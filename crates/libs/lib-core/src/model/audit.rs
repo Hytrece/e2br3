@@ -79,7 +79,7 @@ impl CaseVersionBmc {
 		mm: &ModelManager,
 		version_c: CaseVersionForCreate,
 	) -> Result<Uuid> {
-		let user_id = ctx.user_uuid();
+		let user_id = ctx.user_id();
 		let sql = "INSERT INTO case_versions (case_id, version, snapshot, change_reason, changed_by) VALUES ($1, $2, $3, $4, $5) RETURNING id";
 
 		let (id,) = sqlx::query_as::<_, (Uuid,)>(sql)
@@ -124,7 +124,7 @@ impl AuditLogBmc {
 		mm: &ModelManager,
 		audit_c: AuditLogForCreate,
 	) -> Result<i64> {
-		let user_id = ctx.user_uuid();
+		let user_id = ctx.user_id();
 		let sql = "INSERT INTO audit_logs (table_name, record_id, action, user_id, old_values, new_values, ip_address, user_agent) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id";
 
 		let (id,) = sqlx::query_as::<_, (i64,)>(sql)

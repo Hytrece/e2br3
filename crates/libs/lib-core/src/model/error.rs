@@ -28,7 +28,7 @@ pub enum Error {
 
 	// -- DB
 	UserAlreadyExists {
-		username: String,
+		email: String,
 	},
 	UniqueViolation {
 		table: String,

@@ -4,7 +4,7 @@
 
 ### Core System Models (5 models)
 ✅ `organization.rs` - Organizations (pharma companies, regulatory authorities)
-✅ `e2br3_user.rs` - E2B users with roles (admin, manager, user, viewer)
+✅ `user.rs` - E2B users with roles (admin, manager, user, viewer)
 ✅ `case.rs` - Core safety cases (UUID-based)
 ✅ `audit.rs` - Audit logs and case versions for compliance
 ✅ `terminology.rs` - MedDRA, WHODrug, ISO countries, E2B code lists
@@ -106,7 +106,7 @@ Each model has a corresponding BMC (Business Model Controller) with:
 crates/libs/lib-core/src/model/
 ├── mod.rs                 ← Updated with all new modules
 ├── organization.rs        ← Organizations
-├── e2br3_user.rs         ← E2B users (UUID)
+├── user.rs               ← E2B users (UUID)
 ├── case.rs               ← Core cases
 ├── safety_report.rs      ← Section C (6 structs)
 ├── patient.rs            ← Section D (7 structs)

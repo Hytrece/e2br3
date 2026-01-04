@@ -25,16 +25,9 @@ mod base_uuid; // UUID-based CRUD operations for E2B models
 mod error;
 mod store;
 
-// Original chat modules (keep for backward compatibility)
-pub mod agent;
-pub mod conv;
-pub mod conv_msg;
-pub mod conv_user;
-pub mod user;
-
 // E2B(R3) SafetyDB Core Models
 pub mod case;
-pub mod e2br3_user; // E2B users table (UUID-based)
+pub mod user; // E2B users table (UUID-based)
 pub mod organization; // Organizations table // Core cases table
 
 // E2B(R3) Section C - Safety Report Identification

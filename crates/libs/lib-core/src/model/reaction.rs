@@ -7,7 +7,7 @@ use crate::model::store::dbx;
 use crate::model::ModelManager;
 use crate::model::Result;
 use modql::field::Fields;
-use modql::filter::{FilterNodes, OpValsBool, OpValsUuid};
+use modql::filter::{FilterNodes, OpValsBool, OpValsValue};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use sqlx::types::time::{Date, OffsetDateTime};
@@ -87,7 +87,7 @@ pub struct ReactionForUpdate {
 
 #[derive(FilterNodes, Deserialize, Default)]
 pub struct ReactionFilter {
-	pub case_id: Option<OpValsUuid>,
+	pub case_id: Option<OpValsValue>,
 	pub serious: Option<OpValsBool>,
 }
 

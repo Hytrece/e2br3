@@ -5,7 +5,7 @@
 //! for UUID-based E2B(R3) models.
 
 use crate::ctx::Ctx;
-use crate::model::base::DbBmc;
+use crate::model::base::{prep_fields_for_create, prep_fields_for_update, DbBmc};
 use crate::model::ModelManager;
 use crate::model::Result;
 use modql::field::HasSeaFields;
@@ -20,13 +20,18 @@ const LIST_LIMIT_MAX: i64 = 5000;
 
 // region:    --- Create
 
-pub async fn create<MC, E>(_ctx: &Ctx, mm: &ModelManager, data: E) -> Result<Uuid>
+pub async fn create<MC, E>(ctx: &Ctx, mm: &ModelManager, data: E) -> Result<Uuid>
 where
 	MC: DbBmc,
 	E: HasSeaFields,
 {
+	let user_id = ctx.user_audit_id();
+
+	// -- Extract fields and prep for create (adds cid, ctime, mid, mtime, owner_id)
+	let mut fields = data.not_none_sea_fields();
+	prep_fields_for_create::<MC>(&mut fields, user_id);
+
 	// -- Build the SQL query
-	let fields = data.not_none_sea_fields();
 	let (columns, sea_values) = fields.for_sea_insert();
 
 	let mut query = Query::insert();
@@ -78,7 +83,7 @@ where
 // region:    --- Update
 
 pub async fn update<MC, E>(
-	_ctx: &Ctx,
+	ctx: &Ctx,
 	mm: &ModelManager,
 	id: Uuid,
 	data: E,
@@ -87,8 +92,13 @@ where
 	MC: DbBmc,
 	E: HasSeaFields,
 {
+	let user_id = ctx.user_audit_id();
+
+	// -- Extract fields and prep for update (adds mid, mtime)
+	let mut fields = data.not_none_sea_fields();
+	prep_fields_for_update::<MC>(&mut fields, user_id);
+
 	// -- Build the SQL query
-	let fields = data.not_none_sea_fields();
 	let fields = fields.for_sea_update();
 
 	let mut query = Query::update();

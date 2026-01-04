@@ -20,15 +20,15 @@ pub async fn api_login_handler(
 	debug!("{:<12} - api_login_handler", "HANDLER");
 
 	let LoginPayload {
-		username,
+		email,
 		pwd: pwd_clear,
 	} = payload;
 	let root_ctx = Ctx::root_ctx();
 
 	// -- Get the user.
-	let user: UserForLogin = UserBmc::first_by_username(&root_ctx, &mm, &username)
+	let user: UserForLogin = UserBmc::first_by_email(&root_ctx, &mm, &email)
 		.await?
-		.ok_or(Error::LoginFailUsernameNotFound)?;
+		.ok_or(Error::LoginFailEmailNotFound)?;
 	let user_id = user.id;
 
 	// -- Validate the password.
@@ -53,7 +53,7 @@ pub async fn api_login_handler(
 	}
 
 	// -- Set web token.
-	token::set_token_cookie(&cookies, &user.username, user.token_salt)?;
+	token::set_token_cookie(&cookies, &user.email, user.token_salt)?;
 
 	// Create the success body.
 	let body = Json(json!({
@@ -67,7 +67,7 @@ pub async fn api_login_handler(
 
 #[derive(Debug, Deserialize)]
 pub struct LoginPayload {
-	username: String,
+	email: String,
 	pwd: String,
 }
 // endregion: --- Login

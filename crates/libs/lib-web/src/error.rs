@@ -9,6 +9,7 @@ use serde_json::Value;
 use serde_with::{serde_as, DisplayFromStr};
 use std::sync::Arc;
 use tracing::{debug, warn};
+use uuid::Uuid;
 
 pub type Result<T> = core::result::Result<T, Error>;
 
@@ -18,11 +19,12 @@ pub type Result<T> = core::result::Result<T, Error>;
 pub enum Error {
 	// -- Login
 	LoginFailUsernameNotFound,
+	LoginFailEmailNotFound,
 	LoginFailUserHasNoPwd {
-		user_id: i64,
+		user_id: Uuid,
 	},
 	LoginFailPwdNotMatching {
-		user_id: i64,
+		user_id: Uuid,
 	},
 
 	// -- CtxExtError
@@ -146,6 +148,7 @@ impl Error {
 		match self {
 			// -- Login
 			LoginFailUsernameNotFound
+			| LoginFailEmailNotFound
 			| LoginFailUserHasNoPwd { .. }
 			| LoginFailPwdNotMatching { .. } => {
 				(StatusCode::FORBIDDEN, ClientError::LOGIN_FAIL)
