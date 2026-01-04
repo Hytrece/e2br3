@@ -30,9 +30,10 @@ modql = { workspace = true }
 # -- Tracing
 tracing = "0.1"
 # -- Others
-uuid = {version = "1", features = ["v4","fast-rng",]}
+uuid = {version = "1", features = ["v4","fast-rng","serde"]}
 time = { workspace = true }
 derive_more = { workspace = true }
+rust_decimal = { workspace = true }
 
 # -- Feature: with-rpc
 rpc-router = { workspace = true, optional = true }

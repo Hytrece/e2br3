@@ -10,6 +10,7 @@ pub use self::error::{Error, Result};
 #[derive(Clone, Debug)]
 pub struct Ctx {
 	user_id: i64,
+	user_uuid: uuid::Uuid,
 
 	/// Note: For the future ACS (Access Control System)
 	conv_id: Option<i64>,
@@ -20,19 +21,37 @@ impl Ctx {
 	pub fn root_ctx() -> Self {
 		Ctx {
 			user_id: 0,
+			user_uuid: uuid::Uuid::nil(),
 			conv_id: None,
 		}
 	}
 
 	pub fn new(user_id: i64) -> Result<Self> {
-		if user_id == 0 {
-			Err(Error::CtxCannotNewRootCtx)
-		} else {
-			Ok(Self {
-				user_id,
-				conv_id: None,
-			})
+		Self::new_with_ids(user_id, uuid::Uuid::nil())
+	}
+
+	pub fn new_with_uuid(user_uuid: uuid::Uuid) -> Result<Self> {
+		if user_uuid.is_nil() {
+			return Err(Error::CtxCannotNewNilUuid);
 		}
+
+		Ok(Self {
+			user_id: 0,
+			user_uuid,
+			conv_id: None,
+		})
+	}
+
+	pub fn new_with_ids(user_id: i64, user_uuid: uuid::Uuid) -> Result<Self> {
+		if user_id == 0 && user_uuid.is_nil() {
+			return Err(Error::CtxCannotNewRootCtx);
+		}
+
+		Ok(Self {
+			user_id,
+			user_uuid,
+			conv_id: None,
+		})
 	}
 
 	/// Note: For the future ACS (Access Control System)
@@ -47,6 +66,10 @@ impl Ctx {
 impl Ctx {
 	pub fn user_id(&self) -> i64 {
 		self.user_id
+	}
+
+	pub fn user_uuid(&self) -> uuid::Uuid {
+		self.user_uuid
 	}
 
 	//. /// Note: For the future ACS (Access Control System)

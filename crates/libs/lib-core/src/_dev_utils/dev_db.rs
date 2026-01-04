@@ -116,7 +116,12 @@ fn split_sql(content: &str) -> Vec<String> {
 	while let Some(c) = chars.next() {
 		let next = chars.peek().copied();
 
-		if !in_dollar && !in_single && !in_block_comment && c == '-' && next == Some('-') {
+		if !in_dollar
+			&& !in_single
+			&& !in_block_comment
+			&& c == '-'
+			&& next == Some('-')
+		{
 			in_line_comment = true;
 			buf.push(c);
 			buf.push(chars.next().unwrap());
@@ -131,7 +136,12 @@ fn split_sql(content: &str) -> Vec<String> {
 			continue;
 		}
 
-		if !in_dollar && !in_single && !in_line_comment && c == '/' && next == Some('*') {
+		if !in_dollar
+			&& !in_single
+			&& !in_line_comment
+			&& c == '/'
+			&& next == Some('*')
+		{
 			in_block_comment = true;
 			buf.push(c);
 			buf.push(chars.next().unwrap());

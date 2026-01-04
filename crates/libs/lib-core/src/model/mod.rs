@@ -21,15 +21,51 @@
 
 mod acs;
 mod base;
+mod base_uuid; // UUID-based CRUD operations for E2B models
 mod error;
 mod store;
 
+// Original chat modules (keep for backward compatibility)
 pub mod agent;
 pub mod conv;
 pub mod conv_msg;
 pub mod conv_user;
-pub mod modql_utils;
 pub mod user;
+
+// E2B(R3) SafetyDB Core Models
+pub mod case;
+pub mod e2br3_user; // E2B users table (UUID-based)
+pub mod organization; // Organizations table // Core cases table
+
+// E2B(R3) Section C - Safety Report Identification
+pub mod safety_report; // Safety report ID, sender info, primary sources, literature refs, study info
+
+// E2B(R3) Section D - Patient Information
+pub mod patient; // Patient info, medical history, past drugs, death info, parent info
+
+// E2B(R3) Section E - Reaction/Event
+pub mod reaction; // Adverse event reactions
+
+// E2B(R3) Section F - Tests and Procedures
+pub mod test_result; // Lab results and diagnostic tests
+
+// E2B(R3) Section G - Drug Information
+pub mod drug; // Drug info, active substances, dosage, indications
+
+// E2B(R3) Section H - Narrative
+pub mod narrative; // Case narrative, sender diagnoses, case summaries
+
+// E2B(R3) Section N - Message Headers
+pub mod message_header; // Batch/message transmission headers
+
+// Controlled Terminologies
+pub mod terminology; // MedDRA, WHODrug, ISO countries, E2B code lists
+
+// Audit and Versioning
+pub mod audit; // Audit logs and case versions
+
+// Utilities
+pub mod modql_utils;
 
 pub use self::error::{Error, Result};
 
