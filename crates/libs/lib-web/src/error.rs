@@ -26,7 +26,9 @@ pub enum Error {
 	LoginFailPwdNotMatching {
 		user_id: Uuid,
 	},
-
+	LoginFailUserCtxCreate {
+		user_id: Uuid,
+	},
 	// -- CtxExtError
 	#[from]
 	CtxExt(middleware::mw_auth::CtxExtError),
@@ -153,6 +155,9 @@ impl Error {
 			| LoginFailPwdNotMatching { .. } => {
 				(StatusCode::FORBIDDEN, ClientError::LOGIN_FAIL)
 			}
+			| LoginFailUserCtxCreate { .. } => {
+				(StatusCode::INTERNAL_SERVER_ERROR, ClientError::SERVICE_ERROR)
+			}
 
 			// -- Auth
 			CtxExt(_) => (StatusCode::FORBIDDEN, ClientError::NO_AUTH),
@@ -212,11 +217,9 @@ pub enum ClientError {
 	LOGIN_FAIL,
 	NO_AUTH,
 	ENTITY_NOT_FOUND { entity: &'static str, id: i64 },
-
 	RPC_REQUEST_INVALID(String),
 	RPC_REQUEST_METHOD_UNKNOWN(String),
 	RPC_PARAMS_INVALID(String),
-
 	SERVICE_ERROR,
 }
 // endregion: --- Client Error

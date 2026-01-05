@@ -8,9 +8,9 @@
 //! - The `ModelManager` holds the internal states/resources
 //!   needed by ModelControllers to access data.
 //!   (e.g., db_pool, S3 client, redis client).
-//! - Model Controllers (e.g., `ConvBmc`, `AgentBmc`) implement
+//! - Model Controllers (e.g., `CaseBmc`, `UserBmc`) implement
 //!   CRUD and other data access methods on a given "entity"
-//!   (e.g., `Conv`, `Agent`).
+//!   (e.g., `Case`, `User`).
 //!   (`Bmc` is short for Backend Model Controller).
 //! - In frameworks like Axum, Tauri, `ModelManager` are typically used as App State.
 //! - ModelManager are designed to be passed as an argument
