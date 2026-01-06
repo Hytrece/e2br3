@@ -1,5 +1,5 @@
 [package]
-name = "lib-rpc-core"
+name = "lib-rest-core"
 version = "0.1.0"
 edition = "2021"
 
@@ -11,7 +11,9 @@ workspace = true
 
 [dependencies]
 # -- App Libs
-lib-core = { path = "../../libs/lib-core", features = ["with-rpc"] }
+lib-core = { path = "../../libs/lib-core" }
+# -- Web
+axum = { workspace = true }
 # -- Async
 tokio = { version = "1", features = ["full"] }
 futures = "0.3"
@@ -21,8 +23,7 @@ serde_json = "1"
 serde_with = { workspace = true }
 # -- Data
 modql = { workspace = true }
-# -- Rpc
-rpc-router = { workspace = true }
 # -- Others
 paste = "1"
 derive_more = { workspace = true }
+uuid = { version = "1", features = ["v4", "fast-rng", "serde"] }

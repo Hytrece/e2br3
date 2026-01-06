@@ -1,5 +1,4 @@
 use crate::error::{Error, Result};
-use crate::handlers::handlers_rpc::RpcInfo;
 use crate::log::log_request;
 use crate::middleware::mw_auth::CtxW;
 use crate::middleware::mw_req_stamp::ReqStamp;
@@ -24,7 +23,8 @@ pub async fn mw_reponse_map(
 	debug!("{:<12} - mw_reponse_map", "RES_MAPPER");
 	let uuid = Uuid::new_v4();
 
-	let rpc_info = res.extensions().get::<Arc<RpcInfo>>().map(Arc::as_ref);
+	// For REST, we don't have RPC info
+	let rpc_info = None;
 
 	// -- Get the eventual response error.
 	let web_error = res.extensions().get::<Arc<Error>>().map(Arc::as_ref);
@@ -40,8 +40,7 @@ pub async fn mw_reponse_map(
 				let detail = client_error.as_ref().and_then(|v| v.get("detail"));
 
 				let client_error_body = json!({
-					"id": rpc_info.as_ref().map(|rpc| rpc.id.clone()),
-					"error": {
+						"error": {
 						"message": message, // Variant name
 						"data": {
 							"req_uuid": uuid.to_string(),

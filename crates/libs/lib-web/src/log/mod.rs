@@ -1,6 +1,5 @@
 use crate::error::Result;
 use crate::error::{ClientError, Error};
-use crate::handlers::handlers_rpc::RpcInfo;
 use crate::middleware::mw_req_stamp::ReqStamp;
 use axum::http::{Method, Uri};
 use lib_core::ctx::Ctx;
@@ -15,7 +14,7 @@ pub async fn log_request(
 	http_method: Method,
 	uri: Uri,
 	req_stamp: ReqStamp,
-	rpc_info: Option<&RpcInfo>,
+	rpc_info: Option<()>,  // Placeholder for REST - not used anymore
 	ctx: Option<Ctx>,
 	web_error: Option<&Error>,
 	client_error: Option<ClientError>,
@@ -43,8 +42,8 @@ pub async fn log_request(
 		http_path: uri.to_string(),
 		http_method: http_method.to_string(),
 
-		rpc_id: rpc_info.and_then(|rpc| rpc.id.as_ref().map(|id| id.to_string())),
-		rpc_method: rpc_info.map(|rpc| rpc.method.to_string()),
+		rpc_id: None,  // No RPC info for REST
+		rpc_method: None,  // No RPC info for REST
 
 		user_audit_id: ctx.map(|c| c.user_audit_id()),
 

@@ -1,12 +1,13 @@
 // region:    --- Modules
 
 mod error;
-mod rpc_params;
-mod rpc_result;
+pub mod rest_params;
+pub mod rest_result;
 mod utils;
 
 pub use self::error::{Error, Result};
-pub use rpc_params::*;
+pub use rest_params::*;
+pub use rest_result::*;
 
 pub mod prelude;
 
