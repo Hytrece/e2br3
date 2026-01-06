@@ -19,7 +19,7 @@ use uuid::Uuid;
 #[derive(Debug)]
 #[cfg_attr(test, derive(PartialEq))]
 pub struct Token {
-	pub ident: String,     // Identifier (username for example).
+	pub ident: String,     // Identifier (email for example).
 	pub exp: String,       // Expiration date in Rfc3339.
 	pub sign_b64u: String, // Signature, base64url encoded.
 }

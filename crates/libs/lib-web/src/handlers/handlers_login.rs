@@ -20,16 +20,17 @@ pub async fn api_login_handler(
 	debug!("{:<12} - api_login_handler", "HANDLER");
 
 	let LoginPayload {
-		username,
+		email,
 		pwd: pwd_clear,
 	} = payload;
 	let root_ctx = Ctx::root_ctx();
 
 	// -- Get the user.
-	let user: UserForLogin = UserBmc::first_by_username(&root_ctx, &mm, &username)
+	let user: UserForLogin = UserBmc::first_by_email(&root_ctx, &mm, &email)
 		.await?
-		.ok_or(Error::LoginFailUsernameNotFound)?;
+		.ok_or(Error::LoginFailEmailNotFound)?;
 	let user_id = user.id;
+	let user_ctx = Ctx::new_with_ids(user.audit_id, user.id).map_err(|_| Error::LoginFailUserCtxCreate { user_id })?;
 
 	// -- Validate the password.
 	let Some(pwd) = user.pwd else {
@@ -49,11 +50,11 @@ pub async fn api_login_handler(
 	// -- Update password scheme if needed
 	if let SchemeStatus::Outdated = scheme_status {
 		debug!("pwd encrypt scheme outdated, upgrading.");
-		UserBmc::update_pwd(&root_ctx, &mm, user.id, &pwd_clear).await?;
+		UserBmc::update_pwd(&user_ctx, &mm, user.id, &pwd_clear).await?;
 	}
 
 	// -- Set web token.
-	token::set_token_cookie(&cookies, &user.username, user.token_salt)?;
+	token::set_token_cookie(&cookies, &user.email, user.token_salt)?;
 
 	// Create the success body.
 	let body = Json(json!({
@@ -67,7 +68,7 @@ pub async fn api_login_handler(
 
 #[derive(Debug, Deserialize)]
 pub struct LoginPayload {
-	username: String,
+	email: String,
 	pwd: String,
 }
 // endregion: --- Login

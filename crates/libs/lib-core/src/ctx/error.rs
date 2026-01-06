@@ -5,6 +5,7 @@ pub type Result<T> = core::result::Result<T, Error>;
 #[derive(Debug, Serialize)]
 pub enum Error {
 	CtxCannotNewRootCtx,
+	CtxCannotNewNilUuid,
 }
 
 // region:    --- Error Boilerplate

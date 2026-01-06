@@ -15,6 +15,10 @@ pub enum Error {
 		entity: &'static str,
 		id: i64,
 	},
+	EntityUuidNotFound {
+		entity: &'static str,
+		id: sqlx::types::Uuid,
+	},
 	ListLimitOverMax {
 		max: i64,
 		actual: i64,
@@ -24,7 +28,7 @@ pub enum Error {
 
 	// -- DB
 	UserAlreadyExists {
-		username: String,
+		email: String,
 	},
 	UniqueViolation {
 		table: String,

@@ -1,6 +1,5 @@
 // region:    --- Modules
 pub mod routes_login;
-pub mod routes_rpc;
-pub mod rpcs;
+// TODO: Add REST routes here
 
 // endregion: --- Modules

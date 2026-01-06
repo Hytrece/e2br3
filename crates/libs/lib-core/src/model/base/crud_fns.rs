@@ -18,7 +18,7 @@ where
 	MC: DbBmc,
 	E: HasSeaFields,
 {
-	let user_id = ctx.user_id();
+	let user_id = ctx.user_audit_id();
 
 	// -- Extract fields (name / sea-query value expression)
 	let mut fields = data.not_none_sea_fields();
@@ -52,7 +52,7 @@ where
 	MC: DbBmc,
 	E: HasSeaFields,
 {
-	let user_id = ctx.user_id();
+	let user_id = ctx.user_audit_id();
 	let mut ids = Vec::with_capacity(data.len());
 
 	// Prepare insert query
@@ -233,7 +233,7 @@ where
 {
 	// -- Prep Fields
 	let mut fields = data.not_none_sea_fields();
-	prep_fields_for_update::<MC>(&mut fields, ctx.user_id());
+	prep_fields_for_update::<MC>(&mut fields, ctx.user_audit_id());
 
 	// -- Build query
 	let fields = fields.for_sea_update();

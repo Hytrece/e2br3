@@ -38,12 +38,16 @@ async fn main() -> Result<()> {
 	let mm = ModelManager::new().await?;
 
 	// -- Define Routes
-	let routes_rpc = web::routes_rpc::routes(mm.clone())
-		.route_layer(middleware::from_fn(mw_ctx_require));
+	// TODO: Add REST API routes here
+	// Example:
+	// let routes_rest = Router::new()
+	//     .route("/api/agents", get(list_agents).post(create_agent))
+	//     .route("/api/agents/:id", get(get_agent).put(update_agent).delete(delete_agent))
+	//     .route_layer(middleware::from_fn(mw_ctx_require));
 
 	let routes_all = Router::new()
 		.merge(routes_login::routes(mm.clone()))
-		.nest("/api", routes_rpc)
+		// .nest("/api", routes_rest)  // TODO: Uncomment when REST routes are ready
 		.layer(middleware::map_response(mw_reponse_map))
 		.layer(middleware::from_fn_with_state(mm.clone(), mw_ctx_resolver))
 		.layer(CookieManagerLayer::new())
