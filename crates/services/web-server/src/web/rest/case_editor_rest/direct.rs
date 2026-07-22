@@ -1,5 +1,16 @@
 use super::common::*;
 
+fn ci_date(value: Option<sqlx::types::time::Date>) -> Option<String> {
+	value.map(|date| {
+		format!(
+			"{:04}{:02}{:02}",
+			date.year(),
+			u8::from(date.month()),
+			date.day()
+		)
+	})
+}
+
 async fn load_editor_ci_data(
 	ctx: &lib_core::ctx::Ctx,
 	mm: &ModelManager,
@@ -13,7 +24,35 @@ async fn load_editor_ci_data(
 	};
 	let safety_report_identification =
 		match SafetyReportIdentificationBmc::get_by_case(ctx, mm, case_id).await {
-			Ok(entity) => Some(entity),
+			Ok(entity) => Some(CaseEditorCiSafetyReportDto {
+				id: entity.id,
+				safety_report_id: entity.safety_report_id,
+				transmission_date: entity.transmission_date,
+				report_type: entity.report_type,
+				date_first_received_from_source: ci_date(
+					entity.date_first_received_from_source,
+				),
+				date_of_most_recent_information: ci_date(
+					entity.date_of_most_recent_information,
+				),
+				fulfil_expedited_criteria: entity.fulfil_expedited_criteria,
+				fulfil_expedited_criteria_null_flavor: entity
+					.fulfil_expedited_criteria_null_flavor,
+				local_criteria_report_type: entity.local_criteria_report_type,
+				combination_product_report_indicator: entity
+					.combination_product_report_indicator,
+				combination_product_report_indicator_null_flavor: entity
+					.combination_product_report_indicator_null_flavor,
+				worldwide_unique_id: entity.worldwide_unique_id,
+				first_sender_type: entity.first_sender_type,
+				additional_documents_available: entity
+					.additional_documents_available,
+				other_case_identifiers_exist: entity.other_case_identifiers_exist,
+				other_case_identifiers_exist_null_flavor: entity
+					.other_case_identifiers_exist_null_flavor,
+				nullification_amendment_code: entity.nullification_code,
+				nullification_reason: entity.nullification_reason,
+			}),
 			Err(lib_core::model::Error::EntityUuidNotFound { .. }) => None,
 			Err(err) => return Err(err.into()),
 		};
@@ -65,12 +104,50 @@ async fn load_editor_ci_data(
 
 	Ok(json!(CaseEditorCiRowsDto {
 		case: case_fields,
-		safety_report_identification: json!(safety_report_identification),
+		safety_report_identification,
 		message_header: json!(message_header),
-		other_case_identifiers: json!(other_case_identifiers),
-		linked_reports: json!(linked_reports),
-		documents_held_by_sender: json!(documents_held_by_sender),
-		source_documents: json!(source_documents),
+		other_case_identifiers: other_case_identifiers
+			.into_iter()
+			.map(|row| CaseEditorCiOtherIdentifierDto {
+				id: row.id,
+				source: row.source_of_identifier,
+				case_identifier: row.case_identifier,
+				sequence_number: row.sequence_number,
+				deleted: row.deleted,
+			})
+			.collect(),
+		linked_reports: linked_reports
+			.into_iter()
+			.map(|row| CaseEditorCiLinkedReportDto {
+				id: row.id,
+				linked_report_number: row.linked_report_number,
+				sequence_number: row.sequence_number,
+				deleted: row.deleted,
+			})
+			.collect(),
+		documents_held_by_sender: documents_held_by_sender
+			.into_iter()
+			.map(|row| CaseEditorCiDocumentDto {
+				id: row.id,
+				document_description: row.title,
+				included_document: row.document_base64,
+				media_type: row.media_type,
+				representation: row.representation,
+				compression: row.compression,
+				sequence_number: row.sequence_number,
+				deleted: row.deleted,
+			})
+			.collect(),
+		source_documents: source_documents
+			.into_iter()
+			.map(|row| CaseEditorCiSourceDocumentDto {
+				id: row.id,
+				source_document_name: row.source_document_name,
+				source_document_base64: row.source_document_base64,
+				source_document_media_type: row.source_document_media_type,
+				sequence_number: row.sequence_number,
+			})
+			.collect(),
 	}))
 }
 
@@ -195,6 +272,378 @@ fn patch_optional_bool_value(
 	Ok(Some(value))
 }
 
+#[derive(Deserialize)]
+struct CiDatePatchValue {
+	#[serde(
+		default,
+		deserialize_with = "lib_core::serde::flex_date::deserialize_option_date"
+	)]
+	value: Option<sqlx::types::time::Date>,
+}
+
+fn patch_date_value(
+	field_name: &str,
+	patch: &CaseEditorFieldPatch,
+) -> Result<Option<sqlx::types::time::Date>> {
+	let value = patch.value.clone().unwrap_or(Value::Null);
+	serde_json::from_value::<CiDatePatchValue>(json!({ "value": value }))
+		.map(|value| value.value)
+		.map_err(|err| Error::BadRequest {
+			message: format!("{field_name} must be an E2B date or null: {err}"),
+		})
+}
+
+#[derive(Deserialize, Default)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct CiCaseRowPatch {
+	report_year: Option<String>,
+	fda_report_type: Option<String>,
+	mfds_report_type: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct CiDocumentRowPatch {
+	#[serde(default)]
+	id: Option<Uuid>,
+	#[serde(default)]
+	document_description: Option<String>,
+	#[serde(default)]
+	included_document: Option<String>,
+	#[serde(default)]
+	media_type: Option<String>,
+	#[serde(default)]
+	representation: Option<String>,
+	#[serde(default)]
+	compression: Option<String>,
+	#[serde(default)]
+	sequence_number: Option<i32>,
+	#[serde(default)]
+	deleted: Option<bool>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct CiOtherIdentifierRowPatch {
+	#[serde(default)]
+	id: Option<Uuid>,
+	#[serde(default)]
+	source: Option<String>,
+	#[serde(default)]
+	case_identifier: Option<String>,
+	#[serde(default)]
+	sequence_number: Option<i32>,
+	#[serde(default)]
+	deleted: Option<bool>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct CiLinkedReportRowPatch {
+	#[serde(default)]
+	id: Option<Uuid>,
+	#[serde(default)]
+	linked_report_number: Option<String>,
+	#[serde(default)]
+	sequence_number: Option<i32>,
+	#[serde(default)]
+	deleted: Option<bool>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct CiSourceDocumentRowPatch {
+	#[serde(default)]
+	id: Option<Uuid>,
+	#[serde(default)]
+	source_document_name: Option<String>,
+	#[serde(default)]
+	source_document_base64: Option<String>,
+	#[serde(default)]
+	source_document_media_type: Option<String>,
+	#[serde(default)]
+	sequence_number: Option<i32>,
+}
+
+fn ci_row_error(owner: &str, err: serde_json::Error) -> Error {
+	Error::BadRequest {
+		message: format!("CI.{owner} has an invalid row payload: {err}"),
+	}
+}
+
+async fn apply_ci_rows_patch(
+	ctx: &lib_core::ctx::Ctx,
+	mm: &ModelManager,
+	case_id: Uuid,
+	rows: &BTreeMap<String, Value>,
+) -> Result<()> {
+	if rows.contains_key("messageHeader")
+		|| rows.contains_key("safetyReportIdentification")
+	{
+		return Err(Error::BadRequest {
+			message: "CI.messageHeader and CI.safetyReportIdentification row patches are not supported; use changes".to_string(),
+		});
+	}
+	reject_unknown_row_keys(
+		"CI",
+		rows,
+		&[
+			"case",
+			"messageHeader",
+			"safetyReportIdentification",
+			"documentsHeldBySender",
+			"otherCaseIdentifiers",
+			"linkedReports",
+			"sourceDocuments",
+		],
+	)?;
+
+	let portable_row = rows
+		.iter()
+		.map(|(key, value)| (key.clone(), value.clone()))
+		.collect::<Map<String, Value>>();
+	validate_row_payload("CI", "CI", &portable_row, None)?;
+
+	if let Some(value) = rows.get("case") {
+		let patch = serde_json::from_value::<CiCaseRowPatch>(value.clone())
+			.map_err(|err| ci_row_error("case", err))?;
+		CaseBmc::update(
+			ctx,
+			mm,
+			case_id,
+			CaseForUpdate {
+				report_year: patch.report_year,
+				fda_report_type: patch.fda_report_type,
+				mfds_report_type: patch.mfds_report_type,
+				dirty_c: Some(true),
+				..Default::default()
+			},
+		)
+		.await?;
+	}
+
+	if let Some(value) = rows.get("documentsHeldBySender") {
+		let patches =
+			serde_json::from_value::<Vec<CiDocumentRowPatch>>(value.clone())
+				.map_err(|err| ci_row_error("documentsHeldBySender", err))?;
+		for (index, patch) in patches.into_iter().enumerate() {
+			let sequence_number = patch
+				.sequence_number
+				.unwrap_or_else(|| i32::try_from(index + 1).unwrap_or(i32::MAX));
+			if let Some(id) = patch.id {
+				let current = DocumentsHeldBySenderBmc::get(ctx, mm, id).await?;
+				if current.case_id != case_id {
+					return Err(Error::BadRequest {
+						message: format!("CI.documentsHeldBySender row '{id}' belongs to another case"),
+					});
+				}
+				if patch.deleted == Some(true) {
+					DocumentsHeldBySenderBmc::delete(ctx, mm, id).await?;
+					continue;
+				}
+				if patch.deleted == Some(false) && current.deleted {
+					DocumentsHeldBySenderBmc::restore(ctx, mm, id).await?;
+				}
+				DocumentsHeldBySenderBmc::update(
+					ctx,
+					mm,
+					id,
+					DocumentsHeldBySenderForUpdate {
+						title: patch.document_description,
+						document_base64: patch.included_document,
+						media_type: patch.media_type,
+						representation: patch.representation,
+						compression: patch.compression,
+						sequence_number: patch.sequence_number,
+					},
+				)
+				.await?;
+			} else {
+				if patch.deleted == Some(true) {
+					return Err(Error::BadRequest {
+						message:
+							"a new CI.documentsHeldBySender row cannot be deleted"
+								.to_string(),
+					});
+				}
+				DocumentsHeldBySenderBmc::create(
+					ctx,
+					mm,
+					DocumentsHeldBySenderForCreate {
+						case_id,
+						title: patch.document_description,
+						document_base64: patch.included_document,
+						media_type: patch.media_type,
+						representation: patch.representation,
+						compression: patch.compression,
+						sequence_number,
+					},
+				)
+				.await?;
+			}
+		}
+	}
+
+	if let Some(value) = rows.get("otherCaseIdentifiers") {
+		let patches =
+			serde_json::from_value::<Vec<CiOtherIdentifierRowPatch>>(value.clone())
+				.map_err(|err| ci_row_error("otherCaseIdentifiers", err))?;
+		for (index, patch) in patches.into_iter().enumerate() {
+			if let Some(id) = patch.id {
+				let current = OtherCaseIdentifierBmc::get(ctx, mm, id).await?;
+				if current.case_id != case_id {
+					return Err(Error::BadRequest {
+						message: format!("CI.otherCaseIdentifiers row '{id}' belongs to another case"),
+					});
+				}
+				if patch.deleted == Some(true) {
+					OtherCaseIdentifierBmc::delete(ctx, mm, id).await?;
+					continue;
+				}
+				if patch.deleted == Some(false) && current.deleted {
+					OtherCaseIdentifierBmc::restore(ctx, mm, id).await?;
+				}
+				OtherCaseIdentifierBmc::update(
+					ctx,
+					mm,
+					id,
+					OtherCaseIdentifierForUpdate {
+						source_of_identifier: patch.source,
+						case_identifier: patch.case_identifier,
+					},
+				)
+				.await?;
+			} else {
+				let source = patch.source.ok_or_else(|| Error::BadRequest {
+					message: "CI.otherCaseIdentifiers[].source is required"
+						.to_string(),
+				})?;
+				let case_identifier =
+					patch.case_identifier.ok_or_else(|| Error::BadRequest {
+						message:
+							"CI.otherCaseIdentifiers[].caseIdentifier is required"
+								.to_string(),
+					})?;
+				OtherCaseIdentifierBmc::create(
+					ctx,
+					mm,
+					OtherCaseIdentifierForCreate {
+						case_id,
+						sequence_number: patch.sequence_number.unwrap_or_else(
+							|| i32::try_from(index + 1).unwrap_or(i32::MAX),
+						),
+						source_of_identifier: source,
+						case_identifier,
+					},
+				)
+				.await?;
+			}
+		}
+	}
+
+	if let Some(value) = rows.get("linkedReports") {
+		let patches =
+			serde_json::from_value::<Vec<CiLinkedReportRowPatch>>(value.clone())
+				.map_err(|err| ci_row_error("linkedReports", err))?;
+		for (index, patch) in patches.into_iter().enumerate() {
+			if let Some(id) = patch.id {
+				let current = LinkedReportNumberBmc::get(ctx, mm, id).await?;
+				if current.case_id != case_id {
+					return Err(Error::BadRequest {
+						message: format!(
+							"CI.linkedReports row '{id}' belongs to another case"
+						),
+					});
+				}
+				if patch.deleted == Some(true) {
+					LinkedReportNumberBmc::delete(ctx, mm, id).await?;
+					continue;
+				}
+				if patch.deleted == Some(false) && current.deleted {
+					LinkedReportNumberBmc::restore(ctx, mm, id).await?;
+				}
+				LinkedReportNumberBmc::update(
+					ctx,
+					mm,
+					id,
+					LinkedReportNumberForUpdate {
+						linked_report_number: patch.linked_report_number,
+					},
+				)
+				.await?;
+			} else {
+				let linked_report_number =
+					patch
+						.linked_report_number
+						.ok_or_else(|| Error::BadRequest {
+							message:
+								"CI.linkedReports[].linkedReportNumber is required"
+									.to_string(),
+						})?;
+				LinkedReportNumberBmc::create(
+					ctx,
+					mm,
+					LinkedReportNumberForCreate {
+						case_id,
+						sequence_number: patch.sequence_number.unwrap_or_else(
+							|| i32::try_from(index + 1).unwrap_or(i32::MAX),
+						),
+						linked_report_number,
+					},
+				)
+				.await?;
+			}
+		}
+	}
+
+	if let Some(value) = rows.get("sourceDocuments") {
+		let patches =
+			serde_json::from_value::<Vec<CiSourceDocumentRowPatch>>(value.clone())
+				.map_err(|err| ci_row_error("sourceDocuments", err))?;
+		for (index, patch) in patches.into_iter().enumerate() {
+			if let Some(id) = patch.id {
+				let current = SourceDocumentBmc::get(ctx, mm, id).await?;
+				if current.case_id != case_id {
+					return Err(Error::BadRequest {
+						message: format!(
+							"CI.sourceDocuments row '{id}' belongs to another case"
+						),
+					});
+				}
+				SourceDocumentBmc::update(
+					ctx,
+					mm,
+					id,
+					SourceDocumentForUpdate {
+						source_document_name: patch.source_document_name,
+						source_document_base64: patch.source_document_base64,
+						source_document_media_type: patch.source_document_media_type,
+						sequence_number: patch.sequence_number,
+					},
+				)
+				.await?;
+			} else {
+				SourceDocumentBmc::create(
+					ctx,
+					mm,
+					SourceDocumentForCreate {
+						case_id,
+						source_document_name: patch.source_document_name,
+						source_document_base64: patch.source_document_base64,
+						source_document_media_type: patch.source_document_media_type,
+						sequence_number: patch.sequence_number.unwrap_or_else(
+							|| i32::try_from(index + 1).unwrap_or(i32::MAX),
+						),
+					},
+				)
+				.await?;
+			}
+		}
+	}
+
+	Ok(())
+}
+
 /// PATCH /api/cases/{case_id}/editor/pages/CI
 pub async fn patch_editor_ci_page_projection(
 	State(mm): State<ModelManager>,
@@ -237,8 +686,27 @@ pub async fn patch_editor_ci_page_projection(
 
 	for (field, patch) in &request.changes {
 		match field.as_str() {
+			"safetyReportId" => {
+				update.safety_report_id = patch_optional_string_value(field, patch)?;
+			}
+			"transmissionDate" => {
+				update.transmission_date =
+					patch_optional_string_value(field, patch)?;
+			}
 			"reportType" => {
 				update.report_type = patch_string_value(field, patch)?;
+			}
+			"dateFirstReceivedFromSource" => {
+				update.date_first_received_from_source =
+					patch_date_value(field, patch)?;
+			}
+			"dateOfMostRecentInformation" => {
+				update.date_of_most_recent_information =
+					patch_date_value(field, patch)?;
+			}
+			"additionalDocumentsAvailable" => {
+				update.additional_documents_available =
+					patch_optional_bool_value(field, patch)?;
 			}
 			"fulfilExpeditedCriteria" => {
 				update.fulfil_expedited_criteria = patch_bool_value(field, patch)?;
@@ -259,12 +727,28 @@ pub async fn patch_editor_ci_page_projection(
 				update.combination_product_report_indicator_null_flavor =
 					patch_optional_string_value(field, patch)?;
 			}
+			"worldwideUniqueId" => {
+				update.worldwide_unique_id =
+					patch_optional_string_value(field, patch)?;
+			}
+			"firstSenderType" => {
+				update.first_sender_type =
+					patch_optional_string_value(field, patch)?;
+			}
 			"otherCaseIdentifiersExist" => {
 				update.other_case_identifiers_exist =
 					patch_optional_bool_value(field, patch)?;
 			}
 			"otherCaseIdentifiersExistNullFlavor" => {
 				update.other_case_identifiers_exist_null_flavor =
+					patch_optional_string_value(field, patch)?;
+			}
+			"nullificationAmendmentCode" => {
+				update.nullification_code =
+					patch_optional_string_value(field, patch)?;
+			}
+			"nullificationReason" => {
+				update.nullification_reason =
 					patch_optional_string_value(field, patch)?;
 			}
 			_ => {
@@ -274,16 +758,14 @@ pub async fn patch_editor_ci_page_projection(
 			}
 		}
 	}
-	if !request.rows.is_empty() {
-		return Err(Error::BadRequest {
-			message: "CI row patch operations are not implemented in this slice"
-				.to_string(),
-		});
-	}
-
 	if !request.changes.is_empty() {
 		SafetyReportIdentificationBmc::update_by_case(&ctx, &mm, case_id, update)
 			.await?;
+	}
+	if !request.rows.is_empty() {
+		apply_ci_rows_patch(&ctx, &mm, case_id, &request.rows).await?;
+	}
+	if !request.changes.is_empty() || !request.rows.is_empty() {
 		refresh_editor_validation_cache(
 			&ctx,
 			&mm,

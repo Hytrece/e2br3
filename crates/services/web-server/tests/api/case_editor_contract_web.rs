@@ -549,12 +549,9 @@ async fn editor_ci_returns_ci_payload_only() -> Result<()> {
 	let safety_report = data
 		.get("safetyReportIdentification")
 		.ok_or("missing safetyReportIdentification")?;
-	assert!(safety_report["safety_report_id"].is_string(), "{body}");
+	assert!(safety_report["safetyReportId"].is_string(), "{body}");
 	assert!(data["case"].get("safety_report_id").is_none(), "{body}");
-	assert!(
-		data["receiverInfo"].is_null() || data["receiverInfo"].is_object(),
-		"{body}"
-	);
+	assert!(data.get("receiverInfo").is_none(), "{body}");
 	assert!(data.get("receiverInformation").is_none(), "{body}");
 	assert!(data.get("receiver").is_none(), "{body}");
 	assert!(data["otherCaseIdentifiers"].is_array(), "{body}");
@@ -612,12 +609,12 @@ async fn editor_ci_page_projection_returns_direct_page_rows_without_field_issues
 		"{body}"
 	);
 	assert!(body["rows"]["messageHeader"].is_null(), "{body}");
-	assert!(body["rows"]["receiverInfo"].is_null(), "{body}");
+	assert!(body["rows"].get("receiverInfo").is_none(), "{body}");
 	assert!(body["rows"]["otherCaseIdentifiers"].is_array(), "{body}");
 	assert!(body["rows"]["linkedReports"].is_array(), "{body}");
 	assert!(body["rows"]["documentsHeldBySender"].is_array(), "{body}");
 	assert_eq!(
-		body["rows"]["safetyReportIdentification"]["report_type"],
+		body["rows"]["safetyReportIdentification"]["reportType"],
 		"2"
 	);
 	assert!(
@@ -678,6 +675,362 @@ async fn editor_ci_projection_matches_field_contract() -> Result<()> {
 	assert!(rows["sourceDocuments"].is_array(), "{body}");
 	assert!(rows.get("receiverInfo").is_none(), "{body}");
 	assert!(rows.get("receiverInformation").is_none(), "{body}");
+
+	Ok(())
+}
+
+#[serial]
+#[tokio::test]
+async fn editor_ci_complete_fields_round_trip() -> Result<()> {
+	let mm = init_test_mm().await?;
+	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
+	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
+	let cookie = cookie_header(&token.to_string());
+	let app = web_server::app(mm);
+	let case_id =
+		create_case_for_editor(&app, &cookie, "EDITOR-CI-ROUNDTRIP", &["ich"])
+			.await?;
+	let roundtrip_safety_report_id = format!("CI-ROUNDTRIP-{case_id}");
+	create_safety_report(&app, &cookie, &case_id, "1", false).await?;
+
+	let (status, body) = patch_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/editor/pages/CI"),
+		json!({
+			"authorities": ["ich", "fda", "mfds"],
+			"changes": {
+				"safetyReportId": { "value": roundtrip_safety_report_id.clone() },
+				"transmissionDate": { "value": "20260722120000+0900" },
+				"reportType": { "value": "2" },
+				"dateFirstReceivedFromSource": { "value": "20260721" },
+				"dateOfMostRecentInformation": { "value": "20260722" },
+				"additionalDocumentsAvailable": { "value": true },
+				"fulfilExpeditedCriteria": { "value": true },
+				"localCriteriaReportType": { "value": "1" },
+				"combinationProductReportIndicator": { "value": "1" },
+				"worldwideUniqueId": { "value": "US-QVIS-2026-0001" },
+				"firstSenderType": { "value": "1" },
+				"otherCaseIdentifiersExist": { "value": true },
+				"nullificationAmendmentCode": { "value": "2" },
+				"nullificationReason": { "value": "CI roundtrip reason" }
+			},
+			"rows": {
+				"case": {
+					"reportYear": "2026",
+					"fdaReportType": "4",
+					"mfdsReportType": "6"
+				},
+				"documentsHeldBySender": [{
+					"documentDescription": "CI document",
+					"includedDocument": "Q0ktZG9jdW1lbnQ="
+				}],
+				"otherCaseIdentifiers": [{
+					"source": "CI source",
+					"caseIdentifier": "CI-OTHER-001"
+				}],
+				"linkedReports": [{
+					"linkedReportNumber": "CI-LINK-001"
+				}],
+				"sourceDocuments": [{
+					"sourceDocumentName": "ci-source.txt"
+				}]
+			}
+		}),
+	)
+	.await?;
+
+	assert_eq!(status, StatusCode::OK, "{body}");
+	let rows = &body["rows"];
+	assert_eq!(rows["case"]["reportYear"], "2026", "{body}");
+	assert_eq!(rows["case"]["fdaReportType"], "4", "{body}");
+	assert_eq!(rows["case"]["mfdsReportType"], "6", "{body}");
+	let report = &rows["safetyReportIdentification"];
+	for (field, expected) in [
+		("safetyReportId", json!(roundtrip_safety_report_id)),
+		("transmissionDate", json!("20260722120000+0900")),
+		("reportType", json!("2")),
+		("dateFirstReceivedFromSource", json!("20260721")),
+		("dateOfMostRecentInformation", json!("20260722")),
+		("additionalDocumentsAvailable", json!(true)),
+		("fulfilExpeditedCriteria", json!(true)),
+		("localCriteriaReportType", json!("1")),
+		("combinationProductReportIndicator", json!("1")),
+		("worldwideUniqueId", json!("US-QVIS-2026-0001")),
+		("firstSenderType", json!("1")),
+		("otherCaseIdentifiersExist", json!(true)),
+		("nullificationAmendmentCode", json!("2")),
+		("nullificationReason", json!("CI roundtrip reason")),
+	] {
+		assert_eq!(report[field], expected, "{field}: {body}");
+	}
+	assert_eq!(
+		rows["documentsHeldBySender"][0]["documentDescription"], "CI document",
+		"{body}"
+	);
+	assert_eq!(
+		rows["documentsHeldBySender"][0]["includedDocument"], "Q0ktZG9jdW1lbnQ=",
+		"{body}"
+	);
+	assert_eq!(
+		rows["otherCaseIdentifiers"][0]["source"], "CI source",
+		"{body}"
+	);
+	assert_eq!(
+		rows["otherCaseIdentifiers"][0]["caseIdentifier"], "CI-OTHER-001",
+		"{body}"
+	);
+	assert_eq!(
+		rows["linkedReports"][0]["linkedReportNumber"], "CI-LINK-001",
+		"{body}"
+	);
+	assert_eq!(
+		rows["sourceDocuments"][0]["sourceDocumentName"], "ci-source.txt",
+		"{body}"
+	);
+
+	for (null_flavor_field, value_field, restore_value) in [
+		(
+			"fulfilExpeditedCriteriaNullFlavor",
+			"fulfilExpeditedCriteria",
+			json!(true),
+		),
+		(
+			"combinationProductReportIndicatorNullFlavor",
+			"combinationProductReportIndicator",
+			json!("1"),
+		),
+		(
+			"otherCaseIdentifiersExistNullFlavor",
+			"otherCaseIdentifiersExist",
+			json!(true),
+		),
+	] {
+		let (status, null_flavor_body) = patch_json(
+			&app,
+			&cookie,
+			&format!("/api/cases/{case_id}/editor/pages/CI"),
+			json!({
+				"authorities": ["ich", "fda", "mfds"],
+				"changes": { null_flavor_field: { "value": "NI" } },
+				"rows": {}
+			}),
+		)
+		.await?;
+		assert_eq!(status, StatusCode::OK, "{null_flavor_body}");
+		assert_eq!(
+			null_flavor_body["rows"]["safetyReportIdentification"]
+				[null_flavor_field],
+			"NI",
+			"{null_flavor_body}"
+		);
+
+		let (status, restored_body) = patch_json(
+			&app,
+			&cookie,
+			&format!("/api/cases/{case_id}/editor/pages/CI"),
+			json!({
+				"authorities": ["ich", "fda", "mfds"],
+				"changes": { value_field: { "value": restore_value.clone() } },
+				"rows": {}
+			}),
+		)
+		.await?;
+		assert_eq!(status, StatusCode::OK, "{restored_body}");
+		assert_eq!(
+			restored_body["rows"]["safetyReportIdentification"][value_field],
+			restore_value,
+			"{restored_body}"
+		);
+	}
+
+	let (status, reloaded) = get_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/editor/pages/CI?authorities=ich,fda,mfds"),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK, "{reloaded}");
+	assert_eq!(reloaded["rows"], body["rows"]);
+
+	Ok(())
+}
+
+#[serial]
+#[tokio::test]
+async fn editor_ci_repeating_rows_create_update_delete_and_restore() -> Result<()> {
+	let mm = init_test_mm().await?;
+	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
+	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
+	let cookie = cookie_header(&token.to_string());
+	let app = web_server::app(mm);
+	let case_id = create_case(&app, &cookie, "EDITOR-CI-ROWS").await?;
+
+	for (owner, create_row, update_field, updated_value) in [
+		(
+			"documentsHeldBySender",
+			json!({ "documentDescription": "created document" }),
+			"documentDescription",
+			json!("updated document"),
+		),
+		(
+			"otherCaseIdentifiers",
+			json!({ "source": "created source", "caseIdentifier": "CREATED-ID" }),
+			"source",
+			json!("updated source"),
+		),
+		(
+			"linkedReports",
+			json!({ "linkedReportNumber": "CREATED-LINK" }),
+			"linkedReportNumber",
+			json!("UPDATED-LINK"),
+		),
+	] {
+		let mut create_request =
+			json!({ "authorities": ["ich"], "changes": {}, "rows": {} });
+		create_request["rows"][owner] = json!([create_row]);
+		let (status, created) = patch_json(
+			&app,
+			&cookie,
+			&format!("/api/cases/{case_id}/editor/pages/CI"),
+			create_request,
+		)
+		.await?;
+		assert_eq!(status, StatusCode::OK, "{owner}: {created}");
+		let id = created["rows"][owner][0]["id"]
+			.as_str()
+			.ok_or("created CI row is missing id")?
+			.to_string();
+
+		let mut update_row = json!({ "id": id });
+		update_row[update_field] = updated_value.clone();
+		let mut update_request =
+			json!({ "authorities": ["ich"], "changes": {}, "rows": {} });
+		update_request["rows"][owner] = json!([update_row]);
+		let (status, updated) = patch_json(
+			&app,
+			&cookie,
+			&format!("/api/cases/{case_id}/editor/pages/CI"),
+			update_request,
+		)
+		.await?;
+		assert_eq!(status, StatusCode::OK, "{owner}: {updated}");
+		assert_eq!(updated["rows"][owner][0][update_field], updated_value);
+
+		let mut delete_request =
+			json!({ "authorities": ["ich"], "changes": {}, "rows": {} });
+		delete_request["rows"][owner] = json!([{ "id": id, "deleted": true }]);
+		let (status, deleted) = patch_json(
+			&app,
+			&cookie,
+			&format!("/api/cases/{case_id}/editor/pages/CI"),
+			delete_request,
+		)
+		.await?;
+		assert_eq!(status, StatusCode::OK, "{owner}: {deleted}");
+		assert!(
+			deleted["rows"][owner].as_array().is_some_and(Vec::is_empty),
+			"{owner}: {deleted}"
+		);
+
+		let mut restore_row = json!({ "id": id, "deleted": false });
+		restore_row[update_field] = updated_value.clone();
+		let mut restore_request =
+			json!({ "authorities": ["ich"], "changes": {}, "rows": {} });
+		restore_request["rows"][owner] = json!([restore_row]);
+		let (status, restored) = patch_json(
+			&app,
+			&cookie,
+			&format!("/api/cases/{case_id}/editor/pages/CI"),
+			restore_request,
+		)
+		.await?;
+		assert_eq!(status, StatusCode::OK, "{owner}: {restored}");
+		assert_eq!(restored["rows"][owner][0]["id"], id);
+		assert_eq!(restored["rows"][owner][0][update_field], updated_value);
+	}
+
+	let (status, created) = patch_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/editor/pages/CI"),
+		json!({
+			"authorities": ["ich"],
+			"changes": {},
+			"rows": { "sourceDocuments": [{ "sourceDocumentName": "created.txt" }] }
+		}),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK, "{created}");
+	let source_id = created["rows"]["sourceDocuments"][0]["id"]
+		.as_str()
+		.ok_or("created source document is missing id")?;
+	let (status, updated) = patch_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/editor/pages/CI"),
+		json!({
+			"authorities": ["ich"],
+			"changes": {},
+			"rows": { "sourceDocuments": [{ "id": source_id, "sourceDocumentName": "updated.txt" }] }
+		}),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK, "{updated}");
+	assert_eq!(
+		updated["rows"]["sourceDocuments"][0]["sourceDocumentName"],
+		"updated.txt"
+	);
+
+	Ok(())
+}
+
+#[serial]
+#[tokio::test]
+async fn editor_ci_repeating_constraint_rejects_before_write() -> Result<()> {
+	let mm = init_test_mm().await?;
+	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
+	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
+	let cookie = cookie_header(&token.to_string());
+	let app = web_server::app(mm);
+	let case_id = create_case(&app, &cookie, "EDITOR-CI-ROW-GATE").await?;
+
+	let (status, body) = patch_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/editor/pages/CI"),
+		json!({
+			"authorities": ["ich"],
+			"changes": {},
+			"rows": {
+				"documentsHeldBySender": [{
+					"documentDescription": "D".repeat(2001)
+				}]
+			}
+		}),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
+	assert_eq!(body["error"]["message"], "CONSTRAINT_VIOLATION");
+	assert_eq!(
+		body["error"]["data"]["detail"]["ruleCode"],
+		"ICH.C.1.6.1.r.1.LENGTH.MAX"
+	);
+	assert_eq!(
+		body["error"]["data"]["detail"]["path"],
+		"documentsHeldBySender.0.documentDescription"
+	);
+
+	let (status, reloaded) = get_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/editor/pages/CI?authorities=ich"),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK, "{reloaded}");
+	assert!(reloaded["rows"]["documentsHeldBySender"]
+		.as_array()
+		.is_some_and(Vec::is_empty));
 
 	Ok(())
 }
@@ -823,11 +1176,11 @@ async fn editor_ci_page_patch_updates_only_report_type_and_returns_projection(
 
 	assert_eq!(status, StatusCode::OK, "{body}");
 	assert_eq!(
-		body["rows"]["safetyReportIdentification"]["report_type"],
+		body["rows"]["safetyReportIdentification"]["reportType"],
 		"3"
 	);
 	assert_eq!(
-		body["rows"]["safetyReportIdentification"]["fulfil_expedited_criteria"],
+		body["rows"]["safetyReportIdentification"]["fulfilExpeditedCriteria"],
 		false
 	);
 	assert!(
@@ -1068,7 +1421,7 @@ async fn editor_ci_page_patch_rejects_invalid_profiles_before_mutation() -> Resu
 	.await?;
 	assert_eq!(status, StatusCode::OK, "{body}");
 	assert_ne!(
-		body["rows"]["safetyReportIdentification"]["report_type"], "3",
+		body["rows"]["safetyReportIdentification"]["reportType"], "3",
 		"{body}"
 	);
 
@@ -1110,7 +1463,7 @@ async fn editor_ci_page_patch_can_clear_profile_specific_field() -> Result<()> {
 
 	assert_eq!(status, StatusCode::OK, "{body}");
 	assert_eq!(
-		body["rows"]["safetyReportIdentification"]["local_criteria_report_type"],
+		body["rows"]["safetyReportIdentification"]["localCriteriaReportType"],
 		Value::Null
 	);
 	assert!(

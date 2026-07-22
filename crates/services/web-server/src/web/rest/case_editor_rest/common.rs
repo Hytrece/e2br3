@@ -4,7 +4,9 @@ pub(super) use super::portable_save::{
 	validate_direct_changes, validate_direct_rows, validate_row_payload,
 };
 pub(super) use crate::web::rest::case_editor_dto::{
-	CaseEditorAeListRowDto, CaseEditorCiCaseDto, CaseEditorCiRowsDto,
+	CaseEditorAeListRowDto, CaseEditorCiCaseDto, CaseEditorCiDocumentDto,
+	CaseEditorCiLinkedReportDto, CaseEditorCiOtherIdentifierDto,
+	CaseEditorCiRowsDto, CaseEditorCiSafetyReportDto, CaseEditorCiSourceDocumentDto,
 	CaseEditorDgListRowDto, CaseEditorDhListRowDto, CaseEditorDirectSectionResponse,
 	CaseEditorFieldPatch, CaseEditorLbListRowDto, CaseEditorListResponse,
 	CaseEditorPagePatchRequest, CaseEditorPageProjectionResponse,
@@ -30,11 +32,13 @@ pub(super) use lib_core::model::acs::{
 	TEST_RESULT_UPDATE,
 };
 pub(super) use lib_core::model::case::{
-	CaseBmc, SourceDocumentBmc, SourceDocumentFilter,
+	CaseBmc, CaseForUpdate, SourceDocumentBmc, SourceDocumentFilter,
+	SourceDocumentForCreate, SourceDocumentForUpdate,
 };
 pub(super) use lib_core::model::case_identifiers::{
-	LinkedReportNumberBmc, LinkedReportNumberFilter, OtherCaseIdentifierBmc,
-	OtherCaseIdentifierFilter,
+	LinkedReportNumberBmc, LinkedReportNumberFilter, LinkedReportNumberForCreate,
+	LinkedReportNumberForUpdate, OtherCaseIdentifierBmc, OtherCaseIdentifierFilter,
+	OtherCaseIdentifierForCreate, OtherCaseIdentifierForUpdate,
 };
 pub(super) use lib_core::model::case_validation_report_cache::CaseValidationReportCacheBmc;
 pub(super) use lib_core::model::case_validation_summary::CaseValidationSummaryBmc;
@@ -69,8 +73,9 @@ pub(super) use lib_core::model::reaction::{
 	ReactionBmc, ReactionForCreate, ReactionForUpdate,
 };
 pub(super) use lib_core::model::safety_report::{
-	DocumentsHeldBySenderBmc, DocumentsHeldBySenderFilter, LiteratureReferenceBmc,
-	LiteratureReferenceFilter, LiteratureReferenceForCreate,
+	DocumentsHeldBySenderBmc, DocumentsHeldBySenderFilter,
+	DocumentsHeldBySenderForCreate, DocumentsHeldBySenderForUpdate,
+	LiteratureReferenceBmc, LiteratureReferenceFilter, LiteratureReferenceForCreate,
 	LiteratureReferenceForUpdate, PatchValue, PrimarySourceBmc, PrimarySourceFilter,
 	PrimarySourceForCreate, PrimarySourceForUpdate, SafetyReportIdentificationBmc,
 	SafetyReportIdentificationForUpdate, SenderInformationBmc,
