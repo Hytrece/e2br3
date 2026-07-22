@@ -6,6 +6,7 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import validate
+import editor_contract
 
 
 class RegistryValidatorTests(unittest.TestCase):
@@ -26,6 +27,107 @@ class RegistryValidatorTests(unittest.TestCase):
         sections = root / "sections"
         sections.mkdir()
         (sections / "c-safety-report.json").write_text(row, encoding="utf-8")
+
+    def editor_row(self, *, code: str = "C.1.3", status: str = "complete") -> dict:
+        return {
+            "id": code,
+            "e2br3_code": code,
+            "label": "Type of Report",
+            "section": "C",
+            "authority": "ICH",
+            "status": status,
+            "editor_page": "CI",
+            "backend": {
+                "status": "mapped",
+                "model": "SafetyReportIdentification",
+                "field": "report_type",
+                "evidence": "model field",
+            },
+            "frontend": {
+                "status": "mapped",
+                "section": "safetyReportIdentification",
+                "field": "reportType",
+                "evidence": "mounted input",
+            },
+        }
+
+    def editor_field(self, *, code: str = "C.1.3") -> dict:
+        return {
+            "code": code,
+            "authority": "ICH",
+            "frontendPath": "safetyReportIdentification.reportType",
+            "projectionPath": "safetyReportIdentification.reportType",
+            "patch": {"kind": "change", "key": "reportType"},
+            "roundTripValue": "2",
+            "constraint": {
+                "status": "verified",
+                "ruleCode": "ICH.C.1.3.ALLOWED.VALUE",
+            },
+            "businessValidation": {
+                "status": "verified",
+                "issuePath": "safetyReportIdentification.reportType",
+            },
+        }
+
+    def test_complete_editor_field_requires_all_contract_stages(self):
+        field = self.editor_field()
+        del field["businessValidation"]
+        result = validate.ValidationResult()
+
+        editor_contract.validate_editor_contract(
+            [self.editor_row()], {"pageId": "CI", "fields": [field]}, result
+        )
+
+        self.assertIn("C.1.3 missing businessValidation evidence", result.errors)
+
+    def test_complete_editor_field_requires_manifest_entry(self):
+        result = validate.ValidationResult()
+
+        editor_contract.validate_editor_contract(
+            [self.editor_row()], {"pageId": "CI", "fields": []}, result
+        )
+
+        self.assertIn("C.1.3 complete but missing from CI editor contract", result.errors)
+
+    def test_editor_contract_requires_registry_frontend_path_match(self):
+        field = self.editor_field()
+        field["frontendPath"] = "case.reportType"
+        result = validate.ValidationResult()
+
+        editor_contract.validate_editor_contract(
+            [self.editor_row()], {"pageId": "CI", "fields": [field]}, result
+        )
+
+        self.assertIn(
+            "C.1.3 frontend path case.reportType does not match registry safetyReportIdentification.reportType",
+            result.errors,
+        )
+
+    def test_editor_contract_accepts_explicit_not_applicable_stage(self):
+        field = self.editor_field()
+        field["businessValidation"] = {
+            "status": "not_applicable",
+            "reason": "No business validation rule exists for this local field.",
+        }
+        result = validate.ValidationResult()
+
+        editor_contract.validate_editor_contract(
+            [self.editor_row()], {"pageId": "CI", "fields": [field]}, result
+        )
+
+        self.assertEqual([], result.errors)
+
+    def test_incomplete_is_a_valid_registry_status(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self.write_registry(
+                root,
+                json.dumps([self.editor_row(status="incomplete")]),
+            )
+
+            result = validate.validate_registry(root, validate_backend_inventory=False)
+
+        self.assertEqual([], result.errors)
 
     def valid_row(self, overrides: dict[str, str] | None = None) -> str:
         values = {
