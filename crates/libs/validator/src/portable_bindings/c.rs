@@ -68,14 +68,14 @@ pub(super) const BINDINGS: &[PortableFieldBinding] = &[
 	),
 	binding!(
 		"CI",
-		"safetyReportIdentification.documentsHeldBySender[].documentDescription",
+		"documentsHeldBySender[].documentDescription",
 		"documentsHeldBySender[].documentDescription",
 		String,
 		["ICH.C.1.6.1.r.1.LENGTH.MAX"]
 	),
 	binding!(
 		"CI",
-		"safetyReportIdentification.documentsHeldBySender[].includedDocument",
+		"documentsHeldBySender[].includedDocument",
 		"documentsHeldBySender[].includedDocument",
 		String,
 		["ICH.C.1.6.1.r.2.ALLOWED.VALUE"]
@@ -119,21 +119,21 @@ pub(super) const BINDINGS: &[PortableFieldBinding] = &[
 	),
 	binding!(
 		"CI",
-		"safetyReportIdentification.otherCaseIdentifiers[].source",
+		"otherCaseIdentifiers[].source",
 		"otherCaseIdentifiers[].source",
 		String,
 		["ICH.C.1.9.1.r.1.LENGTH.MAX"]
 	),
 	binding!(
 		"CI",
-		"safetyReportIdentification.otherCaseIdentifiers[].caseIdentifier",
+		"otherCaseIdentifiers[].caseIdentifier",
 		"otherCaseIdentifiers[].caseIdentifier",
 		String,
 		["ICH.C.1.9.1.r.2.LENGTH.MAX"]
 	),
 	binding!(
 		"CI",
-		"safetyReportIdentification.linkedReports[].linkedReportNumber",
+		"linkedReports[].linkedReportNumber",
 		"linkedReports[].linkedReportNumber",
 		String,
 		["ICH.C.1.10.r.LENGTH.MAX"]
@@ -472,3 +472,99 @@ pub(super) const BINDINGS: &[PortableFieldBinding] = &[
 		["FDA.C.5.6.r.LENGTH.MAX"]
 	),
 ];
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn ci_bindings_match_the_editor_field_contract() {
+		let actual = BINDINGS
+			.iter()
+			.take_while(|binding| binding.section == "CI")
+			.map(|binding| (binding.frontend_path, binding.request_path))
+			.collect::<Vec<_>>();
+		assert_eq!(
+			actual,
+			vec![
+				(
+					"safetyReportIdentification.safetyReportId",
+					"safetyReportId"
+				),
+				(
+					"safetyReportIdentification.transmissionDate",
+					"transmissionDate"
+				),
+				("safetyReportIdentification.reportType", "reportType"),
+				(
+					"safetyReportIdentification.dateFirstReceivedFromSource",
+					"dateFirstReceivedFromSource"
+				),
+				(
+					"safetyReportIdentification.dateOfMostRecentInformation",
+					"dateOfMostRecentInformation"
+				),
+				(
+					"safetyReportIdentification.additionalDocumentsAvailable",
+					"additionalDocumentsAvailable"
+				),
+				(
+					"documentsHeldBySender[].documentDescription",
+					"documentsHeldBySender[].documentDescription"
+				),
+				(
+					"documentsHeldBySender[].includedDocument",
+					"documentsHeldBySender[].includedDocument"
+				),
+				(
+					"safetyReportIdentification.fulfilExpeditedCriteria",
+					"fulfilExpeditedCriteria"
+				),
+				(
+					"safetyReportIdentification.fulfilExpeditedCriteriaNullFlavor",
+					"fulfilExpeditedCriteriaNullFlavor"
+				),
+				(
+					"safetyReportIdentification.localCriteriaReportType",
+					"localCriteriaReportType"
+				),
+				(
+					"safetyReportIdentification.worldwideUniqueId",
+					"worldwideUniqueId"
+				),
+				(
+					"safetyReportIdentification.firstSenderType",
+					"firstSenderType"
+				),
+				(
+					"safetyReportIdentification.otherCaseIdentifiersExist",
+					"otherCaseIdentifiersExist"
+				),
+				(
+					"safetyReportIdentification.otherCaseIdentifiersExistNullFlavor",
+					"otherCaseIdentifiersExistNullFlavor"
+				),
+				(
+					"otherCaseIdentifiers[].source",
+					"otherCaseIdentifiers[].source"
+				),
+				(
+					"otherCaseIdentifiers[].caseIdentifier",
+					"otherCaseIdentifiers[].caseIdentifier"
+				),
+				(
+					"linkedReports[].linkedReportNumber",
+					"linkedReports[].linkedReportNumber"
+				),
+				(
+					"safetyReportIdentification.nullificationAmendmentCode",
+					"nullificationAmendmentCode"
+				),
+				(
+					"safetyReportIdentification.nullificationReason",
+					"nullificationReason"
+				),
+			]
+		);
+	}
+}
