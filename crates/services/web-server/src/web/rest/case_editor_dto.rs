@@ -87,6 +87,26 @@ pub struct CaseEditorPageProjectionResponse {
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct CaseEditorCiCaseDto {
+	pub report_year: Option<String>,
+	pub fda_report_type: Option<String>,
+	pub mfds_report_type: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CaseEditorCiRowsDto {
+	pub case: CaseEditorCiCaseDto,
+	pub safety_report_identification: Value,
+	pub message_header: Value,
+	pub other_case_identifiers: Value,
+	pub linked_reports: Value,
+	pub documents_held_by_sender: Value,
+	pub source_documents: Value,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CaseEditorFieldEnvelope {
 	pub field_id: &'static str,
 	pub path: &'static str,

@@ -634,6 +634,56 @@ async fn editor_ci_page_projection_returns_direct_page_rows_without_field_issues
 
 #[serial]
 #[tokio::test]
+async fn editor_ci_projection_matches_field_contract() -> Result<()> {
+	let mm = init_test_mm().await?;
+	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
+	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
+	let cookie = cookie_header(&token.to_string());
+	let app = web_server::app(mm);
+	let case_id =
+		create_case_for_editor(&app, &cookie, "EDITOR-CI-CONTRACT", &["ich"])
+			.await?;
+	create_safety_report(&app, &cookie, &case_id, "2", true).await?;
+
+	let (status, body) = get_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/editor/pages/CI"),
+	)
+	.await?;
+
+	assert_eq!(status, StatusCode::OK, "{body}");
+	let rows = body["rows"].as_object().ok_or("missing CI rows")?;
+	let mut owners = rows.keys().map(String::as_str).collect::<Vec<_>>();
+	owners.sort_unstable();
+	assert_eq!(
+		owners,
+		vec![
+			"case",
+			"documentsHeldBySender",
+			"linkedReports",
+			"messageHeader",
+			"otherCaseIdentifiers",
+			"safetyReportIdentification",
+			"sourceDocuments",
+		]
+	);
+	let case = rows["case"].as_object().ok_or("missing CI case owner")?;
+	let mut case_fields = case.keys().map(String::as_str).collect::<Vec<_>>();
+	case_fields.sort_unstable();
+	assert_eq!(
+		case_fields,
+		vec!["fdaReportType", "mfdsReportType", "reportYear"]
+	);
+	assert!(rows["sourceDocuments"].is_array(), "{body}");
+	assert!(rows.get("receiverInfo").is_none(), "{body}");
+	assert!(rows.get("receiverInformation").is_none(), "{body}");
+
+	Ok(())
+}
+
+#[serial]
+#[tokio::test]
 async fn editor_ci_page_projection_accepts_multiple_profiles() -> Result<()> {
 	let mm = init_test_mm().await?;
 	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;

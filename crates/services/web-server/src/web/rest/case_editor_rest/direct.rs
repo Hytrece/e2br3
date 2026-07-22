@@ -5,7 +5,12 @@ async fn load_editor_ci_data(
 	mm: &ModelManager,
 	case_id: Uuid,
 ) -> Result<Value> {
-	let case = PublicCaseView::from(CaseBmc::get(ctx, mm, case_id).await?);
+	let case = CaseBmc::get(ctx, mm, case_id).await?;
+	let case_fields = CaseEditorCiCaseDto {
+		report_year: case.report_year,
+		fda_report_type: case.fda_report_type,
+		mfds_report_type: case.mfds_report_type,
+	};
 	let safety_report_identification =
 		match SafetyReportIdentificationBmc::get_by_case(ctx, mm, case_id).await {
 			Ok(entity) => Some(entity),
@@ -18,8 +23,6 @@ async fn load_editor_ci_data(
 		Err(lib_core::model::Error::EntityUuidNotFound { .. }) => None,
 		Err(err) => return Err(err.into()),
 	};
-	let receiver_information =
-		ReceiverInformationBmc::get_by_case_optional(ctx, mm, case_id).await?;
 	let other_case_identifiers = OtherCaseIdentifierBmc::list(
 		ctx,
 		mm,
@@ -50,15 +53,24 @@ async fn load_editor_ci_data(
 		Some(ListOptions::default()),
 	)
 	.await?;
+	let source_documents = SourceDocumentBmc::list(
+		ctx,
+		mm,
+		Some(vec![SourceDocumentFilter {
+			case_id: Some(uuid_eq(case_id)),
+		}]),
+		Some(ListOptions::default()),
+	)
+	.await?;
 
-	Ok(json!({
-		"case": case,
-		"safetyReportIdentification": safety_report_identification,
-		"messageHeader": message_header,
-		"receiverInfo": receiver_information,
-		"otherCaseIdentifiers": other_case_identifiers,
-		"linkedReports": linked_reports,
-		"documentsHeldBySender": documents_held_by_sender,
+	Ok(json!(CaseEditorCiRowsDto {
+		case: case_fields,
+		safety_report_identification: json!(safety_report_identification),
+		message_header: json!(message_header),
+		other_case_identifiers: json!(other_case_identifiers),
+		linked_reports: json!(linked_reports),
+		documents_held_by_sender: json!(documents_held_by_sender),
+		source_documents: json!(source_documents),
 	}))
 }
 

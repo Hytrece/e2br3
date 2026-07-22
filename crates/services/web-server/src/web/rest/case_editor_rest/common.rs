@@ -4,13 +4,13 @@ pub(super) use super::portable_save::{
 	validate_direct_changes, validate_direct_rows, validate_row_payload,
 };
 pub(super) use crate::web::rest::case_editor_dto::{
-	CaseEditorAeListRowDto, CaseEditorDgListRowDto, CaseEditorDhListRowDto,
-	CaseEditorDirectSectionResponse, CaseEditorFieldPatch, CaseEditorLbListRowDto,
-	CaseEditorListResponse, CaseEditorPagePatchRequest,
-	CaseEditorPageProjectionResponse, CaseEditorRowDetailResponse,
-	CaseEditorShellDto,
+	CaseEditorAeListRowDto, CaseEditorCiCaseDto, CaseEditorCiRowsDto,
+	CaseEditorDgListRowDto, CaseEditorDhListRowDto, CaseEditorDirectSectionResponse,
+	CaseEditorFieldPatch, CaseEditorLbListRowDto, CaseEditorListResponse,
+	CaseEditorPagePatchRequest, CaseEditorPageProjectionResponse,
+	CaseEditorRowDetailResponse, CaseEditorShellDto,
 };
-pub(super) use crate::web::rest::case_rest::{case_to_read_result, PublicCaseView};
+pub(super) use crate::web::rest::case_rest::case_to_read_result;
 pub(super) use axum::extract::{Path, Query, State};
 pub(super) use axum::Json;
 pub(super) use lib_core::model::acs::{
@@ -29,7 +29,9 @@ pub(super) use lib_core::model::acs::{
 	TEST_RESULT_CREATE, TEST_RESULT_DELETE, TEST_RESULT_LIST, TEST_RESULT_READ,
 	TEST_RESULT_UPDATE,
 };
-pub(super) use lib_core::model::case::CaseBmc;
+pub(super) use lib_core::model::case::{
+	CaseBmc, SourceDocumentBmc, SourceDocumentFilter,
+};
 pub(super) use lib_core::model::case_identifiers::{
 	LinkedReportNumberBmc, LinkedReportNumberFilter, OtherCaseIdentifierBmc,
 	OtherCaseIdentifierFilter,
@@ -66,7 +68,6 @@ pub(super) use lib_core::model::patient::{
 pub(super) use lib_core::model::reaction::{
 	ReactionBmc, ReactionForCreate, ReactionForUpdate,
 };
-pub(super) use lib_core::model::receiver::ReceiverInformationBmc;
 pub(super) use lib_core::model::safety_report::{
 	DocumentsHeldBySenderBmc, DocumentsHeldBySenderFilter, LiteratureReferenceBmc,
 	LiteratureReferenceFilter, LiteratureReferenceForCreate,
