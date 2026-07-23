@@ -278,8 +278,17 @@ pub(super) fn validate_direct_rows(
 ) -> Result<()> {
 	let normalized = match section {
 		"RP" => {
-			optional_first_row_object(section, rows, "primarySources")?.map(|row| {
-				normalized_direct_object(
+			let Some(value) = rows.get("primarySources") else {
+				return Ok(());
+			};
+			let Some(items) = value.as_array() else {
+				return Err(Error::BadRequest {
+					message: format!("{section}.primarySources must be an array"),
+				});
+			};
+			for (row_index, value) in items.iter().enumerate() {
+				let row = as_object(section, "primarySources", value)?;
+				let normalized = normalized_direct_object(
 					row,
 					&[
 						("reporterTitle", &["reporterTitle", "reporter_title"]),
@@ -402,8 +411,16 @@ pub(super) fn validate_direct_rows(
 							],
 						),
 					],
-				)
-			})
+				);
+				validate_row_payload_with_indexes(
+					section,
+					section,
+					&normalized,
+					None,
+					&[row_index],
+				)?;
+			}
+			return Ok(());
 		}
 		"SD" => {
 			optional_row_object(section, rows, "senderInformation")?.map(|row| {
@@ -605,9 +622,19 @@ fn binding_was_changed(
 
 pub(super) fn validate_row_payload(
 	section: &str,
+	row_key: &str,
+	row: &Map<String, Value>,
+	changed_paths: Option<&BTreeSet<String>>,
+) -> Result<()> {
+	validate_row_payload_with_indexes(section, row_key, row, changed_paths, &[])
+}
+
+fn validate_row_payload_with_indexes(
+	section: &str,
 	_row_key: &str,
 	row: &Map<String, Value>,
 	changed_paths: Option<&BTreeSet<String>>,
+	outer_indexes: &[usize],
 ) -> Result<()> {
 	for binding in bindings_for_section(section) {
 		if !binding_was_changed(binding, changed_paths) {
@@ -623,8 +650,10 @@ pub(super) fn validate_row_payload(
 					)
 				})
 				.and_then(Value::as_str);
+			let mut concrete_indexes = outer_indexes.to_vec();
+			concrete_indexes.extend_from_slice(&matched.indexes);
 			let path =
-				concrete_frontend_path(binding.frontend_path, &matched.indexes);
+				concrete_frontend_path(binding.frontend_path, &concrete_indexes);
 			validate_binding_value(binding, matched.value, null_flavor, &path)?;
 		}
 	}

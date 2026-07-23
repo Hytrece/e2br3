@@ -1,4 +1,103 @@
 use super::common::*;
+use lib_core::model::safety_report::PrimarySource;
+use serde::Serialize;
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct CaseEditorRpPrimarySourceDto {
+	id: Uuid,
+	sequence_number: i32,
+	reporter_title: Option<String>,
+	reporter_title_null_flavor: Option<String>,
+	reporter_given_name: Option<String>,
+	reporter_given_name_null_flavor: Option<String>,
+	reporter_middle_name: Option<String>,
+	reporter_middle_name_null_flavor: Option<String>,
+	reporter_family_name: Option<String>,
+	reporter_family_name_null_flavor: Option<String>,
+	#[serde(rename = "reporterOrganization")]
+	organization: Option<String>,
+	#[serde(rename = "reporterOrganizationNullFlavor")]
+	organization_null_flavor: Option<String>,
+	#[serde(rename = "reporterDepartment")]
+	department: Option<String>,
+	#[serde(rename = "reporterDepartmentNullFlavor")]
+	department_null_flavor: Option<String>,
+	#[serde(rename = "reporterStreet")]
+	street: Option<String>,
+	#[serde(rename = "reporterStreetNullFlavor")]
+	street_null_flavor: Option<String>,
+	#[serde(rename = "reporterCity")]
+	city: Option<String>,
+	#[serde(rename = "reporterCityNullFlavor")]
+	city_null_flavor: Option<String>,
+	#[serde(rename = "reporterState")]
+	state: Option<String>,
+	#[serde(rename = "reporterStateNullFlavor")]
+	state_null_flavor: Option<String>,
+	#[serde(rename = "reporterPostcode")]
+	postcode: Option<String>,
+	#[serde(rename = "reporterPostcodeNullFlavor")]
+	postcode_null_flavor: Option<String>,
+	#[serde(rename = "reporterTelephone")]
+	telephone: Option<String>,
+	#[serde(rename = "reporterTelephoneNullFlavor")]
+	telephone_null_flavor: Option<String>,
+	#[serde(rename = "reporterCountry")]
+	country_code: Option<String>,
+	#[serde(rename = "reporterCountryNullFlavor")]
+	country_code_null_flavor: Option<String>,
+	#[serde(rename = "reporterEmail")]
+	email: Option<String>,
+	#[serde(rename = "reporterEmailNullFlavor")]
+	email_null_flavor: Option<String>,
+	qualification: Option<String>,
+	qualification_null_flavor: Option<String>,
+	qualification_kr1: Option<String>,
+	#[serde(rename = "primarySourceForRegulatoryPurposes")]
+	primary_source_regulatory: Option<String>,
+}
+
+impl From<PrimarySource> for CaseEditorRpPrimarySourceDto {
+	fn from(source: PrimarySource) -> Self {
+		Self {
+			id: source.id,
+			sequence_number: source.sequence_number,
+			reporter_title: source.reporter_title,
+			reporter_title_null_flavor: source.reporter_title_null_flavor,
+			reporter_given_name: source.reporter_given_name,
+			reporter_given_name_null_flavor: source.reporter_given_name_null_flavor,
+			reporter_middle_name: source.reporter_middle_name,
+			reporter_middle_name_null_flavor: source
+				.reporter_middle_name_null_flavor,
+			reporter_family_name: source.reporter_family_name,
+			reporter_family_name_null_flavor: source
+				.reporter_family_name_null_flavor,
+			organization: source.organization,
+			organization_null_flavor: source.organization_null_flavor,
+			department: source.department,
+			department_null_flavor: source.department_null_flavor,
+			street: source.street,
+			street_null_flavor: source.street_null_flavor,
+			city: source.city,
+			city_null_flavor: source.city_null_flavor,
+			state: source.state,
+			state_null_flavor: source.state_null_flavor,
+			postcode: source.postcode,
+			postcode_null_flavor: source.postcode_null_flavor,
+			telephone: source.telephone,
+			telephone_null_flavor: source.telephone_null_flavor,
+			country_code: source.country_code,
+			country_code_null_flavor: source.country_code_null_flavor,
+			email: source.email,
+			email_null_flavor: source.email_null_flavor,
+			qualification: source.qualification,
+			qualification_null_flavor: source.qualification_null_flavor,
+			qualification_kr1: source.qualification_kr1,
+			primary_source_regulatory: source.primary_source_regulatory,
+		}
+	}
+}
 
 fn ci_date(value: Option<sqlx::types::time::Date>) -> Option<String> {
 	value.map(|date| {
@@ -1103,10 +1202,27 @@ async fn apply_rp_page_rows_patch(
 	rows: &BTreeMap<String, Value>,
 ) -> Result<()> {
 	reject_unknown_row_keys(page_id, rows, &["primarySources"])?;
-	let Some(source) = optional_first_row_object(page_id, rows, "primarySources")?
-	else {
+	let Some(value) = rows.get("primarySources") else {
 		return Ok(());
 	};
+	let Some(sources) = value.as_array() else {
+		return Err(Error::BadRequest {
+			message: format!("{page_id}.primarySources must be an array"),
+		});
+	};
+	for value in sources {
+		let source = as_object(page_id, "primarySources", value)?;
+		apply_rp_source_patch(ctx, mm, case_id, source).await?;
+	}
+	Ok(())
+}
+
+async fn apply_rp_source_patch(
+	ctx: &lib_core::ctx::Ctx,
+	mm: &ModelManager,
+	case_id: Uuid,
+	source: &serde_json::Map<String, Value>,
+) -> Result<()> {
 	let update = PrimarySourceForUpdate {
 		source_reporter_presave_id: uuid_field(
 			source,
@@ -1761,7 +1877,10 @@ async fn load_editor_rp_data(
 		}]),
 		Some(ListOptions::default()),
 	)
-	.await?;
+	.await?
+	.into_iter()
+	.map(CaseEditorRpPrimarySourceDto::from)
+	.collect::<Vec<_>>();
 
 	Ok(json!({ "primarySources": primary_sources }))
 }

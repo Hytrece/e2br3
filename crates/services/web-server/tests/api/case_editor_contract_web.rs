@@ -1808,6 +1808,448 @@ async fn editor_rp_page_patch_persists_primary_source_row() -> Result<()> {
 
 #[serial]
 #[tokio::test]
+async fn editor_rp_complete_fields_round_trip() -> Result<()> {
+	let mm = init_test_mm().await?;
+	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
+	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
+	let cookie = cookie_header(&token.to_string());
+	let app = web_server::app(mm.clone());
+	let case_id = create_case_for_editor(
+		&app,
+		&cookie,
+		"EDITOR-RP-COMPLETE",
+		&["ich", "fda", "mfds"],
+	)
+	.await?;
+
+	let concrete = json!({
+		"sequenceNumber": 1,
+		"reporterTitle": "Dr",
+		"reporterGivenName": "Mina",
+		"reporterMiddleName": "J",
+		"reporterFamilyName": "Kim",
+		"reporterOrganization": "QVIS Safety",
+		"reporterDepartment": "Pharmacovigilance",
+		"reporterStreet": "1 Main Street",
+		"reporterCity": "Seoul",
+		"reporterState": "Seoul",
+		"reporterPostcode": "04524",
+		"reporterTelephone": "+821012345678",
+		"reporterCountry": "KR",
+		"reporterEmail": "reporter@example.test",
+		"qualification": "1",
+		"qualificationKr1": "2",
+		"primarySourceForRegulatoryPurposes": "1"
+	});
+	let null_flavors = json!({
+		"sequenceNumber": 2,
+		"reporterTitleNullFlavor": "MSK",
+		"reporterGivenNameNullFlavor": "MSK",
+		"reporterMiddleNameNullFlavor": "MSK",
+		"reporterFamilyNameNullFlavor": "MSK",
+		"reporterOrganizationNullFlavor": "MSK",
+		"reporterDepartmentNullFlavor": "MSK",
+		"reporterStreetNullFlavor": "MSK",
+		"reporterCityNullFlavor": "MSK",
+		"reporterStateNullFlavor": "MSK",
+		"reporterPostcodeNullFlavor": "MSK",
+		"reporterTelephoneNullFlavor": "NASK",
+		"reporterCountryNullFlavor": "UNK",
+		"reporterEmailNullFlavor": "NASK",
+		"qualificationNullFlavor": "UNK"
+	});
+
+	let (status, body) = patch_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/editor/pages/RP"),
+		json!({
+			"authorities": ["ich", "fda", "mfds"],
+			"rows": {"primarySources": [concrete, null_flavors]}
+		}),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK, "{body}");
+
+	let (status, body) = get_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/editor/pages/RP?authorities=ich,fda,mfds"),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK, "{body}");
+	let rows = body["rows"]["primarySources"]
+		.as_array()
+		.ok_or("missing primarySources rows")?;
+	assert_eq!(rows.len(), 2, "{body}");
+	assert_eq!(rows[0]["reporterTitle"], "Dr");
+	assert_eq!(rows[0]["reporterGivenName"], "Mina");
+	assert_eq!(rows[0]["reporterMiddleName"], "J");
+	assert_eq!(rows[0]["reporterFamilyName"], "Kim");
+	assert_eq!(rows[0]["reporterOrganization"], "QVIS Safety");
+	assert_eq!(rows[0]["reporterDepartment"], "Pharmacovigilance");
+	assert_eq!(rows[0]["reporterStreet"], "1 Main Street");
+	assert_eq!(rows[0]["reporterCity"], "Seoul");
+	assert_eq!(rows[0]["reporterState"], "Seoul");
+	assert_eq!(rows[0]["reporterPostcode"], "04524");
+	assert_eq!(rows[0]["reporterTelephone"], "+821012345678");
+	assert_eq!(rows[0]["reporterCountry"], "KR");
+	assert_eq!(rows[0]["reporterEmail"], "reporter@example.test");
+	assert_eq!(rows[0]["qualification"], "1");
+	assert_eq!(rows[0]["qualificationKr1"], "2");
+	assert_eq!(rows[0]["primarySourceForRegulatoryPurposes"], "1");
+	assert_eq!(rows[1]["reporterTitleNullFlavor"], "MSK");
+	assert_eq!(rows[1]["reporterGivenNameNullFlavor"], "MSK");
+	assert_eq!(rows[1]["reporterMiddleNameNullFlavor"], "MSK");
+	assert_eq!(rows[1]["reporterFamilyNameNullFlavor"], "MSK");
+	assert_eq!(rows[1]["reporterOrganizationNullFlavor"], "MSK");
+	assert_eq!(rows[1]["reporterDepartmentNullFlavor"], "MSK");
+	assert_eq!(rows[1]["reporterStreetNullFlavor"], "MSK");
+	assert_eq!(rows[1]["reporterCityNullFlavor"], "MSK");
+	assert_eq!(rows[1]["reporterStateNullFlavor"], "MSK");
+	assert_eq!(rows[1]["reporterPostcodeNullFlavor"], "MSK");
+	assert_eq!(rows[1]["reporterTelephoneNullFlavor"], "NASK");
+	assert_eq!(rows[1]["reporterCountryNullFlavor"], "UNK");
+	assert_eq!(rows[1]["reporterEmailNullFlavor"], "NASK");
+	assert_eq!(rows[1]["qualificationNullFlavor"], "UNK");
+	assert!(rows[0].get("reporter_given_name").is_none(), "{body}");
+
+	mm.dbx().begin_txn().await?;
+	set_full_context_dbx(
+		mm.dbx(),
+		seed.admin.id,
+		seed.org_id,
+		ROLE_SPONSOR_ADMIN_CRO,
+	)
+	.await?;
+	let stored = mm
+		.dbx()
+		.fetch_one(
+			sqlx::query_as::<_, (Value,)>(
+				"SELECT jsonb_agg(jsonb_build_object(
+				'reporter_given_name', reporter_given_name,
+				'qualification_kr1', qualification_kr1,
+				'reporter_given_name_null_flavor', reporter_given_name_null_flavor,
+				'qualification_null_flavor', qualification_null_flavor
+			) ORDER BY sequence_number)
+			FROM primary_sources WHERE case_id = $1",
+			)
+			.bind(Uuid::parse_str(&case_id)?),
+		)
+		.await?
+		.0;
+	mm.dbx().commit_txn().await?;
+	assert_eq!(stored[0]["reporter_given_name"], "Mina");
+	assert_eq!(stored[0]["qualification_kr1"], "2");
+	assert_eq!(stored[1]["reporter_given_name_null_flavor"], "MSK");
+	assert_eq!(stored[1]["qualification_null_flavor"], "UNK");
+
+	Ok(())
+}
+
+#[serial]
+#[tokio::test]
+async fn editor_rp_portable_constraints_return_structured_paths() -> Result<()> {
+	let mm = init_test_mm().await?;
+	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
+	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
+	let cookie = cookie_header(&token.to_string());
+	let app = web_server::app(mm);
+	let case_id = create_case_for_editor(
+		&app,
+		&cookie,
+		"EDITOR-RP-CONSTRAINTS",
+		&["ich", "fda", "mfds"],
+	)
+	.await?;
+
+	let too_long = Value::String("X".repeat(10_001));
+	let cases = [
+		(
+			"reporterTitle",
+			too_long.clone(),
+			"ICH.C.2.r.1.1.LENGTH.MAX",
+		),
+		(
+			"reporterGivenName",
+			too_long.clone(),
+			"ICH.C.2.r.1.2.LENGTH.MAX",
+		),
+		(
+			"reporterMiddleName",
+			too_long.clone(),
+			"ICH.C.2.r.1.3.LENGTH.MAX",
+		),
+		(
+			"reporterFamilyName",
+			too_long.clone(),
+			"ICH.C.2.r.1.4.LENGTH.MAX",
+		),
+		(
+			"reporterOrganization",
+			too_long.clone(),
+			"ICH.C.2.r.2.1.LENGTH.MAX",
+		),
+		(
+			"reporterDepartment",
+			too_long.clone(),
+			"ICH.C.2.r.2.2.LENGTH.MAX",
+		),
+		(
+			"reporterStreet",
+			too_long.clone(),
+			"ICH.C.2.r.2.3.LENGTH.MAX",
+		),
+		("reporterCity", too_long.clone(), "ICH.C.2.r.2.4.LENGTH.MAX"),
+		(
+			"reporterState",
+			too_long.clone(),
+			"ICH.C.2.r.2.5.LENGTH.MAX",
+		),
+		(
+			"reporterPostcode",
+			too_long.clone(),
+			"ICH.C.2.r.2.6.LENGTH.MAX",
+		),
+		(
+			"reporterTelephone",
+			too_long.clone(),
+			"ICH.C.2.r.2.7.LENGTH.MAX",
+		),
+		("reporterCountry", json!("KOR"), "ICH.C.2.r.3.LENGTH.MAX"),
+		(
+			"reporterEmail",
+			too_long.clone(),
+			"FDA.C.2.r.2.8.LENGTH.MAX",
+		),
+		("qualification", json!("9"), "ICH.C.2.r.4.ALLOWED.VALUE"),
+		(
+			"qualificationKr1",
+			too_long.clone(),
+			"MFDS.C.2.r.4.KR.1.LENGTH.MAX",
+		),
+		(
+			"primarySourceForRegulatoryPurposes",
+			json!("2"),
+			"ICH.C.2.r.5.ALLOWED.VALUE",
+		),
+		(
+			"reporterTitleNullFlavor",
+			json!("BAD"),
+			"ICH.C.2.r.1.1.NULLFLAVOR.ALLOWED",
+		),
+		(
+			"reporterGivenNameNullFlavor",
+			json!("BAD"),
+			"ICH.C.2.r.1.2.NULLFLAVOR.ALLOWED",
+		),
+		(
+			"reporterMiddleNameNullFlavor",
+			json!("BAD"),
+			"ICH.C.2.r.1.3.NULLFLAVOR.ALLOWED",
+		),
+		(
+			"reporterFamilyNameNullFlavor",
+			json!("BAD"),
+			"ICH.C.2.r.1.4.NULLFLAVOR.ALLOWED",
+		),
+		(
+			"reporterOrganizationNullFlavor",
+			json!("BAD"),
+			"ICH.C.2.r.2.1.NULLFLAVOR.ALLOWED",
+		),
+		(
+			"reporterDepartmentNullFlavor",
+			json!("BAD"),
+			"ICH.C.2.r.2.2.NULLFLAVOR.ALLOWED",
+		),
+		(
+			"reporterStreetNullFlavor",
+			json!("BAD"),
+			"ICH.C.2.r.2.3.NULLFLAVOR.ALLOWED",
+		),
+		(
+			"reporterCityNullFlavor",
+			json!("BAD"),
+			"ICH.C.2.r.2.4.NULLFLAVOR.ALLOWED",
+		),
+		(
+			"reporterStateNullFlavor",
+			json!("BAD"),
+			"ICH.C.2.r.2.5.NULLFLAVOR.ALLOWED",
+		),
+		(
+			"reporterPostcodeNullFlavor",
+			json!("BAD"),
+			"ICH.C.2.r.2.6.NULLFLAVOR.ALLOWED",
+		),
+		(
+			"reporterTelephoneNullFlavor",
+			json!("BAD"),
+			"ICH.C.2.r.2.7.NULLFLAVOR.ALLOWED",
+		),
+		(
+			"reporterCountryNullFlavor",
+			json!("BAD"),
+			"ICH.C.2.r.3.NULLFLAVOR.ALLOWED",
+		),
+		(
+			"qualificationNullFlavor",
+			json!("BAD"),
+			"ICH.C.2.r.4.NULLFLAVOR.ALLOWED",
+		),
+	];
+
+	for (field, invalid, expected_rule) in cases {
+		let mut source = serde_json::Map::new();
+		source.insert("sequenceNumber".to_string(), json!(1));
+		source.insert(field.to_string(), invalid);
+		let (status, body) = patch_json(
+			&app,
+			&cookie,
+			&format!("/api/cases/{case_id}/editor/pages/RP"),
+			json!({
+				"authorities": ["ich", "fda", "mfds"],
+				"rows": {"primarySources": [Value::Object(source)]}
+			}),
+		)
+		.await?;
+		assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{field}: {body}");
+		assert_eq!(
+			body["error"]["message"], "CONSTRAINT_VIOLATION",
+			"{field}: {body}"
+		);
+		assert_eq!(
+			body["error"]["data"]["detail"]["ruleCode"], expected_rule,
+			"{field}: {body}"
+		);
+		assert_eq!(
+			body["error"]["data"]["detail"]["path"],
+			format!("primarySources.0.{field}"),
+			"{field}: {body}"
+		);
+	}
+
+	let (status, body) = patch_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/editor/pages/RP"),
+		json!({
+			"authorities": ["ich"],
+			"rows": {"primarySources": [
+				{"sequenceNumber": 1, "reporterTitle": "Dr"},
+				{"sequenceNumber": 2, "reporterTitle": "X".repeat(10_001)}
+			]}
+		}),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
+	assert_eq!(
+		body["error"]["data"]["detail"]["ruleCode"],
+		"ICH.C.2.r.1.1.LENGTH.MAX"
+	);
+	assert_eq!(
+		body["error"]["data"]["detail"]["path"],
+		"primarySources.1.reporterTitle"
+	);
+
+	Ok(())
+}
+
+#[serial]
+#[tokio::test]
+async fn editor_rp_business_validation_paths_are_canonical() -> Result<()> {
+	let mm = init_test_mm().await?;
+	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
+	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
+	let cookie = cookie_header(&token.to_string());
+	let app = web_server::app(mm);
+	let case_id = create_case_for_editor(
+		&app,
+		&cookie,
+		"EDITOR-RP-BUSINESS",
+		&["ich", "fda", "mfds"],
+	)
+	.await?;
+
+	let assert_issue_path = |body: &Value, code: &str, expected_path: &str| {
+		let issue = body["data"]["issues"]
+			.as_array()
+			.and_then(|issues| {
+				issues
+					.iter()
+					.find(|issue| issue["code"].as_str() == Some(code))
+			})
+			.unwrap_or_else(|| panic!("missing {code}: {body}"));
+		assert_eq!(issue["path"], expected_path, "{code}: {body}");
+		assert_eq!(issue["field_path"], expected_path, "{code}: {body}");
+	};
+
+	let (status, ich_body) = get_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/validation?authority=ich"),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK, "{ich_body}");
+	assert_issue_path(
+		&ich_body,
+		"ICH.C.2.r.4.REQUIRED",
+		"primarySources.0.qualification",
+	);
+	assert_issue_path(
+		&ich_body,
+		"ICH.C.2.r.5.REQUIRED",
+		"primarySources.0.primarySourceForRegulatoryPurposes",
+	);
+
+	let (status, body) = patch_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/editor/pages/RP"),
+		json!({
+			"authorities": ["ich", "fda", "mfds"],
+			"rows": {"primarySources": [{
+				"sequenceNumber": 1,
+				"reporterOrganization": "QVIS Safety",
+				"qualification": "3"
+			}]}
+		}),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK, "{body}");
+
+	let (status, fda_body) = get_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/validation?authority=fda"),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK, "{fda_body}");
+	assert_issue_path(
+		&fda_body,
+		"FDA.C.2.r.2.8.REQUIRED",
+		"primarySources.0.reporterEmail",
+	);
+
+	let (status, mfds_body) = get_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/validation?authority=mfds"),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK, "{mfds_body}");
+	assert_issue_path(
+		&mfds_body,
+		"MFDS.C.2.r.4.KR.1.REQUIRED",
+		"primarySources.0.qualificationKr1",
+	);
+
+	Ok(())
+}
+
+#[serial]
+#[tokio::test]
 async fn editor_sd_page_patch_persists_sender_information_row() -> Result<()> {
 	let mm = init_test_mm().await?;
 	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
