@@ -340,7 +340,7 @@ git commit -m "feat: normalize authorization storage"
 - Consumes: `AuthorizationFactDefinition` and normalized state rows.
 - Produces: `RevisionRepository::load`, `RevisionRepository::lock`, trigger-verification query, and `PolicySnapshotVersion` internal revisions.
 
-- [ ] **Step 1: Write failing revision tests**
+- [x] **Step 1: Write failing revision tests**
 
 Cover role/grant changes, shared sender/product/study definition changes, user active/access-window/scope/blind/active-sender changes, assignment/membership changes, missing state rows, and unrelated non-authorization updates.
 
@@ -356,23 +356,23 @@ async fn principal_scope_change_advances_only_principal_revision() -> Result<()>
 }
 ```
 
-- [ ] **Step 2: Verify tests fail**
+- [x] **Step 2: Verify tests fail**
 
 Run: `cargo test -p web-server --test authz authorization_revisions -- --test-threads=1`
 
 Expected: FAIL because revision triggers and repository are absent.
 
-- [ ] **Step 3: Implement fact-domain triggers and repository**
+- [x] **Step 3: Implement fact-domain triggers and repository**
 
 Generate trigger verification from registered `FactId` values. Organization-shared facts increment `organization_policy_state`; principal-owned facts increment `principal_authorization_state`; state rows are inserted atomically with organizations and memberships. `RevisionRepository::load` returns an error on missing rows.
 
-- [ ] **Step 4: Verify revision tests pass**
+- [x] **Step 4: Verify revision tests pass**
 
 Run: `cargo test -p web-server --test authz authorization_revisions -- --test-threads=1`
 
 Expected: PASS with exactly one owning revision advanced for each fact mutation.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add db/migrations/20260720_authorization_revisions.sql db/bootstrap/01-safetydb-schema.sql crates/libs/lib-core/src/model/mod.rs crates/libs/lib-core/src/model/authorization crates/services/web-server/tests/authz.rs crates/services/web-server/tests/authz/authorization_revisions.rs
@@ -417,7 +417,7 @@ Expected: FAIL because the snapshot repository and middleware extension are abse
 
 - [ ] **Step 3: Implement the immutable snapshot and repeatable-read loader**
 
-Load membership, assignment, built-in UUID identity, role grants, principal scope facts, both revisions, and active organization in one repeatable-read transaction. Compute entitlements from the registry. Reject `now < access_start_at` and `now >= access_end_at`. Set `authorization_valid_until` to the earliest future access/token boundary.
+Load membership, assignment, built-in UUID identity, role grants, principal scope facts, both revisions, and the active organization's type in one repeatable-read transaction. Compute entitlements from the registry. Reject `now < access_start_at` and `now >= access_end_at`, and fail closed if a sponsor CRO/company built-in identity is incompatible with the current organization type. Set `authorization_valid_until` to the earliest future access/token boundary.
 
 - [ ] **Step 4: Attach the snapshot in middleware without changing decisions**
 
@@ -627,6 +627,7 @@ git commit -m "feat: expose authorization snapshot profile"
 
 **Interfaces:**
 - Produces: `public_route`, `subject_route(SubjectActionId, MethodRouter)`, `context_route(ContextActionId<C>, MethodRouter)`, generated `ENDPOINT_ACTIONS`/OpenAPI/audit-name inventory, and `ShadowDecisionRecord { action, legacy, kernel, reason }`.
+- Produces a canonical proof hash over the catalog hash plus the complete action-binding inventory. Re-evaluate every active migration reconciliation against observed legacy/kernel decisions, set it to `proven_equivalent` or `proven_different`, and invalidate prior proof whenever either its evidence hash or this proof hash changes.
 - Context classification examples: `/cases` GET Collection(Case), `/cases` POST Proposed(CaseCreate), `/cases/{id}` Existing(Case), nested case rows Parent(Case, child), `/cases/export/xml` ResourceSet(Case), `/import/xml` Proposed(XmlImportBatch), `/audit-logs` Collection(AuditLog).
 
 - [ ] **Step 1: Write failing completeness tests**
@@ -655,7 +656,11 @@ Run in frontend: `npm test -- --runInBand __tests__/auth/generated-endpoint-acti
 
 Expected: PASS with 100% explicit route classification and no duplicate binding.
 
-- [ ] **Step 5: Commit once in each repository**
+- [ ] **Step 5: Prove migration equivalence before cutover**
+
+Require every active assignment reconciliation to carry the current catalog/action-binding proof hash. Persist `proven_equivalent` only when all relevant legacy and kernel decisions agree; persist reviewed differences as `proven_different`. Any missing route binding, changed evidence, changed proof hash, or unreviewed mismatch remains `pending_action_binding` and blocks cutover.
+
+- [ ] **Step 6: Commit once in each repository**
 
 ```bash
 git add crates/services/web-server/src/web/mod.rs crates/services/web-server/src/web/authorization crates/services/web-server/src/web/rest/routes crates/services/web-server/tests/authz.rs crates/services/web-server/tests/authz/protected_route_inventory.rs crates/services/web-server/tests/authz/action_binding_completeness.rs crates/services/web-server/examples/export_authorization_contract.rs scripts/generate_frontend_authorization.sh
@@ -875,6 +880,8 @@ Expected: FAIL because role APIs still use `permission_profiles.privileges_json`
 - [ ] **Step 3: Implement normalized role repositories and service transactions**
 
 Lock `organization_policy_state` before active-role counting. Validate grants through generated catalog tables. Reject built-in identity/class fields from public payloads. Return 409 with assignment count for an in-use role and return the canonical server DTO after every successful write.
+
+Before disabling or deleting the legacy profile path, fail the cutover transaction unless every active assignment has a reconciliation row with `comparison_status = 'proven_equivalent'`, `equivalent = true`, and the current catalog/action-binding proof hash. Pending or different rows require an explicit reviewed disposition; startup reconciliation alone never treats them as equivalent.
 
 - [ ] **Step 4: Verify role suites pass**
 
