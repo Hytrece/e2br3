@@ -135,10 +135,10 @@
     },
     "frontend": {
       "status": "mapped",
-      "section": "safetyReportIdentification",
-      "field": "documentsHeldBySender.documentDescription",
-      "file": "../frontend/E2BR3-frontend/components/case-form/sections/SectionC1.tsx",
-      "evidence": "SectionC1 binds fieldNumber C.1.6.1.r.1 to safetyReportIdentification.documentsHeldBySender[index].documentDescription."
+      "section": "documentsHeldBySender",
+      "field": "documentDescription",
+      "file": "../frontend/E2BR3-frontend/app/(protected)/[authority]/case/[id]/detail/CI/components/DocumentsHeldBySenderTable.tsx",
+      "evidence": "The canonical CI table binds C.1.6.1.r.1 to documentsHeldBySender[index].documentDescription."
     },
     "action": "",
     "notes": ""
@@ -159,10 +159,10 @@
     },
     "frontend": {
       "status": "mapped",
-      "section": "safetyReportIdentification",
-      "field": "documentsHeldBySender.includedDocument",
-      "file": "../frontend/E2BR3-frontend/components/case-form/sections/SectionC1.tsx",
-      "evidence": "SectionC1 binds fieldNumber C.1.6.1.r.2 to safetyReportIdentification.documentsHeldBySender[index].includedDocument."
+      "section": "documentsHeldBySender",
+      "field": "includedDocument",
+      "file": "../frontend/E2BR3-frontend/app/(protected)/[authority]/case/[id]/detail/CI/components/DocumentsHeldBySenderTable.tsx",
+      "evidence": "The canonical CI table binds C.1.6.1.r.2 to documentsHeldBySender[index].includedDocument."
     },
     "action": "",
     "notes": "ED component row for C.1.6.1.r.2. Renamed from C.1.6.1.r.2@documentBase64: this payload field is the official Included Documents element."
@@ -1907,10 +1907,10 @@
     },
     "frontend": {
       "status": "mapped",
-      "section": "safetyReportIdentification",
+      "section": "case",
       "field": "reportYear",
-      "file": "../frontend/E2BR3-frontend/components/case-form/sections/SectionC1.tsx",
-      "evidence": "Strict frontend input inventory extracts safetyReportIdentification.reportYear from the case-form section source."
+      "file": "../frontend/E2BR3-frontend/app/(protected)/[authority]/case/[id]/detail/CI/components/CaseIdentificationCoreFields.tsx",
+      "evidence": "The canonical CI core fields bind the app-local report year to case.reportYear."
     },
     "action": "",
     "notes": "App-local non-E2B report year for local tracking (the frontend field is explicitly labelled 'Non-E2B', 4-digit year). Re-pointed from the wrong SafetyReportIdentification model to Case.report_year. No E2B counterpart (C.1.2/C.1.4 are full dates)."
@@ -1932,10 +1932,10 @@
     },
     "frontend": {
       "status": "mapped",
-      "section": "safetyReportIdentification",
-      "field": "sourceDocuments.sourceDocumentName",
-      "file": "../frontend/E2BR3-frontend/components/case-form/sections/SectionC1.tsx",
-      "evidence": "Strict frontend input inventory extracts safetyReportIdentification.sourceDocuments.sourceDocumentName from the case-form section source (repeating sourceDocuments[] upload rows)."
+      "section": "sourceDocuments",
+      "field": "sourceDocumentName",
+      "file": "../frontend/E2BR3-frontend/app/(protected)/[authority]/case/[id]/detail/CI/components/SourceDocumentsTable.tsx",
+      "evidence": "The canonical CI upload table binds repeating sourceDocuments[index].sourceDocumentName rows."
     },
     "action": "",
     "notes": "App-local parallel upload stored in the SourceDocument table (source_document_name/base64/media_type), one row per attachment keyed by case_id and ordered by sequence_number. Previously mis-pointed at the Case model, which has no such field; the mapping went unchecked because Case was outside BACKEND_MODELS. The official Included Documents element (C.1.6.1.r.1 title / C.1.6.1.r.2 payload) is separately mapped via documentsHeldBySender; consider consolidating these two upload paths."
@@ -2156,10 +2156,10 @@
     },
     "frontend": {
       "status": "mapped",
-      "section": "safetyReportIdentification",
-      "field": "linkedReports.linkedReportNumber",
-      "file": "../frontend/E2BR3-frontend/components/case-form/sections/SectionC1.tsx",
-      "evidence": "Strict frontend input inventory extracts safetyReportIdentification.linkedReports.linkedReportNumber from the case-form section source."
+      "section": "linkedReports",
+      "field": "linkedReportNumber",
+      "file": "../frontend/E2BR3-frontend/app/(protected)/[authority]/case/[id]/detail/CI/components/LinkedReportsTable.tsx",
+      "evidence": "The canonical CI table binds C.1.10.r to linkedReports[index].linkedReportNumber."
     },
     "action": "",
     "notes": "Reclassified from backend_missing: the backend was already implemented but the registry pointed at the wrong model. Now mapped to LinkedReportNumber.linked_report_number."
@@ -2180,10 +2180,10 @@
     },
     "frontend": {
       "status": "mapped",
-      "section": "safetyReportIdentification",
-      "field": "otherCaseIdentifiers.source",
-      "file": "../frontend/E2BR3-frontend/components/case-form/sections/SectionC1.tsx",
-      "evidence": "Strict frontend input inventory extracts safetyReportIdentification.otherCaseIdentifiers.source from the case-form section source."
+      "section": "otherCaseIdentifiers",
+      "field": "source",
+      "file": "../frontend/E2BR3-frontend/app/(protected)/[authority]/case/[id]/detail/CI/components/OtherCaseIdentifiersTable.tsx",
+      "evidence": "The canonical CI table binds C.1.9.1.r.1 to otherCaseIdentifiers[index].source."
     },
     "action": "",
     "notes": "Reclassified from backend_missing: the backend was already implemented but the registry pointed at the wrong model. Now mapped to OtherCaseIdentifier.source_of_identifier."
@@ -2204,10 +2204,10 @@
     },
     "frontend": {
       "status": "mapped",
-      "section": "safetyReportIdentification",
-      "field": "otherCaseIdentifiers.caseIdentifier",
-      "file": "../frontend/E2BR3-frontend/components/case-form/sections/SectionC1.tsx",
-      "evidence": "Strict frontend input inventory extracts safetyReportIdentification.otherCaseIdentifiers.caseIdentifier from the case-form section source."
+      "section": "otherCaseIdentifiers",
+      "field": "caseIdentifier",
+      "file": "../frontend/E2BR3-frontend/app/(protected)/[authority]/case/[id]/detail/CI/components/OtherCaseIdentifiersTable.tsx",
+      "evidence": "The canonical CI table binds C.1.9.1.r.2 to otherCaseIdentifiers[index].caseIdentifier."
     },
     "action": "",
     "notes": "Reclassified from backend_missing: the backend was already implemented but the registry pointed at the wrong model. Now mapped to OtherCaseIdentifier.case_identifier."
@@ -2229,10 +2229,10 @@
     },
     "frontend": {
       "status": "mapped",
-      "section": "safetyReportIdentification",
+      "section": "case",
       "field": "fdaReportType",
-      "file": "../frontend/E2BR3-frontend/components/case-form/sections/SectionC1.tsx",
-      "evidence": "Strict frontend input inventory extracts safetyReportIdentification.fdaReportType from the case-form section source."
+      "file": "../frontend/E2BR3-frontend/app/(protected)/[authority]/case/[id]/detail/CI/components/ExpeditedCriteriaFields.tsx",
+      "evidence": "The canonical CI FDA fields bind the app-local report type to case.fdaReportType."
     },
     "action": "",
     "notes": "App-local FDA report-type classification stored on Case.fda_report_type. Re-pointed from the wrong SafetyReportIdentification model. Not an official element (official FDA report type is FDA.C.1.7.1 Local Criteria Report Type, mapped separately); possible concept overlap to revisit."
@@ -2254,10 +2254,10 @@
     },
     "frontend": {
       "status": "mapped",
-      "section": "safetyReportIdentification",
+      "section": "case",
       "field": "mfdsReportType",
-      "file": "../frontend/E2BR3-frontend/components/case-form/sections/SectionC1.tsx",
-      "evidence": "Strict frontend input inventory extracts safetyReportIdentification.mfdsReportType from the case-form section source."
+      "file": "../frontend/E2BR3-frontend/app/(protected)/[authority]/case/[id]/detail/CI/components/CaseIdentificationCoreFields.tsx",
+      "evidence": "The canonical CI MFDS fields bind the app-local report type to case.mfdsReportType."
     },
     "action": "",
     "notes": "App-local MFDS report-type classification stored on Case.mfds_report_type. Re-pointed from the wrong SafetyReportIdentification model. Not one of the 14 official MFDS KR extension elements; the .KR. token only satisfies the MFDS authority code rule."
