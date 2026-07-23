@@ -461,7 +461,7 @@ const C_CONSTRAINT_RULES: &[ConstraintRule<SafetyReportIdentification>] = &[
 	},
 	ConstraintRule {
 		code: "ICH.C.1.11.1.ALLOWED.VALUE",
-		path: "safetyReportIdentification.nullificationCode",
+		path: "safetyReportIdentification.nullificationAmendmentCode",
 		value: |report| {
 			ConstraintValue::Text(
 				report.nullification_code.as_deref().map(Cow::Borrowed),
@@ -503,7 +503,7 @@ const C_LENGTH_RULES: &[LengthRule<SafetyReportIdentification>] = &[
 	},
 	LengthRule {
 		code: "ICH.C.1.11.1.LENGTH.MAX",
-		path: "safetyReportIdentification.nullificationCode",
+		path: "safetyReportIdentification.nullificationAmendmentCode",
 		value: |report| report.nullification_code.as_deref(),
 	},
 	LengthRule {
@@ -2348,7 +2348,7 @@ mod golden_c1_value_tests {
 			vec![
 				issue(
 					"ICH.C.1.11.1.ALLOWED.VALUE",
-					"safetyReportIdentification.nullificationCode",
+					"safetyReportIdentification.nullificationAmendmentCode",
 					true
 				),
 				issue(
@@ -2426,7 +2426,7 @@ mod golden_c1_value_tests {
 				),
 				issue(
 					"ICH.C.1.11.1.LENGTH.MAX",
-					"safetyReportIdentification.nullificationCode",
+					"safetyReportIdentification.nullificationAmendmentCode",
 					true
 				),
 				issue(
