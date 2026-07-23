@@ -95,16 +95,17 @@ Validate the registry:
 python3 registry/tools/validate.py
 ```
 
-Validate the certified CI editor contract field by field:
+Validate a certified editor contract field by field:
 
 ```sh
 python3 registry/tools/validate.py --strict-editor-contract CI
+python3 registry/tools/validate.py --strict-editor-contract RP
 ```
 
-All 26 fields in the CI contract are certified independently. A `complete`
+All 26 CI fields and 30 RP fields are certified independently. A `complete`
 row must include projection, PATCH, roundtrip, constraint, and business-rule
-evidence, with an explicit reason when a stage is not applicable. The CI gate
-does not infer section-level completion.
+evidence, with an explicit reason when a stage is not applicable. The editor
+contract gate does not infer section-level completion.
 
 Validate registry rows against extracted backend BMC fields:
 

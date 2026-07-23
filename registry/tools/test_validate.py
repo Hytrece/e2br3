@@ -89,6 +89,22 @@ class RegistryValidatorTests(unittest.TestCase):
 
         self.assertIn("C.1.3 complete but missing from CI editor contract", result.errors)
 
+    def test_complete_rp_row_requires_field_contract(self) -> None:
+        row = self.editor_row(code="C.2.r.1.1")
+        row["editor_page"] = "RP"
+        row["frontend"]["section"] = "primarySources"
+        row["frontend"]["field"] = "reporterTitle"
+        result = validate.ValidationResult()
+
+        editor_contract.validate_editor_contract(
+            [row], {"pageId": "RP", "fields": []}, result
+        )
+
+        self.assertIn(
+            "C.2.r.1.1 complete but missing from RP editor contract",
+            result.errors,
+        )
+
     def test_editor_contract_requires_registry_frontend_path_match(self):
         field = self.editor_field()
         field["frontendPath"] = "case.reportType"
