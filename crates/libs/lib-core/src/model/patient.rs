@@ -1409,10 +1409,12 @@ impl ReportedCauseOfDeathBmc {
 		list_options: Option<ListOptions>,
 	) -> Result<Vec<ReportedCauseOfDeath>> {
 		let mut filters = filters.unwrap_or_default();
-		filters.push(ReportedCauseOfDeathFilter {
-			deleted: Some(OpValBool::Eq(false).into()),
-			..Default::default()
-		});
+		if filters.is_empty() {
+			filters.push(ReportedCauseOfDeathFilter::default());
+		}
+		for filter in &mut filters {
+			filter.deleted = Some(OpValBool::Eq(false).into());
+		}
 		base_uuid::list::<Self, _, _>(ctx, mm, Some(filters), list_options).await
 	}
 
@@ -1463,10 +1465,12 @@ impl AutopsyCauseOfDeathBmc {
 		list_options: Option<ListOptions>,
 	) -> Result<Vec<AutopsyCauseOfDeath>> {
 		let mut filters = filters.unwrap_or_default();
-		filters.push(AutopsyCauseOfDeathFilter {
-			deleted: Some(OpValBool::Eq(false).into()),
-			..Default::default()
-		});
+		if filters.is_empty() {
+			filters.push(AutopsyCauseOfDeathFilter::default());
+		}
+		for filter in &mut filters {
+			filter.deleted = Some(OpValBool::Eq(false).into());
+		}
 		base_uuid::list::<Self, _, _>(ctx, mm, Some(filters), list_options).await
 	}
 

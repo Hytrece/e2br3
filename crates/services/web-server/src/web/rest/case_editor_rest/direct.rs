@@ -2256,6 +2256,172 @@ async fn apply_dm_page_rows_patch(
 			MedicalHistoryEpisodeBmc::update(ctx, mm, id, update).await?;
 		}
 	}
+
+	let death_info_row = optional_row_object(page_id, rows, "deathInfo")?;
+	let has_death_children =
+		rows.contains_key("reportedCauses") || rows.contains_key("autopsyCauses");
+	let existing_death_info = PatientDeathInformationBmc::list(
+		ctx,
+		mm,
+		Some(vec![PatientDeathInformationFilter {
+			patient_id: Some(uuid_eq(patient_id)),
+		}]),
+		Some(ListOptions::default()),
+	)
+	.await?
+	.into_iter()
+	.next();
+	let death_info_id = if let Some(death_info) = death_info_row {
+		let update = PatientDeathInformationForUpdate {
+			date_of_death: date_field(
+				page_id,
+				death_info,
+				&["dateOfDeath", "date_of_death"],
+			)?,
+			date_of_death_null_flavor: string_field(
+				death_info,
+				&["dateOfDeathNullFlavor", "date_of_death_null_flavor"],
+			),
+			autopsy_performed: bool_field(
+				death_info,
+				&["autopsyPerformed", "autopsy_performed"],
+			),
+			autopsy_performed_null_flavor: string_field(
+				death_info,
+				&[
+					"autopsyPerformedNullFlavor",
+					"autopsy_performed_null_flavor",
+				],
+			),
+		};
+		if let Some(existing) = existing_death_info {
+			PatientDeathInformationBmc::update(ctx, mm, existing.id, update).await?;
+			Some(existing.id)
+		} else {
+			Some(
+				PatientDeathInformationBmc::create(
+					ctx,
+					mm,
+					PatientDeathInformationForCreate {
+						patient_id,
+						date_of_death: update.date_of_death,
+						date_of_death_null_flavor: update.date_of_death_null_flavor,
+						autopsy_performed: update.autopsy_performed,
+						autopsy_performed_null_flavor: update
+							.autopsy_performed_null_flavor,
+					},
+				)
+				.await?,
+			)
+		}
+	} else {
+		existing_death_info.map(|row| row.id)
+	};
+
+	if has_death_children && death_info_id.is_none() {
+		return Err(Error::BadRequest {
+			message: format!(
+				"{page_id}.deathInfo is required before death cause rows"
+			),
+		});
+	}
+	let death_info_id = death_info_id.unwrap_or(Uuid::nil());
+
+	if let Some(value) = rows.get("reportedCauses") {
+		let Some(causes) = value.as_array() else {
+			return Err(Error::BadRequest {
+				message: format!("{page_id}.reportedCauses must be an array"),
+			});
+		};
+		for (index, value) in causes.iter().enumerate() {
+			let cause = as_object(page_id, "reportedCauses", value)?;
+			let id = uuid_field(cause, &["id"]);
+			if bool_field(cause, &["deleted", "_delete"]) == Some(true) {
+				if let Some(id) = id {
+					ReportedCauseOfDeathBmc::delete(ctx, mm, id).await?;
+				}
+				continue;
+			}
+			let update = ReportedCauseOfDeathForUpdate {
+				meddra_version: string_field(
+					cause,
+					&["meddraVersion", "meddra_version"],
+				),
+				meddra_code: string_field(cause, &["meddraCode", "meddra_code"]),
+				comments: string_field(cause, &["causeText", "comments"]),
+			};
+			if let Some(id) = id {
+				ReportedCauseOfDeathBmc::update(ctx, mm, id, update).await?;
+			} else {
+				ReportedCauseOfDeathBmc::create(
+					ctx,
+					mm,
+					ReportedCauseOfDeathForCreate {
+						death_info_id,
+						sequence_number: i32_field(
+							cause,
+							&["sequenceNumber", "sequence_number"],
+						)
+						.unwrap_or_else(|| {
+							i32::try_from(index + 1).unwrap_or(i32::MAX)
+						}),
+						meddra_version: update.meddra_version,
+						meddra_code: update.meddra_code,
+						comments: update.comments,
+					},
+				)
+				.await?;
+			}
+		}
+	}
+
+	if let Some(value) = rows.get("autopsyCauses") {
+		let Some(causes) = value.as_array() else {
+			return Err(Error::BadRequest {
+				message: format!("{page_id}.autopsyCauses must be an array"),
+			});
+		};
+		for (index, value) in causes.iter().enumerate() {
+			let cause = as_object(page_id, "autopsyCauses", value)?;
+			let id = uuid_field(cause, &["id"]);
+			if bool_field(cause, &["deleted", "_delete"]) == Some(true) {
+				if let Some(id) = id {
+					AutopsyCauseOfDeathBmc::delete(ctx, mm, id).await?;
+				}
+				continue;
+			}
+			let update = AutopsyCauseOfDeathForUpdate {
+				meddra_version: string_field(
+					cause,
+					&["meddraVersion", "meddra_version"],
+				),
+				meddra_code: string_field(cause, &["meddraCode", "meddra_code"]),
+				comments: string_field(cause, &["causeText", "comments"]),
+			};
+			if let Some(id) = id {
+				AutopsyCauseOfDeathBmc::update(ctx, mm, id, update).await?;
+			} else {
+				AutopsyCauseOfDeathBmc::create(
+					ctx,
+					mm,
+					AutopsyCauseOfDeathForCreate {
+						death_info_id,
+						sequence_number: i32_field(
+							cause,
+							&["sequenceNumber", "sequence_number"],
+						)
+						.unwrap_or_else(|| {
+							i32::try_from(index + 1).unwrap_or(i32::MAX)
+						}),
+						meddra_version: update.meddra_version,
+						meddra_code: update.meddra_code,
+						comments: update.comments,
+					},
+				)
+				.await?;
+			}
+		}
+	}
 	Ok(())
 }
 
@@ -2755,7 +2921,16 @@ async fn load_editor_dm_data(
 			.await?,
 		);
 	}
-	let death_info = death_information.into_iter().next();
+	let death_info = death_information.into_iter().next().map(|death_info| {
+		let mut value = json!(death_info);
+		if let Value::Object(ref mut map) = value {
+			map.insert(
+				"date_of_death".to_string(),
+				json!(ci_date(death_info.date_of_death)),
+			);
+		}
+		value
+	});
 	let parent_info = parent_information_rows.into_iter().next();
 	let mut patient_projection = json!(patient);
 	if let Value::Object(ref mut map) = patient_projection {

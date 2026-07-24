@@ -58,14 +58,17 @@ pub(super) use lib_core::model::parent_history::{
 	ParentPastDrugHistoryFilter,
 };
 pub(super) use lib_core::model::patient::{
-	AutopsyCauseOfDeathBmc, AutopsyCauseOfDeathFilter, MedicalHistoryEpisodeBmc,
+	AutopsyCauseOfDeathBmc, AutopsyCauseOfDeathFilter, AutopsyCauseOfDeathForCreate,
+	AutopsyCauseOfDeathForUpdate, MedicalHistoryEpisodeBmc,
 	MedicalHistoryEpisodeFilter, MedicalHistoryEpisodeForCreate,
 	MedicalHistoryEpisodeForUpdate, ParentInformationBmc, ParentInformationFilter,
 	PastDrugHistoryBmc, PastDrugHistoryFilter, PastDrugHistoryForCreate,
 	PastDrugHistoryForUpdate, PatientDeathInformationBmc,
-	PatientDeathInformationFilter, PatientIdentifierBmc, PatientIdentifierFilter,
+	PatientDeathInformationFilter, PatientDeathInformationForCreate,
+	PatientDeathInformationForUpdate, PatientIdentifierBmc, PatientIdentifierFilter,
 	PatientInformationBmc, PatientInformationForCreate, PatientInformationForUpdate,
 	ReportedCauseOfDeathBmc, ReportedCauseOfDeathFilter,
+	ReportedCauseOfDeathForCreate, ReportedCauseOfDeathForUpdate,
 };
 pub(super) use lib_core::model::reaction::{
 	ReactionBmc, ReactionForCreate, ReactionForUpdate,

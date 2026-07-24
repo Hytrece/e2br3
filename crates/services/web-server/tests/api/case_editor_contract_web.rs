@@ -3002,6 +3002,163 @@ async fn editor_dm_page_rejects_medical_history_catalog_constraint_before_write(
 
 #[serial]
 #[tokio::test]
+async fn editor_dm_page_cruds_patient_death_rows() -> Result<()> {
+	let mm = init_test_mm().await?;
+	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
+	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
+	let cookie = cookie_header(&token.to_string());
+	let app = web_server::app(mm);
+	let case_id =
+		create_case_for_editor(&app, &cookie, "EDITOR-DM-DEATH", &["ich"]).await?;
+
+	let (status, created) = patch_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/editor/pages/DM"),
+		json!({
+			"rows": {
+				"patientInformation": {"patientInitials": "ABC"},
+				"deathInfo": {
+					"dateOfDeath": "20240102",
+					"autopsyPerformed": true
+				},
+				"reportedCauses": [{
+					"sequenceNumber": 1,
+					"meddraVersion": "26.0",
+					"meddraCode": "10000001",
+					"causeText": "reported cause"
+				}],
+				"autopsyCauses": [{
+					"sequenceNumber": 1,
+					"meddraVersion": "26.0",
+					"meddraCode": "10000001",
+					"causeText": "autopsy cause"
+				}]
+			}
+		}),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK, "{created}");
+	assert_eq!(created["rows"]["deathInfo"]["date_of_death"], "20240102");
+	assert_eq!(created["rows"]["deathInfo"]["autopsy_performed"], true);
+	assert_eq!(
+		created["rows"]["reportedCauses"][0]["meddra_version"],
+		"26.0"
+	);
+	assert_eq!(
+		created["rows"]["reportedCauses"][0]["comments"],
+		"reported cause"
+	);
+	assert_eq!(
+		created["rows"]["autopsyCauses"][0]["comments"],
+		"autopsy cause"
+	);
+
+	let reported_id = created["rows"]["reportedCauses"][0]["id"]
+		.as_str()
+		.expect("reported cause id");
+	let autopsy_id = created["rows"]["autopsyCauses"][0]["id"]
+		.as_str()
+		.expect("autopsy cause id");
+	let (status, updated) = patch_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/editor/pages/DM"),
+		json!({
+			"rows": {
+				"deathInfo": {"autopsyPerformed": false},
+				"reportedCauses": [{
+					"id": reported_id,
+					"causeText": "updated cause"
+				}],
+				"autopsyCauses": [{
+					"id": autopsy_id,
+					"deleted": true
+				}]
+			}
+		}),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK, "{updated}");
+	assert_eq!(updated["rows"]["deathInfo"]["autopsy_performed"], false);
+	assert_eq!(updated["rows"]["deathInfo"]["date_of_death"], "20240102");
+	assert_eq!(
+		updated["rows"]["reportedCauses"][0]["comments"],
+		"updated cause"
+	);
+	assert_eq!(
+		updated["rows"]["autopsyCauses"].as_array().map(Vec::len),
+		Some(0)
+	);
+
+	let (status, reloaded) = get_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/editor/pages/DM"),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK, "{reloaded}");
+	assert_eq!(reloaded["rows"], updated["rows"]);
+
+	Ok(())
+}
+
+#[serial]
+#[tokio::test]
+async fn editor_dm_page_rejects_patient_death_catalog_constraint_before_write(
+) -> Result<()> {
+	let mm = init_test_mm().await?;
+	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
+	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
+	let cookie = cookie_header(&token.to_string());
+	let app = web_server::app(mm);
+	let case_id = create_case_for_editor(
+		&app,
+		&cookie,
+		"EDITOR-DM-DEATH-CONSTRAINT",
+		&["ich"],
+	)
+	.await?;
+
+	let (status, body) = patch_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/editor/pages/DM"),
+		json!({
+			"rows": {
+				"patientInformation": {"patientInitials": "ABC"},
+				"deathInfo": {"autopsyPerformed": "yes"}
+			}
+		}),
+	)
+	.await?;
+
+	assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
+	assert_eq!(body["error"]["message"], "CONSTRAINT_VIOLATION");
+	assert_eq!(
+		body["error"]["data"]["detail"]["ruleCode"],
+		"ICH.D.9.3.ALLOWED.VALUE"
+	);
+	assert_eq!(
+		body["error"]["data"]["detail"]["path"],
+		"patientInformation.patientDeath.autopsyPerformed"
+	);
+
+	let (status, reloaded) = get_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/editor/pages/DM"),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK, "{reloaded}");
+	assert!(reloaded["rows"]["patientInformation"].is_null());
+	assert!(reloaded["rows"]["deathInfo"].is_null());
+
+	Ok(())
+}
+
+#[serial]
+#[tokio::test]
 async fn editor_dm_returns_patient_payload_without_dh_list_rows() -> Result<()> {
 	let mm = init_test_mm().await?;
 	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;

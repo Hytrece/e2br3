@@ -864,6 +864,7 @@
     "section": "D",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "DM",
     "backend": {
       "status": "mapped",
       "model": "PatientDeathInformation",
@@ -888,6 +889,7 @@
     "section": "D",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "DM",
     "backend": {
       "status": "mapped",
       "model": "ReportedCauseOfDeath",
@@ -912,6 +914,7 @@
     "section": "D",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "DM",
     "backend": {
       "status": "mapped",
       "model": "ReportedCauseOfDeath",
@@ -936,6 +939,7 @@
     "section": "D",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "DM",
     "backend": {
       "status": "mapped",
       "model": "ReportedCauseOfDeath",
@@ -960,6 +964,7 @@
     "section": "D",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "DM",
     "backend": {
       "status": "mapped",
       "model": "PatientDeathInformation",
@@ -984,6 +989,7 @@
     "section": "D",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "DM",
     "backend": {
       "status": "mapped",
       "model": "AutopsyCauseOfDeath",
@@ -1008,6 +1014,7 @@
     "section": "D",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "DM",
     "backend": {
       "status": "mapped",
       "model": "AutopsyCauseOfDeath",
@@ -1032,6 +1039,7 @@
     "section": "D",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "DM",
     "backend": {
       "status": "mapped",
       "model": "AutopsyCauseOfDeath",

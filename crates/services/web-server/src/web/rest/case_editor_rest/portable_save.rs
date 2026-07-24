@@ -716,6 +716,73 @@ pub(super) fn validate_direct_rows(
 					Value::Array(normalized_episodes),
 				);
 			}
+			let mut patient_death = optional_row_object(section, rows, "deathInfo")?
+				.map(|row| {
+					normalized_direct_object(
+						row,
+						&[
+							(
+								"dateOfDeath",
+								&[
+									"dateOfDeath",
+									"date_of_death",
+									"dateOfDeathNullFlavor",
+									"date_of_death_null_flavor",
+								],
+							),
+							(
+								"autopsyPerformed",
+								&[
+									"autopsyPerformed",
+									"autopsy_performed",
+									"autopsyPerformedNullFlavor",
+									"autopsy_performed_null_flavor",
+								],
+							),
+						],
+					)
+				})
+				.unwrap_or_default();
+			for (row_key, target) in [
+				("reportedCauses", "reportedCausesOfDeath"),
+				("autopsyCauses", "autopsyCausesOfDeath"),
+			] {
+				if let Some(value) = rows.get(row_key) {
+					let Some(causes) = value.as_array() else {
+						return Err(Error::BadRequest {
+							message: format!("{section}.{row_key} must be an array"),
+						});
+					};
+					let mut normalized_causes = Vec::new();
+					for value in causes {
+						let row = as_object(section, row_key, value)?;
+						if bool_field(row, &["deleted", "_delete"]) == Some(true) {
+							continue;
+						}
+						normalized_causes.push(Value::Object(
+							normalized_direct_object(
+								row,
+								&[
+									(
+										"meddraVersion",
+										&["meddraVersion", "meddra_version"],
+									),
+									("meddraCode", &["meddraCode", "meddra_code"]),
+									("causeText", &["causeText", "comments"]),
+								],
+							),
+						));
+					}
+					patient_death
+						.insert(target.to_string(), Value::Array(normalized_causes));
+				}
+			}
+			if !patient_death.is_empty() {
+				normalized.insert(
+					"patientDeath".to_string(),
+					Value::Object(patient_death),
+				);
+			}
 			Some(normalized)
 		}
 		"NR" => optional_row_object(section, rows, "narrative")?.map(|row| {
