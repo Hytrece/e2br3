@@ -1156,6 +1156,14 @@ fn canonical_actions() -> Vec<ActionPolicyInput> {
 			PrivilegedMutation,
 		),
 		action(
+			"notice.read",
+			DecisionStage::ContextRequired(Existing(ResourceKind::Notice)),
+			&["home.notice.read"],
+			&[],
+			&[SameOrganization],
+			PrivilegedRead,
+		),
+		action(
 			"notice.update",
 			DecisionStage::ContextRequired(Existing(ResourceKind::Notice)),
 			&["home.notice.edit"],

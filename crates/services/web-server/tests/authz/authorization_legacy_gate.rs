@@ -408,6 +408,34 @@ fn export_routes_use_typed_policy_contexts_only() {
 }
 
 #[test]
+fn settings_notice_and_audit_routes_use_typed_policy_contexts_only() {
+	let root = workspace_root();
+	for path in [
+		"crates/services/web-server/src/web/rest/admin_settings_rest.rs",
+		"crates/services/web-server/src/web/rest/audit_rest.rs",
+	] {
+		let source = fs::read_to_string(root.join(path)).unwrap_or_else(|_| {
+			panic!("administration route {path} must be readable")
+		});
+		for legacy in [
+			"model::acs",
+			"legacy_permission_allowed",
+			"require_permission",
+			"permission_subject()",
+		] {
+			assert!(
+				!source.contains(legacy),
+				"administration route {path} still uses legacy authorization: {legacy}"
+			);
+		}
+		assert!(
+			source.contains("AuthorizationSnapshotW"),
+			"administration route {path} must consume the request snapshot"
+		);
+	}
+}
+
+#[test]
 fn role_api_has_one_canonical_metadata_shape() {
 	let root = workspace_root();
 	let source =

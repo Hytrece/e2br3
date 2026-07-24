@@ -1,11 +1,13 @@
 use crate::{Error, Result};
 use lib_core::authorization::{
 	authorize_contextual_mutation, authorize_contextual_read, authorize_subject,
-	policy_registry, AuthorizationContext, AuthorizationDenial, AuthorizedMutation,
-	AuthorizedRead, AuthorizedSubject, CaseChildResource, CaseCreateProposal,
-	CaseResource, Collection, EnforcedScopeFilter, Existing, ImportHistoryResource,
-	Parent, PolicySnapshotVersion, Proposed, RequestAuthorizationSnapshot,
-	ResourceSet, SubmissionResource, XmlImportBatchProposal,
+	existing_notice_context, policy_registry, AuditLogResource,
+	AuthorizationContext, AuthorizationDenial, AuthorizedMutation, AuthorizedRead,
+	AuthorizedSubject, CaseAuditTrailResource, CaseChildResource,
+	CaseCreateProposal, CaseResource, Collection, EnforcedScopeFilter, Existing,
+	ImportHistoryResource, NoticeResource, Parent, PolicySnapshotVersion, Proposed,
+	RequestAuthorizationSnapshot, ResourceSet, SettingsResource, SubmissionResource,
+	XmlImportBatchProposal,
 };
 use lib_core::ctx::{Ctx, ROLE_SYSTEM_ADMIN};
 use lib_core::model::authorization::{
@@ -25,6 +27,20 @@ pub fn denied(denial: AuthorizationDenial) -> Error {
 			denial.reason()
 		),
 	}
+}
+
+pub fn notice_read_allowed(snapshot: &RequestAuthorizationSnapshot) -> bool {
+	let Some(action) =
+		policy_registry().context_action::<Existing<NoticeResource>>("notice.read")
+	else {
+		return false;
+	};
+	authorize_contextual_read(
+		action,
+		snapshot,
+		existing_notice_context(snapshot.organization_id()),
+	)
+	.is_ok()
 }
 
 trait RequestBoundPermit {
@@ -157,6 +173,205 @@ where
 			.context_action::<Collection<CaseResource>>("case.list")
 			.ok_or_else(|| Error::AccessDenied {
 				required_role: "registered case.list action".to_string(),
+			})?;
+		let permit =
+			authorize_contextual_read(action, snapshot, context).map_err(denied)?;
+		let authorized_ctx =
+			rls_ctx_for_authorized_read(request_ctx, snapshot, &permit)?;
+		operation(&authorized_ctx, mm).await
+	}
+	.await;
+	finish_fact_transaction(dbx, result).await
+}
+
+pub async fn with_authorized_settings_read<T, F>(
+	request_ctx: &Ctx,
+	snapshot: &RequestAuthorizationSnapshot,
+	mm: &ModelManager,
+	operation: F,
+) -> Result<T>
+where
+	F: for<'ctx> FnOnce(
+		&'ctx Ctx,
+		&'ctx ModelManager,
+	) -> Pin<Box<dyn Future<Output = Result<T>> + Send + 'ctx>>,
+{
+	let dbx = mm.dbx();
+	dbx.begin_txn()
+		.await
+		.map_err(lib_core::model::Error::from)?;
+	if let Err(error) = set_full_context_from_ctx_dbx(dbx, request_ctx).await {
+		let _ = dbx.rollback_txn().await;
+		return Err(error.into());
+	}
+	let result = async {
+		let context =
+			AuthorizationFactLoader::new(dbx, snapshot).settings_existing();
+		let action = policy_registry()
+			.context_action::<Existing<SettingsResource>>("settings.read")
+			.ok_or_else(|| Error::AccessDenied {
+				required_role: "registered settings.read action".to_string(),
+			})?;
+		let permit =
+			authorize_contextual_read(action, snapshot, context).map_err(denied)?;
+		let authorized_ctx =
+			rls_ctx_for_authorized_read(request_ctx, snapshot, &permit)?;
+		operation(&authorized_ctx, mm).await
+	}
+	.await;
+	finish_fact_transaction(dbx, result).await
+}
+
+pub async fn with_authorized_settings_update<T, F>(
+	request_ctx: &Ctx,
+	snapshot: &RequestAuthorizationSnapshot,
+	mm: &ModelManager,
+	operation: F,
+) -> Result<T>
+where
+	F: for<'ctx> FnOnce(
+		&'ctx Ctx,
+		&'ctx ModelManager,
+	) -> Pin<Box<dyn Future<Output = Result<T>> + Send + 'ctx>>,
+{
+	let dbx = mm.dbx();
+	dbx.begin_txn()
+		.await
+		.map_err(lib_core::model::Error::from)?;
+	if let Err(error) = set_full_context_from_ctx_dbx(dbx, request_ctx).await {
+		let _ = dbx.rollback_txn().await;
+		return Err(error.into());
+	}
+	let result = async {
+		let context = AuthorizationFactLoader::new(dbx, snapshot)
+			.settings_for_mutation()
+			.await
+			.map_err(map_fact_load_error)?;
+		let action = policy_registry()
+			.context_action::<Existing<SettingsResource>>("settings.update")
+			.ok_or_else(|| Error::AccessDenied {
+				required_role: "registered settings.update action".to_string(),
+			})?;
+		let permit = authorize_contextual_mutation(action, snapshot, context)
+			.map_err(denied)?;
+		let authorized_ctx =
+			rls_ctx_for_authorized_mutation(request_ctx, snapshot, &permit)?;
+		operation(&authorized_ctx, mm).await
+	}
+	.await;
+	finish_fact_transaction(dbx, result).await
+}
+
+pub async fn with_authorized_notice_update<T, F>(
+	request_ctx: &Ctx,
+	snapshot: &RequestAuthorizationSnapshot,
+	mm: &ModelManager,
+	operation: F,
+) -> Result<T>
+where
+	F: for<'ctx> FnOnce(
+		&'ctx Ctx,
+		&'ctx ModelManager,
+	) -> Pin<Box<dyn Future<Output = Result<T>> + Send + 'ctx>>,
+{
+	let dbx = mm.dbx();
+	dbx.begin_txn()
+		.await
+		.map_err(lib_core::model::Error::from)?;
+	if let Err(error) = set_full_context_from_ctx_dbx(dbx, request_ctx).await {
+		let _ = dbx.rollback_txn().await;
+		return Err(error.into());
+	}
+	let result = async {
+		let context = AuthorizationFactLoader::new(dbx, snapshot)
+			.notice_for_mutation()
+			.await
+			.map_err(map_fact_load_error)?;
+		let action = policy_registry()
+			.context_action::<Existing<NoticeResource>>("notice.update")
+			.ok_or_else(|| Error::AccessDenied {
+				required_role: "registered notice.update action".to_string(),
+			})?;
+		let permit = authorize_contextual_mutation(action, snapshot, context)
+			.map_err(denied)?;
+		let authorized_ctx =
+			rls_ctx_for_authorized_mutation(request_ctx, snapshot, &permit)?;
+		operation(&authorized_ctx, mm).await
+	}
+	.await;
+	finish_fact_transaction(dbx, result).await
+}
+
+pub async fn with_authorized_audit_log_collection<T, F>(
+	request_ctx: &Ctx,
+	snapshot: &RequestAuthorizationSnapshot,
+	mm: &ModelManager,
+	operation: F,
+) -> Result<T>
+where
+	F: for<'ctx> FnOnce(
+		&'ctx Ctx,
+		&'ctx ModelManager,
+	) -> Pin<Box<dyn Future<Output = Result<T>> + Send + 'ctx>>,
+{
+	let dbx = mm.dbx();
+	dbx.begin_txn()
+		.await
+		.map_err(lib_core::model::Error::from)?;
+	if let Err(error) = set_full_context_from_ctx_dbx(dbx, request_ctx).await {
+		let _ = dbx.rollback_txn().await;
+		return Err(error.into());
+	}
+	let result = async {
+		let context =
+			AuthorizationFactLoader::new(dbx, snapshot).audit_log_collection();
+		let action = policy_registry()
+			.context_action::<Collection<AuditLogResource>>("audit_log.list")
+			.ok_or_else(|| Error::AccessDenied {
+				required_role: "registered audit_log.list action".to_string(),
+			})?;
+		let permit =
+			authorize_contextual_read(action, snapshot, context).map_err(denied)?;
+		let authorized_ctx =
+			rls_ctx_for_authorized_read(request_ctx, snapshot, &permit)?;
+		operation(&authorized_ctx, mm).await
+	}
+	.await;
+	finish_fact_transaction(dbx, result).await
+}
+
+pub async fn with_authorized_case_audit_read<T, F>(
+	request_ctx: &Ctx,
+	snapshot: &RequestAuthorizationSnapshot,
+	mm: &ModelManager,
+	case_id: Uuid,
+	operation: F,
+) -> Result<T>
+where
+	F: for<'ctx> FnOnce(
+		&'ctx Ctx,
+		&'ctx ModelManager,
+	) -> Pin<Box<dyn Future<Output = Result<T>> + Send + 'ctx>>,
+{
+	let dbx = mm.dbx();
+	dbx.begin_txn()
+		.await
+		.map_err(lib_core::model::Error::from)?;
+	if let Err(error) = set_full_context_from_ctx_dbx(dbx, request_ctx).await {
+		let _ = dbx.rollback_txn().await;
+		return Err(error.into());
+	}
+	let result = async {
+		let context = AuthorizationFactLoader::new(dbx, snapshot)
+			.case_audit_trail(case_id)
+			.await
+			.map_err(map_fact_load_error)?;
+		let action = policy_registry()
+			.context_action::<Parent<CaseResource, CaseAuditTrailResource>>(
+				"case.audit.list",
+			)
+			.ok_or_else(|| Error::AccessDenied {
+				required_role: "registered case.audit.list action".to_string(),
 			})?;
 		let permit =
 			authorize_contextual_read(action, snapshot, context).map_err(denied)?;

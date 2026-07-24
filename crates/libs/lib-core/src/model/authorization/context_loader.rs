@@ -1,8 +1,9 @@
 use crate::authorization::{
-	BuiltInIdentityKind, CaseChildResource, CaseCreateProposal, CaseResource,
-	Collection, ContextSnapshot, EnforcedScopeFilter, EvaluatedContext, Existing,
-	ImportHistoryResource, LockedMutationContext, Parent, Proposed,
-	RequestAuthorizationSnapshot, ResourceSet, SubmissionResource,
+	AuditLogResource, BuiltInIdentityKind, CaseAuditTrailResource,
+	CaseChildResource, CaseCreateProposal, CaseResource, Collection,
+	ContextSnapshot, EnforcedScopeFilter, EvaluatedContext, Existing,
+	ImportHistoryResource, LockedMutationContext, NoticeResource, Parent, Proposed,
+	RequestAuthorizationSnapshot, ResourceSet, SettingsResource, SubmissionResource,
 	XmlImportBatchProposal,
 };
 use crate::model::store::dbx::Dbx;
@@ -98,6 +99,50 @@ impl<'tx> AuthorizationFactLoader<'tx> {
 			every_target_authorized: false,
 			enforced_scope_filter: Some(scope_filter(self.snapshot)),
 		})
+	}
+
+	pub fn settings_existing(
+		&self,
+	) -> ContextSnapshot<'tx, Existing<SettingsResource>> {
+		ContextSnapshot::new(organization_resource_evaluated(
+			self.snapshot.organization_id(),
+			"settings",
+		))
+	}
+
+	pub async fn settings_for_mutation(
+		&self,
+	) -> Result<
+		LockedMutationContext<'tx, Existing<SettingsResource>>,
+		AuthorizationFactLoadError,
+	> {
+		self.lock_and_verify_revisions().await?;
+		Ok(LockedMutationContext::new(organization_resource_evaluated(
+			self.snapshot.organization_id(),
+			"settings",
+		)))
+	}
+
+	pub async fn notice_for_mutation(
+		&self,
+	) -> Result<
+		LockedMutationContext<'tx, Existing<NoticeResource>>,
+		AuthorizationFactLoadError,
+	> {
+		self.lock_and_verify_revisions().await?;
+		Ok(LockedMutationContext::new(organization_resource_evaluated(
+			self.snapshot.organization_id(),
+			"notice",
+		)))
+	}
+
+	pub fn audit_log_collection(
+		&self,
+	) -> ContextSnapshot<'tx, Collection<AuditLogResource>> {
+		ContextSnapshot::new(organization_resource_evaluated(
+			self.snapshot.organization_id(),
+			"audit-logs",
+		))
 	}
 
 	pub async fn case_resource_set(
@@ -430,6 +475,23 @@ impl<'tx> AuthorizationFactLoader<'tx> {
 		)))
 	}
 
+	pub async fn case_audit_trail(
+		&self,
+		case_id: Uuid,
+	) -> Result<
+		ContextSnapshot<'tx, Parent<CaseResource, CaseAuditTrailResource>>,
+		AuthorizationFactLoadError,
+	> {
+		let facts = self.load_case_facts(case_id, false).await?;
+		Ok(ContextSnapshot::new(case_child_evaluated(
+			self.snapshot,
+			case_id,
+			"audit-trail",
+			&facts,
+			false,
+		)))
+	}
+
 	pub async fn case_child_for_mutation(
 		&self,
 		case_id: Uuid,
@@ -540,6 +602,21 @@ fn scope_filter(snapshot: &RequestAuthorizationSnapshot) -> EnforcedScopeFilter 
 		snapshot.scope().study_ids().to_vec(),
 		snapshot.scope().blind_allowed(),
 	)
+}
+
+fn organization_resource_evaluated(
+	organization_id: Uuid,
+	resource: &str,
+) -> EvaluatedContext {
+	EvaluatedContext {
+		organization_id: Some(organization_id),
+		target_fingerprint: format!("{resource}:{organization_id}"),
+		within_principal_scope: false,
+		lifecycle_compatible: false,
+		parent_authorized: false,
+		every_target_authorized: false,
+		enforced_scope_filter: None,
+	}
 }
 
 fn case_evaluated(
