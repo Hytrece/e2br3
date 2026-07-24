@@ -1167,10 +1167,25 @@ fn direct_sd_rows_from_changes(
 	for (field, patch) in changes {
 		let (row_key, target) = match field.as_str() {
 			"senderType" => ("senderInformation", "senderType"),
+			"senderHealthProfessionalTypeKr1" => {
+				("senderInformation", "healthProfessionalTypeKr1")
+			}
 			"senderOrganization" => ("senderInformation", "organizationName"),
 			"senderDepartment" => ("senderInformation", "department"),
+			"senderPersonTitle" => ("senderInformation", "personTitle"),
+			"senderPersonGivenName" => ("senderInformation", "personGivenName"),
+			"senderPersonMiddleName" => ("senderInformation", "personMiddleName"),
+			"senderPersonFamilyName" => ("senderInformation", "personFamilyName"),
+			"senderStreetAddress" => ("senderInformation", "streetAddress"),
+			"senderCity" => ("senderInformation", "city"),
+			"senderState" => ("senderInformation", "state"),
+			"senderPostcode" => ("senderInformation", "postcode"),
 			"senderCountryCode" => ("senderInformation", "countryCode"),
+			"senderTelephone" => ("senderInformation", "telephone"),
+			"senderFax" => ("senderInformation", "fax"),
+			"senderEmail" => ("senderInformation", "email"),
 			"messageNumber" => ("messageHeader", "messageNumber"),
+			"batchTransmissionDate" => ("messageHeader", "batchTransmissionDate"),
 			"messageSenderIdentifier" => {
 				("messageHeader", "messageSenderIdentifier")
 			}
@@ -1181,7 +1196,16 @@ fn direct_sd_rows_from_changes(
 				("messageHeader", "batchReceiverIdentifier")
 			}
 			"receiverOrganization" => ("receiverInformation", "organizationName"),
-			"receiverCountryCode" => ("receiverInformation", "countryCode"),
+			"receiverType" => ("receiverInformation", "receiverType"),
+			"receiverDepartment" => ("receiverInformation", "department"),
+			"receiverStreet" => ("receiverInformation", "streetAddress"),
+			"receiverCity" => ("receiverInformation", "city"),
+			"receiverState" => ("receiverInformation", "stateProvince"),
+			"receiverPostcode" => ("receiverInformation", "postcode"),
+			"receiverCountry" => ("receiverInformation", "countryCode"),
+			"receiverTelephone" => ("receiverInformation", "telephone"),
+			"receiverFax" => ("receiverInformation", "fax"),
+			"receiverEmail" => ("receiverInformation", "email"),
 			_ => {
 				return Err(Error::BadRequest {
 					message: format!("unknown {page_id} field '{field}'"),
@@ -1199,6 +1223,49 @@ fn direct_sd_rows_from_changes(
 		map.insert(target.to_string(), patch_json_value(patch));
 	}
 	Ok(rows)
+}
+
+fn datetime_field(
+	page_id: &str,
+	row: &Map<String, Value>,
+	keys: &[&str],
+) -> Result<Option<time::OffsetDateTime>> {
+	let Some(value) = keys.iter().find_map(|key| row.get(*key)) else {
+		return Ok(None);
+	};
+	if value.is_null() {
+		return Ok(None);
+	}
+	let Some(value) = value.as_str().map(str::trim) else {
+		return Err(Error::BadRequest {
+			message: format!(
+				"{page_id}.{} must be a datetime string or null",
+				keys[0]
+			),
+		});
+	};
+	if value.is_empty() {
+		return Ok(None);
+	}
+	if let Ok(value) = time::OffsetDateTime::parse(
+		value,
+		&time::format_description::well_known::Rfc3339,
+	) {
+		return Ok(Some(value));
+	}
+	let format =
+		time::format_description::parse("[year][month][day][hour][minute][second]")
+			.map_err(|err| Error::BadRequest {
+				message: format!("failed to initialize E2B datetime parser: {err}"),
+			})?;
+	time::PrimitiveDateTime::parse(value, &format)
+		.map(|value| Some(value.assume_utc()))
+		.map_err(|_| Error::BadRequest {
+			message: format!(
+				"{page_id}.{} must be RFC3339 or YYYYMMDDhhmmss",
+				keys[0]
+			),
+		})
 }
 
 async fn apply_rp_page_rows_patch(
@@ -1429,7 +1496,11 @@ async fn apply_sd_page_rows_patch(
 					message_header,
 					&["batchReceiverIdentifier", "batch_receiver_identifier"],
 				),
-				batch_transmission_date: None,
+				batch_transmission_date: datetime_field(
+					page_id,
+					message_header,
+					&["batchTransmissionDate", "batch_transmission_date"],
+				)?,
 				message_number: string_field(
 					message_header,
 					&["messageNumber", "message_number"],
@@ -1491,7 +1562,18 @@ async fn apply_sd_page_rows_patch(
 			fax: string_field(sender, &["fax"]),
 			email: string_field(sender, &["email"]),
 		};
-		if let Some(id) = uuid_field(sender, &["id"]) {
+		let existing_sender_id = SenderInformationBmc::list(
+			ctx,
+			mm,
+			Some(vec![SenderInformationFilter {
+				case_id: Some(uuid_eq(case_id)),
+			}]),
+			Some(ListOptions::default()),
+		)
+		.await?
+		.first()
+		.map(|row| row.id);
+		if let Some(id) = uuid_field(sender, &["id"]).or(existing_sender_id) {
 			SenderInformationBmc::update(ctx, mm, id, update).await?;
 		} else {
 			SenderInformationBmc::create(
@@ -1514,6 +1596,61 @@ async fn apply_sd_page_rows_patch(
 					person_given_name: update.person_given_name,
 					person_middle_name: update.person_middle_name,
 					person_family_name: update.person_family_name,
+					telephone: update.telephone,
+					fax: update.fax,
+					email: update.email,
+				},
+			)
+			.await?;
+		}
+	}
+	if let Some(receiver) =
+		optional_row_object(page_id, rows, "receiverInformation")?
+	{
+		let update = ReceiverInformationForUpdate {
+			receiver_type: string_field(
+				receiver,
+				&["receiverType", "receiver_type"],
+			),
+			organization_name: string_field(
+				receiver,
+				&["organizationName", "organization_name"],
+			),
+			department: string_field(receiver, &["department"]),
+			street_address: string_field(
+				receiver,
+				&["streetAddress", "street_address"],
+			),
+			city: string_field(receiver, &["city"]),
+			state_province: string_field(
+				receiver,
+				&["stateProvince", "state_province"],
+			),
+			postcode: string_field(receiver, &["postcode"]),
+			country_code: string_field(receiver, &["countryCode", "country_code"]),
+			telephone: string_field(receiver, &["telephone"]),
+			fax: string_field(receiver, &["fax"]),
+			email: string_field(receiver, &["email"]),
+		};
+		if ReceiverInformationBmc::get_by_case_optional(ctx, mm, case_id)
+			.await?
+			.is_some()
+		{
+			ReceiverInformationBmc::update_by_case(ctx, mm, case_id, update).await?;
+		} else {
+			ReceiverInformationBmc::create(
+				ctx,
+				mm,
+				ReceiverInformationForCreate {
+					case_id,
+					receiver_type: update.receiver_type,
+					organization_name: update.organization_name,
+					department: update.department,
+					street_address: update.street_address,
+					city: update.city,
+					state_province: update.state_province,
+					postcode: update.postcode,
+					country_code: update.country_code,
 					telephone: update.telephone,
 					fax: update.fax,
 					email: update.email,
@@ -1923,12 +2060,6 @@ async fn load_editor_sd_data(
 	mm: &ModelManager,
 	case_id: Uuid,
 ) -> Result<Value> {
-	let safety_report_identification =
-		match SafetyReportIdentificationBmc::get_by_case(ctx, mm, case_id).await {
-			Ok(entity) => Some(entity),
-			Err(lib_core::model::Error::EntityUuidNotFound { .. }) => None,
-			Err(err) => return Err(err.into()),
-		};
 	let sender_information = SenderInformationBmc::list(
 		ctx,
 		mm,
@@ -1939,9 +2070,8 @@ async fn load_editor_sd_data(
 	)
 	.await?;
 	let sender = sender_information.first().cloned();
-	// The SD page patch writes message-header routing fields
-	// (messageReceiverIdentifier / batchReceiverIdentifier), so the projection
-	// must load the message header back for the edit to round-trip.
+	let receiver =
+		ReceiverInformationBmc::get_by_case_optional(ctx, mm, case_id).await?;
 	let message_header = match MessageHeaderBmc::get_by_case(ctx, mm, case_id).await
 	{
 		Ok(entity) => Some(entity),
@@ -1949,10 +2079,77 @@ async fn load_editor_sd_data(
 		Err(err) => return Err(err.into()),
 	};
 
+	let safety_report_identification = json!({
+		"senderInformationId": sender.as_ref().map(|row| row.id),
+		"senderType": sender.as_ref().and_then(|row| row.sender_type.clone()),
+		"senderHealthProfessionalTypeKr1": sender
+			.as_ref()
+			.and_then(|row| row.health_professional_type_kr1.clone()),
+		"senderOrganization": sender
+			.as_ref()
+			.and_then(|row| row.organization_name.clone()),
+		"senderDepartment": sender.as_ref().and_then(|row| row.department.clone()),
+		"senderPersonTitle": sender.as_ref().and_then(|row| row.person_title.clone()),
+		"senderPersonGivenName": sender
+			.as_ref()
+			.and_then(|row| row.person_given_name.clone()),
+		"senderPersonMiddleName": sender
+			.as_ref()
+			.and_then(|row| row.person_middle_name.clone()),
+		"senderPersonFamilyName": sender
+			.as_ref()
+			.and_then(|row| row.person_family_name.clone()),
+		"senderStreetAddress": sender
+			.as_ref()
+			.and_then(|row| row.street_address.clone()),
+		"senderCity": sender.as_ref().and_then(|row| row.city.clone()),
+		"senderState": sender.as_ref().and_then(|row| row.state.clone()),
+		"senderPostcode": sender.as_ref().and_then(|row| row.postcode.clone()),
+		"senderCountryCode": sender.as_ref().and_then(|row| row.country_code.clone()),
+		"senderTelephone": sender.as_ref().and_then(|row| row.telephone.clone()),
+		"senderFax": sender.as_ref().and_then(|row| row.fax.clone()),
+		"senderEmail": sender.as_ref().and_then(|row| row.email.clone()),
+		"receiverType": receiver.as_ref().and_then(|row| row.receiver_type.clone()),
+		"receiverOrganization": receiver
+			.as_ref()
+			.and_then(|row| row.organization_name.clone()),
+		"receiverDepartment": receiver.as_ref().and_then(|row| row.department.clone()),
+		"receiverStreet": receiver.as_ref().and_then(|row| row.street_address.clone()),
+		"receiverCity": receiver.as_ref().and_then(|row| row.city.clone()),
+		"receiverState": receiver.as_ref().and_then(|row| row.state_province.clone()),
+		"receiverPostcode": receiver.as_ref().and_then(|row| row.postcode.clone()),
+		"receiverCountry": receiver.as_ref().and_then(|row| row.country_code.clone()),
+		"receiverTelephone": receiver.as_ref().and_then(|row| row.telephone.clone()),
+		"receiverFax": receiver.as_ref().and_then(|row| row.fax.clone()),
+		"receiverEmail": receiver.as_ref().and_then(|row| row.email.clone()),
+	});
+	let message_header = message_header.map(|row| {
+		json!({
+			"batchNumber": row.batch_number,
+			"batchSenderIdentifier": row.batch_sender_identifier,
+			"batchReceiverIdentifier": row.batch_receiver_identifier,
+			"batchTransmissionDate": row.batch_transmission_date.map(|value| {
+				format!(
+					"{:04}{:02}{:02}{:02}{:02}{:02}",
+					value.year(),
+					u8::from(value.month()),
+					value.day(),
+					value.hour(),
+					value.minute(),
+					value.second(),
+				)
+			}),
+			"messageNumber": row.message_number,
+			"messageSenderIdentifier": row.message_sender_identifier,
+			"messageReceiverIdentifier": row.message_receiver_identifier,
+			"messageDate": row.message_date,
+		})
+	});
 	Ok(json!({
 		"safetyReportIdentification": safety_report_identification,
 		"senderInformation": sender_information,
 		"sender": sender,
+		"receiverInformation": receiver,
 		"messageHeader": message_header,
 	}))
 }
@@ -1969,6 +2166,7 @@ pub async fn get_editor_sd(
 	require_permission(&ctx, CASE_READ)?;
 	require_permission(&ctx, SAFETY_REPORT_READ)?;
 	require_permission(&ctx, SENDER_INFORMATION_LIST)?;
+	require_permission(&ctx, RECEIVER_READ)?;
 	lib_rest_core::require_case_read_allowed(&ctx, &mm, case_id).await?;
 
 	Ok(direct_section_response(
@@ -1981,7 +2179,7 @@ direct_page_projection_handler!(
 	get_editor_sd_page_projection,
 	"SD",
 	load_editor_sd_data,
-	[SAFETY_REPORT_READ, SENDER_INFORMATION_LIST],
+	[SAFETY_REPORT_READ, SENDER_INFORMATION_LIST, RECEIVER_READ],
 );
 
 async fn load_editor_lr_data(

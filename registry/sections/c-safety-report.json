@@ -841,6 +841,7 @@
     "section": "C",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "SD",
     "backend": {
       "status": "mapped",
       "model": "SenderInformation",
@@ -865,6 +866,7 @@
     "section": "C",
     "authority": "MFDS",
     "status": "complete",
+    "editor_page": "SD",
     "backend": {
       "status": "mapped",
       "model": "SenderInformation",
@@ -889,6 +891,7 @@
     "section": "C",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "SD",
     "backend": {
       "status": "mapped",
       "model": "SenderInformation",
@@ -913,6 +916,7 @@
     "section": "C",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "SD",
     "backend": {
       "status": "mapped",
       "model": "SenderInformation",
@@ -937,6 +941,7 @@
     "section": "C",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "SD",
     "backend": {
       "status": "mapped",
       "model": "SenderInformation",
@@ -961,6 +966,7 @@
     "section": "C",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "SD",
     "backend": {
       "status": "mapped",
       "model": "SenderInformation",
@@ -985,6 +991,7 @@
     "section": "C",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "SD",
     "backend": {
       "status": "mapped",
       "model": "SenderInformation",
@@ -1009,6 +1016,7 @@
     "section": "C",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "SD",
     "backend": {
       "status": "mapped",
       "model": "SenderInformation",
@@ -1033,6 +1041,7 @@
     "section": "C",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "SD",
     "backend": {
       "status": "mapped",
       "model": "SenderInformation",
@@ -1057,6 +1066,7 @@
     "section": "C",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "SD",
     "backend": {
       "status": "mapped",
       "model": "SenderInformation",
@@ -1081,6 +1091,7 @@
     "section": "C",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "SD",
     "backend": {
       "status": "mapped",
       "model": "SenderInformation",
@@ -1105,6 +1116,7 @@
     "section": "C",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "SD",
     "backend": {
       "status": "mapped",
       "model": "SenderInformation",
@@ -1129,6 +1141,7 @@
     "section": "C",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "SD",
     "backend": {
       "status": "mapped",
       "model": "SenderInformation",
@@ -1153,6 +1166,7 @@
     "section": "C",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "SD",
     "backend": {
       "status": "mapped",
       "model": "SenderInformation",
@@ -1177,6 +1191,7 @@
     "section": "C",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "SD",
     "backend": {
       "status": "mapped",
       "model": "SenderInformation",
@@ -1201,6 +1216,7 @@
     "section": "C",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "SD",
     "backend": {
       "status": "mapped",
       "model": "SenderInformation",
@@ -1614,6 +1630,7 @@
     "section": "C",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "SD",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -1639,6 +1656,7 @@
     "section": "C",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "SD",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -1664,6 +1682,7 @@
     "section": "C",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "SD",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -1689,6 +1708,7 @@
     "section": "C",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "SD",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -1714,6 +1734,7 @@
     "section": "C",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "SD",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -1739,6 +1760,7 @@
     "section": "C",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "SD",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -1764,6 +1786,7 @@
     "section": "C",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "SD",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -1789,6 +1812,7 @@
     "section": "C",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "SD",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -1814,6 +1838,7 @@
     "section": "C",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "SD",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -1839,6 +1864,7 @@
     "section": "C",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "SD",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -1864,6 +1890,7 @@
     "section": "C",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "SD",
     "local_only": true,
     "backend": {
       "status": "mapped",

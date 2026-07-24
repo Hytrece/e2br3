@@ -2360,7 +2360,16 @@ async fn editor_sd_page_patch_persists_sender_information_row() -> Result<()> {
 				"senderInformation": {
 					"senderType": "3",
 					"organizationName": "Sender Org",
-					"healthProfessionalTypeKr1": "4"
+					"healthProfessionalTypeKr1": "4",
+					"personGivenName": "Sora",
+					"email": "sender@example.test"
+				},
+				"receiverInformation": {
+					"receiverType": "2",
+					"organizationName": "Receiver Org",
+					"stateProvince": "Seoul",
+					"countryCode": "KR",
+					"email": "receiver@example.test"
 				}
 			}
 		}),
@@ -2369,12 +2378,53 @@ async fn editor_sd_page_patch_persists_sender_information_row() -> Result<()> {
 
 	assert_eq!(status, StatusCode::OK, "{body}");
 	assert_eq!(
-		body["rows"]["senderInformation"][0]["organization_name"],
+		body["rows"]["safetyReportIdentification"]["senderOrganization"],
 		"Sender Org"
 	);
 	assert_eq!(
-		body["rows"]["senderInformation"][0]["health_professional_type_kr1"],
+		body["rows"]["safetyReportIdentification"]
+			["senderHealthProfessionalTypeKr1"],
 		"4"
+	);
+	assert_eq!(
+		body["rows"]["safetyReportIdentification"]["senderPersonGivenName"],
+		"Sora"
+	);
+	assert_eq!(
+		body["rows"]["safetyReportIdentification"]["receiverOrganization"],
+		"Receiver Org"
+	);
+	assert_eq!(
+		body["rows"]["safetyReportIdentification"]["receiverState"],
+		"Seoul"
+	);
+
+	// A second scalar change must update the existing singleton instead of
+	// attempting to create another sender row.
+	let (status, body) = patch_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/editor/pages/SD"),
+		json!({
+			"changes": {
+				"senderOrganization": { "value": "Sender Org Updated" },
+				"receiverOrganization": { "value": "Receiver Org Updated" }
+			}
+		}),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK, "{body}");
+	assert_eq!(
+		body["rows"]["safetyReportIdentification"]["senderOrganization"],
+		"Sender Org Updated"
+	);
+	assert_eq!(
+		body["rows"]["safetyReportIdentification"]["receiverOrganization"],
+		"Receiver Org Updated"
+	);
+	assert_eq!(
+		body["rows"]["senderInformation"].as_array().map(Vec::len),
+		Some(1)
 	);
 
 	Ok(())
@@ -2420,7 +2470,8 @@ async fn editor_sd_page_patch_accepts_batch_receiver_identifier_change() -> Resu
 			"authorities": ["fda"],
 			"changes": {
 				"messageReceiverIdentifier": { "value": "CDER" },
-				"batchReceiverIdentifier": { "value": "ZZFDA" }
+				"batchReceiverIdentifier": { "value": "ZZFDA" },
+				"batchTransmissionDate": { "value": "20260724153045" }
 			}
 		}),
 	)
@@ -2428,12 +2479,16 @@ async fn editor_sd_page_patch_accepts_batch_receiver_identifier_change() -> Resu
 
 	assert_eq!(status, StatusCode::OK, "{body}");
 	assert_eq!(
-		body["rows"]["messageHeader"]["message_receiver_identifier"],
+		body["rows"]["messageHeader"]["messageReceiverIdentifier"],
 		"CDER"
 	);
 	assert_eq!(
-		body["rows"]["messageHeader"]["batch_receiver_identifier"],
+		body["rows"]["messageHeader"]["batchReceiverIdentifier"],
 		"ZZFDA"
+	);
+	assert_eq!(
+		body["rows"]["messageHeader"]["batchTransmissionDate"],
+		"20260724153045"
 	);
 
 	let (status, body) = patch_json(
@@ -2449,10 +2504,7 @@ async fn editor_sd_page_patch_accepts_batch_receiver_identifier_change() -> Resu
 	.await?;
 
 	assert_eq!(status, StatusCode::OK, "{body}");
-	assert_eq!(
-		body["rows"]["messageHeader"]["batch_receiver_identifier"],
-		""
-	);
+	assert_eq!(body["rows"]["messageHeader"]["batchReceiverIdentifier"], "");
 
 	Ok(())
 }

@@ -72,6 +72,10 @@ pub(super) use lib_core::model::patient::{
 pub(super) use lib_core::model::reaction::{
 	ReactionBmc, ReactionForCreate, ReactionForUpdate,
 };
+pub(super) use lib_core::model::receiver::{
+	ReceiverInformationBmc, ReceiverInformationForCreate,
+	ReceiverInformationForUpdate,
+};
 pub(super) use lib_core::model::safety_report::{
 	DocumentsHeldBySenderBmc, DocumentsHeldBySenderFilter,
 	DocumentsHeldBySenderForCreate, DocumentsHeldBySenderForUpdate,
