@@ -3304,6 +3304,160 @@ async fn editor_dm_page_rejects_parent_catalog_constraint_before_write() -> Resu
 
 #[serial]
 #[tokio::test]
+async fn editor_dm_page_cruds_parent_medical_history_rows() -> Result<()> {
+	let mm = init_test_mm().await?;
+	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
+	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
+	let cookie = cookie_header(&token.to_string());
+	let app = web_server::app(mm);
+	let case_id =
+		create_case_for_editor(&app, &cookie, "EDITOR-DM-PARENT-HISTORY", &["ich"])
+			.await?;
+
+	let (status, created) = patch_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/editor/pages/DM"),
+		json!({
+			"rows": {
+				"patientInformation": {"patientInitials": "ABC"},
+				"parentInfo": {"parentIdentification": "MOTHER-01"},
+				"parentMedicalHistory": [{
+					"sequenceNumber": 1,
+					"meddraVersion": "26.0",
+					"meddraCode": "10000001",
+					"startDate": "20200102",
+					"continuing": false,
+					"endDate": "20210102",
+					"comments": "resolved"
+				}]
+			}
+		}),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK, "{created}");
+	assert_eq!(
+		created["rows"]["parentMedicalHistory"][0]["meddra_version"],
+		"26.0"
+	);
+	assert_eq!(
+		created["rows"]["parentMedicalHistory"][0]["start_date"],
+		"20200102"
+	);
+	assert_eq!(
+		created["rows"]["parentMedicalHistory"][0]["comments"],
+		"resolved"
+	);
+
+	let row_id = created["rows"]["parentMedicalHistory"][0]["id"]
+		.as_str()
+		.expect("parent medical history id");
+	let (status, updated) = patch_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/editor/pages/DM"),
+		json!({
+			"rows": {
+				"parentMedicalHistory": [{
+					"id": row_id,
+					"comments": "updated"
+				}]
+			}
+		}),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK, "{updated}");
+	assert_eq!(
+		updated["rows"]["parentMedicalHistory"][0]["comments"],
+		"updated"
+	);
+	assert_eq!(
+		updated["rows"]["parentMedicalHistory"][0]["meddra_code"],
+		"10000001"
+	);
+
+	let (status, deleted) = patch_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/editor/pages/DM"),
+		json!({
+			"rows": {
+				"parentMedicalHistory": [{
+					"id": row_id,
+					"deleted": true
+				}]
+			}
+		}),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK, "{deleted}");
+	assert_eq!(
+		deleted["rows"]["parentMedicalHistory"]
+			.as_array()
+			.map(Vec::len),
+		Some(0)
+	);
+
+	Ok(())
+}
+
+#[serial]
+#[tokio::test]
+async fn editor_dm_page_rejects_parent_history_catalog_constraint_before_write(
+) -> Result<()> {
+	let mm = init_test_mm().await?;
+	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
+	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
+	let cookie = cookie_header(&token.to_string());
+	let app = web_server::app(mm);
+	let case_id = create_case_for_editor(
+		&app,
+		&cookie,
+		"EDITOR-DM-PARENT-HISTORY-CONSTRAINT",
+		&["ich"],
+	)
+	.await?;
+
+	let (status, body) = patch_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/editor/pages/DM"),
+		json!({
+			"rows": {
+				"patientInformation": {"patientInitials": "ABC"},
+				"parentInfo": {"parentIdentification": "MOTHER-01"},
+				"parentMedicalHistory": [{"continuing": "yes"}]
+			}
+		}),
+	)
+	.await?;
+
+	assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
+	assert_eq!(body["error"]["message"], "CONSTRAINT_VIOLATION");
+	assert_eq!(
+		body["error"]["data"]["detail"]["ruleCode"],
+		"ICH.D.10.7.1.r.3.ALLOWED.VALUE"
+	);
+	assert_eq!(
+		body["error"]["data"]["detail"]["path"],
+		"patientInformation.parentInformation.medicalHistoryEpisodes.0.continuing"
+	);
+
+	let (status, reloaded) = get_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/editor/pages/DM"),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK, "{reloaded}");
+	assert!(reloaded["rows"]["patientInformation"].is_null());
+	assert!(reloaded["rows"]["parentInfo"].is_null());
+
+	Ok(())
+}
+
+#[serial]
+#[tokio::test]
 async fn editor_dm_returns_patient_payload_without_dh_list_rows() -> Result<()> {
 	let mm = init_test_mm().await?;
 	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;

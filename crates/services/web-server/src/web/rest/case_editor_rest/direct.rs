@@ -2530,6 +2530,91 @@ async fn apply_dm_page_rows_patch(
 			}
 		}
 	}
+
+	if let Some(value) = rows.get("parentMedicalHistory") {
+		let Some(history_rows) = value.as_array() else {
+			return Err(Error::BadRequest {
+				message: format!("{page_id}.parentMedicalHistory must be an array"),
+			});
+		};
+		let parent_id = ParentInformationBmc::list(
+			ctx,
+			mm,
+			Some(vec![ParentInformationFilter {
+				patient_id: Some(uuid_eq(patient_id)),
+				..Default::default()
+			}]),
+			Some(ListOptions::default()),
+		)
+		.await?
+		.into_iter()
+		.next()
+		.map(|row| row.id)
+		.ok_or_else(|| Error::BadRequest {
+			message: format!(
+				"{page_id}.parentInfo is required before parent medical history"
+			),
+		})?;
+		for (index, value) in history_rows.iter().enumerate() {
+			let history = as_object(page_id, "parentMedicalHistory", value)?;
+			let id = uuid_field(history, &["id"]);
+			if bool_field(history, &["deleted", "_delete"]) == Some(true) {
+				if let Some(id) = id {
+					ParentMedicalHistoryBmc::delete(ctx, mm, id).await?;
+				}
+				continue;
+			}
+			let meddra_code = string_field(history, &["meddraCode", "meddra_code"]);
+			let start_date_null_flavor = string_field(
+				history,
+				&["startDateNullFlavor", "start_date_null_flavor"],
+			);
+			let end_date_null_flavor = string_field(
+				history,
+				&["endDateNullFlavor", "end_date_null_flavor"],
+			);
+			let update = ParentMedicalHistoryForUpdate {
+				meddra_version: string_field(
+					history,
+					&["meddraVersion", "meddra_version"],
+				),
+				meddra_code: meddra_code.clone(),
+				start_date: date_field(
+					page_id,
+					history,
+					&["startDate", "start_date"],
+				)?,
+				start_date_null_flavor: start_date_null_flavor.clone(),
+				continuing: bool_field(history, &["continuing"]),
+				end_date: date_field(page_id, history, &["endDate", "end_date"])?,
+				end_date_null_flavor: end_date_null_flavor.clone(),
+				comments: string_field(history, &["comments"]),
+			};
+			let id = if let Some(id) = id {
+				id
+			} else {
+				ParentMedicalHistoryBmc::create(
+					ctx,
+					mm,
+					ParentMedicalHistoryForCreate {
+						parent_id,
+						sequence_number: i32_field(
+							history,
+							&["sequenceNumber", "sequence_number"],
+						)
+						.unwrap_or_else(|| {
+							i32::try_from(index + 1).unwrap_or(i32::MAX)
+						}),
+						meddra_code,
+						start_date_null_flavor,
+						end_date_null_flavor,
+					},
+				)
+				.await?
+			};
+			ParentMedicalHistoryBmc::update(ctx, mm, id, update).await?;
+		}
+	}
 	Ok(())
 }
 
@@ -2972,6 +3057,23 @@ async fn load_editor_dm_data(
 			Some(ListOptions::default()),
 		)
 		.await?;
+		let medical_history = medical_history
+			.into_iter()
+			.map(|history| {
+				let mut value = json!(history);
+				if let Value::Object(ref mut map) = value {
+					map.insert(
+						"start_date".to_string(),
+						json!(ci_date(history.start_date)),
+					);
+					map.insert(
+						"end_date".to_string(),
+						json!(ci_date(history.end_date)),
+					);
+				}
+				value
+			})
+			.collect::<Vec<_>>();
 		let past_drug_history = ParentPastDrugHistoryBmc::list(
 			ctx,
 			mm,

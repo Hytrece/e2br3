@@ -783,58 +783,106 @@ pub(super) fn validate_direct_rows(
 					Value::Object(patient_death),
 				);
 			}
-			if let Some(parent) = optional_row_object(section, rows, "parentInfo")? {
+			let mut parent_information =
+				optional_row_object(section, rows, "parentInfo")?
+					.map(|parent| {
+						normalized_direct_object(
+							parent,
+							&[
+								(
+									"parentIdentification",
+									&[
+										"parentIdentification",
+										"parent_identification",
+									],
+								),
+								(
+									"parentBirthDate",
+									&[
+										"parentBirthDate",
+										"parent_birth_date",
+										"parentBirthDateNullFlavor",
+										"parent_birth_date_null_flavor",
+									],
+								),
+								(
+									"parentAge.value",
+									&["parentAge.value", "parent_age"],
+								),
+								(
+									"parentAge.unit",
+									&[
+										"parentAge.unit",
+										"parentAgeUnit",
+										"parent_age_unit",
+									],
+								),
+								(
+									"parentLastMenstrualPeriodDate",
+									&[
+										"parentLastMenstrualPeriodDate",
+										"last_menstrual_period_date",
+										"parentLastMenstrualPeriodDateNullFlavor",
+										"last_menstrual_period_date_null_flavor",
+									],
+								),
+								(
+									"parentWeight.value",
+									&["parentWeight.value", "weight_kg"],
+								),
+								(
+									"parentHeight.value",
+									&["parentHeight.value", "height_cm"],
+								),
+								("parentSex", &["parentSex", "sex"]),
+								(
+									"medicalHistoryText",
+									&["medicalHistoryText", "medical_history_text"],
+								),
+							],
+						)
+					})
+					.unwrap_or_default();
+			if let Some(value) = rows.get("parentMedicalHistory") {
+				let Some(history_rows) = value.as_array() else {
+					return Err(Error::BadRequest {
+						message: format!(
+							"{section}.parentMedicalHistory must be an array"
+						),
+					});
+				};
+				let mut normalized_history = Vec::new();
+				for value in history_rows {
+					let row = as_object(section, "parentMedicalHistory", value)?;
+					if bool_field(row, &["deleted", "_delete"]) == Some(true) {
+						continue;
+					}
+					normalized_history.push(Value::Object(
+						normalized_direct_object(
+							row,
+							&[
+								(
+									"meddraVersion",
+									&["meddraVersion", "meddra_version"],
+								),
+								("meddraCode", &["meddraCode", "meddra_code"]),
+								("startDate", &["startDate", "start_date"]),
+								("continuing", &["continuing"]),
+								("endDate", &["endDate", "end_date"]),
+								("comments", &["comments"]),
+							],
+						),
+					));
+				}
+				parent_information.insert(
+					"medicalHistoryEpisodes".to_string(),
+					Value::Array(normalized_history),
+				);
+			}
+			if !parent_information.is_empty() {
 				normalized.insert(
 					"parentInformation".to_string(),
-					Value::Object(normalized_direct_object(
-						parent,
-						&[
-							(
-								"parentIdentification",
-								&["parentIdentification", "parent_identification"],
-							),
-							(
-								"parentBirthDate",
-								&[
-									"parentBirthDate",
-									"parent_birth_date",
-									"parentBirthDateNullFlavor",
-									"parent_birth_date_null_flavor",
-								],
-							),
-							("parentAge.value", &["parentAge.value", "parent_age"]),
-							(
-								"parentAge.unit",
-								&[
-									"parentAge.unit",
-									"parentAgeUnit",
-									"parent_age_unit",
-								],
-							),
-							(
-								"parentLastMenstrualPeriodDate",
-								&[
-									"parentLastMenstrualPeriodDate",
-									"last_menstrual_period_date",
-									"parentLastMenstrualPeriodDateNullFlavor",
-									"last_menstrual_period_date_null_flavor",
-								],
-							),
-							(
-								"parentWeight.value",
-								&["parentWeight.value", "weight_kg"],
-							),
-							(
-								"parentHeight.value",
-								&["parentHeight.value", "height_cm"],
-							),
-							("parentSex", &["parentSex", "sex"]),
-							(
-								"medicalHistoryText",
-								&["medicalHistoryText", "medical_history_text"],
-							),
-						],
-					)),
+					Value::Object(parent_information),
 				);
 			}
 			Some(normalized)

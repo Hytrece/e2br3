@@ -1264,6 +1264,7 @@
     "section": "D",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "DM",
     "backend": {
       "status": "mapped",
       "model": "ParentMedicalHistory",
@@ -1288,6 +1289,7 @@
     "section": "D",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "DM",
     "backend": {
       "status": "mapped",
       "model": "ParentMedicalHistory",
@@ -1312,6 +1314,7 @@
     "section": "D",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "DM",
     "backend": {
       "status": "mapped",
       "model": "ParentMedicalHistory",
@@ -1336,6 +1339,7 @@
     "section": "D",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "DM",
     "backend": {
       "status": "mapped",
       "model": "ParentMedicalHistory",
@@ -1360,6 +1364,7 @@
     "section": "D",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "DM",
     "backend": {
       "status": "mapped",
       "model": "ParentMedicalHistory",
@@ -1384,6 +1389,7 @@
     "section": "D",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "DM",
     "backend": {
       "status": "mapped",
       "model": "ParentMedicalHistory",

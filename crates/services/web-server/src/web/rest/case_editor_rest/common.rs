@@ -54,8 +54,9 @@ pub(super) use lib_core::model::narrative::{
 	NarrativeInformationForUpdate, SenderDiagnosisBmc, SenderDiagnosisFilter,
 };
 pub(super) use lib_core::model::parent_history::{
-	ParentMedicalHistoryBmc, ParentMedicalHistoryFilter, ParentPastDrugHistoryBmc,
-	ParentPastDrugHistoryFilter,
+	ParentMedicalHistoryBmc, ParentMedicalHistoryFilter,
+	ParentMedicalHistoryForCreate, ParentMedicalHistoryForUpdate,
+	ParentPastDrugHistoryBmc, ParentPastDrugHistoryFilter,
 };
 pub(super) use lib_core::model::patient::{
 	AutopsyCauseOfDeathBmc, AutopsyCauseOfDeathFilter, AutopsyCauseOfDeathForCreate,
