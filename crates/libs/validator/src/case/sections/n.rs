@@ -334,6 +334,16 @@ mod tests {
 	}
 
 	#[test]
+	fn missing_header_is_deferred_to_export_validation() {
+		let ctx = empty_ctx();
+		let mut issues = Vec::new();
+
+		collect_ich_issues(&ctx, &mut issues);
+
+		assert!(!issues.iter().any(|issue| issue.code == "ICH.N.REQUIRED"));
+	}
+
+	#[test]
 	fn future_date_rules_cover_n_date_time_fields() {
 		let mut ctx = empty_ctx();
 		let mut header = message_header();
