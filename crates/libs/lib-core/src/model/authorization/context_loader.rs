@@ -1,8 +1,8 @@
 use crate::authorization::{
 	CaseChildResource, CaseCreateProposal, CaseResource, Collection,
 	ContextSnapshot, EnforcedScopeFilter, EvaluatedContext, Existing,
-	LockedMutationContext, Parent, Proposed, RequestAuthorizationSnapshot,
-	SubmissionResource,
+	ImportHistoryResource, LockedMutationContext, Parent, Proposed,
+	RequestAuthorizationSnapshot, SubmissionResource, XmlImportBatchProposal,
 };
 use crate::model::store::dbx::Dbx;
 use sqlx::FromRow;
@@ -65,6 +65,11 @@ struct SubmissionParent {
 	case_id: Uuid,
 }
 
+#[derive(Debug, FromRow)]
+struct ImportHistoryFacts {
+	organization_id: Uuid,
+}
+
 pub struct AuthorizationFactLoader<'tx> {
 	dbx: &'tx Dbx,
 	snapshot: &'tx RequestAuthorizationSnapshot,
@@ -102,6 +107,80 @@ impl<'tx> AuthorizationFactLoader<'tx> {
 			every_target_authorized: false,
 			enforced_scope_filter: Some(scope_filter(self.snapshot)),
 		})
+	}
+
+	pub fn import_history_collection(
+		&self,
+	) -> ContextSnapshot<'tx, Collection<ImportHistoryResource>> {
+		ContextSnapshot::new(EvaluatedContext {
+			organization_id: Some(self.snapshot.organization_id()),
+			target_fingerprint: format!(
+				"import-history:{}",
+				self.snapshot.organization_id()
+			),
+			within_principal_scope: true,
+			lifecycle_compatible: false,
+			parent_authorized: false,
+			every_target_authorized: false,
+			enforced_scope_filter: Some(scope_filter(self.snapshot)),
+		})
+	}
+
+	pub async fn import_history_existing(
+		&self,
+		history_id: Uuid,
+	) -> Result<
+		ContextSnapshot<'tx, Existing<ImportHistoryResource>>,
+		AuthorizationFactLoadError,
+	> {
+		let facts = self
+			.dbx
+			.fetch_optional(
+				sqlx::query_as::<_, ImportHistoryFacts>(
+					"SELECT u.organization_id
+					   FROM xml_import_history h
+					   JOIN users u ON u.id = h.uploaded_by
+					  WHERE h.id = $1",
+				)
+				.bind(history_id),
+			)
+			.await?
+			.ok_or(AuthorizationFactLoadError::FactNotFound {
+				fact: "import_history",
+				id: history_id,
+			})?;
+		Ok(ContextSnapshot::new(EvaluatedContext {
+			organization_id: Some(facts.organization_id),
+			target_fingerprint: format!("import-history:{history_id}"),
+			within_principal_scope: true,
+			lifecycle_compatible: false,
+			parent_authorized: false,
+			every_target_authorized: false,
+			enforced_scope_filter: None,
+		}))
+	}
+
+	pub async fn xml_import_batch_for_mutation(
+		&self,
+		fingerprint: impl AsRef<str>,
+	) -> Result<
+		LockedMutationContext<'tx, Proposed<XmlImportBatchProposal>>,
+		AuthorizationFactLoadError,
+	> {
+		self.lock_and_verify_revisions().await?;
+		Ok(LockedMutationContext::new(EvaluatedContext {
+			organization_id: Some(self.snapshot.organization_id()),
+			target_fingerprint: format!(
+				"xml-import:{}:{}",
+				self.snapshot.organization_id(),
+				fingerprint.as_ref()
+			),
+			within_principal_scope: true,
+			lifecycle_compatible: false,
+			parent_authorized: false,
+			every_target_authorized: false,
+			enforced_scope_filter: None,
+		}))
 	}
 
 	pub async fn submission_existing(

@@ -341,6 +341,32 @@ fn submission_routes_use_typed_policy_contexts_only() {
 }
 
 #[test]
+fn import_routes_use_typed_policy_contexts_only() {
+	let source = fs::read_to_string(
+		workspace_root()
+			.join("crates/services/web-server/src/web/rest/import_rest.rs"),
+	)
+	.expect("import routes must be readable");
+	for legacy in [
+		"model::acs",
+		"require_permission",
+		"RequirePermission",
+		"require_case_read_allowed",
+		"case_matches_user_scope",
+	] {
+		assert!(
+			!source.contains(legacy),
+			"import route still uses legacy authorization: {legacy}"
+		);
+	}
+	assert!(source.contains("with_authorized_import_history_collection"));
+	assert!(source.contains("with_authorized_import_history_read"));
+	assert!(source.contains("with_authorized_xml_import"));
+	assert!(source.contains("\"import.xml.validate\""));
+	assert!(source.contains("\"import.xml.execute\""));
+}
+
+#[test]
 fn role_api_has_one_canonical_metadata_shape() {
 	let root = workspace_root();
 	let source =

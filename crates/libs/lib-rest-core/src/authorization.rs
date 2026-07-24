@@ -3,8 +3,9 @@ use lib_core::authorization::{
 	authorize_contextual_mutation, authorize_contextual_read, authorize_subject,
 	policy_registry, AuthorizationContext, AuthorizationDenial, AuthorizedMutation,
 	AuthorizedRead, AuthorizedSubject, CaseChildResource, CaseCreateProposal,
-	CaseResource, Collection, Existing, Parent, PolicySnapshotVersion, Proposed,
-	RequestAuthorizationSnapshot, SubmissionResource,
+	CaseResource, Collection, Existing, ImportHistoryResource, Parent,
+	PolicySnapshotVersion, Proposed, RequestAuthorizationSnapshot,
+	SubmissionResource, XmlImportBatchProposal,
 };
 use lib_core::ctx::{Ctx, ROLE_SYSTEM_ADMIN};
 use lib_core::model::authorization::{
@@ -202,6 +203,129 @@ where
 			authorize_contextual_read(action, snapshot, context).map_err(denied)?;
 		let authorized_ctx =
 			rls_ctx_for_authorized_read(request_ctx, snapshot, &permit)?;
+		operation(&authorized_ctx, mm).await
+	}
+	.await;
+	finish_fact_transaction(dbx, result).await
+}
+
+pub async fn with_authorized_import_history_collection<T, F>(
+	request_ctx: &Ctx,
+	snapshot: &RequestAuthorizationSnapshot,
+	mm: &ModelManager,
+	operation: F,
+) -> Result<T>
+where
+	F: for<'ctx> FnOnce(
+		&'ctx Ctx,
+		&'ctx ModelManager,
+	) -> Pin<Box<dyn Future<Output = Result<T>> + Send + 'ctx>>,
+{
+	let dbx = mm.dbx();
+	dbx.begin_txn()
+		.await
+		.map_err(lib_core::model::Error::from)?;
+	if let Err(error) = set_full_context_from_ctx_dbx(dbx, request_ctx).await {
+		let _ = dbx.rollback_txn().await;
+		return Err(error.into());
+	}
+	let result = async {
+		let context =
+			AuthorizationFactLoader::new(dbx, snapshot).import_history_collection();
+		let action = policy_registry()
+			.context_action::<Collection<ImportHistoryResource>>(
+				"import.history.list",
+			)
+			.ok_or_else(|| Error::AccessDenied {
+				required_role: "registered import.history.list action".to_string(),
+			})?;
+		let permit =
+			authorize_contextual_read(action, snapshot, context).map_err(denied)?;
+		let authorized_ctx =
+			rls_ctx_for_authorized_read(request_ctx, snapshot, &permit)?;
+		operation(&authorized_ctx, mm).await
+	}
+	.await;
+	finish_fact_transaction(dbx, result).await
+}
+
+pub async fn with_authorized_import_history_read<T, F>(
+	request_ctx: &Ctx,
+	snapshot: &RequestAuthorizationSnapshot,
+	mm: &ModelManager,
+	history_id: Uuid,
+	operation: F,
+) -> Result<T>
+where
+	F: for<'ctx> FnOnce(
+		&'ctx Ctx,
+		&'ctx ModelManager,
+	) -> Pin<Box<dyn Future<Output = Result<T>> + Send + 'ctx>>,
+{
+	let dbx = mm.dbx();
+	dbx.begin_txn()
+		.await
+		.map_err(lib_core::model::Error::from)?;
+	if let Err(error) = set_full_context_from_ctx_dbx(dbx, request_ctx).await {
+		let _ = dbx.rollback_txn().await;
+		return Err(error.into());
+	}
+	let result = async {
+		let context = AuthorizationFactLoader::new(dbx, snapshot)
+			.import_history_existing(history_id)
+			.await
+			.map_err(map_fact_load_error)?;
+		let action = policy_registry()
+			.context_action::<Existing<ImportHistoryResource>>("import.history.read")
+			.ok_or_else(|| Error::AccessDenied {
+				required_role: "registered import.history.read action".to_string(),
+			})?;
+		let permit =
+			authorize_contextual_read(action, snapshot, context).map_err(denied)?;
+		let authorized_ctx =
+			rls_ctx_for_authorized_read(request_ctx, snapshot, &permit)?;
+		operation(&authorized_ctx, mm).await
+	}
+	.await;
+	finish_fact_transaction(dbx, result).await
+}
+
+pub async fn with_authorized_xml_import<T, F>(
+	request_ctx: &Ctx,
+	snapshot: &RequestAuthorizationSnapshot,
+	mm: &ModelManager,
+	action_id: &'static str,
+	fingerprint: impl AsRef<str>,
+	operation: F,
+) -> Result<T>
+where
+	F: for<'ctx> FnOnce(
+		&'ctx Ctx,
+		&'ctx ModelManager,
+	) -> Pin<Box<dyn Future<Output = Result<T>> + Send + 'ctx>>,
+{
+	let dbx = mm.dbx();
+	dbx.begin_txn()
+		.await
+		.map_err(lib_core::model::Error::from)?;
+	if let Err(error) = set_full_context_from_ctx_dbx(dbx, request_ctx).await {
+		let _ = dbx.rollback_txn().await;
+		return Err(error.into());
+	}
+	let result = async {
+		let context = AuthorizationFactLoader::new(dbx, snapshot)
+			.xml_import_batch_for_mutation(fingerprint)
+			.await
+			.map_err(map_fact_load_error)?;
+		let action = policy_registry()
+			.context_action::<Proposed<XmlImportBatchProposal>>(action_id)
+			.ok_or_else(|| Error::AccessDenied {
+				required_role: format!("registered {action_id} action"),
+			})?;
+		let permit = authorize_contextual_mutation(action, snapshot, context)
+			.map_err(denied)?;
+		let authorized_ctx =
+			rls_ctx_for_authorized_mutation(request_ctx, snapshot, &permit)?;
 		operation(&authorized_ctx, mm).await
 	}
 	.await;
