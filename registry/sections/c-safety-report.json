@@ -1241,6 +1241,7 @@
     "section": "C",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "LR",
     "backend": {
       "status": "mapped",
       "model": "LiteratureReference",
@@ -1265,6 +1266,7 @@
     "section": "C",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "LR",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -1290,6 +1292,7 @@
     "section": "C",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "LR",
     "backend": {
       "status": "mapped",
       "model": "LiteratureReference",

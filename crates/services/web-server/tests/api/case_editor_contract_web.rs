@@ -2527,10 +2527,19 @@ async fn editor_lr_page_patch_persists_literature_reference_row() -> Result<()> 
 		json!({
 			"authorities": ["fda"],
 			"rows": {
-				"literatureReferences": [{
-					"sequenceNumber": 1,
-					"referenceText": "Smith 2026"
-				}]
+				"literatureReferences": [
+					{
+						"sequenceNumber": 1,
+						"referenceText": "Smith 2026",
+						"documentBase64": "UEZERg==",
+						"mediaType": "application/pdf",
+						"representation": "B64"
+					},
+					{
+						"sequenceNumber": 2,
+						"referenceText": "Kim 2026"
+					}
+				]
 			}
 		}),
 	)
@@ -2538,8 +2547,45 @@ async fn editor_lr_page_patch_persists_literature_reference_row() -> Result<()> 
 
 	assert_eq!(status, StatusCode::OK, "{body}");
 	assert_eq!(
-		body["rows"]["literatureReferences"][0]["reference_text"],
+		body["rows"]["literatureReferences"][0]["referenceText"],
 		"Smith 2026"
+	);
+	assert_eq!(
+		body["rows"]["literatureReferences"][0]["mediaType"],
+		"application/pdf"
+	);
+	assert_eq!(
+		body["rows"]["literatureReferences"][1]["referenceText"],
+		"Kim 2026"
+	);
+
+	let first_id = body["rows"]["literatureReferences"][0]["id"]
+		.as_str()
+		.expect("first literature id");
+	let (status, body) = patch_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/editor/pages/LR"),
+		json!({
+			"rows": {
+				"literatureReferences": [{
+					"id": first_id,
+					"deleted": true
+				}]
+			}
+		}),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK, "{body}");
+	assert_eq!(
+		body["rows"]["literatureReferences"]
+			.as_array()
+			.map(Vec::len),
+		Some(1)
+	);
+	assert_eq!(
+		body["rows"]["literatureReferences"][0]["referenceText"],
+		"Kim 2026"
 	);
 
 	Ok(())

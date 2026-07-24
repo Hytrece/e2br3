@@ -1670,50 +1670,65 @@ async fn apply_lr_page_rows_patch(
 	rows: &BTreeMap<String, Value>,
 ) -> Result<()> {
 	reject_unknown_row_keys(page_id, rows, &["literatureReferences"])?;
-	let Some(reference) =
-		optional_first_row_object(page_id, rows, "literatureReferences")?
-	else {
+	let Some(value) = rows.get("literatureReferences") else {
 		return Ok(());
 	};
-	let update = LiteratureReferenceForUpdate {
-		reference_text: string_field(
-			reference,
-			&["referenceText", "reference_text"],
-		),
-		reference_text_null_flavor: string_field(
-			reference,
-			&["referenceTextNullFlavor", "reference_text_null_flavor"],
-		),
-		sequence_number: i32_field(
-			reference,
-			&["sequenceNumber", "sequence_number"],
-		),
-		document_base64: string_field(
-			reference,
-			&["documentBase64", "document_base64"],
-		),
-		media_type: string_field(reference, &["mediaType", "media_type"]),
-		representation: string_field(reference, &["representation"]),
-		compression: string_field(reference, &["compression"]),
+	let Some(references) = value.as_array() else {
+		return Err(Error::BadRequest {
+			message: format!("{page_id}.literatureReferences must be an array"),
+		});
 	};
-	if let Some(id) = uuid_field(reference, &["id"]) {
-		LiteratureReferenceBmc::update(ctx, mm, id, update).await?;
-	} else if let Some(reference_text) = update.reference_text {
-		LiteratureReferenceBmc::create(
-			ctx,
-			mm,
-			LiteratureReferenceForCreate {
-				case_id,
-				reference_text,
-				reference_text_null_flavor: update.reference_text_null_flavor,
-				sequence_number: update.sequence_number.unwrap_or(1),
-				document_base64: update.document_base64,
-				media_type: update.media_type,
-				representation: update.representation,
-				compression: update.compression,
-			},
-		)
-		.await?;
+	for (index, value) in references.iter().enumerate() {
+		let reference = as_object(page_id, "literatureReferences", value)?;
+		let id = uuid_field(reference, &["id"]);
+		if bool_field(reference, &["deleted", "_delete"]) == Some(true) {
+			if let Some(id) = id {
+				LiteratureReferenceBmc::delete(ctx, mm, id).await?;
+			}
+			continue;
+		}
+		let update = LiteratureReferenceForUpdate {
+			reference_text: string_field(
+				reference,
+				&["referenceText", "reference_text"],
+			),
+			reference_text_null_flavor: string_field(
+				reference,
+				&["referenceTextNullFlavor", "reference_text_null_flavor"],
+			),
+			sequence_number: i32_field(
+				reference,
+				&["sequenceNumber", "sequence_number"],
+			),
+			document_base64: string_field(
+				reference,
+				&["documentBase64", "document_base64"],
+			),
+			media_type: string_field(reference, &["mediaType", "media_type"]),
+			representation: string_field(reference, &["representation"]),
+			compression: string_field(reference, &["compression"]),
+		};
+		if let Some(id) = id {
+			LiteratureReferenceBmc::update(ctx, mm, id, update).await?;
+		} else if let Some(reference_text) = update.reference_text {
+			LiteratureReferenceBmc::create(
+				ctx,
+				mm,
+				LiteratureReferenceForCreate {
+					case_id,
+					reference_text,
+					reference_text_null_flavor: update.reference_text_null_flavor,
+					sequence_number: update.sequence_number.unwrap_or_else(|| {
+						i32::try_from(index + 1).unwrap_or(i32::MAX)
+					}),
+					document_base64: update.document_base64,
+					media_type: update.media_type,
+					representation: update.representation,
+					compression: update.compression,
+				},
+			)
+			.await?;
+		}
 	}
 	Ok(())
 }
@@ -2198,7 +2213,22 @@ async fn load_editor_lr_data(
 	)
 	.await?;
 
-	Ok(json!({ "literatureReferences": literature_references }))
+	Ok(json!({
+		"literatureReferences": literature_references
+			.into_iter()
+			.map(|row| json!({
+				"id": row.id,
+				"sequenceNumber": row.sequence_number,
+				"referenceText": row.reference_text,
+				"referenceTextNullFlavor": row.reference_text_null_flavor,
+				"documentBase64": row.document_base64,
+				"mediaType": row.media_type,
+				"representation": row.representation,
+				"compression": row.compression,
+				"deleted": row.deleted,
+			}))
+			.collect::<Vec<_>>()
+	}))
 }
 
 pub async fn get_editor_lr(
