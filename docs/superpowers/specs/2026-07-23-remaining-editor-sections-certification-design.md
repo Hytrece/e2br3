@@ -11,20 +11,25 @@ PATCH persistence, and database reload roundtrip are all proven.
 
 The certification proceeds in this fixed order:
 
-1. `RP` — Reporter / primary sources
-2. `SD` — Sender
-3. `LR` — Literature references
-4. `SI` — Study
-5. `DM` — Patient and patient history
-6. `NR` — Narrative
-7. `AE` — Reactions
-8. `LB` — Test results
-9. `DG` — Drugs
-10. `DH` — Past drug history
+1. `CI` — Case identification
+2. `RP` — Reporter / primary sources
+3. `SD` — Sender
+4. `LR` — Literature references
+5. `SI` — Study
+6. `DM` — Patient
+7. `DH` — Patient drug history
+8. `RE` — Reactions
+9. `LB` — Test results
+10. `DG` — Drugs
+11. `NR` — Narrative
 
-`CI` is already certified and remains the reference implementation. `RE`,
-`AT`, and `WF` are workflow or supporting screens rather than E2B data-field
-sections, so they are outside this registry/validation/roundtrip certification.
+`CI`, `RP`, `SD`, and `LR` already have strict contracts and are the first
+regulatory source-coverage rollout. `AE` and `AT` are audit screens. `WF` is a
+workflow screen and does not own E2B data fields. They are outside this
+registry/validation/roundtrip certification.
+
+N Message Header is no longer an editor section and must not be assigned to
+`CI` or `SD`. It is certified separately at the submission/export boundary.
 
 ## Certification Unit
 
@@ -121,7 +126,7 @@ developer's original services and removes only the disposable test data.
 
 ## Final Verification
 
-After all ten page gates pass:
+After all eleven page gates and the N submission/export gate pass:
 
 - run the strict editor-contract gate for every certified page
 - run each page's focused backend projection/PATCH/roundtrip tests
@@ -131,6 +136,9 @@ After all ten page gates pass:
 - confirm a catalog constraint disables or blocks invalid frontend input and
   that forced API injection returns a structured HTTP save failure on the same
   field path
+- confirm submission/export generates N Message Header values without exposing
+  them as CI or SD editor fields and XML export emits the generated values
 
-The work is complete only when all field contracts are certified and the final
-live frontend-to-backend roundtrip succeeds for every in-scope page.
+The work is complete only when all field contracts are certified, the final
+live frontend-to-backend roundtrip succeeds for every in-scope page, and the N
+submission/export roundtrip succeeds.

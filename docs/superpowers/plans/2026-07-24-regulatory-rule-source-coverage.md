@@ -1,10 +1,15 @@
 # Regulatory Rule Source Coverage Implementation Plan
 
+> This is the infrastructure and LR-pilot companion plan. The required
+> repository-wide rollout continues in
+> `docs/superpowers/plans/2026-07-24-all-editor-regulatory-coverage.md`; LR
+> completion alone does not satisfy the overall goal.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Add a non-runtime coverage gate proving that regulatory prose for an audited editor page is reviewed and mapped to an existing business rule, portable constraint, guidance decision, or explicit deferred gap.
+**Goal:** Add a non-runtime coverage gate proving that regulatory prose for an audited surface is reviewed and mapped to an existing business rule, portable constraint, guidance decision, or explicit deferred gap.
 
-**Architecture:** Keep the canonical catalog, portable constraints, section rule tables, and evaluators unchanged. Add a reviewed JSON crosswalk, validate its source/hash/editor-completion semantics in Python, and validate referenced executable codes against the compiled Rust catalogs in a focused unit test. Roll out the gate to LR first; CI, RP, and SD source classification are separate page-audit plans built on this infrastructure.
+**Architecture:** Keep the canonical catalog, portable constraints, section rule tables, and evaluators unchanged. Add a reviewed JSON crosswalk, validate its source/hash/editor-completion semantics in Python, and validate referenced executable codes against the compiled Rust catalogs in a focused unit test. Use LR as the first real fixture; the master rollout plan applies the infrastructure to every remaining surface.
 
 **Tech Stack:** Python 3 `unittest`, JSON, Rust 2021, `serde`/`serde_json`, existing validator catalog and portable binding APIs.
 

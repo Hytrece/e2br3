@@ -3,8 +3,9 @@
 ## Goal
 
 Prevent an ICH, FDA, or MFDS business-rule prose entry applicable to a
-certified editor page from being absent from both the executable canonical
-catalog and the section rule tables while all existing parity tests still pass.
+certified editor or submission/export surface from being absent from both the
+executable canonical catalog and the section rule tables while all existing
+parity tests still pass.
 
 This change does not replace or redesign the canonical validator catalog,
 portable constraints, section rule tables, or shared evaluators.
@@ -72,9 +73,9 @@ change validation behavior.
 
 Extend `registry/tools/validate.py` with source-coverage validation:
 
-1. Every prose source block applicable to a field in a strict editor contract
-   must have exactly one crosswalk source entry for each authority that defines
-   prose for that element.
+1. Every prose source block applicable to a field in a strict editor or
+   submission/export contract must have exactly one crosswalk source entry for
+   each authority that defines prose for that element.
 2. Crosswalk entries must not reference absent prose blocks.
 3. `sourceHash` must match the current trimmed prose.
 4. Every source entry must contain at least one requirement.
@@ -95,7 +96,7 @@ avoids a generated executable-rule inventory and does not introduce a second
 catalog. The existing exact-set test continues to prove that a canonical
 case-validation rule is backed by a section rule table.
 
-## Editor Certification
+## Certification Surfaces
 
 Editor certification is authority-complete rather than representative-authority
 only. For a shared ICH element such as `C.4.r.2`, the gate evaluates:
@@ -107,12 +108,35 @@ only. For a shared ICH element such as `C.4.r.2`, the gate evaluates:
 Local-only fields with no regulatory element are exempt. A `guidance`
 classification does not block completion. A `deferred` classification does.
 
-The first rollout covers every field referenced by the existing CI, RP, SD, and
-LR editor contracts. The validator also reports prose entries outside those
-pages as unaudited inventory, but they do not become completion claims until
-their editor section is certified. New strict editor contracts must have source
-coverage from their first introduction. Expanding coverage to a new page is
-therefore part of that page's certification, not a repository-wide flag day.
+Coverage is completed in this order:
+
+1. Existing editor contracts: `CI`, `RP`, `SD`, and `LR`.
+2. New editor contracts: `SI`, `DM`, `DH`, `RE`, `LB`, `DG`, and `NR`.
+3. The submission/export-owned N Message Header contract.
+
+The final case-editor scope is:
+
+- C: `CI`, `RP`, `SD`, `LR`, and `SI`
+- D: `DM` and `DH`
+- E: `RE`
+- F: `LB`
+- G: `DG`
+- H: `NR`
+
+`AE` and `AT` are audit screens. `WF` is a workflow screen and does not own
+regulatory data fields. They are excluded from editor-contract and regulatory
+source-coverage claims.
+
+N Message Header fields are not part of `CI` or `SD`. They are generated and
+validated at the submission/export boundary and receive a separate strict
+contract proving registry mapping, builder output, compiled validation
+references, persistence where applicable, and XML export roundtrip.
+
+The validator reports prose entries outside certified surfaces as unaudited
+inventory, but they do not become completion claims until their editor or
+submission/export contract is certified. A new strict contract must have
+authority-complete source coverage from its first introduction. Expanding
+coverage is therefore sequential rather than a repository-wide flag day.
 
 ## Workflow for Implementing a Deferred Rule
 
@@ -135,7 +159,8 @@ therefore part of that page's certification, not a repository-wide flag day.
 - Tests rejecting nonexistent canonical or portable rule codes.
 - Tests proving a deferred regional rule prevents `complete`.
 - Tests proving guidance does not prevent `complete`.
-- Strict CI/RP/SD/LR contract validation using the reviewed crosswalk.
+- Strict validation for all eleven editor contracts and the N
+  submission/export contract using the reviewed crosswalk.
 - Existing canonical-catalog-to-rule-table and portable-binding parity tests
   remain unchanged and must continue to pass.
 
