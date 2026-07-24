@@ -4,7 +4,7 @@
 //! dictionaries. HTTP handlers in `terminology_rest` are thin wrappers that
 //! call these functions.
 
-use crate::ctx::ROLE_SYSTEM_ADMIN;
+use crate::ctx::Ctx;
 use crate::model::store::dbx::Dbx;
 use crate::model::ModelManager;
 use csv::ReaderBuilder;
@@ -445,8 +445,6 @@ fn parse_whodrug_delimited(bytes: &[u8]) -> Result<Vec<WhodrugRow>> {
 pub async fn stage_meddra_rows(
 	mm: &ModelManager,
 	uploader_id: Uuid,
-	organization_id: Uuid,
-	_role: &str,
 	rows: &[MeddraRow],
 	version: &str,
 	language: &str,
@@ -455,8 +453,7 @@ pub async fn stage_meddra_rows(
 	let dbx = mm.dbx();
 	dbx.begin_txn().await.map_err(store_err)?;
 	let run_result = async {
-		set_full_context(dbx, uploader_id, organization_id, ROLE_SYSTEM_ADMIN)
-			.await?;
+		set_platform_service_context(dbx).await?;
 		upsert_release_header(
 			mm,
 			"meddra",
@@ -496,8 +493,6 @@ pub async fn stage_meddra_rows(
 pub async fn stage_whodrug_rows(
 	mm: &ModelManager,
 	uploader_id: Uuid,
-	organization_id: Uuid,
-	_role: &str,
 	rows: &[WhodrugRow],
 	version: &str,
 	language: &str,
@@ -506,8 +501,7 @@ pub async fn stage_whodrug_rows(
 	let dbx = mm.dbx();
 	dbx.begin_txn().await.map_err(store_err)?;
 	let run_result = async {
-		set_full_context(dbx, uploader_id, organization_id, ROLE_SYSTEM_ADMIN)
-			.await?;
+		set_platform_service_context(dbx).await?;
 		upsert_release_header(
 			mm,
 			"whodrug",
@@ -530,8 +524,7 @@ pub async fn stage_whodrug_rows(
 	for chunk in rows.chunks(1000) {
 		dbx.begin_txn().await.map_err(store_err)?;
 		let run_result = async {
-			set_full_context(dbx, uploader_id, organization_id, ROLE_SYSTEM_ADMIN)
-				.await?;
+			set_platform_service_context(dbx).await?;
 			upsert_whodrug_rows(mm, chunk, version, language, false).await?;
 			Ok::<(), ImportError>(())
 		}
@@ -541,8 +534,7 @@ pub async fn stage_whodrug_rows(
 
 	dbx.begin_txn().await.map_err(store_err)?;
 	let run_result = async {
-		set_full_context(dbx, uploader_id, organization_id, ROLE_SYSTEM_ADMIN)
-			.await?;
+		set_platform_service_context(dbx).await?;
 		upsert_release_header(
 			mm,
 			"whodrug",
@@ -569,8 +561,6 @@ pub async fn stage_whodrug_rows(
 pub async fn activate_release_tx(
 	mm: &ModelManager,
 	actor_user_id: Uuid,
-	organization_id: Uuid,
-	_role: &str,
 	dictionary: &str,
 	target_version: &str,
 	language: &str,
@@ -581,8 +571,7 @@ pub async fn activate_release_tx(
 	let dbx = mm.dbx();
 	dbx.begin_txn().await.map_err(store_err)?;
 	let run_result = async {
-		set_full_context(dbx, actor_user_id, organization_id, ROLE_SYSTEM_ADMIN)
-			.await?;
+		set_platform_service_context(dbx).await?;
 
 		let target = dbx
 			.fetch_optional(
@@ -811,13 +800,17 @@ pub async fn fetch_releases(
 /// is not in an approvable status (`validated` or `approved`).
 pub async fn approve_release(
 	mm: &ModelManager,
+	actor_user_id: Uuid,
 	dictionary: &str,
 	version: &str,
 	language: &str,
-	approved_by: sqlx::types::Uuid,
 	note: Option<&str>,
 ) -> Result<Option<TerminologyReleaseRow>> {
-	mm.dbx()
+	let dbx = mm.dbx();
+	dbx.begin_txn().await.map_err(store_err)?;
+	let result = async {
+		set_platform_service_context(dbx).await?;
+		dbx
 		.fetch_optional(
 			sqlx::query_as::<_, TerminologyReleaseRow>(
 				"UPDATE terminology_releases
@@ -835,31 +828,29 @@ pub async fn approve_release(
 			.bind(dictionary)
 			.bind(version)
 			.bind(language)
-			.bind(approved_by)
+			.bind(actor_user_id)
 			.bind(note),
 		)
 		.await
 		.map_err(store_err)
+	}
+	.await;
+	finish_txn(dbx, result).await
 }
 
 // -- Private helpers
 
-async fn set_full_context(
-	dbx: &Dbx,
-	user_id: Uuid,
-	organization_id: Uuid,
-	role: &str,
-) -> Result<()> {
-	crate::model::store::set_full_context_dbx(dbx, user_id, organization_id, role)
+async fn set_platform_service_context(dbx: &Dbx) -> Result<()> {
+	crate::model::store::set_full_context_from_ctx_dbx(dbx, &Ctx::root_ctx())
 		.await
 		.map_err(|e| store_err(e))
 }
 
-async fn finish_txn(dbx: &Dbx, result: Result<()>) -> Result<()> {
+async fn finish_txn<T>(dbx: &Dbx, result: Result<T>) -> Result<T> {
 	match result {
-		Ok(_) => {
+		Ok(value) => {
 			dbx.commit_txn().await.map_err(store_err)?;
-			Ok(())
+			Ok(value)
 		}
 		Err(err) => {
 			let _ = dbx.rollback_txn().await;

@@ -436,6 +436,29 @@ fn settings_notice_and_audit_routes_use_typed_policy_contexts_only() {
 }
 
 #[test]
+fn terminology_routes_use_typed_policy_contexts_only() {
+	let source = fs::read_to_string(
+		workspace_root()
+			.join("crates/services/web-server/src/web/rest/terminology_rest.rs"),
+	)
+	.expect("terminology routes must be readable");
+	for legacy in [
+		"model::acs",
+		"require_permission",
+		"RequirePermission",
+		"mw_permission",
+	] {
+		assert!(
+			!source.contains(legacy),
+			"terminology route still uses legacy authorization: {legacy}"
+		);
+	}
+	assert!(source.contains("with_authorized_terminology_read"));
+	assert!(source.contains("with_authorized_terminology_mutation"));
+	assert!(source.contains("AuthorizationSnapshotW"));
+}
+
+#[test]
 fn role_api_has_one_canonical_metadata_shape() {
 	let root = workspace_root();
 	let source =

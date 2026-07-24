@@ -4,7 +4,7 @@ use crate::authorization::{
 	ContextSnapshot, EnforcedScopeFilter, EvaluatedContext, Existing,
 	ImportHistoryResource, LockedMutationContext, NoticeResource, Parent, Proposed,
 	RequestAuthorizationSnapshot, ResourceSet, SettingsResource, SubmissionResource,
-	XmlImportBatchProposal,
+	TerminologyImportProposal, TerminologyResource, XmlImportBatchProposal,
 };
 use crate::model::store::dbx::Dbx;
 use sqlx::FromRow;
@@ -143,6 +143,38 @@ impl<'tx> AuthorizationFactLoader<'tx> {
 			self.snapshot.organization_id(),
 			"audit-logs",
 		))
+	}
+
+	pub fn terminology_collection(
+		&self,
+	) -> ContextSnapshot<'tx, Collection<TerminologyResource>> {
+		ContextSnapshot::new(organization_resource_evaluated(
+			self.snapshot.organization_id(),
+			"terminology",
+		))
+	}
+
+	pub async fn terminology_import_for_mutation(
+		&self,
+		fingerprint: impl AsRef<str>,
+	) -> Result<
+		LockedMutationContext<'tx, Proposed<TerminologyImportProposal>>,
+		AuthorizationFactLoadError,
+	> {
+		self.lock_and_verify_revisions().await?;
+		Ok(LockedMutationContext::new(EvaluatedContext {
+			organization_id: Some(self.snapshot.organization_id()),
+			target_fingerprint: format!(
+				"terminology:{}:{}",
+				self.snapshot.organization_id(),
+				fingerprint.as_ref()
+			),
+			within_principal_scope: false,
+			lifecycle_compatible: false,
+			parent_authorized: false,
+			every_target_authorized: false,
+			enforced_scope_filter: None,
+		}))
 	}
 
 	pub async fn case_resource_set(

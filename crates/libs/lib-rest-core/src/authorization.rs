@@ -7,7 +7,7 @@ use lib_core::authorization::{
 	CaseCreateProposal, CaseResource, Collection, EnforcedScopeFilter, Existing,
 	ImportHistoryResource, NoticeResource, Parent, PolicySnapshotVersion, Proposed,
 	RequestAuthorizationSnapshot, ResourceSet, SettingsResource, SubmissionResource,
-	XmlImportBatchProposal,
+	TerminologyImportProposal, TerminologyResource, XmlImportBatchProposal,
 };
 use lib_core::ctx::{Ctx, ROLE_SYSTEM_ADMIN};
 use lib_core::model::authorization::{
@@ -338,6 +338,87 @@ where
 	}
 	.await;
 	finish_fact_transaction(dbx, result).await
+}
+
+pub async fn with_authorized_terminology_read<T, F>(
+	request_ctx: &Ctx,
+	snapshot: &RequestAuthorizationSnapshot,
+	mm: &ModelManager,
+	operation: F,
+) -> Result<T>
+where
+	F: for<'ctx> FnOnce(
+		&'ctx Ctx,
+		&'ctx ModelManager,
+	) -> Pin<Box<dyn Future<Output = Result<T>> + Send + 'ctx>>,
+{
+	let dbx = mm.dbx();
+	dbx.begin_txn()
+		.await
+		.map_err(lib_core::model::Error::from)?;
+	if let Err(error) = set_full_context_from_ctx_dbx(dbx, request_ctx).await {
+		let _ = dbx.rollback_txn().await;
+		return Err(error.into());
+	}
+	let result = async {
+		let context =
+			AuthorizationFactLoader::new(dbx, snapshot).terminology_collection();
+		let action = policy_registry()
+			.context_action::<Collection<TerminologyResource>>("terminology.list")
+			.ok_or_else(|| Error::AccessDenied {
+				required_role: "registered terminology.list action".to_string(),
+			})?;
+		let permit =
+			authorize_contextual_read(action, snapshot, context).map_err(denied)?;
+		let authorized_ctx =
+			rls_ctx_for_authorized_read(request_ctx, snapshot, &permit)?;
+		operation(&authorized_ctx, mm).await
+	}
+	.await;
+	finish_fact_transaction(dbx, result).await
+}
+
+pub async fn with_authorized_terminology_mutation<T, F>(
+	request_ctx: &Ctx,
+	snapshot: &RequestAuthorizationSnapshot,
+	mm: &ModelManager,
+	fingerprint: impl AsRef<str>,
+	operation: F,
+) -> Result<T>
+where
+	F: for<'ctx> FnOnce(
+		&'ctx Ctx,
+		&'ctx ModelManager,
+	) -> Pin<Box<dyn Future<Output = Result<T>> + Send + 'ctx>>,
+{
+	let dbx = mm.dbx();
+	dbx.begin_txn()
+		.await
+		.map_err(lib_core::model::Error::from)?;
+	if let Err(error) = set_full_context_from_ctx_dbx(dbx, request_ctx).await {
+		let _ = dbx.rollback_txn().await;
+		return Err(error.into());
+	}
+	let authorization_result = async {
+		let context = AuthorizationFactLoader::new(dbx, snapshot)
+			.terminology_import_for_mutation(fingerprint)
+			.await
+			.map_err(map_fact_load_error)?;
+		let action = policy_registry()
+			.context_action::<Proposed<TerminologyImportProposal>>(
+				"terminology.import",
+			)
+			.ok_or_else(|| Error::AccessDenied {
+				required_role: "registered terminology.import action".to_string(),
+			})?;
+		let permit = authorize_contextual_mutation(action, snapshot, context)
+			.map_err(denied)?;
+		rls_ctx_for_authorized_mutation(request_ctx, snapshot, &permit)
+	}
+	.await;
+	let authorized_ctx =
+		finish_fact_transaction(dbx, authorization_result).await?;
+	operation(&authorized_ctx, mm).await
 }
 
 pub async fn with_authorized_case_audit_read<T, F>(

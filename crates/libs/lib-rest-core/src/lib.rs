@@ -20,7 +20,8 @@ pub use authorization::{
 	with_authorized_notice_update, with_authorized_settings_read,
 	with_authorized_settings_update, with_authorized_subject_action,
 	with_authorized_submission_collection, with_authorized_submission_mutation,
-	with_authorized_submission_read, with_authorized_xml_import,
+	with_authorized_submission_read, with_authorized_terminology_mutation,
+	with_authorized_terminology_read, with_authorized_xml_import,
 };
 pub use rest_params::*;
 pub use rest_result::*;
