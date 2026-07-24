@@ -465,7 +465,7 @@
     "label": "Reporter's Given Name",
     "section": "C",
     "authority": "ICH",
-    "status": "complete",
+    "status": "incomplete",
     "editor_page": "RP",
     "backend": {
       "status": "mapped",
@@ -515,7 +515,7 @@
     "label": "Reporter's Family Name",
     "section": "C",
     "authority": "ICH",
-    "status": "complete",
+    "status": "incomplete",
     "editor_page": "RP",
     "backend": {
       "status": "mapped",
@@ -540,7 +540,7 @@
     "label": "Reporter's Organisation",
     "section": "C",
     "authority": "ICH",
-    "status": "complete",
+    "status": "incomplete",
     "editor_page": "RP",
     "backend": {
       "status": "mapped",
@@ -590,7 +590,7 @@
     "label": "Reporter's Street",
     "section": "C",
     "authority": "ICH",
-    "status": "complete",
+    "status": "incomplete",
     "editor_page": "RP",
     "backend": {
       "status": "mapped",
@@ -615,7 +615,7 @@
     "label": "Reporter's City",
     "section": "C",
     "authority": "ICH",
-    "status": "complete",
+    "status": "incomplete",
     "editor_page": "RP",
     "backend": {
       "status": "mapped",
@@ -640,7 +640,7 @@
     "label": "Reporter's State or Province",
     "section": "C",
     "authority": "ICH",
-    "status": "complete",
+    "status": "incomplete",
     "editor_page": "RP",
     "backend": {
       "status": "mapped",
@@ -665,7 +665,7 @@
     "label": "Reporter's Postcode",
     "section": "C",
     "authority": "ICH",
-    "status": "complete",
+    "status": "incomplete",
     "editor_page": "RP",
     "backend": {
       "status": "mapped",
@@ -690,7 +690,7 @@
     "label": "Reporter's Telephone",
     "section": "C",
     "authority": "ICH",
-    "status": "complete",
+    "status": "incomplete",
     "editor_page": "RP",
     "backend": {
       "status": "mapped",
@@ -715,7 +715,7 @@
     "label": "Reporter's Country Code",
     "section": "C",
     "authority": "ICH",
-    "status": "complete",
+    "status": "incomplete",
     "editor_page": "RP",
     "backend": {
       "status": "mapped",
@@ -740,7 +740,7 @@
     "label": "Reporter's Email",
     "section": "C",
     "authority": "FDA",
-    "status": "complete",
+    "status": "incomplete",
     "editor_page": "RP",
     "backend": {
       "status": "mapped",
@@ -765,7 +765,7 @@
     "label": "Qualification",
     "section": "C",
     "authority": "ICH",
-    "status": "complete",
+    "status": "incomplete",
     "editor_page": "RP",
     "backend": {
       "status": "mapped",
@@ -790,7 +790,7 @@
     "label": "Other Health Professional Type",
     "section": "C",
     "authority": "MFDS",
-    "status": "complete",
+    "status": "incomplete",
     "editor_page": "RP",
     "backend": {
       "status": "mapped",
@@ -815,7 +815,7 @@
     "label": "Primary Source for Regulatory Purposes",
     "section": "C",
     "authority": "ICH",
-    "status": "complete",
+    "status": "incomplete",
     "editor_page": "RP",
     "backend": {
       "status": "mapped",
@@ -865,7 +865,7 @@
     "label": "Sender Health Professional Type",
     "section": "C",
     "authority": "MFDS",
-    "status": "complete",
+    "status": "incomplete",
     "editor_page": "SD",
     "backend": {
       "status": "mapped",
@@ -915,7 +915,7 @@
     "label": "Sender's Department",
     "section": "C",
     "authority": "ICH",
-    "status": "complete",
+    "status": "incomplete",
     "editor_page": "SD",
     "backend": {
       "status": "mapped",
@@ -940,7 +940,7 @@
     "label": "Sender's Title",
     "section": "C",
     "authority": "ICH",
-    "status": "complete",
+    "status": "incomplete",
     "editor_page": "SD",
     "backend": {
       "status": "mapped",
@@ -965,7 +965,7 @@
     "label": "Sender's Given Name",
     "section": "C",
     "authority": "ICH",
-    "status": "complete",
+    "status": "incomplete",
     "editor_page": "SD",
     "backend": {
       "status": "mapped",
@@ -1015,7 +1015,7 @@
     "label": "Sender's Family Name",
     "section": "C",
     "authority": "ICH",
-    "status": "complete",
+    "status": "incomplete",
     "editor_page": "SD",
     "backend": {
       "status": "mapped",
@@ -1040,7 +1040,7 @@
     "label": "Sender's Street Address",
     "section": "C",
     "authority": "ICH",
-    "status": "complete",
+    "status": "incomplete",
     "editor_page": "SD",
     "backend": {
       "status": "mapped",
@@ -1065,7 +1065,7 @@
     "label": "Sender's City",
     "section": "C",
     "authority": "ICH",
-    "status": "complete",
+    "status": "incomplete",
     "editor_page": "SD",
     "backend": {
       "status": "mapped",
@@ -1090,7 +1090,7 @@
     "label": "Sender's State or Province",
     "section": "C",
     "authority": "ICH",
-    "status": "complete",
+    "status": "incomplete",
     "editor_page": "SD",
     "backend": {
       "status": "mapped",
@@ -1115,7 +1115,7 @@
     "label": "Sender's Postcode",
     "section": "C",
     "authority": "ICH",
-    "status": "complete",
+    "status": "incomplete",
     "editor_page": "SD",
     "backend": {
       "status": "mapped",
@@ -1140,7 +1140,7 @@
     "label": "Sender's Country Code",
     "section": "C",
     "authority": "ICH",
-    "status": "complete",
+    "status": "incomplete",
     "editor_page": "SD",
     "backend": {
       "status": "mapped",
@@ -1165,7 +1165,7 @@
     "label": "Sender's Telephone",
     "section": "C",
     "authority": "ICH",
-    "status": "complete",
+    "status": "incomplete",
     "editor_page": "SD",
     "backend": {
       "status": "mapped",
@@ -1190,7 +1190,7 @@
     "label": "Sender's Fax",
     "section": "C",
     "authority": "ICH",
-    "status": "complete",
+    "status": "incomplete",
     "editor_page": "SD",
     "backend": {
       "status": "mapped",
@@ -1215,7 +1215,7 @@
     "label": "Sender's E-mail Address",
     "section": "C",
     "authority": "ICH",
-    "status": "complete",
+    "status": "incomplete",
     "editor_page": "SD",
     "backend": {
       "status": "mapped",
@@ -1291,7 +1291,7 @@
     "label": "Literature Included Document Payload",
     "section": "C",
     "authority": "ICH",
-    "status": "complete",
+    "status": "incomplete",
     "editor_page": "LR",
     "backend": {
       "status": "mapped",
@@ -1307,8 +1307,8 @@
       "file": "../frontend/E2BR3-frontend/components/case-form/sections/SectionLiterature.tsx",
       "evidence": "SectionLiterature binds fieldNumber C.4.r.2 to literatureReferences[index].documentBase64."
     },
-    "action": "",
-    "notes": "ED component row for C.4.r.2. Renamed from C.4.r.2@documentBase64: this payload field is the official literature Included Documents element."
+    "action": "Implement and test the FDA C.4.r.2 attachment file name-to-mediaType consistency rule. Persist the original file name so the business validator and save/reload roundtrip can evaluate it.",
+    "notes": "ED component row for C.4.r.2. Renamed from C.4.r.2@documentBase64: this payload field is the official literature Included Documents element. ICH/MFDS payload constraints are covered, but FDA rejects a file whose extension does not match mediaType; LiteratureReference currently has no file-name field, validator rule, or authority-specific test."
   },
   {
     "id": "C.4.r.2.local.mediaType",

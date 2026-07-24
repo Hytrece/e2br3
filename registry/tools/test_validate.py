@@ -10,10 +10,13 @@ import editor_contract
 
 
 class RegistryValidatorTests(unittest.TestCase):
-    def test_lr_editor_contract_does_not_misclassify_constraints_as_business_validation(self):
+    def test_lr_editor_contract_tracks_regional_business_validation_gap(self):
         repo = Path(__file__).resolve().parents[2]
         contract = json.loads(
             (repo / "registry/editor-contracts/lr.json").read_text(encoding="utf-8")
+        )
+        registry = json.loads(
+            (repo / "registry/sections/c-safety-report.json").read_text(encoding="utf-8")
         )
 
         self.assertEqual(
@@ -25,6 +28,70 @@ class RegistryValidatorTests(unittest.TestCase):
                 "C.4.r.1": "not_applicable",
                 "C.4.r.local.referenceTextNullFlavor": "not_applicable",
                 "C.4.r.2": "not_applicable",
+            },
+        )
+        literature_attachment = next(
+            row for row in registry if row["id"] == "C.4.r.2"
+        )
+        self.assertEqual("incomplete", literature_attachment["status"])
+        self.assertIn("FDA", literature_attachment["action"])
+        self.assertIn("file name", literature_attachment["action"])
+        self.assertIn("mediaType", literature_attachment["action"])
+
+    def test_certified_editor_sections_track_regional_business_rule_gaps(self):
+        repo = Path(__file__).resolve().parents[2]
+        registry_rows = []
+        for path in (repo / "registry/sections").glob("*.json"):
+            registry_rows.extend(json.loads(path.read_text(encoding="utf-8")))
+        status_by_code = {
+            row["id"]: row["status"]
+            for row in registry_rows
+            if row.get("editor_page") in {"RP", "SD", "LR"}
+        }
+
+        regional_gaps = {
+            # RP: FDA VAERS primary-reporter requirements/MSK restrictions and
+            # MFDS study/therapeutic-use conditional requirements.
+            "C.2.r.1.2",
+            "C.2.r.1.4",
+            "C.2.r.2.1",
+            "C.2.r.2.3",
+            "C.2.r.2.4",
+            "C.2.r.2.5",
+            "C.2.r.2.6",
+            "C.2.r.2.7",
+            "C.2.r.3",
+            "FDA.C.2.r.2.8",
+            "C.2.r.4",
+            "C.2.r.4.KR.1",
+            "C.2.r.5",
+            # SD: FDA sender/identifier rules and MFDS conditional/format rules.
+            "C.3.1.KR.1",
+            "C.3.3.1",
+            "C.3.3.2",
+            "C.3.3.3",
+            "C.3.3.5",
+            "C.3.4.1",
+            "C.3.4.2",
+            "C.3.4.3",
+            "C.3.4.4",
+            "C.3.4.5",
+            "C.3.4.6",
+            "C.3.4.7",
+            "C.3.4.8",
+            "N.1.5",
+            "N.2.r.2",
+            "N.2.r.3",
+            # LR: FDA attachment file-name/mediaType consistency.
+            "C.4.r.2",
+        }
+
+        self.assertEqual(
+            {},
+            {
+                code: status_by_code.get(code)
+                for code in sorted(regional_gaps)
+                if status_by_code.get(code) != "incomplete"
             },
         )
 

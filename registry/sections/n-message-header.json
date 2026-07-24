@@ -101,7 +101,7 @@
     "label": "Date of Batch Transmission",
     "section": "N",
     "authority": "ICH",
-    "status": "complete",
+    "status": "incomplete",
     "editor_page": "SD",
     "backend": {
       "status": "mapped",
@@ -151,7 +151,7 @@
     "label": "Message Sender Identifier",
     "section": "N",
     "authority": "ICH",
-    "status": "complete",
+    "status": "incomplete",
     "editor_page": "SD",
     "backend": {
       "status": "mapped",
@@ -176,7 +176,7 @@
     "label": "Message Receiver Identifier",
     "section": "N",
     "authority": "ICH",
-    "status": "complete",
+    "status": "incomplete",
     "editor_page": "SD",
     "backend": {
       "status": "mapped",
