@@ -491,7 +491,7 @@ struct CaseEditorShellDoc {
 	id: String,
 	status: String,
 	organization_id: String,
-	safety_report_id: String,
+	safety_report_identification: CaseEditorShellSafetyReportDoc,
 	dg_prd_key: Option<String>,
 	created_at: String,
 	updated_at: String,
@@ -505,6 +505,12 @@ struct CaseEditorShellDoc {
 	is_locked: bool,
 	can_act_on_workflow: bool,
 	workflow_block_reason: Option<String>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+struct CaseEditorShellSafetyReportDoc {
+	safety_report_id: String,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, ToSchema)]

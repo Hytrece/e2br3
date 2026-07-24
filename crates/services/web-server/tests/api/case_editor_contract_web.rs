@@ -516,6 +516,10 @@ async fn editor_shell_returns_only_case_header_workflow_and_permissions(
 
 	assert_eq!(status, StatusCode::OK);
 	assert_eq!(body["id"], case_id);
+	assert_eq!(
+		body["safetyReportIdentification"]["safetyReportId"],
+		safety_report_id
+	);
 	assert!(body.get("status").is_some());
 	assert!(body.get("appendices").is_none());
 	assert!(body.get("canActOnWorkflow").is_some());
@@ -524,7 +528,12 @@ async fn editor_shell_returns_only_case_header_workflow_and_permissions(
 	assert!(body.get("drugs").is_none());
 	assert!(body.get("patientInformation").is_none());
 	assert!(body.get("messageHeader").is_none());
-	assert!(body.get("safetyReportIdentification").is_none());
+	assert_eq!(
+		body["safetyReportIdentification"]
+			.as_object()
+			.map(serde_json::Map::len),
+		Some(1)
+	);
 
 	Ok(())
 }
@@ -1802,6 +1811,88 @@ async fn editor_rp_page_patch_persists_primary_source_row() -> Result<()> {
 
 	assert_eq!(status, StatusCode::OK, "{body}");
 	assert_eq!(body["rows"]["primarySources"][0]["qualification"], "1");
+
+	Ok(())
+}
+
+#[serial]
+#[tokio::test]
+async fn editor_rp_changes_accept_frontend_canonical_fields() -> Result<()> {
+	let mm = init_test_mm().await?;
+	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
+	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
+	let cookie = cookie_header(&token.to_string());
+	let app = web_server::app(mm);
+	let case_id =
+		create_case_for_editor(&app, &cookie, "EDITOR-RP-CHANGES", &["ich"]).await?;
+
+	let (status, body) = patch_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/editor/pages/RP"),
+		json!({
+			"authorities": ["ich"],
+			"changes": {
+				"reporterGivenName": { "value": "Canonical" },
+				"reporterCountryNullFlavor": { "value": "UNK" },
+				"reporterEmail": { "value": "canonical@example.test" },
+				"qualification": { "value": "1" },
+				"primarySourceForRegulatoryPurposes": { "value": "1" }
+			}
+		}),
+	)
+	.await?;
+
+	assert_eq!(status, StatusCode::OK, "{body}");
+	let row = &body["rows"]["primarySources"][0];
+	assert_eq!(row["reporterGivenName"], "Canonical");
+	assert_eq!(row["reporterCountryNullFlavor"], "UNK");
+	assert_eq!(row["reporterEmail"], "canonical@example.test");
+	assert_eq!(row["qualification"], "1");
+	assert_eq!(row["primarySourceForRegulatoryPurposes"], "1");
+
+	Ok(())
+}
+
+#[serial]
+#[tokio::test]
+async fn editor_rp_projection_does_not_leak_rows_from_another_case() -> Result<()> {
+	let mm = init_test_mm().await?;
+	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
+	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
+	let cookie = cookie_header(&token.to_string());
+	let app = web_server::app(mm);
+	let populated_case_id =
+		create_case_for_editor(&app, &cookie, "EDITOR-RP-POPULATED", &["ich"])
+			.await?;
+	let empty_case_id =
+		create_case_for_editor(&app, &cookie, "EDITOR-RP-EMPTY", &["ich"]).await?;
+
+	let (status, body) = patch_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{populated_case_id}/editor/pages/RP"),
+		json!({
+			"authorities": ["ich"],
+			"rows": {
+				"primarySources": [{
+					"sequenceNumber": 1,
+					"reporterGivenName": "Only populated case"
+				}]
+			}
+		}),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK, "{body}");
+
+	let (status, body) = get_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{empty_case_id}/editor/pages/RP?authorities=ich"),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK, "{body}");
+	assert_eq!(body["rows"]["primarySources"], json!([]), "{body}");
 
 	Ok(())
 }

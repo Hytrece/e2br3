@@ -12,6 +12,7 @@ pub struct CaseEditorShellDto {
 	pub id: Uuid,
 	pub status: String,
 	pub organization_id: Uuid,
+	pub safety_report_identification: CaseEditorShellSafetyReportDto,
 	pub dg_prd_key: Option<String>,
 	pub created_at: OffsetDateTime,
 	pub updated_at: OffsetDateTime,
@@ -27,12 +28,24 @@ pub struct CaseEditorShellDto {
 	pub workflow_block_reason: Option<&'static str>,
 }
 
-impl From<CaseReadResult> for CaseEditorShellDto {
-	fn from(value: CaseReadResult) -> Self {
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CaseEditorShellSafetyReportDto {
+	pub safety_report_id: String,
+}
+
+impl CaseEditorShellDto {
+	pub fn from_case_read_result(
+		value: CaseReadResult,
+		safety_report_id: String,
+	) -> Self {
 		Self {
 			id: value.case.id,
 			status: value.case.status,
 			organization_id: value.case.organization_id,
+			safety_report_identification: CaseEditorShellSafetyReportDto {
+				safety_report_id,
+			},
 			dg_prd_key: value.case.dg_prd_key,
 			created_at: value.case.created_at,
 			updated_at: value.case.updated_at,
