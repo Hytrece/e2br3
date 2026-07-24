@@ -251,6 +251,7 @@ fn converted_case_route_modules_do_not_call_legacy_authorization() {
 		"message_header_rest.rs",
 		"narrative_rest.rs",
 		"narrative_sub_rest.rs",
+		"parent_history_rest.rs",
 		"patient_rest.rs",
 		"patient_sub_rest.rs",
 		"receiver_rest.rs",
