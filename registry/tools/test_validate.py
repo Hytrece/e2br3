@@ -215,7 +215,7 @@ class RegistryValidatorTests(unittest.TestCase):
             },
         }
 
-    def test_complete_editor_field_requires_all_contract_stages(self):
+    def test_complete_editor_field_does_not_require_business_validation_stage(self):
         field = self.editor_field()
         del field["businessValidation"]
         result = validate.ValidationResult()
@@ -224,7 +224,7 @@ class RegistryValidatorTests(unittest.TestCase):
             [self.editor_row()], {"pageId": "CI", "fields": [field]}, result
         )
 
-        self.assertIn("C.1.3 missing businessValidation evidence", result.errors)
+        self.assertEqual([], result.errors)
 
     def test_complete_editor_field_requires_manifest_entry(self):
         result = validate.ValidationResult()

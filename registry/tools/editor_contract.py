@@ -107,12 +107,13 @@ def validate_editor_contract(
                 if key not in field:
                     result.add(f"{code} missing {key} evidence")
             _validate_stage(code, "constraint", field.get("constraint"), result)
-            _validate_stage(
-                code,
-                "businessValidation",
-                field.get("businessValidation"),
-                result,
-            )
+            if "businessValidation" in field:
+                _validate_stage(
+                    code,
+                    "businessValidation",
+                    field.get("businessValidation"),
+                    result,
+                )
 
     for row in registry_rows:
         if (
