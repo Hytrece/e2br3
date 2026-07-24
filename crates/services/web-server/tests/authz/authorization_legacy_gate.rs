@@ -247,12 +247,14 @@ fn converted_case_route_modules_do_not_call_legacy_authorization() {
 		"case_identifiers_rest.rs",
 		"case_validation_rest.rs",
 		"case_workflow_rest.rs",
+		"drug_reaction_assessment_rest.rs",
 		"message_header_rest.rs",
 		"narrative_rest.rs",
 		"narrative_sub_rest.rs",
 		"patient_rest.rs",
 		"patient_sub_rest.rs",
 		"receiver_rest.rs",
+		"relatedness_assessment_rest.rs",
 		"safety_report_rest.rs",
 	] {
 		let source = fs::read_to_string(
