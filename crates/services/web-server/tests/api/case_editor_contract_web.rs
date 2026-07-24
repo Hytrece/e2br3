@@ -5187,6 +5187,114 @@ async fn editor_dg_page_rejects_catalog_constraint_before_write() -> Result<()> 
 
 #[serial]
 #[tokio::test]
+async fn editor_nr_page_round_trips_narrative_fields() -> Result<()> {
+	let mm = init_test_mm().await?;
+	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
+	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
+	let cookie = cookie_header(&token.to_string());
+	let app = web_server::app(mm);
+	let case_id = create_case(&app, &cookie, "EDITOR-NR-ALL-FIELDS").await?;
+
+	let (status, created) = patch_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/editor/pages/NR"),
+		json!({
+			"authorities": ["ich"],
+			"rows": {
+				"narrative": {
+					"caseNarrative": "Case narrative",
+					"reporterComments": "Reporter comments",
+					"senderComments": "Sender comments",
+					"additionalInformation": "Additional information"
+				}
+			}
+		}),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK, "{created}");
+	let narrative = &created["rows"]["narrative"];
+	assert_eq!(narrative["case_narrative"], "Case narrative");
+	assert_eq!(narrative["reporter_comments"], "Reporter comments");
+	assert_eq!(narrative["sender_comments"], "Sender comments");
+	assert_eq!(
+		narrative["additional_information"],
+		"Additional information"
+	);
+
+	let (status, reloaded) = get_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/editor/pages/NR"),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK, "{reloaded}");
+	assert_eq!(reloaded["rows"]["narrative"], created["rows"]["narrative"]);
+
+	let (status, updated) = patch_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/editor/pages/NR"),
+		json!({
+			"authorities": ["ich"],
+			"rows": {
+				"narrative": {
+					"caseNarrative": "Updated narrative"
+				}
+			}
+		}),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK, "{updated}");
+	assert_eq!(
+		updated["rows"]["narrative"]["case_narrative"],
+		"Updated narrative"
+	);
+
+	Ok(())
+}
+
+#[serial]
+#[tokio::test]
+async fn editor_nr_page_rejects_catalog_constraint_before_write() -> Result<()> {
+	let mm = init_test_mm().await?;
+	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
+	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
+	let cookie = cookie_header(&token.to_string());
+	let app = web_server::app(mm);
+	let case_id = create_case(&app, &cookie, "EDITOR-NR-CONSTRAINT").await?;
+
+	let (status, body) = patch_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/editor/pages/NR"),
+		json!({
+			"authorities": ["ich"],
+			"rows": {
+				"narrative": {
+					"caseNarrative": "Case narrative",
+					"reporterComments": "X".repeat(20001)
+				}
+			}
+		}),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
+	assert_eq!(body["error"]["message"], "CONSTRAINT_VIOLATION");
+	assert_eq!(
+		body["error"]["data"]["detail"]["ruleCode"],
+		"ICH.H.2.LENGTH.MAX"
+	);
+	assert_eq!(
+		body["error"]["data"]["detail"]["path"],
+		"narrative.reporterComments"
+	);
+
+	Ok(())
+}
+
+#[serial]
+#[tokio::test]
 async fn editor_repeatable_page_rows_accept_field_delta_changes_with_profiles(
 ) -> Result<()> {
 	let mm = init_test_mm().await?;
