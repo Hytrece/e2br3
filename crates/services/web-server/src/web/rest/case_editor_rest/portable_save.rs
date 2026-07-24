@@ -783,6 +783,60 @@ pub(super) fn validate_direct_rows(
 					Value::Object(patient_death),
 				);
 			}
+			if let Some(parent) = optional_row_object(section, rows, "parentInfo")? {
+				normalized.insert(
+					"parentInformation".to_string(),
+					Value::Object(normalized_direct_object(
+						parent,
+						&[
+							(
+								"parentIdentification",
+								&["parentIdentification", "parent_identification"],
+							),
+							(
+								"parentBirthDate",
+								&[
+									"parentBirthDate",
+									"parent_birth_date",
+									"parentBirthDateNullFlavor",
+									"parent_birth_date_null_flavor",
+								],
+							),
+							("parentAge.value", &["parentAge.value", "parent_age"]),
+							(
+								"parentAge.unit",
+								&[
+									"parentAge.unit",
+									"parentAgeUnit",
+									"parent_age_unit",
+								],
+							),
+							(
+								"parentLastMenstrualPeriodDate",
+								&[
+									"parentLastMenstrualPeriodDate",
+									"last_menstrual_period_date",
+									"parentLastMenstrualPeriodDateNullFlavor",
+									"last_menstrual_period_date_null_flavor",
+								],
+							),
+							(
+								"parentWeight.value",
+								&["parentWeight.value", "weight_kg"],
+							),
+							(
+								"parentHeight.value",
+								&["parentHeight.value", "height_cm"],
+							),
+							("parentSex", &["parentSex", "sex"]),
+							(
+								"medicalHistoryText",
+								&["medicalHistoryText", "medical_history_text"],
+							),
+						],
+					)),
+				);
+			}
 			Some(normalized)
 		}
 		"NR" => optional_row_object(section, rows, "narrative")?.map(|row| {

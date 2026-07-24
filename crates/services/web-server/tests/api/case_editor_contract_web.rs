@@ -3159,6 +3159,151 @@ async fn editor_dm_page_rejects_patient_death_catalog_constraint_before_write(
 
 #[serial]
 #[tokio::test]
+async fn editor_dm_page_round_trips_parent_information() -> Result<()> {
+	let mm = init_test_mm().await?;
+	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
+	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
+	let cookie = cookie_header(&token.to_string());
+	let app = web_server::app(mm);
+	let case_id =
+		create_case_for_editor(&app, &cookie, "EDITOR-DM-PARENT", &["ich"]).await?;
+
+	let (status, created) = patch_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/editor/pages/DM"),
+		json!({
+			"rows": {
+				"patientInformation": {"patientInitials": "ABC"},
+				"parentInfo": {
+					"parentIdentification": "MOTHER-01",
+					"parentBirthDate": "19700102",
+					"parentAge": {"value": 54, "unit": "a"},
+					"parentLastMenstrualPeriodDate": "20230102",
+					"parentWeight": {"value": 64.5},
+					"parentHeight": {"value": 168},
+					"parentSex": "2",
+					"medicalHistoryText": "Parent history"
+				}
+			}
+		}),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK, "{created}");
+	assert_eq!(
+		created["rows"]["parentInfo"]["parent_identification"],
+		"MOTHER-01"
+	);
+	assert_eq!(
+		created["rows"]["parentInfo"]["parent_birth_date"],
+		"19700102"
+	);
+	assert_eq!(created["rows"]["parentInfo"]["parent_age"], "54.00");
+	assert_eq!(created["rows"]["parentInfo"]["parent_age_unit"], "a");
+	assert_eq!(
+		created["rows"]["parentInfo"]["last_menstrual_period_date"],
+		"20230102"
+	);
+	assert_eq!(created["rows"]["parentInfo"]["weight_kg"], "64.50");
+	assert_eq!(created["rows"]["parentInfo"]["height_cm"], "168.00");
+	assert_eq!(created["rows"]["parentInfo"]["sex"], "2");
+	assert_eq!(
+		created["rows"]["parentInfo"]["medical_history_text"],
+		"Parent history"
+	);
+
+	let parent_id = created["rows"]["parentInfo"]["id"]
+		.as_str()
+		.expect("parent id");
+	let (status, updated) = patch_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/editor/pages/DM"),
+		json!({
+			"rows": {
+				"parentInfo": {
+					"id": parent_id,
+					"parentWeight": {"value": 65}
+				}
+			}
+		}),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK, "{updated}");
+	assert_eq!(updated["rows"]["parentInfo"]["weight_kg"], "65.00");
+	assert_eq!(
+		updated["rows"]["parentInfo"]["parent_identification"],
+		"MOTHER-01"
+	);
+
+	let (status, reloaded) = get_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/editor/pages/DM"),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK, "{reloaded}");
+	assert_eq!(reloaded["rows"], updated["rows"]);
+
+	Ok(())
+}
+
+#[serial]
+#[tokio::test]
+async fn editor_dm_page_rejects_parent_catalog_constraint_before_write() -> Result<()>
+{
+	let mm = init_test_mm().await?;
+	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
+	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
+	let cookie = cookie_header(&token.to_string());
+	let app = web_server::app(mm);
+	let case_id = create_case_for_editor(
+		&app,
+		&cookie,
+		"EDITOR-DM-PARENT-CONSTRAINT",
+		&["ich"],
+	)
+	.await?;
+
+	let (status, body) = patch_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/editor/pages/DM"),
+		json!({
+			"rows": {
+				"patientInformation": {"patientInitials": "ABC"},
+				"parentInfo": {"parentSex": "9"}
+			}
+		}),
+	)
+	.await?;
+
+	assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
+	assert_eq!(body["error"]["message"], "CONSTRAINT_VIOLATION");
+	assert_eq!(
+		body["error"]["data"]["detail"]["ruleCode"],
+		"ICH.D.10.6.ALLOWED.VALUE"
+	);
+	assert_eq!(
+		body["error"]["data"]["detail"]["path"],
+		"patientInformation.parentInformation.parentSex"
+	);
+
+	let (status, reloaded) = get_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/editor/pages/DM"),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK, "{reloaded}");
+	assert!(reloaded["rows"]["patientInformation"].is_null());
+	assert!(reloaded["rows"]["parentInfo"].is_null());
+
+	Ok(())
+}
+
+#[serial]
+#[tokio::test]
 async fn editor_dm_returns_patient_payload_without_dh_list_rows() -> Result<()> {
 	let mm = init_test_mm().await?;
 	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;

@@ -2422,6 +2422,114 @@ async fn apply_dm_page_rows_patch(
 			}
 		}
 	}
+
+	if let Some(parent) = optional_row_object(page_id, rows, "parentInfo")? {
+		let existing = ParentInformationBmc::list(
+			ctx,
+			mm,
+			Some(vec![ParentInformationFilter {
+				patient_id: Some(uuid_eq(patient_id)),
+				..Default::default()
+			}]),
+			Some(ListOptions::default()),
+		)
+		.await?
+		.into_iter()
+		.next();
+		if bool_field(parent, &["deleted", "_delete"]) == Some(true) {
+			if let Some(id) = uuid_field(parent, &["id"])
+				.or_else(|| existing.as_ref().map(|row| row.id))
+			{
+				ParentInformationBmc::delete(ctx, mm, id).await?;
+			}
+		} else {
+			let update = ParentInformationForUpdate {
+				parent_identification: string_field(
+					parent,
+					&["parentIdentification", "parent_identification"],
+				),
+				parent_birth_date: date_field(
+					page_id,
+					parent,
+					&["parentBirthDate", "parent_birth_date"],
+				)?,
+				parent_birth_date_null_flavor: string_field(
+					parent,
+					&["parentBirthDateNullFlavor", "parent_birth_date_null_flavor"],
+				),
+				parent_age: decimal_field(
+					page_id,
+					parent,
+					&["parentAge.value", "parent_age"],
+				)?,
+				parent_age_null_flavor: string_field(
+					parent,
+					&["parentAgeNullFlavor", "parent_age_null_flavor"],
+				),
+				parent_age_unit: nested_string_field(
+					parent,
+					&["parentAge.unit", "parentAgeUnit", "parent_age_unit"],
+				),
+				last_menstrual_period_date: date_field(
+					page_id,
+					parent,
+					&[
+						"parentLastMenstrualPeriodDate",
+						"last_menstrual_period_date",
+					],
+				)?,
+				last_menstrual_period_date_null_flavor: string_field(
+					parent,
+					&[
+						"parentLastMenstrualPeriodDateNullFlavor",
+						"last_menstrual_period_date_null_flavor",
+					],
+				),
+				weight_kg: decimal_field(
+					page_id,
+					parent,
+					&["parentWeight.value", "weight_kg"],
+				)?,
+				height_cm: decimal_field(
+					page_id,
+					parent,
+					&["parentHeight.value", "height_cm"],
+				)?,
+				sex: string_field(parent, &["parentSex", "sex"]),
+				medical_history_text: string_field(
+					parent,
+					&["medicalHistoryText", "medical_history_text"],
+				),
+			};
+			if let Some(existing) = existing {
+				ParentInformationBmc::update(ctx, mm, existing.id, update).await?;
+			} else {
+				ParentInformationBmc::create(
+					ctx,
+					mm,
+					ParentInformationForCreate {
+						patient_id,
+						parent_identification: update.parent_identification,
+						parent_birth_date: update.parent_birth_date,
+						parent_birth_date_null_flavor: update
+							.parent_birth_date_null_flavor,
+						parent_age: update.parent_age,
+						parent_age_null_flavor: update.parent_age_null_flavor,
+						parent_age_unit: update.parent_age_unit,
+						last_menstrual_period_date: update
+							.last_menstrual_period_date,
+						last_menstrual_period_date_null_flavor: update
+							.last_menstrual_period_date_null_flavor,
+						weight_kg: update.weight_kg,
+						height_cm: update.height_cm,
+						sex: update.sex,
+						medical_history_text: update.medical_history_text,
+					},
+				)
+				.await?;
+			}
+		}
+	}
 	Ok(())
 }
 
@@ -2931,7 +3039,20 @@ async fn load_editor_dm_data(
 		}
 		value
 	});
-	let parent_info = parent_information_rows.into_iter().next();
+	let parent_info = parent_information_rows.into_iter().next().map(|parent| {
+		let mut value = json!(parent);
+		if let Value::Object(ref mut map) = value {
+			map.insert(
+				"parent_birth_date".to_string(),
+				json!(ci_date(parent.parent_birth_date)),
+			);
+			map.insert(
+				"last_menstrual_period_date".to_string(),
+				json!(ci_date(parent.last_menstrual_period_date)),
+			);
+		}
+		value
+	});
 	let mut patient_projection = json!(patient);
 	if let Value::Object(ref mut map) = patient_projection {
 		map.insert("birth_date".to_string(), json!(ci_date(patient.birth_date)));
