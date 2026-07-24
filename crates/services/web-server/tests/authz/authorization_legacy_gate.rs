@@ -243,6 +243,8 @@ fn converted_case_route_modules_do_not_call_legacy_authorization() {
 	let root = workspace_root();
 	for file in [
 		"case_rest.rs",
+		"case_intake_rest.rs",
+		"case_validation_rest.rs",
 		"case_workflow_rest.rs",
 		"message_header_rest.rs",
 		"narrative_rest.rs",
