@@ -1,5 +1,118 @@
 use super::common::*;
 
+const REACTION_ROW_ALIASES: &[(&str, &[&str])] = &[
+	("primary_source_reaction", &["reactionPrimarySourceNative"]),
+	(
+		"primary_source_reaction_translation",
+		&["reactionPrimarySourceTranslation"],
+	),
+	("reaction_language", &["reactionLanguage"]),
+	("reaction_meddra_version", &["meddraVersion"]),
+	("reaction_meddra_code", &["meddraCode"]),
+	("term_highlighted", &["termHighlighted"]),
+	("serious", &["seriousness.serious"]),
+	("criteria_death", &["seriousness.criteriaResultsInDeath"]),
+	(
+		"criteria_life_threatening",
+		&["seriousness.criteriaLifeThreatening"],
+	),
+	(
+		"criteria_hospitalization",
+		&["seriousness.criteriaHospitalization"],
+	),
+	("criteria_disabling", &["seriousness.criteriaDisabling"]),
+	(
+		"criteria_congenital_anomaly",
+		&["seriousness.criteriaCongenitalAnomaly"],
+	),
+	(
+		"criteria_other_medically_important",
+		&["seriousness.criteriaOtherMedicallyImportant"],
+	),
+	("required_intervention", &["requiredIntervention"]),
+	("expectedness", &["expectedness"]),
+	("severity", &["severity"]),
+	(
+		"mfds_device_ae_classification",
+		&["mfdsDeviceAe.aeClassification"],
+	),
+	("mfds_device_ae_outcome", &["mfdsDeviceAe.aeOutcome"]),
+	(
+		"mfds_device_cause_medical_device",
+		&["mfdsDeviceAe.causeMedicalDevice"],
+	),
+	(
+		"mfds_device_cause_procedure_issue",
+		&["mfdsDeviceAe.causeProcedureIssue"],
+	),
+	(
+		"mfds_device_cause_patient_condition",
+		&["mfdsDeviceAe.causePatientCondition"],
+	),
+	(
+		"mfds_device_cause_unable_to_assess",
+		&["mfdsDeviceAe.causeUnableToAssess"],
+	),
+	("mfds_device_cause_other", &["mfdsDeviceAe.causeOther"]),
+	("mfds_device_action_reason", &["mfdsDeviceAe.actionReason"]),
+	("mfds_device_action_recall", &["mfdsDeviceAe.actionRecall"]),
+	("mfds_device_action_repair", &["mfdsDeviceAe.actionRepair"]),
+	(
+		"mfds_device_action_inspection",
+		&["mfdsDeviceAe.actionInspection"],
+	),
+	(
+		"mfds_device_action_replacement",
+		&["mfdsDeviceAe.actionReplacement"],
+	),
+	(
+		"mfds_device_action_improvement",
+		&["mfdsDeviceAe.actionImprovement"],
+	),
+	(
+		"mfds_device_action_monitoring",
+		&["mfdsDeviceAe.actionMonitoring"],
+	),
+	(
+		"mfds_device_action_notification",
+		&["mfdsDeviceAe.actionNotification"],
+	),
+	(
+		"mfds_device_action_label_change",
+		&["mfdsDeviceAe.actionLabelChange"],
+	),
+	("mfds_device_action_other", &["mfdsDeviceAe.actionOther"]),
+	("start_date", &["reactionStartDate"]),
+	("end_date", &["reactionEndDate"]),
+	("duration_value", &["reactionDuration.value"]),
+	("duration_unit", &["reactionDuration.unit"]),
+	("outcome", &["outcome", "reactionOutcome"]),
+	("medical_confirmation", &["medicalConfirmation"]),
+	("country_code", &["reactionCountry"]),
+	("sequence_number", &["sequenceNumber"]),
+];
+
+const REACTION_CHANGE_ALIASES: &[(&str, &str)] = &[
+	("reactionPrimarySourceNative", "reactionPrimarySourceNative"),
+	(
+		"reactionPrimarySourceTranslation",
+		"reactionPrimarySourceTranslation",
+	),
+	("reactionLanguage", "reactionLanguage"),
+	("meddraVersion", "meddraVersion"),
+	("meddraCode", "meddraCode"),
+	("termHighlighted", "termHighlighted"),
+	("requiredIntervention", "requiredIntervention"),
+	("expectedness", "expectedness"),
+	("severity", "severity"),
+	("reactionStartDate", "reactionStartDate"),
+	("reactionEndDate", "reactionEndDate"),
+	("outcome", "outcome"),
+	("reactionOutcome", "reactionOutcome"),
+	("medicalConfirmation", "medicalConfirmation"),
+	("reactionCountry", "reactionCountry"),
+];
+
 async fn load_editor_ae_list_rows(
 	ctx: &lib_core::ctx::Ctx,
 	mm: &ModelManager,
@@ -98,7 +211,14 @@ async fn build_editor_ae_page_row_response(
 	row_id: Uuid,
 	authorities: Option<String>,
 ) -> Result<Value> {
-	let reaction = ReactionBmc::get_in_case(&ctx, &mm, case_id, row_id).await?;
+	let persisted = ReactionBmc::get_in_case(&ctx, &mm, case_id, row_id).await?;
+	let start_date = ci_date(persisted.start_date);
+	let end_date = ci_date(persisted.end_date);
+	let mut reaction = json!(persisted);
+	if let Value::Object(ref mut map) = reaction {
+		map.insert("start_date".to_string(), json!(start_date));
+		map.insert("end_date".to_string(), json!(end_date));
+	}
 	editor_page_row_response(
 		case_id,
 		"AE",
@@ -115,16 +235,7 @@ repeatable_page_row_create_handler!(
 	permission: REACTION_CREATE,
 	bmc: ReactionBmc,
 	model: ReactionForCreate,
-	aliases: &[
-		("primary_source_reaction", &["reactionPrimarySourceNative"][..]),
-		(
-			"primary_source_reaction_translation",
-			&["reactionPrimarySourceTranslation"][..],
-		),
-		("reaction_meddra_version", &["meddraVersion"][..]),
-		("reaction_meddra_code", &["meddraCode"][..]),
-		("sequence_number", &["sequenceNumber"][..]),
-	],
+	aliases: REACTION_ROW_ALIASES,
 	extras: |case_id, row| [
 		("case_id", json!(case_id)),
 		(
@@ -142,25 +253,8 @@ repeatable_page_row_patch_handler!(
 	permission: REACTION_UPDATE,
 	bmc: ReactionBmc,
 	model: ReactionForUpdate,
-	changes: &[
-		("reactionPrimarySourceNative", "reactionPrimarySourceNative"),
-		(
-			"reactionPrimarySourceTranslation",
-			"reactionPrimarySourceTranslation",
-		),
-		("meddraVersion", "meddraVersion"),
-		("meddraCode", "meddraCode"),
-		("outcome", "outcome"),
-	],
-	aliases: &[
-		("primary_source_reaction", &["reactionPrimarySourceNative"][..]),
-		(
-			"primary_source_reaction_translation",
-			&["reactionPrimarySourceTranslation"][..],
-		),
-		("reaction_meddra_version", &["meddraVersion"][..]),
-		("reaction_meddra_code", &["meddraCode"][..]),
-	],
+	changes: REACTION_CHANGE_ALIASES,
+	aliases: REACTION_ROW_ALIASES,
 	build_response: build_editor_ae_page_row_response,
 );
 

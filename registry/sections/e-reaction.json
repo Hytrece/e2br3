@@ -6,6 +6,7 @@
     "section": "E",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "AE",
     "backend": {
       "status": "mapped",
       "model": "Reaction",
@@ -30,6 +31,7 @@
     "section": "E",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "AE",
     "backend": {
       "status": "mapped",
       "model": "Reaction",
@@ -54,6 +56,7 @@
     "section": "E",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "AE",
     "backend": {
       "status": "mapped",
       "model": "Reaction",
@@ -78,6 +81,7 @@
     "section": "E",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "AE",
     "backend": {
       "status": "mapped",
       "model": "Reaction",
@@ -102,6 +106,7 @@
     "section": "E",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "AE",
     "backend": {
       "status": "mapped",
       "model": "Reaction",
@@ -126,6 +131,7 @@
     "section": "E",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "AE",
     "backend": {
       "status": "mapped",
       "model": "Reaction",
@@ -150,6 +156,7 @@
     "section": "E",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "AE",
     "backend": {
       "status": "mapped",
       "model": "Reaction",
@@ -173,7 +180,7 @@
     "label": "Term Highlighted by Reporter",
     "section": "E",
     "authority": "ICH",
-    "status": "complete",
+    "status": "incomplete",
     "backend": {
       "status": "mapped",
       "model": "Reaction",
@@ -188,8 +195,8 @@
       "file": "../frontend/E2BR3-frontend/components/case-form/sections/SectionE.tsx",
       "evidence": "SectionE binds fieldNumber E.i.3.1 to reactions[index].termHighlighted."
     },
-    "action": "",
-    "notes": ""
+    "action": "Use one canonical coded representation for E.i.3.1 in the frontend, API, Rust model, and database before restoring complete status.",
+    "notes": "CRUD audit failed lossless roundtrip: the frontend uses coded strings such as 1/2/3 while Reaction.term_highlighted is Option<bool>."
   },
   {
     "id": "E.i.serious",
@@ -198,6 +205,7 @@
     "section": "E",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "AE",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -223,6 +231,7 @@
     "section": "E",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "AE",
     "backend": {
       "status": "mapped",
       "model": "Reaction",
@@ -247,6 +256,7 @@
     "section": "E",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "AE",
     "backend": {
       "status": "mapped",
       "model": "Reaction",
@@ -271,6 +281,7 @@
     "section": "E",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "AE",
     "backend": {
       "status": "mapped",
       "model": "Reaction",
@@ -295,6 +306,7 @@
     "section": "E",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "AE",
     "backend": {
       "status": "mapped",
       "model": "Reaction",
@@ -319,6 +331,7 @@
     "section": "E",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "AE",
     "backend": {
       "status": "mapped",
       "model": "Reaction",
@@ -343,6 +356,7 @@
     "section": "E",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "AE",
     "backend": {
       "status": "mapped",
       "model": "Reaction",
@@ -366,7 +380,7 @@
     "label": "Required Intervention",
     "section": "E",
     "authority": "FDA",
-    "status": "complete",
+    "status": "incomplete",
     "backend": {
       "status": "mapped",
       "model": "Reaction",
@@ -381,8 +395,8 @@
       "file": "../frontend/E2BR3-frontend/components/case-form/sections/SectionE.tsx",
       "evidence": "SectionE binds fieldNumber FDA.E.i.3.2h to reactions[index].requiredIntervention."
     },
-    "action": "",
-    "notes": ""
+    "action": "Add an executable FDA regional allowed-value constraint and portable binding before restoring complete status.",
+    "notes": "CRUD roundtrip passes, but the FDA regional dictionary currently has source allowed_values only; invalid values are not rejected by the portable constraint engine."
   },
   {
     "id": "E.local.expectedness",
@@ -391,6 +405,7 @@
     "section": "E",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "AE",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -416,6 +431,7 @@
     "section": "E",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "AE",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -441,6 +457,7 @@
     "section": "E",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "AE",
     "backend": {
       "status": "mapped",
       "model": "Reaction",
@@ -465,6 +482,7 @@
     "section": "E",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "AE",
     "backend": {
       "status": "mapped",
       "model": "Reaction",
@@ -489,6 +507,7 @@
     "section": "E",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "AE",
     "backend": {
       "status": "mapped",
       "model": "Reaction",
@@ -513,6 +532,7 @@
     "section": "E",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "AE",
     "backend": {
       "status": "mapped",
       "model": "Reaction",
@@ -537,6 +557,7 @@
     "section": "E",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "AE",
     "backend": {
       "status": "mapped",
       "model": "Reaction",
@@ -560,7 +581,7 @@
     "label": "MFDS Device AE Classification",
     "section": "E",
     "authority": "MFDS",
-    "status": "complete",
+    "status": "incomplete",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -585,7 +606,7 @@
     "label": "MFDS Device AE Outcome",
     "section": "E",
     "authority": "MFDS",
-    "status": "complete",
+    "status": "incomplete",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -610,7 +631,7 @@
     "label": "MFDS Device Cause Medical Device",
     "section": "E",
     "authority": "MFDS",
-    "status": "complete",
+    "status": "incomplete",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -635,7 +656,7 @@
     "label": "MFDS Device Cause Procedure Issue",
     "section": "E",
     "authority": "MFDS",
-    "status": "complete",
+    "status": "incomplete",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -660,7 +681,7 @@
     "label": "MFDS Device Cause Patient Condition",
     "section": "E",
     "authority": "MFDS",
-    "status": "complete",
+    "status": "incomplete",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -685,7 +706,7 @@
     "label": "MFDS Device Cause Unable To Assess",
     "section": "E",
     "authority": "MFDS",
-    "status": "complete",
+    "status": "incomplete",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -710,7 +731,7 @@
     "label": "MFDS Device Cause Other",
     "section": "E",
     "authority": "MFDS",
-    "status": "complete",
+    "status": "incomplete",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -735,7 +756,7 @@
     "label": "MFDS Device Action Reason",
     "section": "E",
     "authority": "MFDS",
-    "status": "complete",
+    "status": "incomplete",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -760,7 +781,7 @@
     "label": "MFDS Device Action Recall",
     "section": "E",
     "authority": "MFDS",
-    "status": "complete",
+    "status": "incomplete",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -785,7 +806,7 @@
     "label": "MFDS Device Action Repair",
     "section": "E",
     "authority": "MFDS",
-    "status": "complete",
+    "status": "incomplete",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -810,7 +831,7 @@
     "label": "MFDS Device Action Inspection",
     "section": "E",
     "authority": "MFDS",
-    "status": "complete",
+    "status": "incomplete",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -835,7 +856,7 @@
     "label": "MFDS Device Action Replacement",
     "section": "E",
     "authority": "MFDS",
-    "status": "complete",
+    "status": "incomplete",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -860,7 +881,7 @@
     "label": "MFDS Device Action Improvement",
     "section": "E",
     "authority": "MFDS",
-    "status": "complete",
+    "status": "incomplete",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -885,7 +906,7 @@
     "label": "MFDS Device Action Monitoring",
     "section": "E",
     "authority": "MFDS",
-    "status": "complete",
+    "status": "incomplete",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -910,7 +931,7 @@
     "label": "MFDS Device Action Notification",
     "section": "E",
     "authority": "MFDS",
-    "status": "complete",
+    "status": "incomplete",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -935,7 +956,7 @@
     "label": "MFDS Device Action Label Change",
     "section": "E",
     "authority": "MFDS",
-    "status": "complete",
+    "status": "incomplete",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -960,7 +981,7 @@
     "label": "MFDS Device Action Other",
     "section": "E",
     "authority": "MFDS",
-    "status": "complete",
+    "status": "incomplete",
     "local_only": true,
     "backend": {
       "status": "mapped",

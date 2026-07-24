@@ -4770,6 +4770,156 @@ async fn editor_dh_page_rejects_catalog_constraint_before_write() -> Result<()> 
 
 #[serial]
 #[tokio::test]
+async fn editor_ae_page_row_round_trips_supported_fields() -> Result<()> {
+	let mm = init_test_mm().await?;
+	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
+	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
+	let cookie = cookie_header(&token.to_string());
+	let app = web_server::app(mm);
+	let case_id = create_case(&app, &cookie, "EDITOR-AE-ALL-FIELDS").await?;
+
+	let (status, created) = post_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/editor/pages/AE/rows"),
+		json!({
+			"authorities": ["ich", "fda", "mfds"],
+			"rows": {
+				"reaction": {
+					"sequenceNumber": 1,
+					"reactionPrimarySourceNative": "Headache",
+					"reactionPrimarySourceTranslation": "Head pain",
+					"reactionLanguage": "eng",
+					"meddraVersion": "26.0",
+					"meddraCode": "10000001",
+					"seriousness": {
+						"serious": true,
+						"criteriaResultsInDeath": true,
+						"criteriaLifeThreatening": true,
+						"criteriaHospitalization": true,
+						"criteriaDisabling": true,
+						"criteriaCongenitalAnomaly": true,
+						"criteriaOtherMedicallyImportant": true
+					},
+					"requiredIntervention": "1",
+					"expectedness": "1",
+					"severity": "moderate",
+					"reactionStartDate": "20200102",
+					"reactionEndDate": "20200103",
+					"reactionDuration": {"value": 1, "unit": "d"},
+					"outcome": "1",
+					"medicalConfirmation": true,
+					"reactionCountry": "KR",
+					"mfdsDeviceAe": {
+						"aeClassification": "0",
+						"aeOutcome": "10",
+						"causeMedicalDevice": true,
+						"causeProcedureIssue": true,
+						"causePatientCondition": true,
+						"causeUnableToAssess": true,
+						"causeOther": "Other cause",
+						"actionReason": "Action reason",
+						"actionRecall": true,
+						"actionRepair": true,
+						"actionInspection": true,
+						"actionReplacement": true,
+						"actionImprovement": true,
+						"actionMonitoring": true,
+						"actionNotification": true,
+						"actionLabelChange": true,
+						"actionOther": "Other action"
+					}
+				}
+			}
+		}),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::CREATED, "{created}");
+	let row = &created["data"]["reaction"];
+	assert_eq!(row["primary_source_reaction"], "Headache");
+	assert_eq!(row["reaction_language"], "eng");
+	assert_eq!(row["criteria_death"], true);
+	assert_eq!(row["start_date"], "20200102");
+	assert_eq!(row["duration_value"], "1.00");
+	assert_eq!(row["country_code"], "KR");
+	assert_eq!(row["mfds_device_ae_classification"], "0");
+	assert_eq!(row["mfds_device_action_other"], "Other action");
+
+	let row_id = created["rowId"].as_str().expect("reaction id");
+	let (status, updated) = patch_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/editor/pages/AE/rows/{row_id}"),
+		json!({
+			"authorities": ["ich", "fda", "mfds"],
+			"rows": {
+				"reaction": {
+					"reactionPrimarySourceNative": "Updated headache"
+				}
+			}
+		}),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK, "{updated}");
+	assert_eq!(
+		updated["data"]["reaction"]["primary_source_reaction"],
+		"Updated headache"
+	);
+	assert_eq!(updated["data"]["reaction"]["country_code"], "KR");
+
+	let (status, reloaded) = get_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/editor/pages/AE/rows/{row_id}"),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK, "{reloaded}");
+	assert_eq!(reloaded["data"], updated["data"]);
+
+	Ok(())
+}
+
+#[serial]
+#[tokio::test]
+async fn editor_ae_page_rejects_catalog_constraint_before_write() -> Result<()> {
+	let mm = init_test_mm().await?;
+	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
+	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
+	let cookie = cookie_header(&token.to_string());
+	let app = web_server::app(mm);
+	let case_id = create_case(&app, &cookie, "EDITOR-AE-CONSTRAINT").await?;
+
+	let (status, body) = post_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/editor/pages/AE/rows"),
+		json!({
+			"authorities": ["ich"],
+			"rows": {
+				"reaction": {
+					"reactionPrimarySourceNative": "Headache",
+					"reactionStartDate": "not-a-date"
+				}
+			}
+		}),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
+	assert_eq!(body["error"]["message"], "CONSTRAINT_VIOLATION");
+	assert_eq!(
+		body["error"]["data"]["detail"]["ruleCode"],
+		"ICH.E.i.4.ALLOWED.VALUE"
+	);
+	assert_eq!(
+		body["error"]["data"]["detail"]["path"],
+		"reactions.0.reactionStartDate"
+	);
+
+	Ok(())
+}
+
+#[serial]
+#[tokio::test]
 async fn editor_repeatable_page_rows_accept_field_delta_changes_with_profiles(
 ) -> Result<()> {
 	let mm = init_test_mm().await?;

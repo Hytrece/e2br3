@@ -483,7 +483,17 @@ pub(super) fn insert_alias(
 		return;
 	}
 	for alias in aliases {
-		if let Some(value) = map.get(*alias) {
+		let mut segments = alias.split('.');
+		let Some(first) = segments.next() else {
+			continue;
+		};
+		let mut value = map.get(first);
+		for segment in segments {
+			value = value
+				.and_then(Value::as_object)
+				.and_then(|object| object.get(segment));
+		}
+		if let Some(value) = value {
 			map.insert(target.to_string(), value.clone());
 			return;
 		}
