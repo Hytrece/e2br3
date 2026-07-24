@@ -68,10 +68,11 @@ pub(super) use lib_core::model::patient::{
 	PastDrugHistoryFilter, PastDrugHistoryForCreate, PastDrugHistoryForUpdate,
 	PatientDeathInformationBmc, PatientDeathInformationFilter,
 	PatientDeathInformationForCreate, PatientDeathInformationForUpdate,
-	PatientIdentifierBmc, PatientIdentifierFilter, PatientInformationBmc,
-	PatientInformationForCreate, PatientInformationForUpdate,
-	ReportedCauseOfDeathBmc, ReportedCauseOfDeathFilter,
-	ReportedCauseOfDeathForCreate, ReportedCauseOfDeathForUpdate,
+	PatientIdentifierBmc, PatientIdentifierFilter, PatientIdentifierForCreate,
+	PatientIdentifierForUpdate, PatientInformationBmc, PatientInformationForCreate,
+	PatientInformationForUpdate, ReportedCauseOfDeathBmc,
+	ReportedCauseOfDeathFilter, ReportedCauseOfDeathForCreate,
+	ReportedCauseOfDeathForUpdate,
 };
 pub(super) use lib_core::model::reaction::{
 	ReactionBmc, ReactionForCreate, ReactionForUpdate,

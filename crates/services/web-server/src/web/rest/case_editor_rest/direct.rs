@@ -2257,6 +2257,68 @@ async fn apply_dm_page_rows_patch(
 		}
 	}
 
+	if let Some(value) = rows.get("patientIdentifiers") {
+		let Some(identifier_rows) = value.as_array() else {
+			return Err(Error::BadRequest {
+				message: format!("{page_id}.patientIdentifiers must be an array"),
+			});
+		};
+		for (index, value) in identifier_rows.iter().enumerate() {
+			let identifier = as_object(page_id, "patientIdentifiers", value)?;
+			let id = uuid_field(identifier, &["id"]);
+			if bool_field(identifier, &["deleted", "_delete"]) == Some(true) {
+				if let Some(id) = id {
+					PatientIdentifierBmc::delete(ctx, mm, id).await?;
+				}
+				continue;
+			}
+			let identifier_type_code = string_field(
+				identifier,
+				&["identifierTypeCode", "identifier_type_code"],
+			);
+			let update = PatientIdentifierForUpdate {
+				identifier_type_code: identifier_type_code.clone(),
+				identifier_value: string_field(
+					identifier,
+					&["identifierValue", "identifier_value"],
+				),
+				identifier_value_null_flavor: string_field(
+					identifier,
+					&["identifierValueNullFlavor", "identifier_value_null_flavor"],
+				),
+			};
+			if let Some(id) = id {
+				PatientIdentifierBmc::update(ctx, mm, id, update).await?;
+			} else {
+				let identifier_type_code =
+					identifier_type_code.ok_or_else(|| Error::BadRequest {
+						message: format!(
+							"{page_id}.patientIdentifiers.identifierTypeCode is required"
+						),
+					})?;
+				PatientIdentifierBmc::create(
+					ctx,
+					mm,
+					PatientIdentifierForCreate {
+						patient_id,
+						sequence_number: i32_field(
+							identifier,
+							&["sequenceNumber", "sequence_number"],
+						)
+						.unwrap_or_else(|| {
+							i32::try_from(index + 1).unwrap_or(i32::MAX)
+						}),
+						identifier_type_code,
+						identifier_value: update.identifier_value,
+						identifier_value_null_flavor: update
+							.identifier_value_null_flavor,
+					},
+				)
+				.await?;
+			}
+		}
+	}
+
 	let death_info_row = optional_row_object(page_id, rows, "deathInfo")?;
 	let has_death_children =
 		rows.contains_key("reportedCauses") || rows.contains_key("autopsyCauses");

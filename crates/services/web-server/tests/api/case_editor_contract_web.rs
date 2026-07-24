@@ -3616,6 +3616,96 @@ async fn editor_dm_page_rejects_parent_past_drug_constraint_before_write(
 
 #[serial]
 #[tokio::test]
+async fn editor_dm_page_cruds_local_patient_identifier_rows() -> Result<()> {
+	let mm = init_test_mm().await?;
+	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
+	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
+	let cookie = cookie_header(&token.to_string());
+	let app = web_server::app(mm);
+	let case_id =
+		create_case_for_editor(&app, &cookie, "EDITOR-DM-IDENTIFIER", &["ich"])
+			.await?;
+
+	let (status, created) = patch_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/editor/pages/DM"),
+		json!({
+			"rows": {
+				"patientInformation": {"patientInitials": "ABC"},
+				"patientIdentifiers": [{
+					"sequenceNumber": 1,
+					"identifierTypeCode": "1",
+					"identifierValue": "GP-001"
+				}]
+			}
+		}),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK, "{created}");
+	assert_eq!(
+		created["rows"]["patientIdentifiers"][0]["identifier_type_code"],
+		"1"
+	);
+	assert_eq!(
+		created["rows"]["patientIdentifiers"][0]["identifier_value"],
+		"GP-001"
+	);
+
+	let row_id = created["rows"]["patientIdentifiers"][0]["id"]
+		.as_str()
+		.expect("patient identifier id");
+	let (status, updated) = patch_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/editor/pages/DM"),
+		json!({
+			"rows": {
+				"patientIdentifiers": [{
+					"id": row_id,
+					"identifierValue": "GP-002"
+				}]
+			}
+		}),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK, "{updated}");
+	assert_eq!(
+		updated["rows"]["patientIdentifiers"][0]["identifier_value"],
+		"GP-002"
+	);
+	assert_eq!(
+		updated["rows"]["patientIdentifiers"][0]["identifier_type_code"],
+		"1"
+	);
+
+	let (status, deleted) = patch_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/editor/pages/DM"),
+		json!({
+			"rows": {
+				"patientIdentifiers": [{
+					"id": row_id,
+					"deleted": true
+				}]
+			}
+		}),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK, "{deleted}");
+	assert_eq!(
+		deleted["rows"]["patientIdentifiers"]
+			.as_array()
+			.map(Vec::len),
+		Some(0)
+	);
+
+	Ok(())
+}
+
+#[serial]
+#[tokio::test]
 async fn editor_dm_returns_patient_payload_without_dh_list_rows() -> Result<()> {
 	let mm = init_test_mm().await?;
 	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;

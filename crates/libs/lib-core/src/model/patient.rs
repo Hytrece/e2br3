@@ -1035,10 +1035,12 @@ impl PatientIdentifierBmc {
 		list_options: Option<ListOptions>,
 	) -> Result<Vec<PatientIdentifier>> {
 		let mut filters = filters.unwrap_or_default();
-		filters.push(PatientIdentifierFilter {
-			deleted: Some(OpValBool::Eq(false).into()),
-			..Default::default()
-		});
+		if filters.is_empty() {
+			filters.push(PatientIdentifierFilter::default());
+		}
+		for filter in &mut filters {
+			filter.deleted = Some(OpValBool::Eq(false).into());
+		}
 		base_uuid::list::<Self, _, _>(ctx, mm, Some(filters), list_options).await
 	}
 
