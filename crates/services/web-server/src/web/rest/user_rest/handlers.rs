@@ -405,53 +405,14 @@ pub async fn update_current_user_organization(
 			message: "organization_id is required".to_string(),
 		});
 	}
-	let is_member = UserBmc::user_has_organization_membership(
-		&ctx,
-		&mm,
-		ctx.user_id(),
-		next_organization_id,
-	)
-	.await?;
-	if !is_member {
+	let selected =
+		UserBmc::select_current_user_organization(&ctx, &mm, next_organization_id)
+			.await?;
+	if !selected {
 		return Err(Error::AccessDenied {
 			required_role: "organization_membership".to_string(),
 		});
 	}
-	let update_ctx = Ctx::new(
-		ctx.user_id(),
-		ctx.organization_id(),
-		ROLE_SYSTEM_ADMIN.to_string(),
-	)
-	.map_err(|_| Error::BadRequest {
-		message: "valid organization update context required".to_string(),
-	})?
-	.with_compliance(
-		ctx.change_reason().map(ToString::to_string),
-		ctx.e_signature_id(),
-	);
-	UserBmc::update(
-		&update_ctx,
-		&mm,
-		ctx.user_id(),
-		UserForUpdate {
-			organization_id: Some(next_organization_id),
-			email: None,
-			username: None,
-			role: None,
-			comments: None,
-			other_information: None,
-			access_start_at: None,
-			access_end_at: None,
-			access_sender_ids: None,
-			access_product_ids: None,
-			access_study_ids: None,
-			access_blind_allowed: None,
-			active_sender_identifier: None,
-			active: None,
-			last_login_at: None,
-		},
-	)
-	.await?;
 	let selected_ctx =
 		Ctx::new(ctx.user_id(), next_organization_id, ctx.role().to_string())
 			.map_err(|_| Error::BadRequest {

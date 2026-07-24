@@ -1502,6 +1502,42 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path FROM CURRENT;
 
+CREATE OR REPLACE FUNCTION select_current_user_organization(
+	target_organization_id UUID
+) RETURNS BOOLEAN AS $$
+DECLARE
+	actor_user_id UUID;
+BEGIN
+	actor_user_id := NULLIF(
+		current_setting('app.current_user_id', true), ''
+	)::UUID;
+	IF actor_user_id IS NULL OR target_organization_id IS NULL THEN
+		RETURN FALSE;
+	END IF;
+
+	IF NOT EXISTS (
+		SELECT 1
+		FROM user_organization_memberships membership
+		JOIN organizations organization
+		  ON organization.id = membership.organization_id
+		WHERE membership.user_id = actor_user_id
+		  AND membership.organization_id = target_organization_id
+		  AND membership.active
+		  AND organization.active
+	) THEN
+		RETURN FALSE;
+	END IF;
+
+	UPDATE users
+	SET organization_id = target_organization_id,
+		updated_by = actor_user_id,
+		updated_at = NOW()
+	WHERE id = actor_user_id;
+
+	RETURN FOUND;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path FROM CURRENT;
+
 -- Compatibility adapter for legacy callers. The role label is translated once
 -- and is never stored or read by RLS.
 CREATE OR REPLACE FUNCTION set_org_context(org_id UUID, user_role VARCHAR) RETURNS VOID AS $$
@@ -1518,6 +1554,8 @@ GRANT EXECUTE ON FUNCTION current_organization_id() TO e2br3_app_role;
 GRANT EXECUTE ON FUNCTION is_current_user_admin() TO e2br3_app_role;
 REVOKE ALL ON FUNCTION set_authorization_isolation_context(UUID, BOOLEAN) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION set_authorization_isolation_context(UUID, BOOLEAN) TO e2br3_app_role;
+REVOKE ALL ON FUNCTION select_current_user_organization(UUID) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION select_current_user_organization(UUID) TO e2br3_app_role;
 GRANT EXECUTE ON FUNCTION set_org_context(UUID, VARCHAR) TO e2br3_app_role;
 
 -- Grant table access for application role (RLS will still enforce isolation)
