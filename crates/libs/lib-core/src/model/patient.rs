@@ -1192,10 +1192,12 @@ impl PastDrugHistoryBmc {
 		list_options: Option<ListOptions>,
 	) -> Result<Vec<PastDrugHistory>> {
 		let mut filters = filters.unwrap_or_default();
-		filters.push(PastDrugHistoryFilter {
-			deleted: Some(OpValBool::Eq(false).into()),
-			..Default::default()
-		});
+		if filters.is_empty() {
+			filters.push(PastDrugHistoryFilter::default());
+		}
+		for filter in &mut filters {
+			filter.deleted = Some(OpValBool::Eq(false).into());
+		}
 		base_uuid::list::<Self, _, _>(ctx, mm, Some(filters), list_options).await
 	}
 

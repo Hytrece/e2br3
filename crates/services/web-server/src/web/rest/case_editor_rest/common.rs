@@ -522,6 +522,17 @@ pub(super) fn uuid_field(
 	string_field(map, aliases).and_then(|value| Uuid::parse_str(&value).ok())
 }
 
+pub(super) fn ci_date(value: Option<sqlx::types::time::Date>) -> Option<String> {
+	value.map(|date| {
+		format!(
+			"{:04}{:02}{:02}",
+			date.year(),
+			u8::from(date.month()),
+			date.day()
+		)
+	})
+}
+
 pub(super) fn rows_from_direct_section(data: Value) -> BTreeMap<String, Value> {
 	match data {
 		Value::Object(map) => map.into_iter().collect(),

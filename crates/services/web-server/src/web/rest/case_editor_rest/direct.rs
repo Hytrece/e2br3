@@ -101,17 +101,6 @@ impl From<PrimarySource> for CaseEditorRpPrimarySourceDto {
 	}
 }
 
-fn ci_date(value: Option<sqlx::types::time::Date>) -> Option<String> {
-	value.map(|date| {
-		format!(
-			"{:04}{:02}{:02}",
-			date.year(),
-			u8::from(date.month()),
-			date.day()
-		)
-	})
-}
-
 async fn load_editor_ci_data(
 	ctx: &lib_core::ctx::Ctx,
 	mm: &ModelManager,

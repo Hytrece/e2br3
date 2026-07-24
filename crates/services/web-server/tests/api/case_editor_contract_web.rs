@@ -4638,6 +4638,138 @@ async fn editor_dh_page_row_patch_updates_one_drug_history() -> Result<()> {
 
 #[serial]
 #[tokio::test]
+async fn editor_dh_page_row_round_trips_all_catalog_fields() -> Result<()> {
+	let mm = init_test_mm().await?;
+	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
+	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
+	let cookie = cookie_header(&token.to_string());
+	let app = web_server::app(mm);
+	let case_id = create_case(&app, &cookie, "EDITOR-DH-ALL-FIELDS").await?;
+	create_patient_fixture(&app, &cookie, &case_id).await?;
+
+	let (status, created) = post_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/editor/pages/DH/rows"),
+		json!({
+			"authorities": ["ich", "mfds"],
+			"rows": {
+				"pastDrugHistory": {
+					"sequenceNumber": 1,
+					"drugName": "Prior drug",
+					"mfdsMedicinalProductVersion": "2026",
+					"mfdsMedicinalProductId": "MFDS-001",
+					"mpidVersion": "1",
+					"mpid": "MPID-001",
+					"phpidVersion": "1",
+					"phpid": "PHPID-001",
+					"startDate": "20200102",
+					"endDate": "20210102",
+					"indicationMeddraVersion": "26.0",
+					"indicationMeddraCode": "10000001",
+					"reactionMeddraVersion": "26.0",
+					"reactionMeddraCode": "10000001"
+				}
+			}
+		}),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::CREATED, "{created}");
+	let row = &created["data"]["pastDrugHistory"];
+	assert_eq!(row["drug_name"], "Prior drug");
+	assert_eq!(row["mfds_medicinal_product_id"], "MFDS-001");
+	assert_eq!(row["mpid"], "MPID-001");
+	assert_eq!(row["phpid"], "PHPID-001");
+	assert_eq!(row["start_date"], "20200102");
+	assert_eq!(row["end_date"], "20210102");
+	assert_eq!(row["indication_meddra_code"], "10000001");
+	assert_eq!(row["reaction_meddra_code"], "10000001");
+
+	let row_id = created["rowId"].as_str().expect("past drug id");
+	let (status, updated) = patch_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/editor/pages/DH/rows/{row_id}"),
+		json!({
+			"authorities": ["ich", "mfds"],
+			"rows": {
+				"pastDrugHistory": {
+					"drugName": "Updated prior drug"
+				}
+			}
+		}),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK, "{updated}");
+	assert_eq!(
+		updated["data"]["pastDrugHistory"]["drug_name"],
+		"Updated prior drug"
+	);
+	assert_eq!(updated["data"]["pastDrugHistory"]["mpid"], "MPID-001");
+
+	let (status, reloaded) = get_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/editor/pages/DH/rows/{row_id}"),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK, "{reloaded}");
+	assert_eq!(reloaded["data"], updated["data"]);
+
+	Ok(())
+}
+
+#[serial]
+#[tokio::test]
+async fn editor_dh_page_rejects_catalog_constraint_before_write() -> Result<()> {
+	let mm = init_test_mm().await?;
+	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
+	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
+	let cookie = cookie_header(&token.to_string());
+	let app = web_server::app(mm);
+	let case_id = create_case(&app, &cookie, "EDITOR-DH-CONSTRAINT").await?;
+	create_patient_fixture(&app, &cookie, &case_id).await?;
+
+	let (status, body) = post_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/editor/pages/DH/rows"),
+		json!({
+			"authorities": ["ich"],
+			"rows": {
+				"pastDrugHistory": {
+					"drugName": "Prior drug",
+					"startDate": "not-a-date"
+				}
+			}
+		}),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
+	assert_eq!(body["error"]["message"], "CONSTRAINT_VIOLATION");
+	assert_eq!(
+		body["error"]["data"]["detail"]["ruleCode"],
+		"ICH.D.8.r.4.ALLOWED.VALUE"
+	);
+	assert_eq!(
+		body["error"]["data"]["detail"]["path"],
+		"patientInformation.pastDrugHistory.0.startDate"
+	);
+
+	let (status, list) = get_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/editor/pages/DH"),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK, "{list}");
+	assert_eq!(list["rows"]["rows"].as_array().map(Vec::len), Some(0));
+
+	Ok(())
+}
+
+#[serial]
+#[tokio::test]
 async fn editor_repeatable_page_rows_accept_field_delta_changes_with_profiles(
 ) -> Result<()> {
 	let mm = init_test_mm().await?;

@@ -32,8 +32,8 @@ async fn load_editor_dh_list_rows(
 		sequence_number: history.sequence_number,
 		drug_name: history.drug_name,
 		indication: history.indication_meddra_code,
-		start_date: history.start_date.map(|date| date.to_string()),
-		end_date: history.end_date.map(|date| date.to_string()),
+		start_date: ci_date(history.start_date),
+		end_date: ci_date(history.end_date),
 	})
 	.collect())
 }
@@ -140,7 +140,12 @@ async fn load_editor_dh_row_detail(
 		}
 		.into());
 	}
-	Ok(json!(history))
+	let mut value = json!(history);
+	if let Value::Object(ref mut map) = value {
+		map.insert("start_date".to_string(), json!(ci_date(history.start_date)));
+		map.insert("end_date".to_string(), json!(ci_date(history.end_date)));
+	}
+	Ok(value)
 }
 
 async fn build_editor_dh_page_row_response(
@@ -197,7 +202,19 @@ repeatable_page_row_create_handler!(
 	model: PastDrugHistoryForCreate,
 	aliases: &[
 		("drug_name", &["drugName"][..]),
-		("indication_meddra_code", &["indication"][..]),
+		("drug_name_null_flavor", &["drugNameNullFlavor"][..]),
+		("mfds_medicinal_product_version", &["mfdsMedicinalProductVersion"][..]),
+		("mfds_medicinal_product_id", &["mfdsMedicinalProductId"][..]),
+		("mpid_version", &["mpidVersion"][..]),
+		("phpid_version", &["phpidVersion"][..]),
+		("start_date", &["startDate"][..]),
+		("start_date_null_flavor", &["startDateNullFlavor"][..]),
+		("end_date", &["endDate"][..]),
+		("end_date_null_flavor", &["endDateNullFlavor"][..]),
+		("indication_meddra_version", &["indicationMeddraVersion"][..]),
+		("indication_meddra_code", &["indicationMeddraCode", "indication"][..]),
+		("reaction_meddra_version", &["reactionMeddraVersion"][..]),
+		("reaction_meddra_code", &["reactionMeddraCode"][..]),
 		("sequence_number", &["sequenceNumber"][..]),
 	],
 	extras_fn: editor_dh_create_extras,
@@ -212,10 +229,40 @@ repeatable_page_row_patch_handler!(
 	bmc: PastDrugHistoryBmc,
 	model: PastDrugHistoryForUpdate,
 	verify: verify_editor_dh_page_row,
-	changes: &[("drugName", "drugName"), ("indication", "indication")],
+	changes: &[
+		("drugName", "drugName"),
+		("drugNameNullFlavor", "drugNameNullFlavor"),
+		("mfdsMedicinalProductVersion", "mfdsMedicinalProductVersion"),
+		("mfdsMedicinalProductId", "mfdsMedicinalProductId"),
+		("mpidVersion", "mpidVersion"),
+		("mpid", "mpid"),
+		("phpidVersion", "phpidVersion"),
+		("phpid", "phpid"),
+		("startDate", "startDate"),
+		("startDateNullFlavor", "startDateNullFlavor"),
+		("endDate", "endDate"),
+		("endDateNullFlavor", "endDateNullFlavor"),
+		("indicationMeddraVersion", "indicationMeddraVersion"),
+		("indicationMeddraCode", "indicationMeddraCode"),
+		("reactionMeddraVersion", "reactionMeddraVersion"),
+		("reactionMeddraCode", "reactionMeddraCode"),
+		("indication", "indication"),
+	],
 	aliases: &[
 		("drug_name", &["drugName"][..]),
-		("indication_meddra_code", &["indication"][..]),
+		("drug_name_null_flavor", &["drugNameNullFlavor"][..]),
+		("mfds_medicinal_product_version", &["mfdsMedicinalProductVersion"][..]),
+		("mfds_medicinal_product_id", &["mfdsMedicinalProductId"][..]),
+		("mpid_version", &["mpidVersion"][..]),
+		("phpid_version", &["phpidVersion"][..]),
+		("start_date", &["startDate"][..]),
+		("start_date_null_flavor", &["startDateNullFlavor"][..]),
+		("end_date", &["endDate"][..]),
+		("end_date_null_flavor", &["endDateNullFlavor"][..]),
+		("indication_meddra_version", &["indicationMeddraVersion"][..]),
+		("indication_meddra_code", &["indicationMeddraCode", "indication"][..]),
+		("reaction_meddra_version", &["reactionMeddraVersion"][..]),
+		("reaction_meddra_code", &["reactionMeddraCode"][..]),
 	],
 	build_response: build_editor_dh_page_row_response,
 );
