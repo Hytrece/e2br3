@@ -201,6 +201,44 @@ fn pdf_menu_privileges_are_not_part_of_the_legacy_permission_runtime() {
 }
 
 #[test]
+fn generated_case_routes_do_not_accept_legacy_permissions() {
+	let root = workspace_root();
+	let macros = fs::read_to_string(
+		root.join("crates/libs/lib-rest-core/src/utils/macro_utils.rs"),
+	)
+	.expect("REST macro source must be readable");
+	let case_macros = macros
+		.split_once(
+			"/// Generate CRUD REST handlers for a resource nested below a drug.",
+		)
+		.map(|(_, case_macros)| case_macros)
+		.expect("Case macro boundary must exist");
+
+	for legacy in [
+		"require_permission",
+		"RequirePermission",
+		"check_permission",
+		"legacy_permission_allowed",
+		"PermCreate:",
+		"PermRead:",
+		"PermUpdate:",
+		"PermDelete:",
+		"PermList:",
+	] {
+		assert!(
+			!case_macros.contains(legacy),
+			"generated Case routes still accept legacy authorization input: {legacy}"
+		);
+	}
+	assert!(
+		case_macros.contains("AuthorizationSnapshotW"),
+		"generated Case routes must consume the request authorization snapshot"
+	);
+	assert!(case_macros.contains("with_authorized_case_child_read"));
+	assert!(case_macros.contains("with_authorized_case_child_mutation"));
+}
+
+#[test]
 fn role_api_has_one_canonical_metadata_shape() {
 	let root = workspace_root();
 	let source =

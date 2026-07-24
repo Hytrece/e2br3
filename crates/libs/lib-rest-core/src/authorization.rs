@@ -1,9 +1,18 @@
 use crate::{Error, Result};
 use lib_core::authorization::{
+	authorize_contextual_mutation, authorize_contextual_read, policy_registry,
 	AuthorizationContext, AuthorizationDenial, AuthorizedMutation, AuthorizedRead,
-	AuthorizedSubject, PolicySnapshotVersion, RequestAuthorizationSnapshot,
+	AuthorizedSubject, CaseChildResource, CaseResource, Parent,
+	PolicySnapshotVersion, RequestAuthorizationSnapshot,
 };
 use lib_core::ctx::{Ctx, ROLE_SYSTEM_ADMIN};
+use lib_core::model::authorization::{
+	AuthorizationFactLoadError, AuthorizationFactLoader,
+};
+use lib_core::model::store::set_full_context_from_ctx_dbx;
+use lib_core::model::ModelManager;
+use std::future::Future;
+use std::pin::Pin;
 use uuid::Uuid;
 
 pub fn denied(denial: AuthorizationDenial) -> Error {
@@ -81,6 +90,136 @@ pub fn rls_ctx_for_authorized_subject(
 ) -> Result<Ctx> {
 	validate_request_binding(request_ctx, snapshot, permit)?;
 	Ok(request_ctx.clone())
+}
+
+pub async fn with_authorized_case_child_read<T, F>(
+	request_ctx: &Ctx,
+	snapshot: &RequestAuthorizationSnapshot,
+	mm: &ModelManager,
+	case_id: Uuid,
+	child_fingerprint: impl AsRef<str>,
+	operation: F,
+) -> Result<T>
+where
+	F: for<'ctx> FnOnce(
+		&'ctx Ctx,
+		&'ctx ModelManager,
+	) -> Pin<Box<dyn Future<Output = Result<T>> + Send + 'ctx>>,
+{
+	let dbx = mm.dbx();
+	dbx.begin_txn()
+		.await
+		.map_err(lib_core::model::Error::from)?;
+	if let Err(error) = set_full_context_from_ctx_dbx(dbx, request_ctx).await {
+		let _ = dbx.rollback_txn().await;
+		return Err(error.into());
+	}
+	let result = async {
+		let context = AuthorizationFactLoader::new(dbx, snapshot)
+			.case_child(case_id, child_fingerprint)
+			.await
+			.map_err(map_fact_load_error)?;
+		let action = policy_registry()
+			.context_action::<Parent<CaseResource, CaseChildResource>>(
+				"case.child.read",
+			)
+			.ok_or_else(|| Error::AccessDenied {
+				required_role: "registered case.child.read action".to_string(),
+			})?;
+		let permit =
+			authorize_contextual_read(action, snapshot, context).map_err(denied)?;
+		let authorized_ctx =
+			rls_ctx_for_authorized_read(request_ctx, snapshot, &permit)?;
+		operation(&authorized_ctx, mm).await
+	}
+	.await;
+	finish_fact_transaction(dbx, result).await
+}
+
+pub async fn with_authorized_case_child_mutation<T, F>(
+	request_ctx: &Ctx,
+	snapshot: &RequestAuthorizationSnapshot,
+	mm: &ModelManager,
+	case_id: Uuid,
+	child_fingerprint: impl AsRef<str>,
+	operation: F,
+) -> Result<T>
+where
+	F: for<'ctx> FnOnce(
+		&'ctx Ctx,
+		&'ctx ModelManager,
+	) -> Pin<Box<dyn Future<Output = Result<T>> + Send + 'ctx>>,
+{
+	let dbx = mm.dbx();
+	dbx.begin_txn()
+		.await
+		.map_err(lib_core::model::Error::from)?;
+	if let Err(error) = set_full_context_from_ctx_dbx(dbx, request_ctx).await {
+		let _ = dbx.rollback_txn().await;
+		return Err(error.into());
+	}
+	let loader = AuthorizationFactLoader::new(dbx, snapshot);
+	if let Err(error) = loader.lock_and_verify_revisions().await {
+		let _ = dbx.rollback_txn().await;
+		return Err(map_fact_load_error(error));
+	}
+	let result = async {
+		let context = loader
+			.case_child_for_verified_mutation(case_id, child_fingerprint)
+			.await
+			.map_err(map_fact_load_error)?;
+		let action = policy_registry()
+			.context_action::<Parent<CaseResource, CaseChildResource>>(
+				"case.child.update",
+			)
+			.ok_or_else(|| Error::AccessDenied {
+				required_role: "registered case.child.update action".to_string(),
+			})?;
+		let permit = authorize_contextual_mutation(action, snapshot, context)
+			.map_err(denied)?;
+		let authorized_ctx =
+			rls_ctx_for_authorized_mutation(request_ctx, snapshot, &permit)?;
+		operation(&authorized_ctx, mm).await
+	}
+	.await;
+	finish_fact_transaction(dbx, result).await
+}
+
+async fn finish_fact_transaction<T>(
+	dbx: &lib_core::model::store::dbx::Dbx,
+	result: Result<T>,
+) -> Result<T> {
+	match result {
+		Ok(ctx) => {
+			dbx.commit_txn()
+				.await
+				.map_err(lib_core::model::Error::from)?;
+			Ok(ctx)
+		}
+		Err(error) => {
+			let _ = dbx.rollback_txn().await;
+			Err(error)
+		}
+	}
+}
+
+fn map_fact_load_error(error: AuthorizationFactLoadError) -> Error {
+	match error {
+		AuthorizationFactLoadError::Database(error) => {
+			Error::Model(lib_core::model::Error::Dbx(error))
+		}
+		AuthorizationFactLoadError::FactNotFound { fact, id } => {
+			Error::Model(lib_core::model::Error::EntityUuidNotFound {
+				entity: fact,
+				id,
+			})
+		}
+		AuthorizationFactLoadError::SnapshotStale { .. } => {
+			Error::PermissionDenied {
+				required_permission: "AUTHORIZATION_SNAPSHOT_STALE".to_string(),
+			}
+		}
+	}
 }
 
 pub fn rls_ctx_for_authorized_read<C: AuthorizationContext>(

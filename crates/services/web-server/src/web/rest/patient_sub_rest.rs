@@ -5,15 +5,8 @@ use axum::http::StatusCode;
 use axum::Json;
 use lib_core::model::acs::{
 	DEATH_CAUSE_CREATE, DEATH_CAUSE_DELETE, DEATH_CAUSE_LIST, DEATH_CAUSE_READ,
-	DEATH_CAUSE_UPDATE, MEDICAL_HISTORY_CREATE, MEDICAL_HISTORY_DELETE,
-	MEDICAL_HISTORY_LIST, MEDICAL_HISTORY_READ, MEDICAL_HISTORY_UPDATE,
-	PARENT_INFORMATION_CREATE, PARENT_INFORMATION_DELETE, PARENT_INFORMATION_LIST,
-	PARENT_INFORMATION_READ, PARENT_INFORMATION_UPDATE, PAST_DRUG_CREATE,
-	PAST_DRUG_DELETE, PAST_DRUG_LIST, PAST_DRUG_READ, PAST_DRUG_UPDATE,
-	PATIENT_DEATH_CREATE, PATIENT_DEATH_DELETE, PATIENT_DEATH_LIST,
-	PATIENT_DEATH_READ, PATIENT_DEATH_UPDATE, PATIENT_IDENTIFIER_CREATE,
-	PATIENT_IDENTIFIER_DELETE, PATIENT_IDENTIFIER_LIST, PATIENT_IDENTIFIER_READ,
-	PATIENT_IDENTIFIER_UPDATE,
+	DEATH_CAUSE_UPDATE, PATIENT_DEATH_CREATE, PATIENT_DEATH_DELETE,
+	PATIENT_DEATH_LIST, PATIENT_DEATH_READ, PATIENT_DEATH_UPDATE,
 };
 use lib_core::model::patient::{
 	AutopsyCauseOfDeath, AutopsyCauseOfDeathBmc, AutopsyCauseOfDeathFilter,
@@ -106,12 +99,7 @@ lib_rest_core::generate_patient_child_rest_fns! {
 	ScopeFn: ensure_patient_scope,
 	EntityName: "patient_identifiers",
 	DeleteResult: (StatusCode, Json<DataRestResult<PatientIdentifier>>),
-	DeleteResponse: entity,
-	PermCreate: PATIENT_IDENTIFIER_CREATE,
-	PermList: PATIENT_IDENTIFIER_LIST,
-	PermRead: PATIENT_IDENTIFIER_READ,
-	PermUpdate: PATIENT_IDENTIFIER_UPDATE,
-	PermDelete: PATIENT_IDENTIFIER_DELETE
+	DeleteResponse: entity
 }
 
 // -- Medical History Episodes (D.7.1.r)
@@ -125,10 +113,7 @@ lib_rest_core::generate_patient_child_rest_fns! {
 	DeleteFn: delete_medical_history_episode, RestoreFn: restore_medical_history_episode,
 	ParentField: patient_id, ResolveParentFn: patient_id_for_case,
 	ScopeFn: ensure_patient_scope, EntityName: "medical_history_episodes",
-	DeleteResult: StatusCode, DeleteResponse: no_content,
-	PermCreate: MEDICAL_HISTORY_CREATE, PermList: MEDICAL_HISTORY_LIST,
-	PermRead: MEDICAL_HISTORY_READ, PermUpdate: MEDICAL_HISTORY_UPDATE,
-	PermDelete: MEDICAL_HISTORY_DELETE
+	DeleteResult: StatusCode, DeleteResponse: no_content
 }
 
 // -- Past Drug History (D.8.r)
@@ -142,10 +127,7 @@ lib_rest_core::generate_patient_child_rest_fns! {
 	DeleteFn: delete_past_drug_history, RestoreFn: restore_past_drug_history,
 	ParentField: patient_id, ResolveParentFn: patient_id_for_case,
 	ScopeFn: ensure_patient_scope, EntityName: "past_drug_history",
-	DeleteResult: StatusCode, DeleteResponse: no_content,
-	PermCreate: PAST_DRUG_CREATE, PermList: PAST_DRUG_LIST,
-	PermRead: PAST_DRUG_READ, PermUpdate: PAST_DRUG_UPDATE,
-	PermDelete: PAST_DRUG_DELETE
+	DeleteResult: StatusCode, DeleteResponse: no_content
 }
 
 // -- Patient Death Information (D.9)
@@ -554,8 +536,5 @@ lib_rest_core::generate_patient_child_rest_fns! {
 	DeleteFn: delete_parent_information, RestoreFn: restore_parent_information,
 	ParentField: patient_id, ResolveParentFn: patient_id_for_case,
 	ScopeFn: ensure_patient_scope, EntityName: "parent_information",
-	DeleteResult: StatusCode, DeleteResponse: no_content,
-	PermCreate: PARENT_INFORMATION_CREATE, PermList: PARENT_INFORMATION_LIST,
-	PermRead: PARENT_INFORMATION_READ, PermUpdate: PARENT_INFORMATION_UPDATE,
-	PermDelete: PARENT_INFORMATION_DELETE
+	DeleteResult: StatusCode, DeleteResponse: no_content
 }

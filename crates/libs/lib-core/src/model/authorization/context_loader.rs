@@ -1,6 +1,7 @@
 use crate::authorization::{
-	CaseResource, Collection, ContextSnapshot, EnforcedScopeFilter,
-	EvaluatedContext, Existing, LockedMutationContext, RequestAuthorizationSnapshot,
+	CaseChildResource, CaseResource, Collection, ContextSnapshot,
+	EnforcedScopeFilter, EvaluatedContext, Existing, LockedMutationContext, Parent,
+	RequestAuthorizationSnapshot,
 };
 use crate::model::store::dbx::Dbx;
 use sqlx::FromRow;
@@ -105,6 +106,18 @@ impl<'tx> AuthorizationFactLoader<'tx> {
 		AuthorizationFactLoadError,
 	> {
 		self.lock_and_verify_revisions().await?;
+		self.case_existing_for_verified_mutation(case_id, kind)
+			.await
+	}
+
+	pub async fn case_existing_for_verified_mutation(
+		&self,
+		case_id: Uuid,
+		kind: CaseMutationKind,
+	) -> Result<
+		LockedMutationContext<'tx, Existing<CaseResource>>,
+		AuthorizationFactLoadError,
+	> {
 		let facts = self.load_case_facts(case_id, true).await?;
 		Ok(LockedMutationContext::new(case_evaluated(
 			self.snapshot,
@@ -114,22 +127,67 @@ impl<'tx> AuthorizationFactLoader<'tx> {
 		)))
 	}
 
-	async fn lock_and_verify_revisions(
+	pub async fn case_child(
+		&self,
+		case_id: Uuid,
+		child_fingerprint: impl AsRef<str>,
+	) -> Result<
+		ContextSnapshot<'tx, Parent<CaseResource, CaseChildResource>>,
+		AuthorizationFactLoadError,
+	> {
+		let facts = self.load_case_facts(case_id, false).await?;
+		Ok(ContextSnapshot::new(case_child_evaluated(
+			self.snapshot,
+			case_id,
+			child_fingerprint.as_ref(),
+			&facts,
+			false,
+		)))
+	}
+
+	pub async fn case_child_for_mutation(
+		&self,
+		case_id: Uuid,
+		child_fingerprint: impl AsRef<str>,
+	) -> Result<
+		LockedMutationContext<'tx, Parent<CaseResource, CaseChildResource>>,
+		AuthorizationFactLoadError,
+	> {
+		self.lock_and_verify_revisions().await?;
+		self.case_child_for_verified_mutation(case_id, child_fingerprint)
+			.await
+	}
+
+	pub async fn case_child_for_verified_mutation(
+		&self,
+		case_id: Uuid,
+		child_fingerprint: impl AsRef<str>,
+	) -> Result<
+		LockedMutationContext<'tx, Parent<CaseResource, CaseChildResource>>,
+		AuthorizationFactLoadError,
+	> {
+		let facts = self.load_case_facts(case_id, true).await?;
+		Ok(LockedMutationContext::new(case_child_evaluated(
+			self.snapshot,
+			case_id,
+			child_fingerprint.as_ref(),
+			&facts,
+			case_lifecycle_allows(&facts, CaseMutationKind::ChildEdit),
+		)))
+	}
+
+	pub async fn lock_and_verify_revisions(
 		&self,
 	) -> Result<(), AuthorizationFactLoadError> {
 		let (organization_revision, principal_revision) = self
 			.dbx
 			.fetch_one(
 				sqlx::query_as::<_, (i64, i64)>(
-					"SELECT o.revision, p.revision
-					   FROM organization_policy_state o
-					   JOIN principal_authorization_state p
-					     ON p.organization_id = o.organization_id
-					  WHERE o.organization_id = $1 AND p.user_id = $2
-					  FOR UPDATE OF o, p",
+					"SELECT organization_revision, principal_revision
+					   FROM authz_lock_policy_revisions($1, $2)",
 				)
-				.bind(self.snapshot.organization_id())
-				.bind(self.snapshot.principal_id()),
+				.bind(self.snapshot.principal_id())
+				.bind(self.snapshot.organization_id()),
 			)
 			.await?;
 		ensure_current_revisions(
@@ -212,6 +270,26 @@ fn case_evaluated(
 		within_principal_scope: case_within_scope(snapshot, facts),
 		lifecycle_compatible,
 		parent_authorized: false,
+		every_target_authorized: false,
+		enforced_scope_filter: None,
+	}
+}
+
+fn case_child_evaluated(
+	snapshot: &RequestAuthorizationSnapshot,
+	case_id: Uuid,
+	child_fingerprint: &str,
+	facts: &CaseFacts,
+	lifecycle_compatible: bool,
+) -> EvaluatedContext {
+	let same_organization = facts.organization_id == snapshot.organization_id()
+		|| snapshot.identity().is_platform_administrator();
+	EvaluatedContext {
+		organization_id: Some(facts.organization_id),
+		target_fingerprint: format!("case:{case_id}:child:{child_fingerprint}"),
+		within_principal_scope: false,
+		lifecycle_compatible,
+		parent_authorized: same_organization && case_within_scope(snapshot, facts),
 		every_target_authorized: false,
 		enforced_scope_filter: None,
 	}

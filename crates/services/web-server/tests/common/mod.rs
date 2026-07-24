@@ -128,6 +128,11 @@ async fn apply_test_authorization_isolation_migration() -> Result<()> {
 			.execute(&pool)
 			.await?;
 			sqlx::raw_sql(include_str!(
+				"../../../../../db/migrations/20260724_authorization_fact_locks.sql"
+			))
+			.execute(&pool)
+			.await?;
+			sqlx::raw_sql(include_str!(
 				"../../../../../db/migrations/20260724_authorization_direct_grant_actions.sql"
 			))
 			.execute(&pool)
