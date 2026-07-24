@@ -9,8 +9,9 @@ use crate::error::{Error, Result};
 use crate::middleware::mw_auth::CtxW;
 use axum::extract::FromRequestParts;
 use axum::http::request::Parts;
+use lib_core::authorization::legacy_permission_allowed;
 use lib_core::ctx::Ctx;
-use lib_core::model::acs::{can_access_user_admin, has_permission, Permission};
+use lib_core::model::acs::Permission;
 use std::marker::PhantomData;
 
 // region:    --- RequirePermission Extractor
@@ -58,7 +59,7 @@ where
 
 		// Check permission
 		let permission = P::permission();
-		if !has_permission(ctx.0.permission_subject(), permission) {
+		if !legacy_permission_allowed(ctx.0.permission_subject(), permission) {
 			return Err(Error::PermissionDenied {
 				required_permission: P::permission_name().to_string(),
 			});
@@ -72,47 +73,12 @@ where
 
 // endregion: --- RequirePermission Extractor
 
-// region:    --- RequireAdmin Extractor
-
-/// Extractor that requires built-in admin access or custom user-management
-/// administration capability. Put this before body/query extractors so
-/// unauthorized requests fail before request-shape validation.
-pub struct RequireAdmin;
-
-impl<S> FromRequestParts<S> for RequireAdmin
-where
-	S: Send + Sync,
-{
-	type Rejection = Error;
-
-	async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self> {
-		let ctx_result = parts
-			.extensions
-			.get::<core::result::Result<CtxW, crate::middleware::mw_auth::CtxExtError>>(
-			)
-			.ok_or(Error::CtxExt(
-				crate::middleware::mw_auth::CtxExtError::CtxNotInRequestExt,
-			))?;
-
-		let ctx = ctx_result.as_ref().map_err(|e| Error::CtxExt(e.clone()))?;
-		if !can_access_user_admin(&ctx.0) {
-			return Err(Error::AccessDenied {
-				required_role: "admin".to_string(),
-			});
-		}
-
-		Ok(Self)
-	}
-}
-
-// endregion: --- RequireAdmin Extractor
-
 // region:    --- Permission Check Function
 
 /// Check if the context has a specific permission.
 /// Use this for inline permission checks in handlers.
 pub fn check_permission(ctx: &Ctx, permission: Permission) -> Result<()> {
-	if !has_permission(ctx.permission_subject(), permission) {
+	if !legacy_permission_allowed(ctx.permission_subject(), permission) {
 		return Err(Error::PermissionDenied {
 			required_permission: format!("{permission}"),
 		});
@@ -123,7 +89,7 @@ pub fn check_permission(ctx: &Ctx, permission: Permission) -> Result<()> {
 /// Check if the context has any of the given permissions.
 pub fn check_any_permission(ctx: &Ctx, permissions: &[Permission]) -> Result<()> {
 	for perm in permissions {
-		if has_permission(ctx.permission_subject(), *perm) {
+		if legacy_permission_allowed(ctx.permission_subject(), *perm) {
 			return Ok(());
 		}
 	}
@@ -146,8 +112,8 @@ pub fn check_organization_access(
 	ctx: &Ctx,
 	resource_org_id: uuid::Uuid,
 ) -> Result<()> {
-	// Admins can access any organization
-	if ctx.is_admin() {
+	// Only the platform identity may cross an organization boundary.
+	if ctx.is_system_admin() {
 		return Ok(());
 	}
 

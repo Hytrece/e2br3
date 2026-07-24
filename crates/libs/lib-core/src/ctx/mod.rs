@@ -22,6 +22,46 @@ pub const ROLE_SPONSOR_ADMIN_COMPANY: &str = "sponsor_admin_company";
 /// Role for regular user access (case CRUD)
 pub const ROLE_USER: &str = "user";
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct BuiltInRoleMetadata {
+	pub role_id: &'static str,
+	pub display_name: &'static str,
+	pub description: &'static str,
+	pub sponsor_admin: bool,
+	pub operational: bool,
+}
+
+const BUILT_IN_ROLE_METADATA: &[BuiltInRoleMetadata] = &[
+	BuiltInRoleMetadata {
+		role_id: ROLE_SYSTEM_ADMIN,
+		display_name: "System Administrator",
+		description: "Platform-level role for provisioning and internal operations.",
+		sponsor_admin: false,
+		operational: false,
+	},
+	BuiltInRoleMetadata {
+		role_id: ROLE_SPONSOR_ADMIN_CRO,
+		display_name: "Sponsor Administrator (CRO)",
+		description: "Fixed account administrator role.",
+		sponsor_admin: true,
+		operational: true,
+	},
+	BuiltInRoleMetadata {
+		role_id: ROLE_SPONSOR_ADMIN_COMPANY,
+		display_name: "Sponsor Administrator (Pharmaceutical Company)",
+		description: "Fixed account administrator role.",
+		sponsor_admin: true,
+		operational: true,
+	},
+];
+
+pub fn built_in_role_metadata(role: &str) -> Option<&'static BuiltInRoleMetadata> {
+	let canonical = canonical_role(role);
+	BUILT_IN_ROLE_METADATA
+		.iter()
+		.find(|metadata| metadata.role_id == canonical)
+}
+
 // System UUIDs
 pub const SYSTEM_USER_ID: &str = "00000000-0000-0000-0000-000000000001";
 pub const SYSTEM_ORG_ID: &str = "00000000-0000-0000-0000-000000000000";
@@ -158,11 +198,6 @@ impl Ctx {
 		next
 	}
 
-	// Role check helpers
-	pub fn is_admin(&self) -> bool {
-		self.is_system_admin() || self.is_sponsor_admin()
-	}
-
 	pub fn is_system_admin(&self) -> bool {
 		self.role == ROLE_SYSTEM_ADMIN
 	}
@@ -186,11 +221,6 @@ impl Ctx {
 
 	pub fn is_user(&self) -> bool {
 		self.role == ROLE_USER
-	}
-
-	/// Returns true if the user can modify operational case data.
-	pub fn can_modify(&self) -> bool {
-		self.is_operational_admin() || self.is_user()
 	}
 }
 
@@ -227,6 +257,22 @@ mod tests {
 			canonical_role("Sponsor Administrator (Pharmaceutical Company)"),
 			ROLE_SPONSOR_ADMIN_COMPANY
 		);
+	}
+
+	#[test]
+	fn built_in_role_metadata_is_canonical_for_api_consumers() {
+		let cro = built_in_role_metadata("Sponsor Administrator (CRO)")
+			.expect("CRO metadata");
+		assert_eq!(cro.role_id, ROLE_SPONSOR_ADMIN_CRO);
+		assert_eq!(cro.display_name, "Sponsor Administrator (CRO)");
+		assert!(cro.sponsor_admin);
+		assert!(cro.operational);
+
+		let system =
+			built_in_role_metadata(ROLE_SYSTEM_ADMIN).expect("system metadata");
+		assert!(!system.sponsor_admin);
+		assert!(!system.operational);
+		assert!(built_in_role_metadata("custom-role-id").is_none());
 	}
 
 	#[test]
@@ -290,9 +336,10 @@ mod tests {
 		)
 		.expect("user ctx");
 
-		assert!(system_admin.is_admin());
-		assert!(cro_admin.is_admin());
-		assert!(company_admin.is_admin());
-		assert!(!user.is_admin());
+		assert!(system_admin.is_system_admin());
+		assert!(cro_admin.is_sponsor_admin());
+		assert!(company_admin.is_sponsor_admin());
+		assert!(!user.is_system_admin());
+		assert!(!user.is_sponsor_admin());
 	}
 }

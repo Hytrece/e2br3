@@ -30,7 +30,6 @@ pub struct DbPermissionProfileRow {
 	pub active: bool,
 	pub built_in: bool,
 	pub editable: bool,
-	pub sponsor_admin_capable: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -39,7 +38,6 @@ pub struct PermissionProfileCreateData {
 	pub description: Option<String>,
 	pub privileges: SqlxJson<Vec<AdminMenuPrivilege>>,
 	pub active: bool,
-	pub sponsor_admin_capable: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -48,12 +46,11 @@ pub struct PermissionProfileUpdateData {
 	pub description: Option<String>,
 	pub privileges: SqlxJson<Vec<AdminMenuPrivilege>>,
 	pub active: bool,
-	pub sponsor_admin_capable: bool,
 }
 
 const PROFILE_SELECT: &str = r#"
 	SELECT id, organization_id, name, description, privileges_json,
-	       active, built_in, editable, sponsor_admin_capable
+	       active, built_in, editable
 	FROM permission_profiles
 "#;
 
@@ -128,11 +125,14 @@ impl PermissionProfileBmc {
 		ctx: &Ctx,
 		mm: &ModelManager,
 	) -> Result<Vec<DbPermissionProfileRow>> {
-		let sql = format!("{PROFILE_SELECT} ORDER BY built_in DESC, name ASC");
+		let sql = format!(
+			"{PROFILE_SELECT} WHERE organization_id = $1 ORDER BY built_in DESC, name ASC"
+		);
 		Self::fetch_all_with_ctx(
 			ctx,
 			mm,
-			sqlx::query_as::<_, DbPermissionProfileRow>(&sql),
+			sqlx::query_as::<_, DbPermissionProfileRow>(&sql)
+				.bind(ctx.organization_id()),
 		)
 		.await
 	}
@@ -157,7 +157,7 @@ impl PermissionProfileBmc {
 		mm: &ModelManager,
 		id: Uuid,
 	) -> Result<DbPermissionProfileRow> {
-		let sql = format!("{PROFILE_SELECT} WHERE id = $1");
+		let sql = format!("{PROFILE_SELECT} WHERE id = $1 AND organization_id = $2");
 		let dbx = mm.dbx();
 		dbx.begin_txn().await?;
 		if let Err(err) = set_full_context_from_ctx_dbx(dbx, ctx).await {
@@ -165,7 +165,11 @@ impl PermissionProfileBmc {
 			return Err(err);
 		}
 		let row = match dbx
-			.fetch_one(sqlx::query_as::<_, DbPermissionProfileRow>(&sql).bind(id))
+			.fetch_one(
+				sqlx::query_as::<_, DbPermissionProfileRow>(&sql)
+					.bind(id)
+					.bind(ctx.organization_id()),
+			)
 			.await
 		{
 			Ok(row) => row,
@@ -319,8 +323,8 @@ impl PermissionProfileBmc {
 					r#"
 					INSERT INTO permission_profiles
 						(organization_id, name, description, privileges_json, active,
-						 built_in, editable, sponsor_admin_capable)
-						VALUES ($1, $2, $3, $4, $5, false, true, $6)
+						 built_in, editable)
+						VALUES ($1, $2, $3, $4, $5, false, true)
 						RETURNING id
 					"#,
 				)
@@ -328,8 +332,7 @@ impl PermissionProfileBmc {
 				.bind(&data.name)
 				.bind(&data.description)
 				.bind(&data.privileges)
-				.bind(data.active)
-				.bind(data.sponsor_admin_capable),
+				.bind(data.active),
 			)
 			.await
 		{
@@ -395,11 +398,11 @@ impl PermissionProfileBmc {
 					UPDATE permission_profiles
 					SET name = $2,
 					    description = $3,
-						    privileges_json = $4,
-						    active = $5,
-						    sponsor_admin_capable = $6,
-						    updated_at = now()
+					    privileges_json = $4,
+					    active = $5,
+					    updated_at = now()
 					WHERE id = $1
+					  AND organization_id = $6
 					"#,
 				)
 				.bind(id)
@@ -407,10 +410,17 @@ impl PermissionProfileBmc {
 				.bind(&data.description)
 				.bind(&data.privileges)
 				.bind(data.active)
-				.bind(data.sponsor_admin_capable),
+				.bind(ctx.organization_id()),
 			)
 			.await
 		{
+			Ok(0) => {
+				dbx.rollback_txn().await?;
+				Err(crate::model::Error::EntityUuidNotFound {
+					entity: "permission_profile",
+					id,
+				})
+			}
 			Ok(_) => {
 				if let Err(err) = NormalizedRoleRepository::upsert_custom_role(
 					dbx,
@@ -451,11 +461,21 @@ impl PermissionProfileBmc {
 		}
 		match dbx
 			.execute(
-				sqlx::query("DELETE FROM permission_profiles WHERE id = $1")
-					.bind(id),
+				sqlx::query(
+					"DELETE FROM permission_profiles WHERE id = $1 AND organization_id = $2",
+				)
+				.bind(id)
+				.bind(ctx.organization_id()),
 			)
 			.await
 		{
+			Ok(0) => {
+				dbx.rollback_txn().await?;
+				Err(crate::model::Error::EntityUuidNotFound {
+					entity: "permission_profile",
+					id,
+				})
+			}
 			Ok(_) => {
 				if let Err(err) = dbx.execute(sqlx::query(
 					"UPDATE rbac_policy_state SET version = version + 1, updated_at = now() WHERE singleton = true",

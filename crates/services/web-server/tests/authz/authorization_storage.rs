@@ -3,7 +3,9 @@ use crate::authorization_test_support::{
 	scalar_i64, scalar_string,
 };
 use crate::common::Result;
-use lib_core::authorization::{export_contract, policy_registry};
+use lib_core::authorization::{
+	export_contract, policy_registry, AUTHORIZATION_CONTRACT_SCHEMA_VERSION,
+};
 use lib_core::model::authorization::{
 	AuthorizationMigrationError, AuthorizationMigrationService,
 };
@@ -28,6 +30,14 @@ async fn normalized_catalog_matches_the_registry() -> Result<()> {
 		)
 		.await?,
 		export_contract(policy_registry())?.catalog_hash
+	);
+	assert_eq!(
+		scalar_i64(
+			&database,
+			"SELECT schema_version::bigint FROM authorization_catalog_state WHERE singleton"
+		)
+		.await?,
+		i64::from(AUTHORIZATION_CONTRACT_SCHEMA_VERSION)
 	);
 	assert_eq!(
 		scalar_i64(
@@ -796,6 +806,16 @@ async fn reviewed_catalog_predecessor_upgrades_explicitly() -> Result<()> {
 	.await?;
 	sqlx::raw_sql(include_str!(
 		"../../../../../db/migrations/20260722_authorization_ui_binding_catalog.sql"
+	))
+	.execute(database.pool())
+	.await?;
+	sqlx::raw_sql(include_str!(
+		"../../../../../db/migrations/20260724_authorization_direct_grant_actions.sql"
+	))
+	.execute(database.pool())
+	.await?;
+	sqlx::raw_sql(include_str!(
+		"../../../../../db/migrations/20260724_authorization_operational_grant_actions.sql"
 	))
 	.execute(database.pool())
 	.await?;

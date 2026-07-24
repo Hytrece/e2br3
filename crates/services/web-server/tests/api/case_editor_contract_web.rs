@@ -2478,8 +2478,9 @@ async fn editor_sd_page_patch_rejects_export_owned_message_header_change(
 	.await?;
 
 	assert_eq!(status, StatusCode::BAD_REQUEST, "{body}");
-	assert!(
-		body.to_string().contains("unsupported change field"),
+	assert_eq!(
+		body["error"]["data"]["detail"],
+		"unknown SD field 'batchReceiverIdentifier'",
 		"{body}"
 	);
 

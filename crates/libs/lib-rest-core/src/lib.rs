@@ -1,11 +1,16 @@
 // region:    --- Modules
 
+pub mod authorization;
 mod error;
 pub mod rest_params;
 pub mod rest_result;
 mod utils;
 
 pub use self::error::{ConstraintViolation, Error, Result};
+pub use authorization::{
+	denied as authorization_denied, rls_ctx_for_authorized_mutation,
+	rls_ctx_for_authorized_read,
+};
 pub use rest_params::*;
 pub use rest_result::*;
 
@@ -46,11 +51,12 @@ where
 	}
 }
 
+use lib_core::authorization::legacy_permission_allowed;
 use lib_core::ctx::{
 	canonical_role, Ctx, ROLE_SPONSOR_ADMIN_COMPANY, ROLE_SPONSOR_ADMIN_CRO,
 	ROLE_USER,
 };
-use lib_core::model::acs::{can_access_user_admin, has_permission, Permission};
+use lib_core::model::acs::Permission;
 use lib_core::model::admin_settings::AdminSettingsBmc;
 use lib_core::model::case::{Case, CaseBmc};
 use lib_core::model::user::UserBmc;
@@ -75,56 +81,8 @@ pub fn is_unique_violation(err: &lib_core::model::Error) -> bool {
 	}
 }
 
-pub async fn is_admin(ctx: &Ctx, mm: &ModelManager) -> Result<bool> {
-	let _ = mm;
-	Ok(ctx.is_admin())
-}
-
-pub fn can_access_admin(ctx: &Ctx) -> bool {
-	can_access_user_admin(ctx)
-}
-
-pub async fn require_user_admin(ctx: &Ctx, mm: &ModelManager) -> Result<()> {
-	let _ = mm;
-	if !can_access_user_admin(ctx) {
-		return Err(Error::AccessDenied {
-			required_role: "user administration".to_string(),
-		});
-	}
-	Ok(())
-}
-
-pub fn require_role_admin(ctx: &Ctx) -> Result<()> {
-	if !ctx.is_admin() {
-		return Err(Error::AccessDenied {
-			required_role: "role administration".to_string(),
-		});
-	}
-	Ok(())
-}
-
-pub async fn admin_db_ctx(ctx: &Ctx, mm: &ModelManager) -> Result<Ctx> {
-	require_user_admin(ctx, mm).await?;
-	if ctx.is_system_admin() || ctx.is_sponsor_admin() {
-		return Ok(ctx.clone());
-	}
-	let elevated = Ctx::new(
-		ctx.user_id(),
-		ctx.organization_id(),
-		ROLE_SPONSOR_ADMIN_CRO.to_string(),
-	)
-	.map_err(|_| Error::AccessDenied {
-		required_role: "admin".to_string(),
-	})?
-	.with_compliance(
-		ctx.change_reason().map(ToString::to_string),
-		ctx.e_signature_id(),
-	);
-	Ok(elevated)
-}
-
 pub fn require_permission(ctx: &Ctx, permission: Permission) -> Result<()> {
-	if !has_permission(ctx.permission_subject(), permission) {
+	if !legacy_permission_allowed(ctx.permission_subject(), permission) {
 		return Err(Error::PermissionDenied {
 			required_permission: format!("{permission}"),
 		});
@@ -643,7 +601,7 @@ pub async fn case_matches_user_scope(
 	mm: &ModelManager,
 	case_id: Uuid,
 ) -> Result<bool> {
-	if is_admin(ctx, mm).await? {
+	if ctx.is_system_admin() || ctx.is_sponsor_admin() {
 		return Ok(true);
 	}
 
