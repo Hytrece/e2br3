@@ -1,5 +1,62 @@
 use super::common::*;
 
+const DRUG_ROW_ALIASES: &[(&str, &[&str])] = &[
+	("source_product_presave_id", &["sourceProductPresaveId"]),
+	("medicinal_product", &["medicinalProduct"]),
+	(
+		"drug_characterization",
+		&["drugCharacterization", "drugRole"],
+	),
+	("batch_lot_number", &["drugBatchNumber"]),
+	("action_taken", &["drugActionTaken", "actionTaken"]),
+	("mpid_version", &["mpidVersion"]),
+	("mpid", &["mpid"]),
+	("phpid_version", &["phpidVersion"]),
+	("phpid", &["phpid"]),
+	("mfds_mpid_version", &["mfdsMpidVersion"]),
+	("mfds_mpid", &["mfdsMpid"]),
+	("obtain_drug_country", &["obtainDrugCountry"]),
+	(
+		"investigational_product_blinded",
+		&["investigationalProductBlinded"],
+	),
+	("drug_authorization_number", &["drugAuthorizationNumber"]),
+	("manufacturer_country", &["drugAuthorizationCountry"]),
+	("manufacturer_name", &["drugAuthorizationHolder"]),
+	(
+		"cumulative_dose_first_reaction_value",
+		&["cumulativeDoseValue"],
+	),
+	(
+		"cumulative_dose_first_reaction_unit",
+		&["cumulativeDoseUnit"],
+	),
+	(
+		"gestation_period_exposure_value",
+		&["gestationPeriodExposureValue"],
+	),
+	(
+		"gestation_period_exposure_unit",
+		&["gestationPeriodExposureUnit"],
+	),
+	("fda_additional_info_coded", &["fdaAdditionalInfoCoded"]),
+	(
+		"drug_additional_info_codes_json",
+		&["drugAdditionalInformationCodes"],
+	),
+	(
+		"drug_additional_information",
+		&["drugAdditionalInformation"],
+	),
+	(
+		"fda_specialized_product_category",
+		&["fdaSpecializedProductCategory"],
+	),
+	("fda_device_info_json", &["fdaDeviceInfo"]),
+	("fda_other_characterization", &["fdaOtherCharacterization"]),
+	("sequence_number", &["sequenceNumber"]),
+];
+
 async fn load_editor_dg_list_rows(
 	ctx: &lib_core::ctx::Ctx,
 	mm: &ModelManager,
@@ -218,13 +275,7 @@ repeatable_page_row_create_handler!(
 	permission: DRUG_CREATE,
 	bmc: DrugInformationBmc,
 	model: DrugInformationForCreate,
-	aliases: &[
-		("source_product_presave_id", &["sourceProductPresaveId"][..]),
-		("medicinal_product", &["medicinalProduct"][..]),
-		("drug_characterization", &["drugRole"][..]),
-		("action_taken", &["actionTaken"][..]),
-		("sequence_number", &["sequenceNumber"][..]),
-	],
+	aliases: DRUG_ROW_ALIASES,
 	extras: |case_id, row| [
 		("case_id", json!(case_id)),
 		(
@@ -234,7 +285,10 @@ repeatable_page_row_create_handler!(
 		(
 			"drug_characterization",
 			json!(
-				string_field(row, &["drugRole", "drug_characterization"])
+				string_field(
+					row,
+					&["drugCharacterization", "drugRole", "drug_characterization"],
+				)
 					.unwrap_or_else(|| "1".to_string())
 			),
 		),
@@ -255,12 +309,7 @@ repeatable_page_row_patch_handler!(
 		("drugRole", "drugRole"),
 		("actionTaken", "actionTaken"),
 	],
-	aliases: &[
-		("source_product_presave_id", &["sourceProductPresaveId"][..]),
-		("medicinal_product", &["medicinalProduct"][..]),
-		("drug_characterization", &["drugRole"][..]),
-		("action_taken", &["actionTaken"][..]),
-	],
+	aliases: DRUG_ROW_ALIASES,
 	build_response: build_editor_dg_page_row_response,
 );
 

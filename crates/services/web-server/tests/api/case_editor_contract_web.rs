@@ -5040,6 +5040,153 @@ async fn editor_lb_page_rejects_catalog_constraint_before_write() -> Result<()> 
 
 #[serial]
 #[tokio::test]
+async fn editor_dg_page_row_round_trips_drug_information_fields() -> Result<()> {
+	let mm = init_test_mm().await?;
+	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
+	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
+	let cookie = cookie_header(&token.to_string());
+	let app = web_server::app(mm);
+	let case_id = create_case(&app, &cookie, "EDITOR-DG-ALL-DRUG-FIELDS").await?;
+
+	let (status, created) = post_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/editor/pages/DG/rows"),
+		json!({
+			"authorities": ["ich", "fda", "mfds"],
+			"rows": {
+				"drug": {
+					"sequenceNumber": 1,
+					"drugCharacterization": "1",
+					"medicinalProduct": "Product A",
+					"drugBatchNumber": "LOT-001",
+					"drugActionTaken": "1",
+					"mpidVersion": "1",
+					"mpid": "MPID-001",
+					"phpidVersion": "1",
+					"phpid": "PHPID-001",
+					"mfdsMpidVersion": "2026",
+					"mfdsMpid": "MFDS-001",
+					"obtainDrugCountry": "KR",
+					"investigationalProductBlinded": true,
+					"drugAuthorizationNumber": "AUTH-001",
+					"drugAuthorizationCountry": "KR",
+					"drugAuthorizationHolder": "Holder",
+					"cumulativeDoseValue": 12.5,
+					"cumulativeDoseUnit": "mg",
+					"gestationPeriodExposureValue": 4,
+					"gestationPeriodExposureUnit": "wk",
+					"drugAdditionalInformation": "Additional information",
+					"drugAdditionalInformationCodes": ["1"],
+					"fdaAdditionalInfoCoded": "1",
+					"fdaSpecializedProductCategory": "1",
+					"fdaOtherCharacterization": "1"
+				}
+			}
+		}),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::CREATED, "{created}");
+	let row = &created["data"]["drug"];
+	assert_eq!(row["drug_characterization"], "1");
+	assert_eq!(row["medicinal_product"], "Product A");
+	assert_eq!(row["batch_lot_number"], "LOT-001");
+	assert_eq!(row["action_taken"], "1");
+	assert_eq!(row["mpid_version"], "1");
+	assert_eq!(row["mpid"], "MPID-001");
+	assert_eq!(row["phpid_version"], "1");
+	assert_eq!(row["phpid"], "PHPID-001");
+	assert_eq!(row["mfds_mpid_version"], "2026");
+	assert_eq!(row["mfds_mpid"], "MFDS-001");
+	assert_eq!(row["obtain_drug_country"], "KR");
+	assert_eq!(row["investigational_product_blinded"], true);
+	assert_eq!(row["drug_authorization_number"], "AUTH-001");
+	assert_eq!(row["manufacturer_country"], "KR");
+	assert_eq!(row["manufacturer_name"], "Holder");
+	assert_eq!(row["cumulative_dose_first_reaction_value"], "12.50000");
+	assert_eq!(row["cumulative_dose_first_reaction_unit"], "mg");
+	assert_eq!(row["gestation_period_exposure_value"], "4.00");
+	assert_eq!(row["gestation_period_exposure_unit"], "wk");
+	assert_eq!(row["drug_additional_information"], "Additional information");
+	assert_eq!(row["drug_additional_info_codes_json"], json!(["1"]));
+	assert_eq!(row["fda_additional_info_coded"], "1");
+	assert_eq!(row["fda_specialized_product_category"], "1");
+	assert_eq!(row["fda_other_characterization"], "1");
+
+	let row_id = created["rowId"].as_str().expect("drug id");
+	let (status, updated) = patch_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/editor/pages/DG/rows/{row_id}"),
+		json!({
+			"authorities": ["ich"],
+			"rows": {
+				"drug": {
+					"medicinalProduct": "Updated product"
+				}
+			}
+		}),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK, "{updated}");
+	assert_eq!(
+		updated["data"]["drug"]["medicinal_product"],
+		"Updated product"
+	);
+
+	let (status, reloaded) = get_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/editor/pages/DG/rows/{row_id}"),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK, "{reloaded}");
+	assert_eq!(reloaded["data"], updated["data"]);
+
+	Ok(())
+}
+
+#[serial]
+#[tokio::test]
+async fn editor_dg_page_rejects_catalog_constraint_before_write() -> Result<()> {
+	let mm = init_test_mm().await?;
+	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
+	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
+	let cookie = cookie_header(&token.to_string());
+	let app = web_server::app(mm);
+	let case_id = create_case(&app, &cookie, "EDITOR-DG-CONSTRAINT").await?;
+
+	let (status, body) = post_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/editor/pages/DG/rows"),
+		json!({
+			"authorities": ["ich"],
+			"rows": {
+				"drug": {
+					"drugCharacterization": "1",
+					"medicinalProduct": "X".repeat(2001)
+				}
+			}
+		}),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
+	assert_eq!(body["error"]["message"], "CONSTRAINT_VIOLATION");
+	assert_eq!(
+		body["error"]["data"]["detail"]["ruleCode"],
+		"ICH.G.k.2.2.LENGTH.MAX"
+	);
+	assert_eq!(
+		body["error"]["data"]["detail"]["path"],
+		"drugs.0.medicinalProduct"
+	);
+
+	Ok(())
+}
+
+#[serial]
+#[tokio::test]
 async fn editor_repeatable_page_rows_accept_field_delta_changes_with_profiles(
 ) -> Result<()> {
 	let mm = init_test_mm().await?;
