@@ -256,6 +256,7 @@ fn converted_case_route_modules_do_not_call_legacy_authorization() {
 		"receiver_rest.rs",
 		"relatedness_assessment_rest.rs",
 		"safety_report_rest.rs",
+		"safety_report_sub_rest.rs",
 	] {
 		let source = fs::read_to_string(
 			root.join("crates/services/web-server/src/web/rest")

@@ -3,10 +3,6 @@
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::Json;
-use lib_core::model::acs::{
-	STUDY_REGISTRATION_CREATE, STUDY_REGISTRATION_DELETE, STUDY_REGISTRATION_LIST,
-	STUDY_REGISTRATION_READ, STUDY_REGISTRATION_UPDATE,
-};
 use lib_core::model::case::{
 	CaseBmc, CaseForUpdate, SourceDocument, SourceDocumentBmc, SourceDocumentFilter,
 	SourceDocumentForCreate, SourceDocumentForUpdate,
@@ -30,7 +26,7 @@ use lib_core::model::safety_report::{
 use lib_core::model::{self, ModelManager};
 use lib_rest_core::rest_params::{ParamsForCreate, ParamsForUpdate};
 use lib_rest_core::rest_result::DataRestResult;
-use lib_rest_core::{require_case_write_allowed, require_permission, Error, Result};
+use lib_rest_core::{Error, Result};
 use lib_web::middleware::mw_auth::CtxW;
 use modql::filter::{ListOptions, OpValValue, OpValsValue};
 use serde_json::json;
@@ -77,7 +73,6 @@ async fn ensure_study_case(
 	case_id: Uuid,
 	study_id: Uuid,
 ) -> Result<()> {
-	lib_rest_core::require_case_read_allowed(ctx, mm, case_id).await?;
 	let study = StudyInformationBmc::get(ctx, mm, study_id).await?;
 	ensure_case_scope(case_id, study.case_id, study_id, "study_information")
 }
@@ -896,138 +891,205 @@ pub async fn delete_study_information(
 pub async fn create_study_registration_number(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 	Path((case_id, study_id)): Path<(Uuid, Uuid)>,
 	Json(params): Json<ParamsForCreate<StudyRegistrationNumberForCreate>>,
 ) -> Result<(StatusCode, Json<DataRestResult<StudyRegistrationNumber>>)> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, STUDY_REGISTRATION_CREATE)?;
-	require_case_write_allowed(&ctx, &mm, case_id).await?;
-	ensure_study_case(&ctx, &mm, case_id, study_id).await?;
-	let ParamsForCreate { data } = params;
-	let mut data = data;
-	data.study_information_id = study_id;
-
-	let id = StudyRegistrationNumberBmc::create(&ctx, &mm, data).await?;
-	let entity = StudyRegistrationNumberBmc::get(&ctx, &mm, id).await?;
-	Ok((StatusCode::CREATED, Json(DataRestResult { data: entity })))
+	lib_rest_core::with_authorized_case_child_mutation(
+		&ctx,
+		&snapshot,
+		&mm,
+		case_id,
+		format!("study-registration:new:study:{study_id}"),
+		move |ctx, mm| {
+			Box::pin(async move {
+				ensure_study_case(ctx, mm, case_id, study_id).await?;
+				let ParamsForCreate { data } = params;
+				let mut data = data;
+				data.study_information_id = study_id;
+				let id = StudyRegistrationNumberBmc::create(ctx, mm, data).await?;
+				let entity = StudyRegistrationNumberBmc::get(ctx, mm, id).await?;
+				Ok((StatusCode::CREATED, Json(DataRestResult { data: entity })))
+			})
+		},
+	)
+	.await
 }
 
 /// GET /api/cases/{case_id}/safety-report/studies/{study_id}/registrations
 pub async fn list_study_registration_numbers(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 	Path((case_id, study_id)): Path<(Uuid, Uuid)>,
 ) -> Result<(
 	StatusCode,
 	Json<DataRestResult<Vec<StudyRegistrationNumber>>>,
 )> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, STUDY_REGISTRATION_LIST)?;
-	ensure_study_case(&ctx, &mm, case_id, study_id).await?;
-	let filter = StudyRegistrationNumberFilter {
-		study_information_id: Some(OpValsValue::from(vec![OpValValue::Eq(json!(
-			study_id.to_string()
-		))])),
-		..Default::default()
-	};
-	let entities = StudyRegistrationNumberBmc::list(
+	lib_rest_core::with_authorized_case_child_read(
 		&ctx,
+		&snapshot,
 		&mm,
-		Some(vec![filter]),
-		Some(ListOptions::default()),
+		case_id,
+		format!("study-registration:list:study:{study_id}"),
+		move |ctx, mm| {
+			Box::pin(async move {
+				ensure_study_case(ctx, mm, case_id, study_id).await?;
+				let filter = StudyRegistrationNumberFilter {
+					study_information_id: Some(OpValsValue::from(vec![
+						OpValValue::Eq(json!(study_id.to_string())),
+					])),
+					..Default::default()
+				};
+				let entities = StudyRegistrationNumberBmc::list(
+					ctx,
+					mm,
+					Some(vec![filter]),
+					Some(ListOptions::default()),
+				)
+				.await?;
+				Ok((StatusCode::OK, Json(DataRestResult { data: entities })))
+			})
+		},
 	)
-	.await?;
-	Ok((StatusCode::OK, Json(DataRestResult { data: entities })))
+	.await
 }
 
 /// GET /api/cases/{case_id}/safety-report/studies/{study_id}/registrations/{id}
 pub async fn get_study_registration_number(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 	Path((case_id, study_id, id)): Path<(Uuid, Uuid, Uuid)>,
 ) -> Result<(StatusCode, Json<DataRestResult<StudyRegistrationNumber>>)> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, STUDY_REGISTRATION_READ)?;
-	let entity = StudyRegistrationNumberBmc::get(&ctx, &mm, id).await?;
-	if entity.study_information_id != study_id {
-		return Err(model::Error::EntityUuidNotFound {
-			entity: "study_registration_numbers",
-			id,
-		}
-		.into());
-	}
-	ensure_study_case(&ctx, &mm, case_id, study_id).await?;
-	Ok((StatusCode::OK, Json(DataRestResult { data: entity })))
+	lib_rest_core::with_authorized_case_child_read(
+		&ctx,
+		&snapshot,
+		&mm,
+		case_id,
+		format!("study-registration:{id}:study:{study_id}"),
+		move |ctx, mm| {
+			Box::pin(async move {
+				ensure_study_case(ctx, mm, case_id, study_id).await?;
+				let entity = StudyRegistrationNumberBmc::get(ctx, mm, id).await?;
+				if entity.study_information_id != study_id {
+					return Err(model::Error::EntityUuidNotFound {
+						entity: "study_registration_numbers",
+						id,
+					}
+					.into());
+				}
+				Ok((StatusCode::OK, Json(DataRestResult { data: entity })))
+			})
+		},
+	)
+	.await
 }
 
 /// PUT /api/cases/{case_id}/safety-report/studies/{study_id}/registrations/{id}
 pub async fn update_study_registration_number(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 	Path((case_id, study_id, id)): Path<(Uuid, Uuid, Uuid)>,
 	Json(params): Json<ParamsForUpdate<StudyRegistrationNumberForUpdate>>,
 ) -> Result<(StatusCode, Json<DataRestResult<StudyRegistrationNumber>>)> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, STUDY_REGISTRATION_UPDATE)?;
-	require_case_write_allowed(&ctx, &mm, case_id).await?;
-	let ParamsForUpdate { data } = params;
-	let entity = StudyRegistrationNumberBmc::get(&ctx, &mm, id).await?;
-	if entity.study_information_id != study_id {
-		return Err(model::Error::EntityUuidNotFound {
-			entity: "study_registration_numbers",
-			id,
-		}
-		.into());
-	}
-	ensure_study_case(&ctx, &mm, case_id, study_id).await?;
-	StudyRegistrationNumberBmc::update(&ctx, &mm, id, data).await?;
-	let entity = StudyRegistrationNumberBmc::get(&ctx, &mm, id).await?;
-	Ok((StatusCode::OK, Json(DataRestResult { data: entity })))
+	lib_rest_core::with_authorized_case_child_mutation(
+		&ctx,
+		&snapshot,
+		&mm,
+		case_id,
+		format!("study-registration:{id}:study:{study_id}"),
+		move |ctx, mm| {
+			Box::pin(async move {
+				ensure_study_case(ctx, mm, case_id, study_id).await?;
+				let entity = StudyRegistrationNumberBmc::get(ctx, mm, id).await?;
+				if entity.study_information_id != study_id {
+					return Err(model::Error::EntityUuidNotFound {
+						entity: "study_registration_numbers",
+						id,
+					}
+					.into());
+				}
+				let ParamsForUpdate { data } = params;
+				StudyRegistrationNumberBmc::update(ctx, mm, id, data).await?;
+				let entity = StudyRegistrationNumberBmc::get(ctx, mm, id).await?;
+				Ok((StatusCode::OK, Json(DataRestResult { data: entity })))
+			})
+		},
+	)
+	.await
 }
 
 /// DELETE /api/cases/{case_id}/safety-report/studies/{study_id}/registrations/{id}
 pub async fn delete_study_registration_number(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 	Path((case_id, study_id, id)): Path<(Uuid, Uuid, Uuid)>,
 ) -> Result<StatusCode> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, STUDY_REGISTRATION_DELETE)?;
-	require_case_write_allowed(&ctx, &mm, case_id).await?;
-	let entity = StudyRegistrationNumberBmc::get(&ctx, &mm, id).await?;
-	if entity.study_information_id != study_id {
-		return Err(model::Error::EntityUuidNotFound {
-			entity: "study_registration_numbers",
-			id,
-		}
-		.into());
-	}
-	ensure_study_case(&ctx, &mm, case_id, study_id).await?;
-	StudyRegistrationNumberBmc::delete(&ctx, &mm, id).await?;
-	Ok(StatusCode::NO_CONTENT)
+	lib_rest_core::with_authorized_case_child_mutation(
+		&ctx,
+		&snapshot,
+		&mm,
+		case_id,
+		format!("study-registration:{id}:study:{study_id}"),
+		move |ctx, mm| {
+			Box::pin(async move {
+				ensure_study_case(ctx, mm, case_id, study_id).await?;
+				let entity = StudyRegistrationNumberBmc::get(ctx, mm, id).await?;
+				if entity.study_information_id != study_id {
+					return Err(model::Error::EntityUuidNotFound {
+						entity: "study_registration_numbers",
+						id,
+					}
+					.into());
+				}
+				StudyRegistrationNumberBmc::delete(ctx, mm, id).await?;
+				Ok(StatusCode::NO_CONTENT)
+			})
+		},
+	)
+	.await
 }
 
 /// POST /api/cases/{case_id}/safety-report/studies/{study_id}/registrations/{id}/restore
 pub async fn restore_study_registration_number(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 	Path((case_id, study_id, id)): Path<(Uuid, Uuid, Uuid)>,
 ) -> Result<(StatusCode, Json<DataRestResult<StudyRegistrationNumber>>)> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, STUDY_REGISTRATION_UPDATE)?;
-	require_case_write_allowed(&ctx, &mm, case_id).await?;
-	let entity = StudyRegistrationNumberBmc::get(&ctx, &mm, id).await?;
-	if entity.study_information_id != study_id {
-		return Err(model::Error::EntityUuidNotFound {
-			entity: "study_registration_numbers",
-			id,
-		}
-		.into());
-	}
-	ensure_study_case(&ctx, &mm, case_id, study_id).await?;
-	StudyRegistrationNumberBmc::restore(&ctx, &mm, id).await?;
-	let entity = StudyRegistrationNumberBmc::get(&ctx, &mm, id).await?;
-	Ok((StatusCode::OK, Json(DataRestResult { data: entity })))
+	lib_rest_core::with_authorized_case_child_mutation(
+		&ctx,
+		&snapshot,
+		&mm,
+		case_id,
+		format!("study-registration:{id}:study:{study_id}"),
+		move |ctx, mm| {
+			Box::pin(async move {
+				ensure_study_case(ctx, mm, case_id, study_id).await?;
+				let entity = StudyRegistrationNumberBmc::get(ctx, mm, id).await?;
+				if entity.study_information_id != study_id {
+					return Err(model::Error::EntityUuidNotFound {
+						entity: "study_registration_numbers",
+						id,
+					}
+					.into());
+				}
+				StudyRegistrationNumberBmc::restore(ctx, mm, id).await?;
+				let entity = StudyRegistrationNumberBmc::get(ctx, mm, id).await?;
+				Ok((StatusCode::OK, Json(DataRestResult { data: entity })))
+			})
+		},
+	)
+	.await
 }
 
 // -- Study FDA Cross-Reported INDs (FDA.C.5.6.r)
@@ -1036,136 +1098,203 @@ pub async fn restore_study_registration_number(
 pub async fn create_study_fda_cross_reported_ind(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 	Path((case_id, study_id)): Path<(Uuid, Uuid)>,
 	Json(params): Json<ParamsForCreate<StudyFdaCrossReportedIndForCreate>>,
 ) -> Result<(StatusCode, Json<DataRestResult<StudyFdaCrossReportedInd>>)> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, STUDY_REGISTRATION_CREATE)?;
-	require_case_write_allowed(&ctx, &mm, case_id).await?;
-	ensure_study_case(&ctx, &mm, case_id, study_id).await?;
-	let ParamsForCreate { data } = params;
-	let mut data = data;
-	data.study_information_id = study_id;
-
-	let id = StudyFdaCrossReportedIndBmc::create(&ctx, &mm, data).await?;
-	let entity = StudyFdaCrossReportedIndBmc::get(&ctx, &mm, id).await?;
-	Ok((StatusCode::CREATED, Json(DataRestResult { data: entity })))
+	lib_rest_core::with_authorized_case_child_mutation(
+		&ctx,
+		&snapshot,
+		&mm,
+		case_id,
+		format!("study-fda-cross-reported-ind:new:study:{study_id}"),
+		move |ctx, mm| {
+			Box::pin(async move {
+				ensure_study_case(ctx, mm, case_id, study_id).await?;
+				let ParamsForCreate { data } = params;
+				let mut data = data;
+				data.study_information_id = study_id;
+				let id = StudyFdaCrossReportedIndBmc::create(ctx, mm, data).await?;
+				let entity = StudyFdaCrossReportedIndBmc::get(ctx, mm, id).await?;
+				Ok((StatusCode::CREATED, Json(DataRestResult { data: entity })))
+			})
+		},
+	)
+	.await
 }
 
 /// GET /api/cases/{case_id}/safety-report/studies/{study_id}/fda-cross-reported-inds
 pub async fn list_study_fda_cross_reported_inds(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 	Path((case_id, study_id)): Path<(Uuid, Uuid)>,
 ) -> Result<(
 	StatusCode,
 	Json<DataRestResult<Vec<StudyFdaCrossReportedInd>>>,
 )> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, STUDY_REGISTRATION_LIST)?;
-	ensure_study_case(&ctx, &mm, case_id, study_id).await?;
-	let filter = StudyFdaCrossReportedIndFilter {
-		study_information_id: Some(OpValsValue::from(vec![OpValValue::Eq(json!(
-			study_id.to_string()
-		))])),
-		..Default::default()
-	};
-	let entities = StudyFdaCrossReportedIndBmc::list(
+	lib_rest_core::with_authorized_case_child_read(
 		&ctx,
+		&snapshot,
 		&mm,
-		Some(vec![filter]),
-		Some(ListOptions::default()),
+		case_id,
+		format!("study-fda-cross-reported-ind:list:study:{study_id}"),
+		move |ctx, mm| {
+			Box::pin(async move {
+				ensure_study_case(ctx, mm, case_id, study_id).await?;
+				let filter = StudyFdaCrossReportedIndFilter {
+					study_information_id: Some(OpValsValue::from(vec![
+						OpValValue::Eq(json!(study_id.to_string())),
+					])),
+					..Default::default()
+				};
+				let entities = StudyFdaCrossReportedIndBmc::list(
+					ctx,
+					mm,
+					Some(vec![filter]),
+					Some(ListOptions::default()),
+				)
+				.await?;
+				Ok((StatusCode::OK, Json(DataRestResult { data: entities })))
+			})
+		},
 	)
-	.await?;
-	Ok((StatusCode::OK, Json(DataRestResult { data: entities })))
+	.await
 }
 
 /// GET /api/cases/{case_id}/safety-report/studies/{study_id}/fda-cross-reported-inds/{id}
 pub async fn get_study_fda_cross_reported_ind(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 	Path((case_id, study_id, id)): Path<(Uuid, Uuid, Uuid)>,
 ) -> Result<(StatusCode, Json<DataRestResult<StudyFdaCrossReportedInd>>)> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, STUDY_REGISTRATION_READ)?;
-	let entity = StudyFdaCrossReportedIndBmc::get(&ctx, &mm, id).await?;
-	if entity.study_information_id != study_id {
-		return Err(model::Error::EntityUuidNotFound {
-			entity: "study_fda_cross_reported_inds",
-			id,
-		}
-		.into());
-	}
-	ensure_study_case(&ctx, &mm, case_id, study_id).await?;
-	Ok((StatusCode::OK, Json(DataRestResult { data: entity })))
+	lib_rest_core::with_authorized_case_child_read(
+		&ctx,
+		&snapshot,
+		&mm,
+		case_id,
+		format!("study-fda-cross-reported-ind:{id}:study:{study_id}"),
+		move |ctx, mm| {
+			Box::pin(async move {
+				ensure_study_case(ctx, mm, case_id, study_id).await?;
+				let entity = StudyFdaCrossReportedIndBmc::get(ctx, mm, id).await?;
+				if entity.study_information_id != study_id {
+					return Err(model::Error::EntityUuidNotFound {
+						entity: "study_fda_cross_reported_inds",
+						id,
+					}
+					.into());
+				}
+				Ok((StatusCode::OK, Json(DataRestResult { data: entity })))
+			})
+		},
+	)
+	.await
 }
 
 /// PUT /api/cases/{case_id}/safety-report/studies/{study_id}/fda-cross-reported-inds/{id}
 pub async fn update_study_fda_cross_reported_ind(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 	Path((case_id, study_id, id)): Path<(Uuid, Uuid, Uuid)>,
 	Json(params): Json<ParamsForUpdate<StudyFdaCrossReportedIndForUpdate>>,
 ) -> Result<(StatusCode, Json<DataRestResult<StudyFdaCrossReportedInd>>)> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, STUDY_REGISTRATION_UPDATE)?;
-	require_case_write_allowed(&ctx, &mm, case_id).await?;
-	let ParamsForUpdate { data } = params;
-	let entity = StudyFdaCrossReportedIndBmc::get(&ctx, &mm, id).await?;
-	if entity.study_information_id != study_id {
-		return Err(model::Error::EntityUuidNotFound {
-			entity: "study_fda_cross_reported_inds",
-			id,
-		}
-		.into());
-	}
-	ensure_study_case(&ctx, &mm, case_id, study_id).await?;
-	StudyFdaCrossReportedIndBmc::update(&ctx, &mm, id, data).await?;
-	let entity = StudyFdaCrossReportedIndBmc::get(&ctx, &mm, id).await?;
-	Ok((StatusCode::OK, Json(DataRestResult { data: entity })))
+	lib_rest_core::with_authorized_case_child_mutation(
+		&ctx,
+		&snapshot,
+		&mm,
+		case_id,
+		format!("study-fda-cross-reported-ind:{id}:study:{study_id}"),
+		move |ctx, mm| {
+			Box::pin(async move {
+				ensure_study_case(ctx, mm, case_id, study_id).await?;
+				let entity = StudyFdaCrossReportedIndBmc::get(ctx, mm, id).await?;
+				if entity.study_information_id != study_id {
+					return Err(model::Error::EntityUuidNotFound {
+						entity: "study_fda_cross_reported_inds",
+						id,
+					}
+					.into());
+				}
+				let ParamsForUpdate { data } = params;
+				StudyFdaCrossReportedIndBmc::update(ctx, mm, id, data).await?;
+				let entity = StudyFdaCrossReportedIndBmc::get(ctx, mm, id).await?;
+				Ok((StatusCode::OK, Json(DataRestResult { data: entity })))
+			})
+		},
+	)
+	.await
 }
 
 /// DELETE /api/cases/{case_id}/safety-report/studies/{study_id}/fda-cross-reported-inds/{id}
 pub async fn delete_study_fda_cross_reported_ind(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 	Path((case_id, study_id, id)): Path<(Uuid, Uuid, Uuid)>,
 ) -> Result<StatusCode> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, STUDY_REGISTRATION_DELETE)?;
-	require_case_write_allowed(&ctx, &mm, case_id).await?;
-	let entity = StudyFdaCrossReportedIndBmc::get(&ctx, &mm, id).await?;
-	if entity.study_information_id != study_id {
-		return Err(model::Error::EntityUuidNotFound {
-			entity: "study_fda_cross_reported_inds",
-			id,
-		}
-		.into());
-	}
-	ensure_study_case(&ctx, &mm, case_id, study_id).await?;
-	StudyFdaCrossReportedIndBmc::delete(&ctx, &mm, id).await?;
-	Ok(StatusCode::NO_CONTENT)
+	lib_rest_core::with_authorized_case_child_mutation(
+		&ctx,
+		&snapshot,
+		&mm,
+		case_id,
+		format!("study-fda-cross-reported-ind:{id}:study:{study_id}"),
+		move |ctx, mm| {
+			Box::pin(async move {
+				ensure_study_case(ctx, mm, case_id, study_id).await?;
+				let entity = StudyFdaCrossReportedIndBmc::get(ctx, mm, id).await?;
+				if entity.study_information_id != study_id {
+					return Err(model::Error::EntityUuidNotFound {
+						entity: "study_fda_cross_reported_inds",
+						id,
+					}
+					.into());
+				}
+				StudyFdaCrossReportedIndBmc::delete(ctx, mm, id).await?;
+				Ok(StatusCode::NO_CONTENT)
+			})
+		},
+	)
+	.await
 }
 
 /// POST /api/cases/{case_id}/safety-report/studies/{study_id}/fda-cross-reported-inds/{id}/restore
 pub async fn restore_study_fda_cross_reported_ind(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 	Path((case_id, study_id, id)): Path<(Uuid, Uuid, Uuid)>,
 ) -> Result<(StatusCode, Json<DataRestResult<StudyFdaCrossReportedInd>>)> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, STUDY_REGISTRATION_UPDATE)?;
-	require_case_write_allowed(&ctx, &mm, case_id).await?;
-	let entity = StudyFdaCrossReportedIndBmc::get(&ctx, &mm, id).await?;
-	if entity.study_information_id != study_id {
-		return Err(model::Error::EntityUuidNotFound {
-			entity: "study_fda_cross_reported_inds",
-			id,
-		}
-		.into());
-	}
-	ensure_study_case(&ctx, &mm, case_id, study_id).await?;
-	StudyFdaCrossReportedIndBmc::restore(&ctx, &mm, id).await?;
-	let entity = StudyFdaCrossReportedIndBmc::get(&ctx, &mm, id).await?;
-	Ok((StatusCode::OK, Json(DataRestResult { data: entity })))
+	lib_rest_core::with_authorized_case_child_mutation(
+		&ctx,
+		&snapshot,
+		&mm,
+		case_id,
+		format!("study-fda-cross-reported-ind:{id}:study:{study_id}"),
+		move |ctx, mm| {
+			Box::pin(async move {
+				ensure_study_case(ctx, mm, case_id, study_id).await?;
+				let entity = StudyFdaCrossReportedIndBmc::get(ctx, mm, id).await?;
+				if entity.study_information_id != study_id {
+					return Err(model::Error::EntityUuidNotFound {
+						entity: "study_fda_cross_reported_inds",
+						id,
+					}
+					.into());
+				}
+				StudyFdaCrossReportedIndBmc::restore(ctx, mm, id).await?;
+				let entity = StudyFdaCrossReportedIndBmc::get(ctx, mm, id).await?;
+				Ok((StatusCode::OK, Json(DataRestResult { data: entity })))
+			})
+		},
+	)
+	.await
 }
