@@ -4,6 +4,7 @@
 // Read operations handle their own transaction internally since the import
 // list uses a manual RLS read (not the with_rls_read helper).
 
+use crate::authorization::EnforcedScopeFilter;
 use crate::ctx::Ctx;
 use crate::model::store::{set_full_context_dbx, set_full_context_dbx_or_rollback};
 use crate::model::ModelManager;
@@ -114,6 +115,105 @@ impl XmlImportHistoryBmc {
 				  ORDER BY h.uploaded_at DESC, h.created_at DESC
 				  LIMIT 200",
 			))
+			.await?;
+		dbx.commit_txn().await?;
+		Ok(rows)
+	}
+
+	pub async fn list_all_scoped(
+		mm: &ModelManager,
+		ctx: &Ctx,
+		scope: &EnforcedScopeFilter,
+		include_unscoped: bool,
+	) -> Result<Vec<XmlImportHistoryRow>> {
+		let dbx = mm.dbx();
+		dbx.begin_txn().await?;
+		set_full_context_dbx(dbx, ctx.user_id(), ctx.organization_id(), ctx.role())
+			.await?;
+		let rows = dbx
+			.fetch_all(
+				sqlx::query_as::<_, XmlImportHistoryRow>(
+					r#"
+					SELECT h.id,
+					       h.uploaded_file_name,
+					       h.source_file_name,
+					       h.case_id,
+					       h.case_number,
+					       h.status,
+					       h.error_message,
+					       h.uploaded_by,
+					       u.email AS uploader_email,
+					       h.uploaded_at
+					  FROM xml_import_history h
+					  LEFT JOIN users u ON u.id = h.uploaded_by
+					  LEFT JOIN cases c ON c.id = h.case_id
+					 WHERE (
+						(
+							h.case_id IS NULL
+							AND (h.uploaded_by = $5 OR $6)
+						)
+						OR (
+							h.case_id IS NOT NULL
+							AND (
+								cardinality($1::text[]) = 0
+								OR NOT EXISTS (
+									SELECT 1 FROM sender_information s
+									 WHERE s.case_id = c.id
+									   AND s.source_sender_presave_id IS NOT NULL
+								)
+								OR EXISTS (
+									SELECT 1 FROM sender_information s
+									 WHERE s.case_id = c.id
+									   AND s.source_sender_presave_id::text = ANY($1)
+								)
+							)
+							AND (
+								cardinality($2::text[]) = 0
+								OR NOT EXISTS (
+									SELECT 1 FROM drug_information d
+									 WHERE d.case_id = c.id
+									   AND d.source_product_presave_id IS NOT NULL
+								)
+								OR EXISTS (
+									SELECT 1 FROM drug_information d
+									 WHERE d.case_id = c.id
+									   AND d.source_product_presave_id::text = ANY($2)
+								)
+							)
+							AND (
+								cardinality($3::text[]) = 0
+								OR NOT EXISTS (
+									SELECT 1 FROM study_information s
+									 WHERE s.case_id = c.id
+									   AND s.source_study_presave_id IS NOT NULL
+								)
+								OR EXISTS (
+									SELECT 1 FROM study_information s
+									 WHERE s.case_id = c.id
+									   AND s.source_study_presave_id::text = ANY($3)
+								)
+							)
+							AND (
+								$4
+								OR NOT EXISTS (
+									SELECT 1 FROM drug_information d
+									 WHERE d.case_id = c.id
+									   AND d.investigational_product_blinded = TRUE
+								)
+							)
+						)
+					 )
+					 ORDER BY h.uploaded_at DESC, h.created_at DESC
+					 LIMIT 200
+					"#,
+				)
+				.bind(scope.sender_ids())
+				.bind(scope.product_ids())
+				.bind(scope.study_ids())
+				.bind(scope.blind_allowed())
+				.bind(ctx.user_id())
+				.bind(include_unscoped),
+			)
 			.await?;
 		dbx.commit_txn().await?;
 		Ok(rows)

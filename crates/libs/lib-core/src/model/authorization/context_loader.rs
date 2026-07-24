@@ -1,8 +1,9 @@
 use crate::authorization::{
-	CaseChildResource, CaseCreateProposal, CaseResource, Collection,
-	ContextSnapshot, EnforcedScopeFilter, EvaluatedContext, Existing,
+	BuiltInIdentityKind, CaseChildResource, CaseCreateProposal, CaseResource,
+	Collection, ContextSnapshot, EnforcedScopeFilter, EvaluatedContext, Existing,
 	ImportHistoryResource, LockedMutationContext, Parent, Proposed,
-	RequestAuthorizationSnapshot, SubmissionResource, XmlImportBatchProposal,
+	RequestAuthorizationSnapshot, ResourceSet, SubmissionResource,
+	XmlImportBatchProposal,
 };
 use crate::model::store::dbx::Dbx;
 use sqlx::FromRow;
@@ -68,6 +69,13 @@ struct SubmissionParent {
 #[derive(Debug, FromRow)]
 struct ImportHistoryFacts {
 	organization_id: Uuid,
+	case_id: Option<Uuid>,
+	uploaded_by: Uuid,
+}
+
+#[derive(Debug, FromRow)]
+struct ExportHistoryParent {
+	case_id: Uuid,
 }
 
 pub struct AuthorizationFactLoader<'tx> {
@@ -90,6 +98,64 @@ impl<'tx> AuthorizationFactLoader<'tx> {
 			every_target_authorized: false,
 			enforced_scope_filter: Some(scope_filter(self.snapshot)),
 		})
+	}
+
+	pub async fn case_resource_set(
+		&self,
+		case_ids: &[Uuid],
+	) -> Result<
+		ContextSnapshot<'tx, ResourceSet<CaseResource>>,
+		AuthorizationFactLoadError,
+	> {
+		let mut ids = case_ids.to_vec();
+		ids.sort_unstable();
+		ids.dedup();
+		let mut every_target_authorized = true;
+		for case_id in &ids {
+			let facts = self.load_case_facts(*case_id, false).await?;
+			let same_organization = facts.organization_id
+				== self.snapshot.organization_id()
+				|| self.snapshot.identity().is_platform_administrator();
+			if !same_organization || !case_within_scope(self.snapshot, &facts) {
+				every_target_authorized = false;
+			}
+		}
+		Ok(ContextSnapshot::new(EvaluatedContext {
+			organization_id: Some(self.snapshot.organization_id()),
+			target_fingerprint: format!(
+				"case-export:{}",
+				ids.iter()
+					.map(Uuid::to_string)
+					.collect::<Vec<_>>()
+					.join(",")
+			),
+			within_principal_scope: false,
+			lifecycle_compatible: false,
+			parent_authorized: false,
+			every_target_authorized,
+			enforced_scope_filter: None,
+		}))
+	}
+
+	pub async fn export_history_parent_case_id(
+		&self,
+		history_id: Uuid,
+	) -> Result<Uuid, AuthorizationFactLoadError> {
+		self.dbx
+			.fetch_optional(
+				sqlx::query_as::<_, ExportHistoryParent>(
+					"SELECT case_id
+					   FROM xml_export_history
+					  WHERE id = $1",
+				)
+				.bind(history_id),
+			)
+			.await?
+			.map(|row| row.case_id)
+			.ok_or(AuthorizationFactLoadError::FactNotFound {
+				fact: "export_history",
+				id: history_id,
+			})
 	}
 
 	pub fn submission_collection(
@@ -137,7 +203,7 @@ impl<'tx> AuthorizationFactLoader<'tx> {
 			.dbx
 			.fetch_optional(
 				sqlx::query_as::<_, ImportHistoryFacts>(
-					"SELECT u.organization_id
+					"SELECT u.organization_id, h.case_id, h.uploaded_by
 					   FROM xml_import_history h
 					   JOIN users u ON u.id = h.uploaded_by
 					  WHERE h.id = $1",
@@ -149,10 +215,27 @@ impl<'tx> AuthorizationFactLoader<'tx> {
 				fact: "import_history",
 				id: history_id,
 			})?;
+		let within_principal_scope = match facts.case_id {
+			Some(case_id) => {
+				let case = self.load_case_facts(case_id, false).await?;
+				case_within_scope(self.snapshot, &case)
+			}
+			None => {
+				facts.uploaded_by == self.snapshot.principal_id()
+					|| matches!(
+						self.snapshot.identity().built_in_kind(),
+						Some(
+							BuiltInIdentityKind::PlatformAdministrator
+								| BuiltInIdentityKind::SponsorCroAdministrator
+								| BuiltInIdentityKind::SponsorCompanyAdministrator
+						)
+					)
+			}
+		};
 		Ok(ContextSnapshot::new(EvaluatedContext {
 			organization_id: Some(facts.organization_id),
 			target_fingerprint: format!("import-history:{history_id}"),
-			within_principal_scope: true,
+			within_principal_scope,
 			lifecycle_compatible: false,
 			parent_authorized: false,
 			every_target_authorized: false,

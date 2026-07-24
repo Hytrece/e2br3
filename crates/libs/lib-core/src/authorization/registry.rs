@@ -882,6 +882,22 @@ fn canonical_actions() -> Vec<ActionPolicyInput> {
 			Read,
 		),
 		action(
+			"case.export.history.list",
+			DecisionStage::ContextRequired(Collection(ResourceKind::Case)),
+			&["submission.history.read"],
+			&[],
+			&[SameOrganization],
+			Read,
+		),
+		action(
+			"case.export.history.read",
+			DecisionStage::ContextRequired(Existing(ResourceKind::Case)),
+			&["submission.history.read"],
+			&[],
+			&[SameOrganization, WithinPrincipalScope],
+			Read,
+		),
+		action(
 			"info.list",
 			DecisionStage::ContextRequired(Collection(ResourceKind::Presave)),
 			&["info.read"],
@@ -926,7 +942,7 @@ fn canonical_actions() -> Vec<ActionPolicyInput> {
 			DecisionStage::ContextRequired(Existing(ResourceKind::ImportHistory)),
 			&["import.history.read"],
 			&[],
-			&[SameOrganization],
+			&[SameOrganization, WithinPrincipalScope],
 			Read,
 		),
 		action(

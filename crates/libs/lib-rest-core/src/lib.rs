@@ -12,11 +12,12 @@ pub use authorization::{
 	rls_ctx_for_authorized_read, rls_ctx_for_authorized_subject,
 	with_authorized_case_child_mutation, with_authorized_case_child_read,
 	with_authorized_case_collection, with_authorized_case_create,
-	with_authorized_case_mutation, with_authorized_case_read,
-	with_authorized_import_history_collection, with_authorized_import_history_read,
-	with_authorized_subject_action, with_authorized_submission_collection,
-	with_authorized_submission_mutation, with_authorized_submission_read,
-	with_authorized_xml_import,
+	with_authorized_case_export, with_authorized_case_mutation,
+	with_authorized_case_read, with_authorized_export_history_collection,
+	with_authorized_export_history_read, with_authorized_import_history_collection,
+	with_authorized_import_history_read, with_authorized_subject_action,
+	with_authorized_submission_collection, with_authorized_submission_mutation,
+	with_authorized_submission_read, with_authorized_xml_import,
 };
 pub use rest_params::*;
 pub use rest_result::*;

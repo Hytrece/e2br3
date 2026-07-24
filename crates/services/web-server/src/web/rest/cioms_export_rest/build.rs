@@ -129,36 +129,46 @@ pub(super) fn build_cioms_pdf_with_options(
 pub async fn export_case_cioms_pdf(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: AuthorizationSnapshotW,
 	Path(id): Path<Uuid>,
 	Query(query): Query<ExportCiomsQuery>,
 ) -> Result<Response> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, XML_EXPORT)?;
-	lib_rest_core::require_case_read_allowed(&ctx, &mm, id).await?;
-	let settings = load_cioms_settings(&ctx, &mm).await?;
-	let data = load_cioms_case_data(&ctx, &mm, id).await?;
-	let pdf = build_cioms_pdf_with_options(
-		&data,
-		&settings,
-		CiomsExportOptions {
-			include_notation: query.include_notation.unwrap_or(false),
-		},
-	);
-	let file_name = format!("{}-cioms.pdf", data.case_number);
+	lib_rest_core::with_authorized_case_export(
+		&ctx,
+		&snapshot,
+		&mm,
+		&[id],
+		move |ctx, mm| {
+			Box::pin(async move {
+				let settings = load_cioms_settings(ctx, mm).await?;
+				let data = load_cioms_case_data(ctx, mm, id).await?;
+				let pdf = build_cioms_pdf_with_options(
+					&data,
+					&settings,
+					CiomsExportOptions {
+						include_notation: query.include_notation.unwrap_or(false),
+					},
+				);
+				let file_name = format!("{}-cioms.pdf", data.case_number);
 
-	let mut response = (StatusCode::OK, pdf).into_response();
-	response.headers_mut().insert(
-		header::CONTENT_TYPE,
-		header::HeaderValue::from_static("application/pdf"),
-	);
-	response.headers_mut().insert(
-		header::CONTENT_DISPOSITION,
-		header::HeaderValue::from_str(&format!(
-			"attachment; filename=\"{file_name}\""
-		))
-		.map_err(|err| Error::BadRequest {
-			message: format!("invalid CIOMS filename header: {err}"),
-		})?,
-	);
-	Ok(response)
+				let mut response = (StatusCode::OK, pdf).into_response();
+				response.headers_mut().insert(
+					header::CONTENT_TYPE,
+					header::HeaderValue::from_static("application/pdf"),
+				);
+				response.headers_mut().insert(
+					header::CONTENT_DISPOSITION,
+					header::HeaderValue::from_str(&format!(
+						"attachment; filename=\"{file_name}\""
+					))
+					.map_err(|err| Error::BadRequest {
+						message: format!("invalid CIOMS filename header: {err}"),
+					})?,
+				);
+				Ok(response)
+			})
+		},
+	)
+	.await
 }

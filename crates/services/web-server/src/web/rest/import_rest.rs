@@ -3,6 +3,7 @@ use axum::extract::{Multipart, Path, State};
 use axum::http::{header, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::Json;
+use lib_core::authorization::BuiltInIdentityKind;
 use lib_core::ctx::Ctx;
 use lib_core::model::admin_settings::AdminSettingsBmc;
 use lib_core::model::case_duplicate::{CaseDuplicateBmc, CaseDuplicateKey};
@@ -689,37 +690,55 @@ pub async fn list_import_history(
 	snapshot: AuthorizationSnapshotW,
 ) -> Result<(StatusCode, Json<DataRestResult<XmlImportHistoryList>>)> {
 	let ctx = ctx_w.0;
-	with_authorized_import_history_collection(&ctx, &snapshot, &mm, |ctx, mm| {
-		Box::pin(async move {
-			let rows = XmlImportHistoryBmc::list_all(mm, ctx)
+	let include_unscoped = matches!(
+		snapshot.identity().built_in_kind(),
+		Some(
+			BuiltInIdentityKind::PlatformAdministrator
+				| BuiltInIdentityKind::SponsorCroAdministrator
+				| BuiltInIdentityKind::SponsorCompanyAdministrator
+		)
+	);
+	with_authorized_import_history_collection(
+		&ctx,
+		&snapshot,
+		&mm,
+		move |ctx, mm, scope| {
+			Box::pin(async move {
+				let rows = XmlImportHistoryBmc::list_all_scoped(
+					mm,
+					ctx,
+					scope,
+					include_unscoped,
+				)
 				.await
 				.map_err(Error::Model)?;
-			let items = rows
-				.into_iter()
-				.map(|row| XmlImportHistoryRecord {
-					id: row.id,
-					uploaded_file_name: row.uploaded_file_name,
-					source_file_name: row.source_file_name,
-					case_id: row.case_id,
-					case_number: row.case_number,
-					status: row.status,
-					error_message: row.error_message,
-					uploaded_by: row.uploaded_by,
-					uploader_email: row.uploader_email,
-					uploaded_at: row
-						.uploaded_at
-						.format(&Rfc3339)
-						.unwrap_or_else(|_| row.uploaded_at.to_string()),
-				})
-				.collect();
-			Ok((
-				StatusCode::OK,
-				Json(DataRestResult {
-					data: XmlImportHistoryList { items },
-				}),
-			))
-		})
-	})
+				let items = rows
+					.into_iter()
+					.map(|row| XmlImportHistoryRecord {
+						id: row.id,
+						uploaded_file_name: row.uploaded_file_name,
+						source_file_name: row.source_file_name,
+						case_id: row.case_id,
+						case_number: row.case_number,
+						status: row.status,
+						error_message: row.error_message,
+						uploaded_by: row.uploaded_by,
+						uploader_email: row.uploader_email,
+						uploaded_at: row
+							.uploaded_at
+							.format(&Rfc3339)
+							.unwrap_or_else(|_| row.uploaded_at.to_string()),
+					})
+					.collect();
+				Ok((
+					StatusCode::OK,
+					Json(DataRestResult {
+						data: XmlImportHistoryList { items },
+					}),
+				))
+			})
+		},
+	)
 	.await
 }
 

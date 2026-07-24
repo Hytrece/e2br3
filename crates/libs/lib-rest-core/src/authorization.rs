@@ -3,9 +3,9 @@ use lib_core::authorization::{
 	authorize_contextual_mutation, authorize_contextual_read, authorize_subject,
 	policy_registry, AuthorizationContext, AuthorizationDenial, AuthorizedMutation,
 	AuthorizedRead, AuthorizedSubject, CaseChildResource, CaseCreateProposal,
-	CaseResource, Collection, Existing, ImportHistoryResource, Parent,
-	PolicySnapshotVersion, Proposed, RequestAuthorizationSnapshot,
-	SubmissionResource, XmlImportBatchProposal,
+	CaseResource, Collection, EnforcedScopeFilter, Existing, ImportHistoryResource,
+	Parent, PolicySnapshotVersion, Proposed, RequestAuthorizationSnapshot,
+	ResourceSet, SubmissionResource, XmlImportBatchProposal,
 };
 use lib_core::ctx::{Ctx, ROLE_SYSTEM_ADMIN};
 use lib_core::model::authorization::{
@@ -168,6 +168,139 @@ where
 	finish_fact_transaction(dbx, result).await
 }
 
+pub async fn with_authorized_export_history_collection<T, F>(
+	request_ctx: &Ctx,
+	snapshot: &RequestAuthorizationSnapshot,
+	mm: &ModelManager,
+	operation: F,
+) -> Result<T>
+where
+	F: for<'ctx> FnOnce(
+		&'ctx Ctx,
+		&'ctx ModelManager,
+		&'ctx EnforcedScopeFilter,
+	) -> Pin<Box<dyn Future<Output = Result<T>> + Send + 'ctx>>,
+{
+	let dbx = mm.dbx();
+	dbx.begin_txn()
+		.await
+		.map_err(lib_core::model::Error::from)?;
+	if let Err(error) = set_full_context_from_ctx_dbx(dbx, request_ctx).await {
+		let _ = dbx.rollback_txn().await;
+		return Err(error.into());
+	}
+	let result = async {
+		let context = AuthorizationFactLoader::new(dbx, snapshot).case_collection();
+		let action = policy_registry()
+			.context_action::<Collection<CaseResource>>("case.export.history.list")
+			.ok_or_else(|| Error::AccessDenied {
+				required_role: "registered case.export.history.list action"
+					.to_string(),
+			})?;
+		let permit =
+			authorize_contextual_read(action, snapshot, context).map_err(denied)?;
+		let authorized_ctx =
+			rls_ctx_for_authorized_read(request_ctx, snapshot, &permit)?;
+		let scope =
+			permit
+				.enforced_scope_filter()
+				.ok_or_else(|| Error::AccessDenied {
+					required_role: "export history scope filter".to_string(),
+				})?;
+		operation(&authorized_ctx, mm, scope).await
+	}
+	.await;
+	finish_fact_transaction(dbx, result).await
+}
+
+pub async fn with_authorized_case_export<T, F>(
+	request_ctx: &Ctx,
+	snapshot: &RequestAuthorizationSnapshot,
+	mm: &ModelManager,
+	case_ids: &[Uuid],
+	operation: F,
+) -> Result<T>
+where
+	F: for<'ctx> FnOnce(
+		&'ctx Ctx,
+		&'ctx ModelManager,
+	) -> Pin<Box<dyn Future<Output = Result<T>> + Send + 'ctx>>,
+{
+	let dbx = mm.dbx();
+	dbx.begin_txn()
+		.await
+		.map_err(lib_core::model::Error::from)?;
+	if let Err(error) = set_full_context_from_ctx_dbx(dbx, request_ctx).await {
+		let _ = dbx.rollback_txn().await;
+		return Err(error.into());
+	}
+	let result = async {
+		let context = AuthorizationFactLoader::new(dbx, snapshot)
+			.case_resource_set(case_ids)
+			.await
+			.map_err(map_fact_load_error)?;
+		let action = policy_registry()
+			.context_action::<ResourceSet<CaseResource>>("case.export.xml_set")
+			.ok_or_else(|| Error::AccessDenied {
+				required_role: "registered case.export.xml_set action".to_string(),
+			})?;
+		let permit =
+			authorize_contextual_read(action, snapshot, context).map_err(denied)?;
+		let authorized_ctx =
+			rls_ctx_for_authorized_read(request_ctx, snapshot, &permit)?;
+		operation(&authorized_ctx, mm).await
+	}
+	.await;
+	finish_fact_transaction(dbx, result).await
+}
+
+pub async fn with_authorized_export_history_read<T, F>(
+	request_ctx: &Ctx,
+	snapshot: &RequestAuthorizationSnapshot,
+	mm: &ModelManager,
+	history_id: Uuid,
+	operation: F,
+) -> Result<T>
+where
+	F: for<'ctx> FnOnce(
+		&'ctx Ctx,
+		&'ctx ModelManager,
+	) -> Pin<Box<dyn Future<Output = Result<T>> + Send + 'ctx>>,
+{
+	let dbx = mm.dbx();
+	dbx.begin_txn()
+		.await
+		.map_err(lib_core::model::Error::from)?;
+	if let Err(error) = set_full_context_from_ctx_dbx(dbx, request_ctx).await {
+		let _ = dbx.rollback_txn().await;
+		return Err(error.into());
+	}
+	let result = async {
+		let loader = AuthorizationFactLoader::new(dbx, snapshot);
+		let case_id = loader
+			.export_history_parent_case_id(history_id)
+			.await
+			.map_err(map_fact_load_error)?;
+		let context = loader
+			.case_existing(case_id)
+			.await
+			.map_err(map_fact_load_error)?;
+		let action = policy_registry()
+			.context_action::<Existing<CaseResource>>("case.export.history.read")
+			.ok_or_else(|| Error::AccessDenied {
+				required_role: "registered case.export.history.read action"
+					.to_string(),
+			})?;
+		let permit =
+			authorize_contextual_read(action, snapshot, context).map_err(denied)?;
+		let authorized_ctx =
+			rls_ctx_for_authorized_read(request_ctx, snapshot, &permit)?;
+		operation(&authorized_ctx, mm).await
+	}
+	.await;
+	finish_fact_transaction(dbx, result).await
+}
+
 pub async fn with_authorized_submission_collection<T, F>(
 	request_ctx: &Ctx,
 	snapshot: &RequestAuthorizationSnapshot,
@@ -219,6 +352,7 @@ where
 	F: for<'ctx> FnOnce(
 		&'ctx Ctx,
 		&'ctx ModelManager,
+		&'ctx EnforcedScopeFilter,
 	) -> Pin<Box<dyn Future<Output = Result<T>> + Send + 'ctx>>,
 {
 	let dbx = mm.dbx();
@@ -243,7 +377,13 @@ where
 			authorize_contextual_read(action, snapshot, context).map_err(denied)?;
 		let authorized_ctx =
 			rls_ctx_for_authorized_read(request_ctx, snapshot, &permit)?;
-		operation(&authorized_ctx, mm).await
+		let scope =
+			permit
+				.enforced_scope_filter()
+				.ok_or_else(|| Error::AccessDenied {
+					required_role: "import history scope filter".to_string(),
+				})?;
+		operation(&authorized_ctx, mm, scope).await
 	}
 	.await;
 	finish_fact_transaction(dbx, result).await

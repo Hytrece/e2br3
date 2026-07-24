@@ -367,6 +367,47 @@ fn import_routes_use_typed_policy_contexts_only() {
 }
 
 #[test]
+fn export_routes_use_typed_policy_contexts_only() {
+	let root = workspace_root();
+	for path in [
+		"crates/services/web-server/src/web/rest/case_export_rest.rs",
+		"crates/services/web-server/src/web/rest/cioms_export_rest.rs",
+		"crates/services/web-server/src/web/rest/cioms_export_rest/build.rs",
+	] {
+		let source = fs::read_to_string(root.join(path))
+			.unwrap_or_else(|_| panic!("export route {path} must be readable"));
+		for legacy in [
+			"model::acs",
+			"require_permission",
+			"RequirePermission",
+			"require_case_read_allowed",
+			"case_matches_user_scope",
+		] {
+			assert!(
+				!source.contains(legacy),
+				"export route {path} still uses legacy authorization: {legacy}"
+			);
+		}
+	}
+	let xml_export = fs::read_to_string(
+		root.join("crates/services/web-server/src/web/rest/case_export_rest.rs"),
+	)
+	.expect("XML export routes must be readable");
+	let cioms =
+		fs::read_to_string(root.join(
+			"crates/services/web-server/src/web/rest/cioms_export_rest/build.rs",
+		))
+		.expect("CIOMS export route must be readable");
+	let rest_authorization = fs::read_to_string(
+		root.join("crates/libs/lib-rest-core/src/authorization.rs"),
+	)
+	.expect("REST authorization boundary must be readable");
+	assert!(xml_export.contains("with_authorized_case_export"));
+	assert!(cioms.contains("with_authorized_case_export"));
+	assert!(rest_authorization.contains("\"case.export.xml_set\""));
+}
+
+#[test]
 fn role_api_has_one_canonical_metadata_shape() {
 	let root = workspace_root();
 	let source =
