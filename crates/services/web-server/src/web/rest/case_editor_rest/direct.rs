@@ -2615,6 +2615,129 @@ async fn apply_dm_page_rows_patch(
 			ParentMedicalHistoryBmc::update(ctx, mm, id, update).await?;
 		}
 	}
+
+	if let Some(value) = rows.get("parentPastDrugs") {
+		let Some(drug_rows) = value.as_array() else {
+			return Err(Error::BadRequest {
+				message: format!("{page_id}.parentPastDrugs must be an array"),
+			});
+		};
+		let parent_id = ParentInformationBmc::list(
+			ctx,
+			mm,
+			Some(vec![ParentInformationFilter {
+				patient_id: Some(uuid_eq(patient_id)),
+				..Default::default()
+			}]),
+			Some(ListOptions::default()),
+		)
+		.await?
+		.into_iter()
+		.next()
+		.map(|row| row.id)
+		.ok_or_else(|| Error::BadRequest {
+			message: format!(
+				"{page_id}.parentInfo is required before parent past drug history"
+			),
+		})?;
+		for (index, value) in drug_rows.iter().enumerate() {
+			let drug = as_object(page_id, "parentPastDrugs", value)?;
+			let id = uuid_field(drug, &["id"]);
+			if bool_field(drug, &["deleted", "_delete"]) == Some(true) {
+				if let Some(id) = id {
+					ParentPastDrugHistoryBmc::delete(ctx, mm, id).await?;
+				}
+				continue;
+			}
+			let update = ParentPastDrugHistoryForUpdate {
+				drug_name: string_field(drug, &["drugName", "drug_name"]),
+				drug_name_null_flavor: string_field(
+					drug,
+					&["drugNameNullFlavor", "drug_name_null_flavor"],
+				),
+				mpid: string_field(drug, &["mpid"]),
+				mpid_version: string_field(drug, &["mpidVersion", "mpid_version"]),
+				mfds_medicinal_product_version: string_field(
+					drug,
+					&[
+						"mfdsMedicinalProductVersion",
+						"mfds_medicinal_product_version",
+					],
+				),
+				mfds_medicinal_product_id: string_field(
+					drug,
+					&["mfdsMedicinalProductId", "mfds_medicinal_product_id"],
+				),
+				phpid: string_field(drug, &["phpid"]),
+				phpid_version: string_field(
+					drug,
+					&["phpidVersion", "phpid_version"],
+				),
+				start_date: date_field(page_id, drug, &["startDate", "start_date"])?,
+				start_date_null_flavor: string_field(
+					drug,
+					&["startDateNullFlavor", "start_date_null_flavor"],
+				),
+				end_date: date_field(page_id, drug, &["endDate", "end_date"])?,
+				end_date_null_flavor: string_field(
+					drug,
+					&["endDateNullFlavor", "end_date_null_flavor"],
+				),
+				indication_meddra_version: string_field(
+					drug,
+					&["indicationMeddraVersion", "indication_meddra_version"],
+				),
+				indication_meddra_code: string_field(
+					drug,
+					&["indicationMeddraCode", "indication_meddra_code"],
+				),
+				reaction_meddra_version: string_field(
+					drug,
+					&["reactionMeddraVersion", "reaction_meddra_version"],
+				),
+				reaction_meddra_code: string_field(
+					drug,
+					&["reactionMeddraCode", "reaction_meddra_code"],
+				),
+			};
+			if let Some(id) = id {
+				ParentPastDrugHistoryBmc::update(ctx, mm, id, update).await?;
+			} else {
+				ParentPastDrugHistoryBmc::create(
+					ctx,
+					mm,
+					ParentPastDrugHistoryForCreate {
+						parent_id,
+						sequence_number: i32_field(
+							drug,
+							&["sequenceNumber", "sequence_number"],
+						)
+						.unwrap_or_else(|| {
+							i32::try_from(index + 1).unwrap_or(i32::MAX)
+						}),
+						drug_name: update.drug_name,
+						drug_name_null_flavor: update.drug_name_null_flavor,
+						mpid: update.mpid,
+						mpid_version: update.mpid_version,
+						mfds_medicinal_product_version: update
+							.mfds_medicinal_product_version,
+						mfds_medicinal_product_id: update.mfds_medicinal_product_id,
+						phpid: update.phpid,
+						phpid_version: update.phpid_version,
+						start_date: update.start_date,
+						start_date_null_flavor: update.start_date_null_flavor,
+						end_date: update.end_date,
+						end_date_null_flavor: update.end_date_null_flavor,
+						indication_meddra_version: update.indication_meddra_version,
+						indication_meddra_code: update.indication_meddra_code,
+						reaction_meddra_version: update.reaction_meddra_version,
+						reaction_meddra_code: update.reaction_meddra_code,
+					},
+				)
+				.await?;
+			}
+		}
+	}
 	Ok(())
 }
 
@@ -3084,6 +3207,23 @@ async fn load_editor_dm_data(
 			Some(ListOptions::default()),
 		)
 		.await?;
+		let past_drug_history = past_drug_history
+			.into_iter()
+			.map(|drug| {
+				let mut value = json!(drug);
+				if let Value::Object(ref mut map) = value {
+					map.insert(
+						"start_date".to_string(),
+						json!(ci_date(drug.start_date)),
+					);
+					map.insert(
+						"end_date".to_string(),
+						json!(ci_date(drug.end_date)),
+					);
+				}
+				value
+			})
+			.collect::<Vec<_>>();
 		let mut parent_with_children = json!(parent);
 		if let Value::Object(ref mut map) = parent_with_children {
 			map.insert("medicalHistory".to_string(), json!(medical_history));

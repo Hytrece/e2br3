@@ -1439,6 +1439,7 @@
     "section": "D",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "DM",
     "backend": {
       "status": "mapped",
       "model": "ParentPastDrugHistory",
@@ -1463,6 +1464,7 @@
     "section": "D",
     "authority": "MFDS",
     "status": "complete",
+    "editor_page": "DM",
     "backend": {
       "status": "mapped",
       "model": "ParentPastDrugHistory",
@@ -1487,6 +1489,7 @@
     "section": "D",
     "authority": "MFDS",
     "status": "complete",
+    "editor_page": "DM",
     "backend": {
       "status": "mapped",
       "model": "ParentPastDrugHistory",
@@ -1511,6 +1514,7 @@
     "section": "D",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "DM",
     "backend": {
       "status": "mapped",
       "model": "ParentPastDrugHistory",
@@ -1535,6 +1539,7 @@
     "section": "D",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "DM",
     "backend": {
       "status": "mapped",
       "model": "ParentPastDrugHistory",
@@ -1559,6 +1564,7 @@
     "section": "D",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "DM",
     "backend": {
       "status": "mapped",
       "model": "ParentPastDrugHistory",
@@ -1583,6 +1589,7 @@
     "section": "D",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "DM",
     "backend": {
       "status": "mapped",
       "model": "ParentPastDrugHistory",
@@ -1607,6 +1614,7 @@
     "section": "D",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "DM",
     "backend": {
       "status": "mapped",
       "model": "ParentPastDrugHistory",
@@ -1631,6 +1639,7 @@
     "section": "D",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "DM",
     "backend": {
       "status": "mapped",
       "model": "ParentPastDrugHistory",
@@ -1655,6 +1664,7 @@
     "section": "D",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "DM",
     "backend": {
       "status": "mapped",
       "model": "ParentPastDrugHistory",
@@ -1679,6 +1689,7 @@
     "section": "D",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "DM",
     "backend": {
       "status": "mapped",
       "model": "ParentPastDrugHistory",
@@ -1703,6 +1714,7 @@
     "section": "D",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "DM",
     "backend": {
       "status": "mapped",
       "model": "ParentPastDrugHistory",
@@ -1727,6 +1739,7 @@
     "section": "D",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "DM",
     "backend": {
       "status": "mapped",
       "model": "ParentPastDrugHistory",

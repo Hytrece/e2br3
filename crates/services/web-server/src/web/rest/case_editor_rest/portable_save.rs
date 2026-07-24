@@ -879,6 +879,74 @@ pub(super) fn validate_direct_rows(
 					Value::Array(normalized_history),
 				);
 			}
+			if let Some(value) = rows.get("parentPastDrugs") {
+				let Some(drug_rows) = value.as_array() else {
+					return Err(Error::BadRequest {
+						message: format!(
+							"{section}.parentPastDrugs must be an array"
+						),
+					});
+				};
+				let mut normalized_drugs = Vec::new();
+				for value in drug_rows {
+					let row = as_object(section, "parentPastDrugs", value)?;
+					if bool_field(row, &["deleted", "_delete"]) == Some(true) {
+						continue;
+					}
+					normalized_drugs.push(Value::Object(normalized_direct_object(
+						row,
+						&[
+							("drugName", &["drugName", "drug_name"]),
+							(
+								"mfdsMedicinalProductVersion",
+								&[
+									"mfdsMedicinalProductVersion",
+									"mfds_medicinal_product_version",
+								],
+							),
+							(
+								"mfdsMedicinalProductId",
+								&[
+									"mfdsMedicinalProductId",
+									"mfds_medicinal_product_id",
+								],
+							),
+							("mpidVersion", &["mpidVersion", "mpid_version"]),
+							("mpid", &["mpid"]),
+							("phpidVersion", &["phpidVersion", "phpid_version"]),
+							("phpid", &["phpid"]),
+							("startDate", &["startDate", "start_date"]),
+							("endDate", &["endDate", "end_date"]),
+							(
+								"indicationMeddraVersion",
+								&[
+									"indicationMeddraVersion",
+									"indication_meddra_version",
+								],
+							),
+							(
+								"indicationMeddraCode",
+								&["indicationMeddraCode", "indication_meddra_code"],
+							),
+							(
+								"reactionMeddraVersion",
+								&[
+									"reactionMeddraVersion",
+									"reaction_meddra_version",
+								],
+							),
+							(
+								"reactionMeddraCode",
+								&["reactionMeddraCode", "reaction_meddra_code"],
+							),
+						],
+					)));
+				}
+				parent_information.insert(
+					"pastDrugHistory".to_string(),
+					Value::Array(normalized_drugs),
+				);
+			}
 			if !parent_information.is_empty() {
 				normalized.insert(
 					"parentInformation".to_string(),

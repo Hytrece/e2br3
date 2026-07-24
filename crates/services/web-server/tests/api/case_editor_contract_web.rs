@@ -3458,6 +3458,164 @@ async fn editor_dm_page_rejects_parent_history_catalog_constraint_before_write(
 
 #[serial]
 #[tokio::test]
+async fn editor_dm_page_cruds_parent_past_drug_rows() -> Result<()> {
+	let mm = init_test_mm().await?;
+	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
+	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
+	let cookie = cookie_header(&token.to_string());
+	let app = web_server::app(mm);
+	let case_id = create_case_for_editor(
+		&app,
+		&cookie,
+		"EDITOR-DM-PARENT-DRUG",
+		&["ich", "mfds"],
+	)
+	.await?;
+
+	let (status, created) = patch_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/editor/pages/DM"),
+		json!({
+			"authorities": ["ich", "mfds"],
+			"rows": {
+				"patientInformation": {"patientInitials": "ABC"},
+				"parentInfo": {"parentIdentification": "MOTHER-01"},
+				"parentPastDrugs": [{
+					"sequenceNumber": 1,
+					"drugName": "Parent drug",
+					"mfdsMedicinalProductVersion": "2026",
+					"mfdsMedicinalProductId": "MFDS-001",
+					"mpidVersion": "1",
+					"mpid": "MPID-001",
+					"phpidVersion": "1",
+					"phpid": "PHPID-001",
+					"startDate": "20200102",
+					"endDate": "20210102",
+					"indicationMeddraVersion": "26.0",
+					"indicationMeddraCode": "10000001",
+					"reactionMeddraVersion": "26.0",
+					"reactionMeddraCode": "10000001"
+				}]
+			}
+		}),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK, "{created}");
+	let row = &created["rows"]["parentPastDrugs"][0];
+	assert_eq!(row["drug_name"], "Parent drug");
+	assert_eq!(row["mfds_medicinal_product_id"], "MFDS-001");
+	assert_eq!(row["mpid"], "MPID-001");
+	assert_eq!(row["phpid"], "PHPID-001");
+	assert_eq!(row["start_date"], "20200102");
+	assert_eq!(row["end_date"], "20210102");
+	assert_eq!(row["indication_meddra_code"], "10000001");
+	assert_eq!(row["reaction_meddra_code"], "10000001");
+
+	let row_id = row["id"].as_str().expect("parent past drug id");
+	let (status, updated) = patch_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/editor/pages/DM"),
+		json!({
+			"authorities": ["ich", "mfds"],
+			"rows": {
+				"parentPastDrugs": [{
+					"id": row_id,
+					"drugName": "Updated parent drug"
+				}]
+			}
+		}),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK, "{updated}");
+	assert_eq!(
+		updated["rows"]["parentPastDrugs"][0]["drug_name"],
+		"Updated parent drug"
+	);
+	assert_eq!(updated["rows"]["parentPastDrugs"][0]["mpid"], "MPID-001");
+
+	let (status, deleted) = patch_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/editor/pages/DM"),
+		json!({
+			"authorities": ["ich", "mfds"],
+			"rows": {
+				"parentPastDrugs": [{
+					"id": row_id,
+					"deleted": true
+				}]
+			}
+		}),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK, "{deleted}");
+	assert_eq!(
+		deleted["rows"]["parentPastDrugs"].as_array().map(Vec::len),
+		Some(0)
+	);
+
+	Ok(())
+}
+
+#[serial]
+#[tokio::test]
+async fn editor_dm_page_rejects_parent_past_drug_constraint_before_write(
+) -> Result<()> {
+	let mm = init_test_mm().await?;
+	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
+	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
+	let cookie = cookie_header(&token.to_string());
+	let app = web_server::app(mm);
+	let case_id = create_case_for_editor(
+		&app,
+		&cookie,
+		"EDITOR-DM-PARENT-DRUG-CONSTRAINT",
+		&["ich"],
+	)
+	.await?;
+
+	let (status, body) = patch_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/editor/pages/DM"),
+		json!({
+			"rows": {
+				"patientInformation": {"patientInitials": "ABC"},
+				"parentInfo": {"parentIdentification": "MOTHER-01"},
+				"parentPastDrugs": [{"startDate": "not-a-date"}]
+			}
+		}),
+	)
+	.await?;
+
+	assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
+	assert_eq!(body["error"]["message"], "CONSTRAINT_VIOLATION");
+	assert_eq!(
+		body["error"]["data"]["detail"]["ruleCode"],
+		"ICH.D.10.8.r.4.ALLOWED.VALUE"
+	);
+	assert_eq!(
+		body["error"]["data"]["detail"]["path"],
+		"patientInformation.parentInformation.pastDrugHistory.0.startDate"
+	);
+
+	let (status, reloaded) = get_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/editor/pages/DM"),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK, "{reloaded}");
+	assert!(reloaded["rows"]["patientInformation"].is_null());
+	assert!(reloaded["rows"]["parentInfo"].is_null());
+
+	Ok(())
+}
+
+#[serial]
+#[tokio::test]
 async fn editor_dm_returns_patient_payload_without_dh_list_rows() -> Result<()> {
 	let mm = init_test_mm().await?;
 	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
