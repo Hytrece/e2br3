@@ -244,7 +244,12 @@ fn converted_case_route_modules_do_not_call_legacy_authorization() {
 	for file in [
 		"case_rest.rs",
 		"case_workflow_rest.rs",
+		"message_header_rest.rs",
+		"narrative_rest.rs",
+		"patient_rest.rs",
 		"patient_sub_rest.rs",
+		"receiver_rest.rs",
+		"safety_report_rest.rs",
 	] {
 		let source = fs::read_to_string(
 			root.join("crates/services/web-server/src/web/rest")
@@ -252,6 +257,7 @@ fn converted_case_route_modules_do_not_call_legacy_authorization() {
 		)
 		.unwrap_or_else(|_| panic!("Case route source {file} must be readable"));
 		for legacy in [
+			"model::acs",
 			"require_permission",
 			"require_case_read_allowed",
 			"require_case_write_allowed",
