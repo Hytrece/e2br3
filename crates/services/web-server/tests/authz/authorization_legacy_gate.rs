@@ -239,6 +239,38 @@ fn generated_case_routes_do_not_accept_legacy_permissions() {
 }
 
 #[test]
+fn converted_case_route_modules_do_not_call_legacy_authorization() {
+	let root = workspace_root();
+	for file in [
+		"case_rest.rs",
+		"case_workflow_rest.rs",
+		"patient_sub_rest.rs",
+	] {
+		let source = fs::read_to_string(
+			root.join("crates/services/web-server/src/web/rest")
+				.join(file),
+		)
+		.unwrap_or_else(|_| panic!("Case route source {file} must be readable"));
+		for legacy in [
+			"require_permission",
+			"require_case_read_allowed",
+			"require_case_write_allowed",
+			"legacy_permission_allowed",
+			"permission_subject()",
+		] {
+			assert!(
+				!source.contains(legacy),
+				"converted Case route {file} still calls legacy authorization: {legacy}"
+			);
+		}
+		assert!(
+			source.contains("AuthorizationSnapshotW"),
+			"converted Case route {file} must consume the request snapshot"
+		);
+	}
+}
+
+#[test]
 fn role_api_has_one_canonical_metadata_shape() {
 	let root = workspace_root();
 	let source =
