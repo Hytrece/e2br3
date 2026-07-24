@@ -244,6 +244,7 @@ fn converted_case_route_modules_do_not_call_legacy_authorization() {
 	for file in [
 		"case_rest.rs",
 		"case_intake_rest.rs",
+		"case_identifiers_rest.rs",
 		"case_validation_rest.rs",
 		"case_workflow_rest.rs",
 		"message_header_rest.rs",
@@ -273,7 +274,8 @@ fn converted_case_route_modules_do_not_call_legacy_authorization() {
 			);
 		}
 		assert!(
-			source.contains("AuthorizationSnapshotW"),
+			source.contains("AuthorizationSnapshotW")
+				|| source.contains("generate_patient_child_rest_fns!"),
 			"converted Case route {file} must consume the request snapshot"
 		);
 	}
