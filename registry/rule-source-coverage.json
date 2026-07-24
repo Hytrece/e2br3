@@ -1,5 +1,74 @@
 {
   "version": 1,
-  "auditedPages": [],
-  "sources": []
+  "auditedPages": ["LR"],
+  "sources": [
+    {
+      "authority": "ICH",
+      "element": "C.4.r.1",
+      "sourceHash": "fnv1a64:915141c7b36208f9",
+      "requirements": [
+        {
+          "id": "null-flavor-guide-reference",
+          "sourceExcerpt": "further guidance on the use of nullFlavor",
+          "disposition": "guidance",
+          "reason": "The prose points to implementation guidance; allowed nullFlavors are structured dictionary constraints."
+        }
+      ]
+    },
+    {
+      "authority": "MFDS",
+      "element": "C.4.r.1",
+      "sourceHash": "fnv1a64:8c29e91d7e740d0b",
+      "requirements": [
+        {
+          "id": "reference-length-and-null-flavor",
+          "sourceExcerpt": "입력값이 500자 이하인지 검증",
+          "disposition": "constraint",
+          "ruleCodes": [
+            "ICH.C.4.r.1.LENGTH.MAX",
+            "ICH.C.4.r.1.NULLFLAVOR.ALLOWED"
+          ]
+        }
+      ]
+    },
+    {
+      "authority": "ICH",
+      "element": "C.4.r.2",
+      "sourceHash": "fnv1a64:1be37ffe28af13c2",
+      "requirements": [
+        {
+          "id": "regional-attachment-policy",
+          "sourceExcerpt": "'Value Allowed' is defined by each region",
+          "disposition": "guidance",
+          "reason": "ICH delegates attachment value policy to each receiving region."
+        }
+      ]
+    },
+    {
+      "authority": "FDA",
+      "element": "C.4.r.2",
+      "sourceHash": "fnv1a64:4a5f58db9609295e",
+      "requirements": [
+        {
+          "id": "filename-media-type-match",
+          "sourceExcerpt": "file extension in the filename does not match the media type",
+          "disposition": "deferred",
+          "reason": "Literature attachment filename is not preserved through UI, API, DB, or XML roundtrip."
+        }
+      ]
+    },
+    {
+      "authority": "MFDS",
+      "element": "C.4.r.2",
+      "sourceHash": "fnv1a64:70bb2be38a12cb39",
+      "requirements": [
+        {
+          "id": "attachment-format",
+          "sourceExcerpt": "첨부된 파일이 허용하는 형식인지 검증",
+          "disposition": "constraint",
+          "ruleCodes": ["ICH.C.4.r.2.ALLOWED.VALUE"]
+        }
+      ]
+    }
+  ]
 }

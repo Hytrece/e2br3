@@ -308,3 +308,26 @@ class RuleSourceCoverageTests(unittest.TestCase):
                 ],
                 report,
             )
+
+    def test_real_lr_sources_are_fully_covered(self) -> None:
+        root = Path(__file__).resolve().parents[1]
+        payload = rule_source_coverage.load_coverage(root)
+        self.assertIn("LR", payload["auditedPages"])
+        result = validate.ValidationResult()
+        coverage = rule_source_coverage.validate_coverage_structure(
+            root, result
+        )
+        registry_rows = []
+        for path in (root / "sections").glob("*.json"):
+            registry_rows.extend(
+                json.loads(path.read_text(encoding="utf-8"))
+            )
+
+        rule_source_coverage.validate_editor_coverage(
+            root,
+            registry_rows,
+            coverage,
+            result,
+        )
+
+        self.assertEqual([], result.errors)
