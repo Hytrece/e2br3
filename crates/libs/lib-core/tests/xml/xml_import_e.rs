@@ -1,6 +1,45 @@
 use lib_core::xml::import_sections::e_reaction::parse_e_reactions;
 
 #[test]
+fn import_e_reaction_preserves_term_highlight_code() {
+	let xml = br#"<?xml version="1.0" encoding="utf-8"?>
+<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <PORR_IN049016UV>
+    <controlActProcess classCode="CACT" moodCode="EVN">
+      <subject typeCode="SUBJ">
+        <investigationEvent classCode="INVSTG" moodCode="EVN">
+          <component typeCode="COMP">
+            <adverseEventAssessment classCode="INVSTG" moodCode="EVN">
+              <subject1 typeCode="SBJ">
+                <primaryRole classCode="INVSBJ">
+                  <subjectOf2 typeCode="SBJ">
+                    <observation classCode="OBS" moodCode="EVN">
+                      <id root="11111111-1111-1111-1111-111111111111"/>
+                      <code code="29" codeSystem="2.16.840.1.113883.3.989.2.1.1.19"/>
+                      <value xsi:type="CE" code="10027940"><originalText>Headache</originalText></value>
+                      <outboundRelationship2 typeCode="PERT">
+                        <observation classCode="OBS" moodCode="EVN">
+                          <code code="37"/>
+                          <value xsi:type="CE" code="4"/>
+                        </observation>
+                      </outboundRelationship2>
+                    </observation>
+                  </subjectOf2>
+                </primaryRole>
+              </subject1>
+            </adverseEventAssessment>
+          </component>
+        </investigationEvent>
+      </subject>
+    </controlActProcess>
+  </PORR_IN049016UV01>
+</MCCI_IN200100UV01>"#;
+
+	let reactions = parse_e_reactions(xml).expect("parse should succeed");
+	assert_eq!(reactions[0].term_highlighted.as_deref(), Some("4"));
+}
+
+#[test]
 fn import_e_reaction_basic() {
 	let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 		.parent()

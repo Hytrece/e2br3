@@ -330,7 +330,7 @@ BEGIN
     )
     VALUES (
         v_reaction_id, v_case_id, 1, 'Severe headache', 'Severe headache', 'en',
-        '27.1', '10019211', true,
+        '27.1', '10019211', '3',
         true, true, false, true,
         false, false, true,
         true, DATE '2026-04-08', DATE '2026-04-09', 2, '804', '5',

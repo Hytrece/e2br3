@@ -19,7 +19,7 @@ fn export_e_reaction_basic() {
 		reaction_language: Some("en".to_string()),
 		reaction_meddra_version: Some("24.1".to_string()),
 		reaction_meddra_code: Some("10019211".to_string()),
-		term_highlighted: Some(true),
+		term_highlighted: Some("4".to_string()),
 		serious: Some(false),
 		criteria_death: false,
 		criteria_death_null_flavor: None,
@@ -87,6 +87,14 @@ fn export_e_reaction_basic() {
 		.unwrap();
 	assert_eq!(outcome_code, "1");
 
+	let term_highlight_code = xpath
+		.findvalue(
+			"//hl7:subjectOf2/hl7:observation/hl7:outboundRelationship2/hl7:observation[hl7:code[@code='37']]/hl7:value/@code",
+			None,
+		)
+		.unwrap();
+	assert_eq!(term_highlight_code, "4");
+
 	let required_intervention_null_flavor = xpath
 		.findvalue(
 			"//hl7:subjectOf2/hl7:observation/hl7:outboundRelationship2/hl7:observation[hl7:code[@code='7']]/hl7:value/@nullFlavor",
@@ -108,7 +116,7 @@ fn export_e_reaction_preserves_known_extension_fields() {
 		reaction_language: Some("en".to_string()),
 		reaction_meddra_version: Some("24.1".to_string()),
 		reaction_meddra_code: Some("10019211".to_string()),
-		term_highlighted: Some(true),
+		term_highlighted: Some("1".to_string()),
 		serious: Some(false),
 		criteria_death: false,
 		criteria_death_null_flavor: None,
@@ -222,7 +230,7 @@ fn export_e_reaction_requires_outcome() {
 		reaction_language: Some("en".to_string()),
 		reaction_meddra_version: Some("24.1".to_string()),
 		reaction_meddra_code: Some("10019211".to_string()),
-		term_highlighted: Some(true),
+		term_highlighted: Some("3".to_string()),
 		serious: Some(false),
 		criteria_death: false,
 		criteria_death_null_flavor: None,

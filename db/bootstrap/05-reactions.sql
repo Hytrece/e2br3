@@ -20,7 +20,7 @@ CREATE TABLE reactions (
     reaction_meddra_code VARCHAR(20),      -- LLT or PT code
 
     -- E.i.3 - Term Highlighted by Reporter
-    term_highlighted BOOLEAN,
+    term_highlighted VARCHAR(1) CHECK (term_highlighted IN ('1', '2', '3', '4')),
 
     -- E.i.3.1 - Seriousness (MANDATORY if any seriousness criteria selected)
     serious BOOLEAN,

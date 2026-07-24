@@ -33,7 +33,7 @@ pub struct Reaction {
 	pub reaction_meddra_code: Option<String>,
 
 	// E.i.3 - Term Highlighted by Reporter
-	pub term_highlighted: Option<bool>,
+	pub term_highlighted: Option<String>,
 
 	// E.i.3.1 - Seriousness (MANDATORY if serious)
 	pub serious: Option<bool>,
@@ -110,7 +110,7 @@ pub struct ReactionForCreate {
 	pub reaction_language: Option<String>,
 	pub reaction_meddra_code: Option<String>,
 	pub reaction_meddra_version: Option<String>,
-	pub term_highlighted: Option<bool>,
+	pub term_highlighted: Option<String>,
 	pub serious: Option<bool>,
 	pub criteria_death: Option<bool>,
 	pub criteria_death_null_flavor: Option<String>,
@@ -172,7 +172,7 @@ pub struct ReactionForUpdate {
 	pub reaction_language: Option<String>,
 	pub reaction_meddra_code: Option<String>,
 	pub reaction_meddra_version: Option<String>,
-	pub term_highlighted: Option<bool>,
+	pub term_highlighted: Option<String>,
 	pub serious: Option<bool>,
 	pub criteria_death: Option<bool>,
 	pub criteria_death_null_flavor: Option<String>,

@@ -4811,6 +4811,7 @@ async fn editor_ae_page_row_round_trips_supported_fields() -> Result<()> {
 					"reactionLanguage": "eng",
 					"meddraVersion": "26.0",
 					"meddraCode": "10000001",
+					"termHighlighted": "4",
 					"seriousness": {
 						"serious": true,
 						"criteriaResultsInDeath": true,
@@ -4857,6 +4858,7 @@ async fn editor_ae_page_row_round_trips_supported_fields() -> Result<()> {
 	let row = &created["data"]["reaction"];
 	assert_eq!(row["primary_source_reaction"], "Headache");
 	assert_eq!(row["reaction_language"], "eng");
+	assert_eq!(row["term_highlighted"], "4");
 	assert_eq!(row["criteria_death"], true);
 	assert_eq!(row["start_date"], "20200102");
 	assert_eq!(row["duration_value"], "1.00");
@@ -4894,6 +4896,7 @@ async fn editor_ae_page_row_round_trips_supported_fields() -> Result<()> {
 	.await?;
 	assert_eq!(status, StatusCode::OK, "{reloaded}");
 	assert_eq!(reloaded["data"], updated["data"]);
+	assert_eq!(reloaded["data"]["reaction"]["term_highlighted"], "4");
 
 	Ok(())
 }
@@ -4917,7 +4920,7 @@ async fn editor_ae_page_rejects_catalog_constraint_before_write() -> Result<()> 
 			"rows": {
 				"reaction": {
 					"reactionPrimarySourceNative": "Headache",
-					"reactionStartDate": "not-a-date"
+					"termHighlighted": "9"
 				}
 			}
 		}),
@@ -4927,11 +4930,11 @@ async fn editor_ae_page_rejects_catalog_constraint_before_write() -> Result<()> 
 	assert_eq!(body["error"]["message"], "CONSTRAINT_VIOLATION");
 	assert_eq!(
 		body["error"]["data"]["detail"]["ruleCode"],
-		"ICH.E.i.4.ALLOWED.VALUE"
+		"ICH.E.i.3.1.ALLOWED.VALUE"
 	);
 	assert_eq!(
 		body["error"]["data"]["detail"]["path"],
-		"reactions.0.reactionStartDate"
+		"reactions.0.termHighlighted"
 	);
 
 	Ok(())

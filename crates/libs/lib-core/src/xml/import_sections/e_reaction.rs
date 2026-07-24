@@ -19,7 +19,7 @@ pub struct EReactionImport {
 	pub reaction_language: Option<String>,
 	pub reaction_meddra_version: Option<String>,
 	pub reaction_meddra_code: Option<String>,
-	pub term_highlighted: Option<bool>,
+	pub term_highlighted: Option<String>,
 	pub serious: Option<bool>,
 	pub criteria_death: Option<bool>,
 	pub criteria_death_null_flavor: Option<String>,
@@ -127,11 +127,9 @@ pub fn parse_e_reactions(xml: &[u8]) -> Result<Vec<EReactionImport>> {
 
 		let term_code =
 			first_attr(&mut xpath, &node, EReactionPaths::TERM_HIGHLIGHT_CODE);
-		let term_highlighted = term_code.as_deref().and_then(|v| match v {
-			"1" | "3" => Some(true),
-			"2" | "4" => Some(false),
-			_ => None,
-		});
+		let term_highlighted = term_code
+			.clone()
+			.filter(|value| matches!(value.as_str(), "1" | "2" | "3" | "4"));
 		let serious_from_term = term_code.as_deref().and_then(|v| match v {
 			"3" | "4" => Some(true),
 			"1" | "2" => Some(false),

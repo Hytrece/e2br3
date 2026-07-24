@@ -5,7 +5,6 @@ mod xml_export_h;
 #[cfg(any())]
 #[path = "xml/xml_import_c.rs"]
 mod xml_import_c;
-#[cfg(any())]
 #[path = "xml/xml_import_e.rs"]
 mod xml_import_e;
 #[path = "xml/xml_import_f.rs"]
