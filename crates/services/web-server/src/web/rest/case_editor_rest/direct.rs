@@ -1,6 +1,8 @@
 use super::common::*;
 use lib_core::model::safety_report::PrimarySource;
+use rust_decimal::Decimal;
 use serde::Serialize;
+use std::str::FromStr;
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -1920,6 +1922,83 @@ async fn apply_dm_page_rows_patch(
 	else {
 		return Ok(());
 	};
+	fn value_at_path<'a>(
+		row: &'a Map<String, Value>,
+		paths: &[&str],
+	) -> Option<&'a Value> {
+		'paths: for path in paths {
+			let mut segments = path.split('.');
+			let Some(first) = segments.next() else {
+				continue;
+			};
+			let Some(mut value) = row.get(first) else {
+				continue;
+			};
+			for segment in segments {
+				let Some(next) =
+					value.as_object().and_then(|object| object.get(segment))
+				else {
+					continue 'paths;
+				};
+				value = next;
+			}
+			return Some(value);
+		}
+		None
+	}
+	fn decimal_field(
+		page_id: &str,
+		row: &Map<String, Value>,
+		paths: &[&str],
+	) -> Result<Option<Decimal>> {
+		let Some(value) = value_at_path(row, paths) else {
+			return Ok(None);
+		};
+		if value.is_null() {
+			return Ok(None);
+		}
+		Decimal::from_str(&value.to_string())
+			.map(Some)
+			.map_err(|_| Error::BadRequest {
+				message: format!(
+					"{page_id}.{} must be a decimal number or null",
+					paths[0]
+				),
+			})
+	}
+	fn date_field(
+		page_id: &str,
+		row: &Map<String, Value>,
+		paths: &[&str],
+	) -> Result<Option<sqlx::types::time::Date>> {
+		let Some(value) = value_at_path(row, paths) else {
+			return Ok(None);
+		};
+		serde_json::from_value::<CiDatePatchValue>(json!({"value": value}))
+			.map(|parsed| parsed.value)
+			.map_err(|err| Error::BadRequest {
+				message: format!(
+					"{page_id}.{} must be an E2B date or null: {err}",
+					paths[0]
+				),
+			})
+	}
+	fn boolean_field(row: &Map<String, Value>, paths: &[&str]) -> Option<bool> {
+		value_at_path(row, paths).and_then(Value::as_bool)
+	}
+	fn nested_string_field(
+		row: &Map<String, Value>,
+		paths: &[&str],
+	) -> Option<String> {
+		value_at_path(row, paths)
+			.filter(|value| !value.is_null())
+			.map(|value| {
+				value
+					.as_str()
+					.map(ToOwned::to_owned)
+					.unwrap_or_else(|| value.to_string())
+			})
+	}
 	let update = PatientInformationForUpdate {
 		patient_initials: string_field(
 			patient,
@@ -1929,12 +2008,24 @@ async fn apply_dm_page_rows_patch(
 			patient,
 			&["patientInitialsNullFlavor", "patient_initials_null_flavor"],
 		),
-		birth_date: None,
+		birth_date: date_field(
+			page_id,
+			patient,
+			&["patientBirthDate", "birth_date"],
+		)?,
 		birth_date_null_flavor: string_field(
 			patient,
 			&["birthDateNullFlavor", "birth_date_null_flavor"],
 		),
-		age_at_time_of_onset: None,
+		age_at_time_of_onset: decimal_field(
+			page_id,
+			patient,
+			&[
+				"patientAge.value",
+				"ageAtTimeOfOnset",
+				"age_at_time_of_onset",
+			],
+		)?,
 		age_at_time_of_onset_null_flavor: string_field(
 			patient,
 			&[
@@ -1942,24 +2033,46 @@ async fn apply_dm_page_rows_patch(
 				"age_at_time_of_onset_null_flavor",
 			],
 		),
-		age_unit: string_field(patient, &["ageUnit", "age_unit"]),
-		gestation_period: None,
-		gestation_period_unit: string_field(
+		age_unit: nested_string_field(
 			patient,
-			&["gestationPeriodUnit", "gestation_period_unit"],
+			&["patientAge.unit", "ageUnit", "age_unit"],
 		),
-		age_group: string_field(patient, &["ageGroup", "age_group"]),
-		weight_kg: None,
+		gestation_period: decimal_field(
+			page_id,
+			patient,
+			&["gestationPeriod.value", "gestation_period"],
+		)?,
+		gestation_period_unit: nested_string_field(
+			patient,
+			&[
+				"gestationPeriod.unit",
+				"gestationPeriodUnit",
+				"gestation_period_unit",
+			],
+		),
+		age_group: string_field(
+			patient,
+			&["patientAgeGroup", "ageGroup", "age_group"],
+		),
+		weight_kg: decimal_field(
+			page_id,
+			patient,
+			&["patientWeight.value", "weightKg", "weight_kg"],
+		)?,
 		weight_kg_null_flavor: string_field(
 			patient,
 			&["weightKgNullFlavor", "weight_kg_null_flavor"],
 		),
-		height_cm: None,
+		height_cm: decimal_field(
+			page_id,
+			patient,
+			&["patientHeight.value", "heightCm", "height_cm"],
+		)?,
 		height_cm_null_flavor: string_field(
 			patient,
 			&["heightCmNullFlavor", "height_cm_null_flavor"],
 		),
-		sex: string_field(patient, &["sex"]),
+		sex: string_field(patient, &["patientSex", "sex"]),
 		sex_null_flavor: string_field(
 			patient,
 			&["sexNullFlavor", "sex_null_flavor"],
@@ -1974,7 +2087,11 @@ async fn apply_dm_page_rows_patch(
 			patient,
 			&["ethnicityCodeNullFlavor", "ethnicity_code_null_flavor"],
 		),
-		last_menstrual_period_date: None,
+		last_menstrual_period_date: date_field(
+			page_id,
+			patient,
+			&["lastMenstrualPeriodDate", "last_menstrual_period_date"],
+		)?,
 		last_menstrual_period_date_null_flavor: string_field(
 			patient,
 			&[
@@ -1993,7 +2110,10 @@ async fn apply_dm_page_rows_patch(
 				"medical_history_text_null_flavor",
 			],
 		),
-		concomitant_therapy: None,
+		concomitant_therapy: boolean_field(
+			patient,
+			&["concomitantTherapies", "concomitant_therapy"],
+		),
 	};
 	match PatientInformationBmc::get_by_case(ctx, mm, case_id).await {
 		Ok(_) => {
@@ -2008,18 +2128,18 @@ async fn apply_dm_page_rows_patch(
 					patient_initials: update.patient_initials,
 					patient_initials_null_flavor: update
 						.patient_initials_null_flavor,
-					birth_date: None,
+					birth_date: update.birth_date,
 					birth_date_null_flavor: update.birth_date_null_flavor,
-					age_at_time_of_onset: None,
+					age_at_time_of_onset: update.age_at_time_of_onset,
 					age_at_time_of_onset_null_flavor: update
 						.age_at_time_of_onset_null_flavor,
 					age_unit: update.age_unit,
-					gestation_period: None,
+					gestation_period: update.gestation_period,
 					gestation_period_unit: update.gestation_period_unit,
 					age_group: update.age_group,
-					weight_kg: None,
+					weight_kg: update.weight_kg,
 					weight_kg_null_flavor: update.weight_kg_null_flavor,
-					height_cm: None,
+					height_cm: update.height_cm,
 					height_cm_null_flavor: update.height_cm_null_flavor,
 					sex: update.sex,
 					sex_null_flavor: update.sex_null_flavor,
@@ -2027,13 +2147,13 @@ async fn apply_dm_page_rows_patch(
 					race_code_null_flavor: update.race_code_null_flavor,
 					ethnicity_code: update.ethnicity_code,
 					ethnicity_code_null_flavor: update.ethnicity_code_null_flavor,
-					last_menstrual_period_date: None,
+					last_menstrual_period_date: update.last_menstrual_period_date,
 					last_menstrual_period_date_null_flavor: update
 						.last_menstrual_period_date_null_flavor,
 					medical_history_text: update.medical_history_text,
 					medical_history_text_null_flavor: update
 						.medical_history_text_null_flavor,
-					concomitant_therapy: None,
+					concomitant_therapy: update.concomitant_therapy,
 				},
 			)
 			.await?;
@@ -2527,9 +2647,17 @@ async fn load_editor_dm_data(
 	}
 	let death_info = death_information.into_iter().next();
 	let parent_info = parent_information_rows.into_iter().next();
+	let mut patient_projection = json!(patient);
+	if let Value::Object(ref mut map) = patient_projection {
+		map.insert("birth_date".to_string(), json!(ci_date(patient.birth_date)));
+		map.insert(
+			"last_menstrual_period_date".to_string(),
+			json!(ci_date(patient.last_menstrual_period_date)),
+		);
+	}
 
 	Ok(json!({
-		"patientInformation": patient,
+		"patientInformation": patient_projection,
 		"patientIdentifiers": patient_identifiers,
 		"medicalHistoryEpisodes": medical_history_episodes,
 		"deathInfo": death_info,

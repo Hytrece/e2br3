@@ -244,6 +244,19 @@ fn normalized_direct_object(
 	source: &Map<String, Value>,
 	aliases: &[(&str, &[&str])],
 ) -> Map<String, Value> {
+	fn source_value<'a>(
+		source: &'a Map<String, Value>,
+		path: &str,
+	) -> Option<&'a Value> {
+		let mut segments = path.split('.');
+		let first = segments.next()?;
+		let mut value = source.get(first)?;
+		for segment in segments {
+			value = value.as_object()?.get(segment)?;
+		}
+		Some(value)
+	}
+
 	fn insert_path(target: &mut Map<String, Value>, path: &str, value: Value) {
 		let mut current = target;
 		let mut segments = path.split('.').peekable();
@@ -262,10 +275,9 @@ fn normalized_direct_object(
 
 	let mut normalized = Map::new();
 	for (target, candidates) in aliases {
-		if let Some(value) = candidates
-			.iter()
-			.find_map(|key| source.get(*key).filter(|value| !value.is_null()))
-		{
+		if let Some(value) = candidates.iter().find_map(|key| {
+			source_value(source, key).filter(|value| !value.is_null())
+		}) {
 			insert_path(&mut normalized, target, value.clone());
 		}
 	}
@@ -564,20 +576,65 @@ pub(super) fn validate_direct_rows(
 						),
 						(
 							"patientBirthDate",
-							&["birthDateNullFlavor", "birth_date_null_flavor"],
+							&[
+								"patientBirthDate",
+								"birth_date",
+								"birthDateNullFlavor",
+								"birth_date_null_flavor",
+							],
 						),
-						("patientAge.unit", &["ageUnit", "age_unit"]),
+						(
+							"patientAge.value",
+							&[
+								"patientAge.value",
+								"ageAtTimeOfOnset",
+								"age_at_time_of_onset",
+							],
+						),
+						(
+							"patientAge.unit",
+							&["patientAge.unit", "ageUnit", "age_unit"],
+						),
+						(
+							"gestationPeriod.value",
+							&["gestationPeriod.value", "gestation_period"],
+						),
 						(
 							"gestationPeriod.unit",
-							&["gestationPeriodUnit", "gestation_period_unit"],
+							&[
+								"gestationPeriod.unit",
+								"gestationPeriodUnit",
+								"gestation_period_unit",
+							],
 						),
-						("patientAgeGroup", &["ageGroup", "age_group"]),
-						("patientSex", &["sex", "sexNullFlavor", "sex_null_flavor"]),
+						(
+							"patientAgeGroup",
+							&["patientAgeGroup", "ageGroup", "age_group"],
+						),
+						(
+							"patientWeight.value",
+							&["patientWeight.value", "weightKg", "weight_kg"],
+						),
+						(
+							"patientHeight.value",
+							&["patientHeight.value", "heightCm", "height_cm"],
+						),
+						(
+							"patientSex",
+							&[
+								"patientSex",
+								"sex",
+								"sexNullFlavor",
+								"sex_null_flavor",
+							],
+						),
 						("raceCode", &["raceCode", "race_code"]),
 						("ethnicityCode", &["ethnicityCode", "ethnicity_code"]),
 						(
 							"lastMenstrualPeriodDate",
 							&[
+								"lastMenstrualPeriodDate",
+								"last_menstrual_period_date",
 								"lastMenstrualPeriodDateNullFlavor",
 								"last_menstrual_period_date_null_flavor",
 							],
@@ -590,6 +647,10 @@ pub(super) fn validate_direct_rows(
 								"medicalHistoryTextNullFlavor",
 								"medical_history_text_null_flavor",
 							],
+						),
+						(
+							"concomitantTherapies",
+							&["concomitantTherapies", "concomitant_therapy"],
 						),
 					],
 				)

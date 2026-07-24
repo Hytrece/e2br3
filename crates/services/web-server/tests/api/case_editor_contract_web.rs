@@ -2662,7 +2662,7 @@ async fn editor_si_page_patch_round_trips_every_contract_field() -> Result<()> {
 
 #[serial]
 #[tokio::test]
-async fn editor_dm_page_patch_persists_patient_information_row() -> Result<()> {
+async fn editor_dm_page_patch_round_trips_base_patient_fields() -> Result<()> {
 	let mm = init_test_mm().await?;
 	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
 	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
@@ -2679,7 +2679,19 @@ async fn editor_dm_page_patch_persists_patient_information_row() -> Result<()> {
 			"authorities": ["fda"],
 			"rows": {
 				"patientInformation": {
-					"patientInitials": "ABC"
+					"patientInitials": "ABC",
+					"patientBirthDate": "19900102",
+					"patientAge": {"value": 36.5, "unit": "a"},
+					"gestationPeriod": {"value": 22, "unit": "wk"},
+					"patientAgeGroup": "5",
+					"patientWeight": {"value": 62.5},
+					"patientHeight": {"value": 171},
+					"patientSex": "2",
+					"lastMenstrualPeriodDate": "20260102",
+					"medicalHistoryText": "History text",
+					"concomitantTherapies": true,
+					"raceCode": "C41260",
+					"ethnicityCode": "C41222"
 				}
 			}
 		}),
@@ -2691,6 +2703,124 @@ async fn editor_dm_page_patch_persists_patient_information_row() -> Result<()> {
 		body["rows"]["patientInformation"]["patient_initials"],
 		"ABC"
 	);
+	assert_eq!(body["rows"]["patientInformation"]["birth_date"], "19900102");
+	assert_eq!(
+		body["rows"]["patientInformation"]["age_at_time_of_onset"],
+		"36.50"
+	);
+	assert_eq!(body["rows"]["patientInformation"]["age_unit"], "a");
+	assert_eq!(
+		body["rows"]["patientInformation"]["gestation_period"],
+		"22.00"
+	);
+	assert_eq!(
+		body["rows"]["patientInformation"]["gestation_period_unit"],
+		"wk"
+	);
+	assert_eq!(body["rows"]["patientInformation"]["age_group"], "5");
+	assert_eq!(body["rows"]["patientInformation"]["weight_kg"], "62.50");
+	assert_eq!(body["rows"]["patientInformation"]["height_cm"], "171.00");
+	assert_eq!(body["rows"]["patientInformation"]["sex"], "2");
+	assert_eq!(
+		body["rows"]["patientInformation"]["last_menstrual_period_date"],
+		"20260102"
+	);
+	assert_eq!(
+		body["rows"]["patientInformation"]["medical_history_text"],
+		"History text"
+	);
+	assert_eq!(
+		body["rows"]["patientInformation"]["concomitant_therapy"],
+		true
+	);
+	assert_eq!(body["rows"]["patientInformation"]["race_code"], "C41260");
+	assert_eq!(
+		body["rows"]["patientInformation"]["ethnicity_code"],
+		"C41222"
+	);
+
+	let (status, reloaded) = get_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/editor/pages/DM"),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK, "{reloaded}");
+	assert_eq!(reloaded["rows"], body["rows"]);
+
+	let (status, updated) = patch_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/editor/pages/DM"),
+		json!({
+			"rows": {
+				"patientInformation": {
+					"patientInitials": "XYZ",
+					"patientWeight": {"value": 63.0}
+				}
+			}
+		}),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK, "{updated}");
+	assert_eq!(
+		updated["rows"]["patientInformation"]["patient_initials"],
+		"XYZ"
+	);
+	assert_eq!(updated["rows"]["patientInformation"]["weight_kg"], "63.00");
+	assert_eq!(
+		updated["rows"]["patientInformation"]["birth_date"],
+		"19900102"
+	);
+
+	Ok(())
+}
+
+#[serial]
+#[tokio::test]
+async fn editor_dm_page_rejects_catalog_constraint_before_write() -> Result<()> {
+	let mm = init_test_mm().await?;
+	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
+	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
+	let cookie = cookie_header(&token.to_string());
+	let app = web_server::app(mm);
+	let case_id =
+		create_case_for_editor(&app, &cookie, "EDITOR-DM-CONSTRAINT", &["ich"])
+			.await?;
+
+	let (status, body) = patch_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/editor/pages/DM"),
+		json!({
+			"rows": {
+				"patientInformation": {
+					"patientAgeGroup": "9"
+				}
+			}
+		}),
+	)
+	.await?;
+
+	assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
+	assert_eq!(body["error"]["message"], "CONSTRAINT_VIOLATION");
+	assert_eq!(
+		body["error"]["data"]["detail"]["ruleCode"],
+		"ICH.D.2.3.ALLOWED.VALUE"
+	);
+	assert_eq!(
+		body["error"]["data"]["detail"]["path"],
+		"patientInformation.patientAgeGroup"
+	);
+
+	let (status, reloaded) = get_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/editor/pages/DM"),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK, "{reloaded}");
+	assert!(reloaded["rows"]["patientInformation"].is_null());
 
 	Ok(())
 }
