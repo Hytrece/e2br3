@@ -44,34 +44,35 @@ fn executable_rule_source_references_exist_in_compiled_catalogs() {
 		.into_iter()
 		.flat_map(|binding| binding.rule_codes.iter().copied())
 		.collect::<BTreeSet<_>>();
+	let mut missing = Vec::new();
 
 	for source in coverage.sources {
 		for requirement in source.requirements {
 			match requirement.disposition.as_str() {
 				"business_rule" => {
 					for code in requirement.rule_codes {
-						assert!(
-							business.contains(&code),
-							"{} references missing business rule {}",
-							requirement.id,
-							code
-						);
+						if !business.contains(&code) {
+							missing.push(format!(
+								"{} references missing business rule {}",
+								requirement.id, code
+							));
+						}
 					}
 				}
 				"constraint" => {
 					for code in requirement.rule_codes {
-						assert!(
-							portable.contains(&code),
-							"{} references missing portable constraint {}",
-							requirement.id,
-							code
-						);
-						assert!(
-							bound.contains(code.as_str()),
-							"{} references unbound portable constraint {}",
-							requirement.id,
-							code
-						);
+						if !portable.contains(&code) {
+							missing.push(format!(
+								"{} references missing portable constraint {}",
+								requirement.id, code
+							));
+						}
+						if !bound.contains(code.as_str()) {
+							missing.push(format!(
+								"{} references unbound portable constraint {}",
+								requirement.id, code
+							));
+						}
 					}
 				}
 				"guidance" | "deferred" => {}
@@ -79,4 +80,5 @@ fn executable_rule_source_references_exist_in_compiled_catalogs() {
 			}
 		}
 	}
+	assert!(missing.is_empty(), "{}", missing.join("\n"));
 }

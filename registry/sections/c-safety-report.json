@@ -5,7 +5,7 @@
     "label": "Date of Creation",
     "section": "C",
     "authority": "ICH",
-    "status": "complete",
+    "status": "incomplete",
     "backend": {
       "status": "mapped",
       "model": "SafetyReportIdentification",
@@ -20,8 +20,8 @@
       "file": "../frontend/E2BR3-frontend/__tests__/validation/backendFieldBanners.test.ts",
       "evidence": "Frontend validation/banner tests reference safetyReportIdentification.transmissionDate."
     },
-    "action": "",
-    "notes": ""
+    "action": "Implement the MFDS C.1.2 to submission-generated N.2.r.4 date equality rule before restoring complete.",
+    "notes": "Registry mapping and editor roundtrip are implemented; MFDS cross-surface business validation remains deferred."
   },
   {
     "id": "C.1.3",
@@ -29,7 +29,7 @@
     "label": "Type of Report",
     "section": "C",
     "authority": "ICH",
-    "status": "complete",
+    "status": "incomplete",
     "backend": {
       "status": "mapped",
       "model": "SafetyReportIdentification",
@@ -44,8 +44,8 @@
       "file": "../frontend/E2BR3-frontend/node-tests/create-gate.validation.test.ts",
       "evidence": "Frontend create gate tests require safetyReportIdentification.reportType."
     },
-    "action": "",
-    "notes": ""
+    "action": "Bind FDA and MFDS receiver-specific C.1.3 report-type rules to submission receiver context before restoring complete.",
+    "notes": "Portable shape validation is implemented; receiver-dependent regional business validation remains deferred."
   },
   {
     "id": "C.1.4",
@@ -248,7 +248,7 @@
     "label": "Does This Case Fulfil the Local Criteria for an Expedited Report?",
     "section": "C",
     "authority": "ICH",
-    "status": "complete",
+    "status": "incomplete",
     "backend": {
       "status": "mapped",
       "model": "SafetyReportIdentification",
@@ -263,8 +263,8 @@
       "file": "../frontend/E2BR3-frontend/components/case-form/sections/SectionC1.tsx",
       "evidence": "SectionC1 binds fieldNumber C.1.7 to safetyReportIdentification.fulfilExpeditedCriteria."
     },
-    "action": "",
-    "notes": ""
+    "action": "Implement the FDA initial-submission NI prohibition and MFDS receiver-specific C.1.7 conditions before restoring complete.",
+    "notes": "ICH validation is implemented; regional submission-context rules remain deferred."
   },
   {
     "id": "FDA.C.1.7.1",
@@ -272,7 +272,7 @@
     "label": "Local Criteria Report Type",
     "section": "C",
     "authority": "FDA",
-    "status": "complete",
+    "status": "incomplete",
     "backend": {
       "status": "mapped",
       "model": "SafetyReportIdentification",
@@ -287,8 +287,8 @@
       "file": "../frontend/E2BR3-frontend/node-tests/validation.domain-format.parity.test.ts",
       "evidence": "Frontend parity tests reference safetyReportIdentification.localCriteriaReportType."
     },
-    "action": "",
-    "notes": ""
+    "action": "Register and evaluate the FDA.C.1.7.1 allowed-value policy before restoring complete.",
+    "notes": "FDA conditional presence and portable length checks exist; the regional value policy remains deferred."
   },
   {
     "id": "FDA.C.1.12",
@@ -392,7 +392,7 @@
     "label": "Report Nullification / Amendment Code",
     "section": "C",
     "authority": "ICH",
-    "status": "complete",
+    "status": "incomplete",
     "backend": {
       "status": "mapped",
       "model": "SafetyReportIdentification",
@@ -407,8 +407,8 @@
       "file": "../frontend/E2BR3-frontend/components/case-form/sections/SectionC1.tsx",
       "evidence": "SectionC1 binds fieldNumber C.1.11.1 to safetyReportIdentification.nullificationAmendmentCode."
     },
-    "action": "",
-    "notes": ""
+    "action": "Implement the FDA rule forbidding nullification or amendment on an initial report before restoring complete.",
+    "notes": "ICH representation validation is implemented; the FDA initial-report condition remains deferred."
   },
   {
     "id": "C.1.11.2",
@@ -1918,7 +1918,7 @@
     "label": "Sender's (case) Safety Report Unique Identifier",
     "section": "C",
     "authority": "ICH",
-    "status": "complete",
+    "status": "incomplete",
     "backend": {
       "status": "mapped",
       "model": "SafetyReportIdentification",
@@ -1933,8 +1933,8 @@
       "file": "../frontend/E2BR3-frontend/components/case-form/sections/SectionC1.tsx",
       "evidence": "Strict frontend input inventory extracts safetyReportIdentification.safetyReportId from the case-form section source."
     },
-    "action": "",
-    "notes": "Canonical owner moved from Case.safety_report_id to SafetyReportIdentification.safety_report_id; cases no longer stores a physical safety_report_id column."
+    "action": "Implement the ICH C.1.1 country-component identifier profile before restoring complete.",
+    "notes": "Canonical ownership and roundtrip are implemented; the ICH identifier profile remains deferred."
   },
   {
     "id": "C.local.reportYear",
@@ -2195,7 +2195,7 @@
     "label": "Linked Report Number",
     "section": "C",
     "authority": "ICH",
-    "status": "complete",
+    "status": "incomplete",
     "backend": {
       "status": "mapped",
       "model": "LinkedReportNumber",
@@ -2210,8 +2210,8 @@
       "file": "../frontend/E2BR3-frontend/app/(protected)/[authority]/case/[id]/detail/CI/components/LinkedReportsTable.tsx",
       "evidence": "The canonical CI table binds C.1.10.r to linkedReports[index].linkedReportNumber."
     },
-    "action": "",
-    "notes": "Reclassified from backend_missing: the backend was already implemented but the registry pointed at the wrong model. Now mapped to LinkedReportNumber.linked_report_number."
+    "action": "Implement the FDA aggregate-patient linked-report condition before restoring complete.",
+    "notes": "The linked-report model and roundtrip are implemented; the FDA aggregate condition remains deferred."
   },
   {
     "id": "C.1.9.1.r.1",
