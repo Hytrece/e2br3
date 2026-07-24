@@ -4920,6 +4920,126 @@ async fn editor_ae_page_rejects_catalog_constraint_before_write() -> Result<()> 
 
 #[serial]
 #[tokio::test]
+async fn editor_lb_page_row_round_trips_all_catalog_fields() -> Result<()> {
+	let mm = init_test_mm().await?;
+	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
+	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
+	let cookie = cookie_header(&token.to_string());
+	let app = web_server::app(mm);
+	let case_id = create_case(&app, &cookie, "EDITOR-LB-ALL-FIELDS").await?;
+
+	let (status, created) = post_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/editor/pages/LB/rows"),
+		json!({
+			"authorities": ["ich"],
+			"rows": {
+				"testResult": {
+					"sequenceNumber": 1,
+					"testDate": "20200102",
+					"testName": "ALT",
+					"testMeddraVersion": "26.0",
+					"testMeddraCode": "10000001",
+					"testResultCode": "1",
+					"testResult": "12.5",
+					"testUnit": "mg/dL",
+					"testResultUnstructured": "Normal",
+					"lowRange": "10",
+					"highRange": "20",
+					"comments": "Within range",
+					"moreInformationAvailable": true
+				}
+			}
+		}),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::CREATED, "{created}");
+	let row = &created["data"]["testResult"];
+	assert_eq!(row["test_date"], "20200102");
+	assert_eq!(row["test_name"], "ALT");
+	assert_eq!(row["test_meddra_version"], "26.0");
+	assert_eq!(row["test_meddra_code"], "10000001");
+	assert_eq!(row["test_result_code"], "1");
+	assert_eq!(row["test_result_value"], "12.5");
+	assert_eq!(row["test_result_unit"], "mg/dL");
+	assert_eq!(row["result_unstructured"], "Normal");
+	assert_eq!(row["normal_low_value"], "10");
+	assert_eq!(row["normal_high_value"], "20");
+	assert_eq!(row["comments"], "Within range");
+	assert_eq!(row["more_info_available"], true);
+
+	let row_id = created["rowId"].as_str().expect("test result id");
+	let (status, updated) = patch_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/editor/pages/LB/rows/{row_id}"),
+		json!({
+			"authorities": ["ich"],
+			"rows": {
+				"testResult": {
+					"testName": "Updated ALT"
+				}
+			}
+		}),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK, "{updated}");
+	assert_eq!(updated["data"]["testResult"]["test_name"], "Updated ALT");
+
+	let (status, reloaded) = get_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/editor/pages/LB/rows/{row_id}"),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK, "{reloaded}");
+	assert_eq!(reloaded["data"], updated["data"]);
+
+	Ok(())
+}
+
+#[serial]
+#[tokio::test]
+async fn editor_lb_page_rejects_catalog_constraint_before_write() -> Result<()> {
+	let mm = init_test_mm().await?;
+	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
+	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
+	let cookie = cookie_header(&token.to_string());
+	let app = web_server::app(mm);
+	let case_id = create_case(&app, &cookie, "EDITOR-LB-CONSTRAINT").await?;
+
+	let (status, body) = post_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/editor/pages/LB/rows"),
+		json!({
+			"authorities": ["ich"],
+			"rows": {
+				"testResult": {
+					"testName": "ALT",
+					"testDate": "not-a-date"
+				}
+			}
+		}),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
+	assert_eq!(body["error"]["message"], "CONSTRAINT_VIOLATION");
+	assert_eq!(
+		body["error"]["data"]["detail"]["ruleCode"],
+		"ICH.F.r.1.ALLOWED.VALUE"
+	);
+	assert_eq!(
+		body["error"]["data"]["detail"]["path"],
+		"testResults.0.testDate"
+	);
+
+	Ok(())
+}
+
+#[serial]
+#[tokio::test]
 async fn editor_repeatable_page_rows_accept_field_delta_changes_with_profiles(
 ) -> Result<()> {
 	let mm = init_test_mm().await?;
