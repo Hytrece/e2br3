@@ -254,3 +254,57 @@ class RuleSourceCoverageTests(unittest.TestCase):
                 "FDA/C.4.r.2 is deferred",
                 "\n".join(result.errors),
             )
+
+    def test_contract_audit_report_is_deterministic(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            ich_prose = "attachment file extension guidance"
+            self.write_rules(root, "ICH", {"C.4.r.2": ich_prose})
+            self.write_rules(
+                root,
+                "FDA",
+                {"C.4.r.2": "file extension mismatch"},
+            )
+            self.write_coverage(
+                root,
+                [
+                    {
+                        "authority": "ICH",
+                        "element": "C.4.r.2",
+                        "sourceHash": rule_source_coverage.source_hash(
+                            ich_prose
+                        ),
+                        "requirements": [
+                            self.requirement(
+                                "guidance",
+                                reason="non-executable prose",
+                            )
+                        ],
+                    }
+                ],
+            )
+            self.write_contract(root, "LR", "C.4.r.2")
+
+            report = rule_source_coverage.audit_contract_sources(root, "LR")
+
+            self.assertEqual(
+                [
+                    {
+                        "page": "LR",
+                        "fieldId": "C.4.r.2",
+                        "element": "C.4.r.2",
+                        "authority": "FDA",
+                        "coverage": "missing",
+                        "disposition": "",
+                    },
+                    {
+                        "page": "LR",
+                        "fieldId": "C.4.r.2",
+                        "element": "C.4.r.2",
+                        "authority": "ICH",
+                        "coverage": "covered",
+                        "disposition": "guidance",
+                    },
+                ],
+                report,
+            )

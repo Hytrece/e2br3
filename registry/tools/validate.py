@@ -924,6 +924,26 @@ def validate_registry(
 
 
 def main() -> int:
+    args = sys.argv[1:]
+    if "--report-rule-source-coverage" in args:
+        index = args.index("--report-rule-source-coverage")
+        if index + 1 >= len(args):
+            print(
+                "--report-rule-source-coverage requires a page id",
+                file=sys.stderr,
+            )
+            return 2
+        try:
+            report = rule_source_coverage.audit_contract_sources(
+                ROOT,
+                args[index + 1].upper(),
+            )
+        except (OSError, json.JSONDecodeError, KeyError) as error:
+            print(f"could not build rule source coverage report: {error}", file=sys.stderr)
+            return 2
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+        return 0
+
     strict_backend_inventory = "--strict-backend-inventory" in sys.argv[1:]
     strict_frontend_inventory = "--strict-frontend-inventory" in sys.argv[1:]
     strict_dictionary = "--strict-dictionary" in sys.argv[1:]

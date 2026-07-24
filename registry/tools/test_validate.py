@@ -1,8 +1,11 @@
+import contextlib
+import io
 import json
 import tempfile
 import unittest
 from pathlib import Path
 import sys
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import validate
@@ -10,6 +13,38 @@ import editor_contract
 
 
 class RegistryValidatorTests(unittest.TestCase):
+    def test_rule_source_coverage_report_cli_outputs_json(self):
+        stdout = io.StringIO()
+        with (
+            mock.patch.object(
+                sys,
+                "argv",
+                [
+                    "validate.py",
+                    "--report-rule-source-coverage",
+                    "LR",
+                ],
+            ),
+            contextlib.redirect_stdout(stdout),
+        ):
+            exit_code = validate.main()
+
+        report = json.loads(stdout.getvalue())
+        self.assertEqual(0, exit_code)
+        self.assertTrue(report)
+        self.assertEqual("LR", report[0]["page"])
+        self.assertEqual(
+            {
+                "page",
+                "fieldId",
+                "element",
+                "authority",
+                "coverage",
+                "disposition",
+            },
+            set(report[0]),
+        )
+
     def test_sd_editor_contract_excludes_export_owned_message_header(self):
         repo = Path(__file__).resolve().parents[2]
         contract = json.loads(

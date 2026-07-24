@@ -149,3 +149,59 @@ def validate_editor_coverage(
                         f"{code} cannot be complete while "
                         f"{authority}/{element} is deferred"
                     )
+
+
+def audit_contract_sources(
+    root: Path,
+    page: str,
+) -> list[dict[str, str]]:
+    contract = json.loads(
+        (
+            root / "editor-contracts" / f"{page.lower()}.json"
+        ).read_text(encoding="utf-8")
+    )
+    prose = load_rule_prose(root)
+    payload = load_coverage(root)
+    coverage = {
+        (source["authority"], source["element"]): source
+        for source in payload.get("sources", [])
+    }
+    report: list[dict[str, str]] = []
+    for field in contract.get("fields", []):
+        field_id = field["code"]
+        element = field_id.split("@", 1)[0]
+        for authority in AUTHORITIES:
+            key = (authority, element)
+            if key not in prose:
+                continue
+            source = coverage.get(key)
+            dispositions = (
+                sorted(
+                    {
+                        requirement["disposition"]
+                        for requirement in source.get("requirements", [])
+                    }
+                )
+                if source is not None
+                else []
+            )
+            report.append(
+                {
+                    "page": page.upper(),
+                    "fieldId": field_id,
+                    "element": element,
+                    "authority": authority,
+                    "coverage": (
+                        "covered" if source is not None else "missing"
+                    ),
+                    "disposition": ",".join(dispositions),
+                }
+            )
+    return sorted(
+        report,
+        key=lambda row: (
+            row["fieldId"],
+            row["element"],
+            row["authority"],
+        ),
+    )
