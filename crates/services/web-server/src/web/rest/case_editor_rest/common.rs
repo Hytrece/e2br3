@@ -59,7 +59,8 @@ pub(super) use lib_core::model::parent_history::{
 };
 pub(super) use lib_core::model::patient::{
 	AutopsyCauseOfDeathBmc, AutopsyCauseOfDeathFilter, MedicalHistoryEpisodeBmc,
-	MedicalHistoryEpisodeFilter, ParentInformationBmc, ParentInformationFilter,
+	MedicalHistoryEpisodeFilter, MedicalHistoryEpisodeForCreate,
+	MedicalHistoryEpisodeForUpdate, ParentInformationBmc, ParentInformationFilter,
 	PastDrugHistoryBmc, PastDrugHistoryFilter, PastDrugHistoryForCreate,
 	PastDrugHistoryForUpdate, PatientDeathInformationBmc,
 	PatientDeathInformationFilter, PatientIdentifierBmc, PatientIdentifierFilter,

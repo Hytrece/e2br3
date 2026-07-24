@@ -1134,10 +1134,12 @@ impl MedicalHistoryEpisodeBmc {
 		list_options: Option<ListOptions>,
 	) -> Result<Vec<MedicalHistoryEpisode>> {
 		let mut filters = filters.unwrap_or_default();
-		filters.push(MedicalHistoryEpisodeFilter {
-			deleted: Some(OpValBool::Eq(false).into()),
-			..Default::default()
-		});
+		if filters.is_empty() {
+			filters.push(MedicalHistoryEpisodeFilter::default());
+		}
+		for filter in &mut filters {
+			filter.deleted = Some(OpValBool::Eq(false).into());
+		}
 		base_uuid::list::<Self, _, _>(ctx, mm, Some(filters), list_options).await
 	}
 

@@ -566,95 +566,157 @@ pub(super) fn validate_direct_rows(
 			)
 		}),
 		"DM" => {
-			optional_row_object(section, rows, "patientInformation")?.map(|row| {
-				normalized_direct_object(
-					row,
-					&[
-						(
-							"patientInitials",
-							&["patientInitials", "patient_initials"],
-						),
-						(
-							"patientBirthDate",
+			let mut normalized =
+				optional_row_object(section, rows, "patientInformation")?
+					.map(|row| {
+						normalized_direct_object(
+							row,
 							&[
-								"patientBirthDate",
-								"birth_date",
-								"birthDateNullFlavor",
-								"birth_date_null_flavor",
+								(
+									"patientInitials",
+									&["patientInitials", "patient_initials"],
+								),
+								(
+									"patientBirthDate",
+									&[
+										"patientBirthDate",
+										"birth_date",
+										"birthDateNullFlavor",
+										"birth_date_null_flavor",
+									],
+								),
+								(
+									"patientAge.value",
+									&[
+										"patientAge.value",
+										"ageAtTimeOfOnset",
+										"age_at_time_of_onset",
+									],
+								),
+								(
+									"patientAge.unit",
+									&["patientAge.unit", "ageUnit", "age_unit"],
+								),
+								(
+									"gestationPeriod.value",
+									&["gestationPeriod.value", "gestation_period"],
+								),
+								(
+									"gestationPeriod.unit",
+									&[
+										"gestationPeriod.unit",
+										"gestationPeriodUnit",
+										"gestation_period_unit",
+									],
+								),
+								(
+									"patientAgeGroup",
+									&["patientAgeGroup", "ageGroup", "age_group"],
+								),
+								(
+									"patientWeight.value",
+									&[
+										"patientWeight.value",
+										"weightKg",
+										"weight_kg",
+									],
+								),
+								(
+									"patientHeight.value",
+									&[
+										"patientHeight.value",
+										"heightCm",
+										"height_cm",
+									],
+								),
+								(
+									"patientSex",
+									&[
+										"patientSex",
+										"sex",
+										"sexNullFlavor",
+										"sex_null_flavor",
+									],
+								),
+								("raceCode", &["raceCode", "race_code"]),
+								(
+									"ethnicityCode",
+									&["ethnicityCode", "ethnicity_code"],
+								),
+								(
+									"lastMenstrualPeriodDate",
+									&[
+										"lastMenstrualPeriodDate",
+										"last_menstrual_period_date",
+										"lastMenstrualPeriodDateNullFlavor",
+										"last_menstrual_period_date_null_flavor",
+									],
+								),
+								(
+									"medicalHistoryText",
+									&[
+										"medicalHistoryText",
+										"medical_history_text",
+										"medicalHistoryTextNullFlavor",
+										"medical_history_text_null_flavor",
+									],
+								),
+								(
+									"concomitantTherapies",
+									&["concomitantTherapies", "concomitant_therapy"],
+								),
+							],
+						)
+					})
+					.unwrap_or_default();
+			if let Some(value) = rows.get("medicalHistoryEpisodes") {
+				let Some(episodes) = value.as_array() else {
+					return Err(Error::BadRequest {
+						message: format!(
+							"{section}.medicalHistoryEpisodes must be an array"
+						),
+					});
+				};
+				let mut normalized_episodes = Vec::new();
+				for value in episodes {
+					let row = as_object(section, "medicalHistoryEpisodes", value)?;
+					if bool_field(row, &["deleted", "_delete"]) == Some(true) {
+						continue;
+					}
+					normalized_episodes.push(Value::Object(
+						normalized_direct_object(
+							row,
+							&[
+								(
+									"meddraVersion",
+									&["meddraVersion", "meddra_version"],
+								),
+								("meddraCode", &["meddraCode", "meddra_code"]),
+								("startDate", &["startDate", "start_date"]),
+								(
+									"continuing",
+									&[
+										"continuing",
+										"continuingNullFlavor",
+										"continuing_null_flavor",
+									],
+								),
+								("endDate", &["endDate", "end_date"]),
+								("comments", &["comments"]),
+								(
+									"familyHistory",
+									&["familyHistory", "family_history"],
+								),
 							],
 						),
-						(
-							"patientAge.value",
-							&[
-								"patientAge.value",
-								"ageAtTimeOfOnset",
-								"age_at_time_of_onset",
-							],
-						),
-						(
-							"patientAge.unit",
-							&["patientAge.unit", "ageUnit", "age_unit"],
-						),
-						(
-							"gestationPeriod.value",
-							&["gestationPeriod.value", "gestation_period"],
-						),
-						(
-							"gestationPeriod.unit",
-							&[
-								"gestationPeriod.unit",
-								"gestationPeriodUnit",
-								"gestation_period_unit",
-							],
-						),
-						(
-							"patientAgeGroup",
-							&["patientAgeGroup", "ageGroup", "age_group"],
-						),
-						(
-							"patientWeight.value",
-							&["patientWeight.value", "weightKg", "weight_kg"],
-						),
-						(
-							"patientHeight.value",
-							&["patientHeight.value", "heightCm", "height_cm"],
-						),
-						(
-							"patientSex",
-							&[
-								"patientSex",
-								"sex",
-								"sexNullFlavor",
-								"sex_null_flavor",
-							],
-						),
-						("raceCode", &["raceCode", "race_code"]),
-						("ethnicityCode", &["ethnicityCode", "ethnicity_code"]),
-						(
-							"lastMenstrualPeriodDate",
-							&[
-								"lastMenstrualPeriodDate",
-								"last_menstrual_period_date",
-								"lastMenstrualPeriodDateNullFlavor",
-								"last_menstrual_period_date_null_flavor",
-							],
-						),
-						(
-							"medicalHistoryText",
-							&[
-								"medicalHistoryText",
-								"medical_history_text",
-								"medicalHistoryTextNullFlavor",
-								"medical_history_text_null_flavor",
-							],
-						),
-						(
-							"concomitantTherapies",
-							&["concomitantTherapies", "concomitant_therapy"],
-						),
-					],
-				)
-			})
+					));
+				}
+				normalized.insert(
+					"medicalHistoryEpisodes".to_string(),
+					Value::Array(normalized_episodes),
+				);
+			}
+			Some(normalized)
 		}
 		"NR" => optional_row_object(section, rows, "narrative")?.map(|row| {
 			normalized_direct_object(

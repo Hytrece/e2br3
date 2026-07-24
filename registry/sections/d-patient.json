@@ -377,6 +377,7 @@
     "section": "D",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "DM",
     "backend": {
       "status": "mapped",
       "model": "MedicalHistoryEpisode",
@@ -401,6 +402,7 @@
     "section": "D",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "DM",
     "backend": {
       "status": "mapped",
       "model": "MedicalHistoryEpisode",
@@ -425,6 +427,7 @@
     "section": "D",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "DM",
     "backend": {
       "status": "mapped",
       "model": "MedicalHistoryEpisode",
@@ -449,6 +452,7 @@
     "section": "D",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "DM",
     "backend": {
       "status": "mapped",
       "model": "MedicalHistoryEpisode",
@@ -473,6 +477,7 @@
     "section": "D",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "DM",
     "backend": {
       "status": "mapped",
       "model": "MedicalHistoryEpisode",
@@ -497,6 +502,7 @@
     "section": "D",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "DM",
     "backend": {
       "status": "mapped",
       "model": "MedicalHistoryEpisode",
@@ -521,6 +527,7 @@
     "section": "D",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "DM",
     "backend": {
       "status": "mapped",
       "model": "MedicalHistoryEpisode",

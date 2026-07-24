@@ -1918,10 +1918,7 @@ async fn apply_dm_page_rows_patch(
 			"parentPastDrugs",
 		],
 	)?;
-	let Some(patient) = optional_row_object(page_id, rows, "patientInformation")?
-	else {
-		return Ok(());
-	};
+	let patient = optional_row_object(page_id, rows, "patientInformation")?;
 	fn value_at_path<'a>(
 		row: &'a Map<String, Value>,
 		paths: &[&str],
@@ -1999,166 +1996,265 @@ async fn apply_dm_page_rows_patch(
 					.unwrap_or_else(|| value.to_string())
 			})
 	}
-	let update = PatientInformationForUpdate {
-		patient_initials: string_field(
-			patient,
-			&["patientInitials", "patient_initials"],
-		),
-		patient_initials_null_flavor: string_field(
-			patient,
-			&["patientInitialsNullFlavor", "patient_initials_null_flavor"],
-		),
-		birth_date: date_field(
-			page_id,
-			patient,
-			&["patientBirthDate", "birth_date"],
-		)?,
-		birth_date_null_flavor: string_field(
-			patient,
-			&["birthDateNullFlavor", "birth_date_null_flavor"],
-		),
-		age_at_time_of_onset: decimal_field(
-			page_id,
-			patient,
-			&[
-				"patientAge.value",
-				"ageAtTimeOfOnset",
-				"age_at_time_of_onset",
-			],
-		)?,
-		age_at_time_of_onset_null_flavor: string_field(
-			patient,
-			&[
-				"ageAtTimeOfOnsetNullFlavor",
-				"age_at_time_of_onset_null_flavor",
-			],
-		),
-		age_unit: nested_string_field(
-			patient,
-			&["patientAge.unit", "ageUnit", "age_unit"],
-		),
-		gestation_period: decimal_field(
-			page_id,
-			patient,
-			&["gestationPeriod.value", "gestation_period"],
-		)?,
-		gestation_period_unit: nested_string_field(
-			patient,
-			&[
-				"gestationPeriod.unit",
-				"gestationPeriodUnit",
-				"gestation_period_unit",
-			],
-		),
-		age_group: string_field(
-			patient,
-			&["patientAgeGroup", "ageGroup", "age_group"],
-		),
-		weight_kg: decimal_field(
-			page_id,
-			patient,
-			&["patientWeight.value", "weightKg", "weight_kg"],
-		)?,
-		weight_kg_null_flavor: string_field(
-			patient,
-			&["weightKgNullFlavor", "weight_kg_null_flavor"],
-		),
-		height_cm: decimal_field(
-			page_id,
-			patient,
-			&["patientHeight.value", "heightCm", "height_cm"],
-		)?,
-		height_cm_null_flavor: string_field(
-			patient,
-			&["heightCmNullFlavor", "height_cm_null_flavor"],
-		),
-		sex: string_field(patient, &["patientSex", "sex"]),
-		sex_null_flavor: string_field(
-			patient,
-			&["sexNullFlavor", "sex_null_flavor"],
-		),
-		race_code: string_field(patient, &["raceCode", "race_code"]),
-		race_code_null_flavor: string_field(
-			patient,
-			&["raceCodeNullFlavor", "race_code_null_flavor"],
-		),
-		ethnicity_code: string_field(patient, &["ethnicityCode", "ethnicity_code"]),
-		ethnicity_code_null_flavor: string_field(
-			patient,
-			&["ethnicityCodeNullFlavor", "ethnicity_code_null_flavor"],
-		),
-		last_menstrual_period_date: date_field(
-			page_id,
-			patient,
-			&["lastMenstrualPeriodDate", "last_menstrual_period_date"],
-		)?,
-		last_menstrual_period_date_null_flavor: string_field(
-			patient,
-			&[
-				"lastMenstrualPeriodDateNullFlavor",
-				"last_menstrual_period_date_null_flavor",
-			],
-		),
-		medical_history_text: string_field(
-			patient,
-			&["medicalHistoryText", "medical_history_text"],
-		),
-		medical_history_text_null_flavor: string_field(
-			patient,
-			&[
-				"medicalHistoryTextNullFlavor",
-				"medical_history_text_null_flavor",
-			],
-		),
-		concomitant_therapy: boolean_field(
-			patient,
-			&["concomitantTherapies", "concomitant_therapy"],
-		),
+	let patient_id = if let Some(patient) = patient {
+		let update = PatientInformationForUpdate {
+			patient_initials: string_field(
+				patient,
+				&["patientInitials", "patient_initials"],
+			),
+			patient_initials_null_flavor: string_field(
+				patient,
+				&["patientInitialsNullFlavor", "patient_initials_null_flavor"],
+			),
+			birth_date: date_field(
+				page_id,
+				patient,
+				&["patientBirthDate", "birth_date"],
+			)?,
+			birth_date_null_flavor: string_field(
+				patient,
+				&["birthDateNullFlavor", "birth_date_null_flavor"],
+			),
+			age_at_time_of_onset: decimal_field(
+				page_id,
+				patient,
+				&[
+					"patientAge.value",
+					"ageAtTimeOfOnset",
+					"age_at_time_of_onset",
+				],
+			)?,
+			age_at_time_of_onset_null_flavor: string_field(
+				patient,
+				&[
+					"ageAtTimeOfOnsetNullFlavor",
+					"age_at_time_of_onset_null_flavor",
+				],
+			),
+			age_unit: nested_string_field(
+				patient,
+				&["patientAge.unit", "ageUnit", "age_unit"],
+			),
+			gestation_period: decimal_field(
+				page_id,
+				patient,
+				&["gestationPeriod.value", "gestation_period"],
+			)?,
+			gestation_period_unit: nested_string_field(
+				patient,
+				&[
+					"gestationPeriod.unit",
+					"gestationPeriodUnit",
+					"gestation_period_unit",
+				],
+			),
+			age_group: string_field(
+				patient,
+				&["patientAgeGroup", "ageGroup", "age_group"],
+			),
+			weight_kg: decimal_field(
+				page_id,
+				patient,
+				&["patientWeight.value", "weightKg", "weight_kg"],
+			)?,
+			weight_kg_null_flavor: string_field(
+				patient,
+				&["weightKgNullFlavor", "weight_kg_null_flavor"],
+			),
+			height_cm: decimal_field(
+				page_id,
+				patient,
+				&["patientHeight.value", "heightCm", "height_cm"],
+			)?,
+			height_cm_null_flavor: string_field(
+				patient,
+				&["heightCmNullFlavor", "height_cm_null_flavor"],
+			),
+			sex: string_field(patient, &["patientSex", "sex"]),
+			sex_null_flavor: string_field(
+				patient,
+				&["sexNullFlavor", "sex_null_flavor"],
+			),
+			race_code: string_field(patient, &["raceCode", "race_code"]),
+			race_code_null_flavor: string_field(
+				patient,
+				&["raceCodeNullFlavor", "race_code_null_flavor"],
+			),
+			ethnicity_code: string_field(
+				patient,
+				&["ethnicityCode", "ethnicity_code"],
+			),
+			ethnicity_code_null_flavor: string_field(
+				patient,
+				&["ethnicityCodeNullFlavor", "ethnicity_code_null_flavor"],
+			),
+			last_menstrual_period_date: date_field(
+				page_id,
+				patient,
+				&["lastMenstrualPeriodDate", "last_menstrual_period_date"],
+			)?,
+			last_menstrual_period_date_null_flavor: string_field(
+				patient,
+				&[
+					"lastMenstrualPeriodDateNullFlavor",
+					"last_menstrual_period_date_null_flavor",
+				],
+			),
+			medical_history_text: string_field(
+				patient,
+				&["medicalHistoryText", "medical_history_text"],
+			),
+			medical_history_text_null_flavor: string_field(
+				patient,
+				&[
+					"medicalHistoryTextNullFlavor",
+					"medical_history_text_null_flavor",
+				],
+			),
+			concomitant_therapy: boolean_field(
+				patient,
+				&["concomitantTherapies", "concomitant_therapy"],
+			),
+		};
+		match PatientInformationBmc::get_by_case(ctx, mm, case_id).await {
+			Ok(entity) => {
+				PatientInformationBmc::update_by_case(ctx, mm, case_id, update)
+					.await?;
+				entity.id
+			}
+			Err(lib_core::model::Error::EntityUuidNotFound { .. }) => {
+				PatientInformationBmc::create(
+					ctx,
+					mm,
+					PatientInformationForCreate {
+						case_id,
+						patient_initials: update.patient_initials,
+						patient_initials_null_flavor: update
+							.patient_initials_null_flavor,
+						birth_date: update.birth_date,
+						birth_date_null_flavor: update.birth_date_null_flavor,
+						age_at_time_of_onset: update.age_at_time_of_onset,
+						age_at_time_of_onset_null_flavor: update
+							.age_at_time_of_onset_null_flavor,
+						age_unit: update.age_unit,
+						gestation_period: update.gestation_period,
+						gestation_period_unit: update.gestation_period_unit,
+						age_group: update.age_group,
+						weight_kg: update.weight_kg,
+						weight_kg_null_flavor: update.weight_kg_null_flavor,
+						height_cm: update.height_cm,
+						height_cm_null_flavor: update.height_cm_null_flavor,
+						sex: update.sex,
+						sex_null_flavor: update.sex_null_flavor,
+						race_code: update.race_code,
+						race_code_null_flavor: update.race_code_null_flavor,
+						ethnicity_code: update.ethnicity_code,
+						ethnicity_code_null_flavor: update
+							.ethnicity_code_null_flavor,
+						last_menstrual_period_date: update
+							.last_menstrual_period_date,
+						last_menstrual_period_date_null_flavor: update
+							.last_menstrual_period_date_null_flavor,
+						medical_history_text: update.medical_history_text,
+						medical_history_text_null_flavor: update
+							.medical_history_text_null_flavor,
+						concomitant_therapy: update.concomitant_therapy,
+					},
+				)
+				.await?
+			}
+			Err(err) => return Err(err.into()),
+		}
+	} else {
+		match PatientInformationBmc::get_by_case(ctx, mm, case_id).await {
+			Ok(entity) => entity.id,
+			Err(lib_core::model::Error::EntityUuidNotFound { .. }) => {
+				return Err(Error::BadRequest {
+					message: format!(
+						"{page_id}.patientInformation is required before dependent rows"
+					),
+				});
+			}
+			Err(err) => return Err(err.into()),
+		}
 	};
-	match PatientInformationBmc::get_by_case(ctx, mm, case_id).await {
-		Ok(_) => {
-			PatientInformationBmc::update_by_case(ctx, mm, case_id, update).await?
+
+	if let Some(value) = rows.get("medicalHistoryEpisodes") {
+		let Some(episodes) = value.as_array() else {
+			return Err(Error::BadRequest {
+				message: format!(
+					"{page_id}.medicalHistoryEpisodes must be an array"
+				),
+			});
+		};
+		for (index, value) in episodes.iter().enumerate() {
+			let episode = as_object(page_id, "medicalHistoryEpisodes", value)?;
+			let id = uuid_field(episode, &["id"]);
+			if bool_field(episode, &["deleted", "_delete"]) == Some(true) {
+				if let Some(id) = id {
+					MedicalHistoryEpisodeBmc::delete(ctx, mm, id).await?;
+				}
+				continue;
+			}
+			let meddra_version =
+				string_field(episode, &["meddraVersion", "meddra_version"]);
+			let meddra_code = string_field(episode, &["meddraCode", "meddra_code"]);
+			let start_date =
+				date_field(page_id, episode, &["startDate", "start_date"])?;
+			let start_date_null_flavor = string_field(
+				episode,
+				&["startDateNullFlavor", "start_date_null_flavor"],
+			);
+			let continuing = bool_field(episode, &["continuing"]);
+			let continuing_null_flavor = string_field(
+				episode,
+				&["continuingNullFlavor", "continuing_null_flavor"],
+			);
+			let end_date = date_field(page_id, episode, &["endDate", "end_date"])?;
+			let end_date_null_flavor = string_field(
+				episode,
+				&["endDateNullFlavor", "end_date_null_flavor"],
+			);
+			let comments = string_field(episode, &["comments"]);
+			let family_history =
+				bool_field(episode, &["familyHistory", "family_history"]);
+			let update = MedicalHistoryEpisodeForUpdate {
+				meddra_version,
+				meddra_code: meddra_code.clone(),
+				start_date,
+				start_date_null_flavor: start_date_null_flavor.clone(),
+				continuing,
+				continuing_null_flavor: continuing_null_flavor.clone(),
+				end_date,
+				end_date_null_flavor: end_date_null_flavor.clone(),
+				comments,
+				family_history,
+			};
+			let id = if let Some(id) = id {
+				id
+			} else {
+				MedicalHistoryEpisodeBmc::create(
+					ctx,
+					mm,
+					MedicalHistoryEpisodeForCreate {
+						patient_id,
+						sequence_number: i32_field(
+							episode,
+							&["sequenceNumber", "sequence_number"],
+						)
+						.unwrap_or_else(|| {
+							i32::try_from(index + 1).unwrap_or(i32::MAX)
+						}),
+						meddra_code,
+						start_date_null_flavor,
+						continuing_null_flavor,
+						end_date_null_flavor,
+					},
+				)
+				.await?
+			};
+			MedicalHistoryEpisodeBmc::update(ctx, mm, id, update).await?;
 		}
-		Err(lib_core::model::Error::EntityUuidNotFound { .. }) => {
-			PatientInformationBmc::create(
-				ctx,
-				mm,
-				PatientInformationForCreate {
-					case_id,
-					patient_initials: update.patient_initials,
-					patient_initials_null_flavor: update
-						.patient_initials_null_flavor,
-					birth_date: update.birth_date,
-					birth_date_null_flavor: update.birth_date_null_flavor,
-					age_at_time_of_onset: update.age_at_time_of_onset,
-					age_at_time_of_onset_null_flavor: update
-						.age_at_time_of_onset_null_flavor,
-					age_unit: update.age_unit,
-					gestation_period: update.gestation_period,
-					gestation_period_unit: update.gestation_period_unit,
-					age_group: update.age_group,
-					weight_kg: update.weight_kg,
-					weight_kg_null_flavor: update.weight_kg_null_flavor,
-					height_cm: update.height_cm,
-					height_cm_null_flavor: update.height_cm_null_flavor,
-					sex: update.sex,
-					sex_null_flavor: update.sex_null_flavor,
-					race_code: update.race_code,
-					race_code_null_flavor: update.race_code_null_flavor,
-					ethnicity_code: update.ethnicity_code,
-					ethnicity_code_null_flavor: update.ethnicity_code_null_flavor,
-					last_menstrual_period_date: update.last_menstrual_period_date,
-					last_menstrual_period_date_null_flavor: update
-						.last_menstrual_period_date_null_flavor,
-					medical_history_text: update.medical_history_text,
-					medical_history_text_null_flavor: update
-						.medical_history_text_null_flavor,
-					concomitant_therapy: update.concomitant_therapy,
-				},
-			)
-			.await?;
-		}
-		Err(err) => return Err(err.into()),
 	}
 	Ok(())
 }
@@ -2564,6 +2660,20 @@ async fn load_editor_dm_data(
 		Some(ListOptions::default()),
 	)
 	.await?;
+	let medical_history_episodes = medical_history_episodes
+		.into_iter()
+		.map(|episode| {
+			let mut value = json!(episode);
+			if let Value::Object(ref mut map) = value {
+				map.insert(
+					"start_date".to_string(),
+					json!(ci_date(episode.start_date)),
+				);
+				map.insert("end_date".to_string(), json!(ci_date(episode.end_date)));
+			}
+			value
+		})
+		.collect::<Vec<_>>();
 	let parent_information_rows = ParentInformationBmc::list(
 		ctx,
 		mm,
