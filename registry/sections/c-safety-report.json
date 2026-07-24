@@ -1391,7 +1391,7 @@
     "label": "Study Registration Number",
     "section": "C",
     "authority": "ICH",
-    "status": "complete",
+    "status": "incomplete",
     "editor_page": "SI",
     "backend": {
       "status": "mapped",
@@ -1407,8 +1407,8 @@
       "file": "../frontend/E2BR3-frontend/components/case-form/sections/SectionStudy.tsx",
       "evidence": "SectionStudy binds fieldNumber C.5.1.r.1 to studyInformation.studyRegistrationNumbers[index].registrationNumber."
     },
-    "action": "",
-    "notes": ""
+    "action": "Implement MFDS receiver-specific presence/nullFlavor rules and approval-registry matching for C.5.1.r.1.",
+    "notes": "DB/API/UI mapping exists, but audited MFDS business validation is incomplete."
   },
   {
     "id": "C.5.1.r.2",
@@ -1441,7 +1441,7 @@
     "label": "Study Name",
     "section": "C",
     "authority": "ICH",
-    "status": "complete",
+    "status": "incomplete",
     "editor_page": "SI",
     "backend": {
       "status": "mapped",
@@ -1457,8 +1457,8 @@
       "file": "../frontend/E2BR3-frontend/components/case-form/sections/SectionStudy.tsx",
       "evidence": "SectionStudy binds fieldNumber C.5.2 to studyInformation.studyName."
     },
-    "action": "",
-    "notes": ""
+    "action": "Implement FDA premarket study-name formatting and MFDS receiver/external-registry rules, including the MFDS 50-character limit.",
+    "notes": "DB/API/UI mapping exists, but audited FDA and MFDS source requirements are incomplete."
   },
   {
     "id": "C.5.3",
@@ -1466,7 +1466,7 @@
     "label": "Sponsor Study Number",
     "section": "C",
     "authority": "ICH",
-    "status": "complete",
+    "status": "incomplete",
     "editor_page": "SI",
     "backend": {
       "status": "mapped",
@@ -1482,8 +1482,8 @@
       "file": "../frontend/E2BR3-frontend/components/case-form/sections/SectionStudy.tsx",
       "evidence": "SectionStudy binds fieldNumber C.5.3 to studyInformation.sponsorStudyNumber."
     },
-    "action": "",
-    "notes": ""
+    "action": "Implement MFDS receiver-specific presence/nullFlavor rules and approval-registry cross-checking for C.5.3.",
+    "notes": "ICH study-report validation exists; audited MFDS source requirements remain incomplete."
   },
   {
     "id": "C.5.4",
@@ -1491,7 +1491,7 @@
     "label": "Study Type Where Reaction(s) or Event(s) Were Observed",
     "section": "C",
     "authority": "ICH",
-    "status": "complete",
+    "status": "incomplete",
     "editor_page": "SI",
     "backend": {
       "status": "mapped",
@@ -1507,8 +1507,8 @@
       "file": "../frontend/E2BR3-frontend/components/case-form/sections/SectionStudy.tsx",
       "evidence": "SectionStudy binds fieldNumber C.5.4 to studyInformation.studyTypeReaction."
     },
-    "action": "",
-    "notes": ""
+    "action": "Implement FDA aggregate/premarket value restrictions and MFDS CT/CU receiver-specific value restrictions for C.5.4.",
+    "notes": "ICH required/allowed-value validation exists; audited regional source requirements remain incomplete."
   },
   {
     "id": "C.5.4.KR.1",
@@ -1516,7 +1516,7 @@
     "label": "Other Studies Type",
     "section": "C",
     "authority": "MFDS",
-    "status": "complete",
+    "status": "incomplete",
     "editor_page": "SI",
     "backend": {
       "status": "mapped",
@@ -1532,8 +1532,8 @@
       "file": "../frontend/E2BR3-frontend/components/case-form/sections/SectionStudy.tsx",
       "evidence": "SectionStudy binds fieldNumber C.5.4.KR.1 to studyInformation.studyTypeReactionKr1."
     },
-    "action": "",
-    "notes": ""
+    "action": "Implement MFDS domestic-report gating, allowed values 1-4, and default-to-4 behavior for C.5.4.KR.1.",
+    "notes": "The C.5.4=3 presence rule and length constraint exist, but the full audited MFDS policy does not."
   },
   {
     "id": "FDA.C.5.5a",
@@ -1541,7 +1541,7 @@
     "label": "IND Number Where AE Occurred",
     "section": "C",
     "authority": "FDA",
-    "status": "complete",
+    "status": "incomplete",
     "editor_page": "SI",
     "backend": {
       "status": "mapped",
@@ -1557,8 +1557,8 @@
       "file": "../frontend/E2BR3-frontend/components/case-form/sections/SectionStudy.tsx",
       "evidence": "SectionStudy binds fieldNumber FDA.C.5.5a to studyInformation.fdaIndNumberOccurred."
     },
-    "action": "",
-    "notes": ""
+    "action": "Bind FDA.C.5.5a validation to fda_ind_number_occurred and implement aggregate Parent IND policy.",
+    "notes": "The catalog rule exists, but case evaluation currently reads sponsor_study_number instead of the canonical FDA field."
   },
   {
     "id": "FDA.C.5.5b",
@@ -1566,7 +1566,7 @@
     "label": "Pre-ANDA Number Where AE Occurred",
     "section": "C",
     "authority": "FDA",
-    "status": "complete",
+    "status": "incomplete",
     "editor_page": "SI",
     "backend": {
       "status": "mapped",
@@ -1582,8 +1582,8 @@
       "file": "../frontend/E2BR3-frontend/components/case-form/sections/SectionStudy.tsx",
       "evidence": "SectionStudy binds fieldNumber FDA.C.5.5b to studyInformation.fdaPreAndaNumberOccurred."
     },
-    "action": "",
-    "notes": ""
+    "action": "Bind FDA.C.5.5b validation to fda_pre_anda_number_occurred.",
+    "notes": "The catalog rule exists, but case evaluation currently reads sponsor_study_number instead of the canonical FDA field."
   },
   {
     "id": "FDA.C.5.6.r",
@@ -1591,7 +1591,7 @@
     "label": "IND Number of Cross Reported IND",
     "section": "C",
     "authority": "FDA",
-    "status": "complete",
+    "status": "incomplete",
     "editor_page": "SI",
     "backend": {
       "status": "mapped",
@@ -1607,8 +1607,8 @@
       "file": "../frontend/E2BR3-frontend/components/case-form/sections/SectionStudy.tsx",
       "evidence": "SectionStudy binds fieldNumber FDA.C.5.6.r to studyInformation.fdaCrossReportedIndNumbers[index].indNumber."
     },
-    "action": "",
-    "notes": ""
+    "action": "Bind FDA.C.5.6.r validation to FDA IND/cross-reported IND fields and evaluate NA nullFlavor handling.",
+    "notes": "The catalog presence rule is currently evaluated through generic sponsor/registration fields rather than the canonical FDA fields."
   },
   {
     "id": "FDA.C.5.6.r.local.indNumberNullFlavor",
