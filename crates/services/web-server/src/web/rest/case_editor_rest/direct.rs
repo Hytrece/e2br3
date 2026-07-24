@@ -1681,68 +1681,215 @@ async fn apply_si_page_rows_patch(
 		rows,
 		&["studyInformation", "studyRegistrationNumbers"],
 	)?;
-	let Some(study) = optional_row_object(page_id, rows, "studyInformation")? else {
-		return Ok(());
-	};
-	let update = StudyInformationForUpdate {
-		source_study_presave_id: uuid_field(
-			study,
-			&["sourceStudyPresaveId", "source_study_presave_id"],
-		),
-		study_name: string_field(study, &["studyName", "study_name"]),
-		study_name_null_flavor: string_field(
-			study,
-			&["studyNameNullFlavor", "study_name_null_flavor"],
-		),
-		sponsor_study_number: string_field(
-			study,
-			&["sponsorStudyNumber", "sponsor_study_number"],
-		),
-		sponsor_study_number_null_flavor: string_field(
-			study,
-			&[
-				"sponsorStudyNumberNullFlavor",
-				"sponsor_study_number_null_flavor",
-			],
-		),
-		study_type_reaction: string_field(
-			study,
-			&["studyTypeReaction", "study_type_reaction"],
-		),
-		study_type_reaction_kr1: string_field(
-			study,
-			&["studyTypeReactionKr1", "study_type_reaction_kr1"],
-		),
-		fda_ind_number_occurred: string_field(
-			study,
-			&["fdaIndNumberOccurred", "fda_ind_number_occurred"],
-		),
-		fda_pre_anda_number_occurred: string_field(
-			study,
-			&["fdaPreAndaNumberOccurred", "fda_pre_anda_number_occurred"],
-		),
-	};
-	if let Some(id) = uuid_field(study, &["id"]) {
-		StudyInformationBmc::update(ctx, mm, id, update).await?;
+	let study = optional_row_object(page_id, rows, "studyInformation")?;
+	let study_id = if let Some(study) = study {
+		let update = StudyInformationForUpdate {
+			source_study_presave_id: uuid_field(
+				study,
+				&["sourceStudyPresaveId", "source_study_presave_id"],
+			),
+			study_name: string_field(study, &["studyName", "study_name"]),
+			study_name_null_flavor: string_field(
+				study,
+				&["studyNameNullFlavor", "study_name_null_flavor"],
+			),
+			sponsor_study_number: string_field(
+				study,
+				&["sponsorStudyNumber", "sponsor_study_number"],
+			),
+			sponsor_study_number_null_flavor: string_field(
+				study,
+				&[
+					"sponsorStudyNumberNullFlavor",
+					"sponsor_study_number_null_flavor",
+				],
+			),
+			study_type_reaction: string_field(
+				study,
+				&["studyTypeReaction", "study_type_reaction"],
+			),
+			study_type_reaction_kr1: string_field(
+				study,
+				&["studyTypeReactionKr1", "study_type_reaction_kr1"],
+			),
+			fda_ind_number_occurred: string_field(
+				study,
+				&["fdaIndNumberOccurred", "fda_ind_number_occurred"],
+			),
+			fda_pre_anda_number_occurred: string_field(
+				study,
+				&["fdaPreAndaNumberOccurred", "fda_pre_anda_number_occurred"],
+			),
+		};
+		if let Some(id) = uuid_field(study, &["id"]) {
+			StudyInformationBmc::update(ctx, mm, id, update).await?;
+			id
+		} else {
+			StudyInformationBmc::create(
+				ctx,
+				mm,
+				StudyInformationForCreate {
+					case_id,
+					source_study_presave_id: update.source_study_presave_id,
+					study_name: update.study_name,
+					study_name_null_flavor: update.study_name_null_flavor,
+					sponsor_study_number: update.sponsor_study_number,
+					sponsor_study_number_null_flavor: update
+						.sponsor_study_number_null_flavor,
+					study_type_reaction: update.study_type_reaction,
+					study_type_reaction_kr1: update.study_type_reaction_kr1,
+					fda_ind_number_occurred: update.fda_ind_number_occurred,
+					fda_pre_anda_number_occurred: update
+						.fda_pre_anda_number_occurred,
+				},
+			)
+			.await?
+		}
 	} else {
-		StudyInformationBmc::create(
+		let studies = StudyInformationBmc::list(
 			ctx,
 			mm,
-			StudyInformationForCreate {
-				case_id,
-				source_study_presave_id: update.source_study_presave_id,
-				study_name: update.study_name,
-				study_name_null_flavor: update.study_name_null_flavor,
-				sponsor_study_number: update.sponsor_study_number,
-				sponsor_study_number_null_flavor: update
-					.sponsor_study_number_null_flavor,
-				study_type_reaction: update.study_type_reaction,
-				study_type_reaction_kr1: update.study_type_reaction_kr1,
-				fda_ind_number_occurred: update.fda_ind_number_occurred,
-				fda_pre_anda_number_occurred: update.fda_pre_anda_number_occurred,
-			},
+			Some(vec![StudyInformationFilter {
+				case_id: Some(uuid_eq(case_id)),
+			}]),
+			Some(ListOptions::default()),
 		)
 		.await?;
+		let Some(study) = studies.into_iter().min_by_key(|study| study.created_at)
+		else {
+			if rows.contains_key("studyRegistrationNumbers") {
+				return Err(Error::BadRequest {
+					message: format!(
+						"{page_id}.studyInformation is required before child rows"
+					),
+				});
+			}
+			return Ok(());
+		};
+		study.id
+	};
+
+	if let Some(value) = rows.get("studyRegistrationNumbers") {
+		let Some(registrations) = value.as_array() else {
+			return Err(Error::BadRequest {
+				message: format!(
+					"{page_id}.studyRegistrationNumbers must be an array"
+				),
+			});
+		};
+		for (index, value) in registrations.iter().enumerate() {
+			let registration =
+				as_object(page_id, "studyRegistrationNumbers", value)?;
+			let id = uuid_field(registration, &["id"]);
+			if bool_field(registration, &["deleted", "_delete"]) == Some(true) {
+				if let Some(id) = id {
+					StudyRegistrationNumberBmc::delete(ctx, mm, id).await?;
+				}
+				continue;
+			}
+			let update = StudyRegistrationNumberForUpdate {
+				registration_number: string_field(
+					registration,
+					&["registrationNumber", "registration_number"],
+				),
+				registration_number_null_flavor: string_field(
+					registration,
+					&[
+						"registrationNumberNullFlavor",
+						"registration_number_null_flavor",
+					],
+				),
+				country_code: string_field(
+					registration,
+					&["countryCode", "country_code"],
+				),
+				country_code_null_flavor: string_field(
+					registration,
+					&["countryCodeNullFlavor", "country_code_null_flavor"],
+				),
+				sequence_number: i32_field(
+					registration,
+					&["sequenceNumber", "sequence_number"],
+				),
+			};
+			if let Some(id) = id {
+				StudyRegistrationNumberBmc::update(ctx, mm, id, update).await?;
+			} else if let Some(registration_number) = update.registration_number {
+				StudyRegistrationNumberBmc::create(
+					ctx,
+					mm,
+					StudyRegistrationNumberForCreate {
+						study_information_id: study_id,
+						registration_number,
+						registration_number_null_flavor: update
+							.registration_number_null_flavor,
+						country_code: update.country_code,
+						country_code_null_flavor: update.country_code_null_flavor,
+						sequence_number: update.sequence_number.unwrap_or_else(
+							|| i32::try_from(index + 1).unwrap_or(i32::MAX),
+						),
+					},
+				)
+				.await?;
+			}
+		}
+	}
+
+	if let Some(study) = study {
+		if let Some(value) = study
+			.get("fdaCrossReportedIndNumbers")
+			.or_else(|| study.get("fda_cross_reported_ind_numbers"))
+		{
+			let Some(numbers) = value.as_array() else {
+				return Err(Error::BadRequest {
+					message: format!(
+						"{page_id}.studyInformation.fdaCrossReportedIndNumbers must be an array"
+					),
+				});
+			};
+			for (index, value) in numbers.iter().enumerate() {
+				let number = as_object(
+					page_id,
+					"studyInformation.fdaCrossReportedIndNumbers",
+					value,
+				)?;
+				let id = uuid_field(number, &["id"]);
+				if bool_field(number, &["deleted", "_delete"]) == Some(true) {
+					if let Some(id) = id {
+						StudyFdaCrossReportedIndBmc::delete(ctx, mm, id).await?;
+					}
+					continue;
+				}
+				let update = StudyFdaCrossReportedIndForUpdate {
+					ind_number: string_field(number, &["indNumber", "ind_number"]),
+					ind_number_null_flavor: string_field(
+						number,
+						&["indNumberNullFlavor", "ind_number_null_flavor"],
+					),
+					sequence_number: i32_field(
+						number,
+						&["sequenceNumber", "sequence_number"],
+					),
+				};
+				if let Some(id) = id {
+					StudyFdaCrossReportedIndBmc::update(ctx, mm, id, update).await?;
+				} else {
+					StudyFdaCrossReportedIndBmc::create(
+						ctx,
+						mm,
+						StudyFdaCrossReportedIndForCreate {
+							study_information_id: study_id,
+							ind_number: update.ind_number,
+							ind_number_null_flavor: update.ind_number_null_flavor,
+							sequence_number: update.sequence_number.unwrap_or_else(
+								|| i32::try_from(index + 1).unwrap_or(i32::MAX),
+							),
+						},
+					)
+					.await?;
+				}
+			}
+		}
 	}
 	Ok(())
 }
@@ -2180,20 +2327,43 @@ async fn load_editor_si_data(
 	.await?;
 	studies.sort_by_key(|study| study.created_at);
 	let study_information = studies.into_iter().next();
-	let study_registration_numbers = if let Some(ref study) = study_information {
-		StudyRegistrationNumberBmc::list(
-			ctx,
-			mm,
-			Some(vec![StudyRegistrationNumberFilter {
-				study_information_id: Some(uuid_eq(study.id)),
-				..Default::default()
-			}]),
-			Some(ListOptions::default()),
-		)
-		.await?
-	} else {
-		Vec::new()
-	};
+	let (study_registration_numbers, fda_cross_reported_ind_numbers) =
+		if let Some(ref study) = study_information {
+			let registrations = StudyRegistrationNumberBmc::list(
+				ctx,
+				mm,
+				Some(vec![StudyRegistrationNumberFilter {
+					study_information_id: Some(uuid_eq(study.id)),
+					..Default::default()
+				}]),
+				Some(ListOptions::default()),
+			)
+			.await?;
+			let cross_reported = StudyFdaCrossReportedIndBmc::list(
+				ctx,
+				mm,
+				Some(vec![StudyFdaCrossReportedIndFilter {
+					study_information_id: Some(uuid_eq(study.id)),
+					..Default::default()
+				}]),
+				Some(ListOptions::default()),
+			)
+			.await?;
+			(registrations, cross_reported)
+		} else {
+			(Vec::new(), Vec::new())
+		};
+	let study_information = study_information.map(|study| {
+		let mut value = json!(study);
+		value
+			.as_object_mut()
+			.expect("serialized study information is an object")
+			.insert(
+				"fdaCrossReportedIndNumbers".to_string(),
+				json!(fda_cross_reported_ind_numbers),
+			);
+		value
+	});
 
 	Ok(json!({
 		"studyInformation": study_information,

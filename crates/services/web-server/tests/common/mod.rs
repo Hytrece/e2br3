@@ -98,8 +98,8 @@ pub async fn init_test_env() {
 pub async fn init_test_mm() -> Result<ModelManager> {
 	init_test_env().await;
 	_dev_utils::init_dev().await;
-	apply_test_authorization_isolation_migration().await?;
 	reset_test_dynamic_roles();
+	apply_test_authorization_isolation_migration().await?;
 	let mm = ModelManager::new().await?;
 	mm.dbx()
 		.execute(sqlx::query("CREATE EXTENSION IF NOT EXISTS pgcrypto"))

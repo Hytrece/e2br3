@@ -2571,7 +2571,7 @@ async fn editor_lr_page_patch_persists_literature_reference_row() -> Result<()> 
 
 #[serial]
 #[tokio::test]
-async fn editor_si_page_patch_persists_study_information_row() -> Result<()> {
+async fn editor_si_page_patch_round_trips_every_contract_field() -> Result<()> {
 	let mm = init_test_mm().await?;
 	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
 	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
@@ -2588,8 +2588,23 @@ async fn editor_si_page_patch_persists_study_information_row() -> Result<()> {
 			"authorities": ["fda"],
 			"rows": {
 				"studyInformation": {
-					"studyName": "Study 001"
-				}
+					"studyName": "Study 001",
+					"sponsorStudyNumber": "SP-2026-001",
+					"studyTypeReaction": "2",
+					"studyTypeReactionKr1": "1",
+					"fdaIndNumberOccurred": "123456",
+					"fdaPreAndaNumberOccurred": "234567",
+					"fdaCrossReportedIndNumbers": [{
+						"indNumber": "654321",
+						"indNumberNullFlavor": "UNK",
+						"sequenceNumber": 1
+					}]
+				},
+				"studyRegistrationNumbers": [{
+					"registrationNumber": "NCT-2026-001",
+					"countryCode": "KR",
+					"sequenceNumber": 1
+				}]
 			}
 		}),
 	)
@@ -2597,6 +2612,50 @@ async fn editor_si_page_patch_persists_study_information_row() -> Result<()> {
 
 	assert_eq!(status, StatusCode::OK, "{body}");
 	assert_eq!(body["rows"]["studyInformation"]["study_name"], "Study 001");
+	assert_eq!(
+		body["rows"]["studyInformation"]["sponsor_study_number"],
+		"SP-2026-001"
+	);
+	assert_eq!(body["rows"]["studyInformation"]["study_type_reaction"], "2");
+	assert_eq!(
+		body["rows"]["studyInformation"]["study_type_reaction_kr1"],
+		"1"
+	);
+	assert_eq!(
+		body["rows"]["studyInformation"]["fda_ind_number_occurred"],
+		"123456"
+	);
+	assert_eq!(
+		body["rows"]["studyInformation"]["fda_pre_anda_number_occurred"],
+		"234567"
+	);
+	assert_eq!(
+		body["rows"]["studyRegistrationNumbers"][0]["registration_number"],
+		"NCT-2026-001"
+	);
+	assert_eq!(
+		body["rows"]["studyRegistrationNumbers"][0]["country_code"],
+		"KR"
+	);
+	assert_eq!(
+		body["rows"]["studyInformation"]["fdaCrossReportedIndNumbers"][0]
+			["ind_number"],
+		"654321"
+	);
+	assert_eq!(
+		body["rows"]["studyInformation"]["fdaCrossReportedIndNumbers"][0]
+			["ind_number_null_flavor"],
+		"UNK"
+	);
+
+	let (status, reloaded) = get_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/editor/pages/SI"),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK, "{reloaded}");
+	assert_eq!(reloaded["rows"], body["rows"]);
 
 	Ok(())
 }

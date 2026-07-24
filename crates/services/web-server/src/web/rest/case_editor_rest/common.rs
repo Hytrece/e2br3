@@ -81,9 +81,12 @@ pub(super) use lib_core::model::safety_report::{
 	PrimarySourceForCreate, PrimarySourceForUpdate, SafetyReportIdentificationBmc,
 	SafetyReportIdentificationForUpdate, SenderInformationBmc,
 	SenderInformationFilter, SenderInformationForCreate, SenderInformationForUpdate,
+	StudyFdaCrossReportedIndBmc, StudyFdaCrossReportedIndFilter,
+	StudyFdaCrossReportedIndForCreate, StudyFdaCrossReportedIndForUpdate,
 	StudyInformationBmc, StudyInformationFilter, StudyInformationForCreate,
 	StudyInformationForUpdate, StudyRegistrationNumberBmc,
-	StudyRegistrationNumberFilter,
+	StudyRegistrationNumberFilter, StudyRegistrationNumberForCreate,
+	StudyRegistrationNumberForUpdate,
 };
 pub(super) use lib_core::model::test_result::{
 	TestResultBmc, TestResultForCreate, TestResultForUpdate,
