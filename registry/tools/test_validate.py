@@ -10,6 +10,24 @@ import editor_contract
 
 
 class RegistryValidatorTests(unittest.TestCase):
+    def test_lr_editor_contract_does_not_misclassify_constraints_as_business_validation(self):
+        repo = Path(__file__).resolve().parents[2]
+        contract = json.loads(
+            (repo / "registry/editor-contracts/lr.json").read_text(encoding="utf-8")
+        )
+
+        self.assertEqual(
+            {
+                field["code"]: field["businessValidation"]["status"]
+                for field in contract["fields"]
+            },
+            {
+                "C.4.r.1": "not_applicable",
+                "C.4.r.local.referenceTextNullFlavor": "not_applicable",
+                "C.4.r.2": "not_applicable",
+            },
+        )
+
     def test_drug_registry_has_no_local_frequency_value(self):
         repo = Path(__file__).resolve().parents[2]
         rows = json.loads(
