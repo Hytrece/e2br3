@@ -256,6 +256,60 @@ class RegistryValidatorTests(unittest.TestCase):
 
         self.assertEqual([], result.errors)
 
+    def test_default_validation_enforces_audited_source_coverage(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self.write_registry(
+                root,
+                json.dumps([self.editor_row(status="incomplete")]),
+            )
+            rules = root / "dictionary" / "rules"
+            rules.mkdir(parents=True)
+            (rules / "ich.json").write_text(
+                json.dumps(
+                    {
+                        "authority": "ICH",
+                        "source": "fixture",
+                        "rules": {"C.1.3": "report type requirement"},
+                    }
+                ),
+                encoding="utf-8",
+            )
+            contracts = root / "editor-contracts"
+            contracts.mkdir()
+            (contracts / "ci.json").write_text(
+                json.dumps(
+                    {
+                        "pageId": "CI",
+                        "registryFile": "sections/c-safety-report.json",
+                        "fields": [
+                            {"code": "C.1.3", "authority": "ICH"}
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (root / "rule-source-coverage.json").write_text(
+                json.dumps(
+                    {
+                        "version": 1,
+                        "auditedPages": ["CI"],
+                        "sources": [],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            result = validate.validate_registry(
+                root,
+                validate_backend_inventory=False,
+            )
+
+        self.assertIn(
+            "missing ICH/C.1.3 source coverage",
+            result.errors,
+        )
+
     def valid_row(self, overrides: dict[str, str] | None = None) -> str:
         values = {
             "authority": "ICH",

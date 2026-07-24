@@ -13,6 +13,8 @@ mod h_narrative_policy;
 mod mfds_context;
 mod portable_bindings;
 mod portable_constraints;
+#[cfg(test)]
+mod rule_source_coverage_tests;
 pub mod xml;
 
 pub use self::xml::shared_specs::*;

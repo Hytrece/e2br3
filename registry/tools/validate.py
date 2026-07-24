@@ -9,6 +9,7 @@ from typing import Any
 
 import extract_frontend_fields
 import editor_contract
+import rule_source_coverage
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -759,6 +760,15 @@ def validate_registry(
             result.add(str(error))
         else:
             editor_contract.validate_editor_contract(registry_rows, contract, result)
+
+    if (root / "rule-source-coverage.json").is_file():
+        coverage = rule_source_coverage.validate_coverage_structure(root, result)
+        rule_source_coverage.validate_editor_coverage(
+            root,
+            registry_rows,
+            coverage,
+            result,
+        )
 
     if validate_dictionary_membership:
         if not dictionaries:
