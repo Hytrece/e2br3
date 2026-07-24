@@ -4,14 +4,8 @@ use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::Json;
 use lib_core::model::acs::{
-	PRIMARY_SOURCE_CREATE, PRIMARY_SOURCE_DELETE, PRIMARY_SOURCE_LIST,
-	PRIMARY_SOURCE_READ, PRIMARY_SOURCE_UPDATE, SAFETY_REPORT_READ,
-	SAFETY_REPORT_UPDATE, SENDER_INFORMATION_CREATE, SENDER_INFORMATION_DELETE,
-	SENDER_INFORMATION_LIST, SENDER_INFORMATION_READ, SENDER_INFORMATION_UPDATE,
-	STUDY_INFORMATION_CREATE, STUDY_INFORMATION_DELETE, STUDY_INFORMATION_LIST,
-	STUDY_INFORMATION_READ, STUDY_INFORMATION_UPDATE, STUDY_REGISTRATION_CREATE,
-	STUDY_REGISTRATION_DELETE, STUDY_REGISTRATION_LIST, STUDY_REGISTRATION_READ,
-	STUDY_REGISTRATION_UPDATE,
+	STUDY_REGISTRATION_CREATE, STUDY_REGISTRATION_DELETE, STUDY_REGISTRATION_LIST,
+	STUDY_REGISTRATION_READ, STUDY_REGISTRATION_UPDATE,
 };
 use lib_core::model::case::{
 	CaseBmc, CaseForUpdate, SourceDocument, SourceDocumentBmc, SourceDocumentFilter,
@@ -217,90 +211,159 @@ async fn normalize_primary_source_flags(
 pub async fn create_sender_information(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 	Path(case_id): Path<Uuid>,
 	Json(params): Json<ParamsForCreate<SenderInformationForCreate>>,
 ) -> Result<(StatusCode, Json<DataRestResult<SenderInformation>>)> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, SENDER_INFORMATION_CREATE)?;
-	require_case_write_allowed(&ctx, &mm, case_id).await?;
-	let ParamsForCreate { data } = params;
-	let mut data = data;
-	data.case_id = case_id;
-
-	let id = SenderInformationBmc::create(&ctx, &mm, data).await?;
-	let entity = SenderInformationBmc::get(&ctx, &mm, id).await?;
-	Ok((StatusCode::CREATED, Json(DataRestResult { data: entity })))
+	lib_rest_core::with_authorized_case_child_mutation(
+		&ctx,
+		&snapshot,
+		&mm,
+		case_id,
+		"sender-information:new",
+		move |ctx, mm| {
+			Box::pin(async move {
+				let ParamsForCreate { data } = params;
+				let mut data = data;
+				data.case_id = case_id;
+				let id = SenderInformationBmc::create(ctx, mm, data).await?;
+				let entity = SenderInformationBmc::get(ctx, mm, id).await?;
+				Ok((StatusCode::CREATED, Json(DataRestResult { data: entity })))
+			})
+		},
+	)
+	.await
 }
 
 /// GET /api/cases/{case_id}/safety-report/senders
 pub async fn list_sender_information(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 	Path(case_id): Path<Uuid>,
 ) -> Result<(StatusCode, Json<DataRestResult<Vec<SenderInformation>>>)> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, SENDER_INFORMATION_LIST)?;
-	lib_rest_core::require_case_read_allowed(&ctx, &mm, case_id).await?;
-	let filter = SenderInformationFilter {
-		case_id: Some(OpValsValue::from(vec![OpValValue::Eq(json!(
-			case_id.to_string()
-		))])),
-	};
-	let entities = SenderInformationBmc::list(
+	lib_rest_core::with_authorized_case_child_read(
 		&ctx,
+		&snapshot,
 		&mm,
-		Some(vec![filter]),
-		Some(ListOptions::default()),
+		case_id,
+		"sender-information:list",
+		move |ctx, mm| {
+			Box::pin(async move {
+				let filter = SenderInformationFilter {
+					case_id: Some(OpValsValue::from(vec![OpValValue::Eq(json!(
+						case_id.to_string()
+					))])),
+				};
+				let entities = SenderInformationBmc::list(
+					ctx,
+					mm,
+					Some(vec![filter]),
+					Some(ListOptions::default()),
+				)
+				.await?;
+				Ok((StatusCode::OK, Json(DataRestResult { data: entities })))
+			})
+		},
 	)
-	.await?;
-	Ok((StatusCode::OK, Json(DataRestResult { data: entities })))
+	.await
 }
 
 /// GET /api/cases/{case_id}/safety-report/senders/{id}
 pub async fn get_sender_information(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 	Path((case_id, id)): Path<(Uuid, Uuid)>,
 ) -> Result<(StatusCode, Json<DataRestResult<SenderInformation>>)> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, SENDER_INFORMATION_READ)?;
-	lib_rest_core::require_case_read_allowed(&ctx, &mm, case_id).await?;
-	let entity = SenderInformationBmc::get(&ctx, &mm, id).await?;
-	ensure_case_scope(case_id, entity.case_id, id, "sender_information")?;
-	Ok((StatusCode::OK, Json(DataRestResult { data: entity })))
+	lib_rest_core::with_authorized_case_child_read(
+		&ctx,
+		&snapshot,
+		&mm,
+		case_id,
+		format!("sender-information:{id}"),
+		move |ctx, mm| {
+			Box::pin(async move {
+				let entity = SenderInformationBmc::get(ctx, mm, id).await?;
+				ensure_case_scope(
+					case_id,
+					entity.case_id,
+					id,
+					"sender_information",
+				)?;
+				Ok((StatusCode::OK, Json(DataRestResult { data: entity })))
+			})
+		},
+	)
+	.await
 }
 
 /// PUT /api/cases/{case_id}/safety-report/senders/{id}
 pub async fn update_sender_information(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 	Path((case_id, id)): Path<(Uuid, Uuid)>,
 	Json(params): Json<ParamsForUpdate<SenderInformationForUpdate>>,
 ) -> Result<(StatusCode, Json<DataRestResult<SenderInformation>>)> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, SENDER_INFORMATION_UPDATE)?;
-	require_case_write_allowed(&ctx, &mm, case_id).await?;
-	let ParamsForUpdate { data } = params;
-	let entity = SenderInformationBmc::get(&ctx, &mm, id).await?;
-	ensure_case_scope(case_id, entity.case_id, id, "sender_information")?;
-	SenderInformationBmc::update(&ctx, &mm, id, data).await?;
-	let entity = SenderInformationBmc::get(&ctx, &mm, id).await?;
-	Ok((StatusCode::OK, Json(DataRestResult { data: entity })))
+	lib_rest_core::with_authorized_case_child_mutation(
+		&ctx,
+		&snapshot,
+		&mm,
+		case_id,
+		format!("sender-information:{id}"),
+		move |ctx, mm| {
+			Box::pin(async move {
+				let entity = SenderInformationBmc::get(ctx, mm, id).await?;
+				ensure_case_scope(
+					case_id,
+					entity.case_id,
+					id,
+					"sender_information",
+				)?;
+				let ParamsForUpdate { data } = params;
+				SenderInformationBmc::update(ctx, mm, id, data).await?;
+				let entity = SenderInformationBmc::get(ctx, mm, id).await?;
+				Ok((StatusCode::OK, Json(DataRestResult { data: entity })))
+			})
+		},
+	)
+	.await
 }
 
 /// DELETE /api/cases/{case_id}/safety-report/senders/{id}
 pub async fn delete_sender_information(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 	Path((case_id, id)): Path<(Uuid, Uuid)>,
 ) -> Result<StatusCode> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, SENDER_INFORMATION_DELETE)?;
-	require_case_write_allowed(&ctx, &mm, case_id).await?;
-	let entity = SenderInformationBmc::get(&ctx, &mm, id).await?;
-	ensure_case_scope(case_id, entity.case_id, id, "sender_information")?;
-	SenderInformationBmc::delete(&ctx, &mm, id).await?;
-	Ok(StatusCode::NO_CONTENT)
+	lib_rest_core::with_authorized_case_child_mutation(
+		&ctx,
+		&snapshot,
+		&mm,
+		case_id,
+		format!("sender-information:{id}"),
+		move |ctx, mm| {
+			Box::pin(async move {
+				let entity = SenderInformationBmc::get(ctx, mm, id).await?;
+				ensure_case_scope(
+					case_id,
+					entity.case_id,
+					id,
+					"sender_information",
+				)?;
+				SenderInformationBmc::delete(ctx, mm, id).await?;
+				Ok(StatusCode::NO_CONTENT)
+			})
+		},
+	)
+	.await
 }
 
 // -- Primary Sources (C.2.r)
@@ -309,130 +372,213 @@ pub async fn delete_sender_information(
 pub async fn create_primary_source(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 	Path(case_id): Path<Uuid>,
 	Json(params): Json<ParamsForCreate<PrimarySourceForCreate>>,
 ) -> Result<(StatusCode, Json<DataRestResult<PrimarySource>>)> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, PRIMARY_SOURCE_CREATE)?;
-	require_case_write_allowed(&ctx, &mm, case_id).await?;
-	let ParamsForCreate { data } = params;
-	let mut data = data;
-	data.case_id = case_id;
-	data.primary_source_regulatory =
-		normalize_primary_source_regulatory_value(data.primary_source_regulatory)?;
-
-	let id = PrimarySourceBmc::create(&ctx, &mm, data).await?;
-	let preferred_primary_id = PrimarySourceBmc::get(&ctx, &mm, id)
-		.await?
-		.primary_source_regulatory
-		.as_deref()
-		.filter(|value| *value == "1")
-		.map(|_| id);
-	normalize_primary_source_flags(&ctx, &mm, case_id, preferred_primary_id).await?;
-	mark_case_dirty_c(&ctx, &mm, case_id).await?;
-	let entity = PrimarySourceBmc::get(&ctx, &mm, id).await?;
-	Ok((StatusCode::CREATED, Json(DataRestResult { data: entity })))
+	lib_rest_core::with_authorized_case_child_mutation(
+		&ctx,
+		&snapshot,
+		&mm,
+		case_id,
+		"primary-source:new",
+		move |ctx, mm| {
+			Box::pin(async move {
+				let ParamsForCreate { data } = params;
+				let mut data = data;
+				data.case_id = case_id;
+				data.primary_source_regulatory =
+					normalize_primary_source_regulatory_value(
+						data.primary_source_regulatory,
+					)?;
+				let id = PrimarySourceBmc::create(ctx, mm, data).await?;
+				let preferred_primary_id = PrimarySourceBmc::get(ctx, mm, id)
+					.await?
+					.primary_source_regulatory
+					.as_deref()
+					.filter(|value| *value == "1")
+					.map(|_| id);
+				normalize_primary_source_flags(
+					ctx,
+					mm,
+					case_id,
+					preferred_primary_id,
+				)
+				.await?;
+				mark_case_dirty_c(ctx, mm, case_id).await?;
+				let entity = PrimarySourceBmc::get(ctx, mm, id).await?;
+				Ok((StatusCode::CREATED, Json(DataRestResult { data: entity })))
+			})
+		},
+	)
+	.await
 }
 
 /// GET /api/cases/{case_id}/safety-report/primary-sources
 pub async fn list_primary_sources(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 	Path(case_id): Path<Uuid>,
 ) -> Result<(StatusCode, Json<DataRestResult<Vec<PrimarySource>>>)> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, PRIMARY_SOURCE_LIST)?;
-	let filter = PrimarySourceFilter {
-		case_id: Some(OpValsValue::from(vec![OpValValue::Eq(json!(
-			case_id.to_string()
-		))])),
-		..Default::default()
-	};
-	let entities = PrimarySourceBmc::list(
+	lib_rest_core::with_authorized_case_child_read(
 		&ctx,
+		&snapshot,
 		&mm,
-		Some(vec![filter]),
-		Some(ListOptions::default()),
+		case_id,
+		"primary-source:list",
+		move |ctx, mm| {
+			Box::pin(async move {
+				let filter = PrimarySourceFilter {
+					case_id: Some(OpValsValue::from(vec![OpValValue::Eq(json!(
+						case_id.to_string()
+					))])),
+					..Default::default()
+				};
+				let entities = PrimarySourceBmc::list(
+					ctx,
+					mm,
+					Some(vec![filter]),
+					Some(ListOptions::default()),
+				)
+				.await?;
+				Ok((StatusCode::OK, Json(DataRestResult { data: entities })))
+			})
+		},
 	)
-	.await?;
-	Ok((StatusCode::OK, Json(DataRestResult { data: entities })))
+	.await
 }
 
 /// GET /api/cases/{case_id}/safety-report/primary-sources/{id}
 pub async fn get_primary_source(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 	Path((case_id, id)): Path<(Uuid, Uuid)>,
 ) -> Result<(StatusCode, Json<DataRestResult<PrimarySource>>)> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, PRIMARY_SOURCE_READ)?;
-	let entity = PrimarySourceBmc::get(&ctx, &mm, id).await?;
-	ensure_case_scope(case_id, entity.case_id, id, "primary_sources")?;
-	Ok((StatusCode::OK, Json(DataRestResult { data: entity })))
+	lib_rest_core::with_authorized_case_child_read(
+		&ctx,
+		&snapshot,
+		&mm,
+		case_id,
+		format!("primary-source:{id}"),
+		move |ctx, mm| {
+			Box::pin(async move {
+				let entity = PrimarySourceBmc::get(ctx, mm, id).await?;
+				ensure_case_scope(case_id, entity.case_id, id, "primary_sources")?;
+				Ok((StatusCode::OK, Json(DataRestResult { data: entity })))
+			})
+		},
+	)
+	.await
 }
 
 /// PUT /api/cases/{case_id}/safety-report/primary-sources/{id}
 pub async fn update_primary_source(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 	Path((case_id, id)): Path<(Uuid, Uuid)>,
 	Json(params): Json<ParamsForUpdate<PrimarySourceForUpdate>>,
 ) -> Result<(StatusCode, Json<DataRestResult<PrimarySource>>)> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, PRIMARY_SOURCE_UPDATE)?;
-	require_case_write_allowed(&ctx, &mm, case_id).await?;
-	let ParamsForUpdate { data } = params;
-	let mut data = data;
-	data.primary_source_regulatory =
-		normalize_primary_source_regulatory_value(data.primary_source_regulatory)?;
-	let entity = PrimarySourceBmc::get(&ctx, &mm, id).await?;
-	ensure_case_scope(case_id, entity.case_id, id, "primary_sources")?;
-	PrimarySourceBmc::update(&ctx, &mm, id, data).await?;
-	let preferred_primary_id = PrimarySourceBmc::get(&ctx, &mm, id)
-		.await?
-		.primary_source_regulatory
-		.as_deref()
-		.filter(|value| *value == "1")
-		.map(|_| id);
-	normalize_primary_source_flags(&ctx, &mm, case_id, preferred_primary_id).await?;
-	mark_case_dirty_c(&ctx, &mm, case_id).await?;
-	let entity = PrimarySourceBmc::get(&ctx, &mm, id).await?;
-	Ok((StatusCode::OK, Json(DataRestResult { data: entity })))
+	lib_rest_core::with_authorized_case_child_mutation(
+		&ctx,
+		&snapshot,
+		&mm,
+		case_id,
+		format!("primary-source:{id}"),
+		move |ctx, mm| {
+			Box::pin(async move {
+				let ParamsForUpdate { data } = params;
+				let mut data = data;
+				data.primary_source_regulatory =
+					normalize_primary_source_regulatory_value(
+						data.primary_source_regulatory,
+					)?;
+				let entity = PrimarySourceBmc::get(ctx, mm, id).await?;
+				ensure_case_scope(case_id, entity.case_id, id, "primary_sources")?;
+				PrimarySourceBmc::update(ctx, mm, id, data).await?;
+				let preferred_primary_id = PrimarySourceBmc::get(ctx, mm, id)
+					.await?
+					.primary_source_regulatory
+					.as_deref()
+					.filter(|value| *value == "1")
+					.map(|_| id);
+				normalize_primary_source_flags(
+					ctx,
+					mm,
+					case_id,
+					preferred_primary_id,
+				)
+				.await?;
+				mark_case_dirty_c(ctx, mm, case_id).await?;
+				let entity = PrimarySourceBmc::get(ctx, mm, id).await?;
+				Ok((StatusCode::OK, Json(DataRestResult { data: entity })))
+			})
+		},
+	)
+	.await
 }
 
 /// DELETE /api/cases/{case_id}/safety-report/primary-sources/{id}
 pub async fn delete_primary_source(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 	Path((case_id, id)): Path<(Uuid, Uuid)>,
 ) -> Result<StatusCode> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, PRIMARY_SOURCE_DELETE)?;
-	require_case_write_allowed(&ctx, &mm, case_id).await?;
-	let entity = PrimarySourceBmc::get(&ctx, &mm, id).await?;
-	ensure_case_scope(case_id, entity.case_id, id, "primary_sources")?;
-	PrimarySourceBmc::delete(&ctx, &mm, id).await?;
-	normalize_primary_source_flags(&ctx, &mm, case_id, None).await?;
-	mark_case_dirty_c(&ctx, &mm, case_id).await?;
-	Ok(StatusCode::NO_CONTENT)
+	lib_rest_core::with_authorized_case_child_mutation(
+		&ctx,
+		&snapshot,
+		&mm,
+		case_id,
+		format!("primary-source:{id}"),
+		move |ctx, mm| {
+			Box::pin(async move {
+				let entity = PrimarySourceBmc::get(ctx, mm, id).await?;
+				ensure_case_scope(case_id, entity.case_id, id, "primary_sources")?;
+				PrimarySourceBmc::delete(ctx, mm, id).await?;
+				normalize_primary_source_flags(ctx, mm, case_id, None).await?;
+				mark_case_dirty_c(ctx, mm, case_id).await?;
+				Ok(StatusCode::NO_CONTENT)
+			})
+		},
+	)
+	.await
 }
 
 /// POST /api/cases/{case_id}/safety-report/primary-sources/{id}/restore
 pub async fn restore_primary_source(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 	Path((case_id, id)): Path<(Uuid, Uuid)>,
 ) -> Result<(StatusCode, Json<DataRestResult<PrimarySource>>)> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, PRIMARY_SOURCE_UPDATE)?;
-	require_case_write_allowed(&ctx, &mm, case_id).await?;
-	let entity = PrimarySourceBmc::get(&ctx, &mm, id).await?;
-	ensure_case_scope(case_id, entity.case_id, id, "primary_sources")?;
-	PrimarySourceBmc::restore(&ctx, &mm, id).await?;
-	normalize_primary_source_flags(&ctx, &mm, case_id, Some(id)).await?;
-	mark_case_dirty_c(&ctx, &mm, case_id).await?;
-	let entity = PrimarySourceBmc::get(&ctx, &mm, id).await?;
-	Ok((StatusCode::OK, Json(DataRestResult { data: entity })))
+	lib_rest_core::with_authorized_case_child_mutation(
+		&ctx,
+		&snapshot,
+		&mm,
+		case_id,
+		format!("primary-source:{id}"),
+		move |ctx, mm| {
+			Box::pin(async move {
+				let entity = PrimarySourceBmc::get(ctx, mm, id).await?;
+				ensure_case_scope(case_id, entity.case_id, id, "primary_sources")?;
+				PrimarySourceBmc::restore(ctx, mm, id).await?;
+				normalize_primary_source_flags(ctx, mm, case_id, Some(id)).await?;
+				mark_case_dirty_c(ctx, mm, case_id).await?;
+				let entity = PrimarySourceBmc::get(ctx, mm, id).await?;
+				Ok((StatusCode::OK, Json(DataRestResult { data: entity })))
+			})
+		},
+	)
+	.await
 }
 
 // -- Literature References (C.4.r)
@@ -441,78 +587,121 @@ pub async fn restore_primary_source(
 pub async fn create_source_document(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 	Path(case_id): Path<Uuid>,
 	Json(params): Json<ParamsForCreate<SourceDocumentForCreate>>,
 ) -> Result<(StatusCode, Json<DataRestResult<SourceDocument>>)> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, SAFETY_REPORT_UPDATE)?;
-	require_case_write_allowed(&ctx, &mm, case_id).await?;
-	let ParamsForCreate { data } = params;
-	let mut data = data;
-	data.case_id = case_id;
-
-	let id = SourceDocumentBmc::create(&ctx, &mm, data).await?;
-	mark_case_dirty_c(&ctx, &mm, case_id).await?;
-	let entity = SourceDocumentBmc::get(&ctx, &mm, id).await?;
-	Ok((StatusCode::CREATED, Json(DataRestResult { data: entity })))
+	lib_rest_core::with_authorized_case_child_mutation(
+		&ctx,
+		&snapshot,
+		&mm,
+		case_id,
+		"source-document:new",
+		move |ctx, mm| {
+			Box::pin(async move {
+				let ParamsForCreate { data } = params;
+				let mut data = data;
+				data.case_id = case_id;
+				let id = SourceDocumentBmc::create(ctx, mm, data).await?;
+				mark_case_dirty_c(ctx, mm, case_id).await?;
+				let entity = SourceDocumentBmc::get(ctx, mm, id).await?;
+				Ok((StatusCode::CREATED, Json(DataRestResult { data: entity })))
+			})
+		},
+	)
+	.await
 }
 
 /// GET /api/cases/{case_id}/source-documents
 pub async fn list_source_documents(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 	Path(case_id): Path<Uuid>,
 ) -> Result<(StatusCode, Json<DataRestResult<Vec<SourceDocument>>>)> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, SAFETY_REPORT_READ)?;
-	lib_rest_core::require_case_read_allowed(&ctx, &mm, case_id).await?;
-	let filter = SourceDocumentFilter {
-		case_id: Some(OpValsValue::from(vec![OpValValue::Eq(json!(
-			case_id.to_string()
-		))])),
-	};
-	let entities = SourceDocumentBmc::list(
+	lib_rest_core::with_authorized_case_child_read(
 		&ctx,
+		&snapshot,
 		&mm,
-		Some(vec![filter]),
-		Some(ListOptions::default()),
+		case_id,
+		"source-document:list",
+		move |ctx, mm| {
+			Box::pin(async move {
+				let filter = SourceDocumentFilter {
+					case_id: Some(OpValsValue::from(vec![OpValValue::Eq(json!(
+						case_id.to_string()
+					))])),
+				};
+				let entities = SourceDocumentBmc::list(
+					ctx,
+					mm,
+					Some(vec![filter]),
+					Some(ListOptions::default()),
+				)
+				.await?;
+				Ok((StatusCode::OK, Json(DataRestResult { data: entities })))
+			})
+		},
 	)
-	.await?;
-	Ok((StatusCode::OK, Json(DataRestResult { data: entities })))
+	.await
 }
 
 /// PUT /api/cases/{case_id}/source-documents/{id}
 pub async fn update_source_document(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 	Path((case_id, id)): Path<(Uuid, Uuid)>,
 	Json(params): Json<ParamsForUpdate<SourceDocumentForUpdate>>,
 ) -> Result<(StatusCode, Json<DataRestResult<SourceDocument>>)> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, SAFETY_REPORT_UPDATE)?;
-	require_case_write_allowed(&ctx, &mm, case_id).await?;
-	let entity = SourceDocumentBmc::get(&ctx, &mm, id).await?;
-	ensure_case_scope(case_id, entity.case_id, id, "source_documents")?;
-	SourceDocumentBmc::update(&ctx, &mm, id, params.data).await?;
-	mark_case_dirty_c(&ctx, &mm, case_id).await?;
-	let entity = SourceDocumentBmc::get(&ctx, &mm, id).await?;
-	Ok((StatusCode::OK, Json(DataRestResult { data: entity })))
+	lib_rest_core::with_authorized_case_child_mutation(
+		&ctx,
+		&snapshot,
+		&mm,
+		case_id,
+		format!("source-document:{id}"),
+		move |ctx, mm| {
+			Box::pin(async move {
+				let entity = SourceDocumentBmc::get(ctx, mm, id).await?;
+				ensure_case_scope(case_id, entity.case_id, id, "source_documents")?;
+				SourceDocumentBmc::update(ctx, mm, id, params.data).await?;
+				mark_case_dirty_c(ctx, mm, case_id).await?;
+				let entity = SourceDocumentBmc::get(ctx, mm, id).await?;
+				Ok((StatusCode::OK, Json(DataRestResult { data: entity })))
+			})
+		},
+	)
+	.await
 }
 
 /// DELETE /api/cases/{case_id}/source-documents/{id}
 pub async fn delete_source_document(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 	Path((case_id, id)): Path<(Uuid, Uuid)>,
 ) -> Result<StatusCode> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, SAFETY_REPORT_UPDATE)?;
-	require_case_write_allowed(&ctx, &mm, case_id).await?;
-	let entity = SourceDocumentBmc::get(&ctx, &mm, id).await?;
-	ensure_case_scope(case_id, entity.case_id, id, "source_documents")?;
-	SourceDocumentBmc::delete(&ctx, &mm, id).await?;
-	mark_case_dirty_c(&ctx, &mm, case_id).await?;
-	Ok(StatusCode::NO_CONTENT)
+	lib_rest_core::with_authorized_case_child_mutation(
+		&ctx,
+		&snapshot,
+		&mm,
+		case_id,
+		format!("source-document:{id}"),
+		move |ctx, mm| {
+			Box::pin(async move {
+				let entity = SourceDocumentBmc::get(ctx, mm, id).await?;
+				ensure_case_scope(case_id, entity.case_id, id, "source_documents")?;
+				SourceDocumentBmc::delete(ctx, mm, id).await?;
+				mark_case_dirty_c(ctx, mm, case_id).await?;
+				Ok(StatusCode::NO_CONTENT)
+			})
+		},
+	)
+	.await
 }
 
 lib_rest_core::generate_patient_child_rest_fns! {
@@ -561,90 +750,144 @@ lib_rest_core::generate_patient_child_rest_fns! {
 pub async fn create_study_information(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 	Path(case_id): Path<Uuid>,
 	Json(params): Json<ParamsForCreate<StudyInformationForCreate>>,
 ) -> Result<(StatusCode, Json<DataRestResult<StudyInformation>>)> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, STUDY_INFORMATION_CREATE)?;
-	require_case_write_allowed(&ctx, &mm, case_id).await?;
-	let ParamsForCreate { data } = params;
-	let mut data = data;
-	data.case_id = case_id;
-
-	let id = StudyInformationBmc::create(&ctx, &mm, data).await?;
-	let entity = StudyInformationBmc::get(&ctx, &mm, id).await?;
-	Ok((StatusCode::CREATED, Json(DataRestResult { data: entity })))
+	lib_rest_core::with_authorized_case_child_mutation(
+		&ctx,
+		&snapshot,
+		&mm,
+		case_id,
+		"study-information:new",
+		move |ctx, mm| {
+			Box::pin(async move {
+				let ParamsForCreate { data } = params;
+				let mut data = data;
+				data.case_id = case_id;
+				let id = StudyInformationBmc::create(ctx, mm, data).await?;
+				let entity = StudyInformationBmc::get(ctx, mm, id).await?;
+				Ok((StatusCode::CREATED, Json(DataRestResult { data: entity })))
+			})
+		},
+	)
+	.await
 }
 
 /// GET /api/cases/{case_id}/safety-report/studies
 pub async fn list_study_information(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 	Path(case_id): Path<Uuid>,
 ) -> Result<(StatusCode, Json<DataRestResult<Vec<StudyInformation>>>)> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, STUDY_INFORMATION_LIST)?;
-	lib_rest_core::require_case_read_allowed(&ctx, &mm, case_id).await?;
-	let filter = StudyInformationFilter {
-		case_id: Some(OpValsValue::from(vec![OpValValue::Eq(json!(
-			case_id.to_string()
-		))])),
-	};
-	let entities = StudyInformationBmc::list(
+	lib_rest_core::with_authorized_case_child_read(
 		&ctx,
+		&snapshot,
 		&mm,
-		Some(vec![filter]),
-		Some(ListOptions::default()),
+		case_id,
+		"study-information:list",
+		move |ctx, mm| {
+			Box::pin(async move {
+				let filter = StudyInformationFilter {
+					case_id: Some(OpValsValue::from(vec![OpValValue::Eq(json!(
+						case_id.to_string()
+					))])),
+				};
+				let entities = StudyInformationBmc::list(
+					ctx,
+					mm,
+					Some(vec![filter]),
+					Some(ListOptions::default()),
+				)
+				.await?;
+				Ok((StatusCode::OK, Json(DataRestResult { data: entities })))
+			})
+		},
 	)
-	.await?;
-	Ok((StatusCode::OK, Json(DataRestResult { data: entities })))
+	.await
 }
 
 /// GET /api/cases/{case_id}/safety-report/studies/{id}
 pub async fn get_study_information(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 	Path((case_id, id)): Path<(Uuid, Uuid)>,
 ) -> Result<(StatusCode, Json<DataRestResult<StudyInformation>>)> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, STUDY_INFORMATION_READ)?;
-	lib_rest_core::require_case_read_allowed(&ctx, &mm, case_id).await?;
-	let entity = StudyInformationBmc::get(&ctx, &mm, id).await?;
-	ensure_case_scope(case_id, entity.case_id, id, "study_information")?;
-	Ok((StatusCode::OK, Json(DataRestResult { data: entity })))
+	lib_rest_core::with_authorized_case_child_read(
+		&ctx,
+		&snapshot,
+		&mm,
+		case_id,
+		format!("study-information:{id}"),
+		move |ctx, mm| {
+			Box::pin(async move {
+				let entity = StudyInformationBmc::get(ctx, mm, id).await?;
+				ensure_case_scope(case_id, entity.case_id, id, "study_information")?;
+				Ok((StatusCode::OK, Json(DataRestResult { data: entity })))
+			})
+		},
+	)
+	.await
 }
 
 /// PUT /api/cases/{case_id}/safety-report/studies/{id}
 pub async fn update_study_information(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 	Path((case_id, id)): Path<(Uuid, Uuid)>,
 	Json(params): Json<ParamsForUpdate<StudyInformationForUpdate>>,
 ) -> Result<(StatusCode, Json<DataRestResult<StudyInformation>>)> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, STUDY_INFORMATION_UPDATE)?;
-	require_case_write_allowed(&ctx, &mm, case_id).await?;
-	let ParamsForUpdate { data } = params;
-	let entity = StudyInformationBmc::get(&ctx, &mm, id).await?;
-	ensure_case_scope(case_id, entity.case_id, id, "study_information")?;
-	StudyInformationBmc::update(&ctx, &mm, id, data).await?;
-	let entity = StudyInformationBmc::get(&ctx, &mm, id).await?;
-	Ok((StatusCode::OK, Json(DataRestResult { data: entity })))
+	lib_rest_core::with_authorized_case_child_mutation(
+		&ctx,
+		&snapshot,
+		&mm,
+		case_id,
+		format!("study-information:{id}"),
+		move |ctx, mm| {
+			Box::pin(async move {
+				let entity = StudyInformationBmc::get(ctx, mm, id).await?;
+				ensure_case_scope(case_id, entity.case_id, id, "study_information")?;
+				let ParamsForUpdate { data } = params;
+				StudyInformationBmc::update(ctx, mm, id, data).await?;
+				let entity = StudyInformationBmc::get(ctx, mm, id).await?;
+				Ok((StatusCode::OK, Json(DataRestResult { data: entity })))
+			})
+		},
+	)
+	.await
 }
 
 /// DELETE /api/cases/{case_id}/safety-report/studies/{id}
 pub async fn delete_study_information(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 	Path((case_id, id)): Path<(Uuid, Uuid)>,
 ) -> Result<StatusCode> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, STUDY_INFORMATION_DELETE)?;
-	require_case_write_allowed(&ctx, &mm, case_id).await?;
-	let entity = StudyInformationBmc::get(&ctx, &mm, id).await?;
-	ensure_case_scope(case_id, entity.case_id, id, "study_information")?;
-	StudyInformationBmc::delete(&ctx, &mm, id).await?;
-	Ok(StatusCode::NO_CONTENT)
+	lib_rest_core::with_authorized_case_child_mutation(
+		&ctx,
+		&snapshot,
+		&mm,
+		case_id,
+		format!("study-information:{id}"),
+		move |ctx, mm| {
+			Box::pin(async move {
+				let entity = StudyInformationBmc::get(ctx, mm, id).await?;
+				ensure_case_scope(case_id, entity.case_id, id, "study_information")?;
+				StudyInformationBmc::delete(ctx, mm, id).await?;
+				Ok(StatusCode::NO_CONTENT)
+			})
+		},
+	)
+	.await
 }
 
 // -- Study Registration Numbers (C.5.1.r)
