@@ -11,6 +11,17 @@
       "data_type": "AN",
       "max_length": "1",
       "allowed_values": "<Observation><code>= C54588.  \n1=15-Day\n2=Non-Expedited AE\n4=5-Day \n5=30-Day\n6=7-Day",
+      "allowed_value_constraint": {
+        "kind": "code_set",
+        "values": [
+          "1",
+          "2",
+          "4",
+          "5",
+          "6"
+        ],
+        "enforcement": "case_validate"
+      },
       "oid": "2.16.840.1.113883.3.26.1.1\n2.16.840.1.113883.3.989.5.1.2.2.1.1.1",
       "hl7_data_type": "Coded With Equivalents (CE)",
       "hl7_component": "code=Character String (ST)",
@@ -30,6 +41,9 @@
       "kind": "element",
       "conformance": "mandatory",
       "allowed_values": "<Observation><code>= C156384.  \nfalse, true, nullFlavor:NI",
+      "allowed_value_constraint": {
+        "kind": "descriptive"
+      },
       "hl7_data_type": "Boolean (BL)",
       "profiles": {
         "post_market": "mandatory",
@@ -49,6 +63,9 @@
       "conformance": "mandatory",
       "max_length": "100",
       "allowed_values": "Free Text \nnullFlavor: MSK, ASKU, NASK",
+      "allowed_value_constraint": {
+        "kind": "descriptive"
+      },
       "oid": "2.16.840.1.113883.3.989.2.1.1.22",
       "hl7_data_type": "Telecommunication Address (TEL)",
       "profiles": {
@@ -122,6 +139,9 @@
       "conformance": "mandatory",
       "max_length": "10",
       "allowed_values": "<Observation><code>= C17049.  \nC16352=African American\nC41259=American Indian or Alaska Native\nC41260=Asian\nC41219=Native Hawaiian or Other Pacific Islander\nC41261=White\nnullFlavor: UNK, MSK, OTH, NA",
+      "allowed_value_constraint": {
+        "kind": "descriptive"
+      },
       "oid": "2.16.840.1.113883.3.26.1.1",
       "hl7_data_type": "Coded With Equivalents (CE)",
       "hl7_component": "code=Character String (ST)",
@@ -146,6 +166,9 @@
       "conformance": "mandatory",
       "max_length": "10",
       "allowed_values": "<Observation><code>= C16564.  \nC17459=Hispanic or Latino   \nC41222=Non Hispanic or Latino \nnullFlavor: UNK, MSK, NI, NA",
+      "allowed_value_constraint": {
+        "kind": "descriptive"
+      },
       "oid": "2.16.840.1.113883.3.26.1.1",
       "hl7_data_type": "Coded With Equivalents (CE)",
       "hl7_component": "code=Character String (ST)",
@@ -171,6 +194,10 @@
       "kind": "element",
       "conformance": "mandatory",
       "allowed_values": "true, nullFlavor: NI",
+      "allowed_value_constraint": {
+        "kind": "true_marker",
+        "enforcement": "case_validate"
+      },
       "oid": "2.16.840.1.113883.3.989.2.1.1.19\n2.16.840.1.113883.3.989.5.1.2.2.1.3",
       "profiles": {
         "post_market": "mandatory",
@@ -189,6 +216,13 @@
       "conformance": "conditional_mandatory",
       "max_length": "1",
       "allowed_values": "1=Similar Device",
+      "allowed_value_constraint": {
+        "kind": "code_set",
+        "values": [
+          "1"
+        ],
+        "enforcement": "case_validate"
+      },
       "oid": "2.16.840.1.113883.3.989.5.1.2.1.1.8",
       "profiles": {
         "post_market": "conditional_mandatory"
@@ -204,6 +238,17 @@
       "conformance": "conditional_mandatory",
       "max_length": "2",
       "allowed_values": "1=Test\n2=Reference\n3=Bulk ingredient\n4=Bulk Ingredient For Human Prescription Compounding\n5=Unapproved Drug Product Manufactured Exclusively for Private Label Distributer\nnullFlavor: NA",
+      "allowed_value_constraint": {
+        "kind": "code_set",
+        "values": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5"
+        ],
+        "enforcement": "case_validate"
+      },
       "oid": "2.16.840.1.113883.3.989.5.1.2.1.1.7",
       "profiles": {
         "post_market": "optional",
@@ -223,6 +268,9 @@
       "conformance": "optional",
       "max_length": "10",
       "allowed_values": "<Observation><code>= C94031\nC102834=Type 1: Convenience Kit of Co-Package \nC102835=Type 2: Prefilled Drug Delivery Device/System (syringe, patch, etc.) \nC102836=Type 3: Prefilled Biologic Delivery Device/System (syringe, patch, etc.) \nC102837=Type 4: Device Coated/Impregnated/Otherwise Combined with Drug \nC102838=Type 5: Device Coated or Otherwise Combined with Biologic \nC102839=Type 6: Drug/Biologic Combination \nC102840=Type 7: Separate Products Requiring Cross Labeling \nC102841=Type 8: Possible Combination Based on Cross Labeling of Separate Products (Temporary Type) \nC102842=Type 9: Other Type of Part 3 Combination Product (e.g., Drug/Device/Biological Product)",
+      "allowed_value_constraint": {
+        "kind": "descriptive"
+      },
       "oid": "2.16.840.1.113883.3.26.1.1",
       "profiles": {
         "post_market": "optional",
@@ -237,6 +285,9 @@
       "kind": "element",
       "conformance": "conditional_mandatory",
       "allowed_values": "<Observation><code>= C54026.  \ntrue, false",
+      "allowed_value_constraint": {
+        "kind": "descriptive"
+      },
       "oid": "2.16.840.1.113883.3.26.1.1",
       "profiles": {
         "post_market": "conditional_mandatory",
@@ -254,6 +305,16 @@
       "conformance": "optional",
       "max_length": "1",
       "allowed_values": "<Observation><code>= C54592. \n1=Correction\n2=Additional Informaton\n3=Response to FDA Request\n4= Device Evaluation",
+      "allowed_value_constraint": {
+        "kind": "code_set",
+        "values": [
+          "1",
+          "2",
+          "3",
+          "4"
+        ],
+        "enforcement": "case_validate"
+      },
       "oid": "2.16.840.1.113883.3.26.1.1\n2.16.840.1.113883.3.989.5.1.2.1.1.5",
       "profiles": {
         "post_market": "optional",
@@ -269,6 +330,9 @@
       "conformance": "conditional_mandatory",
       "max_length": "7",
       "allowed_values": "<Observation><code>= C54451.  \nFDA Device Problem Codelist\n(https://www.fda.gov/media/146825/download)",
+      "allowed_value_constraint": {
+        "kind": "descriptive"
+      },
       "oid": "2.16.840.1.113883.3.26.1.1",
       "profiles": {
         "post_market": "conditional_mandatory",
@@ -286,6 +350,9 @@
       "conformance": "conditional_mandatory",
       "max_length": "80",
       "allowed_values": "Free Text\nnullFlavor: NI",
+      "allowed_value_constraint": {
+        "kind": "descriptive"
+      },
       "oid": "2.16.840.1.113883.3.26.1.1",
       "profiles": {
         "post_market": "conditional_mandatory",
@@ -306,6 +373,9 @@
       "conformance": "conditional_mandatory",
       "max_length": "80",
       "allowed_values": "Free Text\nnullFlavor: NI",
+      "allowed_value_constraint": {
+        "kind": "descriptive"
+      },
       "oid": "2.16.840.1.113883.3.26.1.1",
       "profiles": {
         "post_market": "conditional_mandatory",
@@ -326,6 +396,9 @@
       "conformance": "conditional_mandatory",
       "max_length": "10",
       "allowed_values": "FDA Device Component Code\n(https://www.fda.gov/media/146826/download)",
+      "allowed_value_constraint": {
+        "kind": "descriptive"
+      },
       "oid": "2.16.840.1.113883.3.26.1.1",
       "profiles": {
         "post_market": "conditional_mandatory",
@@ -349,6 +422,9 @@
       "conformance": "optional",
       "max_length": "100",
       "allowed_values": "Free Text",
+      "allowed_value_constraint": {
+        "kind": "descriptive"
+      },
       "profiles": {
         "post_market": "optional",
         "vaers": "optional"
@@ -363,6 +439,9 @@
       "conformance": "optional",
       "max_length": "100",
       "allowed_values": "Free Text",
+      "allowed_value_constraint": {
+        "kind": "descriptive"
+      },
       "profiles": {
         "post_market": "optional",
         "vaers": "optional"
@@ -377,6 +456,9 @@
       "conformance": "optional",
       "max_length": "35",
       "allowed_values": "Free Text",
+      "allowed_value_constraint": {
+        "kind": "descriptive"
+      },
       "profiles": {
         "post_market": "optional",
         "vaers": "optional"
@@ -391,6 +473,9 @@
       "conformance": "optional",
       "max_length": "40",
       "allowed_values": "Free Text",
+      "allowed_value_constraint": {
+        "kind": "descriptive"
+      },
       "profiles": {
         "post_market": "optional",
         "vaers": "optional"
@@ -405,6 +490,11 @@
       "conformance": "optional",
       "max_length": "2",
       "allowed_values": "ISO 3166-1 alpha-2, EU",
+      "allowed_value_constraint": {
+        "kind": "vocabulary",
+        "enforcement": "case_validate",
+        "vocabulary_scope": "all"
+      },
       "profiles": {
         "post_market": "optional",
         "vaers": "optional"
@@ -419,6 +509,15 @@
       "conformance": "optional",
       "max_length": "1",
       "allowed_values": "<Observation><code>= C54595\n1=Initial Use of Device\n2=Reuse\n3=Unknown",
+      "allowed_value_constraint": {
+        "kind": "code_set",
+        "values": [
+          "1",
+          "2",
+          "3"
+        ],
+        "enforcement": "case_validate"
+      },
       "oid": "2.16.840.1.113883.3.989.5.1.2.1.1.4",
       "profiles": {
         "post_market": "optional"
@@ -433,6 +532,9 @@
       "conformance": "optional",
       "max_length": "100",
       "allowed_values": "Free Text",
+      "allowed_value_constraint": {
+        "kind": "descriptive"
+      },
       "profiles": {
         "post_market": "optional"
       },
@@ -446,6 +548,15 @@
       "conformance": "optional",
       "max_length": "1",
       "allowed_values": "1= Health Professional              \n2= Lay User/Patient                 \n3= Other",
+      "allowed_value_constraint": {
+        "kind": "code_set",
+        "values": [
+          "1",
+          "2",
+          "3"
+        ],
+        "enforcement": "case_validate"
+      },
       "oid": "2.16.840.1.113883.3.989.5.1.2.1.1.6",
       "profiles": {
         "post_market": "optional"
@@ -460,6 +571,9 @@
       "conformance": "conditional_mandatory",
       "max_length": "1",
       "allowed_values": "<Observation><code>= C54594\n1-Recall\n2-Repair\n3-Replacement\n4-Relabeling\n5-Notification\n6-Inspection\n7-Patient Monitoring\n8-Modification or Adjustment\n9-Other",
+      "allowed_value_constraint": {
+        "kind": "descriptive"
+      },
       "oid": "2.16.840.1.113883.3.989.5.1.2.1.1.3",
       "profiles": {
         "post_market": "conditional_mandatory",

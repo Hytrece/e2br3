@@ -108,6 +108,7 @@ struct EmbeddedDictionaryEntry {
 }
 
 static EMBEDDED_ICH_DICTIONARY: OnceLock<EmbeddedDictionary> = OnceLock::new();
+static EMBEDDED_FDA_DICTIONARY: OnceLock<EmbeddedDictionary> = OnceLock::new();
 static ALLOWED_VALUE_CONSTRAINTS: OnceLock<HashMap<String, AllowedValueConstraint>> =
 	OnceLock::new();
 
@@ -120,17 +121,31 @@ fn embedded_ich_dictionary() -> &'static EmbeddedDictionary {
 	})
 }
 
+fn embedded_fda_dictionary() -> &'static EmbeddedDictionary {
+	EMBEDDED_FDA_DICTIONARY.get_or_init(|| {
+		serde_json::from_str(include_str!(
+			"../../../../registry/dictionary/fda-regional.json"
+		))
+		.expect("embedded FDA dictionary should parse")
+	})
+}
+
 fn allowed_value_constraints() -> &'static HashMap<String, AllowedValueConstraint> {
 	ALLOWED_VALUE_CONSTRAINTS.get_or_init(|| {
-		embedded_ich_dictionary()
-			.entries
-			.iter()
-			.filter_map(|entry| {
-				entry.allowed_value_constraint.clone().map(|constraint| {
-					(format!("ICH.{}.ALLOWED.VALUE", entry.code), constraint)
-				})
-			})
-			.collect()
+		let mut constraints = HashMap::new();
+		for entry in &embedded_ich_dictionary().entries {
+			if let Some(constraint) = entry.allowed_value_constraint.clone() {
+				constraints
+					.insert(format!("ICH.{}.ALLOWED.VALUE", entry.code), constraint);
+			}
+		}
+		for entry in &embedded_fda_dictionary().entries {
+			if let Some(constraint) = entry.allowed_value_constraint.clone() {
+				constraints
+					.insert(format!("{}.ALLOWED.VALUE", entry.code), constraint);
+			}
+		}
+		constraints
 	})
 }
 
@@ -4525,10 +4540,16 @@ pub fn null_flavors_source_hash_for_rule(code: &str) -> Option<u64> {
 }
 
 pub fn null_flavors_for_rule(code: &str) -> Option<&'static [String]> {
-	let element_code = code
-		.strip_prefix("ICH.")?
-		.strip_suffix(".NULLFLAVOR.ALLOWED")?;
-	embedded_ich_dictionary()
+	let element_code = code.strip_suffix(".NULLFLAVOR.ALLOWED")?;
+	let (dictionary, element_code) =
+		if let Some(element_code) = element_code.strip_prefix("ICH.") {
+			(embedded_ich_dictionary(), element_code)
+		} else if element_code.starts_with("FDA.") {
+			(embedded_fda_dictionary(), element_code)
+		} else {
+			return None;
+		};
+	dictionary
 		.entries
 		.iter()
 		.find(|entry| entry.code == element_code)
@@ -5588,6 +5609,7 @@ mod tests {
 			.collect::<BTreeSet<_>>();
 		let catalog_codes = allowed_value_constraints()
 			.keys()
+			.filter(|code| code.starts_with("ICH."))
 			.map(String::as_str)
 			.collect::<BTreeSet<_>>();
 		assert_eq!(
@@ -5597,12 +5619,52 @@ mod tests {
 	}
 
 	#[test]
+	fn fda_dictionary_allowed_value_constraints_match_catalog_exactly() {
+		let dictionary_rules = allowed_value_constraint_dictionary_rules(
+			dictionary_from_json(include_str!(
+				"../../../../registry/dictionary/fda-regional.json"
+			)),
+			"FDA",
+		);
+		let mismatched = dictionary_rules
+			.iter()
+			.filter(|(code, expected)| {
+				allowed_value_constraint_for_rule(code) != Some(expected)
+			})
+			.collect::<Vec<_>>();
+		assert!(
+			mismatched.is_empty(),
+			"FDA dictionary allowed-value constraints differ from catalog: {mismatched:?}"
+		);
+
+		let dictionary_codes = dictionary_rules
+			.iter()
+			.map(|(code, _)| code.as_str())
+			.collect::<BTreeSet<_>>();
+		let catalog_codes = allowed_value_constraints()
+			.keys()
+			.filter(|code| code.starts_with("FDA."))
+			.map(String::as_str)
+			.collect::<BTreeSet<_>>();
+		assert_eq!(
+			dictionary_codes, catalog_codes,
+			"FDA catalog constraints must exactly match the regional dictionary"
+		);
+		assert_eq!(
+			null_flavors_for_rule("FDA.E.i.3.2h.NULLFLAVOR.ALLOWED"),
+			Some(["NI".to_string()].as_slice())
+		);
+	}
+
+	#[test]
 	fn ich_machine_constraints_have_enforcement() {
 		let machine = allowed_value_constraints()
-			.values()
-			.filter(|constraint| {
-				constraint.kind != AllowedValueConstraintKind::Descriptive
+			.iter()
+			.filter(|(code, constraint)| {
+				code.starts_with("ICH.")
+					&& constraint.kind != AllowedValueConstraintKind::Descriptive
 			})
+			.map(|(_, constraint)| constraint)
 			.collect::<Vec<_>>();
 
 		assert_eq!(machine.len(), 133);

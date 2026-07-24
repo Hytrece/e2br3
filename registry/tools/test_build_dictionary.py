@@ -506,6 +506,10 @@ class ParseFdaCsvTests(unittest.TestCase):
         self.assertEqual("/some/xpath", entry["xpath"])
         self.assertEqual("CE", entry["hl7_data_type"])
         self.assertEqual(["NI"], entry["null_flavors"])
+        self.assertEqual(
+            {"kind": "true_marker", "enforcement": "case_validate"},
+            entry["allowed_value_constraint"],
+        )
         self.assertNotIn("business_rule", entry)
 
     def test_fda_rules_cover_ich_and_fda_elements(self):

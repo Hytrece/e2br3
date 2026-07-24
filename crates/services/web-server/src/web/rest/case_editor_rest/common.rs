@@ -509,10 +509,30 @@ pub(super) fn row_model_value(
 	for (target, aliases) in aliases {
 		insert_alias(&mut map, target, aliases);
 	}
+	normalize_required_intervention(&mut map);
 	for (key, value) in extra {
 		map.insert((*key).to_string(), value.clone());
 	}
 	Value::Object(map)
+}
+
+fn normalize_required_intervention(map: &mut serde_json::Map<String, Value>) {
+	match map.get("required_intervention") {
+		Some(Value::Bool(true)) => {
+			map.insert(
+				"required_intervention".to_string(),
+				Value::String("true".to_string()),
+			);
+		}
+		Some(Value::String(value)) if value == "NI" => {
+			map.remove("required_intervention");
+			map.insert(
+				"required_intervention_null_flavor".to_string(),
+				Value::String("NI".to_string()),
+			);
+		}
+		_ => {}
+	}
 }
 
 pub(super) fn parse_row_model<T: serde::de::DeserializeOwned>(

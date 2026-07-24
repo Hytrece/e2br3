@@ -4942,6 +4942,116 @@ async fn editor_ae_page_rejects_catalog_constraint_before_write() -> Result<()> 
 
 #[serial]
 #[tokio::test]
+async fn editor_ae_page_rejects_invalid_fda_required_intervention() -> Result<()> {
+	let mm = init_test_mm().await?;
+	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
+	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
+	let cookie = cookie_header(&token.to_string());
+	let app = web_server::app(mm);
+	let case_id = create_case(&app, &cookie, "EDITOR-AE-FDA-CONSTRAINT").await?;
+
+	let (status, body) = post_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/editor/pages/AE/rows"),
+		json!({
+			"authorities": ["fda"],
+			"rows": {
+				"reaction": {
+					"reactionPrimarySourceNative": "Headache",
+					"requiredIntervention": "arbitrary"
+				}
+			}
+		}),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
+	assert_eq!(body["error"]["message"], "CONSTRAINT_VIOLATION");
+	assert_eq!(
+		body["error"]["data"]["detail"]["ruleCode"],
+		"FDA.E.i.3.2h.ALLOWED.VALUE"
+	);
+	assert_eq!(
+		body["error"]["data"]["detail"]["path"],
+		"reactions.0.requiredIntervention"
+	);
+
+	Ok(())
+}
+
+#[serial]
+#[tokio::test]
+async fn editor_ae_page_round_trips_fda_required_intervention_representations(
+) -> Result<()> {
+	let mm = init_test_mm().await?;
+	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
+	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
+	let cookie = cookie_header(&token.to_string());
+	let app = web_server::app(mm);
+	let case_id = create_case(&app, &cookie, "EDITOR-AE-FDA-ROUNDTRIP").await?;
+
+	let (status, created) = post_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/editor/pages/AE/rows"),
+		json!({
+			"authorities": ["fda"],
+			"rows": {
+				"reaction": {
+					"reactionPrimarySourceNative": "Headache",
+					"requiredIntervention": true
+				}
+			}
+		}),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::CREATED, "{created}");
+	assert_eq!(created["data"]["reaction"]["required_intervention"], "true");
+	assert_eq!(
+		created["data"]["reaction"]["required_intervention_null_flavor"],
+		Value::Null
+	);
+	let row_id = created["rowId"].as_str().expect("reaction id");
+
+	let (status, ni) = patch_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/editor/pages/AE/rows/{row_id}"),
+		json!({
+			"authorities": ["fda"],
+			"rows": {"reaction": {"requiredIntervention": "NI"}}
+		}),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK, "{ni}");
+	assert_eq!(ni["data"]["reaction"]["required_intervention"], Value::Null);
+	assert_eq!(
+		ni["data"]["reaction"]["required_intervention_null_flavor"],
+		"NI"
+	);
+
+	let (status, truth) = patch_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/editor/pages/AE/rows/{row_id}"),
+		json!({
+			"authorities": ["fda"],
+			"rows": {"reaction": {"requiredIntervention": true}}
+		}),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK, "{truth}");
+	assert_eq!(truth["data"]["reaction"]["required_intervention"], "true");
+	assert_eq!(
+		truth["data"]["reaction"]["required_intervention_null_flavor"],
+		Value::Null
+	);
+
+	Ok(())
+}
+
+#[serial]
+#[tokio::test]
 async fn editor_lb_page_row_round_trips_all_catalog_fields() -> Result<()> {
 	let mm = init_test_mm().await?;
 	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
