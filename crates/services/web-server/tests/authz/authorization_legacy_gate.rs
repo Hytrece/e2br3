@@ -316,6 +316,31 @@ fn case_editor_routes_do_not_depend_on_legacy_permissions() {
 }
 
 #[test]
+fn submission_routes_use_typed_policy_contexts_only() {
+	let source = fs::read_to_string(
+		workspace_root()
+			.join("crates/services/web-server/src/web/rest/submission_rest.rs"),
+	)
+	.expect("submission routes must be readable");
+	for legacy in [
+		"model::acs",
+		"require_permission",
+		"require_case_read_allowed",
+		"require_case_write_allowed",
+		"set_full_context_dbx",
+	] {
+		assert!(
+			!source.contains(legacy),
+			"submission route still uses legacy authorization: {legacy}"
+		);
+	}
+	assert!(source.contains("with_authorized_submission_collection"));
+	assert!(source.contains("with_authorized_submission_read"));
+	assert!(source.contains("with_authorized_submission_mutation"));
+	assert!(source.contains("\"submission.execute\""));
+}
+
+#[test]
 fn role_api_has_one_canonical_metadata_shape() {
 	let root = workspace_root();
 	let source =

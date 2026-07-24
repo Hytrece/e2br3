@@ -2,6 +2,7 @@ use crate::authorization::{
 	CaseChildResource, CaseCreateProposal, CaseResource, Collection,
 	ContextSnapshot, EnforcedScopeFilter, EvaluatedContext, Existing,
 	LockedMutationContext, Parent, Proposed, RequestAuthorizationSnapshot,
+	SubmissionResource,
 };
 use crate::model::store::dbx::Dbx;
 use sqlx::FromRow;
@@ -44,6 +45,7 @@ pub enum CaseMutationKind {
 	LockToggle,
 	Delete,
 	Validate,
+	Submission,
 	ChildEdit,
 	WorkflowTransition,
 }
@@ -56,6 +58,11 @@ struct CaseFacts {
 	product_identifiers: Vec<String>,
 	study_identifiers: Vec<String>,
 	has_blinded_data: bool,
+}
+
+#[derive(Debug, FromRow)]
+struct SubmissionParent {
+	case_id: Uuid,
 }
 
 pub struct AuthorizationFactLoader<'tx> {
@@ -78,6 +85,105 @@ impl<'tx> AuthorizationFactLoader<'tx> {
 			every_target_authorized: false,
 			enforced_scope_filter: Some(scope_filter(self.snapshot)),
 		})
+	}
+
+	pub fn submission_collection(
+		&self,
+	) -> ContextSnapshot<'tx, Collection<SubmissionResource>> {
+		ContextSnapshot::new(EvaluatedContext {
+			organization_id: Some(self.snapshot.organization_id()),
+			target_fingerprint: format!(
+				"submissions:{}",
+				self.snapshot.organization_id()
+			),
+			within_principal_scope: true,
+			lifecycle_compatible: false,
+			parent_authorized: false,
+			every_target_authorized: false,
+			enforced_scope_filter: Some(scope_filter(self.snapshot)),
+		})
+	}
+
+	pub async fn submission_existing(
+		&self,
+		submission_id: Uuid,
+	) -> Result<
+		ContextSnapshot<'tx, Existing<SubmissionResource>>,
+		AuthorizationFactLoadError,
+	> {
+		let parent = self
+			.dbx
+			.fetch_optional(
+				sqlx::query_as::<_, SubmissionParent>(
+					"SELECT cs.case_id
+			   FROM case_submissions cs
+			  WHERE cs.id = $1",
+				)
+				.bind(submission_id),
+			)
+			.await?
+			.ok_or(AuthorizationFactLoadError::FactNotFound {
+				fact: "submission",
+				id: submission_id,
+			})?;
+		let case = self.load_case_facts(parent.case_id, false).await?;
+		Ok(ContextSnapshot::new(EvaluatedContext {
+			organization_id: Some(case.organization_id),
+			target_fingerprint: format!(
+				"submission:{submission_id}:case:{}",
+				parent.case_id
+			),
+			within_principal_scope: case_within_scope(self.snapshot, &case),
+			lifecycle_compatible: !matches!(
+				case.status.trim().to_ascii_lowercase().as_str(),
+				"deleted" | "archived"
+			),
+			parent_authorized: false,
+			every_target_authorized: false,
+			enforced_scope_filter: None,
+		}))
+	}
+
+	pub async fn submission_parent_case_for_mutation(
+		&self,
+		submission_id: Uuid,
+	) -> Result<
+		LockedMutationContext<'tx, Existing<CaseResource>>,
+		AuthorizationFactLoadError,
+	> {
+		self.lock_and_verify_revisions().await?;
+		let parent = self
+			.dbx
+			.fetch_optional(
+				sqlx::query_as::<_, SubmissionParent>(
+					"SELECT cs.case_id
+					   FROM case_submissions cs
+					  WHERE cs.id = $1
+					  FOR UPDATE OF cs",
+				)
+				.bind(submission_id),
+			)
+			.await?
+			.ok_or(AuthorizationFactLoadError::FactNotFound {
+				fact: "submission",
+				id: submission_id,
+			})?;
+		let case = self.load_case_facts(parent.case_id, true).await?;
+		Ok(LockedMutationContext::new(EvaluatedContext {
+			organization_id: Some(case.organization_id),
+			target_fingerprint: format!(
+				"case:{}:submission:{submission_id}",
+				parent.case_id,
+			),
+			within_principal_scope: case_within_scope(self.snapshot, &case),
+			lifecycle_compatible: !matches!(
+				case.status.trim().to_ascii_lowercase().as_str(),
+				"deleted" | "archived"
+			),
+			parent_authorized: false,
+			every_target_authorized: false,
+			enforced_scope_filter: None,
+		}))
 	}
 
 	pub fn case_create_for_verified_mutation(
@@ -347,6 +453,9 @@ fn case_lifecycle_allows(facts: &CaseFacts, kind: CaseMutationKind) -> bool {
 			!matches!(status.as_str(), "deleted" | "archived")
 		}
 		CaseMutationKind::Validate => {
+			!matches!(status.as_str(), "locked" | "deleted" | "archived")
+		}
+		CaseMutationKind::Submission => {
 			!matches!(status.as_str(), "locked" | "deleted" | "archived")
 		}
 		CaseMutationKind::WorkflowTransition => status != "locked",

@@ -13,7 +13,8 @@ pub use authorization::{
 	with_authorized_case_child_mutation, with_authorized_case_child_read,
 	with_authorized_case_collection, with_authorized_case_create,
 	with_authorized_case_mutation, with_authorized_case_read,
-	with_authorized_subject_action,
+	with_authorized_subject_action, with_authorized_submission_collection,
+	with_authorized_submission_mutation, with_authorized_submission_read,
 };
 pub use rest_params::*;
 pub use rest_result::*;
