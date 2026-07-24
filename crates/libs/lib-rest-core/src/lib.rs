@@ -11,6 +11,8 @@ pub use authorization::{
 	denied as authorization_denied, rls_ctx_for_authorized_mutation,
 	rls_ctx_for_authorized_read, rls_ctx_for_authorized_subject,
 	with_authorized_case_child_mutation, with_authorized_case_child_read,
+	with_authorized_case_collection, with_authorized_case_create,
+	with_authorized_case_mutation, with_authorized_case_read,
 };
 pub use rest_params::*;
 pub use rest_result::*;

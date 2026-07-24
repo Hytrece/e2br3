@@ -1,7 +1,7 @@
 use crate::authorization::{
-	CaseChildResource, CaseResource, Collection, ContextSnapshot,
-	EnforcedScopeFilter, EvaluatedContext, Existing, LockedMutationContext, Parent,
-	RequestAuthorizationSnapshot,
+	CaseChildResource, CaseCreateProposal, CaseResource, Collection,
+	ContextSnapshot, EnforcedScopeFilter, EvaluatedContext, Existing,
+	LockedMutationContext, Parent, Proposed, RequestAuthorizationSnapshot,
 };
 use crate::model::store::dbx::Dbx;
 use sqlx::FromRow;
@@ -52,7 +52,6 @@ pub enum CaseMutationKind {
 struct CaseFacts {
 	organization_id: Uuid,
 	status: String,
-	status_before_lock: Option<String>,
 	sender_identifiers: Vec<String>,
 	product_identifiers: Vec<String>,
 	study_identifiers: Vec<String>,
@@ -78,6 +77,24 @@ impl<'tx> AuthorizationFactLoader<'tx> {
 			parent_authorized: false,
 			every_target_authorized: false,
 			enforced_scope_filter: Some(scope_filter(self.snapshot)),
+		})
+	}
+
+	pub fn case_create_for_verified_mutation(
+		&self,
+		organization_id: Uuid,
+	) -> LockedMutationContext<'tx, Proposed<CaseCreateProposal>> {
+		let within_principal_scope = organization_id
+			== self.snapshot.organization_id()
+			|| self.snapshot.identity().is_platform_administrator();
+		LockedMutationContext::new(EvaluatedContext {
+			organization_id: Some(organization_id),
+			target_fingerprint: format!("case:new:{organization_id}"),
+			within_principal_scope,
+			lifecycle_compatible: false,
+			parent_authorized: false,
+			every_target_authorized: false,
+			enforced_scope_filter: None,
 		})
 	}
 
@@ -207,7 +224,6 @@ impl<'tx> AuthorizationFactLoader<'tx> {
 			r#"
 			SELECT c.organization_id,
 			       c.status,
-			       c.status_before_lock,
 			       COALESCE(
 			       	(SELECT array_agg(DISTINCT s.source_sender_presave_id::text)
 			       	   FROM sender_information s
@@ -326,12 +342,6 @@ fn case_lifecycle_allows(facts: &CaseFacts, kind: CaseMutationKind) -> bool {
 		CaseMutationKind::LockToggle => {
 			matches!(status.as_str(), "draft" | "reviewed" | "validated")
 				|| status == "locked"
-					&& facts.status_before_lock.as_deref().is_some_and(|previous| {
-						matches!(
-							previous.trim().to_ascii_lowercase().as_str(),
-							"draft" | "reviewed" | "validated"
-						)
-					})
 		}
 		CaseMutationKind::Delete => {
 			!matches!(status.as_str(), "deleted" | "archived")

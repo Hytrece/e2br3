@@ -2,12 +2,13 @@ use crate::{Error, Result};
 use lib_core::authorization::{
 	authorize_contextual_mutation, authorize_contextual_read, policy_registry,
 	AuthorizationContext, AuthorizationDenial, AuthorizedMutation, AuthorizedRead,
-	AuthorizedSubject, CaseChildResource, CaseResource, Parent,
-	PolicySnapshotVersion, RequestAuthorizationSnapshot,
+	AuthorizedSubject, CaseChildResource, CaseCreateProposal, CaseResource,
+	Collection, Existing, Parent, PolicySnapshotVersion, Proposed,
+	RequestAuthorizationSnapshot,
 };
 use lib_core::ctx::{Ctx, ROLE_SYSTEM_ADMIN};
 use lib_core::model::authorization::{
-	AuthorizationFactLoadError, AuthorizationFactLoader,
+	AuthorizationFactLoadError, AuthorizationFactLoader, CaseMutationKind,
 };
 use lib_core::model::store::set_full_context_from_ctx_dbx;
 use lib_core::model::ModelManager;
@@ -90,6 +91,175 @@ pub fn rls_ctx_for_authorized_subject(
 ) -> Result<Ctx> {
 	validate_request_binding(request_ctx, snapshot, permit)?;
 	Ok(request_ctx.clone())
+}
+
+pub async fn with_authorized_case_collection<T, F>(
+	request_ctx: &Ctx,
+	snapshot: &RequestAuthorizationSnapshot,
+	mm: &ModelManager,
+	operation: F,
+) -> Result<T>
+where
+	F: for<'ctx> FnOnce(
+		&'ctx Ctx,
+		&'ctx ModelManager,
+	) -> Pin<Box<dyn Future<Output = Result<T>> + Send + 'ctx>>,
+{
+	let dbx = mm.dbx();
+	dbx.begin_txn()
+		.await
+		.map_err(lib_core::model::Error::from)?;
+	if let Err(error) = set_full_context_from_ctx_dbx(dbx, request_ctx).await {
+		let _ = dbx.rollback_txn().await;
+		return Err(error.into());
+	}
+	let result = async {
+		let context = AuthorizationFactLoader::new(dbx, snapshot).case_collection();
+		let action = policy_registry()
+			.context_action::<Collection<CaseResource>>("case.list")
+			.ok_or_else(|| Error::AccessDenied {
+				required_role: "registered case.list action".to_string(),
+			})?;
+		let permit =
+			authorize_contextual_read(action, snapshot, context).map_err(denied)?;
+		let authorized_ctx =
+			rls_ctx_for_authorized_read(request_ctx, snapshot, &permit)?;
+		operation(&authorized_ctx, mm).await
+	}
+	.await;
+	finish_fact_transaction(dbx, result).await
+}
+
+pub async fn with_authorized_case_read<T, F>(
+	request_ctx: &Ctx,
+	snapshot: &RequestAuthorizationSnapshot,
+	mm: &ModelManager,
+	case_id: Uuid,
+	operation: F,
+) -> Result<T>
+where
+	F: for<'ctx> FnOnce(
+		&'ctx Ctx,
+		&'ctx ModelManager,
+	) -> Pin<Box<dyn Future<Output = Result<T>> + Send + 'ctx>>,
+{
+	let dbx = mm.dbx();
+	dbx.begin_txn()
+		.await
+		.map_err(lib_core::model::Error::from)?;
+	if let Err(error) = set_full_context_from_ctx_dbx(dbx, request_ctx).await {
+		let _ = dbx.rollback_txn().await;
+		return Err(error.into());
+	}
+	let result = async {
+		let context = AuthorizationFactLoader::new(dbx, snapshot)
+			.case_existing(case_id)
+			.await
+			.map_err(map_fact_load_error)?;
+		let action = policy_registry()
+			.context_action::<Existing<CaseResource>>("case.read")
+			.ok_or_else(|| Error::AccessDenied {
+				required_role: "registered case.read action".to_string(),
+			})?;
+		let permit =
+			authorize_contextual_read(action, snapshot, context).map_err(denied)?;
+		let authorized_ctx =
+			rls_ctx_for_authorized_read(request_ctx, snapshot, &permit)?;
+		operation(&authorized_ctx, mm).await
+	}
+	.await;
+	finish_fact_transaction(dbx, result).await
+}
+
+pub async fn with_authorized_case_create<T, F>(
+	request_ctx: &Ctx,
+	snapshot: &RequestAuthorizationSnapshot,
+	mm: &ModelManager,
+	operation: F,
+) -> Result<T>
+where
+	F: for<'ctx> FnOnce(
+		&'ctx Ctx,
+		&'ctx ModelManager,
+	) -> Pin<Box<dyn Future<Output = Result<T>> + Send + 'ctx>>,
+{
+	let dbx = mm.dbx();
+	dbx.begin_txn()
+		.await
+		.map_err(lib_core::model::Error::from)?;
+	if let Err(error) = set_full_context_from_ctx_dbx(dbx, request_ctx).await {
+		let _ = dbx.rollback_txn().await;
+		return Err(error.into());
+	}
+	let loader = AuthorizationFactLoader::new(dbx, snapshot);
+	if let Err(error) = loader.lock_and_verify_revisions().await {
+		let _ = dbx.rollback_txn().await;
+		return Err(map_fact_load_error(error));
+	}
+	let result = async {
+		let context =
+			loader.case_create_for_verified_mutation(request_ctx.organization_id());
+		let action = policy_registry()
+			.context_action::<Proposed<CaseCreateProposal>>("case.create")
+			.ok_or_else(|| Error::AccessDenied {
+				required_role: "registered case.create action".to_string(),
+			})?;
+		let permit = authorize_contextual_mutation(action, snapshot, context)
+			.map_err(denied)?;
+		let authorized_ctx =
+			rls_ctx_for_authorized_mutation(request_ctx, snapshot, &permit)?;
+		operation(&authorized_ctx, mm).await
+	}
+	.await;
+	finish_fact_transaction(dbx, result).await
+}
+
+pub async fn with_authorized_case_mutation<T, F>(
+	request_ctx: &Ctx,
+	snapshot: &RequestAuthorizationSnapshot,
+	mm: &ModelManager,
+	case_id: Uuid,
+	action_id: &'static str,
+	mutation_kind: CaseMutationKind,
+	operation: F,
+) -> Result<T>
+where
+	F: for<'ctx> FnOnce(
+		&'ctx Ctx,
+		&'ctx ModelManager,
+	) -> Pin<Box<dyn Future<Output = Result<T>> + Send + 'ctx>>,
+{
+	let dbx = mm.dbx();
+	dbx.begin_txn()
+		.await
+		.map_err(lib_core::model::Error::from)?;
+	if let Err(error) = set_full_context_from_ctx_dbx(dbx, request_ctx).await {
+		let _ = dbx.rollback_txn().await;
+		return Err(error.into());
+	}
+	let loader = AuthorizationFactLoader::new(dbx, snapshot);
+	if let Err(error) = loader.lock_and_verify_revisions().await {
+		let _ = dbx.rollback_txn().await;
+		return Err(map_fact_load_error(error));
+	}
+	let result = async {
+		let context = loader
+			.case_existing_for_verified_mutation(case_id, mutation_kind)
+			.await
+			.map_err(map_fact_load_error)?;
+		let action = policy_registry()
+			.context_action::<Existing<CaseResource>>(action_id)
+			.ok_or_else(|| Error::AccessDenied {
+				required_role: format!("registered {action_id} action"),
+			})?;
+		let permit = authorize_contextual_mutation(action, snapshot, context)
+			.map_err(denied)?;
+		let authorized_ctx =
+			rls_ctx_for_authorized_mutation(request_ctx, snapshot, &permit)?;
+		operation(&authorized_ctx, mm).await
+	}
+	.await;
+	finish_fact_transaction(dbx, result).await
 }
 
 pub async fn with_authorized_case_child_read<T, F>(

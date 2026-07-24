@@ -96,8 +96,7 @@ async fn test_role_privilege_matrix_update_grants_effective_case_access(
 }
 #[serial]
 #[tokio::test]
-async fn test_home_workflow_matrix_privileges_grant_effective_case_list_access(
-) -> Result<()> {
+async fn test_home_workflow_read_does_not_grant_case_page_access() -> Result<()> {
 	let mm = init_test_mm().await?;
 	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
 	let admin_token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
@@ -131,7 +130,8 @@ async fn test_home_workflow_matrix_privileges_grant_effective_case_list_access(
 	)
 	.await?;
 
-	// home_workflow read grants case view + list, but not write.
+	// PDF HOME/My To Do Read is limited to workflow-assigned cases. It must not
+	// grant the full CASE page/list projection.
 	update_role_privileges(
 		&app,
 		&admin_cookie,
@@ -145,10 +145,8 @@ async fn test_home_workflow_matrix_privileges_grant_effective_case_list_access(
 		}]),
 	)
 	.await?;
-	assert!(has_permission(&read_id, CASE_READ));
-	assert!(has_permission(&read_id, CASE_LIST));
 	assert!(!has_permission(&read_id, CASE_CREATE));
-	assert_get_not_status(
+	assert_get_status(
 		&app,
 		&read_cookie,
 		"/api/cases/list-view",
