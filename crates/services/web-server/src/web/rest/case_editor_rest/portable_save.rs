@@ -1003,7 +1003,7 @@ fn binding_was_changed(
 	})
 }
 
-pub(super) fn validate_row_payload(
+pub(crate) fn validate_row_payload(
 	section: &str,
 	row_key: &str,
 	row: &Map<String, Value>,

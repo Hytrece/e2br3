@@ -69,6 +69,25 @@ async fn patch_json(
 	Ok((status, body))
 }
 
+async fn put_json(
+	app: &axum::Router,
+	cookie: &str,
+	uri: &str,
+	body: Value,
+) -> Result<(StatusCode, Value)> {
+	let req = Request::builder()
+		.method("PUT")
+		.uri(uri)
+		.header("cookie", cookie)
+		.header("content-type", "application/json")
+		.body(Body::from(body.to_string()))?;
+	let res = app.clone().oneshot(req).await?;
+	let status = res.status();
+	let body = to_bytes(res.into_body(), usize::MAX).await?;
+	let body = serde_json::from_slice::<Value>(&body).unwrap_or(Value::Null);
+	Ok((status, body))
+}
+
 async fn delete_json(
 	app: &axum::Router,
 	cookie: &str,
@@ -5288,6 +5307,149 @@ async fn editor_nr_page_rejects_catalog_constraint_before_write() -> Result<()> 
 	assert_eq!(
 		body["error"]["data"]["detail"]["path"],
 		"narrative.reporterComments"
+	);
+
+	Ok(())
+}
+
+#[serial]
+#[tokio::test]
+async fn message_header_api_round_trips_submission_fields() -> Result<()> {
+	let mm = init_test_mm().await?;
+	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
+	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
+	let cookie = cookie_header(&token.to_string());
+	let app = web_server::app(mm);
+	let case_id = create_case(&app, &cookie, "MESSAGE-HEADER-ROUNDTRIP").await?;
+	let message_number = format!("MSG-{}", Uuid::new_v4());
+
+	let (status, created) = post_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/message-header"),
+		json!({
+			"data": {
+				"case_id": case_id,
+				"message_number": message_number,
+				"message_sender_identifier": "SENDER",
+				"message_receiver_identifier": "RECEIVER",
+				"message_date": "20260725120000"
+			}
+		}),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::CREATED, "{created}");
+	assert_eq!(created["data"]["message_number"], message_number);
+	assert_eq!(created["data"]["message_sender_identifier"], "SENDER");
+	assert_eq!(created["data"]["message_receiver_identifier"], "RECEIVER");
+	assert_eq!(created["data"]["message_date"], "20260725120000");
+
+	let (status, updated) = put_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/message-header"),
+		json!({
+			"data": {
+				"batch_number": "BATCH-001",
+				"batch_sender_identifier": "BATCH-SENDER",
+				"batch_receiver_identifier": "BATCH-RECEIVER",
+				"batch_transmission_date": [2026, 206, 12, 30, 45, 0, 0, 0, 0],
+				"message_sender_identifier": "UPDATED-SENDER",
+				"message_receiver_identifier": "UPDATED-RECEIVER",
+				"message_date": "20260725123045"
+			}
+		}),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK, "{updated}");
+	assert_eq!(updated["data"]["batch_number"], "BATCH-001");
+	assert_eq!(updated["data"]["batch_sender_identifier"], "BATCH-SENDER");
+	assert_eq!(
+		updated["data"]["batch_receiver_identifier"],
+		"BATCH-RECEIVER"
+	);
+	assert!(!updated["data"]["batch_transmission_date"].is_null());
+	assert_eq!(
+		updated["data"]["message_sender_identifier"],
+		"UPDATED-SENDER"
+	);
+	assert_eq!(
+		updated["data"]["message_receiver_identifier"],
+		"UPDATED-RECEIVER"
+	);
+	assert_eq!(updated["data"]["message_date"], "20260725123045");
+
+	let (status, reloaded) = get_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/message-header"),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK, "{reloaded}");
+	assert_eq!(reloaded["data"], updated["data"]);
+
+	Ok(())
+}
+
+#[serial]
+#[tokio::test]
+async fn message_header_api_rejects_catalog_constraint_before_write() -> Result<()> {
+	let mm = init_test_mm().await?;
+	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
+	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
+	let cookie = cookie_header(&token.to_string());
+	let app = web_server::app(mm);
+	let case_id = create_case(&app, &cookie, "MESSAGE-HEADER-CONSTRAINT").await?;
+
+	let (status, body) = post_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/message-header"),
+		json!({
+			"data": {
+				"case_id": case_id,
+				"message_number": "X".repeat(101),
+				"message_sender_identifier": "SENDER",
+				"message_receiver_identifier": "RECEIVER",
+				"message_date": "20260725120000"
+			}
+		}),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
+	assert_eq!(body["error"]["message"], "CONSTRAINT_VIOLATION");
+	assert_eq!(
+		body["error"]["data"]["detail"]["ruleCode"],
+		"ICH.N.2.r.1.LENGTH.MAX"
+	);
+	assert_eq!(
+		body["error"]["data"]["detail"]["path"],
+		"messageHeader.messageNumber"
+	);
+
+	let (status, body) = post_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/message-header"),
+		json!({
+			"data": {
+				"case_id": case_id,
+				"message_number": format!("MSG-{}", Uuid::new_v4()),
+				"message_sender_identifier": "SENDER",
+				"message_receiver_identifier": "RECEIVER",
+				"message_date": "not-a-date"
+			}
+		}),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
+	assert_eq!(
+		body["error"]["data"]["detail"]["ruleCode"],
+		"ICH.N.2.r.4.ALLOWED.VALUE"
+	);
+	assert_eq!(
+		body["error"]["data"]["detail"]["path"],
+		"messageHeader.messageDate"
 	);
 
 	Ok(())

@@ -18,4 +18,5 @@ pub use dg::*;
 pub use dh::*;
 pub use direct::*;
 pub use lb::*;
+pub(crate) use portable_save::validate_row_payload;
 pub use shell::*;

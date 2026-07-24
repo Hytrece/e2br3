@@ -29,7 +29,8 @@
     "label": "Batch Number",
     "section": "N",
     "authority": "ICH",
-    "status": "frontend_missing",
+    "status": "complete",
+    "editor_page": "N",
     "backend": {
       "status": "mapped",
       "model": "MessageHeader",
@@ -38,14 +39,14 @@
       "evidence": "MessageHeader.batch_number stores the batch number."
     },
     "frontend": {
-      "status": "missing",
+      "status": "mapped",
       "section": "messageHeader",
       "field": "batchNumber",
-      "file": "../frontend/E2BR3-frontend/lib/api/endpoints/cases/subresources/report.ts",
-      "evidence": "Strict frontend inventory did not find a case-form input for this mapped frontend key; the frontend save endpoint carries the value."
+      "file": "../frontend/E2BR3-frontend/app/(protected)/submission/message-header.ts",
+      "evidence": "Outbound submission builds batchNumber and the message-header API persists it."
     },
-    "action": "Add a case-form input, or reclassify as not_applicable if the batch/message envelope is generated at transmission.",
-    "notes": "Batch/message envelope element; SectionC3 renders only N.1.5, N.2.r.1, N.2.r.2 and N.2.r.3 as editable message header inputs."
+    "action": "",
+    "notes": "Outbound transport-envelope value generated on the submission surface, not in the case editor."
   },
   {
     "id": "N.1.3",
@@ -53,7 +54,8 @@
     "label": "Batch Sender Identifier",
     "section": "N",
     "authority": "ICH",
-    "status": "frontend_missing",
+    "status": "complete",
+    "editor_page": "N",
     "backend": {
       "status": "mapped",
       "model": "MessageHeader",
@@ -62,14 +64,14 @@
       "evidence": "MessageHeader.batch_sender_identifier stores the batch sender identifier."
     },
     "frontend": {
-      "status": "missing",
+      "status": "mapped",
       "section": "messageHeader",
       "field": "batchSenderIdentifier",
-      "file": "../frontend/E2BR3-frontend/lib/api/endpoints/cases/subresources/report.ts",
-      "evidence": "Strict frontend inventory did not find a case-form input for this mapped frontend key; the frontend save endpoint carries the value."
+      "file": "../frontend/E2BR3-frontend/app/(protected)/submission/message-header.ts",
+      "evidence": "Outbound submission builds batchSenderIdentifier and the message-header API persists it."
     },
-    "action": "Add a case-form input, or reclassify as not_applicable if the batch/message envelope is generated at transmission.",
-    "notes": "Batch/message envelope element; SectionC3 renders only N.1.5, N.2.r.1, N.2.r.2 and N.2.r.3 as editable message header inputs."
+    "action": "",
+    "notes": "Outbound transport-envelope value generated on the submission surface, not in the case editor."
   },
   {
     "id": "N.1.4",
@@ -77,7 +79,8 @@
     "label": "Batch Receiver Identifier",
     "section": "N",
     "authority": "ICH",
-    "status": "frontend_missing",
+    "status": "complete",
+    "editor_page": "N",
     "backend": {
       "status": "mapped",
       "model": "MessageHeader",
@@ -86,14 +89,14 @@
       "evidence": "MessageHeader.batch_receiver_identifier stores the batch receiver identifier."
     },
     "frontend": {
-      "status": "missing",
+      "status": "mapped",
       "section": "messageHeader",
       "field": "batchReceiverIdentifier",
-      "file": "../frontend/E2BR3-frontend/lib/api/endpoints/cases/subresources/report.ts",
-      "evidence": "Strict frontend inventory did not find a case-form input for this mapped frontend key; the frontend save endpoint carries the value."
+      "file": "../frontend/E2BR3-frontend/app/(protected)/submission/message-header.ts",
+      "evidence": "Outbound submission builds batchReceiverIdentifier and the message-header API persists it."
     },
-    "action": "Add a case-form input, or reclassify as not_applicable if the batch/message envelope is generated at transmission.",
-    "notes": "Batch/message envelope element; SectionC3 renders only N.1.5, N.2.r.1, N.2.r.2 and N.2.r.3 as editable message header inputs."
+    "action": "",
+    "notes": "Outbound transport-envelope value generated on the submission surface, not in the case editor."
   },
   {
     "id": "N.1.5",
@@ -126,6 +129,7 @@
     "section": "N",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "N",
     "backend": {
       "status": "mapped",
       "model": "MessageHeader",
@@ -149,7 +153,8 @@
     "label": "Message Sender Identifier",
     "section": "N",
     "authority": "ICH",
-    "status": "incomplete",
+    "status": "complete",
+    "editor_page": "N",
     "backend": {
       "status": "mapped",
       "model": "MessageHeader",
@@ -173,7 +178,8 @@
     "label": "Message Receiver Identifier",
     "section": "N",
     "authority": "ICH",
-    "status": "incomplete",
+    "status": "complete",
+    "editor_page": "N",
     "backend": {
       "status": "mapped",
       "model": "MessageHeader",
@@ -197,7 +203,8 @@
     "label": "Date of Message Creation",
     "section": "N",
     "authority": "ICH",
-    "status": "frontend_missing",
+    "status": "complete",
+    "editor_page": "N",
     "backend": {
       "status": "mapped",
       "model": "MessageHeader",
@@ -206,13 +213,13 @@
       "evidence": "MessageHeader.message_date stores the message creation date exported to /hl7:MCCI_IN200100UV01/hl7:PORR_IN049016UV/hl7:creationTime/@value."
     },
     "frontend": {
-      "status": "missing",
+      "status": "mapped",
       "section": "messageHeader",
       "field": "messageDate",
-      "file": "../frontend/E2BR3-frontend/lib/api/endpoints/cases/subresources/report.ts",
-      "evidence": "Strict frontend inventory did not find a case-form input for this mapped frontend key; the frontend save endpoint carries the value."
+      "file": "../frontend/E2BR3-frontend/app/(protected)/submission/message-header.ts",
+      "evidence": "Outbound submission generates messageDate and the message-header API persists it."
     },
-    "action": "Add a case-form input, or reclassify as not_applicable if the batch/message envelope is generated at transmission.",
-    "notes": "Batch/message envelope element; SectionC3 renders only N.1.5, N.2.r.1, N.2.r.2 and N.2.r.3 as editable message header inputs."
+    "action": "",
+    "notes": "Outbound transport-envelope value generated on the submission surface, not in the case editor."
   }
 ]
