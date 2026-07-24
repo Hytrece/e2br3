@@ -10,6 +10,32 @@ import editor_contract
 
 
 class RegistryValidatorTests(unittest.TestCase):
+    def test_sd_editor_contract_excludes_export_owned_message_header(self):
+        repo = Path(__file__).resolve().parents[2]
+        contract = json.loads(
+            (repo / "registry/editor-contracts/sd.json").read_text(encoding="utf-8")
+        )
+        registry = json.loads(
+            (repo / "registry/sections/n-message-header.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        export_codes = {"N.1.5", "N.2.r.1", "N.2.r.2", "N.2.r.3"}
+
+        self.assertTrue(
+            {field["code"] for field in contract["fields"]}.isdisjoint(
+                export_codes
+            )
+        )
+        for row in registry:
+            if row["id"] not in export_codes:
+                continue
+            self.assertNotIn("editor_page", row)
+            self.assertIn(
+                "app/(protected)/submission/message-header.ts",
+                row["frontend"]["file"],
+            )
+
     def test_lr_editor_contract_tracks_regional_business_validation_gap(self):
         repo = Path(__file__).resolve().parents[2]
         contract = json.loads(

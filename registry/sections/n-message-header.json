@@ -102,7 +102,6 @@
     "section": "N",
     "authority": "ICH",
     "status": "incomplete",
-    "editor_page": "SD",
     "backend": {
       "status": "mapped",
       "model": "MessageHeader",
@@ -114,8 +113,8 @@
       "status": "mapped",
       "section": "messageHeader",
       "field": "batchTransmissionDate",
-      "file": "../frontend/E2BR3-frontend/components/case-form/sections/SectionC3.tsx",
-      "evidence": "Strict frontend input inventory extracts messageHeader.batchTransmissionDate from the case-form section source."
+      "file": "../frontend/E2BR3-frontend/app/(protected)/submission/message-header.ts",
+      "evidence": "Export/submission preparation generates the batch transmission timestamp immediately before outbound XML creation."
     },
     "action": "",
     "notes": ""
@@ -127,7 +126,6 @@
     "section": "N",
     "authority": "ICH",
     "status": "complete",
-    "editor_page": "SD",
     "backend": {
       "status": "mapped",
       "model": "MessageHeader",
@@ -139,11 +137,11 @@
       "status": "mapped",
       "section": "messageHeader",
       "field": "messageNumber",
-      "file": "../frontend/E2BR3-frontend/components/case-form/sections/SectionC3.tsx",
-      "evidence": "Strict frontend input inventory extracts messageHeader.messageNumber from the case-form section source."
+      "file": "../frontend/E2BR3-frontend/app/(protected)/submission/message-header.ts",
+      "evidence": "Export/submission preparation generates a fresh message identifier for the outbound transmission."
     },
     "action": "",
-    "notes": "SectionC3 renders this input as messageHeader.messageNumber, which is correct for N.2.r.1 (Message Identifier), but tags it fieldNumber N.1.2 (Batch Number) in the UI label — a frontend labelling bug, not a mapping error."
+    "notes": "Outbound transport-envelope value; it is not editable in the case editor."
   },
   {
     "id": "N.2.r.2",
@@ -152,7 +150,6 @@
     "section": "N",
     "authority": "ICH",
     "status": "incomplete",
-    "editor_page": "SD",
     "backend": {
       "status": "mapped",
       "model": "MessageHeader",
@@ -164,8 +161,8 @@
       "status": "mapped",
       "section": "messageHeader",
       "field": "messageSenderIdentifier",
-      "file": "../frontend/E2BR3-frontend/components/case-form/sections/SectionC3.tsx",
-      "evidence": "Strict frontend input inventory extracts messageHeader.messageSenderIdentifier from the case-form section source."
+      "file": "../frontend/E2BR3-frontend/app/(protected)/submission/message-header.ts",
+      "evidence": "Export/submission preparation applies the sender routing identifier selected for the outbound authority."
     },
     "action": "",
     "notes": ""
@@ -177,7 +174,6 @@
     "section": "N",
     "authority": "ICH",
     "status": "incomplete",
-    "editor_page": "SD",
     "backend": {
       "status": "mapped",
       "model": "MessageHeader",
@@ -189,8 +185,8 @@
       "status": "mapped",
       "section": "messageHeader",
       "field": "messageReceiverIdentifier",
-      "file": "../frontend/E2BR3-frontend/components/case-form/sections/SectionC3.tsx",
-      "evidence": "Strict frontend input inventory extracts messageHeader.messageReceiverIdentifier from the case-form section source."
+      "file": "../frontend/E2BR3-frontend/app/(protected)/submission/message-header.ts",
+      "evidence": "Export/submission preparation applies the selected receiver routing identifier."
     },
     "action": "",
     "notes": ""

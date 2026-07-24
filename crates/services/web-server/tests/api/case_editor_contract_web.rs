@@ -575,7 +575,7 @@ async fn editor_ci_returns_ci_payload_only() -> Result<()> {
 		safety_report.get("documentsHeldBySender").is_none(),
 		"{body}"
 	);
-	assert!(data.get("messageHeader").is_some(), "{body}");
+	assert!(data.get("messageHeader").is_none(), "{body}");
 	assert_no_ae_lb_dg_payload(data);
 
 	Ok(())
@@ -617,7 +617,7 @@ async fn editor_ci_page_projection_returns_direct_page_rows_without_field_issues
 		body["rows"]["safetyReportIdentification"].is_object(),
 		"{body}"
 	);
-	assert!(body["rows"]["messageHeader"].is_null(), "{body}");
+	assert!(body["rows"].get("messageHeader").is_none(), "{body}");
 	assert!(body["rows"].get("receiverInfo").is_none(), "{body}");
 	assert!(body["rows"]["otherCaseIdentifiers"].is_array(), "{body}");
 	assert!(body["rows"]["linkedReports"].is_array(), "{body}");
@@ -668,7 +668,6 @@ async fn editor_ci_projection_matches_field_contract() -> Result<()> {
 			"case",
 			"documentsHeldBySender",
 			"linkedReports",
-			"messageHeader",
 			"otherCaseIdentifiers",
 			"safetyReportIdentification",
 			"sourceDocuments",
@@ -2398,6 +2397,7 @@ async fn editor_sd_page_patch_persists_sender_information_row() -> Result<()> {
 		body["rows"]["safetyReportIdentification"]["receiverState"],
 		"Seoul"
 	);
+	assert!(body["rows"].get("messageHeader").is_none(), "{body}");
 
 	// A second scalar change must update the existing singleton instead of
 	// attempting to create another sender row.
@@ -2432,8 +2432,8 @@ async fn editor_sd_page_patch_persists_sender_information_row() -> Result<()> {
 
 #[serial]
 #[tokio::test]
-async fn editor_sd_page_patch_accepts_batch_receiver_identifier_change() -> Result<()>
-{
+async fn editor_sd_page_patch_rejects_export_owned_message_header_change(
+) -> Result<()> {
 	let mm = init_test_mm().await?;
 	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
 	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
@@ -2477,34 +2477,11 @@ async fn editor_sd_page_patch_accepts_batch_receiver_identifier_change() -> Resu
 	)
 	.await?;
 
-	assert_eq!(status, StatusCode::OK, "{body}");
-	assert_eq!(
-		body["rows"]["messageHeader"]["messageReceiverIdentifier"],
-		"CDER"
+	assert_eq!(status, StatusCode::BAD_REQUEST, "{body}");
+	assert!(
+		body.to_string().contains("unsupported change field"),
+		"{body}"
 	);
-	assert_eq!(
-		body["rows"]["messageHeader"]["batchReceiverIdentifier"],
-		"ZZFDA"
-	);
-	assert_eq!(
-		body["rows"]["messageHeader"]["batchTransmissionDate"],
-		"20260724153045"
-	);
-
-	let (status, body) = patch_json(
-		&app,
-		&cookie,
-		&format!("/api/cases/{case_id}/editor/pages/SD"),
-		json!({
-			"changes": {
-				"batchReceiverIdentifier": { "value": "" }
-			}
-		}),
-	)
-	.await?;
-
-	assert_eq!(status, StatusCode::OK, "{body}");
-	assert_eq!(body["rows"]["messageHeader"]["batchReceiverIdentifier"], "");
 
 	Ok(())
 }

@@ -155,12 +155,6 @@ async fn load_editor_ci_data(
 			Err(lib_core::model::Error::EntityUuidNotFound { .. }) => None,
 			Err(err) => return Err(err.into()),
 		};
-	let message_header = match MessageHeaderBmc::get_by_case(ctx, mm, case_id).await
-	{
-		Ok(entity) => Some(entity),
-		Err(lib_core::model::Error::EntityUuidNotFound { .. }) => None,
-		Err(err) => return Err(err.into()),
-	};
 	let other_case_identifiers = OtherCaseIdentifierBmc::list(
 		ctx,
 		mm,
@@ -204,7 +198,6 @@ async fn load_editor_ci_data(
 	Ok(json!(CaseEditorCiRowsDto {
 		case: case_fields,
 		safety_report_identification,
-		message_header: json!(message_header),
 		other_case_identifiers: other_case_identifiers
 			.into_iter()
 			.map(|row| CaseEditorCiOtherIdentifierDto {
@@ -1184,17 +1177,6 @@ fn direct_sd_rows_from_changes(
 			"senderTelephone" => ("senderInformation", "telephone"),
 			"senderFax" => ("senderInformation", "fax"),
 			"senderEmail" => ("senderInformation", "email"),
-			"messageNumber" => ("messageHeader", "messageNumber"),
-			"batchTransmissionDate" => ("messageHeader", "batchTransmissionDate"),
-			"messageSenderIdentifier" => {
-				("messageHeader", "messageSenderIdentifier")
-			}
-			"messageReceiverIdentifier" => {
-				("messageHeader", "messageReceiverIdentifier")
-			}
-			"batchReceiverIdentifier" => {
-				("messageHeader", "batchReceiverIdentifier")
-			}
 			"receiverOrganization" => ("receiverInformation", "organizationName"),
 			"receiverType" => ("receiverInformation", "receiverType"),
 			"receiverDepartment" => ("receiverInformation", "department"),
@@ -1471,56 +1453,10 @@ async fn apply_sd_page_rows_patch(
 		rows,
 		&[
 			"safetyReportIdentification",
-			"messageHeader",
 			"senderInformation",
 			"receiverInformation",
 		],
 	)?;
-	if let Some(message_header) =
-		optional_row_object(page_id, rows, "messageHeader")?
-	{
-		MessageHeaderBmc::update_by_case(
-			ctx,
-			mm,
-			case_id,
-			MessageHeaderForUpdate {
-				batch_number: string_field(
-					message_header,
-					&["batchNumber", "batch_number"],
-				),
-				batch_sender_identifier: string_field(
-					message_header,
-					&["batchSenderIdentifier", "batch_sender_identifier"],
-				),
-				batch_receiver_identifier: string_field(
-					message_header,
-					&["batchReceiverIdentifier", "batch_receiver_identifier"],
-				),
-				batch_transmission_date: datetime_field(
-					page_id,
-					message_header,
-					&["batchTransmissionDate", "batch_transmission_date"],
-				)?,
-				message_number: string_field(
-					message_header,
-					&["messageNumber", "message_number"],
-				),
-				message_sender_identifier: string_field(
-					message_header,
-					&["messageSenderIdentifier", "message_sender_identifier"],
-				),
-				message_receiver_identifier: string_field(
-					message_header,
-					&["messageReceiverIdentifier", "message_receiver_identifier"],
-				),
-				message_date: string_field(
-					message_header,
-					&["messageDate", "message_date"],
-				),
-			},
-		)
-		.await?;
-	}
 	if let Some(sender) = optional_row_object(page_id, rows, "senderInformation")? {
 		let update = SenderInformationForUpdate {
 			source_sender_presave_id: uuid_field(
@@ -2087,12 +2023,6 @@ async fn load_editor_sd_data(
 	let sender = sender_information.first().cloned();
 	let receiver =
 		ReceiverInformationBmc::get_by_case_optional(ctx, mm, case_id).await?;
-	let message_header = match MessageHeaderBmc::get_by_case(ctx, mm, case_id).await
-	{
-		Ok(entity) => Some(entity),
-		Err(lib_core::model::Error::EntityUuidNotFound { .. }) => None,
-		Err(err) => return Err(err.into()),
-	};
 
 	let safety_report_identification = json!({
 		"senderInformationId": sender.as_ref().map(|row| row.id),
@@ -2138,34 +2068,11 @@ async fn load_editor_sd_data(
 		"receiverFax": receiver.as_ref().and_then(|row| row.fax.clone()),
 		"receiverEmail": receiver.as_ref().and_then(|row| row.email.clone()),
 	});
-	let message_header = message_header.map(|row| {
-		json!({
-			"batchNumber": row.batch_number,
-			"batchSenderIdentifier": row.batch_sender_identifier,
-			"batchReceiverIdentifier": row.batch_receiver_identifier,
-			"batchTransmissionDate": row.batch_transmission_date.map(|value| {
-				format!(
-					"{:04}{:02}{:02}{:02}{:02}{:02}",
-					value.year(),
-					u8::from(value.month()),
-					value.day(),
-					value.hour(),
-					value.minute(),
-					value.second(),
-				)
-			}),
-			"messageNumber": row.message_number,
-			"messageSenderIdentifier": row.message_sender_identifier,
-			"messageReceiverIdentifier": row.message_receiver_identifier,
-			"messageDate": row.message_date,
-		})
-	});
 	Ok(json!({
 		"safetyReportIdentification": safety_report_identification,
 		"senderInformation": sender_information,
 		"sender": sender,
 		"receiverInformation": receiver,
-		"messageHeader": message_header,
 	}))
 }
 

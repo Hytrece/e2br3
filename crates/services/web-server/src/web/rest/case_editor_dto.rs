@@ -111,7 +111,6 @@ pub struct CaseEditorCiCaseDto {
 pub struct CaseEditorCiRowsDto {
 	pub case: CaseEditorCiCaseDto,
 	pub safety_report_identification: Option<CaseEditorCiSafetyReportDto>,
-	pub message_header: Value,
 	pub other_case_identifiers: Vec<CaseEditorCiOtherIdentifierDto>,
 	pub linked_reports: Vec<CaseEditorCiLinkedReportDto>,
 	pub documents_held_by_sender: Vec<CaseEditorCiDocumentDto>,
