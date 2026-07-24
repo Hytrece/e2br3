@@ -977,6 +977,7 @@ pub async fn get_case(
 		&snapshot,
 		&mm,
 		id,
+		"case.read",
 		move |ctx, mm| {
 			Box::pin(async move {
 				let entity = CaseBmc::get(ctx, mm, id).await?;
@@ -1467,6 +1468,7 @@ pub async fn get_case_lifecycle(
 		&snapshot,
 		&mm,
 		id,
+		"case.read",
 		move |ctx, mm| Box::pin(get_case_lifecycle_authorized(ctx, mm, id)),
 	)
 	.await

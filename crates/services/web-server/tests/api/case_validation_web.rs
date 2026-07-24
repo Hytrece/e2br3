@@ -3182,11 +3182,8 @@ async fn test_locked_case_blocks_workflow_transition_even_for_admin_override(
 		}),
 	)
 	.await?;
-	assert_eq!(status, StatusCode::BAD_REQUEST, "{body:?}");
-	assert!(
-		body.to_string().contains("locked cases are read-only"),
-		"{body:?}"
-	);
+	assert_eq!(status, StatusCode::FORBIDDEN, "{body:?}");
+	assert!(body.to_string().contains("PERMISSION_DENIED"), "{body:?}");
 	Ok(())
 }
 

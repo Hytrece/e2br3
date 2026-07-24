@@ -1,7 +1,7 @@
 use axum::extract::{Path, State};
 use axum::Json;
 use lib_core::ctx::{canonical_role, Ctx};
-use lib_core::model::acs::{CASE_READ, CASE_UPDATE};
+use lib_core::model::authorization::CaseMutationKind;
 use lib_core::model::case::{
 	Case, CaseBmc, CaseWorkflowEventBmc, CaseWorkflowEventRow, WorkflowAssignRecord,
 	WorkflowTransitionRecord,
@@ -213,19 +213,39 @@ async fn workflow_event_to_read_result(
 pub async fn transition_case_workflow(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 	Path(id): Path<Uuid>,
 	Json(params): Json<ParamsForCreate<WorkflowTransitionInput>>,
 ) -> Result<(axum::http::StatusCode, Json<DataRestResult<CaseReadResult>>)> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, CASE_UPDATE)?;
 	let input = params.data;
-	let current = CaseBmc::get(&ctx, &mm, id).await?;
+	lib_rest_core::with_authorized_case_mutation(
+		&ctx,
+		&snapshot,
+		&mm,
+		id,
+		"case.workflow.transition",
+		CaseMutationKind::WorkflowTransition,
+		move |ctx, mm| {
+			Box::pin(transition_case_workflow_authorized(ctx, mm, id, input))
+		},
+	)
+	.await
+}
+
+async fn transition_case_workflow_authorized(
+	ctx: &Ctx,
+	mm: &ModelManager,
+	id: Uuid,
+	input: WorkflowTransitionInput,
+) -> Result<(axum::http::StatusCode, Json<DataRestResult<CaseReadResult>>)> {
+	let current = CaseBmc::get(ctx, mm, id).await?;
 	if current.status.eq_ignore_ascii_case("locked") {
 		return Err(Error::BadRequest {
 			message: "locked cases are read-only".to_string(),
 		});
 	}
-	let workflow = load_workflow_runtime_settings(&ctx, &mm).await?;
+	let workflow = load_workflow_runtime_settings(ctx, mm).await?;
 	if !workflow.enabled {
 		return Err(Error::BadRequest {
 			message: "workflow is not enabled".to_string(),
@@ -241,8 +261,8 @@ pub async fn transition_case_workflow(
 				),
 			})?;
 	let used_admin_override = require_current_workflow_step_owner(
-		&ctx,
-		&mm,
+		ctx,
+		mm,
 		&current_status.name,
 		&current,
 		current_status,
@@ -275,7 +295,7 @@ pub async fn transition_case_workflow(
 		.filter(|value| !value.is_empty())
 		.map(canonical_role);
 	if let Some(role) = target_role.as_deref() {
-		if !workflow_role_exists_and_is_active(&ctx, &mm, role).await? {
+		if !workflow_role_exists_and_is_active(ctx, mm, role).await? {
 			return Err(Error::BadRequest {
 				message: format!(
 					"target role '{role}' is not active or does not exist"
@@ -311,8 +331,8 @@ pub async fn transition_case_workflow(
 	);
 
 	CaseWorkflowEventBmc::record_transition(
-		&ctx,
-		&mm,
+		ctx,
+		mm,
 		ctx.user_id(),
 		WorkflowTransitionRecord {
 			case_id: id,
@@ -335,9 +355,9 @@ pub async fn transition_case_workflow(
 	.await
 	.map_err(Error::Model)?;
 
-	let entity = CaseBmc::get(&ctx, &mm, id).await?;
+	let entity = CaseBmc::get(ctx, mm, id).await?;
 	let entity =
-		crate::web::rest::case_rest::case_to_read_result(&ctx, &mm, entity).await?;
+		crate::web::rest::case_rest::case_to_read_result(ctx, mm, entity).await?;
 	Ok((
 		axum::http::StatusCode::OK,
 		Json(DataRestResult { data: entity }),
@@ -348,19 +368,37 @@ pub async fn transition_case_workflow(
 pub async fn assign_case_workflow(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 	Path(id): Path<Uuid>,
 	Json(params): Json<ParamsForCreate<WorkflowAssignInput>>,
 ) -> Result<(axum::http::StatusCode, Json<DataRestResult<CaseReadResult>>)> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, CASE_UPDATE)?;
 	let input = params.data;
-	let current = CaseBmc::get(&ctx, &mm, id).await?;
+	lib_rest_core::with_authorized_case_mutation(
+		&ctx,
+		&snapshot,
+		&mm,
+		id,
+		"case.workflow.transition",
+		CaseMutationKind::WorkflowTransition,
+		move |ctx, mm| Box::pin(assign_case_workflow_authorized(ctx, mm, id, input)),
+	)
+	.await
+}
+
+async fn assign_case_workflow_authorized(
+	ctx: &Ctx,
+	mm: &ModelManager,
+	id: Uuid,
+	input: WorkflowAssignInput,
+) -> Result<(axum::http::StatusCode, Json<DataRestResult<CaseReadResult>>)> {
+	let current = CaseBmc::get(ctx, mm, id).await?;
 	if current.status.eq_ignore_ascii_case("locked") {
 		return Err(Error::BadRequest {
 			message: "locked cases are read-only".to_string(),
 		});
 	}
-	let workflow = load_workflow_runtime_settings(&ctx, &mm).await?;
+	let workflow = load_workflow_runtime_settings(ctx, mm).await?;
 	if !workflow.enabled {
 		return Err(Error::BadRequest {
 			message: "workflow is not enabled".to_string(),
@@ -376,8 +414,8 @@ pub async fn assign_case_workflow(
 				),
 			})?;
 	let used_admin_override = require_current_workflow_step_owner(
-		&ctx,
-		&mm,
+		ctx,
+		mm,
 		&current_status.name,
 		&current,
 		current_status,
@@ -390,7 +428,7 @@ pub async fn assign_case_workflow(
 			message: "workflow assignment requires target_role".to_string(),
 		});
 	}
-	if !workflow_role_exists_and_is_active(&ctx, &mm, &target_role).await? {
+	if !workflow_role_exists_and_is_active(ctx, mm, &target_role).await? {
 		return Err(Error::BadRequest {
 			message: format!(
 				"target role '{target_role}' is not active or does not exist"
@@ -425,8 +463,8 @@ pub async fn assign_case_workflow(
 	);
 
 	CaseWorkflowEventBmc::record_assignment(
-		&ctx,
-		&mm,
+		ctx,
+		mm,
 		ctx.user_id(),
 		WorkflowAssignRecord {
 			case_id: id,
@@ -448,9 +486,9 @@ pub async fn assign_case_workflow(
 	.await
 	.map_err(Error::Model)?;
 
-	let entity = CaseBmc::get(&ctx, &mm, id).await?;
+	let entity = CaseBmc::get(ctx, mm, id).await?;
 	let entity =
-		crate::web::rest::case_rest::case_to_read_result(&ctx, &mm, entity).await?;
+		crate::web::rest::case_rest::case_to_read_result(ctx, mm, entity).await?;
 	Ok((
 		axum::http::StatusCode::OK,
 		Json(DataRestResult { data: entity }),
@@ -461,51 +499,71 @@ pub async fn assign_case_workflow(
 pub async fn list_case_workflow_events(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 	Path(id): Path<Uuid>,
 ) -> Result<(
 	axum::http::StatusCode,
 	Json<DataRestResult<Vec<WorkflowEventReadResult>>>,
 )> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, CASE_READ)?;
-	lib_rest_core::require_case_read_allowed(&ctx, &mm, id).await?;
+	lib_rest_core::with_authorized_case_read(
+		&ctx,
+		&snapshot,
+		&mm,
+		id,
+		"case.workflow.read",
+		move |ctx, mm| {
+			Box::pin(async move {
+				let rows = CaseWorkflowEventBmc::list_by_case(ctx, mm, id)
+					.await
+					.map_err(Error::Model)?;
+				let mut data = Vec::with_capacity(rows.len());
+				for row in rows {
+					data.push(workflow_event_to_read_result(mm, row).await?);
+				}
 
-	let rows = CaseWorkflowEventBmc::list_by_case(&ctx, &mm, id)
-		.await
-		.map_err(Error::Model)?;
-	let mut data = Vec::with_capacity(rows.len());
-	for row in rows {
-		data.push(workflow_event_to_read_result(&mm, row).await?);
-	}
-
-	Ok((axum::http::StatusCode::OK, Json(DataRestResult { data })))
+				Ok((axum::http::StatusCode::OK, Json(DataRestResult { data })))
+			})
+		},
+	)
+	.await
 }
 
 /// GET /api/cases/workflow/config
 pub async fn get_workflow_config_runtime(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 ) -> Result<(
 	axum::http::StatusCode,
 	Json<DataRestResult<WorkflowConfigRuntimeDoc>>,
 )> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, CASE_READ)?;
+	lib_rest_core::with_authorized_subject_action(
+		&ctx,
+		&snapshot,
+		&mm,
+		"case.workflow.config.read",
+		move |ctx, mm| {
+			Box::pin(async move {
+				let workflow = load_workflow_runtime_settings(ctx, mm).await?;
+				let data = WorkflowConfigRuntimeDoc {
+					workflow_enabled: workflow.enabled,
+					statuses: workflow
+						.statuses
+						.into_iter()
+						.map(|status| WorkflowStatusRuntimeDoc {
+							name: status.name,
+							editable: status.editable,
+							description: status.description,
+							allowed_roles: status.allowed_roles,
+						})
+						.collect(),
+				};
 
-	let workflow = load_workflow_runtime_settings(&ctx, &mm).await?;
-	let data = WorkflowConfigRuntimeDoc {
-		workflow_enabled: workflow.enabled,
-		statuses: workflow
-			.statuses
-			.into_iter()
-			.map(|status| WorkflowStatusRuntimeDoc {
-				name: status.name,
-				editable: status.editable,
-				description: status.description,
-				allowed_roles: status.allowed_roles,
+				Ok((axum::http::StatusCode::OK, Json(DataRestResult { data })))
 			})
-			.collect(),
-	};
-
-	Ok((axum::http::StatusCode::OK, Json(DataRestResult { data })))
+		},
+	)
+	.await
 }

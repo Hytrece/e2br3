@@ -1,9 +1,9 @@
 use crate::{Error, Result};
 use lib_core::authorization::{
-	authorize_contextual_mutation, authorize_contextual_read, policy_registry,
-	AuthorizationContext, AuthorizationDenial, AuthorizedMutation, AuthorizedRead,
-	AuthorizedSubject, CaseChildResource, CaseCreateProposal, CaseResource,
-	Collection, Existing, Parent, PolicySnapshotVersion, Proposed,
+	authorize_contextual_mutation, authorize_contextual_read, authorize_subject,
+	policy_registry, AuthorizationContext, AuthorizationDenial, AuthorizedMutation,
+	AuthorizedRead, AuthorizedSubject, CaseChildResource, CaseCreateProposal,
+	CaseResource, Collection, Existing, Parent, PolicySnapshotVersion, Proposed,
 	RequestAuthorizationSnapshot,
 };
 use lib_core::ctx::{Ctx, ROLE_SYSTEM_ADMIN};
@@ -93,6 +93,43 @@ pub fn rls_ctx_for_authorized_subject(
 	Ok(request_ctx.clone())
 }
 
+pub async fn with_authorized_subject_action<T, F>(
+	request_ctx: &Ctx,
+	snapshot: &RequestAuthorizationSnapshot,
+	mm: &ModelManager,
+	action_id: &'static str,
+	operation: F,
+) -> Result<T>
+where
+	F: for<'ctx> FnOnce(
+		&'ctx Ctx,
+		&'ctx ModelManager,
+	) -> Pin<Box<dyn Future<Output = Result<T>> + Send + 'ctx>>,
+{
+	let dbx = mm.dbx();
+	dbx.begin_txn()
+		.await
+		.map_err(lib_core::model::Error::from)?;
+	if let Err(error) = set_full_context_from_ctx_dbx(dbx, request_ctx).await {
+		let _ = dbx.rollback_txn().await;
+		return Err(error.into());
+	}
+	let result = async {
+		let action =
+			policy_registry().subject_action(action_id).ok_or_else(|| {
+				Error::AccessDenied {
+					required_role: format!("registered {action_id} action"),
+				}
+			})?;
+		let permit = authorize_subject(action, snapshot).map_err(denied)?;
+		let authorized_ctx =
+			rls_ctx_for_authorized_subject(request_ctx, snapshot, &permit)?;
+		operation(&authorized_ctx, mm).await
+	}
+	.await;
+	finish_fact_transaction(dbx, result).await
+}
+
 pub async fn with_authorized_case_collection<T, F>(
 	request_ctx: &Ctx,
 	snapshot: &RequestAuthorizationSnapshot,
@@ -135,6 +172,7 @@ pub async fn with_authorized_case_read<T, F>(
 	snapshot: &RequestAuthorizationSnapshot,
 	mm: &ModelManager,
 	case_id: Uuid,
+	action_id: &'static str,
 	operation: F,
 ) -> Result<T>
 where
@@ -157,9 +195,9 @@ where
 			.await
 			.map_err(map_fact_load_error)?;
 		let action = policy_registry()
-			.context_action::<Existing<CaseResource>>("case.read")
+			.context_action::<Existing<CaseResource>>(action_id)
 			.ok_or_else(|| Error::AccessDenied {
-				required_role: "registered case.read action".to_string(),
+				required_role: format!("registered {action_id} action"),
 			})?;
 		let permit =
 			authorize_contextual_read(action, snapshot, context).map_err(denied)?;

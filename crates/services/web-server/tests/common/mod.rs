@@ -142,6 +142,11 @@ async fn apply_test_authorization_isolation_migration() -> Result<()> {
 			))
 			.execute(&pool)
 			.await?;
+			sqlx::raw_sql(include_str!(
+				"../../../../../db/migrations/20260724_authorization_workflow_config_action.sql"
+			))
+			.execute(&pool)
+			.await?;
 			AuthorizationMigrationService::reconcile_registry_storage(
 				&pool,
 				policy_registry(),

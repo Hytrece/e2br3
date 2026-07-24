@@ -819,6 +819,11 @@ async fn reviewed_catalog_predecessor_upgrades_explicitly() -> Result<()> {
 	))
 	.execute(database.pool())
 	.await?;
+	sqlx::raw_sql(include_str!(
+		"../../../../../db/migrations/20260724_authorization_workflow_config_action.sql"
+	))
+	.execute(database.pool())
+	.await?;
 	let stored: String = sqlx::query_scalar(
 		"SELECT catalog_hash FROM authorization_catalog_state WHERE singleton",
 	)
