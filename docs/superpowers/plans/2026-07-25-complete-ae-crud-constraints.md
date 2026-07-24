@@ -204,15 +204,13 @@ git commit -m "refactor: use canonical term highlight codes"
 - Modify: `crates/libs/validator/src/catalog.rs`
 - Modify: `crates/libs/validator/src/portable_bindings/e.rs`
 - Modify: `crates/libs/lib-core/src/model/reaction.rs`
-- Modify: `crates/services/web-server/src/web/rest/case_editor_rest/ae.rs`
-- Modify: `db/bootstrap/05-reactions.sql`
-- Create: `db/migrations/20260725_required_intervention_true_marker.sql`
+- Modify: `crates/services/web-server/src/web/rest/case_editor_rest/common.rs`
 - Test: `crates/libs/validator/src/portable_constraints.rs`
 - Test: `crates/services/web-server/tests/api/case_editor_contract_web.rs`
 
 **Interfaces:**
 - Consumes: `requiredIntervention: true | "NI"`.
-- Produces: `required_intervention: Option<bool>` plus `required_intervention_null_flavor: Option<String>`.
+- Produces: the XML-compatible stored marker `"true"` plus `required_intervention_null_flavor: Option<String>`.
 
 - [ ] **Step 1: Write failing generator and API tests**
 
@@ -267,10 +265,11 @@ format!("{}.ALLOWED.VALUE", entry.code)
 
 Retain descriptive regional constraints as non-portable.
 
-- [ ] **Step 4: Type the model and binding**
+- [ ] **Step 4: Normalize the typed API value and bind the catalog rules**
 
-Change the DB/model value to boolean and bind both the value and in-band null
-flavor path:
+Keep the existing XML-compatible `"true"` storage representation, normalize the
+typed frontend/API value at the row-model boundary, and bind both the value and
+in-band null flavor path:
 
 ```rust
 PortableBinding {
@@ -286,9 +285,9 @@ PortableBinding {
 ```
 
 Use the existing null-flavor column for `"NI"`; do not store `"NI"` in the
-boolean column. In the AE endpoint normalization:
+value column. In row-model normalization:
 
-- `true` becomes `required_intervention = Some(true)` and explicitly clears
+- `true` becomes `required_intervention = Some("true")` and explicitly clears
   `required_intervention_null_flavor`.
 - `"NI"` becomes `required_intervention_null_flavor = Some("NI")` and explicitly
   clears `required_intervention`.
@@ -320,9 +319,7 @@ git add registry/tools/build_dictionary.py \
   crates/libs/validator/src/catalog.rs \
   crates/libs/validator/src/portable_bindings/e.rs \
   crates/libs/lib-core/src/model/reaction.rs \
-  crates/services/web-server/src/web/rest/case_editor_rest/ae.rs \
-  db/bootstrap/05-reactions.sql \
-  db/migrations/20260725_required_intervention_true_marker.sql \
+  crates/services/web-server/src/web/rest/case_editor_rest/common.rs \
   crates/services/web-server/tests/api/case_editor_contract_web.rs
 git commit -m "feat: enforce FDA required intervention constraint"
 ```

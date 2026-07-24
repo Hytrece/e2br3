@@ -180,7 +180,8 @@
     "label": "Term Highlighted by Reporter",
     "section": "E",
     "authority": "ICH",
-    "status": "incomplete",
+    "status": "complete",
+    "editor_page": "AE",
     "backend": {
       "status": "mapped",
       "model": "Reaction",
@@ -195,8 +196,8 @@
       "file": "../frontend/E2BR3-frontend/components/case-form/sections/SectionE.tsx",
       "evidence": "SectionE binds fieldNumber E.i.3.1 to reactions[index].termHighlighted."
     },
-    "action": "Use one canonical coded representation for E.i.3.1 in the frontend, API, Rust model, and database before restoring complete status.",
-    "notes": "CRUD audit failed lossless roundtrip: the frontend uses coded strings such as 1/2/3 while Reaction.term_highlighted is Option<bool>."
+    "action": "",
+    "notes": "Frontend, API, Rust, DB, and XML preserve the canonical ICH code 1/2/3/4; focused CRUD and portable 422 tests cover code 4 and invalid code 9."
   },
   {
     "id": "E.i.serious",
@@ -380,7 +381,8 @@
     "label": "Required Intervention",
     "section": "E",
     "authority": "FDA",
-    "status": "incomplete",
+    "status": "complete",
+    "editor_page": "AE",
     "backend": {
       "status": "mapped",
       "model": "Reaction",
@@ -395,8 +397,8 @@
       "file": "../frontend/E2BR3-frontend/components/case-form/sections/SectionE.tsx",
       "evidence": "SectionE binds fieldNumber FDA.E.i.3.2h to reactions[index].requiredIntervention."
     },
-    "action": "Add an executable FDA regional allowed-value constraint and portable binding before restoring complete status.",
-    "notes": "CRUD roundtrip passes, but the FDA regional dictionary currently has source allowed_values only; invalid values are not rejected by the portable constraint engine."
+    "action": "",
+    "notes": "The FDA regional dictionary generates a true-marker constraint. Focused tests cover true/NI CRUD transitions, stale-column clearing, and structured 422 rejection."
   },
   {
     "id": "E.local.expectedness",
