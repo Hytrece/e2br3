@@ -1392,6 +1392,7 @@
     "section": "C",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "SI",
     "backend": {
       "status": "mapped",
       "model": "StudyRegistrationNumber",
@@ -1416,6 +1417,7 @@
     "section": "C",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "SI",
     "backend": {
       "status": "mapped",
       "model": "StudyRegistrationNumber",
@@ -1440,6 +1442,7 @@
     "section": "C",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "SI",
     "backend": {
       "status": "mapped",
       "model": "StudyInformation",
@@ -1464,6 +1467,7 @@
     "section": "C",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "SI",
     "backend": {
       "status": "mapped",
       "model": "StudyInformation",
@@ -1488,6 +1492,7 @@
     "section": "C",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "SI",
     "backend": {
       "status": "mapped",
       "model": "StudyInformation",
@@ -1512,6 +1517,7 @@
     "section": "C",
     "authority": "MFDS",
     "status": "complete",
+    "editor_page": "SI",
     "backend": {
       "status": "mapped",
       "model": "StudyInformation",
@@ -1536,6 +1542,7 @@
     "section": "C",
     "authority": "FDA",
     "status": "complete",
+    "editor_page": "SI",
     "backend": {
       "status": "mapped",
       "model": "StudyInformation",
@@ -1560,6 +1567,7 @@
     "section": "C",
     "authority": "FDA",
     "status": "complete",
+    "editor_page": "SI",
     "backend": {
       "status": "mapped",
       "model": "StudyInformation",
@@ -1584,6 +1592,7 @@
     "section": "C",
     "authority": "FDA",
     "status": "complete",
+    "editor_page": "SI",
     "backend": {
       "status": "mapped",
       "model": "StudyFdaCrossReportedInd",
@@ -1608,6 +1617,7 @@
     "section": "C",
     "authority": "FDA",
     "status": "complete",
+    "editor_page": "SI",
     "local_only": true,
     "backend": {
       "status": "mapped",
