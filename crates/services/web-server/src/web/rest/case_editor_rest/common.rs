@@ -13,22 +13,6 @@ pub(super) use crate::web::rest::case_editor_dto::{
 pub(super) use crate::web::rest::case_rest::{case_to_read_result, PublicCaseView};
 pub(super) use axum::extract::{Path, Query, State};
 pub(super) use axum::Json;
-pub(super) use lib_core::model::acs::{
-	CASE_IDENTIFIER_LIST, CASE_READ, CASE_SUMMARY_LIST, CASE_UPDATE,
-	DEATH_CAUSE_LIST, DRUG_CREATE, DRUG_DELETE, DRUG_DOSAGE_LIST,
-	DRUG_INDICATION_LIST, DRUG_LIST, DRUG_REACTION_ASSESSMENT_LIST, DRUG_READ,
-	DRUG_RECURRENCE_LIST, DRUG_SUBSTANCE_LIST, DRUG_UPDATE,
-	LITERATURE_REFERENCE_LIST, MEDICAL_HISTORY_LIST, MESSAGE_HEADER_READ,
-	NARRATIVE_READ, PARENT_INFORMATION_LIST, PARENT_MEDICAL_HISTORY_LIST,
-	PARENT_PAST_DRUG_LIST, PAST_DRUG_CREATE, PAST_DRUG_DELETE, PAST_DRUG_LIST,
-	PAST_DRUG_READ, PAST_DRUG_UPDATE, PATIENT_DEATH_LIST, PATIENT_IDENTIFIER_LIST,
-	PATIENT_READ, PRIMARY_SOURCE_LIST, REACTION_CREATE, REACTION_DELETE,
-	REACTION_LIST, REACTION_READ, REACTION_UPDATE, RECEIVER_READ,
-	SAFETY_REPORT_READ, SAFETY_REPORT_UPDATE, SENDER_DIAGNOSIS_LIST,
-	SENDER_INFORMATION_LIST, STUDY_INFORMATION_LIST, STUDY_REGISTRATION_LIST,
-	TEST_RESULT_CREATE, TEST_RESULT_DELETE, TEST_RESULT_LIST, TEST_RESULT_READ,
-	TEST_RESULT_UPDATE,
-};
 pub(super) use lib_core::model::case::CaseBmc;
 pub(super) use lib_core::model::case_identifiers::{
 	LinkedReportNumberBmc, LinkedReportNumberFilter, OtherCaseIdentifierBmc,
@@ -615,26 +599,34 @@ pub(super) fn editor_page_row_response(
 }
 
 macro_rules! repeatable_page_row_read_handler {
-	($fn_name:ident, [$($permission:expr),+ $(,)?], $build_response:ident $(,)?) => {
+	($fn_name:ident, $build_response:ident $(,)?) => {
 		pub async fn $fn_name(
 			State(mm): State<ModelManager>,
 			ctx_w: CtxW,
+			snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 			Path((case_id, row_id)): Path<(Uuid, Uuid)>,
 			Query(query): Query<CaseEditorPageProjectionQuery>,
 		) -> Result<(axum::http::StatusCode, Json<Value>)> {
 			let ctx = ctx_w.0;
-			$(require_permission(&ctx, $permission)?;)+
-			lib_rest_core::require_case_read_allowed(&ctx, &mm, case_id).await?;
-
-			let response = $build_response(
+			lib_rest_core::with_authorized_case_child_read(
 				&ctx,
+				&snapshot,
 				&mm,
 				case_id,
-				row_id,
-				query_authorities_csv(&query)?,
+				format!("editor/{}/{}", stringify!($fn_name), row_id),
+				move |ctx, mm| Box::pin(async move {
+					let response = $build_response(
+						ctx,
+						mm,
+						case_id,
+						row_id,
+						query_authorities_csv(&query)?,
+					)
+					.await?;
+					Ok((axum::http::StatusCode::OK, Json(response)))
+				}),
 			)
-			.await?;
-			Ok((axum::http::StatusCode::OK, Json(response)))
+			.await
 		}
 	};
 }
@@ -644,7 +636,6 @@ macro_rules! repeatable_page_row_create_handler {
 		$fn_name:ident,
 		section: $section:expr,
 		row_key: $row_key:expr,
-		permission: $permission:expr,
 		bmc: $bmc:ident,
 		model: $model:ty,
 		aliases: $aliases:expr,
@@ -654,39 +645,46 @@ macro_rules! repeatable_page_row_create_handler {
 		pub async fn $fn_name(
 			State(mm): State<ModelManager>,
 			ctx_w: CtxW,
+			snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 			Path(case_id): Path<Uuid>,
 			Json(request): Json<CaseEditorPagePatchRequest>,
 		) -> Result<(axum::http::StatusCode, Json<Value>)> {
 			let ctx = ctx_w.0;
-			require_permission(&ctx, $permission)?;
-			lib_rest_core::require_case_write_allowed(&ctx, &mm, case_id).await?;
-			let requested_authorities =
-				validate_request_projection_context(request.authorities.as_deref())?;
-
-			let row = required_row_object($section, &request.rows, $row_key)?;
-			validate_row_payload($section, $row_key, row, None)?;
-			let extras = $extras_fn(&ctx, &mm, case_id, row).await?;
-			let value = row_model_value(row, $aliases, &extras);
-			let create = parse_row_model::<$model>($section, $row_key, value)?;
-			let row_id = $bmc::create(&ctx, &mm, create).await?;
-			mark_editor_validation_cache_stale(
+			lib_rest_core::with_authorized_case_child_mutation(
 				&ctx,
+				&snapshot,
 				&mm,
 				case_id,
-				requested_authorities.clone(),
-			)
-			.await?;
-			let response =
-				$build_response(&ctx, &mm, case_id, row_id, requested_authorities)
+				concat!("editor/", $section, "/", $row_key),
+				move |ctx, mm| Box::pin(async move {
+					let requested_authorities =
+						validate_request_projection_context(request.authorities.as_deref())?;
+					let row = required_row_object($section, &request.rows, $row_key)?;
+					validate_row_payload($section, $row_key, row, None)?;
+					let extras = $extras_fn(ctx, mm, case_id, row).await?;
+					let value = row_model_value(row, $aliases, &extras);
+					let create = parse_row_model::<$model>($section, $row_key, value)?;
+					let row_id = $bmc::create(ctx, mm, create).await?;
+					mark_editor_validation_cache_stale(
+						ctx,
+						mm,
+						case_id,
+						requested_authorities.clone(),
+					)
 					.await?;
-			Ok((axum::http::StatusCode::CREATED, Json(response)))
+					let response =
+						$build_response(ctx, mm, case_id, row_id, requested_authorities)
+							.await?;
+					Ok((axum::http::StatusCode::CREATED, Json(response)))
+				}),
+			)
+			.await
 		}
 	};
 	(
 		$fn_name:ident,
 		section: $section:expr,
 		row_key: $row_key:expr,
-		permission: $permission:expr,
 		bmc: $bmc:ident,
 		model: $model:ty,
 		aliases: $aliases:expr,
@@ -696,36 +694,44 @@ macro_rules! repeatable_page_row_create_handler {
 		pub async fn $fn_name(
 			State(mm): State<ModelManager>,
 			ctx_w: CtxW,
+			snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 			Path(case_id): Path<Uuid>,
 			Json(request): Json<CaseEditorPagePatchRequest>,
 		) -> Result<(axum::http::StatusCode, Json<Value>)> {
 			let ctx = ctx_w.0;
-			require_permission(&ctx, $permission)?;
-			lib_rest_core::require_case_write_allowed(&ctx, &mm, case_id).await?;
-			let requested_authorities =
-				validate_request_projection_context(request.authorities.as_deref())?;
-
-			let row = required_row_object($section, &request.rows, $row_key)?;
-			validate_row_payload($section, $row_key, row, None)?;
-			let extras = {
-				let $case_id = case_id;
-				let $row = row;
-				$extras
-			};
-			let value = row_model_value(row, $aliases, &extras);
-			let create = parse_row_model::<$model>($section, $row_key, value)?;
-			let row_id = $bmc::create(&ctx, &mm, create).await?;
-			mark_editor_validation_cache_stale(
+			lib_rest_core::with_authorized_case_child_mutation(
 				&ctx,
+				&snapshot,
 				&mm,
 				case_id,
-				requested_authorities.clone(),
-			)
-			.await?;
-			let response =
-				$build_response(&ctx, &mm, case_id, row_id, requested_authorities)
+				concat!("editor/", $section, "/", $row_key),
+				move |ctx, mm| Box::pin(async move {
+					let requested_authorities =
+						validate_request_projection_context(request.authorities.as_deref())?;
+					let row = required_row_object($section, &request.rows, $row_key)?;
+					validate_row_payload($section, $row_key, row, None)?;
+					let extras = {
+						let $case_id = case_id;
+						let $row = row;
+						$extras
+					};
+					let value = row_model_value(row, $aliases, &extras);
+					let create = parse_row_model::<$model>($section, $row_key, value)?;
+					let row_id = $bmc::create(ctx, mm, create).await?;
+					mark_editor_validation_cache_stale(
+						ctx,
+						mm,
+						case_id,
+						requested_authorities.clone(),
+					)
 					.await?;
-			Ok((axum::http::StatusCode::CREATED, Json(response)))
+					let response =
+						$build_response(ctx, mm, case_id, row_id, requested_authorities)
+							.await?;
+					Ok((axum::http::StatusCode::CREATED, Json(response)))
+				}),
+			)
+			.await
 		}
 	};
 }
@@ -735,7 +741,6 @@ macro_rules! repeatable_page_row_patch_handler {
 		$fn_name:ident,
 		section: $section:expr,
 		row_key: $row_key:expr,
-		permission: $permission:expr,
 		bmc: $bmc:ident,
 		model: $model:ty,
 		verify: $verify_fn:ident,
@@ -746,53 +751,59 @@ macro_rules! repeatable_page_row_patch_handler {
 		pub async fn $fn_name(
 			State(mm): State<ModelManager>,
 			ctx_w: CtxW,
+			snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 			Path((case_id, row_id)): Path<(Uuid, Uuid)>,
 			Json(request): Json<CaseEditorPagePatchRequest>,
 		) -> Result<(axum::http::StatusCode, Json<Value>)> {
 			let ctx = ctx_w.0;
-			require_permission(&ctx, $permission)?;
-			lib_rest_core::require_case_write_allowed(&ctx, &mm, case_id).await?;
-			let requested_authorities =
-				validate_request_projection_context(request.authorities.as_deref())?;
-
-			$verify_fn(&ctx, &mm, case_id, row_id).await?;
-			let synthesized_rows;
-			let rows = if !request.changes.is_empty() {
-				synthesized_rows = row_payload_from_changes(
-					$section,
-					$row_key,
-					&request.changes,
-					$changes,
-				)?;
-				&synthesized_rows
-			} else {
-				&request.rows
-			};
-			let row = required_row_object($section, rows, $row_key)?;
-			let changed_paths = (!request.changes.is_empty())
-				.then(|| request.changes.keys().cloned().collect::<BTreeSet<_>>());
-			validate_row_payload($section, $row_key, row, changed_paths.as_ref())?;
-			let value = row_model_value(row, $aliases, &[]);
-			let update = parse_row_model::<$model>($section, $row_key, value)?;
-			$bmc::update(&ctx, &mm, row_id, update).await?;
-			refresh_editor_validation_cache(
+			lib_rest_core::with_authorized_case_child_mutation(
 				&ctx,
+				&snapshot,
 				&mm,
 				case_id,
-				requested_authorities.clone(),
-			)
-			.await?;
-			let response =
-				$build_response(&ctx, &mm, case_id, row_id, requested_authorities)
+				format!("editor/{}/{}/{}", $section, $row_key, row_id),
+				move |ctx, mm| Box::pin(async move {
+					let requested_authorities =
+						validate_request_projection_context(request.authorities.as_deref())?;
+					$verify_fn(ctx, mm, case_id, row_id).await?;
+					let synthesized_rows;
+					let rows = if !request.changes.is_empty() {
+						synthesized_rows = row_payload_from_changes(
+							$section, $row_key, &request.changes, $changes,
+						)?;
+						&synthesized_rows
+					} else {
+						&request.rows
+					};
+					let row = required_row_object($section, rows, $row_key)?;
+					let changed_paths = (!request.changes.is_empty())
+						.then(|| request.changes.keys().cloned().collect::<BTreeSet<_>>());
+					validate_row_payload(
+						$section,
+						$row_key,
+						row,
+						changed_paths.as_ref(),
+					)?;
+					let value = row_model_value(row, $aliases, &[]);
+					let update = parse_row_model::<$model>($section, $row_key, value)?;
+					$bmc::update(ctx, mm, row_id, update).await?;
+					refresh_editor_validation_cache(
+						ctx, mm, case_id, requested_authorities.clone(),
+					)
 					.await?;
-			Ok((axum::http::StatusCode::OK, Json(response)))
+					let response =
+						$build_response(ctx, mm, case_id, row_id, requested_authorities)
+							.await?;
+					Ok((axum::http::StatusCode::OK, Json(response)))
+				}),
+			)
+			.await
 		}
 	};
 	(
 		$fn_name:ident,
 		section: $section:expr,
 		row_key: $row_key:expr,
-		permission: $permission:expr,
 		bmc: $bmc:ident,
 		model: $model:ty,
 		changes: $changes:expr,
@@ -802,46 +813,53 @@ macro_rules! repeatable_page_row_patch_handler {
 		pub async fn $fn_name(
 			State(mm): State<ModelManager>,
 			ctx_w: CtxW,
+			snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 			Path((case_id, row_id)): Path<(Uuid, Uuid)>,
 			Json(request): Json<CaseEditorPagePatchRequest>,
 		) -> Result<(axum::http::StatusCode, Json<Value>)> {
 			let ctx = ctx_w.0;
-			require_permission(&ctx, $permission)?;
-			lib_rest_core::require_case_write_allowed(&ctx, &mm, case_id).await?;
-			let requested_authorities =
-				validate_request_projection_context(request.authorities.as_deref())?;
-
-			$bmc::get_in_case(&ctx, &mm, case_id, row_id).await?;
-			let synthesized_rows;
-			let rows = if !request.changes.is_empty() {
-				synthesized_rows = row_payload_from_changes(
-					$section,
-					$row_key,
-					&request.changes,
-					$changes,
-				)?;
-				&synthesized_rows
-			} else {
-				&request.rows
-			};
-			let row = required_row_object($section, rows, $row_key)?;
-			let changed_paths = (!request.changes.is_empty())
-				.then(|| request.changes.keys().cloned().collect::<BTreeSet<_>>());
-			validate_row_payload($section, $row_key, row, changed_paths.as_ref())?;
-			let value = row_model_value(row, $aliases, &[]);
-			let update = parse_row_model::<$model>($section, $row_key, value)?;
-			$bmc::update(&ctx, &mm, row_id, update).await?;
-			refresh_editor_validation_cache(
+			lib_rest_core::with_authorized_case_child_mutation(
 				&ctx,
+				&snapshot,
 				&mm,
 				case_id,
-				requested_authorities.clone(),
-			)
-			.await?;
-			let response =
-				$build_response(&ctx, &mm, case_id, row_id, requested_authorities)
+				format!("editor/{}/{}/{}", $section, $row_key, row_id),
+				move |ctx, mm| Box::pin(async move {
+					let requested_authorities =
+						validate_request_projection_context(request.authorities.as_deref())?;
+					$bmc::get_in_case(ctx, mm, case_id, row_id).await?;
+					let synthesized_rows;
+					let rows = if !request.changes.is_empty() {
+						synthesized_rows = row_payload_from_changes(
+							$section, $row_key, &request.changes, $changes,
+						)?;
+						&synthesized_rows
+					} else {
+						&request.rows
+					};
+					let row = required_row_object($section, rows, $row_key)?;
+					let changed_paths = (!request.changes.is_empty())
+						.then(|| request.changes.keys().cloned().collect::<BTreeSet<_>>());
+					validate_row_payload(
+						$section,
+						$row_key,
+						row,
+						changed_paths.as_ref(),
+					)?;
+					let value = row_model_value(row, $aliases, &[]);
+					let update = parse_row_model::<$model>($section, $row_key, value)?;
+					$bmc::update(ctx, mm, row_id, update).await?;
+					refresh_editor_validation_cache(
+						ctx, mm, case_id, requested_authorities.clone(),
+					)
 					.await?;
-			Ok((axum::http::StatusCode::OK, Json(response)))
+					let response =
+						$build_response(ctx, mm, case_id, row_id, requested_authorities)
+							.await?;
+					Ok((axum::http::StatusCode::OK, Json(response)))
+				}),
+			)
+			.await
 		}
 	};
 }
@@ -849,23 +867,30 @@ macro_rules! repeatable_page_row_patch_handler {
 macro_rules! repeatable_page_row_delete_handler {
 	(
 		$fn_name:ident,
-		permission: $permission:expr,
 		bmc: $bmc:ident,
 		verify: $verify_fn:ident $(,)?
 	) => {
 		pub async fn $fn_name(
 			State(mm): State<ModelManager>,
 			ctx_w: CtxW,
+			snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 			Path((case_id, row_id)): Path<(Uuid, Uuid)>,
 		) -> Result<axum::http::StatusCode> {
 			let ctx = ctx_w.0;
-			require_permission(&ctx, $permission)?;
-			lib_rest_core::require_case_write_allowed(&ctx, &mm, case_id).await?;
-
-			$verify_fn(&ctx, &mm, case_id, row_id).await?;
-			$bmc::delete(&ctx, &mm, row_id).await?;
-			mark_editor_validation_cache_stale(&ctx, &mm, case_id, None).await?;
-			Ok(axum::http::StatusCode::NO_CONTENT)
+			lib_rest_core::with_authorized_case_child_mutation(
+				&ctx,
+				&snapshot,
+				&mm,
+				case_id,
+				format!("editor/{}/{}", stringify!($fn_name), row_id),
+				move |ctx, mm| Box::pin(async move {
+					$verify_fn(ctx, mm, case_id, row_id).await?;
+					$bmc::delete(ctx, mm, row_id).await?;
+					mark_editor_validation_cache_stale(ctx, mm, case_id, None).await?;
+					Ok(axum::http::StatusCode::NO_CONTENT)
+				}),
+			)
+			.await
 		}
 	};
 }
@@ -874,7 +899,6 @@ macro_rules! repeatable_list_handler {
 	(
 		$fn_name:ident,
 		$row_dto:ty,
-		$list_permission:expr,
 		$load_rows:ident,
 		include_deleted
 		$(,)?
@@ -882,50 +906,61 @@ macro_rules! repeatable_list_handler {
 		pub async fn $fn_name(
 			State(mm): State<ModelManager>,
 			ctx_w: CtxW,
+			snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 			Path(case_id): Path<Uuid>,
 		) -> Result<(
 			axum::http::StatusCode,
 			Json<CaseEditorListResponse<$row_dto>>,
 		)> {
 			let ctx = ctx_w.0;
-			require_permission(&ctx, CASE_READ)?;
-			require_permission(&ctx, $list_permission)?;
-			lib_rest_core::require_case_read_allowed(&ctx, &mm, case_id).await?;
-
-			let rows = $load_rows(&ctx, &mm, case_id, false).await?;
-
-			Ok((
-				axum::http::StatusCode::OK,
-				Json(CaseEditorListResponse { case_id, rows }),
-			))
+			lib_rest_core::with_authorized_case_child_read(
+				&ctx,
+				&snapshot,
+				&mm,
+				case_id,
+				concat!("editor/", stringify!($fn_name)),
+				move |ctx, mm| Box::pin(async move {
+					let rows = $load_rows(ctx, mm, case_id, false).await?;
+					Ok((
+						axum::http::StatusCode::OK,
+						Json(CaseEditorListResponse { case_id, rows }),
+					))
+				}),
+			)
+			.await
 		}
 	};
 	(
 		$fn_name:ident,
 		$row_dto:ty,
-		$list_permission:expr,
 		$load_rows:ident
 		$(,)?
 	) => {
 		pub async fn $fn_name(
 			State(mm): State<ModelManager>,
 			ctx_w: CtxW,
+			snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 			Path(case_id): Path<Uuid>,
 		) -> Result<(
 			axum::http::StatusCode,
 			Json<CaseEditorListResponse<$row_dto>>,
 		)> {
 			let ctx = ctx_w.0;
-			require_permission(&ctx, CASE_READ)?;
-			require_permission(&ctx, $list_permission)?;
-			lib_rest_core::require_case_read_allowed(&ctx, &mm, case_id).await?;
-
-			let rows = $load_rows(&ctx, &mm, case_id).await?;
-
-			Ok((
-				axum::http::StatusCode::OK,
-				Json(CaseEditorListResponse { case_id, rows }),
-			))
+			lib_rest_core::with_authorized_case_child_read(
+				&ctx,
+				&snapshot,
+				&mm,
+				case_id,
+				concat!("editor/", stringify!($fn_name)),
+				move |ctx, mm| Box::pin(async move {
+					let rows = $load_rows(ctx, mm, case_id).await?;
+					Ok((
+						axum::http::StatusCode::OK,
+						Json(CaseEditorListResponse { case_id, rows }),
+					))
+				}),
+			)
+			.await
 		}
 	};
 }
@@ -935,39 +970,54 @@ macro_rules! repeatable_page_row_delete_restore_handlers {
 		delete: $delete_fn:ident,
 		restore: $restore_fn:ident,
 		bmc: $bmc:ident,
-		delete_permission: $delete_permission:expr,
-		update_permission: $update_permission:expr,
 		build_response: $build_response:ident $(,)?
 	) => {
 		pub async fn $delete_fn(
 			State(mm): State<ModelManager>,
 			ctx_w: CtxW,
+			snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 			Path((case_id, row_id)): Path<(Uuid, Uuid)>,
 		) -> Result<axum::http::StatusCode> {
 			let ctx = ctx_w.0;
-			require_permission(&ctx, $delete_permission)?;
-			lib_rest_core::require_case_write_allowed(&ctx, &mm, case_id).await?;
-
-			$bmc::get_in_case(&ctx, &mm, case_id, row_id).await?;
-			$bmc::delete(&ctx, &mm, row_id).await?;
-			mark_editor_validation_cache_stale(&ctx, &mm, case_id, None).await?;
-			Ok(axum::http::StatusCode::NO_CONTENT)
+			lib_rest_core::with_authorized_case_child_mutation(
+				&ctx,
+				&snapshot,
+				&mm,
+				case_id,
+				format!("editor/{}/{}", stringify!($delete_fn), row_id),
+				move |ctx, mm| Box::pin(async move {
+					$bmc::get_in_case(ctx, mm, case_id, row_id).await?;
+					$bmc::delete(ctx, mm, row_id).await?;
+					mark_editor_validation_cache_stale(ctx, mm, case_id, None).await?;
+					Ok(axum::http::StatusCode::NO_CONTENT)
+				}),
+			)
+			.await
 		}
 
 		pub async fn $restore_fn(
 			State(mm): State<ModelManager>,
 			ctx_w: CtxW,
+			snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 			Path((case_id, row_id)): Path<(Uuid, Uuid)>,
 		) -> Result<(axum::http::StatusCode, Json<Value>)> {
 			let ctx = ctx_w.0;
-			require_permission(&ctx, $update_permission)?;
-			lib_rest_core::require_case_write_allowed(&ctx, &mm, case_id).await?;
-
-			$bmc::get_in_case_with_deleted(&ctx, &mm, case_id, row_id, true).await?;
-			$bmc::restore_in_case(&ctx, &mm, case_id, row_id).await?;
-			mark_editor_validation_cache_stale(&ctx, &mm, case_id, None).await?;
-			let response = $build_response(&ctx, &mm, case_id, row_id, None).await?;
-			Ok((axum::http::StatusCode::OK, Json(response)))
+			lib_rest_core::with_authorized_case_child_mutation(
+				&ctx,
+				&snapshot,
+				&mm,
+				case_id,
+				format!("editor/{}/{}", stringify!($restore_fn), row_id),
+				move |ctx, mm| Box::pin(async move {
+					$bmc::get_in_case_with_deleted(ctx, mm, case_id, row_id, true)
+						.await?;
+					$bmc::restore_in_case(ctx, mm, case_id, row_id).await?;
+					mark_editor_validation_cache_stale(ctx, mm, case_id, None).await?;
+					let response = $build_response(ctx, mm, case_id, row_id, None).await?;
+					Ok((axum::http::StatusCode::OK, Json(response)))
+				}),
+			)
+			.await
 		}
 	};
 }
@@ -976,13 +1026,13 @@ macro_rules! direct_page_projection_handler {
 	(
 		$fn_name:ident,
 		$section:literal,
-		$loader:ident,
-		[$($perm:path),* $(,)?]
+		$loader:ident
 		$(,)?
 	) => {
 		pub async fn $fn_name(
 			State(mm): State<ModelManager>,
 			ctx_w: CtxW,
+			snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 			Path(case_id): Path<Uuid>,
 			Query(query): Query<CaseEditorPageProjectionQuery>,
 		) -> Result<(
@@ -990,20 +1040,26 @@ macro_rules! direct_page_projection_handler {
 			Json<CaseEditorPageProjectionResponse>,
 		)> {
 			let ctx = ctx_w.0;
-			require_permission(&ctx, CASE_READ)?;
-			$( require_permission(&ctx, $perm)?; )*
-			lib_rest_core::require_case_read_allowed(&ctx, &mm, case_id).await?;
-
-			let projection = direct_page_projection_response(
+			lib_rest_core::with_authorized_case_child_read(
 				&ctx,
+				&snapshot,
 				&mm,
 				case_id,
-				$section,
-				query_authorities_csv(&query)?,
-				$loader(&ctx, &mm, case_id).await?,
+				concat!("editor/", $section),
+				move |ctx, mm| Box::pin(async move {
+					let projection = direct_page_projection_response(
+						ctx,
+						mm,
+						case_id,
+						$section,
+						query_authorities_csv(&query)?,
+						$loader(ctx, mm, case_id).await?,
+					)
+					.await?;
+					Ok((axum::http::StatusCode::OK, Json(projection)))
+				}),
 			)
-			.await?;
-			Ok((axum::http::StatusCode::OK, Json(projection)))
+			.await
 		}
 	};
 }

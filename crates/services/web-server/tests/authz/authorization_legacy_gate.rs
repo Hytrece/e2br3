@@ -271,6 +271,36 @@ fn converted_case_route_modules_do_not_call_legacy_authorization() {
 }
 
 #[test]
+fn case_editor_routes_do_not_depend_on_legacy_permissions() {
+	let root = workspace_root();
+	let editor_root =
+		root.join("crates/services/web-server/src/web/rest/case_editor_rest");
+	for entry in
+		fs::read_dir(&editor_root).expect("Case editor directory must exist")
+	{
+		let path = entry.expect("Case editor entry must be readable").path();
+		if path.extension().and_then(|value| value.to_str()) != Some("rs") {
+			continue;
+		}
+		let source = fs::read_to_string(&path)
+			.unwrap_or_else(|_| panic!("{} must be readable", path.display()));
+		for legacy in [
+			"model::acs",
+			"require_permission",
+			"require_case_read_allowed",
+			"require_case_write_allowed",
+			"legacy_permission_allowed",
+		] {
+			assert!(
+				!source.contains(legacy),
+				"Case editor source {} still depends on legacy authorization: {legacy}",
+				path.display()
+			);
+		}
+	}
+}
+
+#[test]
 fn role_api_has_one_canonical_metadata_shape() {
 	let root = workspace_root();
 	let source =

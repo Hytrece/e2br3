@@ -30,7 +30,6 @@ async fn load_editor_dg_list_rows(
 repeatable_list_handler!(
 	list_editor_dg,
 	CaseEditorDgListRowDto,
-	DRUG_LIST,
 	load_editor_dg_list_rows,
 	include_deleted,
 );
@@ -38,6 +37,7 @@ repeatable_list_handler!(
 pub async fn get_editor_dg_page_projection(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 	Path(case_id): Path<Uuid>,
 	Query(query): Query<CaseEditorPageProjectionQuery>,
 ) -> Result<(
@@ -45,24 +45,32 @@ pub async fn get_editor_dg_page_projection(
 	Json<CaseEditorPageProjectionResponse>,
 )> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, CASE_READ)?;
-	require_permission(&ctx, DRUG_LIST)?;
-	lib_rest_core::require_case_read_allowed(&ctx, &mm, case_id).await?;
-
-	let rows = load_editor_dg_list_rows(
+	lib_rest_core::with_authorized_case_child_read(
 		&ctx,
+		&snapshot,
 		&mm,
 		case_id,
-		query.include_deleted.unwrap_or(false),
+		"editor/DG",
+		move |ctx, mm| {
+			Box::pin(async move {
+				let rows = load_editor_dg_list_rows(
+					ctx,
+					mm,
+					case_id,
+					query.include_deleted.unwrap_or(false),
+				)
+				.await?;
+				let projection = repeatable_page_projection_response(
+					case_id,
+					"DG",
+					query_authorities_csv(&query)?,
+					json!({ "rows": rows }),
+				)?;
+				Ok((axum::http::StatusCode::OK, Json(projection)))
+			})
+		},
 	)
-	.await?;
-	let projection = repeatable_page_projection_response(
-		case_id,
-		"DG",
-		query_authorities_csv(&query)?,
-		json!({ "rows": rows }),
-	)?;
-	Ok((axum::http::StatusCode::OK, Json(projection)))
+	.await
 }
 
 fn drug_id_filter<T>(drug_id: Uuid) -> Option<Vec<T>>
@@ -156,41 +164,36 @@ async fn load_editor_dg_row_detail(
 pub async fn get_editor_dg(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 	Path((case_id, drug_id)): Path<(Uuid, Uuid)>,
 ) -> Result<(axum::http::StatusCode, Json<CaseEditorRowDetailResponse>)> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, CASE_READ)?;
-	require_permission(&ctx, DRUG_READ)?;
-	require_permission(&ctx, DRUG_SUBSTANCE_LIST)?;
-	require_permission(&ctx, DRUG_DOSAGE_LIST)?;
-	require_permission(&ctx, DRUG_INDICATION_LIST)?;
-	require_permission(&ctx, DRUG_REACTION_ASSESSMENT_LIST)?;
-	require_permission(&ctx, DRUG_RECURRENCE_LIST)?;
-	lib_rest_core::require_case_read_allowed(&ctx, &mm, case_id).await?;
-
-	let drug = load_editor_dg_row_detail(&ctx, &mm, case_id, drug_id).await?;
-
-	Ok((
-		axum::http::StatusCode::OK,
-		Json(CaseEditorRowDetailResponse {
-			case_id,
-			row_id: drug_id,
-			data: json!({ "drugs": [drug] }),
-		}),
-	))
+	lib_rest_core::with_authorized_case_child_read(
+		&ctx,
+		&snapshot,
+		&mm,
+		case_id,
+		format!("editor/DG/{drug_id}"),
+		move |ctx, mm| {
+			Box::pin(async move {
+				let drug =
+					load_editor_dg_row_detail(ctx, mm, case_id, drug_id).await?;
+				Ok((
+					axum::http::StatusCode::OK,
+					Json(CaseEditorRowDetailResponse {
+						case_id,
+						row_id: drug_id,
+						data: json!({ "drugs": [drug] }),
+					}),
+				))
+			})
+		},
+	)
+	.await
 }
 
 repeatable_page_row_read_handler!(
 	get_editor_dg_page_row,
-	[
-		CASE_READ,
-		DRUG_READ,
-		DRUG_SUBSTANCE_LIST,
-		DRUG_DOSAGE_LIST,
-		DRUG_INDICATION_LIST,
-		DRUG_REACTION_ASSESSMENT_LIST,
-		DRUG_RECURRENCE_LIST,
-	],
 	build_editor_dg_page_row_response,
 );
 
@@ -215,7 +218,6 @@ repeatable_page_row_create_handler!(
 	create_editor_dg_page_row,
 	section: "DG",
 	row_key: "drug",
-	permission: DRUG_CREATE,
 	bmc: DrugInformationBmc,
 	model: DrugInformationForCreate,
 	aliases: &[
@@ -246,7 +248,6 @@ repeatable_page_row_patch_handler!(
 	patch_editor_dg_page_row,
 	section: "DG",
 	row_key: "drug",
-	permission: DRUG_UPDATE,
 	bmc: DrugInformationBmc,
 	model: DrugInformationForUpdate,
 	changes: &[
@@ -268,7 +269,5 @@ repeatable_page_row_delete_restore_handlers!(
 	delete: delete_editor_dg_page_row,
 	restore: restore_editor_dg_page_row,
 	bmc: DrugInformationBmc,
-	delete_permission: DRUG_DELETE,
-	update_permission: DRUG_UPDATE,
 	build_response: build_editor_dg_page_row_response,
 );
