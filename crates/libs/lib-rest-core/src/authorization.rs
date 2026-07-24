@@ -1,7 +1,7 @@
 use crate::{Error, Result};
 use lib_core::authorization::{
 	AuthorizationContext, AuthorizationDenial, AuthorizedMutation, AuthorizedRead,
-	PolicySnapshotVersion, RequestAuthorizationSnapshot,
+	AuthorizedSubject, PolicySnapshotVersion, RequestAuthorizationSnapshot,
 };
 use lib_core::ctx::{Ctx, ROLE_SYSTEM_ADMIN};
 use uuid::Uuid;
@@ -16,22 +16,52 @@ pub fn denied(denial: AuthorizationDenial) -> Error {
 	}
 }
 
-trait PermitEvidence {
+trait RequestBoundPermit {
 	fn principal_id(&self) -> Uuid;
 	fn organization_id(&self) -> Uuid;
-	fn target_organization_id(&self) -> Option<Uuid>;
 	fn snapshot_version(&self) -> &PolicySnapshotVersion;
 }
 
-impl<C: AuthorizationContext> PermitEvidence for AuthorizedRead<'_, C> {
+trait PermitEvidence: RequestBoundPermit {
+	fn target_organization_id(&self) -> Option<Uuid>;
+}
+
+impl RequestBoundPermit for AuthorizedSubject {
 	fn principal_id(&self) -> Uuid {
 		self.principal_id()
 	}
 	fn organization_id(&self) -> Uuid {
 		self.organization_id()
 	}
+	fn snapshot_version(&self) -> &PolicySnapshotVersion {
+		self.snapshot_version()
+	}
+}
+
+impl<C: AuthorizationContext> RequestBoundPermit for AuthorizedRead<'_, C> {
+	fn principal_id(&self) -> Uuid {
+		self.principal_id()
+	}
+	fn organization_id(&self) -> Uuid {
+		self.organization_id()
+	}
+	fn snapshot_version(&self) -> &PolicySnapshotVersion {
+		self.snapshot_version()
+	}
+}
+
+impl<C: AuthorizationContext> PermitEvidence for AuthorizedRead<'_, C> {
 	fn target_organization_id(&self) -> Option<Uuid> {
 		self.target_organization_id()
+	}
+}
+
+impl<C: AuthorizationContext> RequestBoundPermit for AuthorizedMutation<'_, C> {
+	fn principal_id(&self) -> Uuid {
+		self.principal_id()
+	}
+	fn organization_id(&self) -> Uuid {
+		self.organization_id()
 	}
 	fn snapshot_version(&self) -> &PolicySnapshotVersion {
 		self.snapshot_version()
@@ -39,18 +69,18 @@ impl<C: AuthorizationContext> PermitEvidence for AuthorizedRead<'_, C> {
 }
 
 impl<C: AuthorizationContext> PermitEvidence for AuthorizedMutation<'_, C> {
-	fn principal_id(&self) -> Uuid {
-		self.principal_id()
-	}
-	fn organization_id(&self) -> Uuid {
-		self.organization_id()
-	}
 	fn target_organization_id(&self) -> Option<Uuid> {
 		self.target_organization_id()
 	}
-	fn snapshot_version(&self) -> &PolicySnapshotVersion {
-		self.snapshot_version()
-	}
+}
+
+pub fn rls_ctx_for_authorized_subject(
+	request_ctx: &Ctx,
+	snapshot: &RequestAuthorizationSnapshot,
+	permit: &AuthorizedSubject,
+) -> Result<Ctx> {
+	validate_request_binding(request_ctx, snapshot, permit)?;
+	Ok(request_ctx.clone())
 }
 
 pub fn rls_ctx_for_authorized_read<C: AuthorizationContext>(
@@ -74,16 +104,7 @@ fn rls_ctx_from_permit(
 	snapshot: &RequestAuthorizationSnapshot,
 	permit: &impl PermitEvidence,
 ) -> Result<Ctx> {
-	if permit.principal_id() != request_ctx.user_id()
-		|| permit.principal_id() != snapshot.principal_id()
-		|| permit.organization_id() != snapshot.organization_id()
-		|| request_ctx.organization_id() != snapshot.organization_id()
-		|| permit.snapshot_version() != snapshot.version()
-	{
-		return Err(Error::AccessDenied {
-			required_role: "authorization permit bound to this request".to_string(),
-		});
-	}
+	validate_request_binding(request_ctx, snapshot, permit)?;
 	let Some(target_organization_id) = permit.target_organization_id() else {
 		if snapshot.identity().is_platform_administrator() {
 			return Ok(request_ctx.clone());
@@ -117,4 +138,22 @@ fn rls_ctx_from_permit(
 	.map_err(|_| Error::BadRequest {
 		message: "invalid authorized target organization context".to_string(),
 	})
+}
+
+fn validate_request_binding(
+	request_ctx: &Ctx,
+	snapshot: &RequestAuthorizationSnapshot,
+	permit: &impl RequestBoundPermit,
+) -> Result<()> {
+	if permit.principal_id() != request_ctx.user_id()
+		|| permit.principal_id() != snapshot.principal_id()
+		|| permit.organization_id() != snapshot.organization_id()
+		|| request_ctx.organization_id() != snapshot.organization_id()
+		|| permit.snapshot_version() != snapshot.version()
+	{
+		return Err(Error::AccessDenied {
+			required_role: "authorization permit bound to this request".to_string(),
+		});
+	}
+	Ok(())
 }

@@ -1,6 +1,6 @@
 use super::{
 	policy_registry, ActionId, AuditClassification, AuthorizationContext,
-	AuthorizationDecision, AuthorizationDenial, AuthorizedMutation, AuthorizedRead,
+	AuthorizationDenial, AuthorizedMutation, AuthorizedRead, AuthorizedSubject,
 	ContextActionId, ContextCondition, ContextSnapshot, DecisionStage, DenialReason,
 	EligibilityDecision, EvaluatedContext, LockedMutationContext,
 	RequestAuthorizationSnapshot, SubjectActionId,
@@ -54,10 +54,17 @@ pub fn check_eligibility(
 pub fn authorize_subject(
 	action: SubjectActionId,
 	snapshot: &RequestAuthorizationSnapshot,
-) -> AuthorizationDecision {
-	match check_eligibility(action.as_action_id(), snapshot) {
-		EligibilityDecision::Eligible => AuthorizationDecision::Allowed,
-		EligibilityDecision::Denied(denial) => AuthorizationDecision::Denied(denial),
+) -> Result<AuthorizedSubject, AuthorizationDenial> {
+	let action_id = action.as_action_id().clone();
+	match check_eligibility(&action_id, snapshot) {
+		EligibilityDecision::Eligible => Ok(AuthorizedSubject::new(
+			action_id,
+			snapshot.principal_id(),
+			snapshot.organization_id(),
+			snapshot.version().clone(),
+			snapshot.evaluated_at(),
+		)),
+		EligibilityDecision::Denied(denial) => Err(denial),
 	}
 }
 
@@ -234,6 +241,22 @@ mod tests {
 				false,
 			)),
 		}
+	}
+
+	#[test]
+	fn subject_permit_preserves_snapshot_evidence() {
+		let snapshot = snapshot(&[], None);
+		let action = policy_registry()
+			.subject_action("user.profile.read")
+			.expect("subject action must exist");
+
+		let permit = authorize_subject(action, &snapshot)
+			.expect("subject action must be allowed");
+
+		assert_eq!(permit.action_id().as_str(), "user.profile.read");
+		assert_eq!(permit.principal_id(), snapshot.principal_id());
+		assert_eq!(permit.organization_id(), snapshot.organization_id());
+		assert_eq!(permit.snapshot_version(), snapshot.version());
 	}
 
 	#[test]

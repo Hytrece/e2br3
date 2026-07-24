@@ -9,7 +9,7 @@ mod utils;
 pub use self::error::{ConstraintViolation, Error, Result};
 pub use authorization::{
 	denied as authorization_denied, rls_ctx_for_authorized_mutation,
-	rls_ctx_for_authorized_read,
+	rls_ctx_for_authorized_read, rls_ctx_for_authorized_subject,
 };
 pub use rest_params::*;
 pub use rest_result::*;

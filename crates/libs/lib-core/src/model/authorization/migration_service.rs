@@ -1,8 +1,8 @@
 use super::{enum_name, AuthorizationCatalogRepository};
-use crate::authorization::{Availability, BuiltInIdentityKind, PolicyRegistry};
-use crate::model::acs::{
-	permissions_for_menu_privileges, role_permissions, AdminMenuPrivilege,
+use crate::authorization::{
+	AdminMenuPrivilege, Availability, BuiltInIdentityKind, PolicyRegistry,
 };
+use crate::model::acs::{permissions_for_menu_privileges, role_permissions};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 use sqlx::{Pool, Postgres, Row, Transaction};

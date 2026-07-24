@@ -143,6 +143,64 @@ fn user_admin_rls_context_requires_authorization_permit_evidence() {
 }
 
 #[test]
+fn subject_actions_require_permit_bound_rls_context() {
+	let root = workspace_root();
+	let rest_authorization =
+		root.join("crates/libs/lib-rest-core/src/authorization.rs");
+	let source = fs::read_to_string(&rest_authorization).unwrap_or_default();
+
+	assert!(
+		source.contains("AuthorizedSubject"),
+		"subject-action DB access must consume kernel permit evidence"
+	);
+	assert!(
+		source.contains("pub fn rls_ctx_for_authorized_subject("),
+		"subject actions need one explicit permit-to-RLS boundary"
+	);
+	assert!(
+		source.contains("permit.snapshot_version() != snapshot.version()"),
+		"subject permits must be bound to the current policy snapshot"
+	);
+}
+
+#[test]
+fn pdf_menu_privileges_are_not_part_of_the_legacy_permission_runtime() {
+	let root = workspace_root();
+	let menu_privileges =
+		root.join("crates/libs/lib-core/src/authorization/menu_privileges.rs");
+	let source = fs::read_to_string(&menu_privileges).unwrap_or_default();
+	let assignment = fs::read_to_string(
+		root.join("crates/libs/lib-core/src/model/authorization/assignment_repo.rs"),
+	)
+	.expect("assignment repository source must be readable");
+
+	assert!(
+		!source.is_empty(),
+		"PDF menu privilege contract must live under authorization"
+	);
+	for legacy in [
+		"Permission",
+		"Resource",
+		"has_permission",
+		"dynamic_role",
+		"permissions_for_menu_privileges",
+	] {
+		assert!(
+			!source.contains(legacy),
+			"menu privilege contract still depends on legacy runtime: {legacy}"
+		);
+	}
+	assert!(
+		assignment.contains("use crate::authorization::"),
+		"normalized role persistence must import the PDF contract from authorization"
+	);
+	assert!(
+		!assignment.contains("crate::model::acs"),
+		"normalized role persistence must not depend on legacy ACS"
+	);
+}
+
+#[test]
 fn role_api_has_one_canonical_metadata_shape() {
 	let root = workspace_root();
 	let source =

@@ -6,6 +6,15 @@ use time::OffsetDateTime;
 use uuid::Uuid;
 
 #[derive(Debug)]
+pub struct AuthorizedSubject {
+	action_id: ActionId,
+	principal_id: Uuid,
+	organization_id: Uuid,
+	snapshot_version: PolicySnapshotVersion,
+	decision_time: OffsetDateTime,
+}
+
+#[derive(Debug)]
 struct PermitEvidence<C> {
 	action_id: ActionId,
 	principal_id: Uuid,
@@ -16,6 +25,44 @@ struct PermitEvidence<C> {
 	decision_time: OffsetDateTime,
 	enforced_scope_filter: Option<EnforcedScopeFilter>,
 	marker: PhantomData<fn() -> C>,
+}
+
+impl AuthorizedSubject {
+	pub(crate) fn new(
+		action_id: ActionId,
+		principal_id: Uuid,
+		organization_id: Uuid,
+		snapshot_version: PolicySnapshotVersion,
+		decision_time: OffsetDateTime,
+	) -> Self {
+		Self {
+			action_id,
+			principal_id,
+			organization_id,
+			snapshot_version,
+			decision_time,
+		}
+	}
+
+	pub fn action_id(&self) -> &ActionId {
+		&self.action_id
+	}
+
+	pub fn principal_id(&self) -> Uuid {
+		self.principal_id
+	}
+
+	pub fn organization_id(&self) -> Uuid {
+		self.organization_id
+	}
+
+	pub fn snapshot_version(&self) -> &PolicySnapshotVersion {
+		&self.snapshot_version
+	}
+
+	pub fn decision_time(&self) -> OffsetDateTime {
+		self.decision_time
+	}
 }
 
 #[derive(Debug)]
