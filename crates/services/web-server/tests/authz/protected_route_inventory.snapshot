@@ -42,7 +42,7 @@ DELETE /api/cases/{id}
 DELETE /api/organizations/{id}
 DELETE /api/presaves/narratives/{id}
 DELETE /api/presaves/products/{id}
-DELETE /api/presaves/products/{product_id}/substances/{id}
+DELETE /api/presaves/products/{product_id}/active-substances/{id}
 DELETE /api/presaves/receivers/{id}
 DELETE /api/presaves/receivers/{receiver_id}/consignees/{id}
 DELETE /api/presaves/reporters/{id}
@@ -183,8 +183,8 @@ GET /api/presaves/narratives/{id}
 GET /api/presaves/products
 GET /api/presaves/products/{id}
 GET /api/presaves/products/{id}/details
-GET /api/presaves/products/{product_id}/substances
-GET /api/presaves/products/{product_id}/substances/{id}
+GET /api/presaves/products/{product_id}/active-substances
+GET /api/presaves/products/{product_id}/active-substances/{id}
 GET /api/presaves/receivers
 GET /api/presaves/receivers/{id}
 GET /api/presaves/receivers/{id}/details
@@ -243,7 +243,7 @@ PATCH /api/cases/{case_id}/editor/pages/SD
 PATCH /api/cases/{case_id}/editor/pages/SI
 PATCH /api/presaves/narratives/{id}
 PATCH /api/presaves/products/{id}
-PATCH /api/presaves/products/{product_id}/substances/{id}
+PATCH /api/presaves/products/{product_id}/active-substances/{id}
 PATCH /api/presaves/receivers/{id}
 PATCH /api/presaves/receivers/{receiver_id}/consignees/{id}
 PATCH /api/presaves/reporters/{id}
@@ -341,7 +341,7 @@ POST /api/import/xml/validate
 POST /api/organizations
 POST /api/presaves/narratives
 POST /api/presaves/products
-POST /api/presaves/products/{product_id}/substances
+POST /api/presaves/products/{product_id}/active-substances
 POST /api/presaves/receivers
 POST /api/presaves/receivers/{receiver_id}/consignees
 POST /api/presaves/reporters

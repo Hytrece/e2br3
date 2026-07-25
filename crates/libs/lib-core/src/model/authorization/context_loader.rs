@@ -5,7 +5,10 @@ use crate::authorization::{
 	ImportHistoryResource, LockedMutationContext, NoticeResource, Parent,
 	PresaveCreateProposal, PresaveResource, Proposed, RequestAuthorizationSnapshot,
 	ResourceSet, SettingsResource, SubmissionResource, TerminologyImportProposal,
-	TerminologyResource, XmlImportBatchProposal,
+	TerminologyResource, UserResource, XmlImportBatchProposal,
+};
+use crate::ctx::{
+	ROLE_SPONSOR_ADMIN_COMPANY, ROLE_SPONSOR_ADMIN_CRO, ROLE_SYSTEM_ADMIN,
 };
 use crate::model::store::dbx::Dbx;
 use sqlx::FromRow;
@@ -119,6 +122,12 @@ struct ExportHistoryParent {
 	case_id: Uuid,
 }
 
+#[derive(Debug, FromRow)]
+struct UserMutationFacts {
+	organization_id: Uuid,
+	protected_administrator: bool,
+}
+
 pub struct AuthorizationFactLoader<'tx> {
 	dbx: &'tx Dbx,
 	snapshot: &'tx RequestAuthorizationSnapshot,
@@ -156,6 +165,50 @@ impl<'tx> AuthorizationFactLoader<'tx> {
 			every_target_authorized: false,
 			enforced_scope_filter: Some(scope_filter(self.snapshot)),
 		})
+	}
+
+	pub async fn user_for_mutation(
+		&self,
+		user_id: Uuid,
+	) -> Result<
+		(LockedMutationContext<'tx, Existing<UserResource>>, bool),
+		AuthorizationFactLoadError,
+	> {
+		self.lock_and_verify_revisions().await?;
+		let facts = self
+			.dbx
+			.fetch_optional(
+				sqlx::query_as::<_, UserMutationFacts>(
+					r#"
+					SELECT organization_id,
+					       role IN ($2, $3, $4) AS protected_administrator
+					  FROM users
+					 WHERE id = $1
+					 FOR UPDATE
+					"#,
+				)
+				.bind(user_id)
+				.bind(ROLE_SYSTEM_ADMIN)
+				.bind(ROLE_SPONSOR_ADMIN_CRO)
+				.bind(ROLE_SPONSOR_ADMIN_COMPANY),
+			)
+			.await?
+			.ok_or(AuthorizationFactLoadError::FactNotFound {
+				fact: "user",
+				id: user_id,
+			})?;
+		Ok((
+			LockedMutationContext::new(EvaluatedContext {
+				organization_id: Some(facts.organization_id),
+				target_fingerprint: format!("user:{user_id}"),
+				within_principal_scope: false,
+				lifecycle_compatible: false,
+				parent_authorized: false,
+				every_target_authorized: false,
+				enforced_scope_filter: None,
+			}),
+			facts.protected_administrator,
+		))
 	}
 
 	pub async fn presave_create_for_mutation(

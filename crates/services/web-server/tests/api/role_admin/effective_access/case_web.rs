@@ -80,6 +80,34 @@ async fn test_role_privilege_matrix_update_grants_effective_case_access(
 	)
 	.await?;
 	assert_eq!(status, StatusCode::OK, "{profile:?}");
+	assert!(
+		profile["data"]["eligibleActions"].is_array(),
+		"profile must expose canonical eligible actions: {profile:?}"
+	);
+	assert!(
+		profile["data"].get("permissions").is_none(),
+		"legacy permissions must not remain in the profile: {profile:?}"
+	);
+	let actions = profile["data"]["eligibleActions"]
+		.as_array()
+		.expect("eligibleActions must be an array");
+	assert!(
+		actions.iter().any(|action| action == "case.read"),
+		"Case Read must expose case.read eligibility: {profile:?}"
+	);
+	for denied in [
+		"case.create",
+		"case.update",
+		"case.review.toggle",
+		"case.lock.toggle",
+		"case.export.xml_set",
+		"user.list",
+	] {
+		assert!(
+			!actions.iter().any(|action| action == denied),
+			"Case Read unexpectedly exposed {denied}: {profile:?}"
+		);
+	}
 	assert_eq!(
 		profile["data"]["privileges"],
 		json!([{

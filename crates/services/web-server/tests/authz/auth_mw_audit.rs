@@ -307,7 +307,8 @@ async fn test_auth_login_created_user_uses_requested_initial_password() -> Resul
 
 #[serial]
 #[tokio::test]
-async fn test_auth_login_created_user_without_role_is_rejected() -> Result<()> {
+async fn test_auth_login_created_user_without_role_defaults_to_operational_user(
+) -> Result<()> {
 	let mm = init_test_mm().await?;
 	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
 	let admin_token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
@@ -329,7 +330,7 @@ async fn test_auth_login_created_user_without_role_is_rejected() -> Result<()> {
 		.header("content-type", "application/json")
 		.body(Body::from(create_body.to_string()))?;
 	let create_res = app.clone().oneshot(create_req).await?;
-	assert_eq!(create_res.status(), StatusCode::BAD_REQUEST);
+	assert_eq!(create_res.status(), StatusCode::CREATED);
 	Ok(())
 }
 

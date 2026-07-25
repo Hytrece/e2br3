@@ -193,6 +193,22 @@ fn implied_grants_expand_in_the_registry_not_in_callers() {
 }
 
 #[test]
+fn home_workflow_read_exposes_case_list_without_merging_case_workflow() {
+	let home = policy_registry()
+		.effective_grants(["home.workflow.read"])
+		.unwrap();
+	assert!(home.iter().any(|id| id.as_str() == "case.read"));
+
+	let case_workflow = policy_registry()
+		.effective_grants(["case.workflow.read"])
+		.unwrap();
+	assert!(
+		!case_workflow.iter().any(|id| id.as_str() == "case.read"),
+		"CASE Workflow is independent from CASE Case read"
+	);
+}
+
+#[test]
 fn identifiers_reject_alias_like_or_noncanonical_values() {
 	for invalid in [
 		"",

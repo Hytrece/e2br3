@@ -169,7 +169,7 @@ fn render_typescript(
 		output.push_str(&format!("  {}: {},\n", symbol, action_id));
 	}
 	output.push_str(
-		"} as const;\n\nexport type ActionId = (typeof Action)[keyof typeof Action];\n\n",
+		"} as const;\n\nexport type ActionId = (typeof Action)[keyof typeof Action];\n\nexport const ALL_ACTIONS: readonly ActionId[] = Object.values(Action);\n\n",
 	);
 	output.push_str(
 		"export type GrantAvailability = \"implemented\" | \"reserved\";\nexport type RolePrivilegeField = \"canRead\" | \"canEdit\" | \"canReview\" | \"canLock\";\n\nexport interface PdfRolePrivilegeRow {\n  readonly grantId: string;\n  readonly order: number;\n  readonly menu: string;\n  readonly typeName: string;\n  readonly privilege: string;\n  readonly availability: GrantAvailability;\n  readonly menuKey: string;\n  readonly field: RolePrivilegeField;\n}\n\n",

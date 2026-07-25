@@ -11,10 +11,8 @@ fn workspace_root() -> PathBuf {
 #[test]
 fn user_administration_has_one_exact_permission_gate() {
 	let root = workspace_root();
-	let middleware = fs::read_to_string(
-		root.join("crates/libs/lib-web/src/middleware/mw_permission.rs"),
-	)
-	.expect("permission middleware source must be readable");
+	let middleware =
+		root.join("crates/libs/lib-web/src/middleware/mw_permission.rs");
 	let rest_core =
 		fs::read_to_string(root.join("crates/libs/lib-rest-core/src/lib.rs"))
 			.expect("REST core source must be readable");
@@ -24,8 +22,8 @@ fn user_administration_has_one_exact_permission_gate() {
 	.expect("user handlers source must be readable");
 
 	assert!(
-		!middleware.contains("struct RequireAdmin"),
-		"legacy RequireAdmin extractor must not duplicate handler authorization"
+		!middleware.exists(),
+		"legacy permission middleware must remain deleted"
 	);
 	assert!(
 		!rest_core.contains("require_user_admin"),
@@ -38,8 +36,13 @@ fn user_administration_has_one_exact_permission_gate() {
 	assert!(!handlers.contains("user_admin_db_ctx("));
 	assert_eq!(
 		handlers.matches("rls_ctx_for_authorized_").count(),
-		5,
-		"each user administration handler must derive DB scope from one permit"
+		3,
+		"create, get, and list must derive DB scope from their own permit"
+	);
+	assert_eq!(
+		handlers.matches("with_authorized_user_mutation(").count(),
+		2,
+		"update and delete must use the fact-aware user mutation boundary"
 	);
 }
 
@@ -197,6 +200,52 @@ fn pdf_menu_privileges_are_not_part_of_the_legacy_permission_runtime() {
 	assert!(
 		!assignment.contains("crate::model::acs"),
 		"normalized role persistence must not depend on legacy ACS"
+	);
+}
+
+#[test]
+fn production_runtime_does_not_refresh_a_legacy_permission_cache() {
+	let root = workspace_root();
+	for path in [
+		"crates/services/web-server/src/main.rs",
+		"crates/services/web-server/src/web/rest/permission_profile_rest.rs",
+		"crates/libs/lib-core/src/model/permission_profile.rs",
+	] {
+		let source = fs::read_to_string(root.join(path))
+			.unwrap_or_else(|_| panic!("runtime source {path} must be readable"));
+		for legacy in [
+			"refresh_dynamic_roles",
+			"evict_dynamic_role",
+			"replace_dynamic_roles",
+			"remove_dynamic_role",
+			"permissions_for_menu_privileges",
+		] {
+			assert!(
+				!source.contains(legacy),
+				"runtime source {path} still maintains legacy permission cache: {legacy}"
+			);
+		}
+	}
+}
+
+#[test]
+fn production_authorization_has_no_legacy_permission_entry_point() {
+	let root = workspace_root();
+	let kernel = fs::read_to_string(
+		root.join("crates/libs/lib-core/src/authorization/kernel.rs"),
+	)
+	.expect("authorization kernel must be readable");
+	let rest_core =
+		fs::read_to_string(root.join("crates/libs/lib-rest-core/src/lib.rs"))
+			.expect("REST core must be readable");
+	let middleware =
+		root.join("crates/libs/lib-web/src/middleware/mw_permission.rs");
+
+	assert!(!kernel.contains("legacy_permission_allowed"));
+	assert!(!rest_core.contains("require_permission"));
+	assert!(
+		!middleware.exists(),
+		"legacy permission middleware must be deleted"
 	);
 }
 
@@ -524,6 +573,53 @@ fn user_role_metadata_does_not_turn_user_create_into_admin_identity() {
 }
 
 #[test]
+fn identity_and_organization_routes_use_policy_contexts_only() {
+	let root = workspace_root();
+	for path in [
+		"crates/services/web-server/src/web/rest/user_rest/handlers.rs",
+		"crates/services/web-server/src/web/rest/user_rest/validation.rs",
+		"crates/services/web-server/src/web/rest/organization_rest.rs",
+	] {
+		let source = fs::read_to_string(root.join(path))
+			.unwrap_or_else(|_| panic!("{path} must be readable"));
+		for legacy in [
+			"require_permission",
+			"legacy_permission_allowed",
+			"permission_subject()",
+			".is_system_admin()",
+			".is_sponsor_admin()",
+			"require_system_admin",
+		] {
+			assert!(
+				!source.contains(legacy),
+				"{path} still makes a legacy identity or permission decision: {legacy}"
+			);
+		}
+	}
+
+	let organizations = fs::read_to_string(
+		root.join("crates/services/web-server/src/web/rest/organization_rest.rs"),
+	)
+	.expect("organization routes must be readable");
+	assert!(
+		organizations.contains("AuthorizationSnapshotW"),
+		"organization routes must consume the request authorization snapshot"
+	);
+	for action in [
+		"organization.list",
+		"organization.read",
+		"organization.create",
+		"organization.update",
+		"organization.delete",
+	] {
+		assert!(
+			organizations.contains(action),
+			"organization route is missing canonical action {action}"
+		);
+	}
+}
+
+#[test]
 fn built_in_role_metadata_has_one_backend_source() {
 	let root = workspace_root();
 	let permission_profiles =
@@ -570,7 +666,6 @@ fn production_routes_do_not_evaluate_legacy_permissions_directly() {
 	let root = workspace_root();
 	for path in [
 		"crates/libs/lib-rest-core/src/lib.rs",
-		"crates/libs/lib-web/src/middleware/mw_permission.rs",
 		"crates/services/web-server/src/web/rest/admin_settings_rest.rs",
 		"crates/services/web-server/src/web/rest/audit_rest.rs",
 		"crates/services/web-server/src/web/rest/case_rest.rs",

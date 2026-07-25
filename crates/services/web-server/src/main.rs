@@ -16,7 +16,6 @@ use tokio::time::{interval, Duration};
 use tracing::info;
 use tracing::warn;
 use tracing_subscriber::EnvFilter;
-use web::rest::permission_profile_rest;
 
 // endregion: --- Modules
 
@@ -43,9 +42,6 @@ async fn main() -> Result<()> {
 		report.assignments, report.custom_roles
 	);
 	bootstrap::bootstrap_admin_user(&mm).await?;
-	permission_profile_rest::refresh_dynamic_roles(&mm)
-		.await
-		.map_err(|err| Error::Config(err.to_string()))?;
 	start_reconcile_worker(mm.clone());
 
 	// -- Define Routes

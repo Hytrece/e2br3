@@ -225,12 +225,6 @@ fn parse_custom_role_id(id: &str) -> Result<Uuid> {
 	})
 }
 
-pub async fn refresh_dynamic_roles(mm: &ModelManager) -> Result<()> {
-	PermissionProfileBmc::refresh_dynamic_roles(mm)
-		.await
-		.map_err(Error::Model)
-}
-
 /// GET /api/admin/permission-profiles
 pub async fn list_permission_profiles(
 	State(mm): State<ModelManager>,
@@ -360,9 +354,6 @@ pub async fn create_permission_profile(
 		.await
 		.map_err(Error::Model)?;
 
-	PermissionProfileBmc::refresh_dynamic_roles(&mm)
-		.await
-		.map_err(Error::Model)?;
 	Ok((StatusCode::CREATED, Json(row_to_api(row))))
 }
 
@@ -448,9 +439,6 @@ pub async fn update_permission_profile(
 		.await
 		.map_err(Error::Model)?;
 
-	PermissionProfileBmc::refresh_dynamic_roles(&mm)
-		.await
-		.map_err(Error::Model)?;
 	Ok((StatusCode::OK, Json(row_to_api(row))))
 }
 
@@ -498,9 +486,5 @@ pub async fn delete_permission_profile(
 	)
 	.await
 	.map_err(Error::Model)?;
-	PermissionProfileBmc::evict_dynamic_role(id);
-	PermissionProfileBmc::refresh_dynamic_roles(&mm)
-		.await
-		.map_err(Error::Model)?;
 	Ok(StatusCode::NO_CONTENT)
 }

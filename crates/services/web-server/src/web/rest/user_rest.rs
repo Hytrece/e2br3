@@ -5,17 +5,14 @@ use axum::http::StatusCode;
 use axum::Json;
 use lib_core::authorization::{
 	authorize_contextual_mutation, authorize_contextual_read,
-	built_in_menu_privileges, existing_user_mutation_context,
-	existing_user_read_context, legacy_permission_allowed,
-	normalize_menu_privileges, policy_registry, proposed_user_context,
-	user_collection_context, AdminMenuPrivilege, Existing, Proposed,
-	UserCreateProposal, UserResource,
+	built_in_menu_privileges, existing_user_read_context, normalize_menu_privileges,
+	policy_registry, proposed_user_context, user_collection_context,
+	AdminMenuPrivilege, Existing, Proposed, UserCreateProposal, UserResource,
 };
 use lib_core::ctx::{
 	built_in_role_metadata, canonical_role, Ctx, ROLE_SPONSOR_ADMIN_COMPANY,
 	ROLE_SPONSOR_ADMIN_CRO, ROLE_SYSTEM_ADMIN, ROLE_USER,
 };
-use lib_core::model::acs::{all_permissions, CASE_READ};
 use lib_core::model::organization::{
 	Organization, OrganizationBmc, ORG_TYPE_CRO, ORG_TYPE_PHARMACEUTICAL_COMPANY,
 };
@@ -27,7 +24,7 @@ use lib_core::model::ModelManager;
 use lib_rest_core::rest_params::{ParamsForCreate, ParamsForUpdate, ParamsList};
 use lib_rest_core::rest_result::DataRestResult;
 use lib_rest_core::{
-	authorization_denied, require_permission, rls_ctx_for_authorized_mutation,
+	authorization_denied, rls_ctx_for_authorized_mutation,
 	rls_ctx_for_authorized_read, routing_profile_for_user,
 	validate_active_sender_selection, Error, Result,
 };

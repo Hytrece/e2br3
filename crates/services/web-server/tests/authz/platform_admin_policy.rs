@@ -24,6 +24,15 @@ fn user_and_audit_authorization_have_no_system_admin_permission_bypass() {
 #[test]
 fn organization_authorization_remains_system_admin_only() {
 	let source = rest_source("organization_rest.rs");
-	assert!(source.contains("fn require_system_admin"));
-	assert!(source.contains("require_system_admin(&ctx)?"));
+	assert!(source.contains("AuthorizationSnapshotW"));
+	for action in [
+		"organization.list",
+		"organization.read",
+		"organization.create",
+		"organization.update",
+		"organization.delete",
+	] {
+		assert!(source.contains(action));
+	}
+	assert!(!source.contains("require_system_admin"));
 }

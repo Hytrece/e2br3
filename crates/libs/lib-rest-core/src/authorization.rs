@@ -8,7 +8,7 @@ use lib_core::authorization::{
 	ImportHistoryResource, NoticeResource, Parent, PolicySnapshotVersion,
 	PresaveCreateProposal, PresaveResource, Proposed, RequestAuthorizationSnapshot,
 	ResourceSet, SettingsResource, SubmissionResource, TerminologyImportProposal,
-	TerminologyResource, XmlImportBatchProposal,
+	TerminologyResource, UserResource, XmlImportBatchProposal,
 };
 use lib_core::ctx::{Ctx, ROLE_SYSTEM_ADMIN};
 use lib_core::model::authorization::{
@@ -143,6 +143,55 @@ where
 		let permit = authorize_subject(action, snapshot).map_err(denied)?;
 		let authorized_ctx =
 			rls_ctx_for_authorized_subject(request_ctx, snapshot, &permit)?;
+		operation(&authorized_ctx, mm).await
+	}
+	.await;
+	finish_fact_transaction(dbx, result).await
+}
+
+pub async fn with_authorized_user_mutation<T, F>(
+	request_ctx: &Ctx,
+	snapshot: &RequestAuthorizationSnapshot,
+	mm: &ModelManager,
+	user_id: Uuid,
+	ordinary_action_id: &'static str,
+	protected_action_id: &'static str,
+	operation: F,
+) -> Result<T>
+where
+	F: for<'ctx> FnOnce(
+		&'ctx Ctx,
+		&'ctx ModelManager,
+	) -> Pin<Box<dyn Future<Output = Result<T>> + Send + 'ctx>>,
+{
+	let dbx = mm.dbx();
+	dbx.begin_txn()
+		.await
+		.map_err(lib_core::model::Error::from)?;
+	if let Err(error) = set_full_context_from_ctx_dbx(dbx, request_ctx).await {
+		let _ = dbx.rollback_txn().await;
+		return Err(error.into());
+	}
+	let result = async {
+		let (context, protected_administrator) =
+			AuthorizationFactLoader::new(dbx, snapshot)
+				.user_for_mutation(user_id)
+				.await
+				.map_err(map_fact_load_error)?;
+		let action_id = if protected_administrator {
+			protected_action_id
+		} else {
+			ordinary_action_id
+		};
+		let action = policy_registry()
+			.context_action::<Existing<UserResource>>(action_id)
+			.ok_or_else(|| Error::AccessDenied {
+				required_role: format!("registered {action_id} action"),
+			})?;
+		let permit = authorize_contextual_mutation(action, snapshot, context)
+			.map_err(denied)?;
+		let authorized_ctx =
+			rls_ctx_for_authorized_mutation(request_ctx, snapshot, &permit)?;
 		operation(&authorized_ctx, mm).await
 	}
 	.await;

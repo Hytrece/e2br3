@@ -148,7 +148,7 @@ async fn test_user_without_case_read_cannot_list_workflow_user_options() -> Resu
 
 #[serial]
 #[tokio::test]
-async fn test_case_reader_can_list_scoped_lightweight_workflow_user_options(
+async fn test_case_reader_without_workflow_grant_cannot_list_workflow_user_options(
 ) -> Result<()> {
 	let mm = init_test_mm().await?;
 	let seed = seed_two_orgs_users_cases(&mm).await?;
@@ -161,38 +161,7 @@ async fn test_case_reader_can_list_scoped_lightweight_workflow_user_options(
 		.header("cookie", cookie_header(&token.to_string()))
 		.body(Body::empty())?;
 	let res = app.oneshot(req).await?;
-	assert_eq!(res.status(), StatusCode::OK);
-
-	let body = to_bytes(res.into_body(), usize::MAX).await?;
-	let json: serde_json::Value = serde_json::from_slice(&body)?;
-	let users = json["data"]
-		.as_array()
-		.ok_or("expected workflow user option array")?;
-	let own_user_id = seed.user1.id.to_string();
-	let other_org_user_id = seed.user2.id.to_string();
-	assert!(
-		users
-			.iter()
-			.any(|user| user["id"].as_str() == Some(own_user_id.as_str())),
-		"expected current organization user in workflow options: {json:?}"
-	);
-	assert!(
-		users
-			.iter()
-			.all(|user| user["id"].as_str() != Some(other_org_user_id.as_str())),
-		"workflow options must exclude users from other organizations: {json:?}"
-	);
-	assert!(
-		users.iter().all(|user| {
-			user.as_object().is_some_and(|fields| {
-				fields.len() == 3
-					&& fields.contains_key("id")
-					&& fields.contains_key("email")
-					&& fields.contains_key("displayName")
-			})
-		}),
-		"workflow options should expose only lightweight fields: {json:?}"
-	);
+	assert_eq!(res.status(), StatusCode::FORBIDDEN);
 
 	Ok(())
 }

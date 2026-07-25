@@ -1,12 +1,4 @@
 use super::common::*;
-use lib_core::model::acs::{
-	DRUG_DOSAGE_CREATE, DRUG_DOSAGE_DELETE, DRUG_DOSAGE_UPDATE,
-	DRUG_INDICATION_CREATE, DRUG_INDICATION_DELETE, DRUG_INDICATION_UPDATE,
-	DRUG_REACTION_ASSESSMENT_CREATE, DRUG_REACTION_ASSESSMENT_DELETE,
-	DRUG_REACTION_ASSESSMENT_UPDATE, DRUG_SUBSTANCE_CREATE, DRUG_SUBSTANCE_DELETE,
-	DRUG_SUBSTANCE_UPDATE, RELATEDNESS_ASSESSMENT_CREATE,
-	RELATEDNESS_ASSESSMENT_DELETE, RELATEDNESS_ASSESSMENT_UPDATE,
-};
 use lib_core::model::drug::{
 	DosageInformationForCreate, DosageInformationForUpdate,
 	DrugActiveSubstanceForCreate, DrugActiveSubstanceForUpdate,
@@ -203,10 +195,8 @@ async fn persist_active_substances(
 				});
 			}
 			if deleted {
-				require_permission(ctx, DRUG_SUBSTANCE_DELETE)?;
 				DrugActiveSubstanceBmc::delete(ctx, mm, id).await?;
 			} else {
-				require_permission(ctx, DRUG_SUBSTANCE_UPDATE)?;
 				let model = row_model_value(row, ACTIVE_SUBSTANCE_ALIASES, &[]);
 				let update = parse_row_model::<DrugActiveSubstanceForUpdate>(
 					"DG",
@@ -216,7 +206,6 @@ async fn persist_active_substances(
 				DrugActiveSubstanceBmc::update(ctx, mm, id, update).await?;
 			}
 		} else if !deleted {
-			require_permission(ctx, DRUG_SUBSTANCE_CREATE)?;
 			let model = row_model_value(
 				row,
 				ACTIVE_SUBSTANCE_ALIASES,
@@ -251,8 +240,7 @@ macro_rules! persist_drug_children {
 		aliases: $aliases:expr,
 		bmc: $bmc:ident,
 		create: $create:ty,
-		update: $update:ty,
-		permissions: [$create_permission:expr, $update_permission:expr, $delete_permission:expr]
+		update: $update:ty
 	) => {
 		async fn $fn_name(
 			ctx: &lib_core::ctx::Ctx,
@@ -295,17 +283,14 @@ macro_rules! persist_drug_children {
 						});
 					}
 					if deleted {
-						require_permission(ctx, $delete_permission)?;
 						$bmc::delete(ctx, mm, id).await?;
 					} else {
-						require_permission(ctx, $update_permission)?;
 						let model = row_model_value(row, $aliases, &[]);
 						let update =
 							parse_row_model::<$update>("DG", $key, model)?;
 						$bmc::update(ctx, mm, id, update).await?;
 					}
 				} else if !deleted {
-					require_permission(ctx, $create_permission)?;
 					let model = row_model_value(
 						row,
 						$aliases,
@@ -338,8 +323,7 @@ persist_drug_children!(
 	aliases: DOSAGE_ALIASES,
 	bmc: DosageInformationBmc,
 	create: DosageInformationForCreate,
-	update: DosageInformationForUpdate,
-	permissions: [DRUG_DOSAGE_CREATE, DRUG_DOSAGE_UPDATE, DRUG_DOSAGE_DELETE]
+	update: DosageInformationForUpdate
 );
 
 persist_drug_children!(
@@ -348,12 +332,7 @@ persist_drug_children!(
 	aliases: INDICATION_ALIASES,
 	bmc: DrugIndicationBmc,
 	create: DrugIndicationForCreate,
-	update: DrugIndicationForUpdate,
-	permissions: [
-		DRUG_INDICATION_CREATE,
-		DRUG_INDICATION_UPDATE,
-		DRUG_INDICATION_DELETE
-	]
+	update: DrugIndicationForUpdate
 );
 
 async fn persist_drug_reaction_assessments(
@@ -434,13 +413,11 @@ async fn persist_drug_reaction_assessments(
 					"missing DG.drug.drugReactionAssessments[{index}].drugReactionAssessmentId for deletion"
 				),
 			})?;
-			require_permission(ctx, DRUG_REACTION_ASSESSMENT_DELETE)?;
 			DrugReactionAssessmentBmc::delete(ctx, mm, assessment.id).await?;
 			continue;
 		}
 
 		let assessment_id = if let Some(assessment) = persisted_assessment {
-			require_permission(ctx, DRUG_REACTION_ASSESSMENT_UPDATE)?;
 			let model = row_model_value(row, ASSESSMENT_ALIASES, &[]);
 			let update = parse_row_model::<DrugReactionAssessmentForUpdate>(
 				"DG",
@@ -459,7 +436,6 @@ async fn persist_drug_reaction_assessments(
 			)
 			.await?
 		{
-			require_permission(ctx, DRUG_REACTION_ASSESSMENT_UPDATE)?;
 			let model = row_model_value(row, ASSESSMENT_ALIASES, &[]);
 			let update = parse_row_model::<DrugReactionAssessmentForUpdate>(
 				"DG",
@@ -470,7 +446,6 @@ async fn persist_drug_reaction_assessments(
 				.await?;
 			assessment.id
 		} else {
-			require_permission(ctx, DRUG_REACTION_ASSESSMENT_CREATE)?;
 			let model = row_model_value(
 				row,
 				ASSESSMENT_ALIASES,
@@ -508,10 +483,8 @@ async fn persist_drug_reaction_assessments(
 				});
 			}
 			if deleted {
-				require_permission(ctx, RELATEDNESS_ASSESSMENT_DELETE)?;
 				RelatednessAssessmentBmc::delete(ctx, mm, relatedness_id).await?;
 			} else {
-				require_permission(ctx, RELATEDNESS_ASSESSMENT_UPDATE)?;
 				let model = row_model_value(row, RELATEDNESS_ALIASES, &[]);
 				let update = parse_row_model::<RelatednessAssessmentForUpdate>(
 					"DG",
@@ -527,7 +500,6 @@ async fn persist_drug_reaction_assessments(
 					row.get(*alias).is_some_and(|value| !value.is_null())
 				})
 			}) {
-			require_permission(ctx, RELATEDNESS_ASSESSMENT_CREATE)?;
 			let model = row_model_value(
 				row,
 				RELATEDNESS_ALIASES,
