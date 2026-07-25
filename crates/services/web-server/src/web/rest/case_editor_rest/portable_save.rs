@@ -1250,6 +1250,20 @@ mod portable_save_tests {
 	}
 
 	#[test]
+	fn portable_save_rejects_invalid_batch_transmission_date() {
+		let message_header = Map::from_iter([(
+			"batchTransmissionDate".to_string(),
+			json!("not-a-date"),
+		)]);
+		let error =
+			validate_row_payload("N", "messageHeader", &message_header, None)
+				.unwrap_err();
+		let detail = constraint_violation(error);
+		assert_eq!(detail.rule_code, "ICH.N.1.5.ALLOWED.VALUE");
+		assert_eq!(detail.path, "messageHeader.batchTransmissionDate");
+	}
+
+	#[test]
 	fn portable_save_rejects_direct_page_rows_before_mutation() {
 		let narrative_rows = BTreeMap::from([(
 			"narrative".to_string(),

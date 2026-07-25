@@ -5836,7 +5836,10 @@ async fn message_header_api_round_trips_submission_fields() -> Result<()> {
 		updated["data"]["batch_receiver_identifier"],
 		"BATCH-RECEIVER"
 	);
-	assert!(!updated["data"]["batch_transmission_date"].is_null());
+	assert_eq!(
+		updated["data"]["batch_transmission_date"],
+		json!([2026, 206, 12, 30, 45, 0, 0, 0, 0])
+	);
 	assert_eq!(
 		updated["data"]["message_sender_identifier"],
 		"UPDATED-SENDER"

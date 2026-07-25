@@ -104,7 +104,8 @@
     "label": "Date of Batch Transmission",
     "section": "N",
     "authority": "ICH",
-    "status": "incomplete",
+    "status": "complete",
+    "editor_page": "N",
     "backend": {
       "status": "mapped",
       "model": "MessageHeader",
