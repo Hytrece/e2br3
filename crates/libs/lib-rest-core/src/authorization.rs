@@ -5,13 +5,15 @@ use lib_core::authorization::{
 	AuthorizationContext, AuthorizationDenial, AuthorizedMutation, AuthorizedRead,
 	AuthorizedSubject, CaseAuditTrailResource, CaseChildResource,
 	CaseCreateProposal, CaseResource, Collection, EnforcedScopeFilter, Existing,
-	ImportHistoryResource, NoticeResource, Parent, PolicySnapshotVersion, Proposed,
-	RequestAuthorizationSnapshot, ResourceSet, SettingsResource, SubmissionResource,
-	TerminologyImportProposal, TerminologyResource, XmlImportBatchProposal,
+	ImportHistoryResource, NoticeResource, Parent, PolicySnapshotVersion,
+	PresaveCreateProposal, PresaveResource, Proposed, RequestAuthorizationSnapshot,
+	ResourceSet, SettingsResource, SubmissionResource, TerminologyImportProposal,
+	TerminologyResource, XmlImportBatchProposal,
 };
 use lib_core::ctx::{Ctx, ROLE_SYSTEM_ADMIN};
 use lib_core::model::authorization::{
 	AuthorizationFactLoadError, AuthorizationFactLoader, CaseMutationKind,
+	PresaveAuthorizationKind,
 };
 use lib_core::model::store::set_full_context_from_ctx_dbx;
 use lib_core::model::ModelManager;
@@ -416,9 +418,218 @@ where
 		rls_ctx_for_authorized_mutation(request_ctx, snapshot, &permit)
 	}
 	.await;
-	let authorized_ctx =
-		finish_fact_transaction(dbx, authorization_result).await?;
+	let authorized_ctx = finish_fact_transaction(dbx, authorization_result).await?;
 	operation(&authorized_ctx, mm).await
+}
+
+pub async fn with_authorized_presave_collection<T, F>(
+	request_ctx: &Ctx,
+	snapshot: &RequestAuthorizationSnapshot,
+	mm: &ModelManager,
+	operation: F,
+) -> Result<T>
+where
+	F: for<'ctx> FnOnce(
+		&'ctx Ctx,
+		&'ctx ModelManager,
+		&'ctx EnforcedScopeFilter,
+	) -> Pin<Box<dyn Future<Output = Result<T>> + Send + 'ctx>>,
+{
+	let dbx = mm.dbx();
+	dbx.begin_txn()
+		.await
+		.map_err(lib_core::model::Error::from)?;
+	if let Err(error) = set_full_context_from_ctx_dbx(dbx, request_ctx).await {
+		let _ = dbx.rollback_txn().await;
+		return Err(error.into());
+	}
+	let result = async {
+		let context =
+			AuthorizationFactLoader::new(dbx, snapshot).presave_collection();
+		let action = policy_registry()
+			.context_action::<Collection<PresaveResource>>("info.list")
+			.ok_or_else(|| Error::AccessDenied {
+				required_role: "registered info.list action".to_string(),
+			})?;
+		let permit =
+			authorize_contextual_read(action, snapshot, context).map_err(denied)?;
+		let authorized_ctx =
+			rls_ctx_for_authorized_read(request_ctx, snapshot, &permit)?;
+		let scope =
+			permit
+				.enforced_scope_filter()
+				.ok_or_else(|| Error::AccessDenied {
+					required_role: "presave scope filter".to_string(),
+				})?;
+		operation(&authorized_ctx, mm, scope).await
+	}
+	.await;
+	finish_fact_transaction(dbx, result).await
+}
+
+pub async fn with_authorized_presave_read<T, F>(
+	request_ctx: &Ctx,
+	snapshot: &RequestAuthorizationSnapshot,
+	mm: &ModelManager,
+	kind: PresaveAuthorizationKind,
+	id: Uuid,
+	operation: F,
+) -> Result<T>
+where
+	F: for<'ctx> FnOnce(
+		&'ctx Ctx,
+		&'ctx ModelManager,
+	) -> Pin<Box<dyn Future<Output = Result<T>> + Send + 'ctx>>,
+{
+	let dbx = mm.dbx();
+	dbx.begin_txn()
+		.await
+		.map_err(lib_core::model::Error::from)?;
+	if let Err(error) = set_full_context_from_ctx_dbx(dbx, request_ctx).await {
+		let _ = dbx.rollback_txn().await;
+		return Err(error.into());
+	}
+	let result = async {
+		let context = AuthorizationFactLoader::new(dbx, snapshot)
+			.presave_existing(kind, id)
+			.await
+			.map_err(map_fact_load_error)?;
+		let action = policy_registry()
+			.context_action::<Existing<PresaveResource>>("info.read")
+			.ok_or_else(|| Error::AccessDenied {
+				required_role: "registered info.read action".to_string(),
+			})?;
+		let permit =
+			authorize_contextual_read(action, snapshot, context).map_err(denied)?;
+		let authorized_ctx =
+			rls_ctx_for_authorized_read(request_ctx, snapshot, &permit)?;
+		operation(&authorized_ctx, mm).await
+	}
+	.await;
+	finish_fact_transaction(dbx, result).await
+}
+
+pub async fn with_authorized_presave_create<T, F>(
+	request_ctx: &Ctx,
+	snapshot: &RequestAuthorizationSnapshot,
+	mm: &ModelManager,
+	fingerprint: impl AsRef<str>,
+	operation: F,
+) -> Result<T>
+where
+	F: for<'ctx> FnOnce(
+		&'ctx Ctx,
+		&'ctx ModelManager,
+	) -> Pin<Box<dyn Future<Output = Result<T>> + Send + 'ctx>>,
+{
+	let dbx = mm.dbx();
+	dbx.begin_txn()
+		.await
+		.map_err(lib_core::model::Error::from)?;
+	if let Err(error) = set_full_context_from_ctx_dbx(dbx, request_ctx).await {
+		let _ = dbx.rollback_txn().await;
+		return Err(error.into());
+	}
+	let authorization_result = async {
+		let context = AuthorizationFactLoader::new(dbx, snapshot)
+			.presave_create_for_mutation(fingerprint)
+			.await
+			.map_err(map_fact_load_error)?;
+		let action = policy_registry()
+			.context_action::<Proposed<PresaveCreateProposal>>("info.create")
+			.ok_or_else(|| Error::AccessDenied {
+				required_role: "registered info.create action".to_string(),
+			})?;
+		let permit = authorize_contextual_mutation(action, snapshot, context)
+			.map_err(denied)?;
+		rls_ctx_for_authorized_mutation(request_ctx, snapshot, &permit)
+	}
+	.await;
+	let authorized_ctx = finish_fact_transaction(dbx, authorization_result).await?;
+	operation(&authorized_ctx, mm).await
+}
+
+pub async fn with_authorized_presave_update<T, F>(
+	request_ctx: &Ctx,
+	snapshot: &RequestAuthorizationSnapshot,
+	mm: &ModelManager,
+	kind: PresaveAuthorizationKind,
+	id: Uuid,
+	operation: F,
+) -> Result<T>
+where
+	F: for<'ctx> FnOnce(
+		&'ctx Ctx,
+		&'ctx ModelManager,
+	) -> Pin<Box<dyn Future<Output = Result<T>> + Send + 'ctx>>,
+{
+	let dbx = mm.dbx();
+	dbx.begin_txn()
+		.await
+		.map_err(lib_core::model::Error::from)?;
+	if let Err(error) = set_full_context_from_ctx_dbx(dbx, request_ctx).await {
+		let _ = dbx.rollback_txn().await;
+		return Err(error.into());
+	}
+	let authorization_result = async {
+		let context = AuthorizationFactLoader::new(dbx, snapshot)
+			.presave_for_mutation(kind, id)
+			.await
+			.map_err(map_fact_load_error)?;
+		let action = policy_registry()
+			.context_action::<Existing<PresaveResource>>("info.update")
+			.ok_or_else(|| Error::AccessDenied {
+				required_role: "registered info.update action".to_string(),
+			})?;
+		let permit = authorize_contextual_mutation(action, snapshot, context)
+			.map_err(denied)?;
+		rls_ctx_for_authorized_mutation(request_ctx, snapshot, &permit)
+	}
+	.await;
+	let authorized_ctx = finish_fact_transaction(dbx, authorization_result).await?;
+	operation(&authorized_ctx, mm).await
+}
+
+pub async fn with_authorized_presave_atomic_update<T, F>(
+	request_ctx: &Ctx,
+	snapshot: &RequestAuthorizationSnapshot,
+	mm: &ModelManager,
+	kind: PresaveAuthorizationKind,
+	id: Uuid,
+	operation: F,
+) -> Result<T>
+where
+	F: for<'ctx> FnOnce(
+		&'ctx Ctx,
+		&'ctx ModelManager,
+	) -> Pin<Box<dyn Future<Output = Result<T>> + Send + 'ctx>>,
+{
+	let dbx = mm.dbx();
+	dbx.begin_txn()
+		.await
+		.map_err(lib_core::model::Error::from)?;
+	if let Err(error) = set_full_context_from_ctx_dbx(dbx, request_ctx).await {
+		let _ = dbx.rollback_txn().await;
+		return Err(error.into());
+	}
+	let result = async {
+		let context = AuthorizationFactLoader::new(dbx, snapshot)
+			.presave_for_mutation(kind, id)
+			.await
+			.map_err(map_fact_load_error)?;
+		let action = policy_registry()
+			.context_action::<Existing<PresaveResource>>("info.update")
+			.ok_or_else(|| Error::AccessDenied {
+				required_role: "registered info.update action".to_string(),
+			})?;
+		let permit = authorize_contextual_mutation(action, snapshot, context)
+			.map_err(denied)?;
+		let authorized_ctx =
+			rls_ctx_for_authorized_mutation(request_ctx, snapshot, &permit)?;
+		operation(&authorized_ctx, mm).await
+	}
+	.await;
+	finish_fact_transaction(dbx, result).await
 }
 
 pub async fn with_authorized_case_audit_read<T, F>(
@@ -738,6 +949,7 @@ where
 	F: for<'ctx> FnOnce(
 		&'ctx Ctx,
 		&'ctx ModelManager,
+		&'ctx EnforcedScopeFilter,
 	) -> Pin<Box<dyn Future<Output = Result<T>> + Send + 'ctx>>,
 {
 	let dbx = mm.dbx();
@@ -762,7 +974,13 @@ where
 			.map_err(denied)?;
 		let authorized_ctx =
 			rls_ctx_for_authorized_mutation(request_ctx, snapshot, &permit)?;
-		operation(&authorized_ctx, mm).await
+		let scope =
+			permit
+				.enforced_scope_filter()
+				.ok_or_else(|| Error::AccessDenied {
+					required_role: "XML import scope filter".to_string(),
+				})?;
+		operation(&authorized_ctx, mm, scope).await
 	}
 	.await;
 	finish_fact_transaction(dbx, result).await

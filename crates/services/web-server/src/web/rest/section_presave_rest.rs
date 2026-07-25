@@ -5,7 +5,7 @@
 //! router paths (`section_presave_rest::<handler>`) stay unchanged.
 
 mod shared;
-pub(crate) use shared::ensure_product_presave_scope;
+pub(crate) use shared::product_presave_allowed;
 
 mod narrative;
 mod product;

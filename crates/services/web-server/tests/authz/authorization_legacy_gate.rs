@@ -600,3 +600,40 @@ fn role_reactivation_uses_the_restore_policy_action() {
 		"an explicit role reactivation must be authorized and audited as role.restore"
 	);
 }
+
+#[test]
+fn presave_routes_use_typed_policy_contexts_only() {
+	let directory = workspace_root()
+		.join("crates/services/web-server/src/web/rest/section_presave_rest");
+	for entry in fs::read_dir(directory).expect("presave route directory must exist")
+	{
+		let path = entry.expect("presave route entry must be readable").path();
+		if path.extension().and_then(|value| value.to_str()) != Some("rs") {
+			continue;
+		}
+		let source =
+			fs::read_to_string(&path).expect("presave route must be readable");
+		for legacy in [
+			"require_permission",
+			"PRESAVE_TEMPLATE_",
+			".is_system_admin()",
+			".is_sponsor_admin()",
+		] {
+			assert!(
+				!source.contains(legacy),
+				"{} still uses legacy authorization token {legacy}",
+				path.display()
+			);
+		}
+	}
+	let shared = fs::read_to_string(
+		workspace_root().join("crates/libs/lib-rest-core/src/authorization.rs"),
+	)
+	.expect("presave authorization boundary must be readable");
+	for action in ["info.list", "info.read", "info.create", "info.update"] {
+		assert!(
+			shared.contains(action),
+			"presave route boundary must resolve {action}"
+		);
+	}
+}

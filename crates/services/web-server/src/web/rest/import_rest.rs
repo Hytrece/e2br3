@@ -806,7 +806,7 @@ pub async fn validate_xml(
 		&mm,
 		"import.xml.validate",
 		"validate",
-		move |_ctx, _mm| {
+		move |_ctx, _mm, _scope| {
 			Box::pin(async move {
 				let payload = read_xml_multipart(multipart).await?;
 				let report = if should_skip_xml_validation() {
@@ -836,8 +836,10 @@ pub async fn import_xml(
 		&mm,
 		"import.xml.execute",
 		"execute",
-		move |ctx, mm| {
-			Box::pin(async move { import_xml_authorized(ctx, mm, multipart).await })
+		move |ctx, mm, scope| {
+			Box::pin(async move {
+				import_xml_authorized(ctx, mm, scope, multipart).await
+			})
 		},
 	)
 	.await
@@ -846,6 +848,7 @@ pub async fn import_xml(
 async fn import_xml_authorized(
 	ctx: &Ctx,
 	mm: &ModelManager,
+	scope: &lib_core::authorization::EnforcedScopeFilter,
 	multipart: Multipart,
 ) -> Result<(StatusCode, Json<DataRestResult<XmlImportBatchResult>>)> {
 	let payload = read_xml_multipart(multipart).await?;
@@ -859,10 +862,12 @@ async fn import_xml_authorized(
 					message: "selected Product is deleted".to_string(),
 				});
 			}
-			super::section_presave_rest::ensure_product_presave_scope(
-				ctx, mm, &product,
-			)
-			.await?;
+			if !super::section_presave_rest::product_presave_allowed(scope, &product)
+			{
+				return Err(Error::PermissionDenied {
+					required_permission: "info.read product scope".to_string(),
+				});
+			}
 			Some((id, product.product_id, product.sender_presave_id))
 		}
 		None => None,

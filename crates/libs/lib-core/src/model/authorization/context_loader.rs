@@ -2,9 +2,10 @@ use crate::authorization::{
 	AuditLogResource, BuiltInIdentityKind, CaseAuditTrailResource,
 	CaseChildResource, CaseCreateProposal, CaseResource, Collection,
 	ContextSnapshot, EnforcedScopeFilter, EvaluatedContext, Existing,
-	ImportHistoryResource, LockedMutationContext, NoticeResource, Parent, Proposed,
-	RequestAuthorizationSnapshot, ResourceSet, SettingsResource, SubmissionResource,
-	TerminologyImportProposal, TerminologyResource, XmlImportBatchProposal,
+	ImportHistoryResource, LockedMutationContext, NoticeResource, Parent,
+	PresaveCreateProposal, PresaveResource, Proposed, RequestAuthorizationSnapshot,
+	ResourceSet, SettingsResource, SubmissionResource, TerminologyImportProposal,
+	TerminologyResource, XmlImportBatchProposal,
 };
 use crate::model::store::dbx::Dbx;
 use sqlx::FromRow;
@@ -50,6 +51,45 @@ pub enum CaseMutationKind {
 	Submission,
 	ChildEdit,
 	WorkflowTransition,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PresaveAuthorizationKind {
+	Sender,
+	Product,
+	Study,
+	Receiver,
+	Reporter,
+	Narrative,
+}
+
+impl PresaveAuthorizationKind {
+	fn table(self) -> &'static str {
+		match self {
+			Self::Sender => "sender_presaves",
+			Self::Product => "product_presaves",
+			Self::Study => "study_presaves",
+			Self::Receiver => "receiver_presaves",
+			Self::Reporter => "reporter_presaves",
+			Self::Narrative => "narrative_presaves",
+		}
+	}
+
+	fn fingerprint(self) -> &'static str {
+		match self {
+			Self::Sender => "sender",
+			Self::Product => "product",
+			Self::Study => "study",
+			Self::Receiver => "receiver",
+			Self::Reporter => "reporter",
+			Self::Narrative => "narrative",
+		}
+	}
+}
+
+#[derive(Debug, FromRow)]
+struct PresaveFacts {
+	organization_id: Uuid,
 }
 
 #[derive(Debug, FromRow)]
@@ -99,6 +139,101 @@ impl<'tx> AuthorizationFactLoader<'tx> {
 			every_target_authorized: false,
 			enforced_scope_filter: Some(scope_filter(self.snapshot)),
 		})
+	}
+
+	pub fn presave_collection(
+		&self,
+	) -> ContextSnapshot<'tx, Collection<PresaveResource>> {
+		ContextSnapshot::new(EvaluatedContext {
+			organization_id: Some(self.snapshot.organization_id()),
+			target_fingerprint: format!(
+				"presaves:{}",
+				self.snapshot.organization_id()
+			),
+			within_principal_scope: true,
+			lifecycle_compatible: false,
+			parent_authorized: false,
+			every_target_authorized: false,
+			enforced_scope_filter: Some(scope_filter(self.snapshot)),
+		})
+	}
+
+	pub async fn presave_create_for_mutation(
+		&self,
+		fingerprint: impl AsRef<str>,
+	) -> Result<
+		LockedMutationContext<'tx, Proposed<PresaveCreateProposal>>,
+		AuthorizationFactLoadError,
+	> {
+		self.lock_and_verify_revisions().await?;
+		Ok(LockedMutationContext::new(EvaluatedContext {
+			organization_id: Some(self.snapshot.organization_id()),
+			target_fingerprint: format!(
+				"presave-create:{}:{}",
+				self.snapshot.organization_id(),
+				fingerprint.as_ref()
+			),
+			within_principal_scope: true,
+			lifecycle_compatible: false,
+			parent_authorized: false,
+			every_target_authorized: false,
+			enforced_scope_filter: Some(scope_filter(self.snapshot)),
+		}))
+	}
+
+	pub async fn presave_existing(
+		&self,
+		kind: PresaveAuthorizationKind,
+		id: Uuid,
+	) -> Result<
+		ContextSnapshot<'tx, Existing<PresaveResource>>,
+		AuthorizationFactLoadError,
+	> {
+		let facts = self.load_presave_facts(kind, id, false).await?;
+		Ok(ContextSnapshot::new(presave_evaluated(
+			self.snapshot,
+			kind,
+			id,
+			facts.organization_id,
+		)))
+	}
+
+	pub async fn presave_for_mutation(
+		&self,
+		kind: PresaveAuthorizationKind,
+		id: Uuid,
+	) -> Result<
+		LockedMutationContext<'tx, Existing<PresaveResource>>,
+		AuthorizationFactLoadError,
+	> {
+		self.lock_and_verify_revisions().await?;
+		let facts = self.load_presave_facts(kind, id, true).await?;
+		Ok(LockedMutationContext::new(presave_evaluated(
+			self.snapshot,
+			kind,
+			id,
+			facts.organization_id,
+		)))
+	}
+
+	async fn load_presave_facts(
+		&self,
+		kind: PresaveAuthorizationKind,
+		id: Uuid,
+		for_update: bool,
+	) -> Result<PresaveFacts, AuthorizationFactLoadError> {
+		let lock = if for_update { " FOR UPDATE" } else { "" };
+		let sql = format!(
+			"SELECT organization_id FROM {} WHERE id = $1{lock}",
+			kind.table()
+		);
+		self.dbx
+			.fetch_optional(sqlx::query_as::<_, PresaveFacts>(&sql).bind(id))
+			.await?
+			.ok_or(AuthorizationFactLoadError::FactNotFound {
+				fact: "presave",
+				id,
+			})
 	}
 
 	pub fn settings_existing(
@@ -339,7 +474,7 @@ impl<'tx> AuthorizationFactLoader<'tx> {
 			lifecycle_compatible: false,
 			parent_authorized: false,
 			every_target_authorized: false,
-			enforced_scope_filter: None,
+			enforced_scope_filter: Some(scope_filter(self.snapshot)),
 		}))
 	}
 
@@ -707,6 +842,45 @@ fn scope_allows(assigned: &[String], available: &[String]) -> bool {
 			.iter()
 			.any(|assigned| assigned.eq_ignore_ascii_case(candidate))
 	})
+}
+
+fn presave_evaluated(
+	snapshot: &RequestAuthorizationSnapshot,
+	kind: PresaveAuthorizationKind,
+	id: Uuid,
+	organization_id: Uuid,
+) -> EvaluatedContext {
+	EvaluatedContext {
+		organization_id: Some(organization_id),
+		target_fingerprint: format!("presave:{}:{id}", kind.fingerprint()),
+		within_principal_scope: presave_within_scope(snapshot, kind, id),
+		lifecycle_compatible: false,
+		parent_authorized: false,
+		every_target_authorized: false,
+		enforced_scope_filter: None,
+	}
+}
+
+fn presave_within_scope(
+	snapshot: &RequestAuthorizationSnapshot,
+	kind: PresaveAuthorizationKind,
+	id: Uuid,
+) -> bool {
+	let identifier = id.to_string();
+	match kind {
+		PresaveAuthorizationKind::Sender => {
+			scope_allows(snapshot.scope().sender_ids(), &[identifier])
+		}
+		PresaveAuthorizationKind::Product => {
+			scope_allows(snapshot.scope().product_ids(), &[identifier])
+		}
+		PresaveAuthorizationKind::Study => {
+			scope_allows(snapshot.scope().study_ids(), &[identifier])
+		}
+		PresaveAuthorizationKind::Receiver
+		| PresaveAuthorizationKind::Reporter
+		| PresaveAuthorizationKind::Narrative => true,
+	}
 }
 
 fn case_lifecycle_allows(facts: &CaseFacts, kind: CaseMutationKind) -> bool {

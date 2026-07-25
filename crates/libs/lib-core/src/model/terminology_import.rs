@@ -810,8 +810,7 @@ pub async fn approve_release(
 	dbx.begin_txn().await.map_err(store_err)?;
 	let result = async {
 		set_platform_service_context(dbx).await?;
-		dbx
-		.fetch_optional(
+		dbx.fetch_optional(
 			sqlx::query_as::<_, TerminologyReleaseRow>(
 				"UPDATE terminology_releases
 				 SET status = 'approved',
