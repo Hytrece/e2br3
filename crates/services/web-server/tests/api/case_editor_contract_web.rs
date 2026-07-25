@@ -5288,30 +5288,265 @@ async fn editor_dg_page_rejects_catalog_constraint_before_write() -> Result<()> 
 	let app = web_server::app(mm);
 	let case_id = create_case(&app, &cookie, "EDITOR-DG-CONSTRAINT").await?;
 
-	let (status, body) = post_json(
+	let cases = [
+		(
+			json!({"medicinalProduct": "X".repeat(2001)}),
+			"ICH.G.k.2.2.LENGTH.MAX",
+			"drugs.0.medicinalProduct",
+		),
+		(
+			json!({"activeSubstances": [{"substanceName": "X".repeat(251)}]}),
+			"ICH.G.k.2.3.r.1.LENGTH.MAX",
+			"drugs.0.activeSubstances.0.substanceName",
+		),
+		(
+			json!({"dosageInformation": [{"dosageText": "X".repeat(2001)}]}),
+			"ICH.G.k.4.r.8.LENGTH.MAX",
+			"drugs.0.dosageInformation.0.dosageText",
+		),
+		(
+			json!({"indications": [{"indicationText": "X".repeat(251)}]}),
+			"ICH.G.k.7.r.1.LENGTH.MAX",
+			"drugs.0.indications.0.indicationText",
+		),
+		(
+			json!({"drugReactionAssessments": [{"sourceOfAssessment": "X".repeat(61)}]}),
+			"ICH.G.k.9.i.2.r.1.LENGTH.MAX",
+			"drugs.0.drugReactionAssessments.0.sourceOfAssessment",
+		),
+	];
+	for (invalid_fields, rule_code, path) in cases {
+		let mut drug = invalid_fields.as_object().expect("object").clone();
+		drug.insert("drugCharacterization".to_string(), json!("1"));
+		let (status, body) = post_json(
+			&app,
+			&cookie,
+			&format!("/api/cases/{case_id}/editor/pages/DG/rows"),
+			json!({
+				"authorities": ["ich"],
+				"rows": {"drug": drug}
+			}),
+		)
+		.await?;
+		assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
+		assert_eq!(body["error"]["message"], "CONSTRAINT_VIOLATION");
+		assert_eq!(body["error"]["data"]["detail"]["ruleCode"], rule_code);
+		assert_eq!(body["error"]["data"]["detail"]["path"], path);
+	}
+
+	let (status, projection) = get_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/editor/pages/DG"),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK, "{projection}");
+	assert_eq!(
+		projection["rows"]["rows"].as_array().map(Vec::len),
+		Some(0),
+		"constraint failures must happen before the parent drug is written"
+	);
+
+	Ok(())
+}
+
+#[serial]
+#[tokio::test]
+async fn editor_dg_page_round_trips_nested_active_substances() -> Result<()> {
+	let mm = init_test_mm().await?;
+	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
+	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
+	let cookie = cookie_header(&token.to_string());
+	let app = web_server::app(mm);
+	let case_id = create_case(&app, &cookie, "EDITOR-DG-ACTIVE-SUBSTANCE").await?;
+	let reaction_id = create_reaction_fixture(&app, &cookie, &case_id).await?;
+
+	let (status, created) = post_json(
 		&app,
 		&cookie,
 		&format!("/api/cases/{case_id}/editor/pages/DG/rows"),
 		json!({
-			"authorities": ["ich"],
+			"authorities": ["ich", "mfds"],
 			"rows": {
 				"drug": {
 					"drugCharacterization": "1",
-					"medicinalProduct": "X".repeat(2001)
+					"medicinalProduct": "Product A",
+					"activeSubstances": [{
+						"sequenceNumber": 1,
+						"substanceName": "Substance A",
+						"substanceTermIdVersion": "1",
+						"substanceTermId": "SUB-1",
+						"mfdsVersion": "2026",
+						"mfdsId": "KR-SUB-1",
+						"substanceStrengthValue": 10.5,
+						"substanceStrengthUnit": "mg"
+					}],
+					"dosageInformation": [{
+						"sequenceNumber": 1,
+						"doseValue": 2.5,
+						"doseUnit": "mg",
+						"numberOfUnits": 1,
+						"frequencyUnit": "d",
+						"firstAdministrationDate": "20200101",
+						"lastAdministrationDate": "20200102",
+						"durationValue": 2,
+						"durationUnit": "d",
+						"batchNumber": "LOT-1",
+						"dosageText": "One tablet daily",
+						"doseForm": "Tablet",
+						"routeOfAdministration": "048"
+					}],
+					"indications": [{
+						"sequenceNumber": 1,
+						"indicationText": "Pain",
+						"indicationMeddraVersion": "26.0",
+						"indicationMeddraCode": "10033371"
+					}],
+					"drugReactionAssessments": [{
+						"reactionId": reaction_id,
+						"administrationStartIntervalValue": 2,
+						"administrationStartIntervalUnit": "d",
+						"lastDoseIntervalValue": 1,
+						"lastDoseIntervalUnit": "d",
+						"recurrenceAction": "1",
+						"reactionRecurred": "2",
+						"sourceOfAssessment": "Reporter",
+						"methodOfAssessment": "WHO-UMC",
+						"resultOfAssessment": "Possible",
+						"resultOfAssessmentKr2": "1"
+					}]
 				}
 			}
 		}),
 	)
 	.await?;
-	assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
-	assert_eq!(body["error"]["message"], "CONSTRAINT_VIOLATION");
+	assert_eq!(status, StatusCode::CREATED, "{created}");
+	let substance = &created["data"]["drug"]["activeSubstances"][0];
+	assert_eq!(substance["substance_name"], "Substance A");
+	assert_eq!(substance["substance_termid"], "SUB-1");
+	assert_eq!(substance["mfds_id"], "KR-SUB-1");
+	assert_eq!(substance["strength_value"], "10.50000");
+	let dosage = &created["data"]["drug"]["dosageInformation"][0];
+	assert_eq!(dosage["dose_value"], "2.50000");
+	assert_eq!(dosage["first_administration_date"], "20200101");
+	assert_eq!(dosage["batch_lot_number"], "LOT-1");
+	let indication = &created["data"]["drug"]["indications"][0];
+	assert_eq!(indication["indication_text"], "Pain");
+	assert_eq!(indication["indication_meddra_code"], "10033371");
+	let assessment = &created["data"]["drug"]["drugReactionAssessments"][0];
+	assert_eq!(assessment["reactionId"], reaction_id);
+	assert_eq!(assessment["administrationStartIntervalValue"], "2.00");
+	assert_eq!(assessment["recurrenceAction"], "1");
+	assert_eq!(assessment["reactionRecurred"], "2");
+	assert_eq!(assessment["sourceOfAssessment"], "Reporter");
+	assert_eq!(assessment["resultOfAssessmentKr2"], "1");
+	let drug_id = created["rowId"].as_str().expect("drug id");
+	let substance_id = substance["id"].as_str().expect("substance id");
+	let dosage_id = dosage["id"].as_str().expect("dosage id");
+	let indication_id = indication["id"].as_str().expect("indication id");
+	let relatedness_id = assessment["id"].as_str().expect("relatedness id");
+	let assessment_id = assessment["drugReactionAssessmentId"]
+		.as_str()
+		.expect("assessment id");
+
+	let (status, updated) = patch_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/editor/pages/DG/rows/{drug_id}"),
+		json!({
+			"authorities": ["ich", "mfds"],
+			"rows": {
+				"drug": {
+					"activeSubstances": [{
+						"id": substance_id,
+						"substanceName": "Updated substance"
+					}],
+					"dosageInformation": [{
+						"id": dosage_id,
+						"dosageText": "Updated dosage"
+					}],
+					"indications": [{
+						"id": indication_id,
+						"indicationText": "Updated pain"
+					}],
+					"drugReactionAssessments": [{
+						"id": relatedness_id,
+						"drugReactionAssessmentId": assessment_id,
+						"reactionId": reaction_id,
+						"administrationStartIntervalValue": 3,
+						"methodOfAssessment": "Updated method"
+					}]
+				}
+			}
+		}),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK, "{updated}");
 	assert_eq!(
-		body["error"]["data"]["detail"]["ruleCode"],
-		"ICH.G.k.2.2.LENGTH.MAX"
+		updated["data"]["drug"]["activeSubstances"][0]["substance_name"],
+		"Updated substance"
 	);
 	assert_eq!(
-		body["error"]["data"]["detail"]["path"],
-		"drugs.0.medicinalProduct"
+		updated["data"]["drug"]["dosageInformation"][0]["dosage_text"],
+		"Updated dosage"
+	);
+	assert_eq!(
+		updated["data"]["drug"]["indications"][0]["indication_text"],
+		"Updated pain"
+	);
+	assert_eq!(
+		updated["data"]["drug"]["drugReactionAssessments"][0]
+			["administrationStartIntervalValue"],
+		"3.00"
+	);
+	assert_eq!(
+		updated["data"]["drug"]["drugReactionAssessments"][0]["methodOfAssessment"],
+		"Updated method"
+	);
+
+	let (status, deleted) = patch_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/editor/pages/DG/rows/{drug_id}"),
+		json!({
+			"authorities": ["ich"],
+			"rows": {
+				"drug": {
+					"activeSubstances": [{
+						"id": substance_id,
+						"_delete": true
+					}],
+					"dosageInformation": [{
+						"id": dosage_id,
+						"_delete": true
+					}],
+					"indications": [{
+						"id": indication_id,
+						"_delete": true
+					}]
+				}
+			}
+		}),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK, "{deleted}");
+	assert_eq!(
+		deleted["data"]["drug"]["activeSubstances"]
+			.as_array()
+			.map(Vec::len),
+		Some(0)
+	);
+	assert_eq!(
+		deleted["data"]["drug"]["dosageInformation"]
+			.as_array()
+			.map(Vec::len),
+		Some(0)
+	);
+	assert_eq!(
+		deleted["data"]["drug"]["indications"]
+			.as_array()
+			.map(Vec::len),
+		Some(0)
 	);
 
 	Ok(())
