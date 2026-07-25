@@ -24,7 +24,7 @@ pub use authorization::{
 	with_authorized_subject_action, with_authorized_submission_collection,
 	with_authorized_submission_mutation, with_authorized_submission_read,
 	with_authorized_terminology_mutation, with_authorized_terminology_read,
-	with_authorized_xml_import,
+	with_authorized_user_mutation, with_authorized_xml_import,
 };
 pub use rest_params::*;
 pub use rest_result::*;
@@ -66,14 +66,12 @@ where
 	}
 }
 
-use lib_core::authorization::legacy_permission_allowed;
 use lib_core::ctx::{
 	canonical_role, Ctx, ROLE_SPONSOR_ADMIN_COMPANY, ROLE_SPONSOR_ADMIN_CRO,
 	ROLE_USER,
 };
-use lib_core::model::acs::Permission;
 use lib_core::model::admin_settings::AdminSettingsBmc;
-use lib_core::model::case::{Case, CaseBmc};
+use lib_core::model::case::Case;
 use lib_core::model::user::UserBmc;
 use lib_core::model::ModelManager;
 use serde::{Deserialize, Serialize};
@@ -94,15 +92,6 @@ pub fn is_unique_violation(err: &lib_core::model::Error) -> bool {
 		let text = format!("{err:?}").to_ascii_lowercase();
 		text.contains("duplicate") || text.contains("unique")
 	}
-}
-
-pub fn require_permission(ctx: &Ctx, permission: Permission) -> Result<()> {
-	if !legacy_permission_allowed(ctx.permission_subject(), permission) {
-		return Err(Error::PermissionDenied {
-			required_permission: format!("{permission}"),
-		});
-	}
-	Ok(())
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -659,20 +648,6 @@ pub async fn case_matches_user_scope(
 	Ok(true)
 }
 
-pub async fn require_case_read_allowed(
-	ctx: &Ctx,
-	mm: &ModelManager,
-	case_id: Uuid,
-) -> Result<()> {
-	CaseBmc::get(ctx, mm, case_id).await?;
-	if case_matches_user_scope(ctx, mm, case_id).await? {
-		return Ok(());
-	}
-	Err(Error::PermissionDenied {
-		required_permission: "Case.Scope".to_string(),
-	})
-}
-
 pub async fn case_write_block_reason_for_case(
 	ctx: &Ctx,
 	mm: &ModelManager,
@@ -796,21 +771,6 @@ pub async fn workflow_actionability_for_case(
 		can_act_on_workflow: true,
 		workflow_block_reason: None,
 	})
-}
-
-pub async fn require_case_write_allowed(
-	ctx: &Ctx,
-	mm: &ModelManager,
-	case_id: Uuid,
-) -> Result<()> {
-	require_case_read_allowed(ctx, mm, case_id).await?;
-	let case = CaseBmc::get(ctx, mm, case_id).await?;
-	if let Some(reason) = case_write_block_reason_for_case(ctx, mm, &case).await? {
-		return Err(Error::BadRequest {
-			message: reason.message,
-		});
-	}
-	Ok(())
 }
 
 pub mod prelude;

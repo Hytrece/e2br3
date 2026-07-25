@@ -2,13 +2,10 @@
 //
 // Business logic (privilege normalization, built-in role definitions, response
 // shape) stays in the REST layer. This BMC owns only the raw database operations
-// and the dynamic-role permission cache refresh.
+// and normalized authorization-role persistence.
 
 use crate::authorization::AdminMenuPrivilege;
 use crate::ctx::Ctx;
-use crate::model::acs::{
-	permissions_for_menu_privileges, remove_dynamic_role, replace_dynamic_roles,
-};
 use crate::model::authorization::NormalizedRoleRepository;
 use crate::model::store::set_full_context_from_ctx_dbx;
 use crate::model::ModelManager;
@@ -133,21 +130,6 @@ impl PermissionProfileBmc {
 			mm,
 			sqlx::query_as::<_, DbPermissionProfileRow>(&sql)
 				.bind(ctx.organization_id()),
-		)
-		.await
-	}
-
-	pub async fn list_active_custom(
-		mm: &ModelManager,
-	) -> Result<Vec<DbPermissionProfileRow>> {
-		let ctx = Ctx::root_ctx();
-		let sql = format!(
-			"{PROFILE_SELECT} WHERE active = true AND built_in = false ORDER BY name ASC"
-		);
-		Self::fetch_all_with_ctx(
-			&ctx,
-			mm,
-			sqlx::query_as::<_, DbPermissionProfileRow>(&sql),
 		)
 		.await
 	}
@@ -492,28 +474,6 @@ impl PermissionProfileBmc {
 				Err(crate::model::Error::Store(err.to_string()))
 			}
 		}
-	}
-
-	/// Reload the in-memory permission cache from all active permission profiles.
-	/// Must be called after any create/update/delete that changes profile permissions.
-	pub async fn refresh_dynamic_roles(mm: &ModelManager) -> Result<()> {
-		let rows = Self::list_active_custom(mm).await?;
-		let mapped = rows
-			.into_iter()
-			.map(|row| {
-				let permissions =
-					permissions_for_menu_privileges(&row.privileges_json.0);
-				(row.id.to_string(), permissions)
-			})
-			.collect();
-		replace_dynamic_roles(mapped);
-		Ok(())
-	}
-
-	/// Remove a single role from the in-memory cache without a full reload.
-	/// Call before `refresh_dynamic_roles` on delete, or standalone for cache eviction.
-	pub fn evict_dynamic_role(id: Uuid) {
-		remove_dynamic_role(&id.to_string());
 	}
 
 	async fn fetch_all_with_ctx<'q>(

@@ -829,6 +829,16 @@ async fn reviewed_catalog_predecessor_upgrades_explicitly() -> Result<()> {
 	))
 	.execute(database.pool())
 	.await?;
+	sqlx::raw_sql(include_str!(
+		"../../../../../db/migrations/20260725_authorization_built_in_role_assignment_actions.sql"
+	))
+	.execute(database.pool())
+	.await?;
+	sqlx::raw_sql(include_str!(
+		"../../../../../db/migrations/20260725_authorization_home_workflow_case_read.sql"
+	))
+	.execute(database.pool())
+	.await?;
 	let stored: String = sqlx::query_scalar(
 		"SELECT catalog_hash FROM authorization_catalog_state WHERE singleton",
 	)

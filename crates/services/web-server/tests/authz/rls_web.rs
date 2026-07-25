@@ -127,7 +127,7 @@ async fn test_rls_case_versions_filters_org() -> Result<()> {
 		.header("cookie", cookie.clone())
 		.body(Body::empty())?;
 	let res = app.clone().oneshot(req).await?;
-	assert_eq!(res.status(), StatusCode::FORBIDDEN);
+	assert_eq!(res.status(), StatusCode::OK);
 
 	let req = Request::builder()
 		.method("GET")
@@ -135,7 +135,7 @@ async fn test_rls_case_versions_filters_org() -> Result<()> {
 		.header("cookie", cookie)
 		.body(Body::empty())?;
 	let res = app.oneshot(req).await?;
-	assert_eq!(res.status(), StatusCode::FORBIDDEN);
+	assert_eq!(res.status(), StatusCode::NOT_FOUND);
 
 	Ok(())
 }

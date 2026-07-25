@@ -138,12 +138,11 @@ pub(super) fn is_sponsor_admin_role(role: &str) -> bool {
 	matches!(role, ROLE_SPONSOR_ADMIN_CRO | ROLE_SPONSOR_ADMIN_COMPANY)
 }
 
-pub(super) fn sponsor_admin_mutation_error() -> Error {
-	Error::BadRequest {
-		message:
-			"Sponsor Administrator users can only be changed by a System Administrator"
-				.to_string(),
-	}
+pub(super) fn is_built_in_admin_role(role: &str) -> bool {
+	matches!(
+		role,
+		ROLE_SYSTEM_ADMIN | ROLE_SPONSOR_ADMIN_CRO | ROLE_SPONSOR_ADMIN_COMPANY
+	)
 }
 
 pub(super) fn sponsor_admin_singleton_error() -> Error {
@@ -152,18 +151,6 @@ pub(super) fn sponsor_admin_singleton_error() -> Error {
 			"Only one Sponsor Administrator can be assigned for an organization"
 				.to_string(),
 	}
-}
-
-pub(super) fn validate_sponsor_admin_assignment_authority(
-	ctx: &Ctx,
-	role: Option<&str>,
-) -> Result<()> {
-	if role.is_some_and(is_sponsor_admin_role) && !ctx.is_system_admin() {
-		return Err(Error::BadRequest {
-			message: "Sponsor Administrator roles can only be assigned by a System Administrator".to_string(),
-		});
-	}
-	Ok(())
 }
 
 pub(super) async fn validate_permission_profile_role_for_org(
@@ -219,16 +206,6 @@ pub(super) async fn validate_sponsor_admin_role_for_org(
 		| (ROLE_SPONSOR_ADMIN_COMPANY, Some(ORG_TYPE_PHARMACEUTICAL_COMPANY)) => Ok(()),
 		_ => Err(sponsor_admin_role_error()),
 	}
-}
-
-pub(super) fn validate_existing_sponsor_admin_mutation(
-	ctx: &Ctx,
-	user: &User,
-) -> Result<()> {
-	if is_sponsor_admin_role(&user.role) && !ctx.is_system_admin() {
-		return Err(sponsor_admin_mutation_error());
-	}
-	Ok(())
 }
 
 pub(super) async fn validate_single_sponsor_admin_for_org(

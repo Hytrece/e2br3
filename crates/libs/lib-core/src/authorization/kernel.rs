@@ -5,18 +5,6 @@ use super::{
 	EligibilityDecision, EvaluatedContext, LockedMutationContext,
 	RequestAuthorizationSnapshot, SubjectActionId,
 };
-use crate::model::acs::{has_permission, Permission};
-
-/// Temporary compatibility entry point for routes that have not yet adopted a
-/// typed canonical action. Legacy permissions are generated one-way from the
-/// canonical grants; web code must not evaluate them independently.
-pub fn legacy_permission_allowed(
-	permission_subject: &str,
-	permission: Permission,
-) -> bool {
-	has_permission(permission_subject, permission)
-}
-
 pub fn check_eligibility(
 	action_id: &ActionId,
 	snapshot: &RequestAuthorizationSnapshot,
@@ -49,6 +37,16 @@ pub fn check_eligibility(
 		));
 	}
 	EligibilityDecision::Eligible
+}
+
+pub fn eligible_action_ids(
+	snapshot: &RequestAuthorizationSnapshot,
+) -> Vec<ActionId> {
+	policy_registry()
+		.actions()
+		.filter(|policy| check_eligibility(&policy.id, snapshot).is_eligible())
+		.map(|policy| policy.id.clone())
+		.collect()
 }
 
 pub fn authorize_subject(
@@ -122,6 +120,7 @@ pub fn authorize_contextual_mutation<'tx, C: AuthorizationContext>(
 		context.evaluated.target_fingerprint,
 		snapshot.version().clone(),
 		snapshot.evaluated_at(),
+		context.evaluated.enforced_scope_filter,
 	))
 }
 
@@ -312,6 +311,38 @@ mod tests {
 	}
 
 	#[test]
+	fn only_platform_identity_can_assign_built_in_administrator_roles() {
+		type UserProposal =
+			crate::authorization::Proposed<crate::authorization::UserCreateProposal>;
+		let action = policy_registry()
+			.context_action::<UserProposal>("user.create.built_in_role_assignment")
+			.expect("built-in role assignment action must exist");
+
+		let sponsor = snapshot(
+			&["admin.edit"],
+			Some(BuiltInIdentityKind::SponsorCroAdministrator),
+		);
+		let denial = authorize_contextual_mutation(
+			action.clone(),
+			&sponsor,
+			LockedMutationContext::new(evaluated(&sponsor, true)),
+		)
+		.expect_err("sponsor administrator cannot assign built-in admin roles");
+		assert_eq!(denial.reason(), DenialReason::IncompatibleIdentity);
+
+		let platform = snapshot(
+			&["admin.edit"],
+			Some(BuiltInIdentityKind::PlatformAdministrator),
+		);
+		assert!(authorize_contextual_mutation(
+			action,
+			&platform,
+			LockedMutationContext::new(evaluated(&platform, true)),
+		)
+		.is_ok());
+	}
+
+	#[test]
 	fn custom_pdf_grants_are_not_restricted_to_built_in_administrators() {
 		let custom = snapshot(
 			&[
@@ -387,5 +418,24 @@ mod tests {
 		assert_eq!(permit.target_fingerprint(), "case:42:v7");
 		assert!(permit.enforced_scope_filter().is_some());
 		assert_eq!(permit.snapshot_version(), reader.version());
+	}
+
+	#[test]
+	fn mutation_permit_preserves_exact_context_evidence() {
+		type NewCase =
+			crate::authorization::Proposed<crate::authorization::CaseCreateProposal>;
+		let action = policy_registry()
+			.context_action::<NewCase>("case.create")
+			.unwrap();
+		let editor = snapshot(&["case.edit"], None);
+		let permit = authorize_contextual_mutation(
+			action,
+			&editor,
+			LockedMutationContext::new(evaluated(&editor, true)),
+		)
+		.unwrap();
+		assert_eq!(permit.target_fingerprint(), "case:42:v7");
+		assert!(permit.enforced_scope_filter().is_some());
+		assert_eq!(permit.snapshot_version(), editor.version());
 	}
 }

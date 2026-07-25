@@ -330,3 +330,57 @@ pub fn proposed_role_context(
 		enforced_scope_filter: None,
 	})
 }
+
+pub fn organization_collection_context(
+) -> ContextSnapshot<'static, Collection<OrganizationResource>> {
+	ContextSnapshot::new(EvaluatedContext {
+		organization_id: None,
+		target_fingerprint: "organizations:all".to_string(),
+		within_principal_scope: false,
+		lifecycle_compatible: false,
+		parent_authorized: false,
+		every_target_authorized: false,
+		enforced_scope_filter: None,
+	})
+}
+
+pub fn existing_organization_read_context(
+	organization_id: Uuid,
+) -> ContextSnapshot<'static, Existing<OrganizationResource>> {
+	ContextSnapshot::new(EvaluatedContext {
+		organization_id: Some(organization_id),
+		target_fingerprint: format!("organization:{organization_id}"),
+		within_principal_scope: false,
+		lifecycle_compatible: false,
+		parent_authorized: false,
+		every_target_authorized: false,
+		enforced_scope_filter: None,
+	})
+}
+
+pub fn existing_organization_mutation_context(
+	organization_id: Uuid,
+) -> LockedMutationContext<'static, Existing<OrganizationResource>> {
+	LockedMutationContext::new(EvaluatedContext {
+		organization_id: Some(organization_id),
+		target_fingerprint: format!("organization:{organization_id}"),
+		within_principal_scope: false,
+		lifecycle_compatible: false,
+		parent_authorized: false,
+		every_target_authorized: false,
+		enforced_scope_filter: None,
+	})
+}
+
+pub fn proposed_organization_context(
+) -> LockedMutationContext<'static, Proposed<OrganizationCreateProposal>> {
+	LockedMutationContext::new(EvaluatedContext {
+		organization_id: None,
+		target_fingerprint: "organization:new".to_string(),
+		within_principal_scope: false,
+		lifecycle_compatible: false,
+		parent_authorized: false,
+		every_target_authorized: false,
+		enforced_scope_filter: None,
+	})
+}

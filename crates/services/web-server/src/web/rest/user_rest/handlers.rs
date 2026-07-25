@@ -33,7 +33,14 @@ pub async fn create_user(
 		.role
 		.as_deref()
 		.is_some_and(|role| canonical_role(role) != ROLE_USER);
-	let action_id = if assigns_role {
+	let assigns_built_in_admin = data
+		.role
+		.as_deref()
+		.map(canonical_role)
+		.is_some_and(|role| is_built_in_admin_role(&role));
+	let action_id = if assigns_built_in_admin {
+		"user.create.built_in_role_assignment"
+	} else if assigns_role {
 		"user.create.role_assignment"
 	} else {
 		"user.create"
@@ -75,7 +82,6 @@ pub async fn create_user(
 		.unwrap_or_else(|| email.split('@').next().unwrap_or("user").to_string());
 	validate_username(&username)?;
 	validate_permission_profile_role_for_org(&db_ctx, &mm, role.as_deref()).await?;
-	validate_sponsor_admin_assignment_authority(&ctx, role.as_deref())?;
 	validate_sponsor_admin_role_for_org(
 		&db_ctx,
 		&mm,
@@ -221,21 +227,35 @@ pub struct WorkflowUserOptionsQuery {
 pub async fn list_workflow_user_options(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: AuthorizationSnapshotW,
 	axum::extract::Query(query): axum::extract::Query<WorkflowUserOptionsQuery>,
 ) -> Result<(
 	StatusCode,
 	Json<DataRestResult<Vec<WorkflowUserOptionView>>>,
 )> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, CASE_READ)?;
-	let users =
-		UserBmc::list_workflow_options(&ctx, &mm, query.limit.unwrap_or(200))
-			.await?;
-	let users = users
-		.into_iter()
-		.map(workflow_user_option_view)
-		.collect::<Vec<_>>();
-	Ok((StatusCode::OK, Json(DataRestResult { data: users })))
+	lib_rest_core::with_authorized_subject_action(
+		&ctx,
+		&snapshot,
+		&mm,
+		"case.workflow.config.read",
+		move |ctx, mm| {
+			Box::pin(async move {
+				let users = UserBmc::list_workflow_options(
+					ctx,
+					mm,
+					query.limit.unwrap_or(200),
+				)
+				.await?;
+				let users = users
+					.into_iter()
+					.map(workflow_user_option_view)
+					.collect::<Vec<_>>();
+				Ok((StatusCode::OK, Json(DataRestResult { data: users })))
+			})
+		},
+	)
+	.await
 }
 
 /// PUT /api/users/:id
@@ -250,86 +270,101 @@ pub async fn update_user(
 ) -> Result<(StatusCode, Json<DataRestResult<UserView>>)> {
 	let ctx = ctx_w.0;
 	let ParamsForUpdate { data } = params;
-	let target_organization_id = user_target_organization(&ctx, &snapshot);
-	let action_id = if data.role.is_some() {
+	let assigns_built_in_admin = data
+		.role
+		.as_deref()
+		.map(canonical_role)
+		.is_some_and(|role| is_built_in_admin_role(&role));
+	let action_id = if assigns_built_in_admin {
+		"user.update.built_in_role_assignment"
+	} else if data.role.is_some() {
 		"user.update.role_assignment"
 	} else {
 		"user.update"
 	};
-	let action = policy_registry()
-		.context_action::<Existing<UserResource>>(action_id)
-		.expect("registered user update policy");
-	let permit = authorize_contextual_mutation(
-		action,
+	let forbids_sender_scope_assignment =
+		sender_scope_assignment_forbidden_for_ctx(&ctx);
+	lib_rest_core::with_authorized_user_mutation(
+		&ctx,
 		&snapshot,
-		existing_user_mutation_context(id, target_organization_id),
+		&mm,
+		id,
+		action_id,
+		"user.update.built_in_administrator",
+		move |db_ctx, mm| {
+			Box::pin(async move {
+				validate_uuid_scope("access_sender_ids", &data.access_sender_ids)?;
+				validate_uuid_scope("access_product_ids", &data.access_product_ids)?;
+				validate_uuid_scope("access_study_ids", &data.access_study_ids)?;
+				validate_optional_uuid_identifier(
+					"active_sender_identifier",
+					data.active_sender_identifier.as_deref(),
+				)?;
+				if forbids_sender_scope_assignment
+					&& has_sender_scope_assignment(
+						&data.active_sender_identifier,
+						&data.access_sender_ids,
+					) {
+					return Err(sender_scope_assignment_forbidden());
+				}
+				let existing: User = UserBmc::get(db_ctx, mm, id).await?;
+				let role = normalize_user_role(data.role);
+				if role.is_some() {
+					validate_permission_profile_role_for_org(
+						db_ctx,
+						mm,
+						role.as_deref(),
+					)
+					.await?;
+					validate_sponsor_admin_role_for_org(
+						db_ctx,
+						mm,
+						existing.organization_id,
+						role.as_deref(),
+					)
+					.await?;
+					validate_single_sponsor_admin_for_org(
+						db_ctx,
+						mm,
+						existing.organization_id,
+						role.as_deref(),
+						Some(id),
+					)
+					.await?;
+				}
+				let email = normalize_optional_email_input(data.email)?;
+				let username = normalize_optional_username_input(data.username)?;
+				let update = UserForUpdate {
+					organization_id: None,
+					email,
+					username,
+					role,
+					comments: data.comments,
+					other_information: data.other_information,
+					access_start_at: data.access_start_at,
+					access_end_at: data.access_end_at,
+					access_sender_ids: serialize_scope_input(data.access_sender_ids),
+					access_product_ids: serialize_scope_input(
+						data.access_product_ids,
+					),
+					access_study_ids: serialize_scope_input(data.access_study_ids),
+					access_blind_allowed: data.access_blind_allowed,
+					active_sender_identifier: data.active_sender_identifier,
+					active: data.active,
+					last_login_at: data.last_login_at,
+				};
+				UserBmc::update(db_ctx, mm, id, update).await?;
+				let entity: User = UserBmc::get(db_ctx, mm, id).await?;
+				Ok((
+					StatusCode::OK,
+					Json(DataRestResult {
+						data: user_view(entity),
+					}),
+				))
+			})
+		},
 	)
-	.map_err(authorization_denied)?;
-	let db_ctx = rls_ctx_for_authorized_mutation(&ctx, &snapshot, &permit)?;
-	validate_uuid_scope("access_sender_ids", &data.access_sender_ids)?;
-	validate_uuid_scope("access_product_ids", &data.access_product_ids)?;
-	validate_uuid_scope("access_study_ids", &data.access_study_ids)?;
-	validate_optional_uuid_identifier(
-		"active_sender_identifier",
-		data.active_sender_identifier.as_deref(),
-	)?;
-	if sender_scope_assignment_forbidden_for_ctx(&ctx)
-		&& has_sender_scope_assignment(
-			&data.active_sender_identifier,
-			&data.access_sender_ids,
-		) {
-		return Err(sender_scope_assignment_forbidden());
-	}
-	let existing: User = UserBmc::get(&db_ctx, &mm, id).await?;
-	validate_existing_sponsor_admin_mutation(&ctx, &existing)?;
-	let role = normalize_user_role(data.role);
-	if role.is_some() {
-		validate_permission_profile_role_for_org(&db_ctx, &mm, role.as_deref())
-			.await?;
-		validate_sponsor_admin_assignment_authority(&ctx, role.as_deref())?;
-		validate_sponsor_admin_role_for_org(
-			&db_ctx,
-			&mm,
-			existing.organization_id,
-			role.as_deref(),
-		)
-		.await?;
-		validate_single_sponsor_admin_for_org(
-			&db_ctx,
-			&mm,
-			existing.organization_id,
-			role.as_deref(),
-			Some(id),
-		)
-		.await?;
-	}
-	let email = normalize_optional_email_input(data.email)?;
-	let username = normalize_optional_username_input(data.username)?;
-	let update = UserForUpdate {
-		organization_id: None,
-		email,
-		username,
-		role,
-		comments: data.comments,
-		other_information: data.other_information,
-		access_start_at: data.access_start_at,
-		access_end_at: data.access_end_at,
-		access_sender_ids: serialize_scope_input(data.access_sender_ids),
-		access_product_ids: serialize_scope_input(data.access_product_ids),
-		access_study_ids: serialize_scope_input(data.access_study_ids),
-		access_blind_allowed: data.access_blind_allowed,
-		active_sender_identifier: data.active_sender_identifier,
-		active: data.active,
-		last_login_at: data.last_login_at,
-	};
-	UserBmc::update(&db_ctx, &mm, id, update).await?;
-	let entity: User = UserBmc::get(&db_ctx, &mm, id).await?;
-	Ok((
-		StatusCode::OK,
-		Json(DataRestResult {
-			data: user_view(entity),
-		}),
-	))
+	.await
 }
 
 /// DELETE /api/users/:id
@@ -342,48 +377,49 @@ pub async fn delete_user(
 	Path(id): Path<Uuid>,
 ) -> Result<StatusCode> {
 	let ctx = ctx_w.0;
-	let target_organization_id = user_target_organization(&ctx, &snapshot);
-	let action = policy_registry()
-		.context_action::<Existing<UserResource>>("user.delete")
-		.expect("user.delete policy");
-	let permit = authorize_contextual_mutation(
-		action,
+	let request_user_id = ctx.user_id();
+	lib_rest_core::with_authorized_user_mutation(
+		&ctx,
 		&snapshot,
-		existing_user_mutation_context(id, target_organization_id),
-	)
-	.map_err(authorization_denied)?;
-	let db_ctx = rls_ctx_for_authorized_mutation(&ctx, &snapshot, &permit)?;
-	if id == ctx.user_id() {
-		return Err(Error::BadRequest {
-			message: "cannot delete yourself".to_string(),
-		});
-	}
-	let existing: User = UserBmc::get(&db_ctx, &mm, id).await?;
-	validate_existing_sponsor_admin_mutation(&ctx, &existing)?;
-	UserBmc::update(
-		&db_ctx,
 		&mm,
 		id,
-		UserForUpdate {
-			organization_id: None,
-			email: None,
-			username: None,
-			role: None,
-			comments: None,
-			other_information: None,
-			access_start_at: None,
-			access_end_at: None,
-			access_sender_ids: None,
-			access_product_ids: None,
-			access_study_ids: None,
-			access_blind_allowed: None,
-			active_sender_identifier: None,
-			active: Some(false),
-			last_login_at: None,
+		"user.delete",
+		"user.delete.built_in_administrator",
+		move |db_ctx, mm| {
+			Box::pin(async move {
+				if id == request_user_id {
+					return Err(Error::BadRequest {
+						message: "cannot delete yourself".to_string(),
+					});
+				}
+				UserBmc::update(
+					db_ctx,
+					mm,
+					id,
+					UserForUpdate {
+						organization_id: None,
+						email: None,
+						username: None,
+						role: None,
+						comments: None,
+						other_information: None,
+						access_start_at: None,
+						access_end_at: None,
+						access_sender_ids: None,
+						access_product_ids: None,
+						access_study_ids: None,
+						access_blind_allowed: None,
+						active_sender_identifier: None,
+						active: Some(false),
+						last_login_at: None,
+					},
+				)
+				.await?;
+				Ok(StatusCode::NO_CONTENT)
+			})
 		},
 	)
-	.await?;
-	Ok(StatusCode::NO_CONTENT)
+	.await
 }
 
 /// GET /api/users/me
@@ -414,16 +450,7 @@ pub async fn get_current_user_profile(
 		current_user_organization_selection_view(&ctx, &mm).await?;
 	let routing = routing_profile_for_user(&ctx, &mm).await?;
 	let privileges = current_user_menu_privileges(&ctx, &mm).await?;
-	let mut permissions = all_permissions()
-		.iter()
-		.copied()
-		.filter(|permission| {
-			legacy_permission_allowed(ctx.permission_subject(), *permission)
-		})
-		.map(|permission| permission.to_string())
-		.collect::<Vec<_>>();
-	permissions.sort_unstable();
-	permissions.dedup();
+	let eligible_actions = lib_core::authorization::eligible_action_ids(&snapshot);
 	let policy_version = snapshot.version().organization_revision();
 	Ok((
 		StatusCode::OK,
@@ -435,7 +462,7 @@ pub async fn get_current_user_profile(
 					.available_organizations,
 				routing,
 				privileges,
-				permissions,
+				eligible_actions,
 				policy_version,
 			},
 		}),

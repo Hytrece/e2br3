@@ -166,7 +166,7 @@ async fn test_sponsor_admin_cannot_assign_sponsor_admin_role() -> Result<()> {
 		.header("content-type", "application/json")
 		.body(Body::from(body.to_string()))?;
 	let res = app.oneshot(req).await?;
-	assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+	assert_eq!(res.status(), StatusCode::FORBIDDEN);
 	Ok(())
 }
 
@@ -195,12 +195,8 @@ async fn test_sponsor_admin_cannot_update_existing_sponsor_admin_user() -> Resul
 	let body = axum::body::to_bytes(res.into_body(), usize::MAX).await?;
 	let json: serde_json::Value = serde_json::from_slice(&body)?;
 
-	assert_eq!(status, StatusCode::BAD_REQUEST, "{json:?}");
-	assert!(
-		json.to_string()
-			.contains("can only be changed by a System Administrator"),
-		"{json:?}"
-	);
+	assert_eq!(status, StatusCode::FORBIDDEN, "{json:?}");
+	assert!(json.to_string().contains("PERMISSION_DENIED"), "{json:?}");
 	Ok(())
 }
 
@@ -225,7 +221,7 @@ async fn test_update_user_rejects_sponsor_admin_role_for_wrong_org_type(
 		.header("content-type", "application/json")
 		.body(Body::from(body.to_string()))?;
 	let res = app.oneshot(req).await?;
-	assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+	assert_eq!(res.status(), StatusCode::FORBIDDEN);
 	Ok(())
 }
 
@@ -328,6 +324,6 @@ async fn test_admin_cannot_delete_self() -> Result<()> {
 		.header("cookie", cookie_header(&token.to_string()))
 		.body(Body::empty())?;
 	let res = app.oneshot(req).await?;
-	assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+	assert_eq!(res.status(), StatusCode::FORBIDDEN);
 	Ok(())
 }

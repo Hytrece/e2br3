@@ -1005,8 +1005,8 @@ struct RoutingProfileDoc {
 struct CurrentUserProfileDoc {
 	user: UserDoc,
 	routing: RoutingProfileDoc,
-	/// Effective Resource.Action permissions for the authenticated user.
-	permissions: Vec<String>,
+	/// Canonical actions eligible for the authenticated user before resource checks.
+	eligible_actions: Vec<String>,
 	/// Monotonic version of the effective RBAC policy.
 	policy_version: i64,
 }

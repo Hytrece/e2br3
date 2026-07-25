@@ -172,6 +172,7 @@ impl<'tx, C: AuthorizationContext> AuthorizedMutation<'tx, C> {
 		target_fingerprint: String,
 		snapshot_version: PolicySnapshotVersion,
 		decision_time: OffsetDateTime,
+		enforced_scope_filter: Option<EnforcedScopeFilter>,
 	) -> Self {
 		Self {
 			evidence: PermitEvidence::new(
@@ -182,7 +183,7 @@ impl<'tx, C: AuthorizationContext> AuthorizedMutation<'tx, C> {
 				target_fingerprint,
 				snapshot_version,
 				decision_time,
-				None,
+				enforced_scope_filter,
 			),
 			brand: PhantomData,
 		}

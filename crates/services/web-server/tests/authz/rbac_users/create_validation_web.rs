@@ -149,7 +149,7 @@ async fn test_sponsor_admin_create_user_rejects_sponsor_admin_role() -> Result<(
 	let body = axum::body::to_bytes(res.into_body(), usize::MAX).await?;
 	let json: serde_json::Value = serde_json::from_slice(&body)?;
 
-	assert_eq!(status, StatusCode::BAD_REQUEST, "{json:?}");
+	assert_eq!(status, StatusCode::FORBIDDEN, "{json:?}");
 	Ok(())
 }
 
