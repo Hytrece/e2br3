@@ -134,10 +134,8 @@ pub(crate) fn reaction_fragment(reaction: &Reaction) -> Result<String> {
 		out.push_str("</originalText></value>");
 	}
 	out.push_str(&observation_rel_translation(reaction));
-	if let Some(term_code) =
-		term_highlight_code(reaction.term_highlighted, reaction.serious)
-	{
-		out.push_str(&observation_rel_code("37", &term_code));
+	if let Some(term_code) = reaction.term_highlighted.as_deref() {
+		out.push_str(&observation_rel_code("37", term_code));
 	}
 	out.push_str(&observation_rel_bool_or_null_flavor(
 		"34",
@@ -449,19 +447,6 @@ fn observation_rel_translation(reaction: &Reaction) -> String {
 	out.push_str(&xml_escape(text));
 	out.push_str("</value></observation></outboundRelationship2>");
 	out
-}
-
-fn term_highlight_code(
-	term_highlighted: Option<bool>,
-	serious: Option<bool>,
-) -> Option<String> {
-	match (term_highlighted, serious) {
-		(Some(true), Some(true)) => Some("3".to_string()),
-		(Some(true), Some(false)) => Some("1".to_string()),
-		(Some(false), Some(true)) => Some("4".to_string()),
-		(Some(false), Some(false)) => Some("2".to_string()),
-		_ => None,
-	}
 }
 
 fn fmt_date(date: Date) -> String {

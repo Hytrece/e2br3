@@ -4,13 +4,15 @@ pub(super) use super::portable_save::{
 	validate_direct_changes, validate_direct_rows, validate_row_payload,
 };
 pub(super) use crate::web::rest::case_editor_dto::{
-	CaseEditorAeListRowDto, CaseEditorDgListRowDto, CaseEditorDhListRowDto,
-	CaseEditorDirectSectionResponse, CaseEditorFieldPatch, CaseEditorLbListRowDto,
-	CaseEditorListResponse, CaseEditorPagePatchRequest,
-	CaseEditorPageProjectionResponse, CaseEditorRowDetailResponse,
-	CaseEditorShellDto,
+	CaseEditorAeListRowDto, CaseEditorCiCaseDto, CaseEditorCiDocumentDto,
+	CaseEditorCiLinkedReportDto, CaseEditorCiOtherIdentifierDto,
+	CaseEditorCiRowsDto, CaseEditorCiSafetyReportDto, CaseEditorCiSourceDocumentDto,
+	CaseEditorDgListRowDto, CaseEditorDhListRowDto, CaseEditorDirectSectionResponse,
+	CaseEditorFieldPatch, CaseEditorLbListRowDto, CaseEditorListResponse,
+	CaseEditorPagePatchRequest, CaseEditorPageProjectionResponse,
+	CaseEditorRowDetailResponse, CaseEditorShellDto,
 };
-pub(super) use crate::web::rest::case_rest::{case_to_read_result, PublicCaseView};
+pub(super) use crate::web::rest::case_rest::case_to_read_result;
 pub(super) use axum::extract::{Path, Query, State};
 pub(super) use axum::Json;
 pub(super) use lib_core::model::acs::{
@@ -29,10 +31,14 @@ pub(super) use lib_core::model::acs::{
 	TEST_RESULT_CREATE, TEST_RESULT_DELETE, TEST_RESULT_LIST, TEST_RESULT_READ,
 	TEST_RESULT_UPDATE,
 };
-pub(super) use lib_core::model::case::CaseBmc;
+pub(super) use lib_core::model::case::{
+	CaseBmc, CaseForUpdate, SourceDocumentBmc, SourceDocumentFilter,
+	SourceDocumentForCreate, SourceDocumentForUpdate,
+};
 pub(super) use lib_core::model::case_identifiers::{
-	LinkedReportNumberBmc, LinkedReportNumberFilter, OtherCaseIdentifierBmc,
-	OtherCaseIdentifierFilter,
+	LinkedReportNumberBmc, LinkedReportNumberFilter, LinkedReportNumberForCreate,
+	LinkedReportNumberForUpdate, OtherCaseIdentifierBmc, OtherCaseIdentifierFilter,
+	OtherCaseIdentifierForCreate, OtherCaseIdentifierForUpdate,
 };
 pub(super) use lib_core::model::case_validation_report_cache::CaseValidationReportCacheBmc;
 pub(super) use lib_core::model::case_validation_summary::CaseValidationSummaryBmc;
@@ -42,41 +48,53 @@ pub(super) use lib_core::model::drug::{
 	DrugInformationBmc, DrugInformationForCreate, DrugInformationForUpdate,
 };
 pub(super) use lib_core::model::drug_reaction_assessment::DrugReactionAssessmentBmc;
-pub(super) use lib_core::model::message_header::{
-	MessageHeaderBmc, MessageHeaderForUpdate,
-};
 pub(super) use lib_core::model::narrative::{
 	CaseSummaryInformationBmc, CaseSummaryInformationFilter,
 	NarrativeInformationBmc, NarrativeInformationForCreate,
 	NarrativeInformationForUpdate, SenderDiagnosisBmc, SenderDiagnosisFilter,
 };
 pub(super) use lib_core::model::parent_history::{
-	ParentMedicalHistoryBmc, ParentMedicalHistoryFilter, ParentPastDrugHistoryBmc,
-	ParentPastDrugHistoryFilter,
+	ParentMedicalHistoryBmc, ParentMedicalHistoryFilter,
+	ParentMedicalHistoryForCreate, ParentMedicalHistoryForUpdate,
+	ParentPastDrugHistoryBmc, ParentPastDrugHistoryFilter,
+	ParentPastDrugHistoryForCreate, ParentPastDrugHistoryForUpdate,
 };
 pub(super) use lib_core::model::patient::{
-	AutopsyCauseOfDeathBmc, AutopsyCauseOfDeathFilter, MedicalHistoryEpisodeBmc,
-	MedicalHistoryEpisodeFilter, ParentInformationBmc, ParentInformationFilter,
-	PastDrugHistoryBmc, PastDrugHistoryFilter, PastDrugHistoryForCreate,
-	PastDrugHistoryForUpdate, PatientDeathInformationBmc,
-	PatientDeathInformationFilter, PatientIdentifierBmc, PatientIdentifierFilter,
-	PatientInformationBmc, PatientInformationForCreate, PatientInformationForUpdate,
-	ReportedCauseOfDeathBmc, ReportedCauseOfDeathFilter,
+	AutopsyCauseOfDeathBmc, AutopsyCauseOfDeathFilter, AutopsyCauseOfDeathForCreate,
+	AutopsyCauseOfDeathForUpdate, MedicalHistoryEpisodeBmc,
+	MedicalHistoryEpisodeFilter, MedicalHistoryEpisodeForCreate,
+	MedicalHistoryEpisodeForUpdate, ParentInformationBmc, ParentInformationFilter,
+	ParentInformationForCreate, ParentInformationForUpdate, PastDrugHistoryBmc,
+	PastDrugHistoryFilter, PastDrugHistoryForCreate, PastDrugHistoryForUpdate,
+	PatientDeathInformationBmc, PatientDeathInformationFilter,
+	PatientDeathInformationForCreate, PatientDeathInformationForUpdate,
+	PatientIdentifierBmc, PatientIdentifierFilter, PatientIdentifierForCreate,
+	PatientIdentifierForUpdate, PatientInformationBmc, PatientInformationForCreate,
+	PatientInformationForUpdate, ReportedCauseOfDeathBmc,
+	ReportedCauseOfDeathFilter, ReportedCauseOfDeathForCreate,
+	ReportedCauseOfDeathForUpdate,
 };
 pub(super) use lib_core::model::reaction::{
 	ReactionBmc, ReactionForCreate, ReactionForUpdate,
 };
-pub(super) use lib_core::model::receiver::ReceiverInformationBmc;
+pub(super) use lib_core::model::receiver::{
+	ReceiverInformationBmc, ReceiverInformationForCreate,
+	ReceiverInformationForUpdate,
+};
 pub(super) use lib_core::model::safety_report::{
-	DocumentsHeldBySenderBmc, DocumentsHeldBySenderFilter, LiteratureReferenceBmc,
-	LiteratureReferenceFilter, LiteratureReferenceForCreate,
+	DocumentsHeldBySenderBmc, DocumentsHeldBySenderFilter,
+	DocumentsHeldBySenderForCreate, DocumentsHeldBySenderForUpdate,
+	LiteratureReferenceBmc, LiteratureReferenceFilter, LiteratureReferenceForCreate,
 	LiteratureReferenceForUpdate, PatchValue, PrimarySourceBmc, PrimarySourceFilter,
 	PrimarySourceForCreate, PrimarySourceForUpdate, SafetyReportIdentificationBmc,
 	SafetyReportIdentificationForUpdate, SenderInformationBmc,
 	SenderInformationFilter, SenderInformationForCreate, SenderInformationForUpdate,
+	StudyFdaCrossReportedIndBmc, StudyFdaCrossReportedIndFilter,
+	StudyFdaCrossReportedIndForCreate, StudyFdaCrossReportedIndForUpdate,
 	StudyInformationBmc, StudyInformationFilter, StudyInformationForCreate,
 	StudyInformationForUpdate, StudyRegistrationNumberBmc,
-	StudyRegistrationNumberFilter,
+	StudyRegistrationNumberFilter, StudyRegistrationNumberForCreate,
+	StudyRegistrationNumberForUpdate,
 };
 pub(super) use lib_core::model::test_result::{
 	TestResultBmc, TestResultForCreate, TestResultForUpdate,
@@ -465,7 +483,17 @@ pub(super) fn insert_alias(
 		return;
 	}
 	for alias in aliases {
-		if let Some(value) = map.get(*alias) {
+		let mut segments = alias.split('.');
+		let Some(first) = segments.next() else {
+			continue;
+		};
+		let mut value = map.get(first);
+		for segment in segments {
+			value = value
+				.and_then(Value::as_object)
+				.and_then(|object| object.get(segment));
+		}
+		if let Some(value) = value {
 			map.insert(target.to_string(), value.clone());
 			return;
 		}
@@ -481,10 +509,30 @@ pub(super) fn row_model_value(
 	for (target, aliases) in aliases {
 		insert_alias(&mut map, target, aliases);
 	}
+	normalize_required_intervention(&mut map);
 	for (key, value) in extra {
 		map.insert((*key).to_string(), value.clone());
 	}
 	Value::Object(map)
+}
+
+fn normalize_required_intervention(map: &mut serde_json::Map<String, Value>) {
+	match map.get("required_intervention") {
+		Some(Value::Bool(true)) => {
+			map.insert(
+				"required_intervention".to_string(),
+				Value::String("true".to_string()),
+			);
+		}
+		Some(Value::String(value)) if value == "NI" => {
+			map.remove("required_intervention");
+			map.insert(
+				"required_intervention_null_flavor".to_string(),
+				Value::String("NI".to_string()),
+			);
+		}
+		_ => {}
+	}
 }
 
 pub(super) fn parse_row_model<T: serde::de::DeserializeOwned>(
@@ -502,6 +550,17 @@ pub(super) fn uuid_field(
 	aliases: &[&str],
 ) -> Option<Uuid> {
 	string_field(map, aliases).and_then(|value| Uuid::parse_str(&value).ok())
+}
+
+pub(super) fn ci_date(value: Option<sqlx::types::time::Date>) -> Option<String> {
+	value.map(|date| {
+		format!(
+			"{:04}{:02}{:02}",
+			date.year(),
+			u8::from(date.month()),
+			date.day()
+		)
+	})
 }
 
 pub(super) fn rows_from_direct_section(data: Value) -> BTreeMap<String, Value> {

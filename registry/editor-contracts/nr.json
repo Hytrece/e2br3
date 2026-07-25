@@ -1,0 +1,10 @@
+{
+  "pageId": "NR",
+  "registryFile": "sections/h-narrative.json",
+  "fields": [
+    {"code":"H.1","authority":"ICH","frontendPath":"narrative.caseNarrative","projectionPath":"narrative.case_narrative","patch":{"kind":"rows","owner":"narrative"},"roundTripValue":"Case narrative","constraint":{"status":"verified","ruleCode":"ICH.H.1.LENGTH.MAX"}},
+    {"code":"H.2","authority":"ICH","frontendPath":"narrative.reporterComments","projectionPath":"narrative.reporter_comments","patch":{"kind":"rows","owner":"narrative"},"roundTripValue":"Reporter comments","constraint":{"status":"verified","ruleCode":"ICH.H.2.LENGTH.MAX"}},
+    {"code":"H.4","authority":"ICH","frontendPath":"narrative.senderComments","projectionPath":"narrative.sender_comments","patch":{"kind":"rows","owner":"narrative"},"roundTripValue":"Sender comments","constraint":{"status":"verified","ruleCode":"ICH.H.4.LENGTH.MAX"}},
+    {"code":"H.additionalInformation","authority":"ICH","frontendPath":"narrative.additionalInformation","projectionPath":"narrative.additional_information","patch":{"kind":"rows","owner":"narrative"},"roundTripValue":"Additional information","constraint":{"status":"not_applicable","reason":"Local additional narrative field has no portable catalog constraint."}}
+  ]
+}

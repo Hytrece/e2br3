@@ -1,14 +1,161 @@
+import contextlib
+import io
 import json
 import tempfile
 import unittest
 from pathlib import Path
 import sys
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import validate
+import editor_contract
 
 
 class RegistryValidatorTests(unittest.TestCase):
+    def test_rule_source_coverage_report_cli_outputs_json(self):
+        stdout = io.StringIO()
+        with (
+            mock.patch.object(
+                sys,
+                "argv",
+                [
+                    "validate.py",
+                    "--report-rule-source-coverage",
+                    "LR",
+                ],
+            ),
+            contextlib.redirect_stdout(stdout),
+        ):
+            exit_code = validate.main()
+
+        report = json.loads(stdout.getvalue())
+        self.assertEqual(0, exit_code)
+        self.assertTrue(report)
+        self.assertEqual("LR", report[0]["page"])
+        self.assertEqual(
+            {
+                "page",
+                "fieldId",
+                "element",
+                "authority",
+                "coverage",
+                "disposition",
+            },
+            set(report[0]),
+        )
+
+    def test_sd_editor_contract_excludes_export_owned_message_header(self):
+        repo = Path(__file__).resolve().parents[2]
+        contract = json.loads(
+            (repo / "registry/editor-contracts/sd.json").read_text(encoding="utf-8")
+        )
+        registry = json.loads(
+            (repo / "registry/sections/n-message-header.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        export_codes = {"N.1.5", "N.2.r.1", "N.2.r.2", "N.2.r.3"}
+
+        self.assertTrue(
+            {field["code"] for field in contract["fields"]}.isdisjoint(
+                export_codes
+            )
+        )
+        for row in registry:
+            if row["id"] not in export_codes:
+                continue
+            self.assertNotIn("editor_page", row)
+            self.assertIn(
+                "app/(protected)/submission/message-header.ts",
+                row["frontend"]["file"],
+            )
+
+    def test_lr_editor_contract_tracks_regional_business_validation_gap(self):
+        repo = Path(__file__).resolve().parents[2]
+        contract = json.loads(
+            (repo / "registry/editor-contracts/lr.json").read_text(encoding="utf-8")
+        )
+        registry = json.loads(
+            (repo / "registry/sections/c-safety-report.json").read_text(encoding="utf-8")
+        )
+
+        self.assertEqual(
+            {
+                field["code"]: field["businessValidation"]["status"]
+                for field in contract["fields"]
+            },
+            {
+                "C.4.r.1": "not_applicable",
+                "C.4.r.local.referenceTextNullFlavor": "not_applicable",
+                "C.4.r.2": "not_applicable",
+            },
+        )
+        literature_attachment = next(
+            row for row in registry if row["id"] == "C.4.r.2"
+        )
+        self.assertEqual("incomplete", literature_attachment["status"])
+        self.assertIn("FDA", literature_attachment["action"])
+        self.assertIn("file name", literature_attachment["action"])
+        self.assertIn("mediaType", literature_attachment["action"])
+
+    def test_certified_editor_sections_track_regional_business_rule_gaps(self):
+        repo = Path(__file__).resolve().parents[2]
+        registry_rows = []
+        for path in (repo / "registry/sections").glob("*.json"):
+            registry_rows.extend(json.loads(path.read_text(encoding="utf-8")))
+        status_by_code = {
+            row["id"]: row["status"]
+            for row in registry_rows
+            if row.get("editor_page") in {"RP", "SD", "LR"}
+        }
+
+        regional_gaps = {
+            # RP: FDA VAERS primary-reporter requirements/MSK restrictions and
+            # MFDS study/therapeutic-use conditional requirements.
+            "C.2.r.1.2",
+            "C.2.r.1.4",
+            "C.2.r.2.1",
+            "C.2.r.2.3",
+            "C.2.r.2.4",
+            "C.2.r.2.5",
+            "C.2.r.2.6",
+            "C.2.r.2.7",
+            "C.2.r.3",
+            "FDA.C.2.r.2.8",
+            "C.2.r.4",
+            "C.2.r.4.KR.1",
+            "C.2.r.5",
+            # SD: FDA sender/identifier rules and MFDS conditional/format rules.
+            "C.3.1.KR.1",
+            "C.3.3.1",
+            "C.3.3.2",
+            "C.3.3.3",
+            "C.3.3.5",
+            "C.3.4.1",
+            "C.3.4.2",
+            "C.3.4.3",
+            "C.3.4.4",
+            "C.3.4.5",
+            "C.3.4.6",
+            "C.3.4.7",
+            "C.3.4.8",
+            "N.1.5",
+            "N.2.r.2",
+            "N.2.r.3",
+            # LR: FDA attachment file-name/mediaType consistency.
+            "C.4.r.2",
+        }
+
+        self.assertEqual(
+            {},
+            {
+                code: status_by_code.get(code)
+                for code in sorted(regional_gaps)
+                if status_by_code.get(code) != "incomplete"
+            },
+        )
+
     def test_drug_registry_has_no_local_frequency_value(self):
         repo = Path(__file__).resolve().parents[2]
         rows = json.loads(
@@ -26,6 +173,177 @@ class RegistryValidatorTests(unittest.TestCase):
         sections = root / "sections"
         sections.mkdir()
         (sections / "c-safety-report.json").write_text(row, encoding="utf-8")
+
+    def editor_row(self, *, code: str = "C.1.3", status: str = "complete") -> dict:
+        return {
+            "id": code,
+            "e2br3_code": code,
+            "label": "Type of Report",
+            "section": "C",
+            "authority": "ICH",
+            "status": status,
+            "editor_page": "CI",
+            "backend": {
+                "status": "mapped",
+                "model": "SafetyReportIdentification",
+                "field": "report_type",
+                "evidence": "model field",
+            },
+            "frontend": {
+                "status": "mapped",
+                "section": "safetyReportIdentification",
+                "field": "reportType",
+                "evidence": "mounted input",
+            },
+        }
+
+    def editor_field(self, *, code: str = "C.1.3") -> dict:
+        return {
+            "code": code,
+            "authority": "ICH",
+            "frontendPath": "safetyReportIdentification.reportType",
+            "projectionPath": "safetyReportIdentification.reportType",
+            "patch": {"kind": "change", "key": "reportType"},
+            "roundTripValue": "2",
+            "constraint": {
+                "status": "verified",
+                "ruleCode": "ICH.C.1.3.ALLOWED.VALUE",
+            },
+            "businessValidation": {
+                "status": "verified",
+                "issuePath": "safetyReportIdentification.reportType",
+            },
+        }
+
+    def test_complete_editor_field_does_not_require_business_validation_stage(self):
+        field = self.editor_field()
+        del field["businessValidation"]
+        result = validate.ValidationResult()
+
+        editor_contract.validate_editor_contract(
+            [self.editor_row()], {"pageId": "CI", "fields": [field]}, result
+        )
+
+        self.assertEqual([], result.errors)
+
+    def test_complete_editor_field_requires_manifest_entry(self):
+        result = validate.ValidationResult()
+
+        editor_contract.validate_editor_contract(
+            [self.editor_row()], {"pageId": "CI", "fields": []}, result
+        )
+
+        self.assertIn("C.1.3 complete but missing from CI editor contract", result.errors)
+
+    def test_complete_rp_row_requires_field_contract(self) -> None:
+        row = self.editor_row(code="C.2.r.1.1")
+        row["editor_page"] = "RP"
+        row["frontend"]["section"] = "primarySources"
+        row["frontend"]["field"] = "reporterTitle"
+        result = validate.ValidationResult()
+
+        editor_contract.validate_editor_contract(
+            [row], {"pageId": "RP", "fields": []}, result
+        )
+
+        self.assertIn(
+            "C.2.r.1.1 complete but missing from RP editor contract",
+            result.errors,
+        )
+
+    def test_editor_contract_requires_registry_frontend_path_match(self):
+        field = self.editor_field()
+        field["frontendPath"] = "case.reportType"
+        result = validate.ValidationResult()
+
+        editor_contract.validate_editor_contract(
+            [self.editor_row()], {"pageId": "CI", "fields": [field]}, result
+        )
+
+        self.assertIn(
+            "C.1.3 frontend path case.reportType does not match registry safetyReportIdentification.reportType",
+            result.errors,
+        )
+
+    def test_editor_contract_accepts_explicit_not_applicable_stage(self):
+        field = self.editor_field()
+        field["businessValidation"] = {
+            "status": "not_applicable",
+            "reason": "No business validation rule exists for this local field.",
+        }
+        result = validate.ValidationResult()
+
+        editor_contract.validate_editor_contract(
+            [self.editor_row()], {"pageId": "CI", "fields": [field]}, result
+        )
+
+        self.assertEqual([], result.errors)
+
+    def test_incomplete_is_a_valid_registry_status(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self.write_registry(
+                root,
+                json.dumps([self.editor_row(status="incomplete")]),
+            )
+
+            result = validate.validate_registry(root, validate_backend_inventory=False)
+
+        self.assertEqual([], result.errors)
+
+    def test_default_validation_enforces_audited_source_coverage(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self.write_registry(
+                root,
+                json.dumps([self.editor_row(status="incomplete")]),
+            )
+            rules = root / "dictionary" / "rules"
+            rules.mkdir(parents=True)
+            (rules / "ich.json").write_text(
+                json.dumps(
+                    {
+                        "authority": "ICH",
+                        "source": "fixture",
+                        "rules": {"C.1.3": "report type requirement"},
+                    }
+                ),
+                encoding="utf-8",
+            )
+            contracts = root / "editor-contracts"
+            contracts.mkdir()
+            (contracts / "ci.json").write_text(
+                json.dumps(
+                    {
+                        "pageId": "CI",
+                        "registryFile": "sections/c-safety-report.json",
+                        "fields": [
+                            {"code": "C.1.3", "authority": "ICH"}
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (root / "rule-source-coverage.json").write_text(
+                json.dumps(
+                    {
+                        "version": 1,
+                        "auditedPages": ["CI"],
+                        "sources": [],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            result = validate.validate_registry(
+                root,
+                validate_backend_inventory=False,
+            )
+
+        self.assertIn(
+            "missing ICH/C.1.3 source coverage",
+            result.errors,
+        )
 
     def valid_row(self, overrides: dict[str, str] | None = None) -> str:
         values = {

@@ -8,6 +8,8 @@ from pathlib import Path
 from typing import Any
 
 import extract_frontend_fields
+import editor_contract
+import rule_source_coverage
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -16,6 +18,7 @@ AUTHORITIES = {"ICH", "FDA", "MFDS"}
 SECTIONS = {"N", "C", "D", "E", "F", "G", "H"}
 ROW_STATUSES = {
     "complete",
+    "incomplete",
     "backend_missing",
     "frontend_missing",
     "intentionally_unmapped",
@@ -36,6 +39,7 @@ ALLOWED_ROW_FIELDS = {
     "action",
     "notes",
     "local_only",
+    "editor_page",
 }
 DICTIONARY_KINDS = {"element", "group"}
 DICTIONARY_CONFORMANCES = {"mandatory", "conditional_mandatory", "optional", "required"}
@@ -678,6 +682,7 @@ def validate_registry(
     frontend_source_globs: list[str] | None = None,
     validate_presave_registry_rows: bool = False,
     validate_presave_inventory: bool = False,
+    editor_page_id: str | None = None,
 ) -> ValidationResult:
     result = ValidationResult()
     if backend_models is None:
@@ -701,6 +706,7 @@ def validate_registry(
     seen_frontend: dict[str, str] = {}
     case_rows_by_code: dict[str, dict[str, Any]] = {}
     row_authorities: list[tuple[str, str, str, bool]] = []
+    registry_rows: list[dict[str, Any]] = []
     for section_file in sections:
         if not isinstance(section_file, str):
             result.add(f"{index_path}: section entries must be strings")
@@ -717,6 +723,7 @@ def validate_registry(
             validate_row(row, source, result)
             if not isinstance(row, dict):
                 continue
+            registry_rows.append(row)
             row_id = row.get("id")
             if isinstance(row_id, str):
                 if row_id in seen_ids:
@@ -745,6 +752,23 @@ def validate_registry(
                 if key in seen_frontend:
                     result.add(f"{row_id}: duplicate frontend mapping {key}; first seen in {seen_frontend[key]}")
                 seen_frontend[key] = row_id
+
+    if editor_page_id is not None:
+        try:
+            contract = editor_contract.load_editor_contract(root, editor_page_id)
+        except ValueError as error:
+            result.add(str(error))
+        else:
+            editor_contract.validate_editor_contract(registry_rows, contract, result)
+
+    if (root / "rule-source-coverage.json").is_file():
+        coverage = rule_source_coverage.validate_coverage_structure(root, result)
+        rule_source_coverage.validate_editor_coverage(
+            root,
+            registry_rows,
+            coverage,
+            result,
+        )
 
     if validate_dictionary_membership:
         if not dictionaries:
@@ -900,11 +924,39 @@ def validate_registry(
 
 
 def main() -> int:
+    args = sys.argv[1:]
+    if "--report-rule-source-coverage" in args:
+        index = args.index("--report-rule-source-coverage")
+        if index + 1 >= len(args):
+            print(
+                "--report-rule-source-coverage requires a page id",
+                file=sys.stderr,
+            )
+            return 2
+        try:
+            report = rule_source_coverage.audit_contract_sources(
+                ROOT,
+                args[index + 1].upper(),
+            )
+        except (OSError, json.JSONDecodeError, KeyError) as error:
+            print(f"could not build rule source coverage report: {error}", file=sys.stderr)
+            return 2
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+        return 0
+
     strict_backend_inventory = "--strict-backend-inventory" in sys.argv[1:]
     strict_frontend_inventory = "--strict-frontend-inventory" in sys.argv[1:]
     strict_dictionary = "--strict-dictionary" in sys.argv[1:]
     strict_presave_registry = "--strict-presave-registry" in sys.argv[1:]
     strict_presave_inventory = "--strict-presave-inventory" in sys.argv[1:]
+    editor_page_id = None
+    if "--strict-editor-contract" in sys.argv[1:]:
+        index = sys.argv[1:].index("--strict-editor-contract")
+        args = sys.argv[1:]
+        if index + 1 >= len(args):
+            print("--strict-editor-contract requires a page id", file=sys.stderr)
+            return 2
+        editor_page_id = args[index + 1].upper()
     result = validate_registry(
         validate_backend_inventory=strict_backend_inventory,
         validate_frontend_inventory=strict_frontend_inventory,
@@ -913,6 +965,7 @@ def main() -> int:
             strict_presave_registry or strict_presave_inventory
         ),
         validate_presave_inventory=strict_presave_inventory,
+        editor_page_id=editor_page_id,
     )
     if result.ok:
         print("registry validation passed")

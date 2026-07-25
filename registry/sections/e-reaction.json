@@ -6,6 +6,7 @@
     "section": "E",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "AE",
     "backend": {
       "status": "mapped",
       "model": "Reaction",
@@ -30,6 +31,7 @@
     "section": "E",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "AE",
     "backend": {
       "status": "mapped",
       "model": "Reaction",
@@ -54,6 +56,7 @@
     "section": "E",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "AE",
     "backend": {
       "status": "mapped",
       "model": "Reaction",
@@ -78,6 +81,7 @@
     "section": "E",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "AE",
     "backend": {
       "status": "mapped",
       "model": "Reaction",
@@ -102,6 +106,7 @@
     "section": "E",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "AE",
     "backend": {
       "status": "mapped",
       "model": "Reaction",
@@ -126,6 +131,7 @@
     "section": "E",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "AE",
     "backend": {
       "status": "mapped",
       "model": "Reaction",
@@ -150,6 +156,7 @@
     "section": "E",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "AE",
     "backend": {
       "status": "mapped",
       "model": "Reaction",
@@ -174,6 +181,7 @@
     "section": "E",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "AE",
     "backend": {
       "status": "mapped",
       "model": "Reaction",
@@ -189,7 +197,7 @@
       "evidence": "SectionE binds fieldNumber E.i.3.1 to reactions[index].termHighlighted."
     },
     "action": "",
-    "notes": ""
+    "notes": "Frontend, API, Rust, DB, and XML preserve the canonical ICH code 1/2/3/4; focused CRUD and portable 422 tests cover code 4 and invalid code 9."
   },
   {
     "id": "E.i.serious",
@@ -198,6 +206,7 @@
     "section": "E",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "AE",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -223,6 +232,7 @@
     "section": "E",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "AE",
     "backend": {
       "status": "mapped",
       "model": "Reaction",
@@ -247,6 +257,7 @@
     "section": "E",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "AE",
     "backend": {
       "status": "mapped",
       "model": "Reaction",
@@ -271,6 +282,7 @@
     "section": "E",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "AE",
     "backend": {
       "status": "mapped",
       "model": "Reaction",
@@ -295,6 +307,7 @@
     "section": "E",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "AE",
     "backend": {
       "status": "mapped",
       "model": "Reaction",
@@ -319,6 +332,7 @@
     "section": "E",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "AE",
     "backend": {
       "status": "mapped",
       "model": "Reaction",
@@ -343,6 +357,7 @@
     "section": "E",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "AE",
     "backend": {
       "status": "mapped",
       "model": "Reaction",
@@ -367,6 +382,7 @@
     "section": "E",
     "authority": "FDA",
     "status": "complete",
+    "editor_page": "AE",
     "backend": {
       "status": "mapped",
       "model": "Reaction",
@@ -382,7 +398,7 @@
       "evidence": "SectionE binds fieldNumber FDA.E.i.3.2h to reactions[index].requiredIntervention."
     },
     "action": "",
-    "notes": ""
+    "notes": "The FDA regional dictionary generates a true-marker constraint. Focused tests cover true/NI CRUD transitions, stale-column clearing, and structured 422 rejection."
   },
   {
     "id": "E.local.expectedness",
@@ -391,6 +407,7 @@
     "section": "E",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "AE",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -416,6 +433,7 @@
     "section": "E",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "AE",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -441,6 +459,7 @@
     "section": "E",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "AE",
     "backend": {
       "status": "mapped",
       "model": "Reaction",
@@ -465,6 +484,7 @@
     "section": "E",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "AE",
     "backend": {
       "status": "mapped",
       "model": "Reaction",
@@ -489,6 +509,7 @@
     "section": "E",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "AE",
     "backend": {
       "status": "mapped",
       "model": "Reaction",
@@ -513,6 +534,7 @@
     "section": "E",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "AE",
     "backend": {
       "status": "mapped",
       "model": "Reaction",
@@ -537,6 +559,7 @@
     "section": "E",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "AE",
     "backend": {
       "status": "mapped",
       "model": "Reaction",
@@ -560,7 +583,7 @@
     "label": "MFDS Device AE Classification",
     "section": "E",
     "authority": "MFDS",
-    "status": "complete",
+    "status": "incomplete",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -585,7 +608,7 @@
     "label": "MFDS Device AE Outcome",
     "section": "E",
     "authority": "MFDS",
-    "status": "complete",
+    "status": "incomplete",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -610,7 +633,7 @@
     "label": "MFDS Device Cause Medical Device",
     "section": "E",
     "authority": "MFDS",
-    "status": "complete",
+    "status": "incomplete",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -635,7 +658,7 @@
     "label": "MFDS Device Cause Procedure Issue",
     "section": "E",
     "authority": "MFDS",
-    "status": "complete",
+    "status": "incomplete",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -660,7 +683,7 @@
     "label": "MFDS Device Cause Patient Condition",
     "section": "E",
     "authority": "MFDS",
-    "status": "complete",
+    "status": "incomplete",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -685,7 +708,7 @@
     "label": "MFDS Device Cause Unable To Assess",
     "section": "E",
     "authority": "MFDS",
-    "status": "complete",
+    "status": "incomplete",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -710,7 +733,7 @@
     "label": "MFDS Device Cause Other",
     "section": "E",
     "authority": "MFDS",
-    "status": "complete",
+    "status": "incomplete",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -735,7 +758,7 @@
     "label": "MFDS Device Action Reason",
     "section": "E",
     "authority": "MFDS",
-    "status": "complete",
+    "status": "incomplete",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -760,7 +783,7 @@
     "label": "MFDS Device Action Recall",
     "section": "E",
     "authority": "MFDS",
-    "status": "complete",
+    "status": "incomplete",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -785,7 +808,7 @@
     "label": "MFDS Device Action Repair",
     "section": "E",
     "authority": "MFDS",
-    "status": "complete",
+    "status": "incomplete",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -810,7 +833,7 @@
     "label": "MFDS Device Action Inspection",
     "section": "E",
     "authority": "MFDS",
-    "status": "complete",
+    "status": "incomplete",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -835,7 +858,7 @@
     "label": "MFDS Device Action Replacement",
     "section": "E",
     "authority": "MFDS",
-    "status": "complete",
+    "status": "incomplete",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -860,7 +883,7 @@
     "label": "MFDS Device Action Improvement",
     "section": "E",
     "authority": "MFDS",
-    "status": "complete",
+    "status": "incomplete",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -885,7 +908,7 @@
     "label": "MFDS Device Action Monitoring",
     "section": "E",
     "authority": "MFDS",
-    "status": "complete",
+    "status": "incomplete",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -910,7 +933,7 @@
     "label": "MFDS Device Action Notification",
     "section": "E",
     "authority": "MFDS",
-    "status": "complete",
+    "status": "incomplete",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -935,7 +958,7 @@
     "label": "MFDS Device Action Label Change",
     "section": "E",
     "authority": "MFDS",
-    "status": "complete",
+    "status": "incomplete",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -960,7 +983,7 @@
     "label": "MFDS Device Action Other",
     "section": "E",
     "authority": "MFDS",
-    "status": "complete",
+    "status": "incomplete",
     "local_only": true,
     "backend": {
       "status": "mapped",

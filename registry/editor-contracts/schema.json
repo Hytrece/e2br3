@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["pageId", "registryFile", "fields"],
+  "additionalProperties": false,
+  "properties": {
+    "pageId": { "type": "string" },
+    "registryFile": { "type": "string" },
+    "fields": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["code", "authority", "frontendPath", "projectionPath", "patch", "roundTripValue"],
+        "properties": {
+          "code": { "type": "string" },
+          "authority": { "enum": ["ICH", "FDA", "MFDS"] },
+          "frontendPath": { "type": "string" },
+          "projectionPath": { "type": "string" },
+          "patch": { "type": "object" },
+          "roundTripValue": {},
+          "constraint": { "$ref": "#/$defs/stage" },
+          "businessValidation": { "$ref": "#/$defs/stage" }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "stage": {
+      "type": "object",
+      "required": ["status"],
+      "properties": {
+        "status": { "enum": ["verified", "not_applicable"] },
+        "ruleCode": { "type": "string" },
+        "issuePath": { "type": "string" },
+        "reason": { "type": "string" }
+      }
+    }
+  }
+}

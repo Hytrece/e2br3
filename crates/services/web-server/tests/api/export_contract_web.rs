@@ -341,7 +341,7 @@ async fn seed_cioms_case_data(
 			reaction_language: Some("en".to_string()),
 			reaction_meddra_code: Some("10002198".to_string()),
 			reaction_meddra_version: Some("27.0".to_string()),
-			term_highlighted: Some(true),
+			term_highlighted: Some("3".to_string()),
 			serious: Some(true),
 			criteria_death: Some(false),
 			criteria_death_null_flavor: None,

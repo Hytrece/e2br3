@@ -11,6 +11,16 @@ macro_rules! binding {
 			null_flavor_path: None,
 		}
 	};
+	($path:literal, $request:literal, $type:ident, [$($code:literal),+ $(,)?], null: $null:literal) => {
+		PortableFieldBinding {
+			section: "AE",
+			frontend_path: $path,
+			request_path: $request,
+			value_type: PortableValueType::$type,
+			rule_codes: &[$($code),+],
+			null_flavor_path: Some($null),
+		}
+	};
 }
 
 pub(super) const BINDINGS: &[PortableFieldBinding] = &[
@@ -103,6 +113,16 @@ pub(super) const BINDINGS: &[PortableFieldBinding] = &[
 			"ICH.E.i.3.2f.ALLOWED.VALUE",
 			"ICH.E.i.3.2f.NULLFLAVOR.ALLOWED"
 		]
+	),
+	binding!(
+		"reactions[].requiredIntervention",
+		"requiredIntervention",
+		Boolean,
+		[
+			"FDA.E.i.3.2h.ALLOWED.VALUE",
+			"FDA.E.i.3.2h.NULLFLAVOR.ALLOWED"
+		],
+		null: "reactions[].requiredIntervention"
 	),
 	binding!(
 		"reactions[].reactionStartDate",

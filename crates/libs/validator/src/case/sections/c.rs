@@ -461,7 +461,7 @@ const C_CONSTRAINT_RULES: &[ConstraintRule<SafetyReportIdentification>] = &[
 	},
 	ConstraintRule {
 		code: "ICH.C.1.11.1.ALLOWED.VALUE",
-		path: "safetyReportIdentification.nullificationCode",
+		path: "safetyReportIdentification.nullificationAmendmentCode",
 		value: |report| {
 			ConstraintValue::Text(
 				report.nullification_code.as_deref().map(Cow::Borrowed),
@@ -503,7 +503,7 @@ const C_LENGTH_RULES: &[LengthRule<SafetyReportIdentification>] = &[
 	},
 	LengthRule {
 		code: "ICH.C.1.11.1.LENGTH.MAX",
-		path: "safetyReportIdentification.nullificationCode",
+		path: "safetyReportIdentification.nullificationAmendmentCode",
 		value: |report| report.nullification_code.as_deref(),
 	},
 	LengthRule {
@@ -771,7 +771,7 @@ const C_DOCUMENT_CONSTRAINT_RULES: &[IndexedConstraintRule<
 	DocumentsHeldBySender,
 >] = &[IndexedConstraintRule {
 	code: "ICH.C.1.6.1.r.2.ALLOWED.VALUE",
-	path: |idx| format!("documentsHeldBySender.{idx}.documentBase64"),
+	path: |idx| format!("documentsHeldBySender.{idx}.includedDocument"),
 	value: |document| {
 		ConstraintValue::Text(document.document_base64.as_deref().map(Cow::Borrowed))
 	},
@@ -780,7 +780,7 @@ const C_DOCUMENT_CONSTRAINT_RULES: &[IndexedConstraintRule<
 const C_OTHER_IDENTIFIER_RULES: &[IndexedRule<OtherCaseIdentifier>] = &[
 	IndexedRule {
 		code: "ICH.C.1.9.1.r.1.REQUIRED",
-		path: |idx| format!("otherCaseIdentifiers.{idx}.sourceOfIdentifier"),
+		path: |idx| format!("otherCaseIdentifiers.{idx}.source"),
 		value: |identifier| {
 			RuleValue::borrowed(Some(identifier.source_of_identifier.as_str()), None)
 		},
@@ -799,7 +799,7 @@ const C_OTHER_IDENTIFIER_RULES: &[IndexedRule<OtherCaseIdentifier>] = &[
 const C_OTHER_IDENTIFIER_LENGTH_RULES: &[IndexedLengthRule<OtherCaseIdentifier>] = &[
 	IndexedLengthRule {
 		code: "ICH.C.1.9.1.r.1.LENGTH.MAX",
-		path: |idx| format!("otherCaseIdentifiers.{idx}.sourceOfIdentifier"),
+		path: |idx| format!("otherCaseIdentifiers.{idx}.source"),
 		value: |identifier| Some(identifier.source_of_identifier.as_str()),
 	},
 	IndexedLengthRule {
@@ -2158,12 +2158,62 @@ mod golden_c1_value_tests {
 			vec![
 				issue(
 					"ICH.C.1.9.1.r.1.REQUIRED",
-					"otherCaseIdentifiers.1.sourceOfIdentifier",
+					"otherCaseIdentifiers.1.source",
 					true
 				),
 				issue(
 					"ICH.C.1.9.1.r.2.REQUIRED",
 					"otherCaseIdentifiers.1.caseIdentifier",
+					true
+				),
+			]
+		);
+	}
+
+	#[test]
+	fn ci_repeating_issues_use_editor_field_names() {
+		let mut ctx = ctx_with(base_report());
+		let mut document = document(None);
+		document.document_base64 = Some("not-base64".to_string());
+		ctx.documents_held_by_sender = vec![document];
+		ctx.other_case_identifiers = vec![other_identifier("", "")];
+		ctx.linked_report_numbers = vec![linked_report_number("L".repeat(101))];
+
+		assert_eq!(
+			filtered(
+				&ctx,
+				&[
+					"ICH.C.1.6.1.r.1.REQUIRED",
+					"ICH.C.1.6.1.r.2.ALLOWED.VALUE",
+					"ICH.C.1.9.1.r.1.REQUIRED",
+					"ICH.C.1.9.1.r.2.REQUIRED",
+					"ICH.C.1.10.r.LENGTH.MAX",
+				],
+			),
+			vec![
+				issue(
+					"ICH.C.1.10.r.LENGTH.MAX",
+					"linkedReports.0.linkedReportNumber",
+					true
+				),
+				issue(
+					"ICH.C.1.6.1.r.1.REQUIRED",
+					"documentsHeldBySender.0.documentDescription",
+					true
+				),
+				issue(
+					"ICH.C.1.6.1.r.2.ALLOWED.VALUE",
+					"documentsHeldBySender.0.includedDocument",
+					true
+				),
+				issue(
+					"ICH.C.1.9.1.r.1.REQUIRED",
+					"otherCaseIdentifiers.0.source",
+					true
+				),
+				issue(
+					"ICH.C.1.9.1.r.2.REQUIRED",
+					"otherCaseIdentifiers.0.caseIdentifier",
 					true
 				),
 			]
@@ -2298,7 +2348,7 @@ mod golden_c1_value_tests {
 			vec![
 				issue(
 					"ICH.C.1.11.1.ALLOWED.VALUE",
-					"safetyReportIdentification.nullificationCode",
+					"safetyReportIdentification.nullificationAmendmentCode",
 					true
 				),
 				issue(
@@ -2376,7 +2426,7 @@ mod golden_c1_value_tests {
 				),
 				issue(
 					"ICH.C.1.11.1.LENGTH.MAX",
-					"safetyReportIdentification.nullificationCode",
+					"safetyReportIdentification.nullificationAmendmentCode",
 					true
 				),
 				issue(
@@ -2406,7 +2456,7 @@ mod golden_c1_value_tests {
 				),
 				issue(
 					"ICH.C.1.9.1.r.1.LENGTH.MAX",
-					"otherCaseIdentifiers.0.sourceOfIdentifier",
+					"otherCaseIdentifiers.0.source",
 					true
 				),
 				issue(

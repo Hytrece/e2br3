@@ -27,6 +27,15 @@ Tools:
 - `registry/tools/validate.py`
 - `registry/tools/extract_frontend_fields.py`
 
+Editor contract evidence lives under `registry/editor-contracts/`. It is test
+metadata consumed by registry, backend HTTP, and frontend tests; production
+editor code must not read it. `editor_page` assigns a registry row to one route
+section. A field-level `complete` claim is valid only when its section contract
+contains projection, frontend path, patch/readback value, constraint, and
+business-validation evidence. A previously complete row that lacks runtime
+evidence uses `incomplete`; this does not replace the existing missing,
+conflict, or not-applicable statuses.
+
 There must not be a committed `registry/generated/` directory, generated matrix
 JSON, generated inventory JSON, generated markdown report, or second canonical
 mapping file. Source inventories are derived by the validator at runtime and are

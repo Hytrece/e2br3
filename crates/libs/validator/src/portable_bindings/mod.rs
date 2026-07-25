@@ -268,6 +268,20 @@ mod portable_bindings_tests {
 			"reactions[].seriousness.criteriaResultsInDeath",
 			"ICH.E.i.3.2a.NULLFLAVOR.ALLOWED",
 		);
+		let required_intervention = bindings_for_section("AE")
+			.find(|binding| {
+				binding.frontend_path == "reactions[].requiredIntervention"
+			})
+			.expect("FDA required intervention binding");
+		assert_eq!(
+			required_intervention.null_flavor_path,
+			Some("reactions[].requiredIntervention")
+		);
+		assert_binding(
+			"AE",
+			"reactions[].requiredIntervention",
+			"FDA.E.i.3.2h.ALLOWED.VALUE",
+		);
 	}
 
 	#[test]

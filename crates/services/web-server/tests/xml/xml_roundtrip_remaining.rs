@@ -1488,7 +1488,7 @@ async fn test_api_persistence_ae_sd_all_fields() -> Result<()> {
 				"reaction_language": "fr",
 				"reaction_meddra_code": "10012345",
 				"reaction_meddra_version": "27.0",
-				"term_highlighted": true,
+				"term_highlighted": "3",
 				"serious": true,
 				"criteria_death": true,
 				"criteria_life_threatening": false,
@@ -1622,10 +1622,10 @@ async fn test_api_persistence_ae_sd_all_fields() -> Result<()> {
 		"27.0",
 		&mut ae_mismatches,
 	);
-	check_bool(
+	check_str(
 		"term_highlighted",
-		reaction_bool("term_highlighted"),
-		true,
+		reaction_str("term_highlighted"),
+		"3",
 		&mut ae_mismatches,
 	);
 	check_bool(

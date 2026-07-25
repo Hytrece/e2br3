@@ -1035,10 +1035,12 @@ impl PatientIdentifierBmc {
 		list_options: Option<ListOptions>,
 	) -> Result<Vec<PatientIdentifier>> {
 		let mut filters = filters.unwrap_or_default();
-		filters.push(PatientIdentifierFilter {
-			deleted: Some(OpValBool::Eq(false).into()),
-			..Default::default()
-		});
+		if filters.is_empty() {
+			filters.push(PatientIdentifierFilter::default());
+		}
+		for filter in &mut filters {
+			filter.deleted = Some(OpValBool::Eq(false).into());
+		}
 		base_uuid::list::<Self, _, _>(ctx, mm, Some(filters), list_options).await
 	}
 
@@ -1134,10 +1136,12 @@ impl MedicalHistoryEpisodeBmc {
 		list_options: Option<ListOptions>,
 	) -> Result<Vec<MedicalHistoryEpisode>> {
 		let mut filters = filters.unwrap_or_default();
-		filters.push(MedicalHistoryEpisodeFilter {
-			deleted: Some(OpValBool::Eq(false).into()),
-			..Default::default()
-		});
+		if filters.is_empty() {
+			filters.push(MedicalHistoryEpisodeFilter::default());
+		}
+		for filter in &mut filters {
+			filter.deleted = Some(OpValBool::Eq(false).into());
+		}
 		base_uuid::list::<Self, _, _>(ctx, mm, Some(filters), list_options).await
 	}
 
@@ -1188,10 +1192,12 @@ impl PastDrugHistoryBmc {
 		list_options: Option<ListOptions>,
 	) -> Result<Vec<PastDrugHistory>> {
 		let mut filters = filters.unwrap_or_default();
-		filters.push(PastDrugHistoryFilter {
-			deleted: Some(OpValBool::Eq(false).into()),
-			..Default::default()
-		});
+		if filters.is_empty() {
+			filters.push(PastDrugHistoryFilter::default());
+		}
+		for filter in &mut filters {
+			filter.deleted = Some(OpValBool::Eq(false).into());
+		}
 		base_uuid::list::<Self, _, _>(ctx, mm, Some(filters), list_options).await
 	}
 
@@ -1407,10 +1413,12 @@ impl ReportedCauseOfDeathBmc {
 		list_options: Option<ListOptions>,
 	) -> Result<Vec<ReportedCauseOfDeath>> {
 		let mut filters = filters.unwrap_or_default();
-		filters.push(ReportedCauseOfDeathFilter {
-			deleted: Some(OpValBool::Eq(false).into()),
-			..Default::default()
-		});
+		if filters.is_empty() {
+			filters.push(ReportedCauseOfDeathFilter::default());
+		}
+		for filter in &mut filters {
+			filter.deleted = Some(OpValBool::Eq(false).into());
+		}
 		base_uuid::list::<Self, _, _>(ctx, mm, Some(filters), list_options).await
 	}
 
@@ -1461,10 +1469,12 @@ impl AutopsyCauseOfDeathBmc {
 		list_options: Option<ListOptions>,
 	) -> Result<Vec<AutopsyCauseOfDeath>> {
 		let mut filters = filters.unwrap_or_default();
-		filters.push(AutopsyCauseOfDeathFilter {
-			deleted: Some(OpValBool::Eq(false).into()),
-			..Default::default()
-		});
+		if filters.is_empty() {
+			filters.push(AutopsyCauseOfDeathFilter::default());
+		}
+		for filter in &mut filters {
+			filter.deleted = Some(OpValBool::Eq(false).into());
+		}
 		base_uuid::list::<Self, _, _>(ctx, mm, Some(filters), list_options).await
 	}
 
@@ -1515,10 +1525,12 @@ impl ParentInformationBmc {
 		list_options: Option<ListOptions>,
 	) -> Result<Vec<ParentInformation>> {
 		let mut filters = filters.unwrap_or_default();
-		filters.push(ParentInformationFilter {
-			deleted: Some(OpValBool::Eq(false).into()),
-			..Default::default()
-		});
+		if filters.is_empty() {
+			filters.push(ParentInformationFilter::default());
+		}
+		for filter in &mut filters {
+			filter.deleted = Some(OpValBool::Eq(false).into());
+		}
 		base_uuid::list::<Self, _, _>(ctx, mm, Some(filters), list_options).await
 	}
 

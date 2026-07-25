@@ -46,7 +46,7 @@ pub(super) const BINDINGS: &[PortableFieldBinding] = &[
 	),
 	binding!(
 		"testResults[].testResult",
-		"resultValue",
+		"testResult",
 		String,
 		[
 			"ICH.F.r.3.2.ALLOWED.VALUE",
@@ -56,25 +56,25 @@ pub(super) const BINDINGS: &[PortableFieldBinding] = &[
 	),
 	binding!(
 		"testResults[].testUnit",
-		"resultUnit",
+		"testUnit",
 		String,
 		["ICH.F.r.3.3.LENGTH.MAX"]
 	),
 	binding!(
 		"testResults[].testResultUnstructured",
-		"resultUnstructured",
+		"testResultUnstructured",
 		String,
 		["ICH.F.r.3.4.LENGTH.MAX"]
 	),
 	binding!(
 		"testResults[].lowRange",
-		"normalLowValue",
+		"lowRange",
 		String,
 		["ICH.F.r.4.LENGTH.MAX"]
 	),
 	binding!(
 		"testResults[].highRange",
-		"normalHighValue",
+		"highRange",
 		String,
 		["ICH.F.r.5.LENGTH.MAX"]
 	),
@@ -86,7 +86,7 @@ pub(super) const BINDINGS: &[PortableFieldBinding] = &[
 	),
 	binding!(
 		"testResults[].moreInformationAvailable",
-		"moreInfoAvailable",
+		"moreInformationAvailable",
 		Boolean,
 		["ICH.F.r.7.ALLOWED.VALUE"]
 	),

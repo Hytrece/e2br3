@@ -244,6 +244,19 @@ fn normalized_direct_object(
 	source: &Map<String, Value>,
 	aliases: &[(&str, &[&str])],
 ) -> Map<String, Value> {
+	fn source_value<'a>(
+		source: &'a Map<String, Value>,
+		path: &str,
+	) -> Option<&'a Value> {
+		let mut segments = path.split('.');
+		let first = segments.next()?;
+		let mut value = source.get(first)?;
+		for segment in segments {
+			value = value.as_object()?.get(segment)?;
+		}
+		Some(value)
+	}
+
 	fn insert_path(target: &mut Map<String, Value>, path: &str, value: Value) {
 		let mut current = target;
 		let mut segments = path.split('.').peekable();
@@ -262,10 +275,9 @@ fn normalized_direct_object(
 
 	let mut normalized = Map::new();
 	for (target, candidates) in aliases {
-		if let Some(value) = candidates
-			.iter()
-			.find_map(|key| source.get(*key).filter(|value| !value.is_null()))
-		{
+		if let Some(value) = candidates.iter().find_map(|key| {
+			source_value(source, key).filter(|value| !value.is_null())
+		}) {
 			insert_path(&mut normalized, target, value.clone());
 		}
 	}
@@ -278,8 +290,17 @@ pub(super) fn validate_direct_rows(
 ) -> Result<()> {
 	let normalized = match section {
 		"RP" => {
-			optional_first_row_object(section, rows, "primarySources")?.map(|row| {
-				normalized_direct_object(
+			let Some(value) = rows.get("primarySources") else {
+				return Ok(());
+			};
+			let Some(items) = value.as_array() else {
+				return Err(Error::BadRequest {
+					message: format!("{section}.primarySources must be an array"),
+				});
+			};
+			for (row_index, value) in items.iter().enumerate() {
+				let row = as_object(section, "primarySources", value)?;
+				let normalized = normalized_direct_object(
 					row,
 					&[
 						("reporterTitle", &["reporterTitle", "reporter_title"]),
@@ -402,8 +423,16 @@ pub(super) fn validate_direct_rows(
 							],
 						),
 					],
-				)
-			})
+				);
+				validate_row_payload_with_indexes(
+					section,
+					section,
+					&normalized,
+					None,
+					&[row_index],
+				)?;
+			}
+			return Ok(());
 		}
 		"SD" => {
 			optional_row_object(section, rows, "senderInformation")?.map(|row| {
@@ -451,9 +480,23 @@ pub(super) fn validate_direct_rows(
 				)
 			})
 		}
-		"LR" => optional_first_row_object(section, rows, "literatureReferences")?
-			.map(|row| {
-				normalized_direct_object(
+		"LR" => {
+			let Some(value) = rows.get("literatureReferences") else {
+				return Ok(());
+			};
+			let Some(items) = value.as_array() else {
+				return Err(Error::BadRequest {
+					message: format!(
+						"{section}.literatureReferences must be an array"
+					),
+				});
+			};
+			for (row_index, value) in items.iter().enumerate() {
+				let row = as_object(section, "literatureReferences", value)?;
+				if bool_field(row, &["deleted", "_delete"]) == Some(true) {
+					continue;
+				}
+				let normalized = normalized_direct_object(
 					row,
 					&[
 						(
@@ -469,8 +512,17 @@ pub(super) fn validate_direct_rows(
 						),
 						("documentBase64", &["documentBase64", "document_base64"]),
 					],
-				)
-			}),
+				);
+				validate_row_payload_with_indexes(
+					section,
+					section,
+					&normalized,
+					None,
+					&[row_index],
+				)?;
+			}
+			return Ok(());
+		}
 		"SI" => optional_row_object(section, rows, "studyInformation")?.map(|row| {
 			normalized_direct_object(
 				row,
@@ -514,46 +566,394 @@ pub(super) fn validate_direct_rows(
 			)
 		}),
 		"DM" => {
-			optional_row_object(section, rows, "patientInformation")?.map(|row| {
-				normalized_direct_object(
-					row,
-					&[
-						(
-							"patientInitials",
-							&["patientInitials", "patient_initials"],
-						),
-						(
-							"patientBirthDate",
-							&["birthDateNullFlavor", "birth_date_null_flavor"],
-						),
-						("patientAge.unit", &["ageUnit", "age_unit"]),
-						(
-							"gestationPeriod.unit",
-							&["gestationPeriodUnit", "gestation_period_unit"],
-						),
-						("patientAgeGroup", &["ageGroup", "age_group"]),
-						("patientSex", &["sex", "sexNullFlavor", "sex_null_flavor"]),
-						("raceCode", &["raceCode", "race_code"]),
-						("ethnicityCode", &["ethnicityCode", "ethnicity_code"]),
-						(
-							"lastMenstrualPeriodDate",
+			let mut normalized =
+				optional_row_object(section, rows, "patientInformation")?
+					.map(|row| {
+						normalized_direct_object(
+							row,
 							&[
-								"lastMenstrualPeriodDateNullFlavor",
-								"last_menstrual_period_date_null_flavor",
+								(
+									"patientInitials",
+									&["patientInitials", "patient_initials"],
+								),
+								(
+									"patientBirthDate",
+									&[
+										"patientBirthDate",
+										"birth_date",
+										"birthDateNullFlavor",
+										"birth_date_null_flavor",
+									],
+								),
+								(
+									"patientAge.value",
+									&[
+										"patientAge.value",
+										"ageAtTimeOfOnset",
+										"age_at_time_of_onset",
+									],
+								),
+								(
+									"patientAge.unit",
+									&["patientAge.unit", "ageUnit", "age_unit"],
+								),
+								(
+									"gestationPeriod.value",
+									&["gestationPeriod.value", "gestation_period"],
+								),
+								(
+									"gestationPeriod.unit",
+									&[
+										"gestationPeriod.unit",
+										"gestationPeriodUnit",
+										"gestation_period_unit",
+									],
+								),
+								(
+									"patientAgeGroup",
+									&["patientAgeGroup", "ageGroup", "age_group"],
+								),
+								(
+									"patientWeight.value",
+									&[
+										"patientWeight.value",
+										"weightKg",
+										"weight_kg",
+									],
+								),
+								(
+									"patientHeight.value",
+									&[
+										"patientHeight.value",
+										"heightCm",
+										"height_cm",
+									],
+								),
+								(
+									"patientSex",
+									&[
+										"patientSex",
+										"sex",
+										"sexNullFlavor",
+										"sex_null_flavor",
+									],
+								),
+								("raceCode", &["raceCode", "race_code"]),
+								(
+									"ethnicityCode",
+									&["ethnicityCode", "ethnicity_code"],
+								),
+								(
+									"lastMenstrualPeriodDate",
+									&[
+										"lastMenstrualPeriodDate",
+										"last_menstrual_period_date",
+										"lastMenstrualPeriodDateNullFlavor",
+										"last_menstrual_period_date_null_flavor",
+									],
+								),
+								(
+									"medicalHistoryText",
+									&[
+										"medicalHistoryText",
+										"medical_history_text",
+										"medicalHistoryTextNullFlavor",
+										"medical_history_text_null_flavor",
+									],
+								),
+								(
+									"concomitantTherapies",
+									&["concomitantTherapies", "concomitant_therapy"],
+								),
+							],
+						)
+					})
+					.unwrap_or_default();
+			if let Some(value) = rows.get("medicalHistoryEpisodes") {
+				let Some(episodes) = value.as_array() else {
+					return Err(Error::BadRequest {
+						message: format!(
+							"{section}.medicalHistoryEpisodes must be an array"
+						),
+					});
+				};
+				let mut normalized_episodes = Vec::new();
+				for value in episodes {
+					let row = as_object(section, "medicalHistoryEpisodes", value)?;
+					if bool_field(row, &["deleted", "_delete"]) == Some(true) {
+						continue;
+					}
+					normalized_episodes.push(Value::Object(
+						normalized_direct_object(
+							row,
+							&[
+								(
+									"meddraVersion",
+									&["meddraVersion", "meddra_version"],
+								),
+								("meddraCode", &["meddraCode", "meddra_code"]),
+								("startDate", &["startDate", "start_date"]),
+								(
+									"continuing",
+									&[
+										"continuing",
+										"continuingNullFlavor",
+										"continuing_null_flavor",
+									],
+								),
+								("endDate", &["endDate", "end_date"]),
+								("comments", &["comments"]),
+								(
+									"familyHistory",
+									&["familyHistory", "family_history"],
+								),
 							],
 						),
-						(
-							"medicalHistoryText",
+					));
+				}
+				normalized.insert(
+					"medicalHistoryEpisodes".to_string(),
+					Value::Array(normalized_episodes),
+				);
+			}
+			let mut patient_death = optional_row_object(section, rows, "deathInfo")?
+				.map(|row| {
+					normalized_direct_object(
+						row,
+						&[
+							(
+								"dateOfDeath",
+								&[
+									"dateOfDeath",
+									"date_of_death",
+									"dateOfDeathNullFlavor",
+									"date_of_death_null_flavor",
+								],
+							),
+							(
+								"autopsyPerformed",
+								&[
+									"autopsyPerformed",
+									"autopsy_performed",
+									"autopsyPerformedNullFlavor",
+									"autopsy_performed_null_flavor",
+								],
+							),
+						],
+					)
+				})
+				.unwrap_or_default();
+			for (row_key, target) in [
+				("reportedCauses", "reportedCausesOfDeath"),
+				("autopsyCauses", "autopsyCausesOfDeath"),
+			] {
+				if let Some(value) = rows.get(row_key) {
+					let Some(causes) = value.as_array() else {
+						return Err(Error::BadRequest {
+							message: format!("{section}.{row_key} must be an array"),
+						});
+					};
+					let mut normalized_causes = Vec::new();
+					for value in causes {
+						let row = as_object(section, row_key, value)?;
+						if bool_field(row, &["deleted", "_delete"]) == Some(true) {
+							continue;
+						}
+						normalized_causes.push(Value::Object(
+							normalized_direct_object(
+								row,
+								&[
+									(
+										"meddraVersion",
+										&["meddraVersion", "meddra_version"],
+									),
+									("meddraCode", &["meddraCode", "meddra_code"]),
+									("causeText", &["causeText", "comments"]),
+								],
+							),
+						));
+					}
+					patient_death
+						.insert(target.to_string(), Value::Array(normalized_causes));
+				}
+			}
+			if !patient_death.is_empty() {
+				normalized.insert(
+					"patientDeath".to_string(),
+					Value::Object(patient_death),
+				);
+			}
+			let mut parent_information =
+				optional_row_object(section, rows, "parentInfo")?
+					.map(|parent| {
+						normalized_direct_object(
+							parent,
 							&[
-								"medicalHistoryText",
-								"medical_history_text",
-								"medicalHistoryTextNullFlavor",
-								"medical_history_text_null_flavor",
+								(
+									"parentIdentification",
+									&[
+										"parentIdentification",
+										"parent_identification",
+									],
+								),
+								(
+									"parentBirthDate",
+									&[
+										"parentBirthDate",
+										"parent_birth_date",
+										"parentBirthDateNullFlavor",
+										"parent_birth_date_null_flavor",
+									],
+								),
+								(
+									"parentAge.value",
+									&["parentAge.value", "parent_age"],
+								),
+								(
+									"parentAge.unit",
+									&[
+										"parentAge.unit",
+										"parentAgeUnit",
+										"parent_age_unit",
+									],
+								),
+								(
+									"parentLastMenstrualPeriodDate",
+									&[
+										"parentLastMenstrualPeriodDate",
+										"last_menstrual_period_date",
+										"parentLastMenstrualPeriodDateNullFlavor",
+										"last_menstrual_period_date_null_flavor",
+									],
+								),
+								(
+									"parentWeight.value",
+									&["parentWeight.value", "weight_kg"],
+								),
+								(
+									"parentHeight.value",
+									&["parentHeight.value", "height_cm"],
+								),
+								("parentSex", &["parentSex", "sex"]),
+								(
+									"medicalHistoryText",
+									&["medicalHistoryText", "medical_history_text"],
+								),
+							],
+						)
+					})
+					.unwrap_or_default();
+			if let Some(value) = rows.get("parentMedicalHistory") {
+				let Some(history_rows) = value.as_array() else {
+					return Err(Error::BadRequest {
+						message: format!(
+							"{section}.parentMedicalHistory must be an array"
+						),
+					});
+				};
+				let mut normalized_history = Vec::new();
+				for value in history_rows {
+					let row = as_object(section, "parentMedicalHistory", value)?;
+					if bool_field(row, &["deleted", "_delete"]) == Some(true) {
+						continue;
+					}
+					normalized_history.push(Value::Object(
+						normalized_direct_object(
+							row,
+							&[
+								(
+									"meddraVersion",
+									&["meddraVersion", "meddra_version"],
+								),
+								("meddraCode", &["meddraCode", "meddra_code"]),
+								("startDate", &["startDate", "start_date"]),
+								("continuing", &["continuing"]),
+								("endDate", &["endDate", "end_date"]),
+								("comments", &["comments"]),
 							],
 						),
-					],
-				)
-			})
+					));
+				}
+				parent_information.insert(
+					"medicalHistoryEpisodes".to_string(),
+					Value::Array(normalized_history),
+				);
+			}
+			if let Some(value) = rows.get("parentPastDrugs") {
+				let Some(drug_rows) = value.as_array() else {
+					return Err(Error::BadRequest {
+						message: format!(
+							"{section}.parentPastDrugs must be an array"
+						),
+					});
+				};
+				let mut normalized_drugs = Vec::new();
+				for value in drug_rows {
+					let row = as_object(section, "parentPastDrugs", value)?;
+					if bool_field(row, &["deleted", "_delete"]) == Some(true) {
+						continue;
+					}
+					normalized_drugs.push(Value::Object(normalized_direct_object(
+						row,
+						&[
+							("drugName", &["drugName", "drug_name"]),
+							(
+								"mfdsMedicinalProductVersion",
+								&[
+									"mfdsMedicinalProductVersion",
+									"mfds_medicinal_product_version",
+								],
+							),
+							(
+								"mfdsMedicinalProductId",
+								&[
+									"mfdsMedicinalProductId",
+									"mfds_medicinal_product_id",
+								],
+							),
+							("mpidVersion", &["mpidVersion", "mpid_version"]),
+							("mpid", &["mpid"]),
+							("phpidVersion", &["phpidVersion", "phpid_version"]),
+							("phpid", &["phpid"]),
+							("startDate", &["startDate", "start_date"]),
+							("endDate", &["endDate", "end_date"]),
+							(
+								"indicationMeddraVersion",
+								&[
+									"indicationMeddraVersion",
+									"indication_meddra_version",
+								],
+							),
+							(
+								"indicationMeddraCode",
+								&["indicationMeddraCode", "indication_meddra_code"],
+							),
+							(
+								"reactionMeddraVersion",
+								&[
+									"reactionMeddraVersion",
+									"reaction_meddra_version",
+								],
+							),
+							(
+								"reactionMeddraCode",
+								&["reactionMeddraCode", "reaction_meddra_code"],
+							),
+						],
+					)));
+				}
+				parent_information.insert(
+					"pastDrugHistory".to_string(),
+					Value::Array(normalized_drugs),
+				);
+			}
+			if !parent_information.is_empty() {
+				normalized.insert(
+					"parentInformation".to_string(),
+					Value::Object(parent_information),
+				);
+			}
+			Some(normalized)
 		}
 		"NR" => optional_row_object(section, rows, "narrative")?.map(|row| {
 			normalized_direct_object(
@@ -603,11 +1003,21 @@ fn binding_was_changed(
 	})
 }
 
-pub(super) fn validate_row_payload(
+pub(crate) fn validate_row_payload(
+	section: &str,
+	row_key: &str,
+	row: &Map<String, Value>,
+	changed_paths: Option<&BTreeSet<String>>,
+) -> Result<()> {
+	validate_row_payload_with_indexes(section, row_key, row, changed_paths, &[])
+}
+
+fn validate_row_payload_with_indexes(
 	section: &str,
 	_row_key: &str,
 	row: &Map<String, Value>,
 	changed_paths: Option<&BTreeSet<String>>,
+	outer_indexes: &[usize],
 ) -> Result<()> {
 	for binding in bindings_for_section(section) {
 		if !binding_was_changed(binding, changed_paths) {
@@ -623,8 +1033,10 @@ pub(super) fn validate_row_payload(
 					)
 				})
 				.and_then(Value::as_str);
+			let mut concrete_indexes = outer_indexes.to_vec();
+			concrete_indexes.extend_from_slice(&matched.indexes);
 			let path =
-				concrete_frontend_path(binding.frontend_path, &matched.indexes);
+				concrete_frontend_path(binding.frontend_path, &concrete_indexes);
 			validate_binding_value(binding, matched.value, null_flavor, &path)?;
 		}
 	}

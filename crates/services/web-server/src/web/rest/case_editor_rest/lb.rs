@@ -1,5 +1,33 @@
 use super::common::*;
 
+const TEST_RESULT_ROW_ALIASES: &[(&str, &[&str])] = &[
+	("test_date", &["testDate"]),
+	("test_name", &["testName"]),
+	("test_meddra_version", &["testMeddraVersion"]),
+	("test_meddra_code", &["testMeddraCode"]),
+	("test_result_code", &["testResultCode"]),
+	(
+		"test_result_value",
+		&["testResult", "testResultValue", "resultValue"],
+	),
+	(
+		"test_result_unit",
+		&["testUnit", "testResultUnit", "resultUnit"],
+	),
+	(
+		"result_unstructured",
+		&["testResultUnstructured", "resultUnstructured"],
+	),
+	("normal_low_value", &["lowRange", "normalLowValue"]),
+	("normal_high_value", &["highRange", "normalHighValue"]),
+	("comments", &["comments"]),
+	(
+		"more_info_available",
+		&["moreInformationAvailable", "moreInfoAvailable"],
+	),
+	("sequence_number", &["sequenceNumber"]),
+];
+
 async fn load_editor_lb_list_rows(
 	ctx: &lib_core::ctx::Ctx,
 	mm: &ModelManager,
@@ -97,7 +125,12 @@ async fn build_editor_lb_page_row_response(
 	row_id: Uuid,
 	authorities: Option<String>,
 ) -> Result<Value> {
-	let test_result = TestResultBmc::get_in_case(&ctx, &mm, case_id, row_id).await?;
+	let persisted = TestResultBmc::get_in_case(&ctx, &mm, case_id, row_id).await?;
+	let test_date = ci_date(persisted.test_date);
+	let mut test_result = json!(persisted);
+	if let Value::Object(ref mut map) = test_result {
+		map.insert("test_date".to_string(), json!(test_date));
+	}
 	editor_page_row_response(
 		case_id,
 		"LB",
@@ -114,12 +147,7 @@ repeatable_page_row_create_handler!(
 	permission: TEST_RESULT_CREATE,
 	bmc: TestResultBmc,
 	model: TestResultForCreate,
-	aliases: &[
-		("test_name", &["testName"][..]),
-		("test_result_value", &["resultValue"][..]),
-		("test_result_unit", &["resultUnit"][..]),
-		("sequence_number", &["sequenceNumber"][..]),
-	],
+	aliases: TEST_RESULT_ROW_ALIASES,
 	extras: |case_id, row| [
 		("case_id", json!(case_id)),
 		(
@@ -142,11 +170,7 @@ repeatable_page_row_patch_handler!(
 		("resultValue", "resultValue"),
 		("resultUnit", "resultUnit"),
 	],
-	aliases: &[
-		("test_name", &["testName"][..]),
-		("test_result_value", &["resultValue"][..]),
-		("test_result_unit", &["resultUnit"][..]),
-	],
+	aliases: TEST_RESULT_ROW_ALIASES,
 	build_response: build_editor_lb_page_row_response,
 );
 

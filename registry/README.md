@@ -29,6 +29,8 @@ Do not use combined values such as `ICH+FDA`. If a field is FDA-specific, set
 - `dictionary-rules.schema.json`: formal rules-file contract.
 - `index.json`: section file registry.
 - `sections/*.json`: canonical editable field rows.
+- `editor-contracts/*.json`: field-level editor projection, PATCH, roundtrip,
+  constraint, and business-validation evidence used by strict page gates.
 - `dictionary/*.json`: canonical E2BR3 data-element dictionaries (generated, committed).
 - `dictionary/rules/*.json`: per-authority business-rule prose, keyed by element code
   (generated, committed). Kept out of the entries so the dictionaries stay lean.
@@ -92,6 +94,18 @@ Validate the registry:
 ```sh
 python3 registry/tools/validate.py
 ```
+
+Validate a certified editor contract field by field:
+
+```sh
+python3 registry/tools/validate.py --strict-editor-contract CI
+python3 registry/tools/validate.py --strict-editor-contract RP
+```
+
+All 26 CI fields and 30 RP fields are certified independently. A `complete`
+row must include projection, PATCH, roundtrip, constraint, and business-rule
+evidence, with an explicit reason when a stage is not applicable. The editor
+contract gate does not infer section-level completion.
 
 Validate registry rows against extracted backend BMC fields:
 

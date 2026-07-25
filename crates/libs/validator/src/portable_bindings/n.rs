@@ -3,7 +3,7 @@ use super::{PortableFieldBinding, PortableValueType};
 macro_rules! binding {
 	($path:literal, $request:literal, [$($code:literal),+ $(,)?]) => {
 		PortableFieldBinding {
-			section: "SD",
+			section: "N",
 			frontend_path: $path,
 			request_path: $request,
 			value_type: PortableValueType::String,

@@ -10,9 +10,17 @@ pub async fn get_editor_shell(
 	lib_rest_core::require_case_read_allowed(&ctx, &mm, case_id).await?;
 	let case = CaseBmc::get(&ctx, &mm, case_id).await?;
 	let case = case_to_read_result(&ctx, &mm, case).await?;
+	let safety_report_id =
+		SafetyReportIdentificationBmc::get_by_case(&ctx, &mm, case_id)
+			.await?
+			.safety_report_id
+			.unwrap_or_default();
 
 	Ok((
 		axum::http::StatusCode::OK,
-		Json(CaseEditorShellDto::from(case)),
+		Json(CaseEditorShellDto::from_case_read_result(
+			case,
+			safety_report_id,
+		)),
 	))
 }

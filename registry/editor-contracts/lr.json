@@ -1,0 +1,9 @@
+{
+  "pageId": "LR",
+  "registryFile": "sections/c-safety-report.json",
+  "fields": [
+    {"code":"C.4.r.1","authority":"ICH","frontendPath":"literatureReferences[].referenceText","projectionPath":"literatureReferences[].referenceText","patch":{"kind":"rows","owner":"literatureReferences"},"roundTripValue":"Smith et al. Safety study, 2026","constraint":{"status":"verified","ruleCode":"ICH.C.4.r.1.LENGTH.MAX"},"businessValidation":{"status":"not_applicable","reason":"No semantic business rule targets literature reference text; representation length is enforced by the portable constraint."}},
+    {"code":"C.4.r.local.referenceTextNullFlavor","authority":"ICH","frontendPath":"literatureReferences[].referenceTextNullFlavor","projectionPath":"literatureReferences[].referenceTextNullFlavor","patch":{"kind":"rows","owner":"literatureReferences"},"roundTripValue":"ASKU","constraint":{"status":"verified","ruleCode":"ICH.C.4.r.1.NULLFLAVOR.ALLOWED"},"businessValidation":{"status":"not_applicable","reason":"Business validation consumes the companion value and reports the issue on referenceText."}},
+    {"code":"C.4.r.2","authority":"ICH","frontendPath":"literatureReferences[].documentBase64","projectionPath":"literatureReferences[].documentBase64","patch":{"kind":"rows","owner":"literatureReferences"},"roundTripValue":"UEZERg==","constraint":{"status":"verified","ruleCode":"ICH.C.4.r.2.ALLOWED.VALUE"},"businessValidation":{"status":"not_applicable","reason":"No semantic business rule targets the attachment payload; representation format is enforced by the portable constraint."}}
+  ]
+}

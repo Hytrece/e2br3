@@ -33,7 +33,7 @@ pub struct Reaction {
 	pub reaction_meddra_code: Option<String>,
 
 	// E.i.3 - Term Highlighted by Reporter
-	pub term_highlighted: Option<bool>,
+	pub term_highlighted: Option<String>,
 
 	// E.i.3.1 - Seriousness (MANDATORY if serious)
 	pub serious: Option<bool>,
@@ -110,7 +110,7 @@ pub struct ReactionForCreate {
 	pub reaction_language: Option<String>,
 	pub reaction_meddra_code: Option<String>,
 	pub reaction_meddra_version: Option<String>,
-	pub term_highlighted: Option<bool>,
+	pub term_highlighted: Option<String>,
 	pub serious: Option<bool>,
 	pub criteria_death: Option<bool>,
 	pub criteria_death_null_flavor: Option<String>,
@@ -172,7 +172,7 @@ pub struct ReactionForUpdate {
 	pub reaction_language: Option<String>,
 	pub reaction_meddra_code: Option<String>,
 	pub reaction_meddra_version: Option<String>,
-	pub term_highlighted: Option<bool>,
+	pub term_highlighted: Option<String>,
 	pub serious: Option<bool>,
 	pub criteria_death: Option<bool>,
 	pub criteria_death_null_flavor: Option<String>,
@@ -410,7 +410,7 @@ impl ReactionBmc {
 			     criteria_congenital_anomaly_null_flavor = COALESCE($18, criteria_congenital_anomaly_null_flavor),
 			     criteria_other_medically_important = COALESCE($19, criteria_other_medically_important),
 			     criteria_other_medically_important_null_flavor = COALESCE($20, criteria_other_medically_important_null_flavor),
-			     required_intervention = COALESCE($21, required_intervention),
+			     required_intervention = CASE WHEN $50 IS NOT NULL THEN NULL ELSE COALESCE($21, required_intervention) END,
 			     expectedness = COALESCE($22, expectedness),
 			     severity = COALESCE($23, severity),
 			     mfds_device_ae_classification = COALESCE($24, mfds_device_ae_classification),
@@ -439,7 +439,7 @@ impl ReactionBmc {
 			     outcome = COALESCE($47, outcome),
 			     medical_confirmation = COALESCE($48, medical_confirmation),
 			     country_code = COALESCE($49, country_code),
-			     required_intervention_null_flavor = COALESCE($50, required_intervention_null_flavor),
+			     required_intervention_null_flavor = CASE WHEN $21 IS NOT NULL THEN NULL ELSE COALESCE($50, required_intervention_null_flavor) END,
 			     deleted = COALESCE($51, deleted),
 			     updated_at = now(),
 			     updated_by = $52
@@ -659,7 +659,7 @@ impl ReactionBmc {
 			     criteria_congenital_anomaly_null_flavor = COALESCE($19, criteria_congenital_anomaly_null_flavor),
 			     criteria_other_medically_important = COALESCE($20, criteria_other_medically_important),
 			     criteria_other_medically_important_null_flavor = COALESCE($21, criteria_other_medically_important_null_flavor),
-			     required_intervention = COALESCE($22, required_intervention),
+			     required_intervention = CASE WHEN $51 IS NOT NULL THEN NULL ELSE COALESCE($22, required_intervention) END,
 			     expectedness = COALESCE($23, expectedness),
 			     severity = COALESCE($24, severity),
 			     mfds_device_ae_classification = COALESCE($25, mfds_device_ae_classification),
@@ -688,7 +688,7 @@ impl ReactionBmc {
 			     outcome = COALESCE($48, outcome),
 			     medical_confirmation = COALESCE($49, medical_confirmation),
 			     country_code = COALESCE($50, country_code),
-			     required_intervention_null_flavor = COALESCE($51, required_intervention_null_flavor),
+			     required_intervention_null_flavor = CASE WHEN $22 IS NOT NULL THEN NULL ELSE COALESCE($51, required_intervention_null_flavor) END,
 			     deleted = COALESCE($52, deleted),
 			     updated_at = now(),
 			     updated_by = $53

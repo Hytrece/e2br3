@@ -313,7 +313,7 @@ CREATE INDEX IF NOT EXISTS idx_product_presaves_receiver
     WHERE receiver_presave_id IS NOT NULL;
 
 
-CREATE TABLE IF NOT EXISTS product_presave_substances (
+CREATE TABLE IF NOT EXISTS product_presave_active_substances (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     product_presave_id UUID NOT NULL REFERENCES product_presaves(id) ON DELETE CASCADE,
     sequence_number INTEGER NOT NULL,
@@ -329,7 +329,7 @@ CREATE TABLE IF NOT EXISTS product_presave_substances (
     created_by UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
     updated_by UUID REFERENCES users(id) ON DELETE RESTRICT,
 
-    CONSTRAINT product_presave_substances_sequence_unique UNIQUE (product_presave_id, sequence_number)
+    CONSTRAINT product_presave_active_substances_sequence_unique UNIQUE (product_presave_id, sequence_number)
 );
 
 CREATE TABLE IF NOT EXISTS reporter_presaves (
@@ -421,7 +421,7 @@ CREATE TABLE IF NOT EXISTS study_presave_registration_numbers (
     CONSTRAINT study_presave_registration_numbers_sequence_unique UNIQUE (study_presave_id, sequence_number)
 );
 
-CREATE TABLE IF NOT EXISTS study_presave_fda_cross_reported_inds (
+CREATE TABLE IF NOT EXISTS study_presave_fda_cross_reported_ind_numbers (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     study_presave_id UUID NOT NULL REFERENCES study_presaves(id) ON DELETE CASCADE,
     sequence_number INTEGER NOT NULL,
@@ -432,7 +432,7 @@ CREATE TABLE IF NOT EXISTS study_presave_fda_cross_reported_inds (
     created_by UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
     updated_by UUID REFERENCES users(id) ON DELETE RESTRICT,
 
-    CONSTRAINT study_presave_fda_cross_reported_inds_sequence_unique UNIQUE (study_presave_id, sequence_number)
+    CONSTRAINT study_presave_fda_cross_reported_ind_numbers_sequence_unique UNIQUE (study_presave_id, sequence_number)
 );
 
 CREATE TABLE IF NOT EXISTS study_presave_products (
@@ -493,12 +493,12 @@ CREATE INDEX idx_receiver_presave_routes_parent ON receiver_presave_routes(recei
 CREATE INDEX idx_receiver_presave_routes_authority ON receiver_presave_routes(authority);
 CREATE INDEX idx_product_presaves_org ON product_presaves(organization_id);
 CREATE INDEX idx_product_presaves_sender ON product_presaves(sender_presave_id);
-CREATE INDEX idx_product_presave_substances_parent ON product_presave_substances(product_presave_id);
+CREATE INDEX idx_product_presave_active_substances_parent ON product_presave_active_substances(product_presave_id);
 CREATE INDEX idx_reporter_presaves_org ON reporter_presaves(organization_id);
 CREATE INDEX idx_study_presaves_org ON study_presaves(organization_id);
 CREATE INDEX idx_study_presaves_product ON study_presaves(product_presave_id);
 CREATE INDEX idx_study_presave_registration_numbers_parent ON study_presave_registration_numbers(study_presave_id);
-CREATE INDEX idx_study_presave_fda_cross_reported_inds_parent ON study_presave_fda_cross_reported_inds(study_presave_id);
+CREATE INDEX idx_study_presave_fda_cross_reported_ind_numbers_parent ON study_presave_fda_cross_reported_ind_numbers(study_presave_id);
 CREATE INDEX idx_study_presave_products_parent ON study_presave_products(study_presave_id);
 CREATE INDEX idx_study_presave_reporters_parent ON study_presave_reporters(study_presave_id);
 CREATE INDEX idx_narrative_presaves_org ON narrative_presaves(organization_id);
@@ -1501,6 +1501,42 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path FROM CURRENT;
 
+CREATE OR REPLACE FUNCTION select_current_user_organization(
+	target_organization_id UUID
+) RETURNS BOOLEAN AS $$
+DECLARE
+	actor_user_id UUID;
+BEGIN
+	actor_user_id := NULLIF(
+		current_setting('app.current_user_id', true), ''
+	)::UUID;
+	IF actor_user_id IS NULL OR target_organization_id IS NULL THEN
+		RETURN FALSE;
+	END IF;
+
+	IF NOT EXISTS (
+		SELECT 1
+		FROM user_organization_memberships membership
+		JOIN organizations organization
+		  ON organization.id = membership.organization_id
+		WHERE membership.user_id = actor_user_id
+		  AND membership.organization_id = target_organization_id
+		  AND membership.active
+		  AND organization.active
+	) THEN
+		RETURN FALSE;
+	END IF;
+
+	UPDATE users
+	SET organization_id = target_organization_id,
+		updated_by = actor_user_id,
+		updated_at = NOW()
+	WHERE id = actor_user_id;
+
+	RETURN FOUND;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path FROM CURRENT;
+
 -- Compatibility adapter for legacy callers. The role label is translated once
 -- and is never stored or read by RLS.
 CREATE OR REPLACE FUNCTION set_org_context(org_id UUID, user_role VARCHAR) RETURNS VOID AS $$
@@ -1517,6 +1553,8 @@ GRANT EXECUTE ON FUNCTION current_organization_id() TO e2br3_app_role;
 GRANT EXECUTE ON FUNCTION is_current_user_admin() TO e2br3_app_role;
 REVOKE ALL ON FUNCTION set_authorization_isolation_context(UUID, BOOLEAN) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION set_authorization_isolation_context(UUID, BOOLEAN) TO e2br3_app_role;
+REVOKE ALL ON FUNCTION select_current_user_organization(UUID) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION select_current_user_organization(UUID) TO e2br3_app_role;
 GRANT EXECUTE ON FUNCTION set_org_context(UUID, VARCHAR) TO e2br3_app_role;
 
 -- Grant table access for application role (RLS will still enforce isolation)
@@ -1935,22 +1973,22 @@ CREATE POLICY product_presaves_org_isolation ON product_presaves
         organization_id = current_organization_id() OR is_current_user_admin()
     );
 
-ALTER TABLE product_presave_substances ENABLE ROW LEVEL SECURITY;
-ALTER TABLE product_presave_substances FORCE ROW LEVEL SECURITY;
-CREATE POLICY product_presave_substances_via_parent ON product_presave_substances
+ALTER TABLE product_presave_active_substances ENABLE ROW LEVEL SECURITY;
+ALTER TABLE product_presave_active_substances FORCE ROW LEVEL SECURITY;
+CREATE POLICY product_presave_active_substances_via_parent ON product_presave_active_substances
     FOR ALL
     TO e2br3_app_role
     USING (
         EXISTS (
             SELECT 1 FROM product_presaves p
-            WHERE p.id = product_presave_substances.product_presave_id
+            WHERE p.id = product_presave_active_substances.product_presave_id
             AND (p.organization_id = current_organization_id() OR is_current_user_admin())
         )
     )
     WITH CHECK (
         EXISTS (
             SELECT 1 FROM product_presaves p
-            WHERE p.id = product_presave_substances.product_presave_id
+            WHERE p.id = product_presave_active_substances.product_presave_id
             AND (p.organization_id = current_organization_id() OR is_current_user_admin())
         )
     );
@@ -1999,22 +2037,22 @@ CREATE POLICY study_presave_registration_numbers_via_parent ON study_presave_reg
         )
     );
 
-ALTER TABLE study_presave_fda_cross_reported_inds ENABLE ROW LEVEL SECURITY;
-ALTER TABLE study_presave_fda_cross_reported_inds FORCE ROW LEVEL SECURITY;
-CREATE POLICY study_presave_fda_cross_reported_inds_via_parent ON study_presave_fda_cross_reported_inds
+ALTER TABLE study_presave_fda_cross_reported_ind_numbers ENABLE ROW LEVEL SECURITY;
+ALTER TABLE study_presave_fda_cross_reported_ind_numbers FORCE ROW LEVEL SECURITY;
+CREATE POLICY study_presave_fda_cross_reported_ind_numbers_via_parent ON study_presave_fda_cross_reported_ind_numbers
     FOR ALL
     TO e2br3_app_role
     USING (
         EXISTS (
             SELECT 1 FROM study_presaves p
-            WHERE p.id = study_presave_fda_cross_reported_inds.study_presave_id
+            WHERE p.id = study_presave_fda_cross_reported_ind_numbers.study_presave_id
             AND (p.organization_id = current_organization_id() OR is_current_user_admin())
         )
     )
     WITH CHECK (
         EXISTS (
             SELECT 1 FROM study_presaves p
-            WHERE p.id = study_presave_fda_cross_reported_inds.study_presave_id
+            WHERE p.id = study_presave_fda_cross_reported_ind_numbers.study_presave_id
             AND (p.organization_id = current_organization_id() OR is_current_user_admin())
         )
     );

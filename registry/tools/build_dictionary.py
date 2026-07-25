@@ -477,9 +477,16 @@ def parse_fda_csv(text: str) -> list[dict[str, Any]]:
         }
         if profiles:
             entry["conformance"] = min(profiles.values(), key=CONFORMANCE_STRICTNESS.index)
-        set_optional(entry, "data_type", cell(row, header.index("DATA TYPE")))
+        data_type = optional_value(cell(row, header.index("DATA TYPE")))
+        if data_type is not None:
+            entry["data_type"] = data_type
         set_optional(entry, "max_length", cell(row, header.index("MAX LENGTH")))
-        set_optional(entry, "allowed_values", cell(row, header.index("VALUES ALLOWED")))
+        allowed_values = optional_value(cell(row, header.index("VALUES ALLOWED")))
+        if allowed_values is not None:
+            entry["allowed_values"] = allowed_values
+            entry["allowed_value_constraint"] = allowed_value_constraint(
+                allowed_values, code, data_type
+            )
         set_optional(entry, "oid", cell(row, header.index("Code system OID")))
         set_optional(entry, "hl7_data_type", cell(row, header.index("HL7 Data Type")))
         set_optional(entry, "hl7_component", cell(row, header.index("HL7 Data Type (sub component)")))

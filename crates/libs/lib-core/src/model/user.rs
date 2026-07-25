@@ -643,6 +643,36 @@ impl UserBmc {
 		Ok(membership.is_some())
 	}
 
+	pub async fn select_current_user_organization(
+		ctx: &Ctx,
+		mm: &ModelManager,
+		organization_id: Uuid,
+	) -> Result<bool> {
+		let dbx = mm.dbx();
+		dbx.begin_txn().await.map_err(Error::Dbx)?;
+		if let Err(err) = set_full_context_from_ctx_dbx(dbx, ctx).await {
+			let _ = dbx.rollback_txn().await;
+			return Err(err);
+		}
+		let selected = match dbx
+			.fetch_one(
+				sqlx::query_as::<_, (bool,)>(
+					"SELECT select_current_user_organization($1)",
+				)
+				.bind(organization_id),
+			)
+			.await
+		{
+			Ok((selected,)) => selected,
+			Err(err) => {
+				let _ = dbx.rollback_txn().await;
+				return Err(err.into());
+			}
+		};
+		dbx.commit_txn().await.map_err(Error::Dbx)?;
+		Ok(selected)
+	}
+
 	pub async fn delete(ctx: &Ctx, mm: &ModelManager, id: Uuid) -> Result<()> {
 		for attempt in 1..=USER_WRITE_MAX_ATTEMPTS {
 			match base_uuid::delete::<Self>(ctx, mm, id).await {

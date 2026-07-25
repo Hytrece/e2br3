@@ -20,10 +20,6 @@ fn decimal_text(value: Option<Decimal>) -> Option<String> {
 	value.map(|value| value.to_string())
 }
 
-fn bool_code(value: Option<bool>) -> Option<String> {
-	value.map(|value| if value { "1" } else { "2" }.to_string())
-}
-
 struct FdaReactionRuleView {
 	index: usize,
 	required_intervention: Option<String>,
@@ -352,7 +348,7 @@ const E_REACTION_DERIVED_LENGTH_RULES: &[IndexedDerivedLengthRule<Reaction>] = &
 	IndexedDerivedLengthRule {
 		code: "ICH.E.i.3.1.LENGTH.MAX",
 		path: |idx| format!("reactions.{idx}.termHighlightedByReporter"),
-		value: |reaction| bool_code(reaction.term_highlighted),
+		value: |reaction| reaction.term_highlighted.clone(),
 	},
 	IndexedDerivedLengthRule {
 		code: "ICH.E.i.6a.LENGTH.MAX",

@@ -6,6 +6,7 @@
     "section": "H",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "NR",
     "backend": {
       "status": "mapped",
       "model": "NarrativeInformation",
@@ -30,6 +31,7 @@
     "section": "H",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "NR",
     "backend": {
       "status": "mapped",
       "model": "NarrativeInformation",
@@ -53,7 +55,7 @@
     "label": "Sender's Diagnosis MedDRA Version",
     "section": "H",
     "authority": "ICH",
-    "status": "complete",
+    "status": "incomplete",
     "backend": {
       "status": "mapped",
       "model": "SenderDiagnosis",
@@ -77,7 +79,7 @@
     "label": "Sender's Diagnosis MedDRA Code",
     "section": "H",
     "authority": "ICH",
-    "status": "complete",
+    "status": "incomplete",
     "backend": {
       "status": "mapped",
       "model": "SenderDiagnosis",
@@ -102,6 +104,7 @@
     "section": "H",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "NR",
     "backend": {
       "status": "mapped",
       "model": "NarrativeInformation",
@@ -126,6 +129,7 @@
     "section": "H",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "NR",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -150,7 +154,7 @@
     "label": "Case Summary Type",
     "section": "H",
     "authority": "ICH",
-    "status": "complete",
+    "status": "incomplete",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -175,7 +179,7 @@
     "label": "Case Summary Language",
     "section": "H",
     "authority": "ICH",
-    "status": "complete",
+    "status": "incomplete",
     "backend": {
       "status": "mapped",
       "model": "CaseSummaryInformation",
@@ -199,7 +203,7 @@
     "label": "Case Summary Text",
     "section": "H",
     "authority": "ICH",
-    "status": "complete",
+    "status": "incomplete",
     "backend": {
       "status": "mapped",
       "model": "CaseSummaryInformation",

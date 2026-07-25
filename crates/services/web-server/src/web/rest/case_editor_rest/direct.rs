@@ -1,25 +1,151 @@
 use super::common::*;
+use lib_core::model::safety_report::PrimarySource;
+use rust_decimal::Decimal;
+use serde::Serialize;
+use std::str::FromStr;
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct CaseEditorRpPrimarySourceDto {
+	id: Uuid,
+	sequence_number: i32,
+	reporter_title: Option<String>,
+	reporter_title_null_flavor: Option<String>,
+	reporter_given_name: Option<String>,
+	reporter_given_name_null_flavor: Option<String>,
+	reporter_middle_name: Option<String>,
+	reporter_middle_name_null_flavor: Option<String>,
+	reporter_family_name: Option<String>,
+	reporter_family_name_null_flavor: Option<String>,
+	#[serde(rename = "reporterOrganization")]
+	organization: Option<String>,
+	#[serde(rename = "reporterOrganizationNullFlavor")]
+	organization_null_flavor: Option<String>,
+	#[serde(rename = "reporterDepartment")]
+	department: Option<String>,
+	#[serde(rename = "reporterDepartmentNullFlavor")]
+	department_null_flavor: Option<String>,
+	#[serde(rename = "reporterStreet")]
+	street: Option<String>,
+	#[serde(rename = "reporterStreetNullFlavor")]
+	street_null_flavor: Option<String>,
+	#[serde(rename = "reporterCity")]
+	city: Option<String>,
+	#[serde(rename = "reporterCityNullFlavor")]
+	city_null_flavor: Option<String>,
+	#[serde(rename = "reporterState")]
+	state: Option<String>,
+	#[serde(rename = "reporterStateNullFlavor")]
+	state_null_flavor: Option<String>,
+	#[serde(rename = "reporterPostcode")]
+	postcode: Option<String>,
+	#[serde(rename = "reporterPostcodeNullFlavor")]
+	postcode_null_flavor: Option<String>,
+	#[serde(rename = "reporterTelephone")]
+	telephone: Option<String>,
+	#[serde(rename = "reporterTelephoneNullFlavor")]
+	telephone_null_flavor: Option<String>,
+	#[serde(rename = "reporterCountry")]
+	country_code: Option<String>,
+	#[serde(rename = "reporterCountryNullFlavor")]
+	country_code_null_flavor: Option<String>,
+	#[serde(rename = "reporterEmail")]
+	email: Option<String>,
+	#[serde(rename = "reporterEmailNullFlavor")]
+	email_null_flavor: Option<String>,
+	qualification: Option<String>,
+	qualification_null_flavor: Option<String>,
+	qualification_kr1: Option<String>,
+	#[serde(rename = "primarySourceForRegulatoryPurposes")]
+	primary_source_regulatory: Option<String>,
+}
+
+impl From<PrimarySource> for CaseEditorRpPrimarySourceDto {
+	fn from(source: PrimarySource) -> Self {
+		Self {
+			id: source.id,
+			sequence_number: source.sequence_number,
+			reporter_title: source.reporter_title,
+			reporter_title_null_flavor: source.reporter_title_null_flavor,
+			reporter_given_name: source.reporter_given_name,
+			reporter_given_name_null_flavor: source.reporter_given_name_null_flavor,
+			reporter_middle_name: source.reporter_middle_name,
+			reporter_middle_name_null_flavor: source
+				.reporter_middle_name_null_flavor,
+			reporter_family_name: source.reporter_family_name,
+			reporter_family_name_null_flavor: source
+				.reporter_family_name_null_flavor,
+			organization: source.organization,
+			organization_null_flavor: source.organization_null_flavor,
+			department: source.department,
+			department_null_flavor: source.department_null_flavor,
+			street: source.street,
+			street_null_flavor: source.street_null_flavor,
+			city: source.city,
+			city_null_flavor: source.city_null_flavor,
+			state: source.state,
+			state_null_flavor: source.state_null_flavor,
+			postcode: source.postcode,
+			postcode_null_flavor: source.postcode_null_flavor,
+			telephone: source.telephone,
+			telephone_null_flavor: source.telephone_null_flavor,
+			country_code: source.country_code,
+			country_code_null_flavor: source.country_code_null_flavor,
+			email: source.email,
+			email_null_flavor: source.email_null_flavor,
+			qualification: source.qualification,
+			qualification_null_flavor: source.qualification_null_flavor,
+			qualification_kr1: source.qualification_kr1,
+			primary_source_regulatory: source.primary_source_regulatory,
+		}
+	}
+}
 
 async fn load_editor_ci_data(
 	ctx: &lib_core::ctx::Ctx,
 	mm: &ModelManager,
 	case_id: Uuid,
 ) -> Result<Value> {
-	let case = PublicCaseView::from(CaseBmc::get(ctx, mm, case_id).await?);
+	let case = CaseBmc::get(ctx, mm, case_id).await?;
+	let case_fields = CaseEditorCiCaseDto {
+		report_year: case.report_year,
+		fda_report_type: case.fda_report_type,
+		mfds_report_type: case.mfds_report_type,
+	};
 	let safety_report_identification =
 		match SafetyReportIdentificationBmc::get_by_case(ctx, mm, case_id).await {
-			Ok(entity) => Some(entity),
+			Ok(entity) => Some(CaseEditorCiSafetyReportDto {
+				id: entity.id,
+				safety_report_id: entity.safety_report_id,
+				transmission_date: entity.transmission_date,
+				report_type: entity.report_type,
+				date_first_received_from_source: ci_date(
+					entity.date_first_received_from_source,
+				),
+				date_of_most_recent_information: ci_date(
+					entity.date_of_most_recent_information,
+				),
+				fulfil_expedited_criteria: entity.fulfil_expedited_criteria,
+				fulfil_expedited_criteria_null_flavor: entity
+					.fulfil_expedited_criteria_null_flavor,
+				local_criteria_report_type: entity.local_criteria_report_type,
+				combination_product_report_indicator: entity
+					.combination_product_report_indicator,
+				combination_product_report_indicator_null_flavor: entity
+					.combination_product_report_indicator_null_flavor,
+				worldwide_unique_id: entity.worldwide_unique_id,
+				first_sender_type: entity.first_sender_type,
+				additional_documents_available: entity
+					.additional_documents_available,
+				other_case_identifiers_exist: entity.other_case_identifiers_exist,
+				other_case_identifiers_exist_null_flavor: entity
+					.other_case_identifiers_exist_null_flavor,
+				nullification_amendment_code: entity.nullification_code,
+				nullification_reason: entity.nullification_reason,
+			}),
 			Err(lib_core::model::Error::EntityUuidNotFound { .. }) => None,
 			Err(err) => return Err(err.into()),
 		};
-	let message_header = match MessageHeaderBmc::get_by_case(ctx, mm, case_id).await
-	{
-		Ok(entity) => Some(entity),
-		Err(lib_core::model::Error::EntityUuidNotFound { .. }) => None,
-		Err(err) => return Err(err.into()),
-	};
-	let receiver_information =
-		ReceiverInformationBmc::get_by_case_optional(ctx, mm, case_id).await?;
 	let other_case_identifiers = OtherCaseIdentifierBmc::list(
 		ctx,
 		mm,
@@ -50,15 +176,61 @@ async fn load_editor_ci_data(
 		Some(ListOptions::default()),
 	)
 	.await?;
+	let source_documents = SourceDocumentBmc::list(
+		ctx,
+		mm,
+		Some(vec![SourceDocumentFilter {
+			case_id: Some(uuid_eq(case_id)),
+		}]),
+		Some(ListOptions::default()),
+	)
+	.await?;
 
-	Ok(json!({
-		"case": case,
-		"safetyReportIdentification": safety_report_identification,
-		"messageHeader": message_header,
-		"receiverInfo": receiver_information,
-		"otherCaseIdentifiers": other_case_identifiers,
-		"linkedReports": linked_reports,
-		"documentsHeldBySender": documents_held_by_sender,
+	Ok(json!(CaseEditorCiRowsDto {
+		case: case_fields,
+		safety_report_identification,
+		other_case_identifiers: other_case_identifiers
+			.into_iter()
+			.map(|row| CaseEditorCiOtherIdentifierDto {
+				id: row.id,
+				source: row.source_of_identifier,
+				case_identifier: row.case_identifier,
+				sequence_number: row.sequence_number,
+				deleted: row.deleted,
+			})
+			.collect(),
+		linked_reports: linked_reports
+			.into_iter()
+			.map(|row| CaseEditorCiLinkedReportDto {
+				id: row.id,
+				linked_report_number: row.linked_report_number,
+				sequence_number: row.sequence_number,
+				deleted: row.deleted,
+			})
+			.collect(),
+		documents_held_by_sender: documents_held_by_sender
+			.into_iter()
+			.map(|row| CaseEditorCiDocumentDto {
+				id: row.id,
+				document_description: row.title,
+				included_document: row.document_base64,
+				media_type: row.media_type,
+				representation: row.representation,
+				compression: row.compression,
+				sequence_number: row.sequence_number,
+				deleted: row.deleted,
+			})
+			.collect(),
+		source_documents: source_documents
+			.into_iter()
+			.map(|row| CaseEditorCiSourceDocumentDto {
+				id: row.id,
+				source_document_name: row.source_document_name,
+				source_document_base64: row.source_document_base64,
+				source_document_media_type: row.source_document_media_type,
+				sequence_number: row.sequence_number,
+			})
+			.collect(),
 	}))
 }
 
@@ -183,6 +355,378 @@ fn patch_optional_bool_value(
 	Ok(Some(value))
 }
 
+#[derive(Deserialize)]
+struct CiDatePatchValue {
+	#[serde(
+		default,
+		deserialize_with = "lib_core::serde::flex_date::deserialize_option_date"
+	)]
+	value: Option<sqlx::types::time::Date>,
+}
+
+fn patch_date_value(
+	field_name: &str,
+	patch: &CaseEditorFieldPatch,
+) -> Result<Option<sqlx::types::time::Date>> {
+	let value = patch.value.clone().unwrap_or(Value::Null);
+	serde_json::from_value::<CiDatePatchValue>(json!({ "value": value }))
+		.map(|value| value.value)
+		.map_err(|err| Error::BadRequest {
+			message: format!("{field_name} must be an E2B date or null: {err}"),
+		})
+}
+
+#[derive(Deserialize, Default)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct CiCaseRowPatch {
+	report_year: Option<String>,
+	fda_report_type: Option<String>,
+	mfds_report_type: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct CiDocumentRowPatch {
+	#[serde(default)]
+	id: Option<Uuid>,
+	#[serde(default)]
+	document_description: Option<String>,
+	#[serde(default)]
+	included_document: Option<String>,
+	#[serde(default)]
+	media_type: Option<String>,
+	#[serde(default)]
+	representation: Option<String>,
+	#[serde(default)]
+	compression: Option<String>,
+	#[serde(default)]
+	sequence_number: Option<i32>,
+	#[serde(default)]
+	deleted: Option<bool>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct CiOtherIdentifierRowPatch {
+	#[serde(default)]
+	id: Option<Uuid>,
+	#[serde(default)]
+	source: Option<String>,
+	#[serde(default)]
+	case_identifier: Option<String>,
+	#[serde(default)]
+	sequence_number: Option<i32>,
+	#[serde(default)]
+	deleted: Option<bool>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct CiLinkedReportRowPatch {
+	#[serde(default)]
+	id: Option<Uuid>,
+	#[serde(default)]
+	linked_report_number: Option<String>,
+	#[serde(default)]
+	sequence_number: Option<i32>,
+	#[serde(default)]
+	deleted: Option<bool>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct CiSourceDocumentRowPatch {
+	#[serde(default)]
+	id: Option<Uuid>,
+	#[serde(default)]
+	source_document_name: Option<String>,
+	#[serde(default)]
+	source_document_base64: Option<String>,
+	#[serde(default)]
+	source_document_media_type: Option<String>,
+	#[serde(default)]
+	sequence_number: Option<i32>,
+}
+
+fn ci_row_error(owner: &str, err: serde_json::Error) -> Error {
+	Error::BadRequest {
+		message: format!("CI.{owner} has an invalid row payload: {err}"),
+	}
+}
+
+async fn apply_ci_rows_patch(
+	ctx: &lib_core::ctx::Ctx,
+	mm: &ModelManager,
+	case_id: Uuid,
+	rows: &BTreeMap<String, Value>,
+) -> Result<()> {
+	if rows.contains_key("messageHeader")
+		|| rows.contains_key("safetyReportIdentification")
+	{
+		return Err(Error::BadRequest {
+			message: "CI.messageHeader and CI.safetyReportIdentification row patches are not supported; use changes".to_string(),
+		});
+	}
+	reject_unknown_row_keys(
+		"CI",
+		rows,
+		&[
+			"case",
+			"messageHeader",
+			"safetyReportIdentification",
+			"documentsHeldBySender",
+			"otherCaseIdentifiers",
+			"linkedReports",
+			"sourceDocuments",
+		],
+	)?;
+
+	let portable_row = rows
+		.iter()
+		.map(|(key, value)| (key.clone(), value.clone()))
+		.collect::<Map<String, Value>>();
+	validate_row_payload("CI", "CI", &portable_row, None)?;
+
+	if let Some(value) = rows.get("case") {
+		let patch = serde_json::from_value::<CiCaseRowPatch>(value.clone())
+			.map_err(|err| ci_row_error("case", err))?;
+		CaseBmc::update(
+			ctx,
+			mm,
+			case_id,
+			CaseForUpdate {
+				report_year: patch.report_year,
+				fda_report_type: patch.fda_report_type,
+				mfds_report_type: patch.mfds_report_type,
+				dirty_c: Some(true),
+				..Default::default()
+			},
+		)
+		.await?;
+	}
+
+	if let Some(value) = rows.get("documentsHeldBySender") {
+		let patches =
+			serde_json::from_value::<Vec<CiDocumentRowPatch>>(value.clone())
+				.map_err(|err| ci_row_error("documentsHeldBySender", err))?;
+		for (index, patch) in patches.into_iter().enumerate() {
+			let sequence_number = patch
+				.sequence_number
+				.unwrap_or_else(|| i32::try_from(index + 1).unwrap_or(i32::MAX));
+			if let Some(id) = patch.id {
+				let current = DocumentsHeldBySenderBmc::get(ctx, mm, id).await?;
+				if current.case_id != case_id {
+					return Err(Error::BadRequest {
+						message: format!("CI.documentsHeldBySender row '{id}' belongs to another case"),
+					});
+				}
+				if patch.deleted == Some(true) {
+					DocumentsHeldBySenderBmc::delete(ctx, mm, id).await?;
+					continue;
+				}
+				if patch.deleted == Some(false) && current.deleted {
+					DocumentsHeldBySenderBmc::restore(ctx, mm, id).await?;
+				}
+				DocumentsHeldBySenderBmc::update(
+					ctx,
+					mm,
+					id,
+					DocumentsHeldBySenderForUpdate {
+						title: patch.document_description,
+						document_base64: patch.included_document,
+						media_type: patch.media_type,
+						representation: patch.representation,
+						compression: patch.compression,
+						sequence_number: patch.sequence_number,
+					},
+				)
+				.await?;
+			} else {
+				if patch.deleted == Some(true) {
+					return Err(Error::BadRequest {
+						message:
+							"a new CI.documentsHeldBySender row cannot be deleted"
+								.to_string(),
+					});
+				}
+				DocumentsHeldBySenderBmc::create(
+					ctx,
+					mm,
+					DocumentsHeldBySenderForCreate {
+						case_id,
+						title: patch.document_description,
+						document_base64: patch.included_document,
+						media_type: patch.media_type,
+						representation: patch.representation,
+						compression: patch.compression,
+						sequence_number,
+					},
+				)
+				.await?;
+			}
+		}
+	}
+
+	if let Some(value) = rows.get("otherCaseIdentifiers") {
+		let patches =
+			serde_json::from_value::<Vec<CiOtherIdentifierRowPatch>>(value.clone())
+				.map_err(|err| ci_row_error("otherCaseIdentifiers", err))?;
+		for (index, patch) in patches.into_iter().enumerate() {
+			if let Some(id) = patch.id {
+				let current = OtherCaseIdentifierBmc::get(ctx, mm, id).await?;
+				if current.case_id != case_id {
+					return Err(Error::BadRequest {
+						message: format!("CI.otherCaseIdentifiers row '{id}' belongs to another case"),
+					});
+				}
+				if patch.deleted == Some(true) {
+					OtherCaseIdentifierBmc::delete(ctx, mm, id).await?;
+					continue;
+				}
+				if patch.deleted == Some(false) && current.deleted {
+					OtherCaseIdentifierBmc::restore(ctx, mm, id).await?;
+				}
+				OtherCaseIdentifierBmc::update(
+					ctx,
+					mm,
+					id,
+					OtherCaseIdentifierForUpdate {
+						source_of_identifier: patch.source,
+						case_identifier: patch.case_identifier,
+					},
+				)
+				.await?;
+			} else {
+				let source = patch.source.ok_or_else(|| Error::BadRequest {
+					message: "CI.otherCaseIdentifiers[].source is required"
+						.to_string(),
+				})?;
+				let case_identifier =
+					patch.case_identifier.ok_or_else(|| Error::BadRequest {
+						message:
+							"CI.otherCaseIdentifiers[].caseIdentifier is required"
+								.to_string(),
+					})?;
+				OtherCaseIdentifierBmc::create(
+					ctx,
+					mm,
+					OtherCaseIdentifierForCreate {
+						case_id,
+						sequence_number: patch.sequence_number.unwrap_or_else(
+							|| i32::try_from(index + 1).unwrap_or(i32::MAX),
+						),
+						source_of_identifier: source,
+						case_identifier,
+					},
+				)
+				.await?;
+			}
+		}
+	}
+
+	if let Some(value) = rows.get("linkedReports") {
+		let patches =
+			serde_json::from_value::<Vec<CiLinkedReportRowPatch>>(value.clone())
+				.map_err(|err| ci_row_error("linkedReports", err))?;
+		for (index, patch) in patches.into_iter().enumerate() {
+			if let Some(id) = patch.id {
+				let current = LinkedReportNumberBmc::get(ctx, mm, id).await?;
+				if current.case_id != case_id {
+					return Err(Error::BadRequest {
+						message: format!(
+							"CI.linkedReports row '{id}' belongs to another case"
+						),
+					});
+				}
+				if patch.deleted == Some(true) {
+					LinkedReportNumberBmc::delete(ctx, mm, id).await?;
+					continue;
+				}
+				if patch.deleted == Some(false) && current.deleted {
+					LinkedReportNumberBmc::restore(ctx, mm, id).await?;
+				}
+				LinkedReportNumberBmc::update(
+					ctx,
+					mm,
+					id,
+					LinkedReportNumberForUpdate {
+						linked_report_number: patch.linked_report_number,
+					},
+				)
+				.await?;
+			} else {
+				let linked_report_number =
+					patch
+						.linked_report_number
+						.ok_or_else(|| Error::BadRequest {
+							message:
+								"CI.linkedReports[].linkedReportNumber is required"
+									.to_string(),
+						})?;
+				LinkedReportNumberBmc::create(
+					ctx,
+					mm,
+					LinkedReportNumberForCreate {
+						case_id,
+						sequence_number: patch.sequence_number.unwrap_or_else(
+							|| i32::try_from(index + 1).unwrap_or(i32::MAX),
+						),
+						linked_report_number,
+					},
+				)
+				.await?;
+			}
+		}
+	}
+
+	if let Some(value) = rows.get("sourceDocuments") {
+		let patches =
+			serde_json::from_value::<Vec<CiSourceDocumentRowPatch>>(value.clone())
+				.map_err(|err| ci_row_error("sourceDocuments", err))?;
+		for (index, patch) in patches.into_iter().enumerate() {
+			if let Some(id) = patch.id {
+				let current = SourceDocumentBmc::get(ctx, mm, id).await?;
+				if current.case_id != case_id {
+					return Err(Error::BadRequest {
+						message: format!(
+							"CI.sourceDocuments row '{id}' belongs to another case"
+						),
+					});
+				}
+				SourceDocumentBmc::update(
+					ctx,
+					mm,
+					id,
+					SourceDocumentForUpdate {
+						source_document_name: patch.source_document_name,
+						source_document_base64: patch.source_document_base64,
+						source_document_media_type: patch.source_document_media_type,
+						sequence_number: patch.sequence_number,
+					},
+				)
+				.await?;
+			} else {
+				SourceDocumentBmc::create(
+					ctx,
+					mm,
+					SourceDocumentForCreate {
+						case_id,
+						source_document_name: patch.source_document_name,
+						source_document_base64: patch.source_document_base64,
+						source_document_media_type: patch.source_document_media_type,
+						sequence_number: patch.sequence_number.unwrap_or_else(
+							|| i32::try_from(index + 1).unwrap_or(i32::MAX),
+						),
+					},
+				)
+				.await?;
+			}
+		}
+	}
+
+	Ok(())
+}
+
 /// PATCH /api/cases/{case_id}/editor/pages/CI
 pub async fn patch_editor_ci_page_projection(
 	State(mm): State<ModelManager>,
@@ -225,8 +769,27 @@ pub async fn patch_editor_ci_page_projection(
 
 	for (field, patch) in &request.changes {
 		match field.as_str() {
+			"safetyReportId" => {
+				update.safety_report_id = patch_optional_string_value(field, patch)?;
+			}
+			"transmissionDate" => {
+				update.transmission_date =
+					patch_optional_string_value(field, patch)?;
+			}
 			"reportType" => {
 				update.report_type = patch_string_value(field, patch)?;
+			}
+			"dateFirstReceivedFromSource" => {
+				update.date_first_received_from_source =
+					patch_date_value(field, patch)?;
+			}
+			"dateOfMostRecentInformation" => {
+				update.date_of_most_recent_information =
+					patch_date_value(field, patch)?;
+			}
+			"additionalDocumentsAvailable" => {
+				update.additional_documents_available =
+					patch_optional_bool_value(field, patch)?;
 			}
 			"fulfilExpeditedCriteria" => {
 				update.fulfil_expedited_criteria = patch_bool_value(field, patch)?;
@@ -247,12 +810,28 @@ pub async fn patch_editor_ci_page_projection(
 				update.combination_product_report_indicator_null_flavor =
 					patch_optional_string_value(field, patch)?;
 			}
+			"worldwideUniqueId" => {
+				update.worldwide_unique_id =
+					patch_optional_string_value(field, patch)?;
+			}
+			"firstSenderType" => {
+				update.first_sender_type =
+					patch_optional_string_value(field, patch)?;
+			}
 			"otherCaseIdentifiersExist" => {
 				update.other_case_identifiers_exist =
 					patch_optional_bool_value(field, patch)?;
 			}
 			"otherCaseIdentifiersExistNullFlavor" => {
 				update.other_case_identifiers_exist_null_flavor =
+					patch_optional_string_value(field, patch)?;
+			}
+			"nullificationAmendmentCode" => {
+				update.nullification_code =
+					patch_optional_string_value(field, patch)?;
+			}
+			"nullificationReason" => {
+				update.nullification_reason =
 					patch_optional_string_value(field, patch)?;
 			}
 			_ => {
@@ -262,16 +841,14 @@ pub async fn patch_editor_ci_page_projection(
 			}
 		}
 	}
-	if !request.rows.is_empty() {
-		return Err(Error::BadRequest {
-			message: "CI row patch operations are not implemented in this slice"
-				.to_string(),
-		});
-	}
-
 	if !request.changes.is_empty() {
 		SafetyReportIdentificationBmc::update_by_case(&ctx, &mm, case_id, update)
 			.await?;
+	}
+	if !request.rows.is_empty() {
+		apply_ci_rows_patch(&ctx, &mm, case_id, &request.rows).await?;
+	}
+	if !request.changes.is_empty() || !request.rows.is_empty() {
 		refresh_editor_validation_cache(
 			&ctx,
 			&mm,
@@ -502,9 +1079,16 @@ async fn apply_direct_page_changes_patch(
 				("reporterTelephone", "reporterTelephone"),
 				("reporterTelephoneNullFlavor", "reporterTelephoneNullFlavor"),
 				("reporterCountry", "reporterCountry"),
+				("reporterCountryNullFlavor", "reporterCountryNullFlavor"),
+				("reporterEmail", "reporterEmail"),
+				("reporterEmailNullFlavor", "reporterEmailNullFlavor"),
 				("qualification", "qualification"),
 				("qualificationNullFlavor", "qualificationNullFlavor"),
 				("qualificationKr1", "qualificationKr1"),
+				(
+					"primarySourceForRegulatoryPurposes",
+					"primarySourceForRegulatoryPurposes",
+				),
 			],
 		)?,
 		"SD" => direct_sd_rows_from_changes(page_id, changes)?,
@@ -567,21 +1151,34 @@ fn direct_sd_rows_from_changes(
 	for (field, patch) in changes {
 		let (row_key, target) = match field.as_str() {
 			"senderType" => ("senderInformation", "senderType"),
+			"senderHealthProfessionalTypeKr1" => {
+				("senderInformation", "healthProfessionalTypeKr1")
+			}
 			"senderOrganization" => ("senderInformation", "organizationName"),
 			"senderDepartment" => ("senderInformation", "department"),
+			"senderPersonTitle" => ("senderInformation", "personTitle"),
+			"senderPersonGivenName" => ("senderInformation", "personGivenName"),
+			"senderPersonMiddleName" => ("senderInformation", "personMiddleName"),
+			"senderPersonFamilyName" => ("senderInformation", "personFamilyName"),
+			"senderStreetAddress" => ("senderInformation", "streetAddress"),
+			"senderCity" => ("senderInformation", "city"),
+			"senderState" => ("senderInformation", "state"),
+			"senderPostcode" => ("senderInformation", "postcode"),
 			"senderCountryCode" => ("senderInformation", "countryCode"),
-			"messageNumber" => ("messageHeader", "messageNumber"),
-			"messageSenderIdentifier" => {
-				("messageHeader", "messageSenderIdentifier")
-			}
-			"messageReceiverIdentifier" => {
-				("messageHeader", "messageReceiverIdentifier")
-			}
-			"batchReceiverIdentifier" => {
-				("messageHeader", "batchReceiverIdentifier")
-			}
+			"senderTelephone" => ("senderInformation", "telephone"),
+			"senderFax" => ("senderInformation", "fax"),
+			"senderEmail" => ("senderInformation", "email"),
 			"receiverOrganization" => ("receiverInformation", "organizationName"),
-			"receiverCountryCode" => ("receiverInformation", "countryCode"),
+			"receiverType" => ("receiverInformation", "receiverType"),
+			"receiverDepartment" => ("receiverInformation", "department"),
+			"receiverStreet" => ("receiverInformation", "streetAddress"),
+			"receiverCity" => ("receiverInformation", "city"),
+			"receiverState" => ("receiverInformation", "stateProvince"),
+			"receiverPostcode" => ("receiverInformation", "postcode"),
+			"receiverCountry" => ("receiverInformation", "countryCode"),
+			"receiverTelephone" => ("receiverInformation", "telephone"),
+			"receiverFax" => ("receiverInformation", "fax"),
+			"receiverEmail" => ("receiverInformation", "email"),
 			_ => {
 				return Err(Error::BadRequest {
 					message: format!("unknown {page_id} field '{field}'"),
@@ -601,6 +1198,49 @@ fn direct_sd_rows_from_changes(
 	Ok(rows)
 }
 
+fn datetime_field(
+	page_id: &str,
+	row: &Map<String, Value>,
+	keys: &[&str],
+) -> Result<Option<time::OffsetDateTime>> {
+	let Some(value) = keys.iter().find_map(|key| row.get(*key)) else {
+		return Ok(None);
+	};
+	if value.is_null() {
+		return Ok(None);
+	}
+	let Some(value) = value.as_str().map(str::trim) else {
+		return Err(Error::BadRequest {
+			message: format!(
+				"{page_id}.{} must be a datetime string or null",
+				keys[0]
+			),
+		});
+	};
+	if value.is_empty() {
+		return Ok(None);
+	}
+	if let Ok(value) = time::OffsetDateTime::parse(
+		value,
+		&time::format_description::well_known::Rfc3339,
+	) {
+		return Ok(Some(value));
+	}
+	let format =
+		time::format_description::parse("[year][month][day][hour][minute][second]")
+			.map_err(|err| Error::BadRequest {
+				message: format!("failed to initialize E2B datetime parser: {err}"),
+			})?;
+	time::PrimitiveDateTime::parse(value, &format)
+		.map(|value| Some(value.assume_utc()))
+		.map_err(|_| Error::BadRequest {
+			message: format!(
+				"{page_id}.{} must be RFC3339 or YYYYMMDDhhmmss",
+				keys[0]
+			),
+		})
+}
+
 async fn apply_rp_page_rows_patch(
 	ctx: &lib_core::ctx::Ctx,
 	mm: &ModelManager,
@@ -609,10 +1249,27 @@ async fn apply_rp_page_rows_patch(
 	rows: &BTreeMap<String, Value>,
 ) -> Result<()> {
 	reject_unknown_row_keys(page_id, rows, &["primarySources"])?;
-	let Some(source) = optional_first_row_object(page_id, rows, "primarySources")?
-	else {
+	let Some(value) = rows.get("primarySources") else {
 		return Ok(());
 	};
+	let Some(sources) = value.as_array() else {
+		return Err(Error::BadRequest {
+			message: format!("{page_id}.primarySources must be an array"),
+		});
+	};
+	for value in sources {
+		let source = as_object(page_id, "primarySources", value)?;
+		apply_rp_source_patch(ctx, mm, case_id, source).await?;
+	}
+	Ok(())
+}
+
+async fn apply_rp_source_patch(
+	ctx: &lib_core::ctx::Ctx,
+	mm: &ModelManager,
+	case_id: Uuid,
+	source: &serde_json::Map<String, Value>,
+) -> Result<()> {
 	let update = PrimarySourceForUpdate {
 		source_reporter_presave_id: uuid_field(
 			source,
@@ -787,52 +1444,10 @@ async fn apply_sd_page_rows_patch(
 		rows,
 		&[
 			"safetyReportIdentification",
-			"messageHeader",
 			"senderInformation",
 			"receiverInformation",
 		],
 	)?;
-	if let Some(message_header) =
-		optional_row_object(page_id, rows, "messageHeader")?
-	{
-		MessageHeaderBmc::update_by_case(
-			ctx,
-			mm,
-			case_id,
-			MessageHeaderForUpdate {
-				batch_number: string_field(
-					message_header,
-					&["batchNumber", "batch_number"],
-				),
-				batch_sender_identifier: string_field(
-					message_header,
-					&["batchSenderIdentifier", "batch_sender_identifier"],
-				),
-				batch_receiver_identifier: string_field(
-					message_header,
-					&["batchReceiverIdentifier", "batch_receiver_identifier"],
-				),
-				batch_transmission_date: None,
-				message_number: string_field(
-					message_header,
-					&["messageNumber", "message_number"],
-				),
-				message_sender_identifier: string_field(
-					message_header,
-					&["messageSenderIdentifier", "message_sender_identifier"],
-				),
-				message_receiver_identifier: string_field(
-					message_header,
-					&["messageReceiverIdentifier", "message_receiver_identifier"],
-				),
-				message_date: string_field(
-					message_header,
-					&["messageDate", "message_date"],
-				),
-			},
-		)
-		.await?;
-	}
 	if let Some(sender) = optional_row_object(page_id, rows, "senderInformation")? {
 		let update = SenderInformationForUpdate {
 			source_sender_presave_id: uuid_field(
@@ -874,7 +1489,18 @@ async fn apply_sd_page_rows_patch(
 			fax: string_field(sender, &["fax"]),
 			email: string_field(sender, &["email"]),
 		};
-		if let Some(id) = uuid_field(sender, &["id"]) {
+		let existing_sender_id = SenderInformationBmc::list(
+			ctx,
+			mm,
+			Some(vec![SenderInformationFilter {
+				case_id: Some(uuid_eq(case_id)),
+			}]),
+			Some(ListOptions::default()),
+		)
+		.await?
+		.first()
+		.map(|row| row.id);
+		if let Some(id) = uuid_field(sender, &["id"]).or(existing_sender_id) {
 			SenderInformationBmc::update(ctx, mm, id, update).await?;
 		} else {
 			SenderInformationBmc::create(
@@ -905,6 +1531,61 @@ async fn apply_sd_page_rows_patch(
 			.await?;
 		}
 	}
+	if let Some(receiver) =
+		optional_row_object(page_id, rows, "receiverInformation")?
+	{
+		let update = ReceiverInformationForUpdate {
+			receiver_type: string_field(
+				receiver,
+				&["receiverType", "receiver_type"],
+			),
+			organization_name: string_field(
+				receiver,
+				&["organizationName", "organization_name"],
+			),
+			department: string_field(receiver, &["department"]),
+			street_address: string_field(
+				receiver,
+				&["streetAddress", "street_address"],
+			),
+			city: string_field(receiver, &["city"]),
+			state_province: string_field(
+				receiver,
+				&["stateProvince", "state_province"],
+			),
+			postcode: string_field(receiver, &["postcode"]),
+			country_code: string_field(receiver, &["countryCode", "country_code"]),
+			telephone: string_field(receiver, &["telephone"]),
+			fax: string_field(receiver, &["fax"]),
+			email: string_field(receiver, &["email"]),
+		};
+		if ReceiverInformationBmc::get_by_case_optional(ctx, mm, case_id)
+			.await?
+			.is_some()
+		{
+			ReceiverInformationBmc::update_by_case(ctx, mm, case_id, update).await?;
+		} else {
+			ReceiverInformationBmc::create(
+				ctx,
+				mm,
+				ReceiverInformationForCreate {
+					case_id,
+					receiver_type: update.receiver_type,
+					organization_name: update.organization_name,
+					department: update.department,
+					street_address: update.street_address,
+					city: update.city,
+					state_province: update.state_province,
+					postcode: update.postcode,
+					country_code: update.country_code,
+					telephone: update.telephone,
+					fax: update.fax,
+					email: update.email,
+				},
+			)
+			.await?;
+		}
+	}
 	Ok(())
 }
 
@@ -916,50 +1597,65 @@ async fn apply_lr_page_rows_patch(
 	rows: &BTreeMap<String, Value>,
 ) -> Result<()> {
 	reject_unknown_row_keys(page_id, rows, &["literatureReferences"])?;
-	let Some(reference) =
-		optional_first_row_object(page_id, rows, "literatureReferences")?
-	else {
+	let Some(value) = rows.get("literatureReferences") else {
 		return Ok(());
 	};
-	let update = LiteratureReferenceForUpdate {
-		reference_text: string_field(
-			reference,
-			&["referenceText", "reference_text"],
-		),
-		reference_text_null_flavor: string_field(
-			reference,
-			&["referenceTextNullFlavor", "reference_text_null_flavor"],
-		),
-		sequence_number: i32_field(
-			reference,
-			&["sequenceNumber", "sequence_number"],
-		),
-		document_base64: string_field(
-			reference,
-			&["documentBase64", "document_base64"],
-		),
-		media_type: string_field(reference, &["mediaType", "media_type"]),
-		representation: string_field(reference, &["representation"]),
-		compression: string_field(reference, &["compression"]),
+	let Some(references) = value.as_array() else {
+		return Err(Error::BadRequest {
+			message: format!("{page_id}.literatureReferences must be an array"),
+		});
 	};
-	if let Some(id) = uuid_field(reference, &["id"]) {
-		LiteratureReferenceBmc::update(ctx, mm, id, update).await?;
-	} else if let Some(reference_text) = update.reference_text {
-		LiteratureReferenceBmc::create(
-			ctx,
-			mm,
-			LiteratureReferenceForCreate {
-				case_id,
-				reference_text,
-				reference_text_null_flavor: update.reference_text_null_flavor,
-				sequence_number: update.sequence_number.unwrap_or(1),
-				document_base64: update.document_base64,
-				media_type: update.media_type,
-				representation: update.representation,
-				compression: update.compression,
-			},
-		)
-		.await?;
+	for (index, value) in references.iter().enumerate() {
+		let reference = as_object(page_id, "literatureReferences", value)?;
+		let id = uuid_field(reference, &["id"]);
+		if bool_field(reference, &["deleted", "_delete"]) == Some(true) {
+			if let Some(id) = id {
+				LiteratureReferenceBmc::delete(ctx, mm, id).await?;
+			}
+			continue;
+		}
+		let update = LiteratureReferenceForUpdate {
+			reference_text: string_field(
+				reference,
+				&["referenceText", "reference_text"],
+			),
+			reference_text_null_flavor: string_field(
+				reference,
+				&["referenceTextNullFlavor", "reference_text_null_flavor"],
+			),
+			sequence_number: i32_field(
+				reference,
+				&["sequenceNumber", "sequence_number"],
+			),
+			document_base64: string_field(
+				reference,
+				&["documentBase64", "document_base64"],
+			),
+			media_type: string_field(reference, &["mediaType", "media_type"]),
+			representation: string_field(reference, &["representation"]),
+			compression: string_field(reference, &["compression"]),
+		};
+		if let Some(id) = id {
+			LiteratureReferenceBmc::update(ctx, mm, id, update).await?;
+		} else if let Some(reference_text) = update.reference_text {
+			LiteratureReferenceBmc::create(
+				ctx,
+				mm,
+				LiteratureReferenceForCreate {
+					case_id,
+					reference_text,
+					reference_text_null_flavor: update.reference_text_null_flavor,
+					sequence_number: update.sequence_number.unwrap_or_else(|| {
+						i32::try_from(index + 1).unwrap_or(i32::MAX)
+					}),
+					document_base64: update.document_base64,
+					media_type: update.media_type,
+					representation: update.representation,
+					compression: update.compression,
+				},
+			)
+			.await?;
+		}
 	}
 	Ok(())
 }
@@ -976,68 +1672,215 @@ async fn apply_si_page_rows_patch(
 		rows,
 		&["studyInformation", "studyRegistrationNumbers"],
 	)?;
-	let Some(study) = optional_row_object(page_id, rows, "studyInformation")? else {
-		return Ok(());
-	};
-	let update = StudyInformationForUpdate {
-		source_study_presave_id: uuid_field(
-			study,
-			&["sourceStudyPresaveId", "source_study_presave_id"],
-		),
-		study_name: string_field(study, &["studyName", "study_name"]),
-		study_name_null_flavor: string_field(
-			study,
-			&["studyNameNullFlavor", "study_name_null_flavor"],
-		),
-		sponsor_study_number: string_field(
-			study,
-			&["sponsorStudyNumber", "sponsor_study_number"],
-		),
-		sponsor_study_number_null_flavor: string_field(
-			study,
-			&[
-				"sponsorStudyNumberNullFlavor",
-				"sponsor_study_number_null_flavor",
-			],
-		),
-		study_type_reaction: string_field(
-			study,
-			&["studyTypeReaction", "study_type_reaction"],
-		),
-		study_type_reaction_kr1: string_field(
-			study,
-			&["studyTypeReactionKr1", "study_type_reaction_kr1"],
-		),
-		fda_ind_number_occurred: string_field(
-			study,
-			&["fdaIndNumberOccurred", "fda_ind_number_occurred"],
-		),
-		fda_pre_anda_number_occurred: string_field(
-			study,
-			&["fdaPreAndaNumberOccurred", "fda_pre_anda_number_occurred"],
-		),
-	};
-	if let Some(id) = uuid_field(study, &["id"]) {
-		StudyInformationBmc::update(ctx, mm, id, update).await?;
+	let study = optional_row_object(page_id, rows, "studyInformation")?;
+	let study_id = if let Some(study) = study {
+		let update = StudyInformationForUpdate {
+			source_study_presave_id: uuid_field(
+				study,
+				&["sourceStudyPresaveId", "source_study_presave_id"],
+			),
+			study_name: string_field(study, &["studyName", "study_name"]),
+			study_name_null_flavor: string_field(
+				study,
+				&["studyNameNullFlavor", "study_name_null_flavor"],
+			),
+			sponsor_study_number: string_field(
+				study,
+				&["sponsorStudyNumber", "sponsor_study_number"],
+			),
+			sponsor_study_number_null_flavor: string_field(
+				study,
+				&[
+					"sponsorStudyNumberNullFlavor",
+					"sponsor_study_number_null_flavor",
+				],
+			),
+			study_type_reaction: string_field(
+				study,
+				&["studyTypeReaction", "study_type_reaction"],
+			),
+			study_type_reaction_kr1: string_field(
+				study,
+				&["studyTypeReactionKr1", "study_type_reaction_kr1"],
+			),
+			fda_ind_number_occurred: string_field(
+				study,
+				&["fdaIndNumberOccurred", "fda_ind_number_occurred"],
+			),
+			fda_pre_anda_number_occurred: string_field(
+				study,
+				&["fdaPreAndaNumberOccurred", "fda_pre_anda_number_occurred"],
+			),
+		};
+		if let Some(id) = uuid_field(study, &["id"]) {
+			StudyInformationBmc::update(ctx, mm, id, update).await?;
+			id
+		} else {
+			StudyInformationBmc::create(
+				ctx,
+				mm,
+				StudyInformationForCreate {
+					case_id,
+					source_study_presave_id: update.source_study_presave_id,
+					study_name: update.study_name,
+					study_name_null_flavor: update.study_name_null_flavor,
+					sponsor_study_number: update.sponsor_study_number,
+					sponsor_study_number_null_flavor: update
+						.sponsor_study_number_null_flavor,
+					study_type_reaction: update.study_type_reaction,
+					study_type_reaction_kr1: update.study_type_reaction_kr1,
+					fda_ind_number_occurred: update.fda_ind_number_occurred,
+					fda_pre_anda_number_occurred: update
+						.fda_pre_anda_number_occurred,
+				},
+			)
+			.await?
+		}
 	} else {
-		StudyInformationBmc::create(
+		let studies = StudyInformationBmc::list(
 			ctx,
 			mm,
-			StudyInformationForCreate {
-				case_id,
-				source_study_presave_id: update.source_study_presave_id,
-				study_name: update.study_name,
-				study_name_null_flavor: update.study_name_null_flavor,
-				sponsor_study_number: update.sponsor_study_number,
-				sponsor_study_number_null_flavor: update
-					.sponsor_study_number_null_flavor,
-				study_type_reaction: update.study_type_reaction,
-				study_type_reaction_kr1: update.study_type_reaction_kr1,
-				fda_ind_number_occurred: update.fda_ind_number_occurred,
-				fda_pre_anda_number_occurred: update.fda_pre_anda_number_occurred,
-			},
+			Some(vec![StudyInformationFilter {
+				case_id: Some(uuid_eq(case_id)),
+			}]),
+			Some(ListOptions::default()),
 		)
 		.await?;
+		let Some(study) = studies.into_iter().min_by_key(|study| study.created_at)
+		else {
+			if rows.contains_key("studyRegistrationNumbers") {
+				return Err(Error::BadRequest {
+					message: format!(
+						"{page_id}.studyInformation is required before child rows"
+					),
+				});
+			}
+			return Ok(());
+		};
+		study.id
+	};
+
+	if let Some(value) = rows.get("studyRegistrationNumbers") {
+		let Some(registrations) = value.as_array() else {
+			return Err(Error::BadRequest {
+				message: format!(
+					"{page_id}.studyRegistrationNumbers must be an array"
+				),
+			});
+		};
+		for (index, value) in registrations.iter().enumerate() {
+			let registration =
+				as_object(page_id, "studyRegistrationNumbers", value)?;
+			let id = uuid_field(registration, &["id"]);
+			if bool_field(registration, &["deleted", "_delete"]) == Some(true) {
+				if let Some(id) = id {
+					StudyRegistrationNumberBmc::delete(ctx, mm, id).await?;
+				}
+				continue;
+			}
+			let update = StudyRegistrationNumberForUpdate {
+				registration_number: string_field(
+					registration,
+					&["registrationNumber", "registration_number"],
+				),
+				registration_number_null_flavor: string_field(
+					registration,
+					&[
+						"registrationNumberNullFlavor",
+						"registration_number_null_flavor",
+					],
+				),
+				country_code: string_field(
+					registration,
+					&["countryCode", "country_code"],
+				),
+				country_code_null_flavor: string_field(
+					registration,
+					&["countryCodeNullFlavor", "country_code_null_flavor"],
+				),
+				sequence_number: i32_field(
+					registration,
+					&["sequenceNumber", "sequence_number"],
+				),
+			};
+			if let Some(id) = id {
+				StudyRegistrationNumberBmc::update(ctx, mm, id, update).await?;
+			} else if let Some(registration_number) = update.registration_number {
+				StudyRegistrationNumberBmc::create(
+					ctx,
+					mm,
+					StudyRegistrationNumberForCreate {
+						study_information_id: study_id,
+						registration_number,
+						registration_number_null_flavor: update
+							.registration_number_null_flavor,
+						country_code: update.country_code,
+						country_code_null_flavor: update.country_code_null_flavor,
+						sequence_number: update.sequence_number.unwrap_or_else(
+							|| i32::try_from(index + 1).unwrap_or(i32::MAX),
+						),
+					},
+				)
+				.await?;
+			}
+		}
+	}
+
+	if let Some(study) = study {
+		if let Some(value) = study
+			.get("fdaCrossReportedIndNumbers")
+			.or_else(|| study.get("fda_cross_reported_ind_numbers"))
+		{
+			let Some(numbers) = value.as_array() else {
+				return Err(Error::BadRequest {
+					message: format!(
+						"{page_id}.studyInformation.fdaCrossReportedIndNumbers must be an array"
+					),
+				});
+			};
+			for (index, value) in numbers.iter().enumerate() {
+				let number = as_object(
+					page_id,
+					"studyInformation.fdaCrossReportedIndNumbers",
+					value,
+				)?;
+				let id = uuid_field(number, &["id"]);
+				if bool_field(number, &["deleted", "_delete"]) == Some(true) {
+					if let Some(id) = id {
+						StudyFdaCrossReportedIndBmc::delete(ctx, mm, id).await?;
+					}
+					continue;
+				}
+				let update = StudyFdaCrossReportedIndForUpdate {
+					ind_number: string_field(number, &["indNumber", "ind_number"]),
+					ind_number_null_flavor: string_field(
+						number,
+						&["indNumberNullFlavor", "ind_number_null_flavor"],
+					),
+					sequence_number: i32_field(
+						number,
+						&["sequenceNumber", "sequence_number"],
+					),
+				};
+				if let Some(id) = id {
+					StudyFdaCrossReportedIndBmc::update(ctx, mm, id, update).await?;
+				} else {
+					StudyFdaCrossReportedIndBmc::create(
+						ctx,
+						mm,
+						StudyFdaCrossReportedIndForCreate {
+							study_information_id: study_id,
+							ind_number: update.ind_number,
+							ind_number_null_flavor: update.ind_number_null_flavor,
+							sequence_number: update.sequence_number.unwrap_or_else(
+								|| i32::try_from(index + 1).unwrap_or(i32::MAX),
+							),
+						},
+					)
+					.await?;
+				}
+			}
+		}
 	}
 	Ok(())
 }
@@ -1064,129 +1907,887 @@ async fn apply_dm_page_rows_patch(
 			"parentPastDrugs",
 		],
 	)?;
-	let Some(patient) = optional_row_object(page_id, rows, "patientInformation")?
-	else {
-		return Ok(());
-	};
-	let update = PatientInformationForUpdate {
-		patient_initials: string_field(
-			patient,
-			&["patientInitials", "patient_initials"],
-		),
-		patient_initials_null_flavor: string_field(
-			patient,
-			&["patientInitialsNullFlavor", "patient_initials_null_flavor"],
-		),
-		birth_date: None,
-		birth_date_null_flavor: string_field(
-			patient,
-			&["birthDateNullFlavor", "birth_date_null_flavor"],
-		),
-		age_at_time_of_onset: None,
-		age_at_time_of_onset_null_flavor: string_field(
-			patient,
-			&[
-				"ageAtTimeOfOnsetNullFlavor",
-				"age_at_time_of_onset_null_flavor",
-			],
-		),
-		age_unit: string_field(patient, &["ageUnit", "age_unit"]),
-		gestation_period: None,
-		gestation_period_unit: string_field(
-			patient,
-			&["gestationPeriodUnit", "gestation_period_unit"],
-		),
-		age_group: string_field(patient, &["ageGroup", "age_group"]),
-		weight_kg: None,
-		weight_kg_null_flavor: string_field(
-			patient,
-			&["weightKgNullFlavor", "weight_kg_null_flavor"],
-		),
-		height_cm: None,
-		height_cm_null_flavor: string_field(
-			patient,
-			&["heightCmNullFlavor", "height_cm_null_flavor"],
-		),
-		sex: string_field(patient, &["sex"]),
-		sex_null_flavor: string_field(
-			patient,
-			&["sexNullFlavor", "sex_null_flavor"],
-		),
-		race_code: string_field(patient, &["raceCode", "race_code"]),
-		race_code_null_flavor: string_field(
-			patient,
-			&["raceCodeNullFlavor", "race_code_null_flavor"],
-		),
-		ethnicity_code: string_field(patient, &["ethnicityCode", "ethnicity_code"]),
-		ethnicity_code_null_flavor: string_field(
-			patient,
-			&["ethnicityCodeNullFlavor", "ethnicity_code_null_flavor"],
-		),
-		last_menstrual_period_date: None,
-		last_menstrual_period_date_null_flavor: string_field(
-			patient,
-			&[
-				"lastMenstrualPeriodDateNullFlavor",
-				"last_menstrual_period_date_null_flavor",
-			],
-		),
-		medical_history_text: string_field(
-			patient,
-			&["medicalHistoryText", "medical_history_text"],
-		),
-		medical_history_text_null_flavor: string_field(
-			patient,
-			&[
-				"medicalHistoryTextNullFlavor",
-				"medical_history_text_null_flavor",
-			],
-		),
-		concomitant_therapy: None,
-	};
-	match PatientInformationBmc::get_by_case(ctx, mm, case_id).await {
-		Ok(_) => {
-			PatientInformationBmc::update_by_case(ctx, mm, case_id, update).await?
+	let patient = optional_row_object(page_id, rows, "patientInformation")?;
+	fn value_at_path<'a>(
+		row: &'a Map<String, Value>,
+		paths: &[&str],
+	) -> Option<&'a Value> {
+		'paths: for path in paths {
+			let mut segments = path.split('.');
+			let Some(first) = segments.next() else {
+				continue;
+			};
+			let Some(mut value) = row.get(first) else {
+				continue;
+			};
+			for segment in segments {
+				let Some(next) =
+					value.as_object().and_then(|object| object.get(segment))
+				else {
+					continue 'paths;
+				};
+				value = next;
+			}
+			return Some(value);
 		}
-		Err(lib_core::model::Error::EntityUuidNotFound { .. }) => {
-			PatientInformationBmc::create(
-				ctx,
-				mm,
-				PatientInformationForCreate {
-					case_id,
-					patient_initials: update.patient_initials,
-					patient_initials_null_flavor: update
-						.patient_initials_null_flavor,
-					birth_date: None,
-					birth_date_null_flavor: update.birth_date_null_flavor,
-					age_at_time_of_onset: None,
-					age_at_time_of_onset_null_flavor: update
-						.age_at_time_of_onset_null_flavor,
-					age_unit: update.age_unit,
-					gestation_period: None,
-					gestation_period_unit: update.gestation_period_unit,
-					age_group: update.age_group,
-					weight_kg: None,
-					weight_kg_null_flavor: update.weight_kg_null_flavor,
-					height_cm: None,
-					height_cm_null_flavor: update.height_cm_null_flavor,
-					sex: update.sex,
-					sex_null_flavor: update.sex_null_flavor,
-					race_code: update.race_code,
-					race_code_null_flavor: update.race_code_null_flavor,
-					ethnicity_code: update.ethnicity_code,
-					ethnicity_code_null_flavor: update.ethnicity_code_null_flavor,
-					last_menstrual_period_date: None,
-					last_menstrual_period_date_null_flavor: update
-						.last_menstrual_period_date_null_flavor,
-					medical_history_text: update.medical_history_text,
-					medical_history_text_null_flavor: update
-						.medical_history_text_null_flavor,
-					concomitant_therapy: None,
-				},
+		None
+	}
+	fn decimal_field(
+		page_id: &str,
+		row: &Map<String, Value>,
+		paths: &[&str],
+	) -> Result<Option<Decimal>> {
+		let Some(value) = value_at_path(row, paths) else {
+			return Ok(None);
+		};
+		if value.is_null() {
+			return Ok(None);
+		}
+		Decimal::from_str(&value.to_string())
+			.map(Some)
+			.map_err(|_| Error::BadRequest {
+				message: format!(
+					"{page_id}.{} must be a decimal number or null",
+					paths[0]
+				),
+			})
+	}
+	fn date_field(
+		page_id: &str,
+		row: &Map<String, Value>,
+		paths: &[&str],
+	) -> Result<Option<sqlx::types::time::Date>> {
+		let Some(value) = value_at_path(row, paths) else {
+			return Ok(None);
+		};
+		serde_json::from_value::<CiDatePatchValue>(json!({"value": value}))
+			.map(|parsed| parsed.value)
+			.map_err(|err| Error::BadRequest {
+				message: format!(
+					"{page_id}.{} must be an E2B date or null: {err}",
+					paths[0]
+				),
+			})
+	}
+	fn boolean_field(row: &Map<String, Value>, paths: &[&str]) -> Option<bool> {
+		value_at_path(row, paths).and_then(Value::as_bool)
+	}
+	fn nested_string_field(
+		row: &Map<String, Value>,
+		paths: &[&str],
+	) -> Option<String> {
+		value_at_path(row, paths)
+			.filter(|value| !value.is_null())
+			.map(|value| {
+				value
+					.as_str()
+					.map(ToOwned::to_owned)
+					.unwrap_or_else(|| value.to_string())
+			})
+	}
+	let patient_id = if let Some(patient) = patient {
+		let update = PatientInformationForUpdate {
+			patient_initials: string_field(
+				patient,
+				&["patientInitials", "patient_initials"],
+			),
+			patient_initials_null_flavor: string_field(
+				patient,
+				&["patientInitialsNullFlavor", "patient_initials_null_flavor"],
+			),
+			birth_date: date_field(
+				page_id,
+				patient,
+				&["patientBirthDate", "birth_date"],
+			)?,
+			birth_date_null_flavor: string_field(
+				patient,
+				&["birthDateNullFlavor", "birth_date_null_flavor"],
+			),
+			age_at_time_of_onset: decimal_field(
+				page_id,
+				patient,
+				&[
+					"patientAge.value",
+					"ageAtTimeOfOnset",
+					"age_at_time_of_onset",
+				],
+			)?,
+			age_at_time_of_onset_null_flavor: string_field(
+				patient,
+				&[
+					"ageAtTimeOfOnsetNullFlavor",
+					"age_at_time_of_onset_null_flavor",
+				],
+			),
+			age_unit: nested_string_field(
+				patient,
+				&["patientAge.unit", "ageUnit", "age_unit"],
+			),
+			gestation_period: decimal_field(
+				page_id,
+				patient,
+				&["gestationPeriod.value", "gestation_period"],
+			)?,
+			gestation_period_unit: nested_string_field(
+				patient,
+				&[
+					"gestationPeriod.unit",
+					"gestationPeriodUnit",
+					"gestation_period_unit",
+				],
+			),
+			age_group: string_field(
+				patient,
+				&["patientAgeGroup", "ageGroup", "age_group"],
+			),
+			weight_kg: decimal_field(
+				page_id,
+				patient,
+				&["patientWeight.value", "weightKg", "weight_kg"],
+			)?,
+			weight_kg_null_flavor: string_field(
+				patient,
+				&["weightKgNullFlavor", "weight_kg_null_flavor"],
+			),
+			height_cm: decimal_field(
+				page_id,
+				patient,
+				&["patientHeight.value", "heightCm", "height_cm"],
+			)?,
+			height_cm_null_flavor: string_field(
+				patient,
+				&["heightCmNullFlavor", "height_cm_null_flavor"],
+			),
+			sex: string_field(patient, &["patientSex", "sex"]),
+			sex_null_flavor: string_field(
+				patient,
+				&["sexNullFlavor", "sex_null_flavor"],
+			),
+			race_code: string_field(patient, &["raceCode", "race_code"]),
+			race_code_null_flavor: string_field(
+				patient,
+				&["raceCodeNullFlavor", "race_code_null_flavor"],
+			),
+			ethnicity_code: string_field(
+				patient,
+				&["ethnicityCode", "ethnicity_code"],
+			),
+			ethnicity_code_null_flavor: string_field(
+				patient,
+				&["ethnicityCodeNullFlavor", "ethnicity_code_null_flavor"],
+			),
+			last_menstrual_period_date: date_field(
+				page_id,
+				patient,
+				&["lastMenstrualPeriodDate", "last_menstrual_period_date"],
+			)?,
+			last_menstrual_period_date_null_flavor: string_field(
+				patient,
+				&[
+					"lastMenstrualPeriodDateNullFlavor",
+					"last_menstrual_period_date_null_flavor",
+				],
+			),
+			medical_history_text: string_field(
+				patient,
+				&["medicalHistoryText", "medical_history_text"],
+			),
+			medical_history_text_null_flavor: string_field(
+				patient,
+				&[
+					"medicalHistoryTextNullFlavor",
+					"medical_history_text_null_flavor",
+				],
+			),
+			concomitant_therapy: boolean_field(
+				patient,
+				&["concomitantTherapies", "concomitant_therapy"],
+			),
+		};
+		match PatientInformationBmc::get_by_case(ctx, mm, case_id).await {
+			Ok(entity) => {
+				PatientInformationBmc::update_by_case(ctx, mm, case_id, update)
+					.await?;
+				entity.id
+			}
+			Err(lib_core::model::Error::EntityUuidNotFound { .. }) => {
+				PatientInformationBmc::create(
+					ctx,
+					mm,
+					PatientInformationForCreate {
+						case_id,
+						patient_initials: update.patient_initials,
+						patient_initials_null_flavor: update
+							.patient_initials_null_flavor,
+						birth_date: update.birth_date,
+						birth_date_null_flavor: update.birth_date_null_flavor,
+						age_at_time_of_onset: update.age_at_time_of_onset,
+						age_at_time_of_onset_null_flavor: update
+							.age_at_time_of_onset_null_flavor,
+						age_unit: update.age_unit,
+						gestation_period: update.gestation_period,
+						gestation_period_unit: update.gestation_period_unit,
+						age_group: update.age_group,
+						weight_kg: update.weight_kg,
+						weight_kg_null_flavor: update.weight_kg_null_flavor,
+						height_cm: update.height_cm,
+						height_cm_null_flavor: update.height_cm_null_flavor,
+						sex: update.sex,
+						sex_null_flavor: update.sex_null_flavor,
+						race_code: update.race_code,
+						race_code_null_flavor: update.race_code_null_flavor,
+						ethnicity_code: update.ethnicity_code,
+						ethnicity_code_null_flavor: update
+							.ethnicity_code_null_flavor,
+						last_menstrual_period_date: update
+							.last_menstrual_period_date,
+						last_menstrual_period_date_null_flavor: update
+							.last_menstrual_period_date_null_flavor,
+						medical_history_text: update.medical_history_text,
+						medical_history_text_null_flavor: update
+							.medical_history_text_null_flavor,
+						concomitant_therapy: update.concomitant_therapy,
+					},
+				)
+				.await?
+			}
+			Err(err) => return Err(err.into()),
+		}
+	} else {
+		match PatientInformationBmc::get_by_case(ctx, mm, case_id).await {
+			Ok(entity) => entity.id,
+			Err(lib_core::model::Error::EntityUuidNotFound { .. }) => {
+				return Err(Error::BadRequest {
+					message: format!(
+						"{page_id}.patientInformation is required before dependent rows"
+					),
+				});
+			}
+			Err(err) => return Err(err.into()),
+		}
+	};
+
+	if let Some(value) = rows.get("medicalHistoryEpisodes") {
+		let Some(episodes) = value.as_array() else {
+			return Err(Error::BadRequest {
+				message: format!(
+					"{page_id}.medicalHistoryEpisodes must be an array"
+				),
+			});
+		};
+		for (index, value) in episodes.iter().enumerate() {
+			let episode = as_object(page_id, "medicalHistoryEpisodes", value)?;
+			let id = uuid_field(episode, &["id"]);
+			if bool_field(episode, &["deleted", "_delete"]) == Some(true) {
+				if let Some(id) = id {
+					MedicalHistoryEpisodeBmc::delete(ctx, mm, id).await?;
+				}
+				continue;
+			}
+			let meddra_version =
+				string_field(episode, &["meddraVersion", "meddra_version"]);
+			let meddra_code = string_field(episode, &["meddraCode", "meddra_code"]);
+			let start_date =
+				date_field(page_id, episode, &["startDate", "start_date"])?;
+			let start_date_null_flavor = string_field(
+				episode,
+				&["startDateNullFlavor", "start_date_null_flavor"],
+			);
+			let continuing = bool_field(episode, &["continuing"]);
+			let continuing_null_flavor = string_field(
+				episode,
+				&["continuingNullFlavor", "continuing_null_flavor"],
+			);
+			let end_date = date_field(page_id, episode, &["endDate", "end_date"])?;
+			let end_date_null_flavor = string_field(
+				episode,
+				&["endDateNullFlavor", "end_date_null_flavor"],
+			);
+			let comments = string_field(episode, &["comments"]);
+			let family_history =
+				bool_field(episode, &["familyHistory", "family_history"]);
+			let update = MedicalHistoryEpisodeForUpdate {
+				meddra_version,
+				meddra_code: meddra_code.clone(),
+				start_date,
+				start_date_null_flavor: start_date_null_flavor.clone(),
+				continuing,
+				continuing_null_flavor: continuing_null_flavor.clone(),
+				end_date,
+				end_date_null_flavor: end_date_null_flavor.clone(),
+				comments,
+				family_history,
+			};
+			let id = if let Some(id) = id {
+				id
+			} else {
+				MedicalHistoryEpisodeBmc::create(
+					ctx,
+					mm,
+					MedicalHistoryEpisodeForCreate {
+						patient_id,
+						sequence_number: i32_field(
+							episode,
+							&["sequenceNumber", "sequence_number"],
+						)
+						.unwrap_or_else(|| {
+							i32::try_from(index + 1).unwrap_or(i32::MAX)
+						}),
+						meddra_code,
+						start_date_null_flavor,
+						continuing_null_flavor,
+						end_date_null_flavor,
+					},
+				)
+				.await?
+			};
+			MedicalHistoryEpisodeBmc::update(ctx, mm, id, update).await?;
+		}
+	}
+
+	if let Some(value) = rows.get("patientIdentifiers") {
+		let Some(identifier_rows) = value.as_array() else {
+			return Err(Error::BadRequest {
+				message: format!("{page_id}.patientIdentifiers must be an array"),
+			});
+		};
+		for (index, value) in identifier_rows.iter().enumerate() {
+			let identifier = as_object(page_id, "patientIdentifiers", value)?;
+			let id = uuid_field(identifier, &["id"]);
+			if bool_field(identifier, &["deleted", "_delete"]) == Some(true) {
+				if let Some(id) = id {
+					PatientIdentifierBmc::delete(ctx, mm, id).await?;
+				}
+				continue;
+			}
+			let identifier_type_code = string_field(
+				identifier,
+				&["identifierTypeCode", "identifier_type_code"],
+			);
+			let update = PatientIdentifierForUpdate {
+				identifier_type_code: identifier_type_code.clone(),
+				identifier_value: string_field(
+					identifier,
+					&["identifierValue", "identifier_value"],
+				),
+				identifier_value_null_flavor: string_field(
+					identifier,
+					&["identifierValueNullFlavor", "identifier_value_null_flavor"],
+				),
+			};
+			if let Some(id) = id {
+				PatientIdentifierBmc::update(ctx, mm, id, update).await?;
+			} else {
+				let identifier_type_code =
+					identifier_type_code.ok_or_else(|| Error::BadRequest {
+						message: format!(
+							"{page_id}.patientIdentifiers.identifierTypeCode is required"
+						),
+					})?;
+				PatientIdentifierBmc::create(
+					ctx,
+					mm,
+					PatientIdentifierForCreate {
+						patient_id,
+						sequence_number: i32_field(
+							identifier,
+							&["sequenceNumber", "sequence_number"],
+						)
+						.unwrap_or_else(|| {
+							i32::try_from(index + 1).unwrap_or(i32::MAX)
+						}),
+						identifier_type_code,
+						identifier_value: update.identifier_value,
+						identifier_value_null_flavor: update
+							.identifier_value_null_flavor,
+					},
+				)
+				.await?;
+			}
+		}
+	}
+
+	let death_info_row = optional_row_object(page_id, rows, "deathInfo")?;
+	let has_death_children =
+		rows.contains_key("reportedCauses") || rows.contains_key("autopsyCauses");
+	let existing_death_info = PatientDeathInformationBmc::list(
+		ctx,
+		mm,
+		Some(vec![PatientDeathInformationFilter {
+			patient_id: Some(uuid_eq(patient_id)),
+		}]),
+		Some(ListOptions::default()),
+	)
+	.await?
+	.into_iter()
+	.next();
+	let death_info_id = if let Some(death_info) = death_info_row {
+		let update = PatientDeathInformationForUpdate {
+			date_of_death: date_field(
+				page_id,
+				death_info,
+				&["dateOfDeath", "date_of_death"],
+			)?,
+			date_of_death_null_flavor: string_field(
+				death_info,
+				&["dateOfDeathNullFlavor", "date_of_death_null_flavor"],
+			),
+			autopsy_performed: bool_field(
+				death_info,
+				&["autopsyPerformed", "autopsy_performed"],
+			),
+			autopsy_performed_null_flavor: string_field(
+				death_info,
+				&[
+					"autopsyPerformedNullFlavor",
+					"autopsy_performed_null_flavor",
+				],
+			),
+		};
+		if let Some(existing) = existing_death_info {
+			PatientDeathInformationBmc::update(ctx, mm, existing.id, update).await?;
+			Some(existing.id)
+		} else {
+			Some(
+				PatientDeathInformationBmc::create(
+					ctx,
+					mm,
+					PatientDeathInformationForCreate {
+						patient_id,
+						date_of_death: update.date_of_death,
+						date_of_death_null_flavor: update.date_of_death_null_flavor,
+						autopsy_performed: update.autopsy_performed,
+						autopsy_performed_null_flavor: update
+							.autopsy_performed_null_flavor,
+					},
+				)
+				.await?,
 			)
-			.await?;
 		}
-		Err(err) => return Err(err.into()),
+	} else {
+		existing_death_info.map(|row| row.id)
+	};
+
+	if has_death_children && death_info_id.is_none() {
+		return Err(Error::BadRequest {
+			message: format!(
+				"{page_id}.deathInfo is required before death cause rows"
+			),
+		});
+	}
+	let death_info_id = death_info_id.unwrap_or(Uuid::nil());
+
+	if let Some(value) = rows.get("reportedCauses") {
+		let Some(causes) = value.as_array() else {
+			return Err(Error::BadRequest {
+				message: format!("{page_id}.reportedCauses must be an array"),
+			});
+		};
+		for (index, value) in causes.iter().enumerate() {
+			let cause = as_object(page_id, "reportedCauses", value)?;
+			let id = uuid_field(cause, &["id"]);
+			if bool_field(cause, &["deleted", "_delete"]) == Some(true) {
+				if let Some(id) = id {
+					ReportedCauseOfDeathBmc::delete(ctx, mm, id).await?;
+				}
+				continue;
+			}
+			let update = ReportedCauseOfDeathForUpdate {
+				meddra_version: string_field(
+					cause,
+					&["meddraVersion", "meddra_version"],
+				),
+				meddra_code: string_field(cause, &["meddraCode", "meddra_code"]),
+				comments: string_field(cause, &["causeText", "comments"]),
+			};
+			if let Some(id) = id {
+				ReportedCauseOfDeathBmc::update(ctx, mm, id, update).await?;
+			} else {
+				ReportedCauseOfDeathBmc::create(
+					ctx,
+					mm,
+					ReportedCauseOfDeathForCreate {
+						death_info_id,
+						sequence_number: i32_field(
+							cause,
+							&["sequenceNumber", "sequence_number"],
+						)
+						.unwrap_or_else(|| {
+							i32::try_from(index + 1).unwrap_or(i32::MAX)
+						}),
+						meddra_version: update.meddra_version,
+						meddra_code: update.meddra_code,
+						comments: update.comments,
+					},
+				)
+				.await?;
+			}
+		}
+	}
+
+	if let Some(value) = rows.get("autopsyCauses") {
+		let Some(causes) = value.as_array() else {
+			return Err(Error::BadRequest {
+				message: format!("{page_id}.autopsyCauses must be an array"),
+			});
+		};
+		for (index, value) in causes.iter().enumerate() {
+			let cause = as_object(page_id, "autopsyCauses", value)?;
+			let id = uuid_field(cause, &["id"]);
+			if bool_field(cause, &["deleted", "_delete"]) == Some(true) {
+				if let Some(id) = id {
+					AutopsyCauseOfDeathBmc::delete(ctx, mm, id).await?;
+				}
+				continue;
+			}
+			let update = AutopsyCauseOfDeathForUpdate {
+				meddra_version: string_field(
+					cause,
+					&["meddraVersion", "meddra_version"],
+				),
+				meddra_code: string_field(cause, &["meddraCode", "meddra_code"]),
+				comments: string_field(cause, &["causeText", "comments"]),
+			};
+			if let Some(id) = id {
+				AutopsyCauseOfDeathBmc::update(ctx, mm, id, update).await?;
+			} else {
+				AutopsyCauseOfDeathBmc::create(
+					ctx,
+					mm,
+					AutopsyCauseOfDeathForCreate {
+						death_info_id,
+						sequence_number: i32_field(
+							cause,
+							&["sequenceNumber", "sequence_number"],
+						)
+						.unwrap_or_else(|| {
+							i32::try_from(index + 1).unwrap_or(i32::MAX)
+						}),
+						meddra_version: update.meddra_version,
+						meddra_code: update.meddra_code,
+						comments: update.comments,
+					},
+				)
+				.await?;
+			}
+		}
+	}
+
+	if let Some(parent) = optional_row_object(page_id, rows, "parentInfo")? {
+		let existing = ParentInformationBmc::list(
+			ctx,
+			mm,
+			Some(vec![ParentInformationFilter {
+				patient_id: Some(uuid_eq(patient_id)),
+				..Default::default()
+			}]),
+			Some(ListOptions::default()),
+		)
+		.await?
+		.into_iter()
+		.next();
+		if bool_field(parent, &["deleted", "_delete"]) == Some(true) {
+			if let Some(id) = uuid_field(parent, &["id"])
+				.or_else(|| existing.as_ref().map(|row| row.id))
+			{
+				ParentInformationBmc::delete(ctx, mm, id).await?;
+			}
+		} else {
+			let update = ParentInformationForUpdate {
+				parent_identification: string_field(
+					parent,
+					&["parentIdentification", "parent_identification"],
+				),
+				parent_birth_date: date_field(
+					page_id,
+					parent,
+					&["parentBirthDate", "parent_birth_date"],
+				)?,
+				parent_birth_date_null_flavor: string_field(
+					parent,
+					&["parentBirthDateNullFlavor", "parent_birth_date_null_flavor"],
+				),
+				parent_age: decimal_field(
+					page_id,
+					parent,
+					&["parentAge.value", "parent_age"],
+				)?,
+				parent_age_null_flavor: string_field(
+					parent,
+					&["parentAgeNullFlavor", "parent_age_null_flavor"],
+				),
+				parent_age_unit: nested_string_field(
+					parent,
+					&["parentAge.unit", "parentAgeUnit", "parent_age_unit"],
+				),
+				last_menstrual_period_date: date_field(
+					page_id,
+					parent,
+					&[
+						"parentLastMenstrualPeriodDate",
+						"last_menstrual_period_date",
+					],
+				)?,
+				last_menstrual_period_date_null_flavor: string_field(
+					parent,
+					&[
+						"parentLastMenstrualPeriodDateNullFlavor",
+						"last_menstrual_period_date_null_flavor",
+					],
+				),
+				weight_kg: decimal_field(
+					page_id,
+					parent,
+					&["parentWeight.value", "weight_kg"],
+				)?,
+				height_cm: decimal_field(
+					page_id,
+					parent,
+					&["parentHeight.value", "height_cm"],
+				)?,
+				sex: string_field(parent, &["parentSex", "sex"]),
+				medical_history_text: string_field(
+					parent,
+					&["medicalHistoryText", "medical_history_text"],
+				),
+			};
+			if let Some(existing) = existing {
+				ParentInformationBmc::update(ctx, mm, existing.id, update).await?;
+			} else {
+				ParentInformationBmc::create(
+					ctx,
+					mm,
+					ParentInformationForCreate {
+						patient_id,
+						parent_identification: update.parent_identification,
+						parent_birth_date: update.parent_birth_date,
+						parent_birth_date_null_flavor: update
+							.parent_birth_date_null_flavor,
+						parent_age: update.parent_age,
+						parent_age_null_flavor: update.parent_age_null_flavor,
+						parent_age_unit: update.parent_age_unit,
+						last_menstrual_period_date: update
+							.last_menstrual_period_date,
+						last_menstrual_period_date_null_flavor: update
+							.last_menstrual_period_date_null_flavor,
+						weight_kg: update.weight_kg,
+						height_cm: update.height_cm,
+						sex: update.sex,
+						medical_history_text: update.medical_history_text,
+					},
+				)
+				.await?;
+			}
+		}
+	}
+
+	if let Some(value) = rows.get("parentMedicalHistory") {
+		let Some(history_rows) = value.as_array() else {
+			return Err(Error::BadRequest {
+				message: format!("{page_id}.parentMedicalHistory must be an array"),
+			});
+		};
+		let parent_id = ParentInformationBmc::list(
+			ctx,
+			mm,
+			Some(vec![ParentInformationFilter {
+				patient_id: Some(uuid_eq(patient_id)),
+				..Default::default()
+			}]),
+			Some(ListOptions::default()),
+		)
+		.await?
+		.into_iter()
+		.next()
+		.map(|row| row.id)
+		.ok_or_else(|| Error::BadRequest {
+			message: format!(
+				"{page_id}.parentInfo is required before parent medical history"
+			),
+		})?;
+		for (index, value) in history_rows.iter().enumerate() {
+			let history = as_object(page_id, "parentMedicalHistory", value)?;
+			let id = uuid_field(history, &["id"]);
+			if bool_field(history, &["deleted", "_delete"]) == Some(true) {
+				if let Some(id) = id {
+					ParentMedicalHistoryBmc::delete(ctx, mm, id).await?;
+				}
+				continue;
+			}
+			let meddra_code = string_field(history, &["meddraCode", "meddra_code"]);
+			let start_date_null_flavor = string_field(
+				history,
+				&["startDateNullFlavor", "start_date_null_flavor"],
+			);
+			let end_date_null_flavor = string_field(
+				history,
+				&["endDateNullFlavor", "end_date_null_flavor"],
+			);
+			let update = ParentMedicalHistoryForUpdate {
+				meddra_version: string_field(
+					history,
+					&["meddraVersion", "meddra_version"],
+				),
+				meddra_code: meddra_code.clone(),
+				start_date: date_field(
+					page_id,
+					history,
+					&["startDate", "start_date"],
+				)?,
+				start_date_null_flavor: start_date_null_flavor.clone(),
+				continuing: bool_field(history, &["continuing"]),
+				end_date: date_field(page_id, history, &["endDate", "end_date"])?,
+				end_date_null_flavor: end_date_null_flavor.clone(),
+				comments: string_field(history, &["comments"]),
+			};
+			let id = if let Some(id) = id {
+				id
+			} else {
+				ParentMedicalHistoryBmc::create(
+					ctx,
+					mm,
+					ParentMedicalHistoryForCreate {
+						parent_id,
+						sequence_number: i32_field(
+							history,
+							&["sequenceNumber", "sequence_number"],
+						)
+						.unwrap_or_else(|| {
+							i32::try_from(index + 1).unwrap_or(i32::MAX)
+						}),
+						meddra_code,
+						start_date_null_flavor,
+						end_date_null_flavor,
+					},
+				)
+				.await?
+			};
+			ParentMedicalHistoryBmc::update(ctx, mm, id, update).await?;
+		}
+	}
+
+	if let Some(value) = rows.get("parentPastDrugs") {
+		let Some(drug_rows) = value.as_array() else {
+			return Err(Error::BadRequest {
+				message: format!("{page_id}.parentPastDrugs must be an array"),
+			});
+		};
+		let parent_id = ParentInformationBmc::list(
+			ctx,
+			mm,
+			Some(vec![ParentInformationFilter {
+				patient_id: Some(uuid_eq(patient_id)),
+				..Default::default()
+			}]),
+			Some(ListOptions::default()),
+		)
+		.await?
+		.into_iter()
+		.next()
+		.map(|row| row.id)
+		.ok_or_else(|| Error::BadRequest {
+			message: format!(
+				"{page_id}.parentInfo is required before parent past drug history"
+			),
+		})?;
+		for (index, value) in drug_rows.iter().enumerate() {
+			let drug = as_object(page_id, "parentPastDrugs", value)?;
+			let id = uuid_field(drug, &["id"]);
+			if bool_field(drug, &["deleted", "_delete"]) == Some(true) {
+				if let Some(id) = id {
+					ParentPastDrugHistoryBmc::delete(ctx, mm, id).await?;
+				}
+				continue;
+			}
+			let update = ParentPastDrugHistoryForUpdate {
+				drug_name: string_field(drug, &["drugName", "drug_name"]),
+				drug_name_null_flavor: string_field(
+					drug,
+					&["drugNameNullFlavor", "drug_name_null_flavor"],
+				),
+				mpid: string_field(drug, &["mpid"]),
+				mpid_version: string_field(drug, &["mpidVersion", "mpid_version"]),
+				mfds_medicinal_product_version: string_field(
+					drug,
+					&[
+						"mfdsMedicinalProductVersion",
+						"mfds_medicinal_product_version",
+					],
+				),
+				mfds_medicinal_product_id: string_field(
+					drug,
+					&["mfdsMedicinalProductId", "mfds_medicinal_product_id"],
+				),
+				phpid: string_field(drug, &["phpid"]),
+				phpid_version: string_field(
+					drug,
+					&["phpidVersion", "phpid_version"],
+				),
+				start_date: date_field(page_id, drug, &["startDate", "start_date"])?,
+				start_date_null_flavor: string_field(
+					drug,
+					&["startDateNullFlavor", "start_date_null_flavor"],
+				),
+				end_date: date_field(page_id, drug, &["endDate", "end_date"])?,
+				end_date_null_flavor: string_field(
+					drug,
+					&["endDateNullFlavor", "end_date_null_flavor"],
+				),
+				indication_meddra_version: string_field(
+					drug,
+					&["indicationMeddraVersion", "indication_meddra_version"],
+				),
+				indication_meddra_code: string_field(
+					drug,
+					&["indicationMeddraCode", "indication_meddra_code"],
+				),
+				reaction_meddra_version: string_field(
+					drug,
+					&["reactionMeddraVersion", "reaction_meddra_version"],
+				),
+				reaction_meddra_code: string_field(
+					drug,
+					&["reactionMeddraCode", "reaction_meddra_code"],
+				),
+			};
+			if let Some(id) = id {
+				ParentPastDrugHistoryBmc::update(ctx, mm, id, update).await?;
+			} else {
+				ParentPastDrugHistoryBmc::create(
+					ctx,
+					mm,
+					ParentPastDrugHistoryForCreate {
+						parent_id,
+						sequence_number: i32_field(
+							drug,
+							&["sequenceNumber", "sequence_number"],
+						)
+						.unwrap_or_else(|| {
+							i32::try_from(index + 1).unwrap_or(i32::MAX)
+						}),
+						drug_name: update.drug_name,
+						drug_name_null_flavor: update.drug_name_null_flavor,
+						mpid: update.mpid,
+						mpid_version: update.mpid_version,
+						mfds_medicinal_product_version: update
+							.mfds_medicinal_product_version,
+						mfds_medicinal_product_id: update.mfds_medicinal_product_id,
+						phpid: update.phpid,
+						phpid_version: update.phpid_version,
+						start_date: update.start_date,
+						start_date_null_flavor: update.start_date_null_flavor,
+						end_date: update.end_date,
+						end_date_null_flavor: update.end_date_null_flavor,
+						indication_meddra_version: update.indication_meddra_version,
+						indication_meddra_code: update.indication_meddra_code,
+						reaction_meddra_version: update.reaction_meddra_version,
+						reaction_meddra_code: update.reaction_meddra_code,
+					},
+				)
+				.await?;
+			}
+		}
 	}
 	Ok(())
 }
@@ -1267,7 +2868,10 @@ async fn load_editor_rp_data(
 		}]),
 		Some(ListOptions::default()),
 	)
-	.await?;
+	.await?
+	.into_iter()
+	.map(CaseEditorRpPrimarySourceDto::from)
+	.collect::<Vec<_>>();
 
 	Ok(json!({ "primarySources": primary_sources }))
 }
@@ -1303,12 +2907,6 @@ async fn load_editor_sd_data(
 	mm: &ModelManager,
 	case_id: Uuid,
 ) -> Result<Value> {
-	let safety_report_identification =
-		match SafetyReportIdentificationBmc::get_by_case(ctx, mm, case_id).await {
-			Ok(entity) => Some(entity),
-			Err(lib_core::model::Error::EntityUuidNotFound { .. }) => None,
-			Err(err) => return Err(err.into()),
-		};
 	let sender_information = SenderInformationBmc::list(
 		ctx,
 		mm,
@@ -1319,21 +2917,58 @@ async fn load_editor_sd_data(
 	)
 	.await?;
 	let sender = sender_information.first().cloned();
-	// The SD page patch writes message-header routing fields
-	// (messageReceiverIdentifier / batchReceiverIdentifier), so the projection
-	// must load the message header back for the edit to round-trip.
-	let message_header = match MessageHeaderBmc::get_by_case(ctx, mm, case_id).await
-	{
-		Ok(entity) => Some(entity),
-		Err(lib_core::model::Error::EntityUuidNotFound { .. }) => None,
-		Err(err) => return Err(err.into()),
-	};
+	let receiver =
+		ReceiverInformationBmc::get_by_case_optional(ctx, mm, case_id).await?;
 
+	let safety_report_identification = json!({
+		"senderInformationId": sender.as_ref().map(|row| row.id),
+		"senderType": sender.as_ref().and_then(|row| row.sender_type.clone()),
+		"senderHealthProfessionalTypeKr1": sender
+			.as_ref()
+			.and_then(|row| row.health_professional_type_kr1.clone()),
+		"senderOrganization": sender
+			.as_ref()
+			.and_then(|row| row.organization_name.clone()),
+		"senderDepartment": sender.as_ref().and_then(|row| row.department.clone()),
+		"senderPersonTitle": sender.as_ref().and_then(|row| row.person_title.clone()),
+		"senderPersonGivenName": sender
+			.as_ref()
+			.and_then(|row| row.person_given_name.clone()),
+		"senderPersonMiddleName": sender
+			.as_ref()
+			.and_then(|row| row.person_middle_name.clone()),
+		"senderPersonFamilyName": sender
+			.as_ref()
+			.and_then(|row| row.person_family_name.clone()),
+		"senderStreetAddress": sender
+			.as_ref()
+			.and_then(|row| row.street_address.clone()),
+		"senderCity": sender.as_ref().and_then(|row| row.city.clone()),
+		"senderState": sender.as_ref().and_then(|row| row.state.clone()),
+		"senderPostcode": sender.as_ref().and_then(|row| row.postcode.clone()),
+		"senderCountryCode": sender.as_ref().and_then(|row| row.country_code.clone()),
+		"senderTelephone": sender.as_ref().and_then(|row| row.telephone.clone()),
+		"senderFax": sender.as_ref().and_then(|row| row.fax.clone()),
+		"senderEmail": sender.as_ref().and_then(|row| row.email.clone()),
+		"receiverType": receiver.as_ref().and_then(|row| row.receiver_type.clone()),
+		"receiverOrganization": receiver
+			.as_ref()
+			.and_then(|row| row.organization_name.clone()),
+		"receiverDepartment": receiver.as_ref().and_then(|row| row.department.clone()),
+		"receiverStreet": receiver.as_ref().and_then(|row| row.street_address.clone()),
+		"receiverCity": receiver.as_ref().and_then(|row| row.city.clone()),
+		"receiverState": receiver.as_ref().and_then(|row| row.state_province.clone()),
+		"receiverPostcode": receiver.as_ref().and_then(|row| row.postcode.clone()),
+		"receiverCountry": receiver.as_ref().and_then(|row| row.country_code.clone()),
+		"receiverTelephone": receiver.as_ref().and_then(|row| row.telephone.clone()),
+		"receiverFax": receiver.as_ref().and_then(|row| row.fax.clone()),
+		"receiverEmail": receiver.as_ref().and_then(|row| row.email.clone()),
+	});
 	Ok(json!({
 		"safetyReportIdentification": safety_report_identification,
 		"senderInformation": sender_information,
 		"sender": sender,
-		"messageHeader": message_header,
+		"receiverInformation": receiver,
 	}))
 }
 
@@ -1349,6 +2984,7 @@ pub async fn get_editor_sd(
 	require_permission(&ctx, CASE_READ)?;
 	require_permission(&ctx, SAFETY_REPORT_READ)?;
 	require_permission(&ctx, SENDER_INFORMATION_LIST)?;
+	require_permission(&ctx, RECEIVER_READ)?;
 	lib_rest_core::require_case_read_allowed(&ctx, &mm, case_id).await?;
 
 	Ok(direct_section_response(
@@ -1361,7 +2997,7 @@ direct_page_projection_handler!(
 	get_editor_sd_page_projection,
 	"SD",
 	load_editor_sd_data,
-	[SAFETY_REPORT_READ, SENDER_INFORMATION_LIST],
+	[SAFETY_REPORT_READ, SENDER_INFORMATION_LIST, RECEIVER_READ],
 );
 
 async fn load_editor_lr_data(
@@ -1380,7 +3016,22 @@ async fn load_editor_lr_data(
 	)
 	.await?;
 
-	Ok(json!({ "literatureReferences": literature_references }))
+	Ok(json!({
+		"literatureReferences": literature_references
+			.into_iter()
+			.map(|row| json!({
+				"id": row.id,
+				"sequenceNumber": row.sequence_number,
+				"referenceText": row.reference_text,
+				"referenceTextNullFlavor": row.reference_text_null_flavor,
+				"documentBase64": row.document_base64,
+				"mediaType": row.media_type,
+				"representation": row.representation,
+				"compression": row.compression,
+				"deleted": row.deleted,
+			}))
+			.collect::<Vec<_>>()
+	}))
 }
 
 pub async fn get_editor_lr(
@@ -1425,20 +3076,43 @@ async fn load_editor_si_data(
 	.await?;
 	studies.sort_by_key(|study| study.created_at);
 	let study_information = studies.into_iter().next();
-	let study_registration_numbers = if let Some(ref study) = study_information {
-		StudyRegistrationNumberBmc::list(
-			ctx,
-			mm,
-			Some(vec![StudyRegistrationNumberFilter {
-				study_information_id: Some(uuid_eq(study.id)),
-				..Default::default()
-			}]),
-			Some(ListOptions::default()),
-		)
-		.await?
-	} else {
-		Vec::new()
-	};
+	let (study_registration_numbers, fda_cross_reported_ind_numbers) =
+		if let Some(ref study) = study_information {
+			let registrations = StudyRegistrationNumberBmc::list(
+				ctx,
+				mm,
+				Some(vec![StudyRegistrationNumberFilter {
+					study_information_id: Some(uuid_eq(study.id)),
+					..Default::default()
+				}]),
+				Some(ListOptions::default()),
+			)
+			.await?;
+			let cross_reported = StudyFdaCrossReportedIndBmc::list(
+				ctx,
+				mm,
+				Some(vec![StudyFdaCrossReportedIndFilter {
+					study_information_id: Some(uuid_eq(study.id)),
+					..Default::default()
+				}]),
+				Some(ListOptions::default()),
+			)
+			.await?;
+			(registrations, cross_reported)
+		} else {
+			(Vec::new(), Vec::new())
+		};
+	let study_information = study_information.map(|study| {
+		let mut value = json!(study);
+		value
+			.as_object_mut()
+			.expect("serialized study information is an object")
+			.insert(
+				"fdaCrossReportedIndNumbers".to_string(),
+				json!(fda_cross_reported_ind_numbers),
+			);
+		value
+	});
 
 	Ok(json!({
 		"studyInformation": study_information,
@@ -1519,6 +3193,20 @@ async fn load_editor_dm_data(
 		Some(ListOptions::default()),
 	)
 	.await?;
+	let medical_history_episodes = medical_history_episodes
+		.into_iter()
+		.map(|episode| {
+			let mut value = json!(episode);
+			if let Value::Object(ref mut map) = value {
+				map.insert(
+					"start_date".to_string(),
+					json!(ci_date(episode.start_date)),
+				);
+				map.insert("end_date".to_string(), json!(ci_date(episode.end_date)));
+			}
+			value
+		})
+		.collect::<Vec<_>>();
 	let parent_information_rows = ParentInformationBmc::list(
 		ctx,
 		mm,
@@ -1543,6 +3231,23 @@ async fn load_editor_dm_data(
 			Some(ListOptions::default()),
 		)
 		.await?;
+		let medical_history = medical_history
+			.into_iter()
+			.map(|history| {
+				let mut value = json!(history);
+				if let Value::Object(ref mut map) = value {
+					map.insert(
+						"start_date".to_string(),
+						json!(ci_date(history.start_date)),
+					);
+					map.insert(
+						"end_date".to_string(),
+						json!(ci_date(history.end_date)),
+					);
+				}
+				value
+			})
+			.collect::<Vec<_>>();
 		let past_drug_history = ParentPastDrugHistoryBmc::list(
 			ctx,
 			mm,
@@ -1553,6 +3258,23 @@ async fn load_editor_dm_data(
 			Some(ListOptions::default()),
 		)
 		.await?;
+		let past_drug_history = past_drug_history
+			.into_iter()
+			.map(|drug| {
+				let mut value = json!(drug);
+				if let Value::Object(ref mut map) = value {
+					map.insert(
+						"start_date".to_string(),
+						json!(ci_date(drug.start_date)),
+					);
+					map.insert(
+						"end_date".to_string(),
+						json!(ci_date(drug.end_date)),
+					);
+				}
+				value
+			})
+			.collect::<Vec<_>>();
 		let mut parent_with_children = json!(parent);
 		if let Value::Object(ref mut map) = parent_with_children {
 			map.insert("medicalHistory".to_string(), json!(medical_history));
@@ -1600,11 +3322,41 @@ async fn load_editor_dm_data(
 			.await?,
 		);
 	}
-	let death_info = death_information.into_iter().next();
-	let parent_info = parent_information_rows.into_iter().next();
+	let death_info = death_information.into_iter().next().map(|death_info| {
+		let mut value = json!(death_info);
+		if let Value::Object(ref mut map) = value {
+			map.insert(
+				"date_of_death".to_string(),
+				json!(ci_date(death_info.date_of_death)),
+			);
+		}
+		value
+	});
+	let parent_info = parent_information_rows.into_iter().next().map(|parent| {
+		let mut value = json!(parent);
+		if let Value::Object(ref mut map) = value {
+			map.insert(
+				"parent_birth_date".to_string(),
+				json!(ci_date(parent.parent_birth_date)),
+			);
+			map.insert(
+				"last_menstrual_period_date".to_string(),
+				json!(ci_date(parent.last_menstrual_period_date)),
+			);
+		}
+		value
+	});
+	let mut patient_projection = json!(patient);
+	if let Value::Object(ref mut map) = patient_projection {
+		map.insert("birth_date".to_string(), json!(ci_date(patient.birth_date)));
+		map.insert(
+			"last_menstrual_period_date".to_string(),
+			json!(ci_date(patient.last_menstrual_period_date)),
+		);
+	}
 
 	Ok(json!({
-		"patientInformation": patient,
+		"patientInformation": patient_projection,
 		"patientIdentifiers": patient_identifiers,
 		"medicalHistoryEpisodes": medical_history_episodes,
 		"deathInfo": death_info,

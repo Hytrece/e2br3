@@ -98,8 +98,8 @@ pub async fn init_test_env() {
 pub async fn init_test_mm() -> Result<ModelManager> {
 	init_test_env().await;
 	_dev_utils::init_dev().await;
-	apply_test_authorization_isolation_migration().await?;
 	reset_test_dynamic_roles();
+	apply_test_authorization_isolation_migration().await?;
 	let mm = ModelManager::new().await?;
 	mm.dbx()
 		.execute(sqlx::query("CREATE EXTENSION IF NOT EXISTS pgcrypto"))
@@ -247,10 +247,6 @@ pub async fn seed_org_with_users(
 	admin_pwd: &str,
 	viewer_pwd: &str,
 ) -> Result<SeedOrgUsers> {
-	let dbx = mm.dbx();
-	set_full_context_dbx(dbx, system_user_id(), system_org_id(), ROLE_SYSTEM_ADMIN)
-		.await?;
-
 	let org_id = insert_org(mm, system_user_id()).await?;
 	let admin = insert_user(
 		mm,
@@ -316,15 +312,6 @@ pub async fn seed_org_with_admin_and_viewer(
 	admin_pwd: &str,
 	viewer_pwd: &str,
 ) -> Result<SeedOrgUsers> {
-	let dbx = mm.dbx();
-	set_full_context_dbx(
-		dbx,
-		system_user_id(),
-		system_org_id(),
-		ROLE_SPONSOR_ADMIN_CRO,
-	)
-	.await?;
-
 	let org_id = insert_org(mm, system_user_id()).await?;
 	let admin = insert_user(
 		mm,
@@ -351,15 +338,6 @@ pub async fn seed_org_with_admin_and_viewer(
 }
 
 pub async fn seed_org_with_all_roles(mm: &ModelManager) -> Result<SeedOrgAllRoles> {
-	let dbx = mm.dbx();
-	set_full_context_dbx(
-		dbx,
-		system_user_id(),
-		system_org_id(),
-		ROLE_SPONSOR_ADMIN_CRO,
-	)
-	.await?;
-
 	let org_id = insert_org(mm, system_user_id()).await?;
 	let admin =
 		insert_user(mm, org_id, ROLE_SPONSOR_ADMIN_CRO, system_user_id(), None)
@@ -384,15 +362,6 @@ pub async fn seed_org_with_all_roles(mm: &ModelManager) -> Result<SeedOrgAllRole
 pub async fn seed_two_orgs_users_cases(
 	mm: &ModelManager,
 ) -> Result<SeedOrgsUsersCases> {
-	let dbx = mm.dbx();
-	set_full_context_dbx(
-		dbx,
-		system_user_id(),
-		system_org_id(),
-		ROLE_SPONSOR_ADMIN_CRO,
-	)
-	.await?;
-
 	let org1_id = insert_org(mm, system_user_id()).await?;
 	let org2_id = insert_org(mm, system_user_id()).await?;
 	let user1 =
@@ -417,15 +386,6 @@ pub async fn seed_two_orgs_users_cases(
 pub async fn seed_two_orgs_manager_cases(
 	mm: &ModelManager,
 ) -> Result<SeedOrgsManagerCases> {
-	let dbx = mm.dbx();
-	set_full_context_dbx(
-		dbx,
-		system_user_id(),
-		system_org_id(),
-		ROLE_SPONSOR_ADMIN_CRO,
-	)
-	.await?;
-
 	let org1_id = insert_org(mm, system_user_id()).await?;
 	let org2_id = insert_org(mm, system_user_id()).await?;
 	let manager = insert_user(

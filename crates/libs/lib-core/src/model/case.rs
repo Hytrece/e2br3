@@ -1,6 +1,7 @@
 use crate::ctx::{canonical_role, Ctx};
 use crate::model::base::base_uuid;
 use crate::model::base::DbBmc;
+use crate::model::modql_utils::uuid_to_sea_value;
 use crate::model::store::dbx::Dbx;
 use crate::model::store::set_full_context_dbx_or_rollback;
 use crate::model::ModelManager;
@@ -130,6 +131,7 @@ pub struct SourceDocumentForUpdate {
 
 #[derive(FilterNodes, Default)]
 pub struct SourceDocumentFilter {
+	#[modql(to_sea_value_fn = "uuid_to_sea_value")]
 	pub case_id: Option<OpValsValue>,
 }
 
