@@ -55,7 +55,8 @@
     "label": "Sender's Diagnosis MedDRA Version",
     "section": "H",
     "authority": "ICH",
-    "status": "incomplete",
+    "status": "complete",
+    "editor_page": "NR",
     "backend": {
       "status": "mapped",
       "model": "SenderDiagnosis",
@@ -79,7 +80,8 @@
     "label": "Sender's Diagnosis MedDRA Code",
     "section": "H",
     "authority": "ICH",
-    "status": "incomplete",
+    "status": "complete",
+    "editor_page": "NR",
     "backend": {
       "status": "mapped",
       "model": "SenderDiagnosis",
@@ -154,7 +156,8 @@
     "label": "Case Summary Type",
     "section": "H",
     "authority": "ICH",
-    "status": "incomplete",
+    "status": "complete",
+    "editor_page": "NR",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -179,7 +182,8 @@
     "label": "Case Summary Language",
     "section": "H",
     "authority": "ICH",
-    "status": "incomplete",
+    "status": "complete",
+    "editor_page": "NR",
     "backend": {
       "status": "mapped",
       "model": "CaseSummaryInformation",
@@ -203,7 +207,8 @@
     "label": "Case Summary Text",
     "section": "H",
     "authority": "ICH",
-    "status": "incomplete",
+    "status": "complete",
+    "editor_page": "NR",
     "backend": {
       "status": "mapped",
       "model": "CaseSummaryInformation",

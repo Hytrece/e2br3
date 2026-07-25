@@ -34,8 +34,10 @@ pub(super) use lib_core::model::drug::{
 pub(super) use lib_core::model::drug_reaction_assessment::DrugReactionAssessmentBmc;
 pub(super) use lib_core::model::narrative::{
 	CaseSummaryInformationBmc, CaseSummaryInformationFilter,
+	CaseSummaryInformationForCreate, CaseSummaryInformationForUpdate,
 	NarrativeInformationBmc, NarrativeInformationForCreate,
 	NarrativeInformationForUpdate, SenderDiagnosisBmc, SenderDiagnosisFilter,
+	SenderDiagnosisForCreate, SenderDiagnosisForUpdate,
 };
 pub(super) use lib_core::model::parent_history::{
 	ParentMedicalHistoryBmc, ParentMedicalHistoryFilter,

@@ -5391,10 +5391,18 @@ async fn editor_dg_page_round_trips_nested_active_substances() -> Result<()> {
 						"lastAdministrationDate": "20200102",
 						"durationValue": 2,
 						"durationUnit": "d",
+						"continuing": false,
 						"batchNumber": "LOT-1",
 						"dosageText": "One tablet daily",
 						"doseForm": "Tablet",
-						"routeOfAdministration": "048"
+						"doseFormTermIdVersion": "1",
+						"doseFormTermId": "DF-1",
+						"routeOfAdministration": "048",
+						"routeTermIdVersion": "1",
+						"routeTermId": "ROUTE-1",
+						"parentRouteOfAdministration": "Oral",
+						"parentRouteTermIdVersion": "1",
+						"parentRouteTermId": "PROUTE-1"
 					}],
 					"indications": [{
 						"sequenceNumber": 1,
@@ -5423,22 +5431,48 @@ async fn editor_dg_page_round_trips_nested_active_substances() -> Result<()> {
 	assert_eq!(status, StatusCode::CREATED, "{created}");
 	let substance = &created["data"]["drug"]["activeSubstances"][0];
 	assert_eq!(substance["substance_name"], "Substance A");
+	assert_eq!(substance["substance_termid_version"], "1");
 	assert_eq!(substance["substance_termid"], "SUB-1");
+	assert_eq!(substance["mfds_version"], "2026");
 	assert_eq!(substance["mfds_id"], "KR-SUB-1");
 	assert_eq!(substance["strength_value"], "10.50000");
+	assert_eq!(substance["strength_unit"], "mg");
 	let dosage = &created["data"]["drug"]["dosageInformation"][0];
 	assert_eq!(dosage["dose_value"], "2.50000");
+	assert_eq!(dosage["dose_unit"], "mg");
+	assert_eq!(dosage["number_of_units"], "1.00000");
+	assert_eq!(dosage["frequency_unit"], "d");
 	assert_eq!(dosage["first_administration_date"], "20200101");
+	assert_eq!(dosage["last_administration_date"], "20200102");
+	assert_eq!(dosage["duration_value"], "2.00");
+	assert_eq!(dosage["duration_unit"], "d");
+	assert_eq!(dosage["continuing"], false);
 	assert_eq!(dosage["batch_lot_number"], "LOT-1");
+	assert_eq!(dosage["dosage_text"], "One tablet daily");
+	assert_eq!(dosage["dose_form"], "Tablet");
+	assert_eq!(dosage["dose_form_termid_version"], "1");
+	assert_eq!(dosage["dose_form_termid"], "DF-1");
+	assert_eq!(dosage["route_of_administration"], "048");
+	assert_eq!(dosage["route_termid_version"], "1");
+	assert_eq!(dosage["route_termid"], "ROUTE-1");
+	assert_eq!(dosage["parent_route"], "Oral");
+	assert_eq!(dosage["parent_route_termid_version"], "1");
+	assert_eq!(dosage["parent_route_termid"], "PROUTE-1");
 	let indication = &created["data"]["drug"]["indications"][0];
 	assert_eq!(indication["indication_text"], "Pain");
+	assert_eq!(indication["indication_meddra_version"], "26.0");
 	assert_eq!(indication["indication_meddra_code"], "10033371");
 	let assessment = &created["data"]["drug"]["drugReactionAssessments"][0];
 	assert_eq!(assessment["reactionId"], reaction_id);
 	assert_eq!(assessment["administrationStartIntervalValue"], "2.00");
+	assert_eq!(assessment["administrationStartIntervalUnit"], "d");
+	assert_eq!(assessment["lastDoseIntervalValue"], "1.00");
+	assert_eq!(assessment["lastDoseIntervalUnit"], "d");
 	assert_eq!(assessment["recurrenceAction"], "1");
 	assert_eq!(assessment["reactionRecurred"], "2");
 	assert_eq!(assessment["sourceOfAssessment"], "Reporter");
+	assert_eq!(assessment["methodOfAssessment"], "WHO-UMC");
+	assert_eq!(assessment["resultOfAssessment"], "Possible");
 	assert_eq!(assessment["resultOfAssessmentKr2"], "1");
 	let drug_id = created["rowId"].as_str().expect("drug id");
 	let substance_id = substance["id"].as_str().expect("substance id");
@@ -5574,7 +5608,18 @@ async fn editor_nr_page_round_trips_narrative_fields() -> Result<()> {
 					"reporterComments": "Reporter comments",
 					"senderComments": "Sender comments",
 					"additionalInformation": "Additional information"
-				}
+				},
+				"senderDiagnoses": [{
+					"sequenceNumber": 1,
+					"diagnosisMeddraVersion": "27.1",
+					"diagnosisMeddraCode": "10019211"
+				}],
+				"caseSummaryInformation": [{
+					"sequenceNumber": 1,
+					"summaryType": "1",
+					"languageCode": "en",
+					"summaryText": "Case summary"
+				}]
 			}
 		}),
 	)
@@ -5588,6 +5633,15 @@ async fn editor_nr_page_round_trips_narrative_fields() -> Result<()> {
 		narrative["additional_information"],
 		"Additional information"
 	);
+	let diagnosis = &created["rows"]["senderDiagnoses"][0];
+	assert_eq!(diagnosis["diagnosis_meddra_version"], "27.1");
+	assert_eq!(diagnosis["diagnosis_meddra_code"], "10019211");
+	let summary = &created["rows"]["caseSummaryInformation"][0];
+	assert_eq!(summary["summary_type"], "1");
+	assert_eq!(summary["language_code"], "en");
+	assert_eq!(summary["summary_text"], "Case summary");
+	let diagnosis_id = diagnosis["id"].as_str().expect("diagnosis id");
+	let summary_id = summary["id"].as_str().expect("summary id");
 
 	let (status, reloaded) = get_json(
 		&app,
@@ -5607,7 +5661,15 @@ async fn editor_nr_page_round_trips_narrative_fields() -> Result<()> {
 			"rows": {
 				"narrative": {
 					"caseNarrative": "Updated narrative"
-				}
+				},
+				"senderDiagnoses": [{
+					"id": diagnosis_id,
+					"diagnosisMeddraCode": "10000001"
+				}],
+				"caseSummaryInformation": [{
+					"id": summary_id,
+					"summaryText": "Updated summary"
+				}]
 			}
 		}),
 	)
@@ -5616,6 +5678,39 @@ async fn editor_nr_page_round_trips_narrative_fields() -> Result<()> {
 	assert_eq!(
 		updated["rows"]["narrative"]["case_narrative"],
 		"Updated narrative"
+	);
+	assert_eq!(
+		updated["rows"]["senderDiagnoses"][0]["diagnosis_meddra_code"],
+		"10000001"
+	);
+	assert_eq!(
+		updated["rows"]["caseSummaryInformation"][0]["summary_text"],
+		"Updated summary"
+	);
+
+	let (status, deleted) = patch_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/editor/pages/NR"),
+		json!({
+			"authorities": ["ich"],
+			"rows": {
+				"senderDiagnoses": [{"id": diagnosis_id, "_delete": true}],
+				"caseSummaryInformation": [{"id": summary_id, "_delete": true}]
+			}
+		}),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK, "{deleted}");
+	assert_eq!(
+		deleted["rows"]["senderDiagnoses"].as_array().map(Vec::len),
+		Some(0)
+	);
+	assert_eq!(
+		deleted["rows"]["caseSummaryInformation"]
+			.as_array()
+			.map(Vec::len),
+		Some(0)
 	);
 
 	Ok(())
@@ -5655,6 +5750,31 @@ async fn editor_nr_page_rejects_catalog_constraint_before_write() -> Result<()> 
 	assert_eq!(
 		body["error"]["data"]["detail"]["path"],
 		"narrative.reporterComments"
+	);
+
+	let (status, body) = patch_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/editor/pages/NR"),
+		json!({
+			"authorities": ["ich"],
+			"rows": {
+				"narrative": {"caseNarrative": "Case narrative"},
+				"senderDiagnoses": [{
+					"diagnosisMeddraVersion": "12345"
+				}]
+			}
+		}),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
+	assert_eq!(
+		body["error"]["data"]["detail"]["ruleCode"],
+		"ICH.H.3.r.1a.ALLOWED.VALUE"
+	);
+	assert_eq!(
+		body["error"]["data"]["detail"]["path"],
+		"narrative.senderDiagnoses.0.diagnosisMeddraVersion"
 	);
 
 	Ok(())
@@ -5716,7 +5836,10 @@ async fn message_header_api_round_trips_submission_fields() -> Result<()> {
 		updated["data"]["batch_receiver_identifier"],
 		"BATCH-RECEIVER"
 	);
-	assert!(!updated["data"]["batch_transmission_date"].is_null());
+	assert_eq!(
+		updated["data"]["batch_transmission_date"],
+		json!([2026, 206, 12, 30, 45, 0, 0, 0, 0])
+	);
 	assert_eq!(
 		updated["data"]["message_sender_identifier"],
 		"UPDATED-SENDER"
