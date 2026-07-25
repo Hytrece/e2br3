@@ -3,75 +3,120 @@ use super::shared::*;
 pub async fn create_product_presave(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: AuthorizationSnapshotW,
 	Json(params): Json<ParamsForCreate<ProductPresaveForCreate>>,
 ) -> Result<(StatusCode, Json<DataRestResult<ProductPresave>>)> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, PRESAVE_TEMPLATE_CREATE)?;
-	let ParamsForCreate { data } = params;
-	let id = ProductPresaveBmc::create(&ctx, &mm, data).await?;
-	let entity = ProductPresaveBmc::get(&ctx, &mm, id).await?;
-	Ok(rest_created(entity))
+	with_authorized_presave_create(
+		&ctx,
+		&snapshot,
+		&mm,
+		"product",
+		move |ctx, mm| {
+			Box::pin(async move {
+				let ParamsForCreate { data } = params;
+				let id = ProductPresaveBmc::create(ctx, mm, data).await?;
+				Ok(rest_created(ProductPresaveBmc::get(ctx, mm, id).await?))
+			})
+		},
+	)
+	.await
 }
 
 pub async fn list_product_presaves(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: AuthorizationSnapshotW,
 ) -> Result<(StatusCode, Json<DataRestResult<Vec<ProductPresave>>>)> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, PRESAVE_TEMPLATE_LIST)?;
-	let entities = ProductPresaveBmc::list(&ctx, &mm, None).await?;
-	let entities = filter_product_presaves_for_scope(&ctx, &mm, entities).await?;
-	Ok(rest_ok(entities))
+	with_authorized_presave_collection(&ctx, &snapshot, &mm, |ctx, mm, scope| {
+		Box::pin(async move {
+			let entities = ProductPresaveBmc::list(ctx, mm, None).await?;
+			Ok(rest_ok(filter_product_presaves_for_scope(scope, entities)))
+		})
+	})
+	.await
 }
 
 pub async fn get_product_presave(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: AuthorizationSnapshotW,
 	Path(id): Path<Uuid>,
 ) -> Result<(StatusCode, Json<DataRestResult<ProductPresave>>)> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, PRESAVE_TEMPLATE_READ)?;
-	let entity = ProductPresaveBmc::get(&ctx, &mm, id).await?;
-	ensure_product_presave_scope(&ctx, &mm, &entity).await?;
-	Ok(rest_ok(entity))
+	with_authorized_presave_read(
+		&ctx,
+		&snapshot,
+		&mm,
+		PresaveAuthorizationKind::Product,
+		id,
+		|ctx, mm| {
+			Box::pin(async move {
+				Ok(rest_ok(ProductPresaveBmc::get(ctx, mm, id).await?))
+			})
+		},
+	)
+	.await
 }
 
 pub async fn update_product_presave(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: AuthorizationSnapshotW,
 	Path(id): Path<Uuid>,
 	Json(params): Json<ParamsForUpdate<ProductPresaveForUpdate>>,
 ) -> Result<(StatusCode, Json<DataRestResult<ProductPresave>>)> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, PRESAVE_TEMPLATE_UPDATE)?;
-	let ParamsForUpdate { data } = params;
-	if data.deleted == Some(true) {
-		require_permission(&ctx, PRESAVE_TEMPLATE_DELETE)?;
-	}
-	let current = ProductPresaveBmc::get(&ctx, &mm, id).await?;
-	ensure_product_presave_scope(&ctx, &mm, &current).await?;
-	if data.deleted == Some(true) {
-		PresaveLifecycleService::archive(&ctx, &mm, PresaveKind::Product, id)
-			.await?;
-	} else {
-		ProductPresaveBmc::update(&ctx, &mm, id, data).await?;
-	}
-	let entity = ProductPresaveBmc::get(&ctx, &mm, id).await?;
-	ensure_product_presave_scope(&ctx, &mm, &entity).await?;
-	Ok(rest_ok(entity))
+	with_authorized_presave_update(
+		&ctx,
+		&snapshot,
+		&mm,
+		PresaveAuthorizationKind::Product,
+		id,
+		move |ctx, mm| {
+			Box::pin(async move {
+				let ParamsForUpdate { data } = params;
+				if data.deleted == Some(true) {
+					PresaveLifecycleService::archive(
+						ctx,
+						mm,
+						PresaveKind::Product,
+						id,
+					)
+					.await?;
+				} else {
+					ProductPresaveBmc::update(ctx, mm, id, data).await?;
+				}
+				Ok(rest_ok(ProductPresaveBmc::get(ctx, mm, id).await?))
+			})
+		},
+	)
+	.await
 }
 
 pub async fn delete_product_presave(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: AuthorizationSnapshotW,
 	Path(id): Path<Uuid>,
 ) -> Result<StatusCode> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, PRESAVE_TEMPLATE_DELETE)?;
-	let entity = ProductPresaveBmc::get(&ctx, &mm, id).await?;
-	ensure_product_presave_scope(&ctx, &mm, &entity).await?;
-	PresaveLifecycleService::archive(&ctx, &mm, PresaveKind::Product, id).await?;
-	Ok(StatusCode::NO_CONTENT)
+	with_authorized_presave_update(
+		&ctx,
+		&snapshot,
+		&mm,
+		PresaveAuthorizationKind::Product,
+		id,
+		|ctx, mm| {
+			Box::pin(async move {
+				PresaveLifecycleService::archive(ctx, mm, PresaveKind::Product, id)
+					.await?;
+				Ok(StatusCode::NO_CONTENT)
+			})
+		},
+	)
+	.await
 }
 
 #[derive(Debug, Serialize)]
@@ -144,73 +189,71 @@ impl ProductActiveSubstanceDetailsForUpdate {
 pub async fn get_product_presave_details(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: AuthorizationSnapshotW,
 	Path(id): Path<Uuid>,
 ) -> Result<(StatusCode, Json<DataRestResult<ProductPresaveDetails>>)> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, PRESAVE_TEMPLATE_READ)?;
-	let details = load_product_presave_details(&ctx, &mm, id).await?;
-	ensure_product_presave_scope(&ctx, &mm, &details.parent).await?;
-	Ok(rest_ok(details))
+	with_authorized_presave_read(
+		&ctx,
+		&snapshot,
+		&mm,
+		PresaveAuthorizationKind::Product,
+		id,
+		|ctx, mm| {
+			Box::pin(async move {
+				Ok(rest_ok(load_product_presave_details(ctx, mm, id).await?))
+			})
+		},
+	)
+	.await
 }
 
 pub async fn update_product_presave_details(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: AuthorizationSnapshotW,
 	Path(id): Path<Uuid>,
 	Json(params): Json<ParamsForUpdate<ProductPresaveDetailsForUpdate>>,
 ) -> Result<(StatusCode, Json<DataRestResult<ProductPresaveDetails>>)> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, PRESAVE_TEMPLATE_UPDATE)?;
-	let current = ProductPresaveBmc::get(&ctx, &mm, id).await?;
-	ensure_product_presave_scope(&ctx, &mm, &current).await?;
-
-	let ParamsForUpdate { data } = params;
-	require_product_detail_operation_permissions(&ctx, &data)?;
-	if data
-		.parent
-		.as_ref()
-		.is_some_and(|parent| parent.deleted == Some(true))
-	{
-		if data.active_substances.is_some() {
-			return Err(Error::BadRequest {
-				message: "presave deletion cannot include child changes".into(),
-			});
-		}
-		PresaveLifecycleService::archive(&ctx, &mm, PresaveKind::Product, id)
-			.await?;
-		return Ok(rest_ok(load_product_presave_details(&ctx, &mm, id).await?));
-	}
-	preflight_product_presave_details(&ctx, &mm, id, &data).await?;
-	apply_product_presave_details(&ctx, &mm, id, data).await?;
-
-	let details = load_product_presave_details(&ctx, &mm, id).await?;
-	ensure_product_presave_scope(&ctx, &mm, &details.parent).await?;
-	Ok(rest_ok(details))
-}
-
-async fn apply_product_presave_details(
-	ctx: &lib_core::ctx::Ctx,
-	mm: &ModelManager,
-	id: Uuid,
-	data: ProductPresaveDetailsForUpdate,
-) -> Result<()> {
-	let dbx = mm.dbx();
-	dbx.begin_txn().await.map_err(model::Error::from)?;
-	if let Err(err) =
-		lib_core::model::store::set_full_context_from_ctx_dbx(dbx, ctx).await
-	{
-		let _ = dbx.rollback_txn().await;
-		return Err(err.into());
-	}
-
-	let apply_result = apply_product_presave_details_inner(ctx, mm, id, data).await;
-	if let Err(err) = apply_result {
-		let _ = dbx.rollback_txn().await;
-		return Err(err);
-	}
-
-	dbx.commit_txn().await.map_err(model::Error::from)?;
-	Ok(())
+	with_authorized_presave_atomic_update(
+		&ctx,
+		&snapshot,
+		&mm,
+		PresaveAuthorizationKind::Product,
+		id,
+		move |ctx, mm| {
+			Box::pin(async move {
+				let ParamsForUpdate { data } = params;
+				if data
+					.parent
+					.as_ref()
+					.is_some_and(|parent| parent.deleted == Some(true))
+				{
+					if data.active_substances.is_some() {
+						return Err(Error::BadRequest {
+							message: "presave deletion cannot include child changes"
+								.into(),
+						});
+					}
+					PresaveLifecycleService::archive(
+						ctx,
+						mm,
+						PresaveKind::Product,
+						id,
+					)
+					.await?;
+					return Ok(rest_ok(
+						load_product_presave_details(ctx, mm, id).await?,
+					));
+				}
+				preflight_product_presave_details(ctx, mm, id, &data).await?;
+				apply_product_presave_details_inner(ctx, mm, id, data).await?;
+				Ok(rest_ok(load_product_presave_details(ctx, mm, id).await?))
+			})
+		},
+	)
+	.await
 }
 
 async fn apply_product_presave_details_inner(
@@ -242,36 +285,6 @@ async fn load_product_presave_details(
 		parent,
 		active_substances,
 	})
-}
-
-fn require_product_detail_operation_permissions(
-	ctx: &lib_core::ctx::Ctx,
-	data: &ProductPresaveDetailsForUpdate,
-) -> Result<()> {
-	let creates_child = data
-		.active_substances
-		.as_deref()
-		.unwrap_or_default()
-		.iter()
-		.any(|item| item.id.is_none() && !item.delete);
-	let deletes_child = data
-		.active_substances
-		.as_deref()
-		.unwrap_or_default()
-		.iter()
-		.any(|item| item.delete);
-	let deletes_parent = data
-		.parent
-		.as_ref()
-		.is_some_and(|parent| parent.deleted == Some(true));
-
-	if creates_child {
-		require_permission(ctx, PRESAVE_TEMPLATE_CREATE)?;
-	}
-	if deletes_child || deletes_parent {
-		require_permission(ctx, PRESAVE_TEMPLATE_DELETE)?;
-	}
-	Ok(())
 }
 
 async fn preflight_product_presave_details(
@@ -415,8 +428,7 @@ generate_presave_child_rest_fns! {
 	UpdateFn: update_product_active_substance,
 	DeleteFn: delete_product_active_substance,
 	ParentField: product_presave_id,
-	ParentScopeFn: ensure_product_presave_id_scope,
+	ParentKind: Product,
 	EntityName: "product_presave_active_substances",
-	UpdatePermission: update,
 	DeleteMode: hard
 }

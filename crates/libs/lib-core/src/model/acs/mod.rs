@@ -53,11 +53,15 @@ mod check;
 pub use check::{has_all_permissions, has_any_permission, has_permission};
 
 mod registry_adapter;
-pub use registry_adapter::{
+#[allow(deprecated)]
+#[deprecated(
+	note = "import the PDF menu contract from lib_core::authorization"
+)]
+pub use crate::authorization::{
 	built_in_menu_privileges, normalize_current_menu_privileges,
-	normalize_menu_privileges, permissions_for_menu_privileges, AdminMenuPrivilege,
-	PrivilegeAdapterError,
+	normalize_menu_privileges, AdminMenuPrivilege, PrivilegeAdapterError,
 };
+pub use registry_adapter::permissions_for_menu_privileges;
 
 #[cfg(test)]
 mod tests;

@@ -41,13 +41,13 @@ async fn load_editor_dh_list_rows(
 repeatable_list_handler!(
 	list_editor_dh,
 	CaseEditorDhListRowDto,
-	PAST_DRUG_LIST,
 	load_editor_dh_list_rows,
 );
 
 pub async fn get_editor_dh_page_projection(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 	Path(case_id): Path<Uuid>,
 	Query(query): Query<CaseEditorPageProjectionQuery>,
 ) -> Result<(
@@ -55,74 +55,100 @@ pub async fn get_editor_dh_page_projection(
 	Json<CaseEditorPageProjectionResponse>,
 )> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, CASE_READ)?;
-	require_permission(&ctx, PAST_DRUG_LIST)?;
-	lib_rest_core::require_case_read_allowed(&ctx, &mm, case_id).await?;
-
-	let rows = load_editor_dh_list_rows(&ctx, &mm, case_id).await?;
-	let projection = repeatable_page_projection_response(
+	lib_rest_core::with_authorized_case_child_read(
+		&ctx,
+		&snapshot,
+		&mm,
 		case_id,
-		"DH",
-		query_authorities_csv(&query)?,
-		json!({ "rows": rows }),
-	)?;
-	Ok((axum::http::StatusCode::OK, Json(projection)))
+		"editor/DH",
+		move |ctx, mm| {
+			Box::pin(async move {
+				let rows = load_editor_dh_list_rows(ctx, mm, case_id).await?;
+				let projection = repeatable_page_projection_response(
+					case_id,
+					"DH",
+					query_authorities_csv(&query)?,
+					json!({ "rows": rows }),
+				)?;
+				Ok((axum::http::StatusCode::OK, Json(projection)))
+			})
+		},
+	)
+	.await
 }
 
 pub async fn get_editor_dh(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 	Path((case_id, past_drug_id)): Path<(Uuid, Uuid)>,
 ) -> Result<(axum::http::StatusCode, Json<CaseEditorRowDetailResponse>)> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, CASE_READ)?;
-	require_permission(&ctx, PAST_DRUG_READ)?;
-	lib_rest_core::require_case_read_allowed(&ctx, &mm, case_id).await?;
-
-	let patient = PatientInformationBmc::get_by_case(&ctx, &mm, case_id).await?;
-	let history = PastDrugHistoryBmc::get(&ctx, &mm, past_drug_id).await?;
-	if history.patient_id != patient.id {
-		return Err(lib_core::model::Error::EntityUuidNotFound {
-			entity: "past_drug_history",
-			id: past_drug_id,
-		}
-		.into());
-	}
-
-	Ok((
-		axum::http::StatusCode::OK,
-		Json(CaseEditorRowDetailResponse {
-			case_id,
-			row_id: past_drug_id,
-			data: json!({
-				"patientInformation": {
-					"pastDrugHistory": [history]
+	lib_rest_core::with_authorized_case_child_read(
+		&ctx,
+		&snapshot,
+		&mm,
+		case_id,
+		format!("editor/DH/{past_drug_id}"),
+		move |ctx, mm| {
+			Box::pin(async move {
+				let patient =
+					PatientInformationBmc::get_by_case(ctx, mm, case_id).await?;
+				let history = PastDrugHistoryBmc::get(ctx, mm, past_drug_id).await?;
+				if history.patient_id != patient.id {
+					return Err(lib_core::model::Error::EntityUuidNotFound {
+						entity: "past_drug_history",
+						id: past_drug_id,
+					}
+					.into());
 				}
-			}),
-		}),
-	))
+				Ok((
+					axum::http::StatusCode::OK,
+					Json(CaseEditorRowDetailResponse {
+						case_id,
+						row_id: past_drug_id,
+						data: json!({
+							"patientInformation": {
+								"pastDrugHistory": [history]
+							}
+						}),
+					}),
+				))
+			})
+		},
+	)
+	.await
 }
 
 pub async fn get_editor_dh_page_row(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 	Path((case_id, row_id)): Path<(Uuid, Uuid)>,
 	Query(query): Query<CaseEditorPageProjectionQuery>,
 ) -> Result<(axum::http::StatusCode, Json<Value>)> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, CASE_READ)?;
-	require_permission(&ctx, PAST_DRUG_READ)?;
-	lib_rest_core::require_case_read_allowed(&ctx, &mm, case_id).await?;
-
-	let response = build_editor_dh_page_row_response(
+	lib_rest_core::with_authorized_case_child_read(
 		&ctx,
+		&snapshot,
 		&mm,
 		case_id,
-		row_id,
-		query_authorities_csv(&query)?,
+		format!("editor/DH/{row_id}"),
+		move |ctx, mm| {
+			Box::pin(async move {
+				let response = build_editor_dh_page_row_response(
+					ctx,
+					mm,
+					case_id,
+					row_id,
+					query_authorities_csv(&query)?,
+				)
+				.await?;
+				Ok((axum::http::StatusCode::OK, Json(response)))
+			})
+		},
 	)
-	.await?;
-	Ok((axum::http::StatusCode::OK, Json(response)))
+	.await
 }
 
 async fn load_editor_dh_row_detail(
@@ -197,7 +223,6 @@ repeatable_page_row_create_handler!(
 	create_editor_dh_page_row,
 	section: "DH",
 	row_key: "pastDrugHistory",
-	permission: PAST_DRUG_CREATE,
 	bmc: PastDrugHistoryBmc,
 	model: PastDrugHistoryForCreate,
 	aliases: &[
@@ -225,7 +250,6 @@ repeatable_page_row_patch_handler!(
 	patch_editor_dh_page_row,
 	section: "DH",
 	row_key: "pastDrugHistory",
-	permission: PAST_DRUG_UPDATE,
 	bmc: PastDrugHistoryBmc,
 	model: PastDrugHistoryForUpdate,
 	verify: verify_editor_dh_page_row,
@@ -269,7 +293,6 @@ repeatable_page_row_patch_handler!(
 
 repeatable_page_row_delete_handler!(
 	delete_editor_dh_page_row,
-	permission: PAST_DRUG_DELETE,
 	bmc: PastDrugHistoryBmc,
 	verify: verify_editor_dh_page_row,
 );

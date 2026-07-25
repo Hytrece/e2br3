@@ -753,6 +753,14 @@ fn canonical_actions() -> Vec<ActionPolicyInput> {
 			Read,
 		),
 		action(
+			"case.workflow.config.read",
+			DecisionStage::SubjectOnly,
+			&["case.workflow.read"],
+			&[],
+			&[],
+			Read,
+		),
+		action(
 			"case.list",
 			DecisionStage::ContextRequired(Collection(ResourceKind::Case)),
 			&["case.read"],
@@ -874,6 +882,22 @@ fn canonical_actions() -> Vec<ActionPolicyInput> {
 			Read,
 		),
 		action(
+			"case.export.history.list",
+			DecisionStage::ContextRequired(Collection(ResourceKind::Case)),
+			&["submission.history.read"],
+			&[],
+			&[SameOrganization],
+			Read,
+		),
+		action(
+			"case.export.history.read",
+			DecisionStage::ContextRequired(Existing(ResourceKind::Case)),
+			&["submission.history.read"],
+			&[],
+			&[SameOrganization, WithinPrincipalScope],
+			Read,
+		),
+		action(
 			"info.list",
 			DecisionStage::ContextRequired(Collection(ResourceKind::Presave)),
 			&["info.read"],
@@ -918,7 +942,7 @@ fn canonical_actions() -> Vec<ActionPolicyInput> {
 			DecisionStage::ContextRequired(Existing(ResourceKind::ImportHistory)),
 			&["import.history.read"],
 			&[],
-			&[SameOrganization],
+			&[SameOrganization, WithinPrincipalScope],
 			Read,
 		),
 		action(
@@ -1130,6 +1154,14 @@ fn canonical_actions() -> Vec<ActionPolicyInput> {
 			&[],
 			&[SameOrganization],
 			PrivilegedMutation,
+		),
+		action(
+			"notice.read",
+			DecisionStage::ContextRequired(Existing(ResourceKind::Notice)),
+			&["home.notice.read"],
+			&[],
+			&[SameOrganization],
+			PrivilegedRead,
 		),
 		action(
 			"notice.update",

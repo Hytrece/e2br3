@@ -143,6 +143,322 @@ fn user_admin_rls_context_requires_authorization_permit_evidence() {
 }
 
 #[test]
+fn subject_actions_require_permit_bound_rls_context() {
+	let root = workspace_root();
+	let rest_authorization =
+		root.join("crates/libs/lib-rest-core/src/authorization.rs");
+	let source = fs::read_to_string(&rest_authorization).unwrap_or_default();
+
+	assert!(
+		source.contains("AuthorizedSubject"),
+		"subject-action DB access must consume kernel permit evidence"
+	);
+	assert!(
+		source.contains("pub fn rls_ctx_for_authorized_subject("),
+		"subject actions need one explicit permit-to-RLS boundary"
+	);
+	assert!(
+		source.contains("permit.snapshot_version() != snapshot.version()"),
+		"subject permits must be bound to the current policy snapshot"
+	);
+}
+
+#[test]
+fn pdf_menu_privileges_are_not_part_of_the_legacy_permission_runtime() {
+	let root = workspace_root();
+	let menu_privileges =
+		root.join("crates/libs/lib-core/src/authorization/menu_privileges.rs");
+	let source = fs::read_to_string(&menu_privileges).unwrap_or_default();
+	let assignment = fs::read_to_string(
+		root.join("crates/libs/lib-core/src/model/authorization/assignment_repo.rs"),
+	)
+	.expect("assignment repository source must be readable");
+
+	assert!(
+		!source.is_empty(),
+		"PDF menu privilege contract must live under authorization"
+	);
+	for legacy in [
+		"Permission",
+		"Resource",
+		"has_permission",
+		"dynamic_role",
+		"permissions_for_menu_privileges",
+	] {
+		assert!(
+			!source.contains(legacy),
+			"menu privilege contract still depends on legacy runtime: {legacy}"
+		);
+	}
+	assert!(
+		assignment.contains("use crate::authorization::"),
+		"normalized role persistence must import the PDF contract from authorization"
+	);
+	assert!(
+		!assignment.contains("crate::model::acs"),
+		"normalized role persistence must not depend on legacy ACS"
+	);
+}
+
+#[test]
+fn generated_case_routes_do_not_accept_legacy_permissions() {
+	let root = workspace_root();
+	let macros = fs::read_to_string(
+		root.join("crates/libs/lib-rest-core/src/utils/macro_utils.rs"),
+	)
+	.expect("REST macro source must be readable");
+	let case_macros = macros
+		.split_once(
+			"/// Generate CRUD REST handlers for a resource nested below a drug.",
+		)
+		.map(|(_, case_macros)| case_macros)
+		.expect("Case macro boundary must exist");
+
+	for legacy in [
+		"require_permission",
+		"RequirePermission",
+		"check_permission",
+		"legacy_permission_allowed",
+		"PermCreate:",
+		"PermRead:",
+		"PermUpdate:",
+		"PermDelete:",
+		"PermList:",
+	] {
+		assert!(
+			!case_macros.contains(legacy),
+			"generated Case routes still accept legacy authorization input: {legacy}"
+		);
+	}
+	assert!(
+		case_macros.contains("AuthorizationSnapshotW"),
+		"generated Case routes must consume the request authorization snapshot"
+	);
+	assert!(case_macros.contains("with_authorized_case_child_read"));
+	assert!(case_macros.contains("with_authorized_case_child_mutation"));
+}
+
+#[test]
+fn converted_case_route_modules_do_not_call_legacy_authorization() {
+	let root = workspace_root();
+	for file in [
+		"case_rest.rs",
+		"case_intake_rest.rs",
+		"case_identifiers_rest.rs",
+		"case_validation_rest.rs",
+		"case_workflow_rest.rs",
+		"drug_reaction_assessment_rest.rs",
+		"message_header_rest.rs",
+		"narrative_rest.rs",
+		"narrative_sub_rest.rs",
+		"parent_history_rest.rs",
+		"patient_rest.rs",
+		"patient_sub_rest.rs",
+		"receiver_rest.rs",
+		"relatedness_assessment_rest.rs",
+		"safety_report_rest.rs",
+		"safety_report_sub_rest.rs",
+	] {
+		let source = fs::read_to_string(
+			root.join("crates/services/web-server/src/web/rest")
+				.join(file),
+		)
+		.unwrap_or_else(|_| panic!("Case route source {file} must be readable"));
+		for legacy in [
+			"model::acs",
+			"require_permission",
+			"require_case_read_allowed",
+			"require_case_write_allowed",
+			"legacy_permission_allowed",
+			"permission_subject()",
+		] {
+			assert!(
+				!source.contains(legacy),
+				"converted Case route {file} still calls legacy authorization: {legacy}"
+			);
+		}
+		assert!(
+			source.contains("AuthorizationSnapshotW")
+				|| source.contains("generate_patient_child_rest_fns!"),
+			"converted Case route {file} must consume the request snapshot"
+		);
+	}
+}
+
+#[test]
+fn case_editor_routes_do_not_depend_on_legacy_permissions() {
+	let root = workspace_root();
+	let editor_root =
+		root.join("crates/services/web-server/src/web/rest/case_editor_rest");
+	for entry in
+		fs::read_dir(&editor_root).expect("Case editor directory must exist")
+	{
+		let path = entry.expect("Case editor entry must be readable").path();
+		if path.extension().and_then(|value| value.to_str()) != Some("rs") {
+			continue;
+		}
+		let source = fs::read_to_string(&path)
+			.unwrap_or_else(|_| panic!("{} must be readable", path.display()));
+		for legacy in [
+			"model::acs",
+			"require_permission",
+			"require_case_read_allowed",
+			"require_case_write_allowed",
+			"legacy_permission_allowed",
+		] {
+			assert!(
+				!source.contains(legacy),
+				"Case editor source {} still depends on legacy authorization: {legacy}",
+				path.display()
+			);
+		}
+	}
+}
+
+#[test]
+fn submission_routes_use_typed_policy_contexts_only() {
+	let source = fs::read_to_string(
+		workspace_root()
+			.join("crates/services/web-server/src/web/rest/submission_rest.rs"),
+	)
+	.expect("submission routes must be readable");
+	for legacy in [
+		"model::acs",
+		"require_permission",
+		"require_case_read_allowed",
+		"require_case_write_allowed",
+		"set_full_context_dbx",
+	] {
+		assert!(
+			!source.contains(legacy),
+			"submission route still uses legacy authorization: {legacy}"
+		);
+	}
+	assert!(source.contains("with_authorized_submission_collection"));
+	assert!(source.contains("with_authorized_submission_read"));
+	assert!(source.contains("with_authorized_submission_mutation"));
+	assert!(source.contains("\"submission.execute\""));
+}
+
+#[test]
+fn import_routes_use_typed_policy_contexts_only() {
+	let source = fs::read_to_string(
+		workspace_root()
+			.join("crates/services/web-server/src/web/rest/import_rest.rs"),
+	)
+	.expect("import routes must be readable");
+	for legacy in [
+		"model::acs",
+		"require_permission",
+		"RequirePermission",
+		"require_case_read_allowed",
+		"case_matches_user_scope",
+	] {
+		assert!(
+			!source.contains(legacy),
+			"import route still uses legacy authorization: {legacy}"
+		);
+	}
+	assert!(source.contains("with_authorized_import_history_collection"));
+	assert!(source.contains("with_authorized_import_history_read"));
+	assert!(source.contains("with_authorized_xml_import"));
+	assert!(source.contains("\"import.xml.validate\""));
+	assert!(source.contains("\"import.xml.execute\""));
+}
+
+#[test]
+fn export_routes_use_typed_policy_contexts_only() {
+	let root = workspace_root();
+	for path in [
+		"crates/services/web-server/src/web/rest/case_export_rest.rs",
+		"crates/services/web-server/src/web/rest/cioms_export_rest.rs",
+		"crates/services/web-server/src/web/rest/cioms_export_rest/build.rs",
+	] {
+		let source = fs::read_to_string(root.join(path))
+			.unwrap_or_else(|_| panic!("export route {path} must be readable"));
+		for legacy in [
+			"model::acs",
+			"require_permission",
+			"RequirePermission",
+			"require_case_read_allowed",
+			"case_matches_user_scope",
+		] {
+			assert!(
+				!source.contains(legacy),
+				"export route {path} still uses legacy authorization: {legacy}"
+			);
+		}
+	}
+	let xml_export = fs::read_to_string(
+		root.join("crates/services/web-server/src/web/rest/case_export_rest.rs"),
+	)
+	.expect("XML export routes must be readable");
+	let cioms =
+		fs::read_to_string(root.join(
+			"crates/services/web-server/src/web/rest/cioms_export_rest/build.rs",
+		))
+		.expect("CIOMS export route must be readable");
+	let rest_authorization = fs::read_to_string(
+		root.join("crates/libs/lib-rest-core/src/authorization.rs"),
+	)
+	.expect("REST authorization boundary must be readable");
+	assert!(xml_export.contains("with_authorized_case_export"));
+	assert!(cioms.contains("with_authorized_case_export"));
+	assert!(rest_authorization.contains("\"case.export.xml_set\""));
+}
+
+#[test]
+fn settings_notice_and_audit_routes_use_typed_policy_contexts_only() {
+	let root = workspace_root();
+	for path in [
+		"crates/services/web-server/src/web/rest/admin_settings_rest.rs",
+		"crates/services/web-server/src/web/rest/audit_rest.rs",
+	] {
+		let source = fs::read_to_string(root.join(path)).unwrap_or_else(|_| {
+			panic!("administration route {path} must be readable")
+		});
+		for legacy in [
+			"model::acs",
+			"legacy_permission_allowed",
+			"require_permission",
+			"permission_subject()",
+		] {
+			assert!(
+				!source.contains(legacy),
+				"administration route {path} still uses legacy authorization: {legacy}"
+			);
+		}
+		assert!(
+			source.contains("AuthorizationSnapshotW"),
+			"administration route {path} must consume the request snapshot"
+		);
+	}
+}
+
+#[test]
+fn terminology_routes_use_typed_policy_contexts_only() {
+	let source = fs::read_to_string(
+		workspace_root()
+			.join("crates/services/web-server/src/web/rest/terminology_rest.rs"),
+	)
+	.expect("terminology routes must be readable");
+	for legacy in [
+		"model::acs",
+		"require_permission",
+		"RequirePermission",
+		"mw_permission",
+	] {
+		assert!(
+			!source.contains(legacy),
+			"terminology route still uses legacy authorization: {legacy}"
+		);
+	}
+	assert!(source.contains("with_authorized_terminology_read"));
+	assert!(source.contains("with_authorized_terminology_mutation"));
+	assert!(source.contains("AuthorizationSnapshotW"));
+}
+
+#[test]
 fn role_api_has_one_canonical_metadata_shape() {
 	let root = workspace_root();
 	let source =
@@ -283,4 +599,41 @@ fn role_reactivation_uses_the_restore_policy_action() {
 			&& source.contains("\"role.restore\""),
 		"an explicit role reactivation must be authorized and audited as role.restore"
 	);
+}
+
+#[test]
+fn presave_routes_use_typed_policy_contexts_only() {
+	let directory = workspace_root()
+		.join("crates/services/web-server/src/web/rest/section_presave_rest");
+	for entry in fs::read_dir(directory).expect("presave route directory must exist")
+	{
+		let path = entry.expect("presave route entry must be readable").path();
+		if path.extension().and_then(|value| value.to_str()) != Some("rs") {
+			continue;
+		}
+		let source =
+			fs::read_to_string(&path).expect("presave route must be readable");
+		for legacy in [
+			"require_permission",
+			"PRESAVE_TEMPLATE_",
+			".is_system_admin()",
+			".is_sponsor_admin()",
+		] {
+			assert!(
+				!source.contains(legacy),
+				"{} still uses legacy authorization token {legacy}",
+				path.display()
+			);
+		}
+	}
+	let shared = fs::read_to_string(
+		workspace_root().join("crates/libs/lib-rest-core/src/authorization.rs"),
+	)
+	.expect("presave authorization boundary must be readable");
+	for action in ["info.list", "info.read", "info.create", "info.update"] {
+		assert!(
+			shared.contains(action),
+			"presave route boundary must resolve {action}"
+		);
+	}
 }

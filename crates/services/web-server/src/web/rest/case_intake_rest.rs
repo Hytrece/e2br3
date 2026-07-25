@@ -1,6 +1,5 @@
 use axum::extract::State;
 use axum::Json;
-use lib_core::model::acs::CASE_CREATE;
 use lib_core::model::case::{CaseBmc, CaseForCreate as InternalCaseForCreate};
 use lib_core::model::case_duplicate::{
 	assess_duplicate_basis, CaseDuplicateBmc, CaseDuplicateKey,
@@ -228,46 +227,73 @@ async fn next_case_version(
 pub async fn check_case_intake_duplicate(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 	Json(params): Json<ParamsForCreate<CaseIntakeCheckInput>>,
 ) -> Result<(
 	axum::http::StatusCode,
 	Json<DataRestResult<CaseIntakeCheckResult>>,
 )> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, CASE_CREATE)?;
+	lib_rest_core::with_authorized_case_create(
+		&ctx,
+		&snapshot,
+		&mm,
+		move |ctx, mm| {
+			Box::pin(async move {
+				let data = normalize_intake_check_input(params.data);
+				let key = to_duplicate_key(&data);
+				let (assessment, matches) =
+					assess_intake_duplicates(ctx, mm, &key).await?;
 
-	let data = normalize_intake_check_input(params.data);
-	let key = to_duplicate_key(&data);
-	let (assessment, matches) = assess_intake_duplicates(&ctx, &mm, &key).await?;
-
-	Ok((
-		axum::http::StatusCode::OK,
-		Json(DataRestResult {
-			data: CaseIntakeCheckResult {
-				duplicate: !matches.is_empty(),
-				basis_complete: assessment.basis_complete,
-				warnings: assessment.warnings,
-				matches,
-			},
-		}),
-	))
+				Ok((
+					axum::http::StatusCode::OK,
+					Json(DataRestResult {
+						data: CaseIntakeCheckResult {
+							duplicate: !matches.is_empty(),
+							basis_complete: assessment.basis_complete,
+							warnings: assessment.warnings,
+							matches,
+						},
+					}),
+				))
+			})
+		},
+	)
+	.await
 }
 
 /// POST /api/cases/from-intake
 pub async fn create_case_from_intake(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 	Json(params): Json<ParamsForCreate<CaseFromIntakeInput>>,
+) -> Result<(
+	axum::http::StatusCode,
+	Json<DataRestResult<CaseFromIntakeResult>>,
+)> {
+	let ctx = ctx_w.0;
+	lib_rest_core::with_authorized_case_create(
+		&ctx,
+		&snapshot,
+		&mm,
+		move |ctx, mm| {
+			Box::pin(create_case_from_intake_authorized(ctx, mm, params.data))
+		},
+	)
+	.await
+}
+
+async fn create_case_from_intake_authorized(
+	ctx: &lib_core::ctx::Ctx,
+	mm: &ModelManager,
+	data: CaseFromIntakeInput,
 ) -> Result<(
 	axum::http::StatusCode,
 	Json<DataRestResult<CaseFromIntakeResult>>,
 )> {
 	use sqlx::types::time::OffsetDateTime;
 
-	let ctx = ctx_w.0;
-	require_permission(&ctx, CASE_CREATE)?;
-
-	let data = params.data;
 	let mut safety_report_id = data.safety_report_id.clone().unwrap_or_default();
 	if data.report_type.trim().is_empty() {
 		return Err(Error::BadRequest {
@@ -277,7 +303,7 @@ pub async fn create_case_from_intake(
 
 	let duplicate_key = intake_to_duplicate_key(&data);
 	let (duplicate_basis, duplicate_matches) =
-		assess_intake_duplicates(&ctx, &mm, &duplicate_key).await?;
+		assess_intake_duplicates(ctx, mm, &duplicate_key).await?;
 	if !duplicate_matches.is_empty() {
 		return Err(Error::BadRequest {
 			message:
@@ -301,16 +327,14 @@ pub async fn create_case_from_intake(
 	let profile_enum = RegulatoryAuthority::Fda;
 
 	let generated_case_number = if safety_report_id.trim().is_empty() {
-		let generated = generate_case_number(&ctx, &mm)
-			.await
-			.map_err(Error::Model)?;
+		let generated = generate_case_number(ctx, mm).await.map_err(Error::Model)?;
 		safety_report_id = generated.safety_report_id.clone();
 		Some(generated)
 	} else {
 		safety_report_id = safety_report_id.trim().to_string();
 		None
 	};
-	let next_version = next_case_version(&ctx, &mm, &safety_report_id).await?;
+	let next_version = next_case_version(ctx, mm, &safety_report_id).await?;
 	let case_create = InternalCaseForCreate {
 		organization_id: ctx.organization_id(),
 		dg_prd_key: data.dg_prd_key.clone(),
@@ -322,7 +346,7 @@ pub async fn create_case_from_intake(
 		report_year: data.report_year.clone(),
 	};
 	validate_case_create_payload(&case_create)?;
-	let case_id = CaseBmc::create(&ctx, &mm, case_create).await?;
+	let case_id = CaseBmc::create(ctx, mm, case_create).await?;
 	let transmission_date = data
 		.transmission_date
 		.unwrap_or(data.date_of_most_recent_information);

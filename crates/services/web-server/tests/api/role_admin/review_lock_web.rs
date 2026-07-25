@@ -402,9 +402,9 @@ async fn test_reviewed_and_locked_status_transitions_require_dedicated_privilege
 	assert_eq!(status, StatusCode::BAD_REQUEST, "{value:?}");
 	let (status, value) =
 		update_case_status(&app, &reviewer_cookie, case_id, "reviewed").await?;
-	assert_eq!(status, StatusCode::BAD_REQUEST, "{value:?}");
+	assert_eq!(status, StatusCode::FORBIDDEN, "{value:?}");
 
-	// Review is a same-button toggle and requires only Case.Approve.
+	// Review is a same-button toggle and requires only the PDF Case Review grant.
 	let (status, value) =
 		toggle_case_action(&app, &editor_cookie, case_id, "review").await?;
 	assert_eq!(status, StatusCode::FORBIDDEN, "{value:?}");

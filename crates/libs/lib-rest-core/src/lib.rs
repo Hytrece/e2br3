@@ -8,8 +8,23 @@ mod utils;
 
 pub use self::error::{ConstraintViolation, Error, Result};
 pub use authorization::{
-	denied as authorization_denied, rls_ctx_for_authorized_mutation,
-	rls_ctx_for_authorized_read,
+	denied as authorization_denied, notice_read_allowed,
+	rls_ctx_for_authorized_mutation, rls_ctx_for_authorized_read,
+	rls_ctx_for_authorized_subject, with_authorized_audit_log_collection,
+	with_authorized_case_audit_read, with_authorized_case_child_mutation,
+	with_authorized_case_child_read, with_authorized_case_collection,
+	with_authorized_case_create, with_authorized_case_export,
+	with_authorized_case_mutation, with_authorized_case_read,
+	with_authorized_export_history_collection, with_authorized_export_history_read,
+	with_authorized_import_history_collection, with_authorized_import_history_read,
+	with_authorized_notice_update, with_authorized_presave_atomic_update,
+	with_authorized_presave_collection, with_authorized_presave_create,
+	with_authorized_presave_read, with_authorized_presave_update,
+	with_authorized_settings_read, with_authorized_settings_update,
+	with_authorized_subject_action, with_authorized_submission_collection,
+	with_authorized_submission_mutation, with_authorized_submission_read,
+	with_authorized_terminology_mutation, with_authorized_terminology_read,
+	with_authorized_xml_import,
 };
 pub use rest_params::*;
 pub use rest_result::*;

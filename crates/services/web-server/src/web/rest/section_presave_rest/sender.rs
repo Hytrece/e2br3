@@ -3,74 +3,114 @@ use super::shared::*;
 pub async fn create_sender_presave(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: AuthorizationSnapshotW,
 	Json(params): Json<ParamsForCreate<SenderPresaveForCreate>>,
 ) -> Result<(StatusCode, Json<DataRestResult<SenderPresave>>)> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, PRESAVE_TEMPLATE_CREATE)?;
-	let ParamsForCreate { data } = params;
-	let id = SenderPresaveBmc::create(&ctx, &mm, data).await?;
-	let entity = SenderPresaveBmc::get(&ctx, &mm, id).await?;
-	Ok(rest_created(entity))
+	with_authorized_presave_create(&ctx, &snapshot, &mm, "sender", move |ctx, mm| {
+		Box::pin(async move {
+			let ParamsForCreate { data } = params;
+			let id = SenderPresaveBmc::create(ctx, mm, data).await?;
+			Ok(rest_created(SenderPresaveBmc::get(ctx, mm, id).await?))
+		})
+	})
+	.await
 }
 
 pub async fn list_sender_presaves(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: AuthorizationSnapshotW,
 ) -> Result<(StatusCode, Json<DataRestResult<Vec<SenderPresave>>>)> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, PRESAVE_TEMPLATE_LIST)?;
-	let entities = SenderPresaveBmc::list(&ctx, &mm, None).await?;
-	let entities = filter_sender_presaves_for_scope(&ctx, &mm, entities).await?;
-	Ok(rest_ok(entities))
+	with_authorized_presave_collection(&ctx, &snapshot, &mm, |ctx, mm, scope| {
+		Box::pin(async move {
+			let entities = SenderPresaveBmc::list(ctx, mm, None).await?;
+			Ok(rest_ok(filter_sender_presaves_for_scope(scope, entities)))
+		})
+	})
+	.await
 }
 
 pub async fn get_sender_presave(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: AuthorizationSnapshotW,
 	Path(id): Path<Uuid>,
 ) -> Result<(StatusCode, Json<DataRestResult<SenderPresave>>)> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, PRESAVE_TEMPLATE_READ)?;
-	let entity = SenderPresaveBmc::get(&ctx, &mm, id).await?;
-	ensure_sender_presave_scope(&ctx, &mm, &entity).await?;
-	Ok(rest_ok(entity))
+	with_authorized_presave_read(
+		&ctx,
+		&snapshot,
+		&mm,
+		PresaveAuthorizationKind::Sender,
+		id,
+		|ctx, mm| {
+			Box::pin(async move {
+				Ok(rest_ok(SenderPresaveBmc::get(ctx, mm, id).await?))
+			})
+		},
+	)
+	.await
 }
 
 pub async fn update_sender_presave(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: AuthorizationSnapshotW,
 	Path(id): Path<Uuid>,
 	Json(params): Json<ParamsForUpdate<SenderPresaveForUpdate>>,
 ) -> Result<(StatusCode, Json<DataRestResult<SenderPresave>>)> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, PRESAVE_TEMPLATE_UPDATE)?;
-	let ParamsForUpdate { data } = params;
-	if data.deleted == Some(true) {
-		require_permission(&ctx, PRESAVE_TEMPLATE_DELETE)?;
-	}
-	let current = SenderPresaveBmc::get(&ctx, &mm, id).await?;
-	ensure_sender_presave_scope(&ctx, &mm, &current).await?;
-	if data.deleted == Some(true) {
-		PresaveLifecycleService::archive(&ctx, &mm, PresaveKind::Sender, id).await?;
-	} else {
-		SenderPresaveBmc::update(&ctx, &mm, id, data).await?;
-	}
-	let entity = SenderPresaveBmc::get(&ctx, &mm, id).await?;
-	ensure_sender_presave_scope(&ctx, &mm, &entity).await?;
-	Ok(rest_ok(entity))
+	with_authorized_presave_update(
+		&ctx,
+		&snapshot,
+		&mm,
+		PresaveAuthorizationKind::Sender,
+		id,
+		move |ctx, mm| {
+			Box::pin(async move {
+				let ParamsForUpdate { data } = params;
+				if data.deleted == Some(true) {
+					PresaveLifecycleService::archive(
+						ctx,
+						mm,
+						PresaveKind::Sender,
+						id,
+					)
+					.await?;
+				} else {
+					SenderPresaveBmc::update(ctx, mm, id, data).await?;
+				}
+				Ok(rest_ok(SenderPresaveBmc::get(ctx, mm, id).await?))
+			})
+		},
+	)
+	.await
 }
 
 pub async fn delete_sender_presave(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: AuthorizationSnapshotW,
 	Path(id): Path<Uuid>,
 ) -> Result<StatusCode> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, PRESAVE_TEMPLATE_DELETE)?;
-	let entity = SenderPresaveBmc::get(&ctx, &mm, id).await?;
-	ensure_sender_presave_scope(&ctx, &mm, &entity).await?;
-	PresaveLifecycleService::archive(&ctx, &mm, PresaveKind::Sender, id).await?;
-	Ok(StatusCode::NO_CONTENT)
+	with_authorized_presave_update(
+		&ctx,
+		&snapshot,
+		&mm,
+		PresaveAuthorizationKind::Sender,
+		id,
+		|ctx, mm| {
+			Box::pin(async move {
+				PresaveLifecycleService::archive(ctx, mm, PresaveKind::Sender, id)
+					.await?;
+				Ok(StatusCode::NO_CONTENT)
+			})
+		},
+	)
+	.await
 }
 
 #[derive(Debug, Serialize)]
@@ -202,74 +242,72 @@ impl SenderResponsiblePersonDetailsForUpdate {
 pub async fn get_sender_presave_details(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: AuthorizationSnapshotW,
 	Path(id): Path<Uuid>,
 ) -> Result<(StatusCode, Json<DataRestResult<SenderPresaveDetails>>)> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, PRESAVE_TEMPLATE_READ)?;
-	let details = load_sender_presave_details(&ctx, &mm, id).await?;
-	ensure_sender_presave_scope(&ctx, &mm, &details.parent).await?;
-	Ok(rest_ok(details))
+	with_authorized_presave_read(
+		&ctx,
+		&snapshot,
+		&mm,
+		PresaveAuthorizationKind::Sender,
+		id,
+		|ctx, mm| {
+			Box::pin(async move {
+				Ok(rest_ok(load_sender_presave_details(ctx, mm, id).await?))
+			})
+		},
+	)
+	.await
 }
 
 pub async fn update_sender_presave_details(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: AuthorizationSnapshotW,
 	Path(id): Path<Uuid>,
 	Json(params): Json<ParamsForUpdate<SenderPresaveDetailsForUpdate>>,
 ) -> Result<(StatusCode, Json<DataRestResult<SenderPresaveDetails>>)> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, PRESAVE_TEMPLATE_UPDATE)?;
-	let current = SenderPresaveBmc::get(&ctx, &mm, id).await?;
-	ensure_sender_presave_scope(&ctx, &mm, &current).await?;
-
-	let ParamsForUpdate { data } = params;
-	require_sender_detail_operation_permissions(&ctx, &mm, id, &data).await?;
-	if data
-		.parent
-		.as_ref()
-		.is_some_and(|parent| parent.deleted == Some(true))
-	{
-		if data.gateways.is_some() || data.responsible_persons.is_some() {
-			return Err(Error::BadRequest {
-				message: "presave deletion cannot include child changes".into(),
-			});
-		}
-		PresaveLifecycleService::archive(&ctx, &mm, PresaveKind::Sender, id).await?;
-		let details = load_sender_presave_details(&ctx, &mm, id).await?;
-		return Ok(rest_ok(details));
-	}
-	preflight_sender_presave_details(&ctx, &mm, id, &data).await?;
-
-	apply_sender_presave_details(&ctx, &mm, id, data).await?;
-
-	let details = load_sender_presave_details(&ctx, &mm, id).await?;
-	ensure_sender_presave_scope(&ctx, &mm, &details.parent).await?;
-	Ok(rest_ok(details))
-}
-
-async fn apply_sender_presave_details(
-	ctx: &lib_core::ctx::Ctx,
-	mm: &ModelManager,
-	id: Uuid,
-	data: SenderPresaveDetailsForUpdate,
-) -> Result<()> {
-	let dbx = mm.dbx();
-	dbx.begin_txn().await.map_err(model::Error::from)?;
-	if let Err(err) =
-		lib_core::model::store::set_full_context_from_ctx_dbx(dbx, ctx).await
-	{
-		let _ = dbx.rollback_txn().await;
-		return Err(err.into());
-	}
-
-	let apply_result = apply_sender_presave_details_inner(ctx, mm, id, data).await;
-	if let Err(err) = apply_result {
-		let _ = dbx.rollback_txn().await;
-		return Err(err);
-	}
-
-	dbx.commit_txn().await.map_err(model::Error::from)?;
-	Ok(())
+	with_authorized_presave_atomic_update(
+		&ctx,
+		&snapshot,
+		&mm,
+		PresaveAuthorizationKind::Sender,
+		id,
+		move |ctx, mm| {
+			Box::pin(async move {
+				let ParamsForUpdate { data } = params;
+				if data
+					.parent
+					.as_ref()
+					.is_some_and(|parent| parent.deleted == Some(true))
+				{
+					if data.gateways.is_some() || data.responsible_persons.is_some()
+					{
+						return Err(Error::BadRequest {
+							message: "presave deletion cannot include child changes"
+								.into(),
+						});
+					}
+					PresaveLifecycleService::archive(
+						ctx,
+						mm,
+						PresaveKind::Sender,
+						id,
+					)
+					.await?;
+					return Ok(rest_ok(
+						load_sender_presave_details(ctx, mm, id).await?,
+					));
+				}
+				preflight_sender_presave_details(ctx, mm, id, &data).await?;
+				apply_sender_presave_details_inner(ctx, mm, id, data).await?;
+				Ok(rest_ok(load_sender_presave_details(ctx, mm, id).await?))
+			})
+		},
+	)
+	.await
 }
 
 async fn apply_sender_presave_details_inner(
@@ -312,107 +350,6 @@ async fn load_sender_presave_details(
 		gateways,
 		responsible_persons,
 	})
-}
-
-async fn require_sender_detail_operation_permissions(
-	ctx: &lib_core::ctx::Ctx,
-	mm: &ModelManager,
-	sender_id: Uuid,
-	data: &SenderPresaveDetailsForUpdate,
-) -> Result<()> {
-	let creates_child = data
-		.gateways
-		.as_deref()
-		.unwrap_or_default()
-		.iter()
-		.any(|gateway| gateway.id.is_none() && !gateway.delete)
-		|| data
-			.responsible_persons
-			.as_deref()
-			.unwrap_or_default()
-			.iter()
-			.any(|responsible_person| {
-				responsible_person.id.is_none() && !responsible_person.delete
-			});
-	let deletes_child =
-		sender_detail_payload_deletes_child(ctx, mm, sender_id, data).await?;
-	let deletes_parent = data
-		.parent
-		.as_ref()
-		.is_some_and(|parent| parent.deleted == Some(true));
-
-	if creates_child {
-		require_permission(ctx, PRESAVE_TEMPLATE_CREATE)?;
-	}
-	if deletes_child || deletes_parent {
-		require_permission(ctx, PRESAVE_TEMPLATE_DELETE)?;
-	}
-
-	Ok(())
-}
-
-async fn sender_detail_payload_deletes_child(
-	ctx: &lib_core::ctx::Ctx,
-	mm: &ModelManager,
-	sender_id: Uuid,
-	data: &SenderPresaveDetailsForUpdate,
-) -> Result<bool> {
-	for gateway in data.gateways.as_deref().unwrap_or_default() {
-		if gateway.delete {
-			return Ok(true);
-		}
-		if gateway.deleted == Some(true)
-			&& sender_gateway_deleted_transition(ctx, mm, sender_id, gateway).await?
-		{
-			return Ok(true);
-		}
-	}
-
-	for responsible_person in data.responsible_persons.as_deref().unwrap_or_default()
-	{
-		if responsible_person.delete {
-			return Ok(true);
-		}
-		if responsible_person.deleted == Some(true)
-			&& sender_responsible_person_deleted_transition(
-				ctx,
-				mm,
-				sender_id,
-				responsible_person,
-			)
-			.await?
-		{
-			return Ok(true);
-		}
-	}
-
-	Ok(false)
-}
-
-async fn sender_gateway_deleted_transition(
-	ctx: &lib_core::ctx::Ctx,
-	mm: &ModelManager,
-	sender_id: Uuid,
-	gateway: &SenderGatewayDetailsForUpdate,
-) -> Result<bool> {
-	let Some(id) = gateway.id else {
-		return Ok(true);
-	};
-	let entity = SenderPresaveGatewayBmc::get(ctx, mm, id).await?;
-	Ok(entity.sender_presave_id != sender_id || !entity.deleted)
-}
-
-async fn sender_responsible_person_deleted_transition(
-	ctx: &lib_core::ctx::Ctx,
-	mm: &ModelManager,
-	sender_id: Uuid,
-	responsible_person: &SenderResponsiblePersonDetailsForUpdate,
-) -> Result<bool> {
-	let Some(id) = responsible_person.id else {
-		return Ok(true);
-	};
-	let entity = SenderPresaveResponsiblePersonBmc::get(ctx, mm, id).await?;
-	Ok(entity.sender_presave_id != sender_id || !entity.deleted)
 }
 
 async fn preflight_sender_presave_details(
@@ -677,9 +614,8 @@ generate_presave_child_rest_fns! {
 	UpdateFn: update_sender_gateway,
 	DeleteFn: delete_sender_gateway,
 	ParentField: sender_presave_id,
-	ParentScopeFn: ensure_sender_presave_id_scope,
+	ParentKind: Sender,
 	EntityName: "sender_presave_gateways",
-	UpdatePermission: delete_aware,
 	DeleteMode: soft
 }
 
@@ -724,8 +660,7 @@ generate_presave_child_rest_fns! {
 	UpdateFn: update_sender_responsible_person,
 	DeleteFn: delete_sender_responsible_person,
 	ParentField: sender_presave_id,
-	ParentScopeFn: ensure_sender_presave_id_scope,
+	ParentKind: Sender,
 	EntityName: "sender_presave_responsible_persons",
-	UpdatePermission: delete_aware,
 	DeleteMode: soft
 }

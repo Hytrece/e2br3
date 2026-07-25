@@ -2,7 +2,6 @@ use axum::extract::{Path, Query, State};
 use axum::http::header;
 use axum::response::Response;
 use axum::Json;
-use lib_core::model::acs::{XML_EXPORT, XML_EXPORT_READ};
 use lib_core::model::admin_settings::AdminSettingsBmc;
 use lib_core::model::case::CaseBmc;
 use lib_core::model::safety_report::SafetyReportIdentificationBmc;
@@ -15,9 +14,7 @@ use lib_rest_core::prelude::*;
 use lib_rest_core::rest_result::DataRestResult;
 use lib_rest_core::Error;
 use lib_web::middleware::mw_auth::CtxW;
-use lib_web::middleware::mw_permission::{
-	RequirePermission, XmlExport as XmlExportPerm,
-};
+use lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW;
 use serde::{Deserialize, Serialize};
 use sqlx::types::time::OffsetDateTime;
 use std::collections::HashSet;
@@ -187,17 +184,6 @@ fn export_file_name(
 	}
 }
 
-pub async fn generate_validated_case_xml(
-	ctx: &lib_core::ctx::Ctx,
-	mm: &lib_core::model::ModelManager,
-	id: Uuid,
-) -> Result<(lib_core::model::case::Case, String)> {
-	lib_rest_core::require_case_read_allowed(ctx, mm, id).await?;
-	let case = CaseBmc::get(ctx, mm, id).await?;
-	let authority = RegulatoryAuthority::Fda;
-	generate_validated_case_xml_for_authority(ctx, mm, id, case, authority).await
-}
-
 pub async fn generate_validated_case_xml_for_authority(
 	ctx: &lib_core::ctx::Ctx,
 	mm: &lib_core::model::ModelManager,
@@ -342,21 +328,36 @@ pub async fn record_xml_export(
 pub async fn export_case(
 	State(mm): State<lib_core::model::ModelManager>,
 	ctx_w: CtxW,
+	snapshot: AuthorizationSnapshotW,
 	Path(id): Path<Uuid>,
 	Query(query): Query<ExportCaseQuery>,
 ) -> Result<Response> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, XML_EXPORT)?;
-	lib_rest_core::require_case_read_allowed(&ctx, &mm, id).await?;
-	let case = CaseBmc::get(&ctx, &mm, id).await?;
-	let safety_report_id = safety_report_id_for_case(&ctx, &mm, id).await?;
-	let authority = resolve_requested_export_authority(query.authority.as_deref())?;
-	let include_authority_suffix = true;
-	let file_name =
-		export_file_name(&safety_report_id, id, authority, include_authority_suffix);
-	let (_case, xml) = match generate_validated_case_xml_for_authority_with_notation(
+	lib_rest_core::with_authorized_case_export(
 		&ctx,
+		&snapshot,
 		&mm,
+		&[id],
+		move |ctx, mm| {
+			Box::pin(async move { export_case_authorized(ctx, mm, id, query).await })
+		},
+	)
+	.await
+}
+
+async fn export_case_authorized(
+	ctx: &lib_core::ctx::Ctx,
+	mm: &lib_core::model::ModelManager,
+	id: Uuid,
+	query: ExportCaseQuery,
+) -> Result<Response> {
+	let case = CaseBmc::get(ctx, mm, id).await?;
+	let safety_report_id = safety_report_id_for_case(ctx, mm, id).await?;
+	let authority = resolve_requested_export_authority(query.authority.as_deref())?;
+	let file_name = export_file_name(&safety_report_id, id, authority, true);
+	let (_case, xml) = match generate_validated_case_xml_for_authority_with_notation(
+		ctx,
+		mm,
 		id,
 		case.clone(),
 		authority,
@@ -368,8 +369,8 @@ pub async fn export_case(
 		Err(err) => {
 			let error_message = err.to_string();
 			if let Err(record_err) = record_xml_export(
-				&ctx,
-				&mm,
+				ctx,
+				mm,
 				id,
 				Some(safety_report_id.as_str()),
 				&file_name,
@@ -386,8 +387,8 @@ pub async fn export_case(
 		}
 	};
 	if let Err(err) = record_xml_export(
-		&ctx,
-		&mm,
+		ctx,
+		mm,
 		id,
 		Some(safety_report_id.as_str()),
 		&file_name,
@@ -420,11 +421,38 @@ pub async fn export_case(
 pub async fn export_cases_zip(
 	State(mm): State<lib_core::model::ModelManager>,
 	ctx_w: CtxW,
-	_perm: RequirePermission<XmlExportPerm>,
+	snapshot: AuthorizationSnapshotW,
 	axum::Json(input): axum::Json<BulkXmlExportInput>,
 ) -> Result<Response> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, XML_EXPORT)?;
+	let mut unique_case_ids = Vec::new();
+	let mut seen = HashSet::new();
+	for case_id in &input.case_ids {
+		if seen.insert(*case_id) {
+			unique_case_ids.push(*case_id);
+		}
+	}
+	let export_case_ids = unique_case_ids.clone();
+	lib_rest_core::with_authorized_case_export(
+		&ctx,
+		&snapshot,
+		&mm,
+		&unique_case_ids,
+		move |ctx, mm| {
+			Box::pin(async move {
+				export_cases_zip_authorized(ctx, mm, input, export_case_ids).await
+			})
+		},
+	)
+	.await
+}
+
+async fn export_cases_zip_authorized(
+	ctx: &lib_core::ctx::Ctx,
+	mm: &lib_core::model::ModelManager,
+	input: BulkXmlExportInput,
+	unique_case_ids: Vec<Uuid>,
+) -> Result<Response> {
 	if input.case_ids.is_empty() {
 		return Err(Error::BadRequest {
 			message: "case_ids is required".to_string(),
@@ -432,30 +460,21 @@ pub async fn export_cases_zip(
 	}
 	let authority = resolve_requested_export_authority(input.authority.as_deref())?;
 
-	let mut unique_case_ids = Vec::new();
-	let mut seen = HashSet::new();
-	for case_id in input.case_ids {
-		if seen.insert(case_id) {
-			unique_case_ids.push(case_id);
-		}
-	}
-
 	let mut cursor = Cursor::new(Vec::new());
 	let options =
 		SimpleFileOptions::default().compression_method(CompressionMethod::Deflated);
 	{
 		let mut zip = ZipWriter::new(&mut cursor);
 		for case_id in unique_case_ids {
-			lib_rest_core::require_case_read_allowed(&ctx, &mm, case_id).await?;
-			let case = CaseBmc::get(&ctx, &mm, case_id).await?;
+			let case = CaseBmc::get(ctx, mm, case_id).await?;
 			let safety_report_id =
-				safety_report_id_for_case(&ctx, &mm, case_id).await?;
+				safety_report_id_for_case(ctx, mm, case_id).await?;
 			{
 				let file_name =
 					export_file_name(&safety_report_id, case_id, authority, true);
 				let (_case, xml) = match generate_validated_case_xml_for_authority(
-					&ctx,
-					&mm,
+					ctx,
+					mm,
 					case_id,
 					case.clone(),
 					authority,
@@ -466,8 +485,8 @@ pub async fn export_cases_zip(
 					Err(err) => {
 						let error_message = err.to_string();
 						if let Err(record_err) = record_xml_export(
-							&ctx,
-							&mm,
+							ctx,
+							mm,
 							case_id,
 							Some(safety_report_id.as_str()),
 							&file_name,
@@ -493,8 +512,8 @@ pub async fn export_cases_zip(
 						message: format!("failed to write zip entry: {err}"),
 					})?;
 				if let Err(err) = record_xml_export(
-					&ctx,
-					&mm,
+					ctx,
+					mm,
 					case_id,
 					Some(safety_report_id.as_str()),
 					&file_name,
@@ -538,120 +557,123 @@ pub async fn export_cases_zip(
 pub async fn list_xml_export_history(
 	State(mm): State<lib_core::model::ModelManager>,
 	ctx_w: CtxW,
+	snapshot: AuthorizationSnapshotW,
 ) -> Result<(
 	axum::http::StatusCode,
 	Json<DataRestResult<XmlExportHistoryList>>,
 )> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, XML_EXPORT_READ)?;
-
-	let items = lib_rest_core::with_rls_read(&mm, &ctx, |dbx| {
-		Box::pin(async move {
-			XmlExportHistoryBmc::list_all(dbx)
-				.await
-				.map_err(Error::from)
-		})
-	})
-	.await?;
-
-	let mut scoped = Vec::with_capacity(items.len());
-	for item in items {
-		if lib_rest_core::case_matches_user_scope(&ctx, &mm, item.case_id).await? {
-			scoped.push(item);
-		}
-	}
-
-	Ok((
-		axum::http::StatusCode::OK,
-		Json(DataRestResult {
-			data: XmlExportHistoryList { items: scoped },
-		}),
-	))
+	lib_rest_core::with_authorized_export_history_collection(
+		&ctx,
+		&snapshot,
+		&mm,
+		|_ctx, mm, scope| {
+			Box::pin(async move {
+				let items = XmlExportHistoryBmc::list_all_scoped(mm.dbx(), scope)
+					.await
+					.map_err(Error::from)?;
+				Ok((
+					axum::http::StatusCode::OK,
+					Json(DataRestResult {
+						data: XmlExportHistoryList { items },
+					}),
+				))
+			})
+		},
+	)
+	.await
 }
 
 /// GET /api/cases/{case_id}/exports/history
 pub async fn list_case_xml_export_history(
 	State(mm): State<lib_core::model::ModelManager>,
 	ctx_w: CtxW,
+	snapshot: AuthorizationSnapshotW,
 	Path(case_id): Path<Uuid>,
 ) -> Result<(
 	axum::http::StatusCode,
 	Json<DataRestResult<XmlExportHistoryList>>,
 )> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, XML_EXPORT_READ)?;
-	lib_rest_core::require_case_read_allowed(&ctx, &mm, case_id).await?;
-
-	let items = lib_rest_core::with_rls_read(&mm, &ctx, |dbx| {
-		Box::pin(async move {
-			XmlExportHistoryBmc::list_by_case(dbx, case_id)
-				.await
-				.map_err(Error::from)
-		})
-	})
-	.await?;
-
-	Ok((
-		axum::http::StatusCode::OK,
-		Json(DataRestResult {
-			data: XmlExportHistoryList { items },
-		}),
-	))
+	lib_rest_core::with_authorized_case_read(
+		&ctx,
+		&snapshot,
+		&mm,
+		case_id,
+		"case.export.history.read",
+		move |_ctx, mm| {
+			Box::pin(async move {
+				let items = XmlExportHistoryBmc::list_by_case(mm.dbx(), case_id)
+					.await
+					.map_err(Error::from)?;
+				Ok((
+					axum::http::StatusCode::OK,
+					Json(DataRestResult {
+						data: XmlExportHistoryList { items },
+					}),
+				))
+			})
+		},
+	)
+	.await
 }
 
 /// GET /api/exports/history/{id}/error.txt
 pub async fn download_xml_export_history_error(
 	State(mm): State<lib_core::model::ModelManager>,
 	ctx_w: CtxW,
+	snapshot: AuthorizationSnapshotW,
 	Path(id): Path<Uuid>,
 ) -> Result<Response> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, XML_EXPORT_READ)?;
-
-	let row = lib_rest_core::with_rls_read(&mm, &ctx, |dbx| {
-		Box::pin(async move {
-			XmlExportHistoryBmc::get_error_row(dbx, id)
-				.await
-				.map_err(Error::from)
-		})
-	})
-	.await?;
-
-	let row = row.ok_or_else(|| Error::BadRequest {
-		message: format!("xml export history record {id} not found"),
-	})?;
-	if !lib_rest_core::case_matches_user_scope(&ctx, &mm, row.case_id).await? {
-		return Err(Error::PermissionDenied {
-			required_permission: XML_EXPORT_READ.to_string(),
-		});
-	}
-	let text = row.error_message.ok_or_else(|| Error::BadRequest {
-		message: format!("xml export history record {id} has no error details"),
-	})?;
-
-	let safe_file_name = row
-		.file_name
-		.chars()
-		.map(|ch| match ch {
-			'a'..='z' | 'A'..='Z' | '0'..='9' | '.' | '_' | '-' => ch,
-			_ => '_',
-		})
-		.collect::<String>();
-	let download_name = format!("export-error-{id}-{safe_file_name}.txt");
-
-	let mut response = (axum::http::StatusCode::OK, text).into_response();
-	response.headers_mut().insert(
-		header::CONTENT_TYPE,
-		header::HeaderValue::from_static("text/plain; charset=utf-8"),
-	);
-	response.headers_mut().insert(
-		header::CONTENT_DISPOSITION,
-		header::HeaderValue::from_str(&format!(
-			"attachment; filename=\"{download_name}\""
-		))
-		.map_err(|err| Error::BadRequest {
-			message: format!("invalid export error filename header: {err}"),
-		})?,
-	);
-	Ok(response)
+	lib_rest_core::with_authorized_export_history_read(
+		&ctx,
+		&snapshot,
+		&mm,
+		id,
+		move |_ctx, mm| {
+			Box::pin(async move {
+				let row = XmlExportHistoryBmc::get_error_row(mm.dbx(), id)
+					.await
+					.map_err(Error::from)?
+					.ok_or_else(|| Error::BadRequest {
+						message: format!("xml export history record {id} not found"),
+					})?;
+				let text = row.error_message.ok_or_else(|| Error::BadRequest {
+					message: format!(
+						"xml export history record {id} has no error details"
+					),
+				})?;
+				let safe_file_name = row
+					.file_name
+					.chars()
+					.map(|ch| match ch {
+						'a'..='z' | 'A'..='Z' | '0'..='9' | '.' | '_' | '-' => ch,
+						_ => '_',
+					})
+					.collect::<String>();
+				let download_name =
+					format!("export-error-{id}-{safe_file_name}.txt");
+				let mut response =
+					(axum::http::StatusCode::OK, text).into_response();
+				response.headers_mut().insert(
+					header::CONTENT_TYPE,
+					header::HeaderValue::from_static("text/plain; charset=utf-8"),
+				);
+				response.headers_mut().insert(
+					header::CONTENT_DISPOSITION,
+					header::HeaderValue::from_str(&format!(
+						"attachment; filename=\"{download_name}\""
+					))
+					.map_err(|err| Error::BadRequest {
+						message: format!(
+							"invalid export error filename header: {err}"
+						),
+					})?,
+				);
+				Ok(response)
+			})
+		},
+	)
+	.await
 }

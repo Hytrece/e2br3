@@ -5,8 +5,7 @@ use lib_core::model::acs::{
 	DRUG_REACTION_ASSESSMENT_CREATE, DRUG_REACTION_ASSESSMENT_DELETE,
 	DRUG_REACTION_ASSESSMENT_UPDATE, DRUG_SUBSTANCE_CREATE, DRUG_SUBSTANCE_DELETE,
 	DRUG_SUBSTANCE_UPDATE, RELATEDNESS_ASSESSMENT_CREATE,
-	RELATEDNESS_ASSESSMENT_DELETE, RELATEDNESS_ASSESSMENT_LIST,
-	RELATEDNESS_ASSESSMENT_UPDATE,
+	RELATEDNESS_ASSESSMENT_DELETE, RELATEDNESS_ASSESSMENT_UPDATE,
 };
 use lib_core::model::drug::{
 	DosageInformationForCreate, DosageInformationForUpdate,
@@ -586,7 +585,6 @@ async fn load_editor_dg_list_rows(
 repeatable_list_handler!(
 	list_editor_dg,
 	CaseEditorDgListRowDto,
-	DRUG_LIST,
 	load_editor_dg_list_rows,
 	include_deleted,
 );
@@ -594,6 +592,7 @@ repeatable_list_handler!(
 pub async fn get_editor_dg_page_projection(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 	Path(case_id): Path<Uuid>,
 	Query(query): Query<CaseEditorPageProjectionQuery>,
 ) -> Result<(
@@ -601,24 +600,32 @@ pub async fn get_editor_dg_page_projection(
 	Json<CaseEditorPageProjectionResponse>,
 )> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, CASE_READ)?;
-	require_permission(&ctx, DRUG_LIST)?;
-	lib_rest_core::require_case_read_allowed(&ctx, &mm, case_id).await?;
-
-	let rows = load_editor_dg_list_rows(
+	lib_rest_core::with_authorized_case_child_read(
 		&ctx,
+		&snapshot,
 		&mm,
 		case_id,
-		query.include_deleted.unwrap_or(false),
+		"editor/DG",
+		move |ctx, mm| {
+			Box::pin(async move {
+				let rows = load_editor_dg_list_rows(
+					ctx,
+					mm,
+					case_id,
+					query.include_deleted.unwrap_or(false),
+				)
+				.await?;
+				let projection = repeatable_page_projection_response(
+					case_id,
+					"DG",
+					query_authorities_csv(&query)?,
+					json!({ "rows": rows }),
+				)?;
+				Ok((axum::http::StatusCode::OK, Json(projection)))
+			})
+		},
 	)
-	.await?;
-	let projection = repeatable_page_projection_response(
-		case_id,
-		"DG",
-		query_authorities_csv(&query)?,
-		json!({ "rows": rows }),
-	)?;
-	Ok((axum::http::StatusCode::OK, Json(projection)))
+	.await
 }
 
 fn drug_id_filter<T>(drug_id: Uuid) -> Option<Vec<T>>
@@ -788,43 +795,36 @@ async fn load_editor_dg_row_detail(
 pub async fn get_editor_dg(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 	Path((case_id, drug_id)): Path<(Uuid, Uuid)>,
 ) -> Result<(axum::http::StatusCode, Json<CaseEditorRowDetailResponse>)> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, CASE_READ)?;
-	require_permission(&ctx, DRUG_READ)?;
-	require_permission(&ctx, DRUG_SUBSTANCE_LIST)?;
-	require_permission(&ctx, DRUG_DOSAGE_LIST)?;
-	require_permission(&ctx, DRUG_INDICATION_LIST)?;
-	require_permission(&ctx, DRUG_REACTION_ASSESSMENT_LIST)?;
-	require_permission(&ctx, RELATEDNESS_ASSESSMENT_LIST)?;
-	require_permission(&ctx, DRUG_RECURRENCE_LIST)?;
-	lib_rest_core::require_case_read_allowed(&ctx, &mm, case_id).await?;
-
-	let drug = load_editor_dg_row_detail(&ctx, &mm, case_id, drug_id).await?;
-
-	Ok((
-		axum::http::StatusCode::OK,
-		Json(CaseEditorRowDetailResponse {
-			case_id,
-			row_id: drug_id,
-			data: json!({ "drugs": [drug] }),
-		}),
-	))
+	lib_rest_core::with_authorized_case_child_read(
+		&ctx,
+		&snapshot,
+		&mm,
+		case_id,
+		format!("editor/DG/{drug_id}"),
+		move |ctx, mm| {
+			Box::pin(async move {
+				let drug =
+					load_editor_dg_row_detail(ctx, mm, case_id, drug_id).await?;
+				Ok((
+					axum::http::StatusCode::OK,
+					Json(CaseEditorRowDetailResponse {
+						case_id,
+						row_id: drug_id,
+						data: json!({ "drugs": [drug] }),
+					}),
+				))
+			})
+		},
+	)
+	.await
 }
 
 repeatable_page_row_read_handler!(
 	get_editor_dg_page_row,
-	[
-		CASE_READ,
-		DRUG_READ,
-		DRUG_SUBSTANCE_LIST,
-		DRUG_DOSAGE_LIST,
-		DRUG_INDICATION_LIST,
-		DRUG_REACTION_ASSESSMENT_LIST,
-		RELATEDNESS_ASSESSMENT_LIST,
-		DRUG_RECURRENCE_LIST,
-	],
 	build_editor_dg_page_row_response,
 );
 
@@ -848,126 +848,162 @@ async fn build_editor_dg_page_row_response(
 pub async fn create_editor_dg_page_row(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 	Path(case_id): Path<Uuid>,
 	Json(request): Json<CaseEditorPagePatchRequest>,
 ) -> Result<(axum::http::StatusCode, Json<Value>)> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, DRUG_CREATE)?;
-	lib_rest_core::require_case_write_allowed(&ctx, &mm, case_id).await?;
-	let requested_authorities =
-		validate_request_projection_context(request.authorities.as_deref())?;
-	let row = required_row_object("DG", &request.rows, "drug")?;
-	validate_row_payload("DG", "drug", row, None)?;
+	lib_rest_core::with_authorized_case_child_mutation(
+		&ctx,
+		&snapshot,
+		&mm,
+		case_id,
+		"editor/DG/drug",
+		move |ctx, mm| {
+			Box::pin(async move {
+				let requested_authorities = validate_request_projection_context(
+					request.authorities.as_deref(),
+				)?;
+				let row = required_row_object("DG", &request.rows, "drug")?;
+				validate_row_payload("DG", "drug", row, None)?;
 
-	let model = row_model_value(
-		row,
-		DRUG_ROW_ALIASES,
-		&[
-			("case_id", json!(case_id)),
-			(
-				"sequence_number",
-				json!(i32_field(row, &["sequenceNumber", "sequence_number"])
-					.unwrap_or(1)),
-			),
-			(
-				"drug_characterization",
-				json!(string_field(
+				let model = row_model_value(
 					row,
-					&["drugCharacterization", "drugRole", "drug_characterization"],
+					DRUG_ROW_ALIASES,
+					&[
+						("case_id", json!(case_id)),
+						(
+							"sequence_number",
+							json!(i32_field(
+								row,
+								&["sequenceNumber", "sequence_number"],
+							)
+							.unwrap_or(1)),
+						),
+						(
+							"drug_characterization",
+							json!(string_field(
+								row,
+								&[
+									"drugCharacterization",
+									"drugRole",
+									"drug_characterization",
+								],
+							)
+							.unwrap_or_else(|| "1".to_string())),
+						),
+					],
+				);
+				let create = parse_row_model::<DrugInformationForCreate>(
+					"DG", "drug", model,
+				)?;
+				let row_id = DrugInformationBmc::create(ctx, mm, create).await?;
+				persist_active_substances(ctx, mm, row_id, row).await?;
+				persist_dosage_information(ctx, mm, row_id, row).await?;
+				persist_indications(ctx, mm, row_id, row).await?;
+				persist_drug_reaction_assessments(ctx, mm, case_id, row_id, row)
+					.await?;
+				mark_editor_validation_cache_stale(
+					ctx,
+					mm,
+					case_id,
+					requested_authorities.clone(),
 				)
-				.unwrap_or_else(|| "1".to_string())),
-			),
-		],
-	);
-	let create = parse_row_model::<DrugInformationForCreate>("DG", "drug", model)?;
-	let row_id = DrugInformationBmc::create(&ctx, &mm, create).await?;
-	persist_active_substances(&ctx, &mm, row_id, row).await?;
-	persist_dosage_information(&ctx, &mm, row_id, row).await?;
-	persist_indications(&ctx, &mm, row_id, row).await?;
-	persist_drug_reaction_assessments(&ctx, &mm, case_id, row_id, row).await?;
-	mark_editor_validation_cache_stale(
-		&ctx,
-		&mm,
-		case_id,
-		requested_authorities.clone(),
+				.await?;
+				let response = build_editor_dg_page_row_response(
+					ctx,
+					mm,
+					case_id,
+					row_id,
+					requested_authorities,
+				)
+				.await?;
+				Ok((axum::http::StatusCode::CREATED, Json(response)))
+			})
+		},
 	)
-	.await?;
-	let response = build_editor_dg_page_row_response(
-		&ctx,
-		&mm,
-		case_id,
-		row_id,
-		requested_authorities,
-	)
-	.await?;
-	Ok((axum::http::StatusCode::CREATED, Json(response)))
+	.await
 }
 
 pub async fn patch_editor_dg_page_row(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 	Path((case_id, row_id)): Path<(Uuid, Uuid)>,
 	Json(request): Json<CaseEditorPagePatchRequest>,
 ) -> Result<(axum::http::StatusCode, Json<Value>)> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, DRUG_UPDATE)?;
-	lib_rest_core::require_case_write_allowed(&ctx, &mm, case_id).await?;
-	let requested_authorities =
-		validate_request_projection_context(request.authorities.as_deref())?;
-	DrugInformationBmc::get_in_case(&ctx, &mm, case_id, row_id).await?;
-
-	let synthesized_rows;
-	let rows = if !request.changes.is_empty() {
-		synthesized_rows = row_payload_from_changes(
-			"DG",
-			"drug",
-			&request.changes,
-			&[
-				("medicinalProduct", "medicinalProduct"),
-				("drugCharacterization", "drugRole"),
-				("drugRole", "drugRole"),
-				("actionTaken", "actionTaken"),
-			],
-		)?;
-		&synthesized_rows
-	} else {
-		&request.rows
-	};
-	let row = required_row_object("DG", rows, "drug")?;
-	let changed_paths = (!request.changes.is_empty())
-		.then(|| request.changes.keys().cloned().collect::<BTreeSet<_>>());
-	validate_row_payload("DG", "drug", row, changed_paths.as_ref())?;
-
-	let model = row_model_value(row, DRUG_ROW_ALIASES, &[]);
-	let update = parse_row_model::<DrugInformationForUpdate>("DG", "drug", model)?;
-	DrugInformationBmc::update(&ctx, &mm, row_id, update).await?;
-	persist_active_substances(&ctx, &mm, row_id, row).await?;
-	persist_dosage_information(&ctx, &mm, row_id, row).await?;
-	persist_indications(&ctx, &mm, row_id, row).await?;
-	persist_drug_reaction_assessments(&ctx, &mm, case_id, row_id, row).await?;
-	refresh_editor_validation_cache(
+	lib_rest_core::with_authorized_case_child_mutation(
 		&ctx,
+		&snapshot,
 		&mm,
 		case_id,
-		requested_authorities.clone(),
+		"editor/DG/drug",
+		move |ctx, mm| {
+			Box::pin(async move {
+				let requested_authorities = validate_request_projection_context(
+					request.authorities.as_deref(),
+				)?;
+				DrugInformationBmc::get_in_case(ctx, mm, case_id, row_id).await?;
+
+				let synthesized_rows;
+				let rows = if !request.changes.is_empty() {
+					synthesized_rows = row_payload_from_changes(
+						"DG",
+						"drug",
+						&request.changes,
+						&[
+							("medicinalProduct", "medicinalProduct"),
+							("drugCharacterization", "drugRole"),
+							("drugRole", "drugRole"),
+							("actionTaken", "actionTaken"),
+						],
+					)?;
+					&synthesized_rows
+				} else {
+					&request.rows
+				};
+				let row = required_row_object("DG", rows, "drug")?;
+				let changed_paths = (!request.changes.is_empty()).then(|| {
+					request.changes.keys().cloned().collect::<BTreeSet<_>>()
+				});
+				validate_row_payload("DG", "drug", row, changed_paths.as_ref())?;
+
+				let model = row_model_value(row, DRUG_ROW_ALIASES, &[]);
+				let update = parse_row_model::<DrugInformationForUpdate>(
+					"DG", "drug", model,
+				)?;
+				DrugInformationBmc::update(ctx, mm, row_id, update).await?;
+				persist_active_substances(ctx, mm, row_id, row).await?;
+				persist_dosage_information(ctx, mm, row_id, row).await?;
+				persist_indications(ctx, mm, row_id, row).await?;
+				persist_drug_reaction_assessments(ctx, mm, case_id, row_id, row)
+					.await?;
+				refresh_editor_validation_cache(
+					ctx,
+					mm,
+					case_id,
+					requested_authorities.clone(),
+				)
+				.await?;
+				let response = build_editor_dg_page_row_response(
+					ctx,
+					mm,
+					case_id,
+					row_id,
+					requested_authorities,
+				)
+				.await?;
+				Ok((axum::http::StatusCode::OK, Json(response)))
+			})
+		},
 	)
-	.await?;
-	let response = build_editor_dg_page_row_response(
-		&ctx,
-		&mm,
-		case_id,
-		row_id,
-		requested_authorities,
-	)
-	.await?;
-	Ok((axum::http::StatusCode::OK, Json(response)))
+	.await
 }
 
 repeatable_page_row_delete_restore_handlers!(
 	delete: delete_editor_dg_page_row,
 	restore: restore_editor_dg_page_row,
 	bmc: DrugInformationBmc,
-	delete_permission: DRUG_DELETE,
-	update_permission: DRUG_UPDATE,
 	build_response: build_editor_dg_page_row_response,
 );

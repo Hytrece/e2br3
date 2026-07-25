@@ -1481,8 +1481,8 @@ async fn test_case_status_transition_prevents_regression_after_submitted(
 	assert_eq!(status, StatusCode::OK, "{body:?}");
 
 	let (status, body) = update_case_status(&app, &cookie, case_id, "draft").await?;
-	assert_eq!(status, StatusCode::BAD_REQUEST, "{body:?}");
-	assert!(body.to_string().contains("illegal case status transition"));
+	assert_eq!(status, StatusCode::FORBIDDEN, "{body:?}");
+	assert!(body.to_string().contains("PERMISSION_DENIED"));
 	Ok(())
 }
 
@@ -1842,8 +1842,8 @@ async fn test_locked_case_rejects_content_updates() -> Result<()> {
 	let status = res.status();
 	let body = to_bytes(res.into_body(), usize::MAX).await?;
 	let body: Value = serde_json::from_slice(&body)?;
-	assert_eq!(status, StatusCode::BAD_REQUEST, "{body:?}");
-	assert!(body.to_string().contains("locked cases are read-only"));
+	assert_eq!(status, StatusCode::FORBIDDEN, "{body:?}");
+	assert!(body.to_string().contains("PERMISSION_DENIED"));
 
 	Ok(())
 }
@@ -3182,11 +3182,8 @@ async fn test_locked_case_blocks_workflow_transition_even_for_admin_override(
 		}),
 	)
 	.await?;
-	assert_eq!(status, StatusCode::BAD_REQUEST, "{body:?}");
-	assert!(
-		body.to_string().contains("locked cases are read-only"),
-		"{body:?}"
-	);
+	assert_eq!(status, StatusCode::FORBIDDEN, "{body:?}");
+	assert!(body.to_string().contains("PERMISSION_DENIED"), "{body:?}");
 	Ok(())
 }
 

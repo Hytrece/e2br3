@@ -4,10 +4,10 @@
 // shape) stays in the REST layer. This BMC owns only the raw database operations
 // and the dynamic-role permission cache refresh.
 
+use crate::authorization::AdminMenuPrivilege;
 use crate::ctx::Ctx;
 use crate::model::acs::{
 	permissions_for_menu_privileges, remove_dynamic_role, replace_dynamic_roles,
-	AdminMenuPrivilege,
 };
 use crate::model::authorization::NormalizedRoleRepository;
 use crate::model::store::set_full_context_from_ctx_dbx;

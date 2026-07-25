@@ -1,9 +1,6 @@
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::Json;
-use lib_core::model::acs::{
-	PATIENT_CREATE, PATIENT_DELETE, PATIENT_READ, PATIENT_UPDATE,
-};
 use lib_core::model::patient::{
 	PatientInformation, PatientInformationBmc, PatientInformationForCreate,
 	PatientInformationForUpdate,
@@ -11,86 +8,139 @@ use lib_core::model::patient::{
 use lib_core::model::ModelManager;
 use lib_rest_core::rest_params::{ParamsForCreate, ParamsForUpdate};
 use lib_rest_core::rest_result::DataRestResult;
-use lib_rest_core::{
-	is_unique_violation, require_case_write_allowed, require_permission, Result,
-};
+use lib_rest_core::{is_unique_violation, Result};
 use lib_web::middleware::mw_auth::CtxW;
 use uuid::Uuid;
 
 pub async fn create_patient(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 	Path(case_id): Path<Uuid>,
 	Json(params): Json<ParamsForCreate<PatientInformationForCreate>>,
 ) -> Result<(StatusCode, Json<DataRestResult<PatientInformation>>)> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, PATIENT_CREATE)?;
-	require_case_write_allowed(&ctx, &mm, case_id).await?;
-	let ParamsForCreate { data } = params;
-	let mut data = data;
-	data.case_id = case_id;
-
-	match PatientInformationBmc::get_by_case(&ctx, &mm, case_id).await {
-		Ok(entity) => {
-			return Ok((StatusCode::OK, Json(DataRestResult { data: entity })));
-		}
-		Err(lib_core::model::Error::EntityUuidNotFound { .. }) => {}
-		Err(err) => return Err(err.into()),
-	}
-
-	match PatientInformationBmc::create(&ctx, &mm, data).await {
-		Ok(_) => {
-			let entity =
-				PatientInformationBmc::get_by_case(&ctx, &mm, case_id).await?;
-			Ok((StatusCode::CREATED, Json(DataRestResult { data: entity })))
-		}
-		Err(err) if is_unique_violation(&err) => {
-			match PatientInformationBmc::get_by_case(&ctx, &mm, case_id).await {
-				Ok(entity) => {
-					Ok((StatusCode::OK, Json(DataRestResult { data: entity })))
+	lib_rest_core::with_authorized_case_child_mutation(
+		&ctx,
+		&snapshot,
+		&mm,
+		case_id,
+		"patient",
+		move |ctx, mm| {
+			Box::pin(async move {
+				let ParamsForCreate { data } = params;
+				let mut data = data;
+				data.case_id = case_id;
+				match PatientInformationBmc::get_by_case(ctx, mm, case_id).await {
+					Ok(entity) => {
+						return Ok((
+							StatusCode::OK,
+							Json(DataRestResult { data: entity }),
+						));
+					}
+					Err(lib_core::model::Error::EntityUuidNotFound { .. }) => {}
+					Err(err) => return Err(err.into()),
 				}
-				Err(_) => Err(err.into()),
-			}
-		}
-		Err(err) => Err(err.into()),
-	}
+				match PatientInformationBmc::create(ctx, mm, data).await {
+					Ok(_) => {
+						let entity =
+							PatientInformationBmc::get_by_case(ctx, mm, case_id)
+								.await?;
+						Ok((
+							StatusCode::CREATED,
+							Json(DataRestResult { data: entity }),
+						))
+					}
+					Err(err) if is_unique_violation(&err) => {
+						match PatientInformationBmc::get_by_case(ctx, mm, case_id)
+							.await
+						{
+							Ok(entity) => Ok((
+								StatusCode::OK,
+								Json(DataRestResult { data: entity }),
+							)),
+							Err(_) => Err(err.into()),
+						}
+					}
+					Err(err) => Err(err.into()),
+				}
+			})
+		},
+	)
+	.await
 }
 
 pub async fn get_patient(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 	Path(case_id): Path<Uuid>,
 ) -> Result<(StatusCode, Json<DataRestResult<PatientInformation>>)> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, PATIENT_READ)?;
-	lib_rest_core::require_case_read_allowed(&ctx, &mm, case_id).await?;
-	let entity = PatientInformationBmc::get_by_case(&ctx, &mm, case_id).await?;
-	Ok((StatusCode::OK, Json(DataRestResult { data: entity })))
+	lib_rest_core::with_authorized_case_child_read(
+		&ctx,
+		&snapshot,
+		&mm,
+		case_id,
+		"patient",
+		move |ctx, mm| {
+			Box::pin(async move {
+				let entity =
+					PatientInformationBmc::get_by_case(ctx, mm, case_id).await?;
+				Ok((StatusCode::OK, Json(DataRestResult { data: entity })))
+			})
+		},
+	)
+	.await
 }
 
 pub async fn update_patient(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 	Path(case_id): Path<Uuid>,
 	Json(params): Json<ParamsForUpdate<PatientInformationForUpdate>>,
 ) -> Result<(StatusCode, Json<DataRestResult<PatientInformation>>)> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, PATIENT_UPDATE)?;
-	require_case_write_allowed(&ctx, &mm, case_id).await?;
-	let ParamsForUpdate { data } = params;
-	PatientInformationBmc::update_by_case(&ctx, &mm, case_id, data).await?;
-	let entity = PatientInformationBmc::get_by_case(&ctx, &mm, case_id).await?;
-	Ok((StatusCode::OK, Json(DataRestResult { data: entity })))
+	lib_rest_core::with_authorized_case_child_mutation(
+		&ctx,
+		&snapshot,
+		&mm,
+		case_id,
+		"patient",
+		move |ctx, mm| {
+			Box::pin(async move {
+				let ParamsForUpdate { data } = params;
+				PatientInformationBmc::update_by_case(ctx, mm, case_id, data)
+					.await?;
+				let entity =
+					PatientInformationBmc::get_by_case(ctx, mm, case_id).await?;
+				Ok((StatusCode::OK, Json(DataRestResult { data: entity })))
+			})
+		},
+	)
+	.await
 }
 
 pub async fn delete_patient(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 	Path(case_id): Path<Uuid>,
 ) -> Result<StatusCode> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, PATIENT_DELETE)?;
-	require_case_write_allowed(&ctx, &mm, case_id).await?;
-	PatientInformationBmc::delete_by_case(&ctx, &mm, case_id).await?;
-	Ok(StatusCode::NO_CONTENT)
+	lib_rest_core::with_authorized_case_child_mutation(
+		&ctx,
+		&snapshot,
+		&mm,
+		case_id,
+		"patient",
+		move |ctx, mm| {
+			Box::pin(async move {
+				PatientInformationBmc::delete_by_case(ctx, mm, case_id).await?;
+				Ok(StatusCode::NO_CONTENT)
+			})
+		},
+	)
+	.await
 }

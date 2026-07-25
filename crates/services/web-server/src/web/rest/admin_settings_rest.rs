@@ -1,18 +1,18 @@
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::Json;
-use lib_core::authorization::legacy_permission_allowed;
 use lib_core::ctx::{
 	canonical_role, Ctx, ROLE_SPONSOR_ADMIN_COMPANY, ROLE_SPONSOR_ADMIN_CRO,
 	ROLE_USER,
 };
-use lib_core::model::acs::{
-	DASHBOARD_NOTICE_READ, DASHBOARD_NOTICE_UPDATE, SETTINGS_READ, SETTINGS_UPDATE,
-};
 use lib_core::model::admin_settings::AdminSettingsBmc;
 use lib_core::model::ModelManager;
-use lib_rest_core::{require_permission, Error, Result};
+use lib_rest_core::{
+	notice_read_allowed, with_authorized_notice_update,
+	with_authorized_settings_read, with_authorized_settings_update, Error, Result,
+};
 use lib_web::middleware::mw_auth::CtxW;
+use lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::collections::HashSet;
@@ -460,10 +460,11 @@ async fn load_admin_settings_payload(
 pub async fn get_runtime_settings(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: AuthorizationSnapshotW,
 ) -> Result<(StatusCode, Json<AdminSettingsPayload>)> {
 	let ctx = ctx_w.0;
 	let mut payload = load_admin_settings_payload(&ctx, &mm).await?;
-	if !legacy_permission_allowed(ctx.permission_subject(), DASHBOARD_NOTICE_READ) {
+	if !notice_read_allowed(&snapshot) {
 		payload.notices = Some(Vec::new());
 	}
 	Ok((StatusCode::OK, Json(payload)))
@@ -473,57 +474,78 @@ pub async fn get_runtime_settings(
 pub async fn get_admin_settings(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: AuthorizationSnapshotW,
 ) -> Result<(StatusCode, Json<AdminSettingsPayload>)> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, SETTINGS_READ)?;
-	let mut payload = load_admin_settings_payload(&ctx, &mm).await?;
-	if !legacy_permission_allowed(ctx.permission_subject(), DASHBOARD_NOTICE_READ) {
-		payload.notices = Some(Vec::new());
-	}
-	Ok((StatusCode::OK, Json(payload)))
+	let can_read_notices = notice_read_allowed(&snapshot);
+	with_authorized_settings_read(&ctx, &snapshot, &mm, move |ctx, mm| {
+		Box::pin(async move {
+			let mut payload = load_admin_settings_payload(ctx, mm).await?;
+			if !can_read_notices {
+				payload.notices = Some(Vec::new());
+			}
+			Ok((StatusCode::OK, Json(payload)))
+		})
+	})
+	.await
 }
 
 /// PUT /api/admin/settings
 pub async fn update_admin_settings(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: AuthorizationSnapshotW,
 	Json(payload): Json<
 		lib_rest_core::rest_params::ParamsForUpdate<AdminSettingsUpdateBody>,
 	>,
 ) -> Result<(StatusCode, Json<AdminSettingsPayload>)> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, SETTINGS_UPDATE)?;
-	let value = payload_to_value(&ctx, &mm, &payload.data).await?;
-	let updated_by: Option<Uuid> = Some(ctx.user_id());
-	AdminSettingsBmc::upsert(&ctx, &mm, SETTINGS_KEY, &value, updated_by)
-		.await
-		.map_err(Error::Model)?;
-	let response = serde_json::from_value::<AdminSettingsPayload>(value)
-		.unwrap_or_else(|_| default_settings());
-	Ok((StatusCode::OK, Json(response)))
+	with_authorized_settings_update(&ctx, &snapshot, &mm, move |ctx, mm| {
+		Box::pin(async move {
+			let value = payload_to_value(ctx, mm, &payload.data).await?;
+			let updated_by: Option<Uuid> = Some(ctx.user_id());
+			AdminSettingsBmc::upsert(ctx, mm, SETTINGS_KEY, &value, updated_by)
+				.await
+				.map_err(Error::Model)?;
+			let response = serde_json::from_value::<AdminSettingsPayload>(value)
+				.unwrap_or_else(|_| default_settings());
+			Ok((StatusCode::OK, Json(response)))
+		})
+	})
+	.await
 }
 
 /// PUT /api/admin/notices
 pub async fn update_admin_notices(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: AuthorizationSnapshotW,
 	Json(payload): Json<
 		lib_rest_core::rest_params::ParamsForUpdate<AdminNoticesUpdateBody>,
 	>,
 ) -> Result<(StatusCode, Json<AdminNoticesPayload>)> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, DASHBOARD_NOTICE_UPDATE)?;
-	let writer = current_user_email(&ctx, &mm, ctx.user_id()).await?;
-	let notices = normalize_notices(payload.data.notices, writer);
-	let values = notices
-		.iter()
-		.map(serde_json::to_value)
-		.collect::<std::result::Result<Vec<_>, _>>()
-		.map_err(|err| Error::BadRequest {
-			message: format!("failed to serialize notices: {err}"),
-		})?;
-	AdminSettingsBmc::replace_dashboard_notices(&ctx, &mm, &values, ctx.user_id())
-		.await
-		.map_err(Error::Model)?;
-	Ok((StatusCode::OK, Json(AdminNoticesPayload { notices })))
+	with_authorized_notice_update(&ctx, &snapshot, &mm, move |ctx, mm| {
+		Box::pin(async move {
+			let writer = current_user_email(ctx, mm, ctx.user_id()).await?;
+			let notices = normalize_notices(payload.data.notices, writer);
+			let values = notices
+				.iter()
+				.map(serde_json::to_value)
+				.collect::<std::result::Result<Vec<_>, _>>()
+				.map_err(|err| Error::BadRequest {
+					message: format!("failed to serialize notices: {err}"),
+				})?;
+			AdminSettingsBmc::replace_dashboard_notices(
+				ctx,
+				mm,
+				&values,
+				ctx.user_id(),
+			)
+			.await
+			.map_err(Error::Model)?;
+			Ok((StatusCode::OK, Json(AdminNoticesPayload { notices })))
+		})
+	})
+	.await
 }

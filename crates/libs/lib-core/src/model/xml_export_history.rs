@@ -4,6 +4,7 @@
 // Read operations accept a `&Dbx` because callers embed them inside an
 // existing RLS-scoped read transaction via `lib_rest_core::with_rls_read`.
 
+use crate::authorization::EnforcedScopeFilter;
 use crate::ctx::Ctx;
 use crate::model::store::dbx::Dbx;
 use crate::model::store::set_full_context_dbx_or_rollback;
@@ -101,6 +102,85 @@ impl XmlExportHistoryBmc {
 			  ORDER BY h.exported_at DESC, h.created_at DESC
 			  LIMIT 200",
 		))
+		.await
+		.map_err(crate::model::Error::from)
+	}
+
+	pub async fn list_all_scoped(
+		dbx: &Dbx,
+		scope: &EnforcedScopeFilter,
+	) -> Result<Vec<XmlExportHistoryRecord>> {
+		dbx.fetch_all(
+			sqlx::query_as::<_, XmlExportHistoryRecord>(
+				r#"
+				SELECT h.id,
+				       h.case_id,
+				       h.case_number,
+				       h.file_name,
+				       h.status,
+				       h.error_message,
+				       h.exported_by,
+				       u.email AS exporter_email,
+				       h.exported_at
+				  FROM xml_export_history h
+				  JOIN cases c ON c.id = h.case_id
+				  LEFT JOIN users u ON u.id = h.exported_by
+				 WHERE (
+					cardinality($1::text[]) = 0
+					OR NOT EXISTS (
+						SELECT 1 FROM sender_information s
+						 WHERE s.case_id = c.id
+						   AND s.source_sender_presave_id IS NOT NULL
+					)
+					OR EXISTS (
+						SELECT 1 FROM sender_information s
+						 WHERE s.case_id = c.id
+						   AND s.source_sender_presave_id::text = ANY($1)
+					)
+				 )
+				   AND (
+					cardinality($2::text[]) = 0
+					OR NOT EXISTS (
+						SELECT 1 FROM drug_information d
+						 WHERE d.case_id = c.id
+						   AND d.source_product_presave_id IS NOT NULL
+					)
+					OR EXISTS (
+						SELECT 1 FROM drug_information d
+						 WHERE d.case_id = c.id
+						   AND d.source_product_presave_id::text = ANY($2)
+					)
+				   )
+				   AND (
+					cardinality($3::text[]) = 0
+					OR NOT EXISTS (
+						SELECT 1 FROM study_information s
+						 WHERE s.case_id = c.id
+						   AND s.source_study_presave_id IS NOT NULL
+					)
+					OR EXISTS (
+						SELECT 1 FROM study_information s
+						 WHERE s.case_id = c.id
+						   AND s.source_study_presave_id::text = ANY($3)
+					)
+				   )
+				   AND (
+					$4
+					OR NOT EXISTS (
+						SELECT 1 FROM drug_information d
+						 WHERE d.case_id = c.id
+						   AND d.investigational_product_blinded = TRUE
+					)
+				   )
+				 ORDER BY h.exported_at DESC, h.created_at DESC
+				 LIMIT 200
+				"#,
+			)
+			.bind(scope.sender_ids())
+			.bind(scope.product_ids())
+			.bind(scope.study_ids())
+			.bind(scope.blind_allowed()),
+		)
 		.await
 		.map_err(crate::model::Error::from)
 	}

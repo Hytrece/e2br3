@@ -215,6 +215,20 @@ pub fn user_collection_context(
 	})
 }
 
+pub fn existing_notice_context(
+	organization_id: Uuid,
+) -> ContextSnapshot<'static, Existing<NoticeResource>> {
+	ContextSnapshot::new(EvaluatedContext {
+		organization_id: Some(organization_id),
+		target_fingerprint: format!("notice:{organization_id}"),
+		within_principal_scope: false,
+		lifecycle_compatible: false,
+		parent_authorized: false,
+		every_target_authorized: false,
+		enforced_scope_filter: None,
+	})
+}
+
 pub fn existing_user_read_context(
 	user_id: Uuid,
 	organization_id: Option<Uuid>,

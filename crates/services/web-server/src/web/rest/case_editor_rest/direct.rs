@@ -237,29 +237,36 @@ async fn load_editor_ci_data(
 pub async fn get_editor_ci(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 	Path(case_id): Path<Uuid>,
 ) -> Result<(
 	axum::http::StatusCode,
 	Json<CaseEditorDirectSectionResponse>,
 )> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, CASE_READ)?;
-	require_permission(&ctx, SAFETY_REPORT_READ)?;
-	require_permission(&ctx, MESSAGE_HEADER_READ)?;
-	require_permission(&ctx, RECEIVER_READ)?;
-	require_permission(&ctx, CASE_IDENTIFIER_LIST)?;
-	lib_rest_core::require_case_read_allowed(&ctx, &mm, case_id).await?;
-
-	Ok(direct_section_response(
+	lib_rest_core::with_authorized_case_child_read(
+		&ctx,
+		&snapshot,
+		&mm,
 		case_id,
-		load_editor_ci_data(&ctx, &mm, case_id).await?,
-	))
+		"editor/CI",
+		move |ctx, mm| {
+			Box::pin(async move {
+				Ok(direct_section_response(
+					case_id,
+					load_editor_ci_data(ctx, mm, case_id).await?,
+				))
+			})
+		},
+	)
+	.await
 }
 
 /// GET /api/cases/{case_id}/editor/pages/CI
 pub async fn get_editor_ci_page_projection(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 	Path(case_id): Path<Uuid>,
 	Query(query): Query<CaseEditorPageProjectionQuery>,
 ) -> Result<(
@@ -267,20 +274,28 @@ pub async fn get_editor_ci_page_projection(
 	Json<CaseEditorPageProjectionResponse>,
 )> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, CASE_READ)?;
-	require_permission(&ctx, SAFETY_REPORT_READ)?;
-	lib_rest_core::require_case_read_allowed(&ctx, &mm, case_id).await?;
-
-	let projection = direct_page_projection_response(
+	lib_rest_core::with_authorized_case_child_read(
 		&ctx,
+		&snapshot,
 		&mm,
 		case_id,
-		"CI",
-		query_authorities_csv(&query)?,
-		load_editor_ci_data(&ctx, &mm, case_id).await?,
+		"editor/CI",
+		move |ctx, mm| {
+			Box::pin(async move {
+				let projection = direct_page_projection_response(
+					ctx,
+					mm,
+					case_id,
+					"CI",
+					query_authorities_csv(&query)?,
+					load_editor_ci_data(ctx, mm, case_id).await?,
+				)
+				.await?;
+				Ok((axum::http::StatusCode::OK, Json(projection)))
+			})
+		},
 	)
-	.await?;
-	Ok((axum::http::StatusCode::OK, Json(projection)))
+	.await
 }
 
 fn patch_string_value(
@@ -731,6 +746,7 @@ async fn apply_ci_rows_patch(
 pub async fn patch_editor_ci_page_projection(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 	Path(case_id): Path<Uuid>,
 	Json(request): Json<CaseEditorPagePatchRequest>,
 ) -> Result<(
@@ -738,9 +754,30 @@ pub async fn patch_editor_ci_page_projection(
 	Json<CaseEditorPageProjectionResponse>,
 )> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, CASE_UPDATE)?;
-	require_permission(&ctx, SAFETY_REPORT_UPDATE)?;
-	lib_rest_core::require_case_write_allowed(&ctx, &mm, case_id).await?;
+	lib_rest_core::with_authorized_case_child_mutation(
+		&ctx,
+		&snapshot,
+		&mm,
+		case_id,
+		"editor/CI",
+		move |ctx, mm| {
+			Box::pin(patch_editor_ci_page_projection_authorized(
+				ctx, mm, case_id, request,
+			))
+		},
+	)
+	.await
+}
+
+async fn patch_editor_ci_page_projection_authorized(
+	ctx: &lib_core::ctx::Ctx,
+	mm: &ModelManager,
+	case_id: Uuid,
+	request: CaseEditorPagePatchRequest,
+) -> Result<(
+	axum::http::StatusCode,
+	Json<CaseEditorPageProjectionResponse>,
+)> {
 	let requested_authorities =
 		validate_request_projection_context(request.authorities.as_deref())?;
 	validate_direct_changes("CI", &request.changes)?;
@@ -842,7 +879,7 @@ pub async fn patch_editor_ci_page_projection(
 		}
 	}
 	if !request.changes.is_empty() {
-		SafetyReportIdentificationBmc::update_by_case(&ctx, &mm, case_id, update)
+		SafetyReportIdentificationBmc::update_by_case(ctx, mm, case_id, update)
 			.await?;
 	}
 	if !request.rows.is_empty() {
@@ -850,20 +887,20 @@ pub async fn patch_editor_ci_page_projection(
 	}
 	if !request.changes.is_empty() || !request.rows.is_empty() {
 		refresh_editor_validation_cache(
-			&ctx,
-			&mm,
+			ctx,
+			mm,
 			case_id,
 			requested_authorities.clone(),
 		)
 		.await?;
 	}
 	let projection = direct_page_projection_response(
-		&ctx,
-		&mm,
+		ctx,
+		mm,
 		case_id,
 		"CI",
 		requested_authorities,
-		load_editor_ci_data(&ctx, &mm, case_id).await?,
+		load_editor_ci_data(ctx, mm, case_id).await?,
 	)
 	.await?;
 	Ok((axum::http::StatusCode::OK, Json(projection)))
@@ -872,78 +909,85 @@ pub async fn patch_editor_ci_page_projection(
 pub async fn patch_editor_rp_page_projection(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 	Path(case_id): Path<Uuid>,
 	Json(request): Json<CaseEditorPagePatchRequest>,
 ) -> Result<(
 	axum::http::StatusCode,
 	Json<CaseEditorPageProjectionResponse>,
 )> {
-	patch_direct_page_projection(mm, ctx_w, case_id, "RP", request).await
+	patch_direct_page_projection(mm, ctx_w, snapshot, case_id, "RP", request).await
 }
 
 pub async fn patch_editor_sd_page_projection(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 	Path(case_id): Path<Uuid>,
 	Json(request): Json<CaseEditorPagePatchRequest>,
 ) -> Result<(
 	axum::http::StatusCode,
 	Json<CaseEditorPageProjectionResponse>,
 )> {
-	patch_direct_page_projection(mm, ctx_w, case_id, "SD", request).await
+	patch_direct_page_projection(mm, ctx_w, snapshot, case_id, "SD", request).await
 }
 
 pub async fn patch_editor_lr_page_projection(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 	Path(case_id): Path<Uuid>,
 	Json(request): Json<CaseEditorPagePatchRequest>,
 ) -> Result<(
 	axum::http::StatusCode,
 	Json<CaseEditorPageProjectionResponse>,
 )> {
-	patch_direct_page_projection(mm, ctx_w, case_id, "LR", request).await
+	patch_direct_page_projection(mm, ctx_w, snapshot, case_id, "LR", request).await
 }
 
 pub async fn patch_editor_si_page_projection(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 	Path(case_id): Path<Uuid>,
 	Json(request): Json<CaseEditorPagePatchRequest>,
 ) -> Result<(
 	axum::http::StatusCode,
 	Json<CaseEditorPageProjectionResponse>,
 )> {
-	patch_direct_page_projection(mm, ctx_w, case_id, "SI", request).await
+	patch_direct_page_projection(mm, ctx_w, snapshot, case_id, "SI", request).await
 }
 
 pub async fn patch_editor_dm_page_projection(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 	Path(case_id): Path<Uuid>,
 	Json(request): Json<CaseEditorPagePatchRequest>,
 ) -> Result<(
 	axum::http::StatusCode,
 	Json<CaseEditorPageProjectionResponse>,
 )> {
-	patch_direct_page_projection(mm, ctx_w, case_id, "DM", request).await
+	patch_direct_page_projection(mm, ctx_w, snapshot, case_id, "DM", request).await
 }
 
 pub async fn patch_editor_nr_page_projection(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 	Path(case_id): Path<Uuid>,
 	Json(request): Json<CaseEditorPagePatchRequest>,
 ) -> Result<(
 	axum::http::StatusCode,
 	Json<CaseEditorPageProjectionResponse>,
 )> {
-	patch_direct_page_projection(mm, ctx_w, case_id, "NR", request).await
+	patch_direct_page_projection(mm, ctx_w, snapshot, case_id, "NR", request).await
 }
 
 async fn patch_direct_page_projection(
 	mm: ModelManager,
 	ctx_w: CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 	case_id: Uuid,
 	page_id: &'static str,
 	request: CaseEditorPagePatchRequest,
@@ -952,34 +996,50 @@ async fn patch_direct_page_projection(
 	Json<CaseEditorPageProjectionResponse>,
 )> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, CASE_UPDATE)?;
-	require_permission(&ctx, SAFETY_REPORT_UPDATE)?;
-	lib_rest_core::require_case_write_allowed(&ctx, &mm, case_id).await?;
+	lib_rest_core::with_authorized_case_child_mutation(
+		&ctx,
+		&snapshot,
+		&mm,
+		case_id,
+		format!("editor/{page_id}"),
+		move |ctx, mm| {
+			Box::pin(patch_direct_page_projection_authorized(
+				ctx, mm, case_id, page_id, request,
+			))
+		},
+	)
+	.await
+}
+
+async fn patch_direct_page_projection_authorized(
+	ctx: &lib_core::ctx::Ctx,
+	mm: &ModelManager,
+	case_id: Uuid,
+	page_id: &'static str,
+	request: CaseEditorPagePatchRequest,
+) -> Result<(
+	axum::http::StatusCode,
+	Json<CaseEditorPageProjectionResponse>,
+)> {
 	let requested_authorities =
 		validate_request_projection_context(request.authorities.as_deref())?;
 	validate_direct_changes(page_id, &request.changes)?;
 	validate_direct_rows(page_id, &request.rows)?;
 
 	if !request.changes.is_empty() {
-		apply_direct_page_changes_patch(
-			&ctx,
-			&mm,
-			case_id,
-			page_id,
-			&request.changes,
-		)
-		.await?;
+		apply_direct_page_changes_patch(ctx, mm, case_id, page_id, &request.changes)
+			.await?;
 	}
 
 	if !request.rows.is_empty() {
-		apply_direct_page_rows_patch(&ctx, &mm, case_id, page_id, &request.rows)
+		apply_direct_page_rows_patch(ctx, mm, case_id, page_id, &request.rows)
 			.await?;
 	}
 
 	if !request.changes.is_empty() || !request.rows.is_empty() {
 		refresh_editor_validation_cache(
-			&ctx,
-			&mm,
+			ctx,
+			mm,
 			case_id,
 			requested_authorities.clone(),
 		)
@@ -987,12 +1047,12 @@ async fn patch_direct_page_projection(
 	}
 
 	let data = match page_id {
-		"RP" => load_editor_rp_data(&ctx, &mm, case_id).await?,
-		"SD" => load_editor_sd_data(&ctx, &mm, case_id).await?,
-		"LR" => load_editor_lr_data(&ctx, &mm, case_id).await?,
-		"SI" => load_editor_si_data(&ctx, &mm, case_id).await?,
-		"DM" => load_editor_dm_data(&ctx, &mm, case_id).await?,
-		"NR" => load_editor_nr_data(&ctx, &mm, case_id).await?,
+		"RP" => load_editor_rp_data(ctx, mm, case_id).await?,
+		"SD" => load_editor_sd_data(ctx, mm, case_id).await?,
+		"LR" => load_editor_lr_data(ctx, mm, case_id).await?,
+		"SI" => load_editor_si_data(ctx, mm, case_id).await?,
+		"DM" => load_editor_dm_data(ctx, mm, case_id).await?,
+		"NR" => load_editor_nr_data(ctx, mm, case_id).await?,
 		_ => {
 			return Err(Error::BadRequest {
 				message: format!("unsupported direct page '{page_id}'"),
@@ -1000,8 +1060,8 @@ async fn patch_direct_page_projection(
 		}
 	};
 	let projection = direct_page_projection_response(
-		&ctx,
-		&mm,
+		ctx,
+		mm,
 		case_id,
 		page_id,
 		requested_authorities,
@@ -2879,27 +2939,35 @@ async fn load_editor_rp_data(
 pub async fn get_editor_rp(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 	Path(case_id): Path<Uuid>,
 ) -> Result<(
 	axum::http::StatusCode,
 	Json<CaseEditorDirectSectionResponse>,
 )> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, CASE_READ)?;
-	require_permission(&ctx, PRIMARY_SOURCE_LIST)?;
-	lib_rest_core::require_case_read_allowed(&ctx, &mm, case_id).await?;
-
-	Ok(direct_section_response(
+	lib_rest_core::with_authorized_case_child_read(
+		&ctx,
+		&snapshot,
+		&mm,
 		case_id,
-		load_editor_rp_data(&ctx, &mm, case_id).await?,
-	))
+		"editor/RP",
+		move |ctx, mm| {
+			Box::pin(async move {
+				Ok(direct_section_response(
+					case_id,
+					load_editor_rp_data(ctx, mm, case_id).await?,
+				))
+			})
+		},
+	)
+	.await
 }
 
 direct_page_projection_handler!(
 	get_editor_rp_page_projection,
 	"RP",
 	load_editor_rp_data,
-	[PRIMARY_SOURCE_LIST],
 );
 
 async fn load_editor_sd_data(
@@ -2975,29 +3043,35 @@ async fn load_editor_sd_data(
 pub async fn get_editor_sd(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 	Path(case_id): Path<Uuid>,
 ) -> Result<(
 	axum::http::StatusCode,
 	Json<CaseEditorDirectSectionResponse>,
 )> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, CASE_READ)?;
-	require_permission(&ctx, SAFETY_REPORT_READ)?;
-	require_permission(&ctx, SENDER_INFORMATION_LIST)?;
-	require_permission(&ctx, RECEIVER_READ)?;
-	lib_rest_core::require_case_read_allowed(&ctx, &mm, case_id).await?;
-
-	Ok(direct_section_response(
+	lib_rest_core::with_authorized_case_child_read(
+		&ctx,
+		&snapshot,
+		&mm,
 		case_id,
-		load_editor_sd_data(&ctx, &mm, case_id).await?,
-	))
+		"editor/SD",
+		move |ctx, mm| {
+			Box::pin(async move {
+				Ok(direct_section_response(
+					case_id,
+					load_editor_sd_data(ctx, mm, case_id).await?,
+				))
+			})
+		},
+	)
+	.await
 }
 
 direct_page_projection_handler!(
 	get_editor_sd_page_projection,
 	"SD",
 	load_editor_sd_data,
-	[SAFETY_REPORT_READ, SENDER_INFORMATION_LIST, RECEIVER_READ],
 );
 
 async fn load_editor_lr_data(
@@ -3037,27 +3111,35 @@ async fn load_editor_lr_data(
 pub async fn get_editor_lr(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 	Path(case_id): Path<Uuid>,
 ) -> Result<(
 	axum::http::StatusCode,
 	Json<CaseEditorDirectSectionResponse>,
 )> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, CASE_READ)?;
-	require_permission(&ctx, LITERATURE_REFERENCE_LIST)?;
-	lib_rest_core::require_case_read_allowed(&ctx, &mm, case_id).await?;
-
-	Ok(direct_section_response(
+	lib_rest_core::with_authorized_case_child_read(
+		&ctx,
+		&snapshot,
+		&mm,
 		case_id,
-		load_editor_lr_data(&ctx, &mm, case_id).await?,
-	))
+		"editor/LR",
+		move |ctx, mm| {
+			Box::pin(async move {
+				Ok(direct_section_response(
+					case_id,
+					load_editor_lr_data(ctx, mm, case_id).await?,
+				))
+			})
+		},
+	)
+	.await
 }
 
 direct_page_projection_handler!(
 	get_editor_lr_page_projection,
 	"LR",
 	load_editor_lr_data,
-	[LITERATURE_REFERENCE_LIST],
 );
 
 async fn load_editor_si_data(
@@ -3123,28 +3205,35 @@ async fn load_editor_si_data(
 pub async fn get_editor_si(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 	Path(case_id): Path<Uuid>,
 ) -> Result<(
 	axum::http::StatusCode,
 	Json<CaseEditorDirectSectionResponse>,
 )> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, CASE_READ)?;
-	require_permission(&ctx, STUDY_INFORMATION_LIST)?;
-	require_permission(&ctx, STUDY_REGISTRATION_LIST)?;
-	lib_rest_core::require_case_read_allowed(&ctx, &mm, case_id).await?;
-
-	Ok(direct_section_response(
+	lib_rest_core::with_authorized_case_child_read(
+		&ctx,
+		&snapshot,
+		&mm,
 		case_id,
-		load_editor_si_data(&ctx, &mm, case_id).await?,
-	))
+		"editor/SI",
+		move |ctx, mm| {
+			Box::pin(async move {
+				Ok(direct_section_response(
+					case_id,
+					load_editor_si_data(ctx, mm, case_id).await?,
+				))
+			})
+		},
+	)
+	.await
 }
 
 direct_page_projection_handler!(
 	get_editor_si_page_projection,
 	"SI",
 	load_editor_si_data,
-	[STUDY_INFORMATION_LIST, STUDY_REGISTRATION_LIST],
 );
 
 async fn load_editor_dm_data(
@@ -3372,43 +3461,35 @@ async fn load_editor_dm_data(
 pub async fn get_editor_dm(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 	Path(case_id): Path<Uuid>,
 ) -> Result<(
 	axum::http::StatusCode,
 	Json<CaseEditorDirectSectionResponse>,
 )> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, CASE_READ)?;
-	require_permission(&ctx, PATIENT_READ)?;
-	require_permission(&ctx, PATIENT_IDENTIFIER_LIST)?;
-	require_permission(&ctx, MEDICAL_HISTORY_LIST)?;
-	require_permission(&ctx, PATIENT_DEATH_LIST)?;
-	require_permission(&ctx, DEATH_CAUSE_LIST)?;
-	require_permission(&ctx, PARENT_INFORMATION_LIST)?;
-	require_permission(&ctx, PARENT_MEDICAL_HISTORY_LIST)?;
-	require_permission(&ctx, PARENT_PAST_DRUG_LIST)?;
-	lib_rest_core::require_case_read_allowed(&ctx, &mm, case_id).await?;
-
-	Ok(direct_section_response(
+	lib_rest_core::with_authorized_case_child_read(
+		&ctx,
+		&snapshot,
+		&mm,
 		case_id,
-		load_editor_dm_data(&ctx, &mm, case_id).await?,
-	))
+		"editor/DM",
+		move |ctx, mm| {
+			Box::pin(async move {
+				Ok(direct_section_response(
+					case_id,
+					load_editor_dm_data(ctx, mm, case_id).await?,
+				))
+			})
+		},
+	)
+	.await
 }
 
 direct_page_projection_handler!(
 	get_editor_dm_page_projection,
 	"DM",
 	load_editor_dm_data,
-	[
-		PATIENT_READ,
-		PATIENT_IDENTIFIER_LIST,
-		MEDICAL_HISTORY_LIST,
-		PATIENT_DEATH_LIST,
-		DEATH_CAUSE_LIST,
-		PARENT_INFORMATION_LIST,
-		PARENT_MEDICAL_HISTORY_LIST,
-		PARENT_PAST_DRUG_LIST
-	],
 );
 
 async fn load_editor_nr_data(
@@ -3455,29 +3536,35 @@ async fn load_editor_nr_data(
 pub async fn get_editor_nr(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 	Path(case_id): Path<Uuid>,
 ) -> Result<(
 	axum::http::StatusCode,
 	Json<CaseEditorDirectSectionResponse>,
 )> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, CASE_READ)?;
-	require_permission(&ctx, NARRATIVE_READ)?;
-	require_permission(&ctx, SENDER_DIAGNOSIS_LIST)?;
-	require_permission(&ctx, CASE_SUMMARY_LIST)?;
-	lib_rest_core::require_case_read_allowed(&ctx, &mm, case_id).await?;
-
-	Ok(direct_section_response(
+	lib_rest_core::with_authorized_case_child_read(
+		&ctx,
+		&snapshot,
+		&mm,
 		case_id,
-		load_editor_nr_data(&ctx, &mm, case_id).await?,
-	))
+		"editor/NR",
+		move |ctx, mm| {
+			Box::pin(async move {
+				Ok(direct_section_response(
+					case_id,
+					load_editor_nr_data(ctx, mm, case_id).await?,
+				))
+			})
+		},
+	)
+	.await
 }
 
 direct_page_projection_handler!(
 	get_editor_nr_page_projection,
 	"NR",
 	load_editor_nr_data,
-	[NARRATIVE_READ, SENDER_DIAGNOSIS_LIST, CASE_SUMMARY_LIST],
 );
 
 #[cfg(test)]

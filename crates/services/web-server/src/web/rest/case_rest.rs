@@ -3,12 +3,8 @@ use crate::web::rest::compliance::{
 };
 use axum::extract::{Path, State};
 use axum::Json;
-use lib_core::authorization::legacy_permission_allowed;
 use lib_core::ctx::Ctx;
-use lib_core::model::acs::{
-	CASE_APPROVE, CASE_CREATE, CASE_DELETE, CASE_LIST, CASE_LOCK, CASE_READ,
-	CASE_UPDATE,
-};
+use lib_core::model::authorization::CaseMutationKind;
 use lib_core::model::case::{
 	is_allowed_case_status_transition, is_valid_case_status,
 	update_touches_non_status_fields, Case, CaseBmc, CaseFilter,
@@ -880,11 +876,25 @@ pub async fn case_to_read_result(
 pub async fn create_case_guarded(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 	Json(params): Json<ParamsForCreate<PublicCaseForCreate>>,
 ) -> Result<(axum::http::StatusCode, Json<DataRestResult<CaseReadResult>>)> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, CASE_CREATE)?;
 	let ParamsForCreate { data } = params;
+	lib_rest_core::with_authorized_case_create(
+		&ctx,
+		&snapshot,
+		&mm,
+		move |ctx, mm| Box::pin(create_case_authorized(ctx, mm, data)),
+	)
+	.await
+}
+
+async fn create_case_authorized(
+	ctx: &Ctx,
+	mm: &ModelManager,
+	data: PublicCaseForCreate,
+) -> Result<(axum::http::StatusCode, Json<DataRestResult<CaseReadResult>>)> {
 	let provided_safety_report_id = data
 		.safety_report_identification
 		.as_ref()
@@ -893,11 +903,7 @@ pub async fn create_case_guarded(
 		.filter(|value| !value.is_empty())
 		.map(ToOwned::to_owned);
 	let generated_case_number = if provided_safety_report_id.is_none() {
-		Some(
-			generate_case_number(&ctx, &mm)
-				.await
-				.map_err(Error::Model)?,
-		)
+		Some(generate_case_number(ctx, mm).await.map_err(Error::Model)?)
 	} else {
 		None
 	};
@@ -911,20 +917,20 @@ pub async fn create_case_guarded(
 			message: "safetyReportIdentification.safetyReportId is required"
 				.to_string(),
 		})?;
-	let next_version = next_case_version(&ctx, &mm, &safety_report_id).await?;
+	let next_version = next_case_version(ctx, mm, &safety_report_id).await?;
 	let worldwide_unique_id =
 		generated_case_number.map(|value| value.worldwide_unique_id);
-	let data = to_internal_case_for_create(&ctx, data);
+	let data = to_internal_case_for_create(ctx, data);
 	validate_case_create_payload(&data)?;
 
-	let id = CaseBmc::create(&ctx, &mm, data).await?;
+	let id = CaseBmc::create(ctx, mm, data).await?;
 	let creation_timestamp =
 		crate::web::rest::case_export_rest::format_message_timestamp_utc_pub(
 			OffsetDateTime::now_utc(),
 		);
 	SafetyReportIdentificationBmc::create(
-		&ctx,
-		&mm,
+		ctx,
+		mm,
 		SafetyReportIdentificationForCreate {
 			case_id: id,
 			safety_report_id: Some(safety_report_id),
@@ -950,8 +956,8 @@ pub async fn create_case_guarded(
 	)
 	.await
 	.map_err(Error::Model)?;
-	let entity = CaseBmc::get(&ctx, &mm, id).await?;
-	let entity = case_to_read_result(&ctx, &mm, entity).await?;
+	let entity = CaseBmc::get(ctx, mm, id).await?;
+	let entity = case_to_read_result(ctx, mm, entity).await?;
 	Ok((
 		axum::http::StatusCode::CREATED,
 		Json(DataRestResult { data: entity }),
@@ -962,57 +968,99 @@ pub async fn create_case_guarded(
 pub async fn get_case(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 	Path(id): Path<Uuid>,
 ) -> Result<(axum::http::StatusCode, Json<DataRestResult<CaseReadResult>>)> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, CASE_READ)?;
-	lib_rest_core::require_case_read_allowed(&ctx, &mm, id).await?;
-	let entity = CaseBmc::get(&ctx, &mm, id).await?;
-	let entity = case_to_read_result(&ctx, &mm, entity).await?;
-	Ok((
-		axum::http::StatusCode::OK,
-		Json(DataRestResult { data: entity }),
-	))
+	lib_rest_core::with_authorized_case_read(
+		&ctx,
+		&snapshot,
+		&mm,
+		id,
+		"case.read",
+		move |ctx, mm| {
+			Box::pin(async move {
+				let entity = CaseBmc::get(ctx, mm, id).await?;
+				let entity = case_to_read_result(ctx, mm, entity).await?;
+				Ok((
+					axum::http::StatusCode::OK,
+					Json(DataRestResult { data: entity }),
+				))
+			})
+		},
+	)
+	.await
 }
 
 /// GET /api/cases
 pub async fn list_cases(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 	axum::extract::RawQuery(raw_query): axum::extract::RawQuery,
 ) -> Result<(
 	axum::http::StatusCode,
 	Json<DataRestResult<Vec<CaseReadResult>>>,
 )> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, CASE_LIST)?;
-	let params = ParamsList::<CaseFilter>::from_raw_query(raw_query.as_deref())
-		.map_err(|message| Error::BadRequest { message })?;
-	let entities =
-		CaseBmc::list(&ctx, &mm, params.filters, params.list_options).await?;
-	let mut scoped = Vec::with_capacity(entities.len());
-	for entity in entities {
-		if lib_rest_core::case_matches_user_scope(&ctx, &mm, entity.id).await? {
-			scoped.push(case_to_read_result(&ctx, &mm, entity).await?);
-		}
-	}
-	Ok((
-		axum::http::StatusCode::OK,
-		Json(DataRestResult { data: scoped }),
-	))
+	lib_rest_core::with_authorized_case_collection(
+		&ctx,
+		&snapshot,
+		&mm,
+		move |ctx, mm| {
+			Box::pin(async move {
+				let params =
+					ParamsList::<CaseFilter>::from_raw_query(raw_query.as_deref())
+						.map_err(|message| Error::BadRequest { message })?;
+				let entities =
+					CaseBmc::list(ctx, mm, params.filters, params.list_options)
+						.await?;
+				let mut scoped = Vec::with_capacity(entities.len());
+				for entity in entities {
+					if lib_rest_core::case_matches_user_scope(ctx, mm, entity.id)
+						.await?
+					{
+						scoped.push(case_to_read_result(ctx, mm, entity).await?);
+					}
+				}
+				Ok((
+					axum::http::StatusCode::OK,
+					Json(DataRestResult { data: scoped }),
+				))
+			})
+		},
+	)
+	.await
 }
 
 /// GET /api/cases/list-view
 pub async fn list_case_view_rows(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 	axum::extract::RawQuery(raw_query): axum::extract::RawQuery,
 ) -> Result<(
 	axum::http::StatusCode,
 	Json<DataRestResult<CaseListViewResult>>,
 )> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, CASE_LIST)?;
+	lib_rest_core::with_authorized_case_collection(
+		&ctx,
+		&snapshot,
+		&mm,
+		move |ctx, mm| Box::pin(list_case_view_rows_authorized(ctx, mm, raw_query)),
+	)
+	.await
+}
+
+async fn list_case_view_rows_authorized(
+	ctx: &Ctx,
+	mm: &ModelManager,
+	raw_query: Option<String>,
+) -> Result<(
+	axum::http::StatusCode,
+	Json<DataRestResult<CaseListViewResult>>,
+)> {
 	let params = ParamsList::<CaseFilter>::from_raw_query(raw_query.as_deref())
 		.map_err(|message| Error::BadRequest { message })?;
 	let list_options = params.list_options;
@@ -1035,7 +1083,7 @@ pub async fn list_case_view_rows(
 		));
 	}
 
-	let items = lib_rest_core::with_rls_read(&mm, &ctx, |dbx| {
+	let items = lib_rest_core::with_rls_read(mm, ctx, |dbx| {
 		let list_options = list_options.clone();
 		Box::pin(async move {
 			CaseBmc::list_view_rows(dbx, list_options.as_ref())
@@ -1048,7 +1096,7 @@ pub async fn list_case_view_rows(
 	let mut scoped = Vec::with_capacity(limit.min(items.len()));
 	let mut scoped_offset = 0usize;
 	for item in items {
-		if lib_rest_core::case_matches_user_scope(&ctx, &mm, item.case_id).await? {
+		if lib_rest_core::case_matches_user_scope(ctx, mm, item.case_id).await? {
 			if scoped_offset < offset {
 				scoped_offset += 1;
 				continue;
@@ -1061,8 +1109,7 @@ pub async fn list_case_view_rows(
 	}
 	let case_ids = scoped.iter().map(|item| item.case_id).collect::<Vec<_>>();
 	let cached_totals =
-		CaseValidationSummaryBmc::cached_totals_by_case(&ctx, &mm, &case_ids)
-			.await?;
+		CaseValidationSummaryBmc::cached_totals_by_case(ctx, mm, &case_ids).await?;
 	for item in &mut scoped {
 		item.warn = cached_totals
 			.get(&item.case_id)
@@ -1083,20 +1130,29 @@ pub async fn list_case_view_rows(
 pub async fn update_case_guarded(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 	Path(id): Path<Uuid>,
 	Json(params): Json<PublicCaseUpdateRequest>,
 ) -> Result<(axum::http::StatusCode, Json<DataRestResult<CaseReadResult>>)> {
 	let ctx = ctx_w.0;
-	// Cheap gate before any DB access: the caller must hold at least one
-	// case-write-grade permission (edit, review, or lock).
-	if !legacy_permission_allowed(ctx.permission_subject(), CASE_UPDATE)
-		&& !legacy_permission_allowed(ctx.permission_subject(), CASE_APPROVE)
-		&& !legacy_permission_allowed(ctx.permission_subject(), CASE_LOCK)
-	{
-		return Err(Error::PermissionDenied {
-			required_permission: format!("{CASE_UPDATE}"),
-		});
-	}
+	lib_rest_core::with_authorized_case_mutation(
+		&ctx,
+		&snapshot,
+		&mm,
+		id,
+		"case.update",
+		CaseMutationKind::Edit,
+		move |ctx, mm| Box::pin(update_case_authorized(ctx, mm, id, params)),
+	)
+	.await
+}
+
+async fn update_case_authorized(
+	ctx: &Ctx,
+	mm: &ModelManager,
+	id: Uuid,
+	params: PublicCaseUpdateRequest,
+) -> Result<(axum::http::StatusCode, Json<DataRestResult<CaseReadResult>>)> {
 	let PublicCaseUpdateRequest {
 		data,
 		reason_for_change,
@@ -1105,15 +1161,12 @@ pub async fn update_case_guarded(
 	let mut data = to_internal_case_for_update(data);
 	validate_case_update_payload(&data)?;
 	let touches_non_status = update_touches_non_status_fields(&data);
-	if touches_non_status {
-		require_permission(&ctx, CASE_UPDATE)?;
-	}
-	let current = CaseBmc::get(&ctx, &mm, id).await?;
-	normalize_review_receivers_for_update(&ctx, &mm, id, &mut data).await?;
+	let current = CaseBmc::get(ctx, mm, id).await?;
+	normalize_review_receivers_for_update(ctx, mm, id, &mut data).await?;
 	let requested_status = data.status.clone();
 	if touches_non_status {
 		if let Some(reason) =
-			case_write_block_reason_for_case(&ctx, &mm, &current).await?
+			case_write_block_reason_for_case(ctx, mm, &current).await?
 		{
 			return Err(Error::BadRequest {
 				message: format!(
@@ -1148,12 +1201,7 @@ pub async fn update_case_guarded(
 					message: "use the dedicated case review/lock toggle endpoint for QC or lock state changes".to_string(),
 				});
 			}
-			require_permission(&ctx, CASE_UPDATE)?;
-		} else if !touches_non_status {
-			require_permission(&ctx, CASE_UPDATE)?;
 		}
-	} else if !touches_non_status {
-		require_permission(&ctx, CASE_UPDATE)?;
 	}
 
 	let requires_compliance = requested_status
@@ -1184,8 +1232,8 @@ pub async fn update_case_guarded(
 			e_signature,
 		};
 		let signature_id = capture_e_signature(
-			&ctx,
-			&mm,
+			ctx,
+			mm,
 			Some(id),
 			"CASE_STATUS_TRANSITION",
 			&compliance,
@@ -1203,10 +1251,10 @@ pub async fn update_case_guarded(
 		ctx.clone()
 	};
 
-	CaseBmc::update(&ctx_for_update, &mm, id, data).await?;
-	CaseValidationSummaryBmc::mark_stale_for_case(&ctx, &mm, id).await?;
-	let entity = CaseBmc::get(&ctx, &mm, id).await?;
-	let entity = case_to_read_result(&ctx, &mm, entity).await?;
+	CaseBmc::update(&ctx_for_update, mm, id, data).await?;
+	CaseValidationSummaryBmc::mark_stale_for_case(ctx, mm, id).await?;
+	let entity = CaseBmc::get(ctx, mm, id).await?;
+	let entity = case_to_read_result(ctx, mm, entity).await?;
 
 	Ok((
 		axum::http::StatusCode::OK,
@@ -1218,83 +1266,120 @@ pub async fn update_case_guarded(
 pub async fn toggle_case_review(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 	Path(id): Path<Uuid>,
 ) -> Result<(axum::http::StatusCode, Json<DataRestResult<PublicCaseView>>)> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, CASE_APPROVE)?;
-	lib_rest_core::require_case_read_allowed(&ctx, &mm, id).await?;
-	let entity = CaseBmc::toggle_review(&ctx, &mm, id).await?;
-	Ok((
-		axum::http::StatusCode::OK,
-		Json(DataRestResult {
-			data: entity.into(),
-		}),
-	))
+	lib_rest_core::with_authorized_case_mutation(
+		&ctx,
+		&snapshot,
+		&mm,
+		id,
+		"case.review.toggle",
+		CaseMutationKind::ReviewToggle,
+		move |ctx, mm| {
+			Box::pin(async move {
+				let entity = CaseBmc::toggle_review(ctx, mm, id).await?;
+				Ok((
+					axum::http::StatusCode::OK,
+					Json(DataRestResult {
+						data: entity.into(),
+					}),
+				))
+			})
+		},
+	)
+	.await
 }
 
 /// POST /api/cases/{id}/lock/toggle
 pub async fn toggle_case_lock(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 	Path(id): Path<Uuid>,
 ) -> Result<(axum::http::StatusCode, Json<DataRestResult<PublicCaseView>>)> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, CASE_LOCK)?;
-	lib_rest_core::require_case_read_allowed(&ctx, &mm, id).await?;
-	let entity = CaseBmc::toggle_lock(&ctx, &mm, id).await?;
-	Ok((
-		axum::http::StatusCode::OK,
-		Json(DataRestResult {
-			data: entity.into(),
-		}),
-	))
+	lib_rest_core::with_authorized_case_mutation(
+		&ctx,
+		&snapshot,
+		&mm,
+		id,
+		"case.lock.toggle",
+		CaseMutationKind::LockToggle,
+		move |ctx, mm| {
+			Box::pin(async move {
+				let entity = CaseBmc::toggle_lock(ctx, mm, id).await?;
+				Ok((
+					axum::http::StatusCode::OK,
+					Json(DataRestResult {
+						data: entity.into(),
+					}),
+				))
+			})
+		},
+	)
+	.await
 }
 
 /// DELETE /api/cases/{id}
 pub async fn delete_case(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 	Path(id): Path<Uuid>,
 	payload: Option<Json<PublicCaseDeleteRequest>>,
 ) -> Result<(axum::http::StatusCode, Json<DataRestResult<CaseReadResult>>)> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, CASE_DELETE)?;
-	lib_rest_core::require_case_read_allowed(&ctx, &mm, id).await?;
-	let current = CaseBmc::get(&ctx, &mm, id).await?;
-	if !is_allowed_case_status_transition(&current.status, "deleted") {
-		return Err(Error::BadRequest {
-			message: format!(
-				"illegal case status transition: '{}' -> 'deleted'",
-				current.status
-			),
-		});
-	}
-	let reason = required_reason_for_change(
-		payload.and_then(|Json(params)| params.reason_for_change),
-		ctx.change_reason(),
-		"delete",
-	)?;
-	let ctx_for_update = ctx.with_compliance(Some(reason), None);
-	CaseBmc::update(
-		&ctx_for_update,
+	lib_rest_core::with_authorized_case_mutation(
+		&ctx,
+		&snapshot,
 		&mm,
 		id,
-		case_status_update("deleted".to_string()),
+		"case.delete",
+		CaseMutationKind::Delete,
+		move |ctx, mm| {
+			Box::pin(async move {
+				let current = CaseBmc::get(ctx, mm, id).await?;
+				if !is_allowed_case_status_transition(&current.status, "deleted") {
+					return Err(Error::BadRequest {
+						message: format!(
+							"illegal case status transition: '{}' -> 'deleted'",
+							current.status
+						),
+					});
+				}
+				let reason = required_reason_for_change(
+					payload.and_then(|Json(params)| params.reason_for_change),
+					ctx.change_reason(),
+					"delete",
+				)?;
+				let ctx_for_update = ctx.with_compliance(Some(reason), None);
+				CaseBmc::update(
+					&ctx_for_update,
+					mm,
+					id,
+					case_status_update("deleted".to_string()),
+				)
+				.await?;
+				CaseValidationSummaryBmc::mark_stale_for_case(ctx, mm, id).await?;
+				let entity = CaseBmc::get(ctx, mm, id).await?;
+				let entity = case_to_read_result(ctx, mm, entity).await?;
+				Ok((
+					axum::http::StatusCode::OK,
+					Json(DataRestResult { data: entity }),
+				))
+			})
+		},
 	)
-	.await?;
-	CaseValidationSummaryBmc::mark_stale_for_case(&ctx, &mm, id).await?;
-	let entity = CaseBmc::get(&ctx, &mm, id).await?;
-	let entity = case_to_read_result(&ctx, &mm, entity).await?;
-	Ok((
-		axum::http::StatusCode::OK,
-		Json(DataRestResult { data: entity }),
-	))
+	.await
 }
 
 /// POST /api/cases/{id}/validator/mark-validated
 pub async fn mark_case_validated_by_validator(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 	Path(id): Path<Uuid>,
 	headers: axum::http::HeaderMap,
 ) -> Result<(axum::http::StatusCode, Json<DataRestResult<CaseReadResult>>)> {
@@ -1312,56 +1397,95 @@ pub async fn mark_case_validated_by_validator(
 			message: "invalid validator token".to_string(),
 		});
 	}
-	require_permission(&ctx, CASE_UPDATE)?;
-	lib_rest_core::require_case_write_allowed(&ctx, &mm, id).await?;
-
-	let report =
-		validate_case_for_authority(&ctx, &mm, id, RegulatoryAuthority::Fda).await?;
-	CaseValidationSummaryBmc::upsert_for_reports(&ctx, &mm, id, &[report.clone()])
-		.await?;
-	let total_blocking = report.blocking_count;
-	if total_blocking > 0 {
-		return Err(Error::BadRequest {
-			message: format!(
-				"validator cannot mark case validated: {} blocking issue(s) remain",
-				total_blocking
-			),
-		});
-	}
-
-	let validator_ctx = ctx
-		.with_compliance(Some(SYSTEM_VALIDATION_REASON_VALIDATOR.to_string()), None);
-	CaseBmc::update(
-		&validator_ctx,
+	lib_rest_core::with_authorized_case_mutation(
+		&ctx,
+		&snapshot,
 		&mm,
 		id,
-		case_status_update("validated".to_string()),
+		"case.validate",
+		CaseMutationKind::Validate,
+		move |ctx, mm| {
+			Box::pin(async move {
+				let report = validate_case_for_authority(
+					ctx,
+					mm,
+					id,
+					RegulatoryAuthority::Fda,
+				)
+				.await?;
+				CaseValidationSummaryBmc::upsert_for_reports(
+					ctx,
+					mm,
+					id,
+					&[report.clone()],
+				)
+				.await?;
+				if report.blocking_count > 0 {
+					return Err(Error::BadRequest {
+						message: format!(
+							"validator cannot mark case validated: {} blocking issue(s) remain",
+							report.blocking_count
+						),
+					});
+				}
+
+				let validator_ctx = ctx.with_compliance(
+					Some(SYSTEM_VALIDATION_REASON_VALIDATOR.to_string()),
+					None,
+				);
+				CaseBmc::update(
+					&validator_ctx,
+					mm,
+					id,
+					case_status_update("validated".to_string()),
+				)
+				.await?;
+				let entity = CaseBmc::get(ctx, mm, id).await?;
+				let entity = case_to_read_result(ctx, mm, entity).await?;
+				Ok((
+					axum::http::StatusCode::OK,
+					Json(DataRestResult { data: entity }),
+				))
+			})
+		},
 	)
-	.await?;
-	let entity = CaseBmc::get(&ctx, &mm, id).await?;
-	let entity = case_to_read_result(&ctx, &mm, entity).await?;
-	Ok((
-		axum::http::StatusCode::OK,
-		Json(DataRestResult { data: entity }),
-	))
+	.await
 }
 
 /// GET /api/cases/{id}/lifecycle
 pub async fn get_case_lifecycle(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 	Path(id): Path<Uuid>,
 ) -> Result<(
 	axum::http::StatusCode,
 	Json<DataRestResult<CaseLifecycleResult>>,
 )> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, CASE_READ)?;
-	lib_rest_core::require_case_read_allowed(&ctx, &mm, id).await?;
+	lib_rest_core::with_authorized_case_read(
+		&ctx,
+		&snapshot,
+		&mm,
+		id,
+		"case.read",
+		move |ctx, mm| Box::pin(get_case_lifecycle_authorized(ctx, mm, id)),
+	)
+	.await
+}
+
+async fn get_case_lifecycle_authorized(
+	ctx: &Ctx,
+	mm: &ModelManager,
+	id: Uuid,
+) -> Result<(
+	axum::http::StatusCode,
+	Json<DataRestResult<CaseLifecycleResult>>,
+)> {
 	let safety_report =
-		SafetyReportIdentificationBmc::get_by_case(&ctx, &mm, id).await?;
+		SafetyReportIdentificationBmc::get_by_case(ctx, mm, id).await?;
 	let safety_report_id = safety_report.safety_report_id.unwrap_or_default();
-	let versions = lib_rest_core::with_rls_read(&mm, &ctx, |dbx| {
+	let versions = lib_rest_core::with_rls_read(mm, ctx, |dbx| {
 		let safety_report_id = safety_report_id.clone();
 		Box::pin(async move {
 			dbx.fetch_all(
@@ -1387,7 +1511,7 @@ pub async fn get_case_lifecycle(
 	.await?;
 	let mut items = Vec::new();
 	for row in versions {
-		if lib_rest_core::case_matches_user_scope(&ctx, &mm, row.case_id).await? {
+		if lib_rest_core::case_matches_user_scope(ctx, mm, row.case_id).await? {
 			items.push(row);
 		}
 	}
@@ -1418,14 +1542,29 @@ pub async fn get_case_lifecycle(
 pub async fn list_case_link_options(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 ) -> Result<(
 	axum::http::StatusCode,
 	Json<DataRestResult<CaseLinkOptionList>>,
 )> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, CASE_LIST)?;
+	lib_rest_core::with_authorized_case_collection(
+		&ctx,
+		&snapshot,
+		&mm,
+		move |ctx, mm| Box::pin(list_case_link_options_authorized(ctx, mm)),
+	)
+	.await
+}
 
-	let items = lib_rest_core::with_rls_read(&mm, &ctx, |dbx| {
+async fn list_case_link_options_authorized(
+	ctx: &Ctx,
+	mm: &ModelManager,
+) -> Result<(
+	axum::http::StatusCode,
+	Json<DataRestResult<CaseLinkOptionList>>,
+)> {
+	let items = lib_rest_core::with_rls_read(mm, ctx, |dbx| {
 		Box::pin(async move {
 			CaseBmc::list_link_options(dbx).await.map_err(Error::from)
 		})
@@ -1434,7 +1573,7 @@ pub async fn list_case_link_options(
 
 	let mut scoped = Vec::with_capacity(items.len());
 	for item in items {
-		if lib_rest_core::case_matches_user_scope(&ctx, &mm, item.case_id).await? {
+		if lib_rest_core::case_matches_user_scope(ctx, mm, item.case_id).await? {
 			scoped.push(item);
 		}
 	}
