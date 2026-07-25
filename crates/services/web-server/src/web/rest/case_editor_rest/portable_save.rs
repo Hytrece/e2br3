@@ -955,19 +955,91 @@ pub(super) fn validate_direct_rows(
 			}
 			Some(normalized)
 		}
-		"NR" => optional_row_object(section, rows, "narrative")?.map(|row| {
-			normalized_direct_object(
-				row,
-				&[
-					("caseNarrative", &["caseNarrative", "case_narrative"]),
-					(
-						"reporterComments",
-						&["reporterComments", "reporter_comments"],
-					),
-					("senderComments", &["senderComments", "sender_comments"]),
-				],
-			)
-		}),
+		"NR" => {
+			let narrative = optional_row_object(section, rows, "narrative")?;
+			let mut normalized = narrative
+				.map(|row| {
+					normalized_direct_object(
+						row,
+						&[
+							("caseNarrative", &["caseNarrative", "case_narrative"]),
+							(
+								"reporterComments",
+								&["reporterComments", "reporter_comments"],
+							),
+							(
+								"senderComments",
+								&["senderComments", "sender_comments"],
+							),
+						],
+					)
+				})
+				.unwrap_or_default();
+
+			let sender_diagnoses = rows
+				.get("senderDiagnoses")
+				.or_else(|| narrative.and_then(|row| row.get("senderDiagnoses")));
+			if let Some(value) = sender_diagnoses {
+				let Some(items) = value.as_array() else {
+					return Err(Error::BadRequest {
+						message: format!(
+							"{section}.senderDiagnoses must be an array"
+						),
+					});
+				};
+				let mut normalized_items = Vec::with_capacity(items.len());
+				for value in items {
+					let row = as_object(section, "senderDiagnoses", value)?;
+					normalized_items.push(Value::Object(normalized_direct_object(
+						row,
+						&[
+							(
+								"diagnosisMeddraVersion",
+								&[
+									"diagnosisMeddraVersion",
+									"diagnosis_meddra_version",
+								],
+							),
+							(
+								"diagnosisMeddraCode",
+								&["diagnosisMeddraCode", "diagnosis_meddra_code"],
+							),
+						],
+					)));
+				}
+				normalized.insert(
+					"senderDiagnoses".to_string(),
+					Value::Array(normalized_items),
+				);
+			}
+
+			if let Some(value) = rows.get("caseSummaryInformation") {
+				let Some(items) = value.as_array() else {
+					return Err(Error::BadRequest {
+						message: format!(
+							"{section}.caseSummaryInformation must be an array"
+						),
+					});
+				};
+				let mut normalized_items = Vec::with_capacity(items.len());
+				for value in items {
+					let row = as_object(section, "caseSummaryInformation", value)?;
+					normalized_items.push(Value::Object(normalized_direct_object(
+						row,
+						&[
+							("summaryText", &["summaryText", "summary_text"]),
+							("languageCode", &["languageCode", "language_code"]),
+						],
+					)));
+				}
+				normalized.insert(
+					"caseSummaryInformation".to_string(),
+					Value::Array(normalized_items),
+				);
+			}
+
+			(!normalized.is_empty()).then_some(normalized)
+		}
 		_ => None,
 	};
 

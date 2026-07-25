@@ -435,11 +435,10 @@ impl CaseSummaryInformationBmc {
 		filters: Option<Vec<CaseSummaryInformationFilter>>,
 		list_options: Option<ListOptions>,
 	) -> Result<Vec<CaseSummaryInformation>> {
-		let mut filters = filters.unwrap_or_default();
-		filters.push(CaseSummaryInformationFilter {
-			deleted: Some(OpValBool::Eq(false).into()),
-			..Default::default()
-		});
+		let mut filters = filters.unwrap_or_else(|| vec![Default::default()]);
+		for filter in &mut filters {
+			filter.deleted = Some(OpValBool::Eq(false).into());
+		}
 		base_uuid::list::<Self, _, _>(ctx, mm, Some(filters), list_options).await
 	}
 

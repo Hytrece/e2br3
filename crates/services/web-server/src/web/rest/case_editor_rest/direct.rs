@@ -2804,51 +2804,213 @@ async fn apply_nr_page_rows_patch(
 		rows,
 		&["narrative", "senderDiagnoses", "caseSummaryInformation"],
 	)?;
-	let Some(narrative) = optional_row_object(page_id, rows, "narrative")? else {
+	if let Some(narrative) = optional_row_object(page_id, rows, "narrative")? {
+		let case_narrative =
+			string_field(narrative, &["caseNarrative", "case_narrative"]);
+		let update = NarrativeInformationForUpdate {
+			source_narrative_presave_id: uuid_field(
+				narrative,
+				&["sourceNarrativePresaveId", "source_narrative_presave_id"],
+			),
+			case_narrative: case_narrative.clone(),
+			reporter_comments: string_field(
+				narrative,
+				&["reporterComments", "reporter_comments"],
+			),
+			sender_comments: string_field(
+				narrative,
+				&["senderComments", "sender_comments"],
+			),
+			additional_information: string_field(
+				narrative,
+				&["additionalInformation", "additional_information"],
+			),
+		};
+		match NarrativeInformationBmc::get_by_case_optional(ctx, mm, case_id).await?
+		{
+			Some(_) => {
+				NarrativeInformationBmc::update_by_case(ctx, mm, case_id, update)
+					.await?
+			}
+			None => {
+				let Some(case_narrative) = case_narrative else {
+					return Ok(());
+				};
+				NarrativeInformationBmc::create(
+					ctx,
+					mm,
+					NarrativeInformationForCreate {
+						case_id,
+						source_narrative_presave_id: update
+							.source_narrative_presave_id,
+						case_narrative,
+						reporter_comments: update.reporter_comments,
+						sender_comments: update.sender_comments,
+						additional_information: update.additional_information,
+					},
+				)
+				.await?;
+			}
+		}
+	}
+
+	let has_nested_rows = rows.contains_key("senderDiagnoses")
+		|| rows.contains_key("caseSummaryInformation");
+	let Some(narrative) =
+		NarrativeInformationBmc::get_by_case_optional(ctx, mm, case_id).await?
+	else {
+		if has_nested_rows {
+			return Err(Error::BadRequest {
+				message: format!(
+					"{page_id} nested rows require an existing narrative"
+				),
+			});
+		}
 		return Ok(());
 	};
-	let case_narrative =
-		string_field(narrative, &["caseNarrative", "case_narrative"]);
-	let update = NarrativeInformationForUpdate {
-		source_narrative_presave_id: uuid_field(
-			narrative,
-			&["sourceNarrativePresaveId", "source_narrative_presave_id"],
-		),
-		case_narrative: case_narrative.clone(),
-		reporter_comments: string_field(
-			narrative,
-			&["reporterComments", "reporter_comments"],
-		),
-		sender_comments: string_field(
-			narrative,
-			&["senderComments", "sender_comments"],
-		),
-		additional_information: string_field(
-			narrative,
-			&["additionalInformation", "additional_information"],
-		),
-	};
-	match NarrativeInformationBmc::get_by_case_optional(ctx, mm, case_id).await? {
-		Some(_) => {
-			NarrativeInformationBmc::update_by_case(ctx, mm, case_id, update).await?
+
+	if let Some(value) = rows.get("senderDiagnoses") {
+		let diagnoses = value.as_array().ok_or_else(|| Error::BadRequest {
+			message: format!("{page_id}.senderDiagnoses must be an array"),
+		})?;
+		for (index, value) in diagnoses.iter().enumerate() {
+			let diagnosis = as_object(page_id, "senderDiagnoses", value)?;
+			let id = uuid_field(diagnosis, &["id"]);
+			let deleted =
+				bool_field(diagnosis, &["_delete", "deleted"]).unwrap_or(false);
+			if let Some(id) = id {
+				let persisted = SenderDiagnosisBmc::get(ctx, mm, id).await?;
+				if persisted.narrative_id != narrative.id {
+					return Err(Error::BadRequest {
+						message: format!(
+							"{page_id}.senderDiagnoses[{index}].id does not belong to the current narrative"
+						),
+					});
+				}
+				if deleted {
+					require_permission(ctx, SENDER_DIAGNOSIS_DELETE)?;
+					SenderDiagnosisBmc::delete(ctx, mm, id).await?;
+				} else {
+					require_permission(ctx, SENDER_DIAGNOSIS_UPDATE)?;
+					SenderDiagnosisBmc::update(
+						ctx,
+						mm,
+						id,
+						SenderDiagnosisForUpdate {
+							diagnosis_meddra_version: string_field(
+								diagnosis,
+								&[
+									"diagnosisMeddraVersion",
+									"diagnosis_meddra_version",
+								],
+							),
+							diagnosis_meddra_code: string_field(
+								diagnosis,
+								&["diagnosisMeddraCode", "diagnosis_meddra_code"],
+							),
+						},
+					)
+					.await?;
+				}
+			} else if !deleted {
+				require_permission(ctx, SENDER_DIAGNOSIS_CREATE)?;
+				SenderDiagnosisBmc::create(
+					ctx,
+					mm,
+					SenderDiagnosisForCreate {
+						narrative_id: narrative.id,
+						sequence_number: i32_field(
+							diagnosis,
+							&["sequenceNumber", "sequence_number"],
+						)
+						.unwrap_or((index + 1) as i32),
+						diagnosis_meddra_version: string_field(
+							diagnosis,
+							&["diagnosisMeddraVersion", "diagnosis_meddra_version"],
+						),
+						diagnosis_meddra_code: string_field(
+							diagnosis,
+							&["diagnosisMeddraCode", "diagnosis_meddra_code"],
+						),
+					},
+				)
+				.await?;
+			}
 		}
-		None => {
-			let Some(case_narrative) = case_narrative else {
-				return Ok(());
-			};
-			NarrativeInformationBmc::create(
-				ctx,
-				mm,
-				NarrativeInformationForCreate {
-					case_id,
-					source_narrative_presave_id: update.source_narrative_presave_id,
-					case_narrative,
-					reporter_comments: update.reporter_comments,
-					sender_comments: update.sender_comments,
-					additional_information: update.additional_information,
-				},
-			)
-			.await?;
+	}
+
+	if let Some(value) = rows.get("caseSummaryInformation") {
+		let summaries = value.as_array().ok_or_else(|| Error::BadRequest {
+			message: format!("{page_id}.caseSummaryInformation must be an array"),
+		})?;
+		for (index, value) in summaries.iter().enumerate() {
+			let summary = as_object(page_id, "caseSummaryInformation", value)?;
+			let id = uuid_field(summary, &["id"]);
+			let deleted =
+				bool_field(summary, &["_delete", "deleted"]).unwrap_or(false);
+			if let Some(id) = id {
+				let persisted = CaseSummaryInformationBmc::get(ctx, mm, id).await?;
+				if persisted.narrative_id != narrative.id {
+					return Err(Error::BadRequest {
+						message: format!(
+							"{page_id}.caseSummaryInformation[{index}].id does not belong to the current narrative"
+						),
+					});
+				}
+				if deleted {
+					require_permission(ctx, CASE_SUMMARY_DELETE)?;
+					CaseSummaryInformationBmc::delete(ctx, mm, id).await?;
+				} else {
+					require_permission(ctx, CASE_SUMMARY_UPDATE)?;
+					CaseSummaryInformationBmc::update(
+						ctx,
+						mm,
+						id,
+						CaseSummaryInformationForUpdate {
+							summary_type: string_field(
+								summary,
+								&["summaryType", "summary_type"],
+							),
+							language_code: string_field(
+								summary,
+								&["languageCode", "language_code"],
+							),
+							summary_text: string_field(
+								summary,
+								&["summaryText", "summary_text"],
+							),
+						},
+					)
+					.await?;
+				}
+			} else if !deleted {
+				require_permission(ctx, CASE_SUMMARY_CREATE)?;
+				CaseSummaryInformationBmc::create(
+					ctx,
+					mm,
+					CaseSummaryInformationForCreate {
+						narrative_id: narrative.id,
+						sequence_number: i32_field(
+							summary,
+							&["sequenceNumber", "sequence_number"],
+						)
+						.unwrap_or((index + 1) as i32),
+						summary_type: string_field(
+							summary,
+							&["summaryType", "summary_type"],
+						),
+						language_code: string_field(
+							summary,
+							&["languageCode", "language_code"],
+						),
+						summary_text: string_field(
+							summary,
+							&["summaryText", "summary_text"],
+						),
+					},
+				)
+				.await?;
+			}
 		}
 	}
 	Ok(())

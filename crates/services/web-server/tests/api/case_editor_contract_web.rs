@@ -5608,7 +5608,18 @@ async fn editor_nr_page_round_trips_narrative_fields() -> Result<()> {
 					"reporterComments": "Reporter comments",
 					"senderComments": "Sender comments",
 					"additionalInformation": "Additional information"
-				}
+				},
+				"senderDiagnoses": [{
+					"sequenceNumber": 1,
+					"diagnosisMeddraVersion": "27.1",
+					"diagnosisMeddraCode": "10019211"
+				}],
+				"caseSummaryInformation": [{
+					"sequenceNumber": 1,
+					"summaryType": "1",
+					"languageCode": "en",
+					"summaryText": "Case summary"
+				}]
 			}
 		}),
 	)
@@ -5622,6 +5633,15 @@ async fn editor_nr_page_round_trips_narrative_fields() -> Result<()> {
 		narrative["additional_information"],
 		"Additional information"
 	);
+	let diagnosis = &created["rows"]["senderDiagnoses"][0];
+	assert_eq!(diagnosis["diagnosis_meddra_version"], "27.1");
+	assert_eq!(diagnosis["diagnosis_meddra_code"], "10019211");
+	let summary = &created["rows"]["caseSummaryInformation"][0];
+	assert_eq!(summary["summary_type"], "1");
+	assert_eq!(summary["language_code"], "en");
+	assert_eq!(summary["summary_text"], "Case summary");
+	let diagnosis_id = diagnosis["id"].as_str().expect("diagnosis id");
+	let summary_id = summary["id"].as_str().expect("summary id");
 
 	let (status, reloaded) = get_json(
 		&app,
@@ -5641,7 +5661,15 @@ async fn editor_nr_page_round_trips_narrative_fields() -> Result<()> {
 			"rows": {
 				"narrative": {
 					"caseNarrative": "Updated narrative"
-				}
+				},
+				"senderDiagnoses": [{
+					"id": diagnosis_id,
+					"diagnosisMeddraCode": "10000001"
+				}],
+				"caseSummaryInformation": [{
+					"id": summary_id,
+					"summaryText": "Updated summary"
+				}]
 			}
 		}),
 	)
@@ -5650,6 +5678,39 @@ async fn editor_nr_page_round_trips_narrative_fields() -> Result<()> {
 	assert_eq!(
 		updated["rows"]["narrative"]["case_narrative"],
 		"Updated narrative"
+	);
+	assert_eq!(
+		updated["rows"]["senderDiagnoses"][0]["diagnosis_meddra_code"],
+		"10000001"
+	);
+	assert_eq!(
+		updated["rows"]["caseSummaryInformation"][0]["summary_text"],
+		"Updated summary"
+	);
+
+	let (status, deleted) = patch_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/editor/pages/NR"),
+		json!({
+			"authorities": ["ich"],
+			"rows": {
+				"senderDiagnoses": [{"id": diagnosis_id, "_delete": true}],
+				"caseSummaryInformation": [{"id": summary_id, "_delete": true}]
+			}
+		}),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK, "{deleted}");
+	assert_eq!(
+		deleted["rows"]["senderDiagnoses"].as_array().map(Vec::len),
+		Some(0)
+	);
+	assert_eq!(
+		deleted["rows"]["caseSummaryInformation"]
+			.as_array()
+			.map(Vec::len),
+		Some(0)
 	);
 
 	Ok(())
@@ -5689,6 +5750,31 @@ async fn editor_nr_page_rejects_catalog_constraint_before_write() -> Result<()> 
 	assert_eq!(
 		body["error"]["data"]["detail"]["path"],
 		"narrative.reporterComments"
+	);
+
+	let (status, body) = patch_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/editor/pages/NR"),
+		json!({
+			"authorities": ["ich"],
+			"rows": {
+				"narrative": {"caseNarrative": "Case narrative"},
+				"senderDiagnoses": [{
+					"diagnosisMeddraVersion": "12345"
+				}]
+			}
+		}),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
+	assert_eq!(
+		body["error"]["data"]["detail"]["ruleCode"],
+		"ICH.H.3.r.1a.ALLOWED.VALUE"
+	);
+	assert_eq!(
+		body["error"]["data"]["detail"]["path"],
+		"narrative.senderDiagnoses.0.diagnosisMeddraVersion"
 	);
 
 	Ok(())
