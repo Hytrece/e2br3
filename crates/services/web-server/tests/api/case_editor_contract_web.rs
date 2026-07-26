@@ -1064,6 +1064,121 @@ async fn editor_ci_repeating_constraint_rejects_before_write() -> Result<()> {
 
 #[serial]
 #[tokio::test]
+async fn editor_ci_incomplete_registry_fields_enforce_portable_constraints(
+) -> Result<()> {
+	let mm = init_test_mm().await?;
+	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
+	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
+	let cookie = cookie_header(&token.to_string());
+	let app = web_server::app(mm);
+	let case_id =
+		create_case_for_editor(&app, &cookie, "EDITOR-CI-FIELD-GATES", &["ich", "fda"])
+			.await?;
+	create_safety_report(&app, &cookie, &case_id, "1", false).await?;
+
+	for (field, invalid_value, rule_code, path) in [
+		(
+			"safetyReportId",
+			json!("S".repeat(101)),
+			"ICH.C.1.1.LENGTH.MAX",
+			"safetyReportIdentification.safetyReportId",
+		),
+		(
+			"transmissionDate",
+			json!("not-an-e2b-date"),
+			"ICH.C.1.2.ALLOWED.VALUE",
+			"safetyReportIdentification.transmissionDate",
+		),
+		(
+			"reportType",
+			json!("9"),
+			"ICH.C.1.3.ALLOWED.VALUE",
+			"safetyReportIdentification.reportType",
+		),
+		(
+			"fulfilExpeditedCriteria",
+			json!("not-a-boolean"),
+			"ICH.C.1.7.ALLOWED.VALUE",
+			"safetyReportIdentification.fulfilExpeditedCriteria",
+		),
+		(
+			"localCriteriaReportType",
+			json!("12"),
+			"FDA.C.1.7.1.LENGTH.MAX",
+			"safetyReportIdentification.localCriteriaReportType",
+		),
+		(
+			"nullificationAmendmentCode",
+			json!("9"),
+			"ICH.C.1.11.1.ALLOWED.VALUE",
+			"safetyReportIdentification.nullificationAmendmentCode",
+		),
+	] {
+		let (status, body) = patch_json(
+			&app,
+			&cookie,
+			&format!("/api/cases/{case_id}/editor/pages/CI"),
+			json!({
+				"authorities": ["ich", "fda"],
+				"changes": { field: { "value": invalid_value } },
+				"rows": {}
+			}),
+		)
+		.await?;
+		assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{field}: {body}");
+		assert_eq!(body["error"]["message"], "CONSTRAINT_VIOLATION");
+		assert_eq!(
+			body["error"]["data"]["detail"]["ruleCode"], rule_code,
+			"{field}: {body}"
+		);
+		assert_eq!(
+			body["error"]["data"]["detail"]["path"], path,
+			"{field}: {body}"
+		);
+	}
+
+	let (status, body) = patch_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/editor/pages/CI"),
+		json!({
+			"authorities": ["ich", "fda"],
+			"changes": {},
+			"rows": {
+				"linkedReports": [{
+					"linkedReportNumber": "L".repeat(101)
+				}]
+			}
+		}),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
+	assert_eq!(body["error"]["message"], "CONSTRAINT_VIOLATION");
+	assert_eq!(
+		body["error"]["data"]["detail"]["ruleCode"],
+		"ICH.C.1.10.r.LENGTH.MAX"
+	);
+	assert_eq!(
+		body["error"]["data"]["detail"]["path"],
+		"linkedReports.0.linkedReportNumber"
+	);
+
+	let (status, reloaded) = get_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/editor/pages/CI?authorities=ich,fda"),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK, "{reloaded}");
+	assert!(reloaded["rows"]["linkedReports"]
+		.as_array()
+		.is_some_and(Vec::is_empty));
+
+	Ok(())
+}
+
+#[serial]
+#[tokio::test]
 async fn editor_ci_page_projection_accepts_multiple_profiles() -> Result<()> {
 	let mm = init_test_mm().await?;
 	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;

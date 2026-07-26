@@ -16,6 +16,10 @@ REQUIRED_FIELD_KEYS = (
 STAGE_STATUSES = {"verified", "not_applicable"}
 
 
+def _editor_status(row: dict[str, Any]) -> Any:
+    return row.get("editor_status", row.get("status"))
+
+
 def load_editor_contract(root: Path, page_id: str) -> dict[str, Any]:
     path = root / "editor-contracts" / f"{page_id.lower()}.json"
     try:
@@ -102,7 +106,7 @@ def validate_editor_contract(
             result.add(
                 f"{code} frontend path {frontend_path} does not match registry {registry_path}"
             )
-        if row.get("status") == "complete":
+        if _editor_status(row) == "complete":
             for key in REQUIRED_FIELD_KEYS:
                 if key not in field:
                     result.add(f"{code} missing {key} evidence")
@@ -118,7 +122,7 @@ def validate_editor_contract(
     for row in registry_rows:
         if (
             row.get("editor_page") == page_id
-            and row.get("status") == "complete"
+            and _editor_status(row) == "complete"
             and row.get("e2br3_code") not in fields_by_code
         ):
             result.add(
