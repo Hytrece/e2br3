@@ -235,6 +235,31 @@ class RegistryValidatorTests(unittest.TestCase):
 
         self.assertIn("C.1.3 complete but missing from CI editor contract", result.errors)
 
+    def test_editor_completion_is_independent_from_business_rule_status(self):
+        row = self.editor_row(status="incomplete")
+        row["editor_status"] = "complete"
+        result = validate.ValidationResult()
+
+        editor_contract.validate_editor_contract(
+            [row], {"pageId": "CI", "fields": []}, result
+        )
+
+        self.assertIn("C.1.3 complete but missing from CI editor contract", result.errors)
+
+    def test_registry_accepts_complete_editor_with_incomplete_business_status(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            row = self.editor_row(status="incomplete")
+            row["editor_status"] = "complete"
+            self.write_registry(root, json.dumps([row]))
+
+            result = validate.validate_registry(
+                root,
+                validate_backend_inventory=False,
+            )
+
+        self.assertEqual([], result.errors)
+
     def test_complete_rp_row_requires_field_contract(self) -> None:
         row = self.editor_row(code="C.2.r.1.1")
         row["editor_page"] = "RP"

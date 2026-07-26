@@ -46,6 +46,10 @@
     "editor_page": {
       "type": "string",
       "enum": ["CI", "RP", "SD", "LR", "SI", "DM", "NR", "AE", "LB", "DG", "DH"]
+    },
+    "editor_status": {
+      "type": "string",
+      "enum": ["complete", "incomplete"]
     }
   },
   "$defs": {

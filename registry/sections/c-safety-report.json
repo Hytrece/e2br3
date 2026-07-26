@@ -6,6 +6,8 @@
     "section": "C",
     "authority": "ICH",
     "status": "incomplete",
+    "editor_page": "CI",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "SafetyReportIdentification",
@@ -30,6 +32,8 @@
     "section": "C",
     "authority": "ICH",
     "status": "incomplete",
+    "editor_page": "CI",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "SafetyReportIdentification",
@@ -54,6 +58,8 @@
     "section": "C",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "CI",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "SafetyReportIdentification",
@@ -78,6 +84,8 @@
     "section": "C",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "CI",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "SafetyReportIdentification",
@@ -102,6 +110,8 @@
     "section": "C",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "CI",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "SafetyReportIdentification",
@@ -126,6 +136,8 @@
     "section": "C",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "CI",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "DocumentsHeldBySender",
@@ -150,6 +162,8 @@
     "section": "C",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "CI",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "DocumentsHeldBySender",
@@ -249,6 +263,8 @@
     "section": "C",
     "authority": "ICH",
     "status": "incomplete",
+    "editor_page": "CI",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "SafetyReportIdentification",
@@ -273,6 +289,8 @@
     "section": "C",
     "authority": "FDA",
     "status": "incomplete",
+    "editor_page": "CI",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "SafetyReportIdentification",
@@ -297,6 +315,8 @@
     "section": "C",
     "authority": "FDA",
     "status": "complete",
+    "editor_page": "CI",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "SafetyReportIdentification",
@@ -321,6 +341,8 @@
     "section": "C",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "CI",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "SafetyReportIdentification",
@@ -345,6 +367,8 @@
     "section": "C",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "CI",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "SafetyReportIdentification",
@@ -369,6 +393,8 @@
     "section": "C",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "CI",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "SafetyReportIdentification",
@@ -393,6 +419,8 @@
     "section": "C",
     "authority": "ICH",
     "status": "incomplete",
+    "editor_page": "CI",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "SafetyReportIdentification",
@@ -417,6 +445,8 @@
     "section": "C",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "CI",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "SafetyReportIdentification",
@@ -442,6 +472,7 @@
     "authority": "ICH",
     "status": "complete",
     "editor_page": "RP",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "PrimarySource",
@@ -467,6 +498,7 @@
     "authority": "ICH",
     "status": "incomplete",
     "editor_page": "RP",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "PrimarySource",
@@ -492,6 +524,7 @@
     "authority": "ICH",
     "status": "complete",
     "editor_page": "RP",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "PrimarySource",
@@ -517,6 +550,7 @@
     "authority": "ICH",
     "status": "incomplete",
     "editor_page": "RP",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "PrimarySource",
@@ -542,6 +576,7 @@
     "authority": "ICH",
     "status": "incomplete",
     "editor_page": "RP",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "PrimarySource",
@@ -567,6 +602,7 @@
     "authority": "ICH",
     "status": "complete",
     "editor_page": "RP",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "PrimarySource",
@@ -592,6 +628,7 @@
     "authority": "ICH",
     "status": "incomplete",
     "editor_page": "RP",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "PrimarySource",
@@ -617,6 +654,7 @@
     "authority": "ICH",
     "status": "incomplete",
     "editor_page": "RP",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "PrimarySource",
@@ -642,6 +680,7 @@
     "authority": "ICH",
     "status": "incomplete",
     "editor_page": "RP",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "PrimarySource",
@@ -667,6 +706,7 @@
     "authority": "ICH",
     "status": "incomplete",
     "editor_page": "RP",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "PrimarySource",
@@ -692,6 +732,7 @@
     "authority": "ICH",
     "status": "incomplete",
     "editor_page": "RP",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "PrimarySource",
@@ -717,6 +758,7 @@
     "authority": "ICH",
     "status": "incomplete",
     "editor_page": "RP",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "PrimarySource",
@@ -742,6 +784,7 @@
     "authority": "FDA",
     "status": "incomplete",
     "editor_page": "RP",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "PrimarySource",
@@ -767,6 +810,7 @@
     "authority": "ICH",
     "status": "incomplete",
     "editor_page": "RP",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "PrimarySource",
@@ -792,6 +836,7 @@
     "authority": "MFDS",
     "status": "incomplete",
     "editor_page": "RP",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "PrimarySource",
@@ -817,6 +862,7 @@
     "authority": "ICH",
     "status": "incomplete",
     "editor_page": "RP",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "PrimarySource",
@@ -842,6 +888,7 @@
     "authority": "ICH",
     "status": "complete",
     "editor_page": "SD",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "SenderInformation",
@@ -867,6 +914,7 @@
     "authority": "MFDS",
     "status": "incomplete",
     "editor_page": "SD",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "SenderInformation",
@@ -892,6 +940,7 @@
     "authority": "ICH",
     "status": "complete",
     "editor_page": "SD",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "SenderInformation",
@@ -917,6 +966,7 @@
     "authority": "ICH",
     "status": "incomplete",
     "editor_page": "SD",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "SenderInformation",
@@ -942,6 +992,7 @@
     "authority": "ICH",
     "status": "incomplete",
     "editor_page": "SD",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "SenderInformation",
@@ -967,6 +1018,7 @@
     "authority": "ICH",
     "status": "incomplete",
     "editor_page": "SD",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "SenderInformation",
@@ -992,6 +1044,7 @@
     "authority": "ICH",
     "status": "complete",
     "editor_page": "SD",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "SenderInformation",
@@ -1017,6 +1070,7 @@
     "authority": "ICH",
     "status": "incomplete",
     "editor_page": "SD",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "SenderInformation",
@@ -1042,6 +1096,7 @@
     "authority": "ICH",
     "status": "incomplete",
     "editor_page": "SD",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "SenderInformation",
@@ -1067,6 +1122,7 @@
     "authority": "ICH",
     "status": "incomplete",
     "editor_page": "SD",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "SenderInformation",
@@ -1092,6 +1148,7 @@
     "authority": "ICH",
     "status": "incomplete",
     "editor_page": "SD",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "SenderInformation",
@@ -1117,6 +1174,7 @@
     "authority": "ICH",
     "status": "incomplete",
     "editor_page": "SD",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "SenderInformation",
@@ -1142,6 +1200,7 @@
     "authority": "ICH",
     "status": "incomplete",
     "editor_page": "SD",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "SenderInformation",
@@ -1167,6 +1226,7 @@
     "authority": "ICH",
     "status": "incomplete",
     "editor_page": "SD",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "SenderInformation",
@@ -1192,6 +1252,7 @@
     "authority": "ICH",
     "status": "incomplete",
     "editor_page": "SD",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "SenderInformation",
@@ -1217,6 +1278,7 @@
     "authority": "ICH",
     "status": "incomplete",
     "editor_page": "SD",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "SenderInformation",
@@ -1242,6 +1304,7 @@
     "authority": "ICH",
     "status": "complete",
     "editor_page": "LR",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "LiteratureReference",
@@ -1267,6 +1330,7 @@
     "authority": "ICH",
     "status": "complete",
     "editor_page": "LR",
+    "editor_status": "complete",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -1293,6 +1357,7 @@
     "authority": "ICH",
     "status": "incomplete",
     "editor_page": "LR",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "LiteratureReference",
@@ -1393,6 +1458,7 @@
     "authority": "ICH",
     "status": "incomplete",
     "editor_page": "SI",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "StudyRegistrationNumber",
@@ -1418,6 +1484,7 @@
     "authority": "ICH",
     "status": "complete",
     "editor_page": "SI",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "StudyRegistrationNumber",
@@ -1443,6 +1510,7 @@
     "authority": "ICH",
     "status": "incomplete",
     "editor_page": "SI",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "StudyInformation",
@@ -1468,6 +1536,7 @@
     "authority": "ICH",
     "status": "incomplete",
     "editor_page": "SI",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "StudyInformation",
@@ -1493,6 +1562,7 @@
     "authority": "ICH",
     "status": "incomplete",
     "editor_page": "SI",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "StudyInformation",
@@ -1518,6 +1588,7 @@
     "authority": "MFDS",
     "status": "incomplete",
     "editor_page": "SI",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "StudyInformation",
@@ -1543,6 +1614,7 @@
     "authority": "FDA",
     "status": "incomplete",
     "editor_page": "SI",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "StudyInformation",
@@ -1568,6 +1640,7 @@
     "authority": "FDA",
     "status": "incomplete",
     "editor_page": "SI",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "StudyInformation",
@@ -1593,6 +1666,7 @@
     "authority": "FDA",
     "status": "incomplete",
     "editor_page": "SI",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "StudyFdaCrossReportedInd",
@@ -1618,6 +1692,7 @@
     "authority": "FDA",
     "status": "complete",
     "editor_page": "SI",
+    "editor_status": "complete",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -1644,6 +1719,7 @@
     "authority": "ICH",
     "status": "complete",
     "editor_page": "SD",
+    "editor_status": "complete",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -1670,6 +1746,7 @@
     "authority": "ICH",
     "status": "complete",
     "editor_page": "SD",
+    "editor_status": "complete",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -1696,6 +1773,7 @@
     "authority": "ICH",
     "status": "complete",
     "editor_page": "SD",
+    "editor_status": "complete",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -1722,6 +1800,7 @@
     "authority": "ICH",
     "status": "complete",
     "editor_page": "SD",
+    "editor_status": "complete",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -1748,6 +1827,7 @@
     "authority": "ICH",
     "status": "complete",
     "editor_page": "SD",
+    "editor_status": "complete",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -1774,6 +1854,7 @@
     "authority": "ICH",
     "status": "complete",
     "editor_page": "SD",
+    "editor_status": "complete",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -1800,6 +1881,7 @@
     "authority": "ICH",
     "status": "complete",
     "editor_page": "SD",
+    "editor_status": "complete",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -1826,6 +1908,7 @@
     "authority": "ICH",
     "status": "complete",
     "editor_page": "SD",
+    "editor_status": "complete",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -1852,6 +1935,7 @@
     "authority": "ICH",
     "status": "complete",
     "editor_page": "SD",
+    "editor_status": "complete",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -1878,6 +1962,7 @@
     "authority": "ICH",
     "status": "complete",
     "editor_page": "SD",
+    "editor_status": "complete",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -1904,6 +1989,7 @@
     "authority": "ICH",
     "status": "complete",
     "editor_page": "SD",
+    "editor_status": "complete",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -1929,6 +2015,8 @@
     "section": "C",
     "authority": "ICH",
     "status": "incomplete",
+    "editor_page": "CI",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "SafetyReportIdentification",
@@ -1953,6 +2041,8 @@
     "section": "C",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "CI",
+    "editor_status": "complete",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -1978,6 +2068,8 @@
     "section": "C",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "CI",
+    "editor_status": "complete",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -2053,6 +2145,8 @@
     "section": "C",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "CI",
+    "editor_status": "complete",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -2078,6 +2172,8 @@
     "section": "C",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "CI",
+    "editor_status": "complete",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -2103,6 +2199,8 @@
     "section": "C",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "CI",
+    "editor_status": "complete",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -2129,6 +2227,7 @@
     "authority": "ICH",
     "status": "complete",
     "editor_page": "RP",
+    "editor_status": "complete",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -2155,6 +2254,7 @@
     "authority": "ICH",
     "status": "complete",
     "editor_page": "RP",
+    "editor_status": "complete",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -2181,6 +2281,7 @@
     "authority": "ICH",
     "status": "complete",
     "editor_page": "RP",
+    "editor_status": "complete",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -2206,6 +2307,8 @@
     "section": "C",
     "authority": "ICH",
     "status": "incomplete",
+    "editor_page": "CI",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "LinkedReportNumber",
@@ -2230,6 +2333,8 @@
     "section": "C",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "CI",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "OtherCaseIdentifier",
@@ -2254,6 +2359,8 @@
     "section": "C",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "CI",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "OtherCaseIdentifier",
@@ -2278,6 +2385,8 @@
     "section": "C",
     "authority": "FDA",
     "status": "complete",
+    "editor_page": "CI",
+    "editor_status": "complete",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -2303,6 +2412,8 @@
     "section": "C",
     "authority": "MFDS",
     "status": "complete",
+    "editor_page": "CI",
+    "editor_status": "complete",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -2329,6 +2440,7 @@
     "authority": "ICH",
     "status": "complete",
     "editor_page": "RP",
+    "editor_status": "complete",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -2355,6 +2467,7 @@
     "authority": "ICH",
     "status": "complete",
     "editor_page": "RP",
+    "editor_status": "complete",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -2381,6 +2494,7 @@
     "authority": "ICH",
     "status": "complete",
     "editor_page": "RP",
+    "editor_status": "complete",
     "local_only": true,
     "backend": {"status": "mapped", "model": "PrimarySource", "field": "reporter_middle_name_null_flavor", "file": "crates/libs/lib-core/src/model/safety_report.rs", "evidence": "PrimarySource.reporter_middle_name_null_flavor stores the C.2.r.1.3 nullFlavor."},
     "frontend": {"status": "mapped", "section": "primarySources", "field": "reporterMiddleNameNullFlavor", "file": "../frontend/E2BR3-frontend/app/(protected)/[authority]/case/[id]/detail/RP/components/ReporterEditorPanel.tsx", "evidence": "ReporterEditorPanel binds primarySources[index].reporterMiddleNameNullFlavor."},
@@ -2395,6 +2509,7 @@
     "authority": "ICH",
     "status": "complete",
     "editor_page": "RP",
+    "editor_status": "complete",
     "local_only": true,
     "backend": {"status": "mapped", "model": "PrimarySource", "field": "reporter_family_name_null_flavor", "file": "crates/libs/lib-core/src/model/safety_report.rs", "evidence": "PrimarySource.reporter_family_name_null_flavor stores the C.2.r.1.4 nullFlavor."},
     "frontend": {"status": "mapped", "section": "primarySources", "field": "reporterFamilyNameNullFlavor", "file": "../frontend/E2BR3-frontend/app/(protected)/[authority]/case/[id]/detail/RP/components/ReporterEditorPanel.tsx", "evidence": "ReporterEditorPanel binds primarySources[index].reporterFamilyNameNullFlavor."},
@@ -2409,6 +2524,7 @@
     "authority": "ICH",
     "status": "complete",
     "editor_page": "RP",
+    "editor_status": "complete",
     "local_only": true,
     "backend": {"status": "mapped", "model": "PrimarySource", "field": "organization_null_flavor", "file": "crates/libs/lib-core/src/model/safety_report.rs", "evidence": "PrimarySource.organization_null_flavor stores the C.2.r.2.1 nullFlavor."},
     "frontend": {"status": "mapped", "section": "primarySources", "field": "reporterOrganizationNullFlavor", "file": "../frontend/E2BR3-frontend/app/(protected)/[authority]/case/[id]/detail/RP/components/ReporterEditorPanel.tsx", "evidence": "ReporterEditorPanel binds primarySources[index].reporterOrganizationNullFlavor."},
@@ -2423,6 +2539,7 @@
     "authority": "ICH",
     "status": "complete",
     "editor_page": "RP",
+    "editor_status": "complete",
     "local_only": true,
     "backend": {"status": "mapped", "model": "PrimarySource", "field": "department_null_flavor", "file": "crates/libs/lib-core/src/model/safety_report.rs", "evidence": "PrimarySource.department_null_flavor stores the C.2.r.2.2 nullFlavor."},
     "frontend": {"status": "mapped", "section": "primarySources", "field": "reporterDepartmentNullFlavor", "file": "../frontend/E2BR3-frontend/app/(protected)/[authority]/case/[id]/detail/RP/components/ReporterEditorPanel.tsx", "evidence": "ReporterEditorPanel binds primarySources[index].reporterDepartmentNullFlavor."},
@@ -2437,6 +2554,7 @@
     "authority": "ICH",
     "status": "complete",
     "editor_page": "RP",
+    "editor_status": "complete",
     "local_only": true,
     "backend": {"status": "mapped", "model": "PrimarySource", "field": "street_null_flavor", "file": "crates/libs/lib-core/src/model/safety_report.rs", "evidence": "PrimarySource.street_null_flavor stores the C.2.r.2.3 nullFlavor."},
     "frontend": {"status": "mapped", "section": "primarySources", "field": "reporterStreetNullFlavor", "file": "../frontend/E2BR3-frontend/app/(protected)/[authority]/case/[id]/detail/RP/components/ReporterEditorPanel.tsx", "evidence": "ReporterEditorPanel binds primarySources[index].reporterStreetNullFlavor."},
@@ -2451,6 +2569,7 @@
     "authority": "ICH",
     "status": "complete",
     "editor_page": "RP",
+    "editor_status": "complete",
     "local_only": true,
     "backend": {"status": "mapped", "model": "PrimarySource", "field": "city_null_flavor", "file": "crates/libs/lib-core/src/model/safety_report.rs", "evidence": "PrimarySource.city_null_flavor stores the C.2.r.2.4 nullFlavor."},
     "frontend": {"status": "mapped", "section": "primarySources", "field": "reporterCityNullFlavor", "file": "../frontend/E2BR3-frontend/app/(protected)/[authority]/case/[id]/detail/RP/components/ReporterEditorPanel.tsx", "evidence": "ReporterEditorPanel binds primarySources[index].reporterCityNullFlavor."},
@@ -2465,6 +2584,7 @@
     "authority": "ICH",
     "status": "complete",
     "editor_page": "RP",
+    "editor_status": "complete",
     "local_only": true,
     "backend": {"status": "mapped", "model": "PrimarySource", "field": "state_null_flavor", "file": "crates/libs/lib-core/src/model/safety_report.rs", "evidence": "PrimarySource.state_null_flavor stores the C.2.r.2.5 nullFlavor."},
     "frontend": {"status": "mapped", "section": "primarySources", "field": "reporterStateNullFlavor", "file": "../frontend/E2BR3-frontend/app/(protected)/[authority]/case/[id]/detail/RP/components/ReporterEditorPanel.tsx", "evidence": "ReporterEditorPanel binds primarySources[index].reporterStateNullFlavor."},
@@ -2479,6 +2599,7 @@
     "authority": "ICH",
     "status": "complete",
     "editor_page": "RP",
+    "editor_status": "complete",
     "local_only": true,
     "backend": {"status": "mapped", "model": "PrimarySource", "field": "postcode_null_flavor", "file": "crates/libs/lib-core/src/model/safety_report.rs", "evidence": "PrimarySource.postcode_null_flavor stores the C.2.r.2.6 nullFlavor."},
     "frontend": {"status": "mapped", "section": "primarySources", "field": "reporterPostcodeNullFlavor", "file": "../frontend/E2BR3-frontend/app/(protected)/[authority]/case/[id]/detail/RP/components/ReporterEditorPanel.tsx", "evidence": "ReporterEditorPanel binds primarySources[index].reporterPostcodeNullFlavor."},
@@ -2493,6 +2614,7 @@
     "authority": "ICH",
     "status": "complete",
     "editor_page": "RP",
+    "editor_status": "complete",
     "local_only": true,
     "backend": {"status": "mapped", "model": "PrimarySource", "field": "telephone_null_flavor", "file": "crates/libs/lib-core/src/model/safety_report.rs", "evidence": "PrimarySource.telephone_null_flavor stores the C.2.r.2.7 nullFlavor."},
     "frontend": {"status": "mapped", "section": "primarySources", "field": "reporterTelephoneNullFlavor", "file": "../frontend/E2BR3-frontend/app/(protected)/[authority]/case/[id]/detail/RP/components/ReporterEditorPanel.tsx", "evidence": "ReporterEditorPanel binds primarySources[index].reporterTelephoneNullFlavor."},

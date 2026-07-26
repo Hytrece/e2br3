@@ -25,6 +25,7 @@ ROW_STATUSES = {
     "not_applicable",
     "conflict",
 }
+EDITOR_STATUSES = {"complete", "incomplete"}
 MAPPING_STATUSES = {"mapped", "missing", "not_applicable", "conflict"}
 ALLOWED_ROW_FIELDS = {
     "id",
@@ -40,6 +41,7 @@ ALLOWED_ROW_FIELDS = {
     "notes",
     "local_only",
     "editor_page",
+    "editor_status",
 }
 DICTIONARY_KINDS = {"element", "group"}
 DICTIONARY_CONFORMANCES = {"mandatory", "conditional_mandatory", "optional", "required"}
@@ -643,14 +645,25 @@ def validate_row(row: Any, source: Path, result: ValidationResult) -> None:
     if status not in ROW_STATUSES:
         result.add(f"{row_id}: invalid status {status!r}; expected one of {sorted(ROW_STATUSES)}")
 
+    editor_status = row.get("editor_status")
+    if editor_status is not None and editor_status not in EDITOR_STATUSES:
+        result.add(
+            f"{row_id}: invalid editor_status {editor_status!r}; "
+            f"expected one of {sorted(EDITOR_STATUSES)}"
+        )
+    if editor_status is not None and not row.get("editor_page"):
+        result.add(f"{row_id}: editor_status requires editor_page")
+
     for name in ("backend", "frontend"):
         validate_mapping(row_id, name, row.get(name), result)
 
-    if status == "complete":
+    if status == "complete" or editor_status == "complete":
         for name in ("backend", "frontend"):
             value = row.get(name)
             if isinstance(value, dict) and value.get("status") != "mapped":
-                result.add(f"{row_id}: complete rows require {name}.status to be mapped")
+                result.add(
+                    f"{row_id}: complete rows require {name}.status to be mapped"
+                )
 
     backend_status = row.get("backend", {}).get("status") if isinstance(row.get("backend"), dict) else None
     frontend_status = row.get("frontend", {}).get("status") if isinstance(row.get("frontend"), dict) else None

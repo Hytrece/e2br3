@@ -523,48 +523,136 @@ pub(super) fn validate_direct_rows(
 			}
 			return Ok(());
 		}
-		"SI" => optional_row_object(section, rows, "studyInformation")?.map(|row| {
-			normalized_direct_object(
-				row,
-				&[
-					("studyName", &["studyName", "study_name"]),
-					(
-						"studyNameNullFlavor",
-						&["studyNameNullFlavor", "study_name_null_flavor"],
-					),
-					(
-						"sponsorStudyNumber",
-						&["sponsorStudyNumber", "sponsor_study_number"],
-					),
-					(
-						"sponsorStudyNumberNullFlavor",
+		"SI" => {
+			let study = optional_row_object(section, rows, "studyInformation")?;
+			let mut normalized = study
+				.map(|row| {
+					normalized_direct_object(
+						row,
 						&[
-							"sponsorStudyNumberNullFlavor",
-							"sponsor_study_number_null_flavor",
+							("studyName", &["studyName", "study_name"]),
+							(
+								"studyNameNullFlavor",
+								&["studyNameNullFlavor", "study_name_null_flavor"],
+							),
+							(
+								"sponsorStudyNumber",
+								&["sponsorStudyNumber", "sponsor_study_number"],
+							),
+							(
+								"sponsorStudyNumberNullFlavor",
+								&[
+									"sponsorStudyNumberNullFlavor",
+									"sponsor_study_number_null_flavor",
+								],
+							),
+							(
+								"studyTypeReaction",
+								&["studyTypeReaction", "study_type_reaction"],
+							),
+							(
+								"studyTypeReactionKr1",
+								&["studyTypeReactionKr1", "study_type_reaction_kr1"],
+							),
+							(
+								"fdaIndNumberOccurred",
+								&["fdaIndNumberOccurred", "fda_ind_number_occurred"],
+							),
+							(
+								"fdaPreAndaNumberOccurred",
+								&[
+									"fdaPreAndaNumberOccurred",
+									"fda_pre_anda_number_occurred",
+								],
+							),
 						],
-					),
-					(
-						"studyTypeReaction",
-						&["studyTypeReaction", "study_type_reaction"],
-					),
-					(
-						"studyTypeReactionKr1",
-						&["studyTypeReactionKr1", "study_type_reaction_kr1"],
-					),
-					(
-						"fdaIndNumberOccurred",
-						&["fdaIndNumberOccurred", "fda_ind_number_occurred"],
-					),
-					(
-						"fdaPreAndaNumberOccurred",
+					)
+				})
+				.unwrap_or_default();
+
+			if let Some(study) = study {
+				if let Some(value) = study
+					.get("fdaCrossReportedIndNumbers")
+					.or_else(|| study.get("fda_cross_reported_ind_numbers"))
+				{
+					let Some(items) = value.as_array() else {
+						return Err(Error::BadRequest {
+							message: format!(
+								"{section}.studyInformation.fdaCrossReportedIndNumbers must be an array"
+							),
+						});
+					};
+					let mut normalized_items = Vec::with_capacity(items.len());
+					for value in items {
+						let row =
+							as_object(section, "fdaCrossReportedIndNumbers", value)?;
+						normalized_items.push(Value::Object(
+							normalized_direct_object(
+								row,
+								&[
+									("indNumber", &["indNumber", "ind_number"]),
+									(
+										"indNumberNullFlavor",
+										&[
+											"indNumberNullFlavor",
+											"ind_number_null_flavor",
+										],
+									),
+								],
+							),
+						));
+					}
+					normalized.insert(
+						"fdaCrossReportedIndNumbers".to_string(),
+						Value::Array(normalized_items),
+					);
+				}
+			}
+
+			if let Some(value) = rows.get("studyRegistrationNumbers") {
+				let Some(items) = value.as_array() else {
+					return Err(Error::BadRequest {
+						message: format!(
+							"{section}.studyRegistrationNumbers must be an array"
+						),
+					});
+				};
+				let mut normalized_items = Vec::with_capacity(items.len());
+				for value in items {
+					let row = as_object(section, "studyRegistrationNumbers", value)?;
+					normalized_items.push(Value::Object(normalized_direct_object(
+						row,
 						&[
-							"fdaPreAndaNumberOccurred",
-							"fda_pre_anda_number_occurred",
+							(
+								"registrationNumber",
+								&["registrationNumber", "registration_number"],
+							),
+							(
+								"registrationNumberNullFlavor",
+								&[
+									"registrationNumberNullFlavor",
+									"registration_number_null_flavor",
+								],
+							),
+							("countryCode", &["countryCode", "country_code"]),
+							(
+								"countryCodeNullFlavor",
+								&[
+									"countryCodeNullFlavor",
+									"country_code_null_flavor",
+								],
+							),
 						],
-					),
-				],
-			)
-		}),
+					)));
+				}
+				normalized.insert(
+					"studyRegistrationNumbers".to_string(),
+					Value::Array(normalized_items),
+				);
+			}
+
+			(!normalized.is_empty()).then_some(normalized)
+		}
 		"DM" => {
 			let mut normalized =
 				optional_row_object(section, rows, "patientInformation")?
@@ -1286,5 +1374,39 @@ mod portable_save_tests {
 		assert!(error_message(error).contains(
 			"ICH.C.3.2.LENGTH.MAX at safetyReportIdentification.senderOrganization"
 		));
+	}
+
+	#[test]
+	fn portable_save_rejects_si_nested_values_before_mutation() {
+		let registrations = BTreeMap::from([
+			("studyInformation".to_string(), json!({})),
+			(
+				"studyRegistrationNumbers".to_string(),
+				json!([{"registrationNumber": "X".repeat(51)}]),
+			),
+		]);
+		let detail = constraint_violation(
+			validate_direct_rows("SI", &registrations).unwrap_err(),
+		);
+		assert_eq!(detail.rule_code, "ICH.C.5.1.r.1.LENGTH.MAX");
+		assert_eq!(
+			detail.path,
+			"studyInformation.studyRegistrationNumbers.0.registrationNumber"
+		);
+
+		let cross_report = BTreeMap::from([(
+			"studyInformation".to_string(),
+			json!({
+				"fdaCrossReportedIndNumbers": [{"indNumberNullFlavor": "BAD"}]
+			}),
+		)]);
+		let detail = constraint_violation(
+			validate_direct_rows("SI", &cross_report).unwrap_err(),
+		);
+		assert_eq!(detail.rule_code, "FDA.C.5.6.r.NULLFLAVOR.ALLOWED");
+		assert_eq!(
+			detail.path,
+			"studyInformation.fdaCrossReportedIndNumbers.0.indNumberNullFlavor"
+		);
 	}
 }

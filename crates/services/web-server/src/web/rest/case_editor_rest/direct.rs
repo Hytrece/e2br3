@@ -1697,13 +1697,19 @@ async fn apply_lr_page_rows_patch(
 		};
 		if let Some(id) = id {
 			LiteratureReferenceBmc::update(ctx, mm, id, update).await?;
-		} else if let Some(reference_text) = update.reference_text {
+		} else if update.reference_text.is_some()
+			|| update.reference_text_null_flavor.is_some()
+			|| update.document_base64.is_some()
+			|| update.media_type.is_some()
+			|| update.representation.is_some()
+			|| update.compression.is_some()
+		{
 			LiteratureReferenceBmc::create(
 				ctx,
 				mm,
 				LiteratureReferenceForCreate {
 					case_id,
-					reference_text,
+					reference_text: update.reference_text.unwrap_or_default(),
 					reference_text_null_flavor: update.reference_text_null_flavor,
 					sequence_number: update.sequence_number.unwrap_or_else(|| {
 						i32::try_from(index + 1).unwrap_or(i32::MAX)
