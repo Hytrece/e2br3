@@ -7,6 +7,7 @@
     "authority": "ICH",
     "status": "complete",
     "editor_page": "AE",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "Reaction",
@@ -32,6 +33,7 @@
     "authority": "ICH",
     "status": "complete",
     "editor_page": "AE",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "Reaction",
@@ -57,6 +59,7 @@
     "authority": "ICH",
     "status": "complete",
     "editor_page": "AE",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "Reaction",
@@ -82,6 +85,7 @@
     "authority": "ICH",
     "status": "complete",
     "editor_page": "AE",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "Reaction",
@@ -107,6 +111,7 @@
     "authority": "ICH",
     "status": "complete",
     "editor_page": "AE",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "Reaction",
@@ -132,6 +137,7 @@
     "authority": "ICH",
     "status": "complete",
     "editor_page": "AE",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "Reaction",
@@ -157,6 +163,7 @@
     "authority": "ICH",
     "status": "complete",
     "editor_page": "AE",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "Reaction",
@@ -182,6 +189,7 @@
     "authority": "ICH",
     "status": "complete",
     "editor_page": "AE",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "Reaction",
@@ -207,6 +215,7 @@
     "authority": "ICH",
     "status": "complete",
     "editor_page": "AE",
+    "editor_status": "complete",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -233,6 +242,7 @@
     "authority": "ICH",
     "status": "complete",
     "editor_page": "AE",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "Reaction",
@@ -258,6 +268,7 @@
     "authority": "ICH",
     "status": "complete",
     "editor_page": "AE",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "Reaction",
@@ -283,6 +294,7 @@
     "authority": "ICH",
     "status": "complete",
     "editor_page": "AE",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "Reaction",
@@ -308,6 +320,7 @@
     "authority": "ICH",
     "status": "complete",
     "editor_page": "AE",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "Reaction",
@@ -333,6 +346,7 @@
     "authority": "ICH",
     "status": "complete",
     "editor_page": "AE",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "Reaction",
@@ -358,6 +372,7 @@
     "authority": "ICH",
     "status": "complete",
     "editor_page": "AE",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "Reaction",
@@ -383,6 +398,7 @@
     "authority": "FDA",
     "status": "complete",
     "editor_page": "AE",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "Reaction",
@@ -408,6 +424,7 @@
     "authority": "ICH",
     "status": "complete",
     "editor_page": "AE",
+    "editor_status": "complete",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -434,6 +451,7 @@
     "authority": "ICH",
     "status": "complete",
     "editor_page": "AE",
+    "editor_status": "complete",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -460,6 +478,7 @@
     "authority": "ICH",
     "status": "complete",
     "editor_page": "AE",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "Reaction",
@@ -485,6 +504,7 @@
     "authority": "ICH",
     "status": "complete",
     "editor_page": "AE",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "Reaction",
@@ -510,6 +530,7 @@
     "authority": "ICH",
     "status": "complete",
     "editor_page": "AE",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "Reaction",
@@ -535,6 +556,7 @@
     "authority": "ICH",
     "status": "complete",
     "editor_page": "AE",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "Reaction",
@@ -560,6 +582,7 @@
     "authority": "ICH",
     "status": "complete",
     "editor_page": "AE",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "Reaction",
@@ -584,6 +607,8 @@
     "section": "E",
     "authority": "MFDS",
     "status": "incomplete",
+    "editor_page": "AE",
+    "editor_status": "incomplete",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -609,6 +634,8 @@
     "section": "E",
     "authority": "MFDS",
     "status": "incomplete",
+    "editor_page": "AE",
+    "editor_status": "incomplete",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -634,6 +661,8 @@
     "section": "E",
     "authority": "MFDS",
     "status": "incomplete",
+    "editor_page": "AE",
+    "editor_status": "incomplete",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -659,6 +688,8 @@
     "section": "E",
     "authority": "MFDS",
     "status": "incomplete",
+    "editor_page": "AE",
+    "editor_status": "incomplete",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -684,6 +715,8 @@
     "section": "E",
     "authority": "MFDS",
     "status": "incomplete",
+    "editor_page": "AE",
+    "editor_status": "incomplete",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -709,6 +742,8 @@
     "section": "E",
     "authority": "MFDS",
     "status": "incomplete",
+    "editor_page": "AE",
+    "editor_status": "incomplete",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -734,6 +769,8 @@
     "section": "E",
     "authority": "MFDS",
     "status": "incomplete",
+    "editor_page": "AE",
+    "editor_status": "incomplete",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -759,6 +796,8 @@
     "section": "E",
     "authority": "MFDS",
     "status": "incomplete",
+    "editor_page": "AE",
+    "editor_status": "incomplete",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -784,6 +823,8 @@
     "section": "E",
     "authority": "MFDS",
     "status": "incomplete",
+    "editor_page": "AE",
+    "editor_status": "incomplete",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -809,6 +850,8 @@
     "section": "E",
     "authority": "MFDS",
     "status": "incomplete",
+    "editor_page": "AE",
+    "editor_status": "incomplete",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -834,6 +877,8 @@
     "section": "E",
     "authority": "MFDS",
     "status": "incomplete",
+    "editor_page": "AE",
+    "editor_status": "incomplete",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -859,6 +904,8 @@
     "section": "E",
     "authority": "MFDS",
     "status": "incomplete",
+    "editor_page": "AE",
+    "editor_status": "incomplete",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -884,6 +931,8 @@
     "section": "E",
     "authority": "MFDS",
     "status": "incomplete",
+    "editor_page": "AE",
+    "editor_status": "incomplete",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -909,6 +958,8 @@
     "section": "E",
     "authority": "MFDS",
     "status": "incomplete",
+    "editor_page": "AE",
+    "editor_status": "incomplete",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -934,6 +985,8 @@
     "section": "E",
     "authority": "MFDS",
     "status": "incomplete",
+    "editor_page": "AE",
+    "editor_status": "incomplete",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -959,6 +1012,8 @@
     "section": "E",
     "authority": "MFDS",
     "status": "incomplete",
+    "editor_page": "AE",
+    "editor_status": "incomplete",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -984,6 +1039,8 @@
     "section": "E",
     "authority": "MFDS",
     "status": "incomplete",
+    "editor_page": "AE",
+    "editor_status": "incomplete",
     "local_only": true,
     "backend": {
       "status": "mapped",

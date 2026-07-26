@@ -5337,7 +5337,7 @@ async fn editor_ae_page_row_round_trips_supported_fields() -> Result<()> {
 						"criteriaCongenitalAnomaly": true,
 						"criteriaOtherMedicallyImportant": true
 					},
-					"requiredIntervention": "1",
+					"requiredIntervention": true,
 					"expectedness": "1",
 					"severity": "moderate",
 					"reactionStartDate": "20200102",
@@ -5379,8 +5379,27 @@ async fn editor_ae_page_row_round_trips_supported_fields() -> Result<()> {
 	assert_eq!(row["start_date"], "20200102");
 	assert_eq!(row["duration_value"], "1.00");
 	assert_eq!(row["country_code"], "KR");
-	assert_eq!(row["mfds_device_ae_classification"], "0");
-	assert_eq!(row["mfds_device_action_other"], "Other action");
+	for (field, expected) in [
+		("mfds_device_ae_classification", json!("0")),
+		("mfds_device_ae_outcome", json!("10")),
+		("mfds_device_cause_medical_device", json!(true)),
+		("mfds_device_cause_procedure_issue", json!(true)),
+		("mfds_device_cause_patient_condition", json!(true)),
+		("mfds_device_cause_unable_to_assess", json!(true)),
+		("mfds_device_cause_other", json!("Other cause")),
+		("mfds_device_action_reason", json!("Action reason")),
+		("mfds_device_action_recall", json!(true)),
+		("mfds_device_action_repair", json!(true)),
+		("mfds_device_action_inspection", json!(true)),
+		("mfds_device_action_replacement", json!(true)),
+		("mfds_device_action_improvement", json!(true)),
+		("mfds_device_action_monitoring", json!(true)),
+		("mfds_device_action_notification", json!(true)),
+		("mfds_device_action_label_change", json!(true)),
+		("mfds_device_action_other", json!("Other action")),
+	] {
+		assert_eq!(row[field], expected, "{field}: {created}");
+	}
 
 	let row_id = created["rowId"].as_str().expect("reaction id");
 	let (status, updated) = patch_json(
