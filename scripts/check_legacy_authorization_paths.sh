@@ -7,10 +7,12 @@ if [[ "$mode" != "--report" && "$mode" != "--enforce-zero" ]]; then
 	exit 2
 fi
 
-pattern='has_permission|require_permission|ctx\.is_admin|RequireAdmin|require_admin|can_access_user_admin|permission_contract|set_org_context|can_modify'
+# RLS context setters are storage isolation primitives used only after an
+# authorization decision. This gate targets competing authorization APIs.
+pattern='has_permission|require_permission|ctx\.is_admin|RequireAdmin|require_admin|can_access_user_admin|permission_contract|can_modify'
 matches="$(rg -n "$pattern" crates/libs crates/services/web-server/src \
+	crates/services/web-server/examples \
 	-g '!**/tests/**' \
-	-g '!**/examples/**' \
 	-g '!**/target/**' || true)"
 
 if [[ -n "$matches" ]]; then

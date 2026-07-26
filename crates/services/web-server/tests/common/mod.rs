@@ -473,7 +473,7 @@ async fn seed_normalized_role_assignment(
 		};
 		let privileges =
 			test_role_privileges(tx, organization_id, legacy_role).await?;
-		let grant_ids = grant_ids_for_menu_privileges(&privileges, true)
+		let grant_ids = grant_ids_for_menu_privileges(&privileges, false)
 			.map_err(|error| format!("invalid test role privileges: {error:?}"))?;
 		let grant_ids = grant_ids
 			.into_iter()

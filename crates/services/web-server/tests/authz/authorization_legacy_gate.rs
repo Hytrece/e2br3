@@ -29,6 +29,20 @@ fn legacy_permission_runtime_is_deleted() {
 			.exists(),
 		"the obsolete endpoint Permission generator must be deleted"
 	);
+	assert!(
+		!root
+			.join("crates/services/web-server/src/web/rest/permission_contract.rs")
+			.exists(),
+		"the handwritten endpoint-to-Permission contract must be deleted"
+	);
+	assert!(
+		!root
+			.join(
+				"crates/services/web-server/examples/export_permission_contract.rs"
+			)
+			.exists(),
+		"the obsolete endpoint Permission contract exporter must be deleted"
+	);
 	let model =
 		fs::read_to_string(root.join("crates/libs/lib-core/src/model/mod.rs"))
 			.expect("model module source must be readable");
