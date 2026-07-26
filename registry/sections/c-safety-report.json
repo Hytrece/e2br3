@@ -1458,6 +1458,7 @@
     "authority": "ICH",
     "status": "incomplete",
     "editor_page": "SI",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "StudyRegistrationNumber",
@@ -1483,6 +1484,7 @@
     "authority": "ICH",
     "status": "complete",
     "editor_page": "SI",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "StudyRegistrationNumber",
@@ -1508,6 +1510,7 @@
     "authority": "ICH",
     "status": "incomplete",
     "editor_page": "SI",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "StudyInformation",
@@ -1533,6 +1536,7 @@
     "authority": "ICH",
     "status": "incomplete",
     "editor_page": "SI",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "StudyInformation",
@@ -1558,6 +1562,7 @@
     "authority": "ICH",
     "status": "incomplete",
     "editor_page": "SI",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "StudyInformation",
@@ -1583,6 +1588,7 @@
     "authority": "MFDS",
     "status": "incomplete",
     "editor_page": "SI",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "StudyInformation",
@@ -1608,6 +1614,7 @@
     "authority": "FDA",
     "status": "incomplete",
     "editor_page": "SI",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "StudyInformation",
@@ -1633,6 +1640,7 @@
     "authority": "FDA",
     "status": "incomplete",
     "editor_page": "SI",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "StudyInformation",
@@ -1658,6 +1666,7 @@
     "authority": "FDA",
     "status": "incomplete",
     "editor_page": "SI",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "StudyFdaCrossReportedInd",
@@ -1683,6 +1692,7 @@
     "authority": "FDA",
     "status": "complete",
     "editor_page": "SI",
+    "editor_status": "complete",
     "local_only": true,
     "backend": {
       "status": "mapped",

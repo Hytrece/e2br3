@@ -3102,6 +3102,101 @@ async fn editor_si_page_patch_round_trips_every_contract_field() -> Result<()> {
 
 #[serial]
 #[tokio::test]
+async fn editor_si_portable_constraints_return_structured_paths() -> Result<()> {
+	let mm = init_test_mm().await?;
+	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
+	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
+	let cookie = cookie_header(&token.to_string());
+	let app = web_server::app(mm);
+	let case_id = create_case_for_editor(
+		&app,
+		&cookie,
+		"EDITOR-SI-CONSTRAINTS",
+		&["ich", "fda", "mfds"],
+	)
+	.await?;
+	let too_long = "X".repeat(10_001);
+	let cases = [
+		(
+			json!({
+				"studyInformation": {},
+				"studyRegistrationNumbers": [{"registrationNumber": too_long}]
+			}),
+			"ICH.C.5.1.r.1.LENGTH.MAX",
+			"studyInformation.studyRegistrationNumbers.0.registrationNumber",
+		),
+		(
+			json!({
+				"studyInformation": {},
+				"studyRegistrationNumbers": [{"countryCode": "KOR"}]
+			}),
+			"ICH.C.5.1.r.2.LENGTH.MAX",
+			"studyInformation.studyRegistrationNumbers.0.countryCode",
+		),
+		(
+			json!({"studyInformation": {"studyName": "X".repeat(2001)}}),
+			"ICH.C.5.2.LENGTH.MAX",
+			"studyInformation.studyName",
+		),
+		(
+			json!({"studyInformation": {"sponsorStudyNumber": "X".repeat(101)}}),
+			"ICH.C.5.3.LENGTH.MAX",
+			"studyInformation.sponsorStudyNumber",
+		),
+		(
+			json!({"studyInformation": {"studyTypeReaction": "9"}}),
+			"ICH.C.5.4.ALLOWED.VALUE",
+			"studyInformation.studyTypeReaction",
+		),
+		(
+			json!({"studyInformation": {"studyTypeReactionKr1": "12"}}),
+			"MFDS.C.5.4.KR.1.LENGTH.MAX",
+			"studyInformation.studyTypeReactionKr1",
+		),
+		(
+			json!({"studyInformation": {"fdaIndNumberOccurred": "X".repeat(11)}}),
+			"FDA.C.5.5a.LENGTH.MAX",
+			"studyInformation.fdaIndNumberOccurred",
+		),
+		(
+			json!({"studyInformation": {"fdaPreAndaNumberOccurred": "X".repeat(11)}}),
+			"FDA.C.5.5b.LENGTH.MAX",
+			"studyInformation.fdaPreAndaNumberOccurred",
+		),
+		(
+			json!({"studyInformation": {"fdaCrossReportedIndNumbers": [{"indNumber": "X".repeat(11)}]}}),
+			"FDA.C.5.6.r.LENGTH.MAX",
+			"studyInformation.fdaCrossReportedIndNumbers.0.indNumber",
+		),
+		(
+			json!({"studyInformation": {"fdaCrossReportedIndNumbers": [{"indNumberNullFlavor": "BAD"}]}}),
+			"FDA.C.5.6.r.NULLFLAVOR.ALLOWED",
+			"studyInformation.fdaCrossReportedIndNumbers.0.indNumberNullFlavor",
+		),
+	];
+
+	for (rows, expected_rule, expected_path) in cases {
+		let (status, body) = patch_json(
+			&app,
+			&cookie,
+			&format!("/api/cases/{case_id}/editor/pages/SI"),
+			json!({
+				"authorities": ["ich", "fda", "mfds"],
+				"rows": rows
+			}),
+		)
+		.await?;
+		assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
+		assert_eq!(body["error"]["message"], "CONSTRAINT_VIOLATION");
+		assert_eq!(body["error"]["data"]["detail"]["ruleCode"], expected_rule);
+		assert_eq!(body["error"]["data"]["detail"]["path"], expected_path);
+	}
+
+	Ok(())
+}
+
+#[serial]
+#[tokio::test]
 async fn editor_dm_page_patch_round_trips_base_patient_fields() -> Result<()> {
 	let mm = init_test_mm().await?;
 	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;

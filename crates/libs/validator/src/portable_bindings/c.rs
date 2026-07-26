@@ -471,6 +471,13 @@ pub(super) const BINDINGS: &[PortableFieldBinding] = &[
 		String,
 		["FDA.C.5.6.r.LENGTH.MAX"]
 	),
+	binding!(
+		"SI",
+		"studyInformation.fdaCrossReportedIndNumbers[].indNumberNullFlavor",
+		"fdaCrossReportedIndNumbers[].indNumberNullFlavor",
+		String,
+		["FDA.C.5.6.r.NULLFLAVOR.ALLOWED"]
+	),
 ];
 
 #[cfg(test)]
