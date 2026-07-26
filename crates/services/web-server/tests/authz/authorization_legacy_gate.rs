@@ -9,6 +9,39 @@ fn workspace_root() -> PathBuf {
 }
 
 #[test]
+fn legacy_permission_runtime_is_deleted() {
+	let root = workspace_root();
+	assert!(
+		!root
+			.join("crates/libs/lib-core/src/model/acs/mod.rs")
+			.exists(),
+		"the legacy ACS module must be deleted, not retained as a second policy engine"
+	);
+	assert!(
+		!root
+			.join("scripts/generate_frontend_permissions.sh")
+			.exists(),
+		"the obsolete Permission catalog generator must be deleted"
+	);
+	assert!(
+		!root
+			.join("scripts/generate_frontend_endpoint_permissions.sh")
+			.exists(),
+		"the obsolete endpoint Permission generator must be deleted"
+	);
+	let model =
+		fs::read_to_string(root.join("crates/libs/lib-core/src/model/mod.rs"))
+			.expect("model module source must be readable");
+	let migration =
+		fs::read_to_string(root.join(
+			"crates/libs/lib-core/src/model/authorization/migration_service.rs",
+		))
+		.expect("authorization migration source must be readable");
+	assert!(!model.contains("pub mod acs"));
+	assert!(!migration.contains("model::acs"));
+}
+
+#[test]
 fn user_administration_has_one_exact_permission_gate() {
 	let root = workspace_root();
 	let middleware =

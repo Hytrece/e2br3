@@ -123,11 +123,6 @@ async fn test_admin_matrix_privileges_grant_user_operations_but_not_role_identit
 		]),
 	)
 	.await?;
-	assert!(has_permission(&profile_id, USER_READ));
-	assert!(has_permission(&profile_id, USER_LIST));
-	assert!(!has_permission(&profile_id, USER_CREATE));
-	assert!(!has_permission(&profile_id, USER_UPDATE));
-	assert!(!has_permission(&profile_id, USER_DELETE));
 	assert_profile_access(
 		&app,
 		&custom_cookie,
@@ -184,9 +179,6 @@ async fn test_admin_matrix_privileges_grant_user_operations_but_not_role_identit
 	)
 	.await?;
 	assert_eq!(status, StatusCode::BAD_REQUEST, "{value:?}");
-	assert!(!has_permission(&roles_profile_id, USER_CREATE));
-	assert!(!has_permission(&roles_profile_id, USER_UPDATE));
-	assert!(!has_permission(&roles_profile_id, USER_DELETE));
 	assert_profile_access(
 		&app,
 		&roles_cookie,
@@ -237,9 +229,6 @@ async fn test_admin_matrix_privileges_grant_user_operations_but_not_role_identit
 		]),
 	)
 	.await?;
-	assert!(has_permission(&profile_id, USER_CREATE));
-	assert!(has_permission(&profile_id, USER_UPDATE));
-	assert!(has_permission(&profile_id, USER_DELETE));
 	assert_profile_access(
 		&app,
 		&custom_cookie,
@@ -371,14 +360,6 @@ async fn test_pdf_admin_read_and_edit_grant_registered_admin_actions() -> Result
 		],
 	)
 	.await?;
-	assert!(
-		!has_permission(&profile_id, CASE_CREATE),
-		"settings.can_read alone must not grant raw CASE_CREATE permission"
-	);
-	assert!(
-		!has_permission(&profile_id, USER_CREATE),
-		"settings.can_read alone must not grant raw USER_CREATE permission"
-	);
 	assert_get_status(&app, &custom_cookie, "/api/admin/settings", StatusCode::OK)
 		.await?;
 	let (status, value) = request_json(
@@ -399,8 +380,6 @@ async fn test_pdf_admin_read_and_edit_grant_registered_admin_actions() -> Result
 		StatusCode::FORBIDDEN,
 		"settings.can_read alone must not update admin settings: {value:?}"
 	);
-	assert!(has_permission(&profile_id, SETTINGS_READ));
-	assert!(!has_permission(&profile_id, SETTINGS_UPDATE));
 	assert_get_status(&app, &custom_cookie, "/api/users", StatusCode::OK).await?;
 	let (status, value) = request_json(
 		&app,
@@ -480,11 +459,6 @@ async fn test_pdf_admin_read_and_edit_grant_registered_admin_actions() -> Result
 		],
 	)
 	.await?;
-	assert!(has_permission(&profile_id, SETTINGS_READ));
-	assert!(has_permission(&profile_id, SETTINGS_UPDATE));
-	assert!(has_permission(&profile_id, USER_CREATE));
-	assert!(has_permission(&profile_id, USER_UPDATE));
-	assert!(has_permission(&profile_id, USER_DELETE));
 	assert_get_status(&app, &custom_cookie, "/api/users", StatusCode::OK).await?;
 	let (status, value) = request_json(
 		&app,
@@ -568,7 +542,6 @@ async fn test_admin_read_grants_effective_audit_log_access() -> Result<()> {
 		custom_role_user(&mm, seed.org_id, &read_id).await?;
 
 	// Unchecked: no audit access.
-	assert!(!has_permission(&none_id, AUDIT_LIST));
 	assert_get_status(&app, &none_cookie, "/api/audit-logs", StatusCode::FORBIDDEN)
 		.await?;
 
@@ -586,8 +559,6 @@ async fn test_admin_read_grants_effective_audit_log_access() -> Result<()> {
 		}]),
 	)
 	.await?;
-	assert!(has_permission(&read_id, AUDIT_READ));
-	assert!(has_permission(&read_id, AUDIT_LIST));
 	assert_get_not_status(
 		&app,
 		&read_cookie,

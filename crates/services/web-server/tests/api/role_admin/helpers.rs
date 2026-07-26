@@ -11,13 +11,6 @@ use lib_auth::token::generate_web_token;
 use lib_core::ctx::{
 	ROLE_SPONSOR_ADMIN_COMPANY, ROLE_SPONSOR_ADMIN_CRO, ROLE_SYSTEM_ADMIN,
 };
-use lib_core::model::acs::{
-	has_permission, CASE_APPROVE, CASE_CREATE, CASE_UPDATE, PRESAVE_TEMPLATE_CREATE,
-	PRESAVE_TEMPLATE_DELETE, PRESAVE_TEMPLATE_LIST, PRESAVE_TEMPLATE_READ,
-	PRESAVE_TEMPLATE_UPDATE, SETTINGS_READ, SETTINGS_UPDATE, TERMINOLOGY_APPROVE,
-	TERMINOLOGY_IMPORT, USER_CREATE, USER_DELETE, USER_LIST, USER_READ, USER_UPDATE,
-	XML_EXPORT, XML_EXPORT_READ, XML_IMPORT, XML_IMPORT_READ,
-};
 use lib_core::model::store::set_full_context_dbx;
 use lib_core::model::ModelManager;
 use serde_json::{json, Value};
@@ -179,49 +172,48 @@ pub(super) async fn assert_profile_access(
 	.await?;
 	assert_eq!(status, StatusCode::OK, "{profile:?}");
 	assert!(profile["data"].get("capabilities").is_none(), "{profile:?}");
-	let permissions = profile["data"]["permissions"]
+	let actions = profile["data"]["eligibleActions"]
 		.as_array()
-		.ok_or("missing permissions")?
+		.ok_or("missing eligibleActions")?
 		.iter()
 		.filter_map(Value::as_str)
 		.collect::<HashSet<_>>();
 	for (module, action, expected) in expected {
 		let required: &[&str] = match (*module, *action) {
-			("case", "read") => &["Case.Read", "Case.List"],
-			("case", "create") => &["Case.Create"],
-			("case", "update") => &["Case.Update"],
-			("case", "delete") => &["Case.Delete"],
-			("case", "review") => &["Case.Approve"],
-			("case", "lock") => &["Case.Lock"],
-			("import", "read") => &["XmlImport.Read"],
-			("import", "execute") => &["XmlImport.Import"],
-			("exportSubmission", "read") => &["XmlExport.Read"],
-			("exportSubmission", "execute") => &["XmlExport.Export"],
-			("data", "read") => &["Terminology.Read"],
-			("data", "import") => &["Terminology.Import"],
-			("data", "approve") => &["Terminology.Approve"],
-			("users", "read") => &["User.Read", "User.List"],
-			("users", "create") => &["User.Create"],
-			("users", "update") => &["User.Update"],
-			("users", "delete") => &["User.Delete"],
-			("settings", "read") => &["Settings.Read"],
-			("settings", "update") => &["Settings.Update"],
-			("homeNotice", "read") => &["DashboardNotice.Read"],
-			("homeNotice", "update") => &["DashboardNotice.Update"],
+			("case", "read") => &["case.read", "case.list"],
+			("case", "create") => &["case.create"],
+			("case", "update") => &["case.update"],
+			("case", "delete") => &["case.delete"],
+			("case", "review") => &["case.review.toggle"],
+			("case", "lock") => &["case.lock.toggle"],
+			("import", "read") => &["import.history.read"],
+			("import", "execute") => &["import.xml.execute"],
+			("exportSubmission", "read") => &["submission.history.list"],
+			("exportSubmission", "execute") => &["submission.execute"],
+			("data", "read") => &["terminology.list"],
+			("data", "import") | ("data", "approve") => &["terminology.import"],
+			("users", "read") => &["user.read", "user.list"],
+			("users", "create") => &["user.create"],
+			("users", "update") => &["user.update"],
+			("users", "delete") => &["user.delete"],
+			("settings", "read") => &["settings.read"],
+			("settings", "update") => &["settings.update"],
+			("homeNotice", "read") => &["notice.read"],
+			("homeNotice", "update") => &["notice.update"],
 			("admin", "read") => &[
-				"User.List",
-				"User.Read",
-				"User.Create",
-				"User.Update",
-				"User.Delete",
-				"Settings.Read",
-				"Settings.Update",
+				"user.list",
+				"user.read",
+				"user.create",
+				"user.update",
+				"user.delete",
+				"settings.read",
+				"settings.update",
 			],
 			("admin", "update") => &[
-				"User.Create",
-				"User.Update",
-				"User.Delete",
-				"Settings.Update",
+				"user.create",
+				"user.update",
+				"user.delete",
+				"settings.update",
 			],
 			("roles", _) => &[],
 			_ => {
@@ -230,18 +222,16 @@ pub(super) async fn assert_profile_access(
 				)
 			}
 		};
-		let actual = required
-			.iter()
-			.any(|permission| permissions.contains(permission));
+		let actual = required.iter().any(|action| actions.contains(action));
 		assert_eq!(
 			actual, *expected,
-			"{module}.{action} permission mismatch: {profile:?}"
+			"{module}.{action} action mismatch: {profile:?}"
 		);
 	}
 	Ok(profile)
 }
 
-pub(super) async fn assert_profile_permissions(
+pub(super) async fn assert_profile_actions(
 	app: &Router,
 	cookie: &str,
 	present: &[&str],
@@ -257,17 +247,17 @@ pub(super) async fn assert_profile_permissions(
 	.await?;
 	assert_eq!(status, StatusCode::OK, "{profile:?}");
 	assert!(profile["data"].get("capabilities").is_none(), "{profile:?}");
-	let permissions = profile["data"]["permissions"]
+	let actions = profile["data"]["eligibleActions"]
 		.as_array()
-		.ok_or("missing permissions")?
+		.ok_or("missing eligibleActions")?
 		.iter()
 		.filter_map(Value::as_str)
 		.collect::<HashSet<_>>();
-	for permission in present {
-		assert!(permissions.contains(permission), "missing {permission}");
+	for action in present {
+		assert!(actions.contains(action), "missing {action}");
 	}
-	for permission in absent {
-		assert!(!permissions.contains(permission), "unexpected {permission}");
+	for action in absent {
+		assert!(!actions.contains(action), "unexpected {action}");
 	}
 	Ok(profile)
 }

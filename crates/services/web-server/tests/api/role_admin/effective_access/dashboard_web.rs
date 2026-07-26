@@ -75,9 +75,6 @@ async fn test_home_notice_matrix_privileges_surface_in_current_user_capabilities
 		],
 	)
 	.await?;
-	assert!(has_permission(&profile_id, DASHBOARD_NOTICE_READ));
-	assert!(has_permission(&profile_id, DASHBOARD_NOTICE_UPDATE));
-	assert!(!has_permission(&profile_id, SETTINGS_UPDATE));
 	let runtime = assert_get_status(
 		&app,
 		&custom_cookie,
@@ -105,7 +102,6 @@ async fn test_report_due_mail_rows_persist_but_grant_nothing_while_reserved(
 		&format!("qa_email_{}", Uuid::new_v4().simple()),
 	)
 	.await?;
-	assert!(!has_permission(&profile_id, EMAIL_NOTIFICATION_SEND));
 
 	// The PDF row remains representable for migration, but reserved grants never
 	// compile to an operational permission.
@@ -122,7 +118,6 @@ async fn test_report_due_mail_rows_persist_but_grant_nothing_while_reserved(
 		}]),
 	)
 	.await?;
-	assert!(!has_permission(&profile_id, EMAIL_NOTIFICATION_SEND));
 
 	Ok(())
 }

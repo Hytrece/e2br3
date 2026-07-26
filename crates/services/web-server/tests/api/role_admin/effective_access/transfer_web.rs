@@ -39,14 +39,6 @@ async fn test_export_submission_matrix_privileges_grant_effective_xml_export_per
 	let (_edit_user_id, edit_cookie) =
 		custom_role_user(&mm, seed.org_id, &edit_profile_id).await?;
 
-	assert!(
-		!has_permission(&no_export_profile_id, XML_EXPORT),
-		"empty custom role must not grant XML_EXPORT"
-	);
-	assert!(
-		!has_permission(&no_export_profile_id, XML_EXPORT_READ),
-		"empty custom role must not grant XML_EXPORT_READ"
-	);
 	assert_get_status(
 		&app,
 		&no_export_cookie,
@@ -79,14 +71,6 @@ async fn test_export_submission_matrix_privileges_grant_effective_xml_export_per
 		],
 	)
 	.await?;
-	assert!(
-		has_permission(&read_profile_id, XML_EXPORT_READ),
-		"export_submission.can_read must grant XML_EXPORT_READ"
-	);
-	assert!(
-		!has_permission(&read_profile_id, XML_EXPORT),
-		"export_submission.can_read must not grant XML_EXPORT"
-	);
 	assert_get_not_status(
 		&app,
 		&read_cookie,
@@ -132,14 +116,6 @@ async fn test_export_submission_matrix_privileges_grant_effective_xml_export_per
 		],
 	)
 	.await?;
-	assert!(
-		has_permission(&edit_profile_id, XML_EXPORT),
-		"export_submission.can_edit must independently grant XML_EXPORT"
-	);
-	assert!(
-		!has_permission(&edit_profile_id, XML_EXPORT_READ),
-		"export_submission.can_edit must not grant history read without can_read"
-	);
 	assert_get_status(
 		&app,
 		&edit_cookie,
@@ -213,8 +189,6 @@ async fn test_import_matrix_privileges_split_files_edit_from_history_read(
 		&[("import", "read", true), ("import", "execute", false)],
 	)
 	.await?;
-	assert!(has_permission(&read_profile_id, XML_IMPORT_READ));
-	assert!(!has_permission(&read_profile_id, XML_IMPORT));
 	assert_get_status(
 		&app,
 		&read_cookie,
@@ -256,8 +230,6 @@ async fn test_import_matrix_privileges_split_files_edit_from_history_read(
 		&[("import", "read", false), ("import", "execute", true)],
 	)
 	.await?;
-	assert!(has_permission(&edit_profile_id, XML_IMPORT));
-	assert!(!has_permission(&edit_profile_id, XML_IMPORT_READ));
 	assert_get_status(
 		&app,
 		&edit_cookie,

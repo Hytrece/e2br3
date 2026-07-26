@@ -78,22 +78,13 @@ async fn test_info_matrix_privileges_grant_effective_presave_permissions(
 		]),
 	)
 	.await?;
-	assert_profile_permissions(
+	assert_profile_actions(
 		&app,
 		&custom_cookie,
-		&["PresaveTemplate.Read", "PresaveTemplate.List"],
-		&[
-			"PresaveTemplate.Create",
-			"PresaveTemplate.Update",
-			"PresaveTemplate.Delete",
-		],
+		&["info.read", "info.list"],
+		&["info.create", "info.update"],
 	)
 	.await?;
-	assert!(has_permission(&profile_id, PRESAVE_TEMPLATE_READ));
-	assert!(has_permission(&profile_id, PRESAVE_TEMPLATE_LIST));
-	assert!(!has_permission(&profile_id, PRESAVE_TEMPLATE_CREATE));
-	assert!(!has_permission(&profile_id, PRESAVE_TEMPLATE_UPDATE));
-	assert!(!has_permission(&profile_id, PRESAVE_TEMPLATE_DELETE));
 	assert_get_status(
 		&app,
 		&custom_cookie,
@@ -165,22 +156,13 @@ async fn test_info_matrix_privileges_grant_effective_presave_permissions(
 		]),
 	)
 	.await?;
-	assert_profile_permissions(
+	assert_profile_actions(
 		&app,
 		&custom_cookie,
-		&[
-			"PresaveTemplate.Read",
-			"PresaveTemplate.List",
-			"PresaveTemplate.Create",
-			"PresaveTemplate.Update",
-			"PresaveTemplate.Delete",
-		],
+		&["info.read", "info.list", "info.create", "info.update"],
 		&[],
 	)
 	.await?;
-	assert!(has_permission(&profile_id, PRESAVE_TEMPLATE_CREATE));
-	assert!(has_permission(&profile_id, PRESAVE_TEMPLATE_UPDATE));
-	assert!(has_permission(&profile_id, PRESAVE_TEMPLATE_DELETE));
 
 	let (status, value) = request_json(
 		&app,

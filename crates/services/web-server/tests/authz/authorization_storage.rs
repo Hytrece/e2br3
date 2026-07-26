@@ -505,7 +505,7 @@ async fn custom_role_and_assignment_backfill_use_canonical_grants() -> Result<()
 	assert_eq!(
 		scalar_i64(
 			&database,
-			"SELECT count(*) FROM authorization_migration_reconciliations WHERE user_id = '00000000-0000-0000-0000-000000000302' AND comparison_status = 'pending_action_binding' AND equivalent IS NULL AND jsonb_array_length(legacy_effective_access) > 0 AND jsonb_array_length(normalized_effective_access) > 0"
+			"SELECT count(*) FROM authorization_migration_reconciliations WHERE user_id = '00000000-0000-0000-0000-000000000302' AND comparison_status = 'pending_action_binding' AND equivalent IS NULL AND jsonb_array_length(legacy_effective_access) > 0 AND legacy_effective_access = normalized_effective_access"
 		)
 		.await?,
 		1

@@ -124,7 +124,7 @@ async fn test_role_privilege_matrix_update_grants_effective_case_access(
 }
 #[serial]
 #[tokio::test]
-async fn test_home_workflow_read_does_not_grant_case_page_access() -> Result<()> {
+async fn test_home_workflow_read_grants_scoped_case_queue_access() -> Result<()> {
 	let mm = init_test_mm().await?;
 	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
 	let admin_token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
@@ -149,7 +149,6 @@ async fn test_home_workflow_read_does_not_grant_case_page_access() -> Result<()>
 		custom_role_user(&mm, seed.org_id, &read_id).await?;
 
 	// Unchecked: no case access.
-	assert!(!has_permission(&none_id, CASE_LIST));
 	assert_get_status(
 		&app,
 		&none_cookie,
@@ -158,8 +157,8 @@ async fn test_home_workflow_read_does_not_grant_case_page_access() -> Result<()>
 	)
 	.await?;
 
-	// PDF HOME/My To Do Read is limited to workflow-assigned cases. It must not
-	// grant the full CASE page/list projection.
+	// PDF HOME/My To Do Read exposes the scoped case queue. Row-level scope still
+	// limits the returned cases to the user's assignments.
 	update_role_privileges(
 		&app,
 		&admin_cookie,
@@ -173,14 +172,8 @@ async fn test_home_workflow_read_does_not_grant_case_page_access() -> Result<()>
 		}]),
 	)
 	.await?;
-	assert!(!has_permission(&read_id, CASE_CREATE));
-	assert_get_status(
-		&app,
-		&read_cookie,
-		"/api/cases/list-view",
-		StatusCode::FORBIDDEN,
-	)
-	.await?;
+	assert_get_status(&app, &read_cookie, "/api/cases/list-view", StatusCode::OK)
+		.await?;
 
 	Ok(())
 }

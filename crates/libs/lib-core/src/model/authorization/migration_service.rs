@@ -2,7 +2,6 @@ use super::{enum_name, AuthorizationCatalogRepository};
 use crate::authorization::{
 	AdminMenuPrivilege, Availability, BuiltInIdentityKind, PolicyRegistry,
 };
-use crate::model::acs::{permissions_for_menu_privileges, role_permissions};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 use sqlx::{Pool, Postgres, Row, Transaction};
@@ -254,7 +253,19 @@ impl AuthorizationMigrationService {
 		.map(|(legacy_role, kind)| {
 			registry
 				.built_in_identity(kind)
-				.map(|identity| (legacy_role, identity.id))
+				.map(|identity| {
+					(
+						legacy_role,
+						(
+							identity.id,
+							identity
+								.grants
+								.iter()
+								.map(ToString::to_string)
+								.collect::<Vec<_>>(),
+						),
+					)
+				})
 				.ok_or_else(|| {
 					AuthorizationMigrationError::Registry(format!(
 						"missing registry identity for {kind:?}"
@@ -270,7 +281,9 @@ impl AuthorizationMigrationService {
 			let user_id: Uuid = row.try_get("user_id")?;
 			let organization_id: Uuid = row.try_get("organization_id")?;
 			let legacy_role: String = row.try_get("role")?;
-			let role_id = if let Some(id) = builtin_roles.get(legacy_role.as_str()) {
+			let role_id = if let Some((id, _)) =
+				builtin_roles.get(legacy_role.as_str())
+			{
 				Some(*id)
 			} else if let Ok(id) = Uuid::parse_str(&legacy_role) {
 				sqlx::query_scalar::<_, bool>("SELECT EXISTS (SELECT 1 FROM authorization_roles r JOIN permission_profiles p ON p.id = r.id AND p.organization_id = r.organization_id WHERE r.id = $1 AND r.organization_id = $2 AND r.active AND NOT r.built_in AND p.active AND NOT p.built_in)")
@@ -310,12 +323,9 @@ impl AuthorizationMigrationService {
 			}
 		}
 		for (user_id, organization_id, legacy_role, role_id) in &assignments {
-			let mut legacy_effective_access =
-				if builtin_roles.contains_key(legacy_role.as_str()) {
-					role_permissions(legacy_role)
-						.iter()
-						.map(ToString::to_string)
-						.collect::<Vec<_>>()
+			let legacy_grants =
+				if let Some((_, grants)) = builtin_roles.get(legacy_role.as_str()) {
+					grants.clone()
 				} else {
 					let raw = sqlx::query_scalar::<_, Value>(
 					"SELECT privileges_json FROM permission_profiles WHERE id = $1",
@@ -327,13 +337,19 @@ impl AuthorizationMigrationService {
 						serde_json::from_value(raw).map_err(|error| {
 							AuthorizationMigrationError::Registry(error.to_string())
 						})?;
-					permissions_for_menu_privileges(&privileges)
-						.iter()
-						.map(ToString::to_string)
+					grants_for_legacy_privileges(registry, &privileges)
+						.map_err(AuthorizationMigrationError::Registry)?
+						.into_iter()
 						.collect()
 				};
-			legacy_effective_access.sort_unstable();
-			legacy_effective_access.dedup();
+			let legacy_effective_access = registry
+				.effective_grants(legacy_grants.iter().map(String::as_str))
+				.map_err(|error| {
+					AuthorizationMigrationError::Registry(error.to_string())
+				})?
+				.into_iter()
+				.map(|grant| grant.to_string())
+				.collect::<Vec<_>>();
 			let grant_ids = sqlx::query_scalar::<_, String>(
 				"SELECT grant_id FROM role_grants WHERE role_id = $1 ORDER BY grant_id",
 			)

@@ -9,10 +9,6 @@ use crate::common::{cookie_header, init_test_mm, seed_org_with_users, Result};
 use axum::http::StatusCode;
 use lib_auth::token::generate_web_token;
 use lib_core::ctx::ROLE_SPONSOR_ADMIN_CRO;
-use lib_core::model::acs::{
-	has_permission, CASE_APPROVE, CASE_LOCK, CASE_UPDATE, SETTINGS_UPDATE,
-	TERMINOLOGY_APPROVE, TERMINOLOGY_IMPORT, USER_CREATE, USER_DELETE, USER_UPDATE,
-};
 use lib_core::model::store::set_full_context_dbx;
 use lib_core::model::ModelManager;
 use serde_json::json;
@@ -175,17 +171,6 @@ async fn test_review_lock_flags_are_normalized_to_case_menu_only() -> Result<()>
 		);
 	}
 
-	// The normalized-away flags must not leak edit-grade permissions.
-	assert!(has_permission(&profile_id, CASE_APPROVE));
-	assert!(has_permission(&profile_id, CASE_LOCK));
-	assert!(!has_permission(&profile_id, CASE_UPDATE));
-	assert!(!has_permission(&profile_id, USER_CREATE));
-	assert!(!has_permission(&profile_id, USER_UPDATE));
-	assert!(!has_permission(&profile_id, USER_DELETE));
-	assert!(!has_permission(&profile_id, SETTINGS_UPDATE));
-	assert!(!has_permission(&profile_id, TERMINOLOGY_IMPORT));
-	assert!(!has_permission(&profile_id, TERMINOLOGY_APPROVE));
-
 	Ok(())
 }
 
@@ -227,12 +212,6 @@ async fn test_reserved_email_subscription_rows_are_not_persisted_or_granted(
 		.ok_or("privileges should be an array")?;
 	assert!(privileges.is_empty(), "{privileges:?}");
 
-	// Subscription rows are reserved: they grant no operational permissions.
-	assert!(!has_permission(&profile_id, CASE_UPDATE));
-	assert!(!has_permission(&profile_id, CASE_APPROVE));
-	assert!(!has_permission(&profile_id, CASE_LOCK));
-	assert!(!has_permission(&profile_id, USER_CREATE));
-
 	Ok(())
 }
 
@@ -269,11 +248,11 @@ async fn test_case_review_and_lock_profile_permissions_are_distinct() -> Result<
 		]),
 	)
 	.await?;
-	assert_profile_permissions(
+	assert_profile_actions(
 		&app,
 		&custom_cookie,
-		&["Case.Read", "Case.Approve"],
-		&["Case.Update", "Case.Lock"],
+		&["case.read", "case.review.toggle"],
+		&["case.update", "case.lock.toggle"],
 	)
 	.await?;
 
@@ -292,11 +271,11 @@ async fn test_case_review_and_lock_profile_permissions_are_distinct() -> Result<
 		]),
 	)
 	.await?;
-	assert_profile_permissions(
+	assert_profile_actions(
 		&app,
 		&custom_cookie,
-		&["Case.Read", "Case.Lock"],
-		&["Case.Update", "Case.Approve"],
+		&["case.read", "case.lock.toggle"],
+		&["case.update", "case.review.toggle"],
 	)
 	.await?;
 

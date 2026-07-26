@@ -3,15 +3,12 @@
 use lib_auth::pwd::{self, ContentToHash};
 use lib_core::_dev_utils;
 use lib_core::authorization::{
-	policy_registry, Availability, BuiltInIdentityKind, GrantUiField,
+	grant_ids_for_menu_privileges, policy_registry, AdminMenuPrivilege,
+	BuiltInIdentityKind,
 };
 use lib_core::ctx::{
 	ROLE_SPONSOR_ADMIN_COMPANY, ROLE_SPONSOR_ADMIN_CRO, ROLE_SYSTEM_ADMIN,
 	ROLE_USER, SYSTEM_ORG_ID, SYSTEM_USER_ID,
-};
-use lib_core::model::acs::{
-	normalize_menu_privileges, permissions_for_menu_privileges,
-	replace_dynamic_roles, upsert_dynamic_role_permissions, AdminMenuPrivilege,
 };
 use lib_core::model::authorization::AuthorizationMigrationService;
 use lib_core::model::store::{
@@ -19,7 +16,6 @@ use lib_core::model::store::{
 };
 use lib_core::model::ModelManager;
 use sqlx::postgres::PgPoolOptions;
-use std::collections::HashMap;
 use std::path::PathBuf;
 use tokio::sync::OnceCell;
 use uuid::Uuid;
@@ -98,7 +94,6 @@ pub async fn init_test_env() {
 pub async fn init_test_mm() -> Result<ModelManager> {
 	init_test_env().await;
 	_dev_utils::init_dev().await;
-	reset_test_dynamic_roles();
 	apply_test_authorization_isolation_migration().await?;
 	let mm = ModelManager::new().await?;
 	mm.dbx()
@@ -198,61 +193,6 @@ pub async fn seed_active_test_meddra_term(mm: &ModelManager) -> Result<()> {
 
 	tx.commit().await?;
 	Ok(())
-}
-
-fn reset_test_dynamic_roles() {
-	let mut roles = HashMap::new();
-	roles.insert(
-		TEST_CUSTOM_VIEWER_ROLE.to_string(),
-		permissions_for_menu_privileges(&[AdminMenuPrivilege {
-			menu_key: "case".to_string(),
-			can_read: true,
-			can_edit: false,
-			can_review: false,
-			can_lock: false,
-		}]),
-	);
-	roles.insert(
-		TEST_CUSTOM_MANAGER_ROLE.to_string(),
-		permissions_for_menu_privileges(&[
-			AdminMenuPrivilege {
-				menu_key: "case".to_string(),
-				can_read: true,
-				can_edit: false,
-				can_review: false,
-				can_lock: false,
-			},
-			AdminMenuPrivilege {
-				menu_key: "audit".to_string(),
-				can_read: true,
-				can_edit: false,
-				can_review: false,
-				can_lock: false,
-			},
-			AdminMenuPrivilege {
-				menu_key: "info".to_string(),
-				can_read: true,
-				can_edit: false,
-				can_review: false,
-				can_lock: false,
-			},
-			AdminMenuPrivilege {
-				menu_key: "import".to_string(),
-				can_read: true,
-				can_edit: false,
-				can_review: false,
-				can_lock: false,
-			},
-			AdminMenuPrivilege {
-				menu_key: "export_submission".to_string(),
-				can_read: true,
-				can_edit: false,
-				can_review: false,
-				can_lock: false,
-			},
-		]),
-	);
-	replace_dynamic_roles(roles);
 }
 
 pub fn system_user_id() -> Uuid {
@@ -533,25 +473,11 @@ async fn seed_normalized_role_assignment(
 		};
 		let privileges =
 			test_role_privileges(tx, organization_id, legacy_role).await?;
-		let legacy_permissions = permissions_for_menu_privileges(&privileges);
-		upsert_dynamic_role_permissions(&role_id.to_string(), legacy_permissions);
-		let normalized = normalize_menu_privileges(&privileges)
+		let grant_ids = grant_ids_for_menu_privileges(&privileges, true)
 			.map_err(|error| format!("invalid test role privileges: {error:?}"))?;
-		let grant_ids = registry
-			.grants()
-			.filter(|grant| {
-				grant.availability == Availability::Implemented
-					&& normalized.iter().any(|privilege| {
-						privilege.menu_key == grant.ui_binding.menu_key
-							&& match grant.ui_binding.field {
-								GrantUiField::CanRead => privilege.can_read,
-								GrantUiField::CanEdit => privilege.can_edit,
-								GrantUiField::CanReview => privilege.can_review,
-								GrantUiField::CanLock => privilege.can_lock,
-							}
-					})
-			})
-			.map(|grant| grant.id.to_string())
+		let grant_ids = grant_ids
+			.into_iter()
+			.map(|grant| grant.to_string())
 			.collect::<Vec<_>>();
 		sqlx::query("SELECT authz_upsert_custom_role($1, $2, $3, true, $4)")
 			.bind(role_id)

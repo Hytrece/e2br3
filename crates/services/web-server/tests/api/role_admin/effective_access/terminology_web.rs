@@ -56,14 +56,6 @@ async fn test_admin_matrix_privileges_grant_effective_terminology_permissions(
 		StatusCode::OK,
 	)
 	.await?;
-	assert!(
-		!has_permission(&profile_id, TERMINOLOGY_IMPORT),
-		"read-only DATA must not grant terminology import permission"
-	);
-	assert!(
-		!has_permission(&profile_id, TERMINOLOGY_APPROVE),
-		"read-only DATA must not grant terminology approve permission"
-	);
 
 	let req = Request::builder()
 		.method("POST")
@@ -117,14 +109,6 @@ async fn test_admin_matrix_privileges_grant_effective_terminology_permissions(
 		],
 	)
 	.await?;
-	assert!(
-		has_permission(&profile_id, TERMINOLOGY_IMPORT),
-		"editable DATA must grant terminology import permission"
-	);
-	assert!(
-		has_permission(&profile_id, TERMINOLOGY_APPROVE),
-		"editable DATA must grant terminology approve permission"
-	);
 
 	let req = Request::builder()
 		.method("POST")

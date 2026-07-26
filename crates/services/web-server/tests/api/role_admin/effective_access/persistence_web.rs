@@ -164,8 +164,6 @@ async fn test_role_admin_api_persists_privilege_matrix_menu_keys() -> Result<()>
 		assert_eq!(row["can_review"].as_bool(), Some(can_review), "{menu_key}");
 		assert_eq!(row["can_lock"].as_bool(), Some(can_lock), "{menu_key}");
 	}
-	assert!(has_permission(&profile_id, DASHBOARD_NOTICE_READ));
-	assert!(has_permission(&profile_id, DASHBOARD_NOTICE_UPDATE));
 	for menu_key in [
 		"report_due_mail",
 		"monitoring",
