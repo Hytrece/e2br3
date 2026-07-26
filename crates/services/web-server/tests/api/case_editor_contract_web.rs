@@ -1071,9 +1071,13 @@ async fn editor_ci_incomplete_registry_fields_enforce_portable_constraints(
 	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
 	let cookie = cookie_header(&token.to_string());
 	let app = web_server::app(mm);
-	let case_id =
-		create_case_for_editor(&app, &cookie, "EDITOR-CI-FIELD-GATES", &["ich", "fda"])
-			.await?;
+	let case_id = create_case_for_editor(
+		&app,
+		&cookie,
+		"EDITOR-CI-FIELD-GATES",
+		&["ich", "fda"],
+	)
+	.await?;
 	create_safety_report(&app, &cookie, &case_id, "1", false).await?;
 
 	for (field, invalid_value, rule_code, path) in [
@@ -2560,6 +2564,208 @@ async fn editor_sd_page_patch_persists_sender_information_row() -> Result<()> {
 		body["rows"]["senderInformation"].as_array().map(Vec::len),
 		Some(1)
 	);
+
+	Ok(())
+}
+
+#[serial]
+#[tokio::test]
+async fn editor_sd_complete_fields_round_trip() -> Result<()> {
+	let mm = init_test_mm().await?;
+	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
+	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
+	let cookie = cookie_header(&token.to_string());
+	let app = web_server::app(mm);
+	let case_id = create_case_for_editor(
+		&app,
+		&cookie,
+		"EDITOR-SD-COMPLETE",
+		&["ich", "fda", "mfds"],
+	)
+	.await?;
+
+	let (status, body) = patch_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/editor/pages/SD"),
+		json!({
+			"authorities": ["ich", "fda", "mfds"],
+			"changes": {
+				"senderType": { "value": "3" },
+				"senderHealthProfessionalTypeKr1": { "value": "4" },
+				"senderOrganization": { "value": "Sender Org" },
+				"senderDepartment": { "value": "Safety" },
+				"senderPersonTitle": { "value": "Dr" },
+				"senderPersonGivenName": { "value": "Sora" },
+				"senderPersonMiddleName": { "value": "J" },
+				"senderPersonFamilyName": { "value": "Kim" },
+				"senderStreetAddress": { "value": "1 Sender Street" },
+				"senderCity": { "value": "Seoul" },
+				"senderState": { "value": "Seoul" },
+				"senderPostcode": { "value": "04524" },
+				"senderCountryCode": { "value": "KR" },
+				"senderTelephone": { "value": "+821012345678" },
+				"senderFax": { "value": "+8221234567" },
+				"senderEmail": { "value": "sender@example.test" },
+				"receiverType": { "value": "2" },
+				"receiverOrganization": { "value": "Receiver Org" },
+				"receiverDepartment": { "value": "Intake" },
+				"receiverStreet": { "value": "2 Receiver Street" },
+				"receiverCity": { "value": "Busan" },
+				"receiverState": { "value": "Busan" },
+				"receiverPostcode": { "value": "48000" },
+				"receiverCountry": { "value": "KR" },
+				"receiverTelephone": { "value": "+82511234567" },
+				"receiverFax": { "value": "+82517654321" },
+				"receiverEmail": { "value": "receiver@example.test" }
+			},
+			"rows": {}
+		}),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK, "{body}");
+
+	let (status, reloaded) = get_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/editor/pages/SD?authorities=ich,fda,mfds"),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK, "{reloaded}");
+	let report = &reloaded["rows"]["safetyReportIdentification"];
+	for (field, expected) in [
+		("senderType", json!("3")),
+		("senderHealthProfessionalTypeKr1", json!("4")),
+		("senderOrganization", json!("Sender Org")),
+		("senderDepartment", json!("Safety")),
+		("senderPersonTitle", json!("Dr")),
+		("senderPersonGivenName", json!("Sora")),
+		("senderPersonMiddleName", json!("J")),
+		("senderPersonFamilyName", json!("Kim")),
+		("senderStreetAddress", json!("1 Sender Street")),
+		("senderCity", json!("Seoul")),
+		("senderState", json!("Seoul")),
+		("senderPostcode", json!("04524")),
+		("senderCountryCode", json!("KR")),
+		("senderTelephone", json!("+821012345678")),
+		("senderFax", json!("+8221234567")),
+		("senderEmail", json!("sender@example.test")),
+		("receiverType", json!("2")),
+		("receiverOrganization", json!("Receiver Org")),
+		("receiverDepartment", json!("Intake")),
+		("receiverStreet", json!("2 Receiver Street")),
+		("receiverCity", json!("Busan")),
+		("receiverState", json!("Busan")),
+		("receiverPostcode", json!("48000")),
+		("receiverCountry", json!("KR")),
+		("receiverTelephone", json!("+82511234567")),
+		("receiverFax", json!("+82517654321")),
+		("receiverEmail", json!("receiver@example.test")),
+	] {
+		assert_eq!(report[field], expected, "{field}: {reloaded}");
+	}
+	assert!(
+		reloaded["rows"].get("messageHeader").is_none(),
+		"{reloaded}"
+	);
+
+	Ok(())
+}
+
+#[serial]
+#[tokio::test]
+async fn editor_sd_portable_constraints_return_structured_paths() -> Result<()> {
+	let mm = init_test_mm().await?;
+	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
+	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
+	let cookie = cookie_header(&token.to_string());
+	let app = web_server::app(mm);
+	let case_id = create_case_for_editor(
+		&app,
+		&cookie,
+		"EDITOR-SD-CONSTRAINTS",
+		&["ich", "fda", "mfds"],
+	)
+	.await?;
+	let too_long = Value::String("X".repeat(10_001));
+
+	for (field, invalid, expected_rule) in [
+		("senderType", json!("9"), "ICH.C.3.1.ALLOWED.VALUE"),
+		(
+			"senderHealthProfessionalTypeKr1",
+			too_long.clone(),
+			"MFDS.C.3.1.KR.1.LENGTH.MAX",
+		),
+		(
+			"senderOrganization",
+			too_long.clone(),
+			"ICH.C.3.2.LENGTH.MAX",
+		),
+		(
+			"senderDepartment",
+			too_long.clone(),
+			"ICH.C.3.3.1.LENGTH.MAX",
+		),
+		(
+			"senderPersonTitle",
+			too_long.clone(),
+			"ICH.C.3.3.2.LENGTH.MAX",
+		),
+		(
+			"senderPersonGivenName",
+			too_long.clone(),
+			"ICH.C.3.3.3.LENGTH.MAX",
+		),
+		(
+			"senderPersonMiddleName",
+			too_long.clone(),
+			"ICH.C.3.3.4.LENGTH.MAX",
+		),
+		(
+			"senderPersonFamilyName",
+			too_long.clone(),
+			"ICH.C.3.3.5.LENGTH.MAX",
+		),
+		(
+			"senderStreetAddress",
+			too_long.clone(),
+			"ICH.C.3.4.1.LENGTH.MAX",
+		),
+		("senderCity", too_long.clone(), "ICH.C.3.4.2.LENGTH.MAX"),
+		("senderState", too_long.clone(), "ICH.C.3.4.3.LENGTH.MAX"),
+		("senderPostcode", too_long.clone(), "ICH.C.3.4.4.LENGTH.MAX"),
+		("senderCountryCode", json!("KOR"), "ICH.C.3.4.5.LENGTH.MAX"),
+		(
+			"senderTelephone",
+			too_long.clone(),
+			"ICH.C.3.4.6.LENGTH.MAX",
+		),
+		("senderFax", too_long.clone(), "ICH.C.3.4.7.LENGTH.MAX"),
+		("senderEmail", too_long.clone(), "ICH.C.3.4.8.LENGTH.MAX"),
+	] {
+		let (status, body) = patch_json(
+			&app,
+			&cookie,
+			&format!("/api/cases/{case_id}/editor/pages/SD"),
+			json!({
+				"authorities": ["ich", "fda", "mfds"],
+				"changes": { field: { "value": invalid } },
+				"rows": {}
+			}),
+		)
+		.await?;
+		assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{field}: {body}");
+		assert_eq!(body["error"]["message"], "CONSTRAINT_VIOLATION");
+		assert_eq!(
+			body["error"]["data"]["detail"]["ruleCode"], expected_rule,
+			"{field}: {body}"
+		);
+		assert_eq!(
+			body["error"]["data"]["detail"]["path"],
+			format!("safetyReportIdentification.{field}"),
+			"{field}: {body}"
+		);
+	}
 
 	Ok(())
 }

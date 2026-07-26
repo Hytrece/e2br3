@@ -888,6 +888,7 @@
     "authority": "ICH",
     "status": "complete",
     "editor_page": "SD",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "SenderInformation",
@@ -913,6 +914,7 @@
     "authority": "MFDS",
     "status": "incomplete",
     "editor_page": "SD",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "SenderInformation",
@@ -938,6 +940,7 @@
     "authority": "ICH",
     "status": "complete",
     "editor_page": "SD",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "SenderInformation",
@@ -963,6 +966,7 @@
     "authority": "ICH",
     "status": "incomplete",
     "editor_page": "SD",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "SenderInformation",
@@ -988,6 +992,7 @@
     "authority": "ICH",
     "status": "incomplete",
     "editor_page": "SD",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "SenderInformation",
@@ -1013,6 +1018,7 @@
     "authority": "ICH",
     "status": "incomplete",
     "editor_page": "SD",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "SenderInformation",
@@ -1038,6 +1044,7 @@
     "authority": "ICH",
     "status": "complete",
     "editor_page": "SD",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "SenderInformation",
@@ -1063,6 +1070,7 @@
     "authority": "ICH",
     "status": "incomplete",
     "editor_page": "SD",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "SenderInformation",
@@ -1088,6 +1096,7 @@
     "authority": "ICH",
     "status": "incomplete",
     "editor_page": "SD",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "SenderInformation",
@@ -1113,6 +1122,7 @@
     "authority": "ICH",
     "status": "incomplete",
     "editor_page": "SD",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "SenderInformation",
@@ -1138,6 +1148,7 @@
     "authority": "ICH",
     "status": "incomplete",
     "editor_page": "SD",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "SenderInformation",
@@ -1163,6 +1174,7 @@
     "authority": "ICH",
     "status": "incomplete",
     "editor_page": "SD",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "SenderInformation",
@@ -1188,6 +1200,7 @@
     "authority": "ICH",
     "status": "incomplete",
     "editor_page": "SD",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "SenderInformation",
@@ -1213,6 +1226,7 @@
     "authority": "ICH",
     "status": "incomplete",
     "editor_page": "SD",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "SenderInformation",
@@ -1238,6 +1252,7 @@
     "authority": "ICH",
     "status": "incomplete",
     "editor_page": "SD",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "SenderInformation",
@@ -1263,6 +1278,7 @@
     "authority": "ICH",
     "status": "incomplete",
     "editor_page": "SD",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "SenderInformation",
@@ -1690,6 +1706,7 @@
     "authority": "ICH",
     "status": "complete",
     "editor_page": "SD",
+    "editor_status": "complete",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -1716,6 +1733,7 @@
     "authority": "ICH",
     "status": "complete",
     "editor_page": "SD",
+    "editor_status": "complete",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -1742,6 +1760,7 @@
     "authority": "ICH",
     "status": "complete",
     "editor_page": "SD",
+    "editor_status": "complete",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -1768,6 +1787,7 @@
     "authority": "ICH",
     "status": "complete",
     "editor_page": "SD",
+    "editor_status": "complete",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -1794,6 +1814,7 @@
     "authority": "ICH",
     "status": "complete",
     "editor_page": "SD",
+    "editor_status": "complete",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -1820,6 +1841,7 @@
     "authority": "ICH",
     "status": "complete",
     "editor_page": "SD",
+    "editor_status": "complete",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -1846,6 +1868,7 @@
     "authority": "ICH",
     "status": "complete",
     "editor_page": "SD",
+    "editor_status": "complete",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -1872,6 +1895,7 @@
     "authority": "ICH",
     "status": "complete",
     "editor_page": "SD",
+    "editor_status": "complete",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -1898,6 +1922,7 @@
     "authority": "ICH",
     "status": "complete",
     "editor_page": "SD",
+    "editor_status": "complete",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -1924,6 +1949,7 @@
     "authority": "ICH",
     "status": "complete",
     "editor_page": "SD",
+    "editor_status": "complete",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -1950,6 +1976,7 @@
     "authority": "ICH",
     "status": "complete",
     "editor_page": "SD",
+    "editor_status": "complete",
     "local_only": true,
     "backend": {
       "status": "mapped",
