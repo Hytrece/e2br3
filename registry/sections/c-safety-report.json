@@ -1304,6 +1304,7 @@
     "authority": "ICH",
     "status": "complete",
     "editor_page": "LR",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "LiteratureReference",
@@ -1329,6 +1330,7 @@
     "authority": "ICH",
     "status": "complete",
     "editor_page": "LR",
+    "editor_status": "complete",
     "local_only": true,
     "backend": {
       "status": "mapped",
@@ -1355,6 +1357,7 @@
     "authority": "ICH",
     "status": "incomplete",
     "editor_page": "LR",
+    "editor_status": "complete",
     "backend": {
       "status": "mapped",
       "model": "LiteratureReference",

@@ -2911,6 +2911,106 @@ async fn editor_lr_page_patch_persists_literature_reference_row() -> Result<()> 
 
 #[serial]
 #[tokio::test]
+async fn editor_lr_contract_round_trip_and_portable_constraints() -> Result<()> {
+	let mm = init_test_mm().await?;
+	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
+	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
+	let cookie = cookie_header(&token.to_string());
+	let app = web_server::app(mm);
+	let case_id =
+		create_case_for_editor(&app, &cookie, "EDITOR-LR-CONTRACT", &["ich", "fda"])
+			.await?;
+
+	let (status, saved) = patch_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/editor/pages/LR"),
+		json!({
+			"authorities": ["ich", "fda"],
+			"rows": {
+				"literatureReferences": [
+					{
+						"sequenceNumber": 1,
+						"referenceText": "Smith et al. Safety study, 2026",
+						"documentBase64": "UEZERg==",
+						"mediaType": "application/pdf",
+						"representation": "B64"
+					},
+					{
+						"sequenceNumber": 2,
+						"referenceTextNullFlavor": "ASKU"
+					}
+				]
+			}
+		}),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK, "{saved}");
+
+	let (status, reloaded) = get_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/editor/pages/LR?authorities=ich,fda"),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK, "{reloaded}");
+	let rows = &reloaded["rows"]["literatureReferences"];
+	assert_eq!(rows[0]["referenceText"], "Smith et al. Safety study, 2026");
+	assert_eq!(rows[0]["documentBase64"], "UEZERg==");
+	assert_eq!(rows[0]["mediaType"], "application/pdf");
+	assert_eq!(rows[0]["representation"], "B64");
+	assert_eq!(rows[1]["referenceTextNullFlavor"], "ASKU");
+
+	for (field, invalid, expected_rule) in [
+		(
+			"referenceText",
+			json!("X".repeat(10_001)),
+			"ICH.C.4.r.1.LENGTH.MAX",
+		),
+		(
+			"referenceTextNullFlavor",
+			json!("BAD"),
+			"ICH.C.4.r.1.NULLFLAVOR.ALLOWED",
+		),
+		(
+			"documentBase64",
+			json!("not-base64"),
+			"ICH.C.4.r.2.ALLOWED.VALUE",
+		),
+	] {
+		let (status, body) = patch_json(
+			&app,
+			&cookie,
+			&format!("/api/cases/{case_id}/editor/pages/LR"),
+			json!({
+				"authorities": ["ich", "fda"],
+				"rows": {
+					"literatureReferences": [{
+						"sequenceNumber": 3,
+						field: invalid
+					}]
+				}
+			}),
+		)
+		.await?;
+		assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{field}: {body}");
+		assert_eq!(body["error"]["message"], "CONSTRAINT_VIOLATION");
+		assert_eq!(
+			body["error"]["data"]["detail"]["ruleCode"], expected_rule,
+			"{field}: {body}"
+		);
+		assert_eq!(
+			body["error"]["data"]["detail"]["path"],
+			format!("literatureReferences.0.{field}"),
+			"{field}: {body}"
+		);
+	}
+
+	Ok(())
+}
+
+#[serial]
+#[tokio::test]
 async fn editor_si_page_patch_round_trips_every_contract_field() -> Result<()> {
 	let mm = init_test_mm().await?;
 	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
