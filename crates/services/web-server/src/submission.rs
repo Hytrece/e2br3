@@ -20,8 +20,8 @@ use tokio::runtime::Handle;
 use tokio::task;
 use tokio::time::sleep;
 use uuid::Uuid;
-use validator::xml::validate_e2b_xml_business;
 use xml::export_case_xml;
+use xml::validation::validate_e2b_xml_business;
 use xml::validation::{should_skip_xml_validation, validate_e2b_xml};
 
 const SYSTEM_REASON_ACK_CALLBACK: &str =

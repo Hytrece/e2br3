@@ -1,17 +1,18 @@
 mod fda_profile;
 mod ich_profile;
 mod sections;
+#[allow(dead_code)]
 pub(crate) mod shared_specs;
 
-use crate::{
+use crate::export::policy::{ExportNormalizationSpec, ExportNormalizeKind};
+use crate::rules::{
 	find_canonical_rule_for_phase, is_rule_condition_satisfied,
 	is_rule_presence_valid, is_rule_value_valid, RuleFacts, ValidationPhase,
 };
+use crate::validation::{validate_e2b_xml_basic, XmlValidatorConfig};
+use crate::{Error, Result, XmlValidationError, XmlValidationReport};
 use libxml::parser::Parser;
 use libxml::xpath::Context;
-use xml::export::policy::{ExportNormalizationSpec, ExportNormalizeKind};
-use xml::validation::{validate_e2b_xml_basic, XmlValidatorConfig};
-use xml::{Error, Result, XmlValidationError, XmlValidationReport};
 
 /// Business/XML-structure validation only:
 /// - lightweight XML parse/root checks

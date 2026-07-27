@@ -1,9 +1,9 @@
+use crate::XmlValidationError;
 use crate::{
 	AttrNullFlavorPairRuleSpec, AttrOrNullFlavorRequiredRuleSpec,
 	TextNullFlavorPairRuleSpec, ValueNodeRuleSpec,
 };
 use libxml::xpath::Context;
-use xml::XmlValidationError;
 
 pub(crate) const ICH_E_PROFILE_TEXT_NULL_FLAVOR_RULES:
 	&[TextNullFlavorPairRuleSpec] = &[];
@@ -48,14 +48,17 @@ fn drain_section_errors(
 
 pub(crate) fn collect(xpath: &mut Context, errors: &mut Vec<XmlValidationError>) {
 	let mut collected = Vec::new();
-	crate::xml::ich_profile::collect_ich_profile_value_presence_errors(
+	crate::validation::business::ich_profile::collect_ich_profile_value_presence_errors(
 		xpath,
 		&mut collected,
 	);
-	crate::xml::ich_profile::collect_ich_structural_value_errors(
+	crate::validation::business::ich_profile::collect_ich_structural_value_errors(
 		xpath,
 		&mut collected,
 	);
-	crate::xml::fda_profile::collect_fda_profile_errors(xpath, &mut collected);
+	crate::validation::business::fda_profile::collect_fda_profile_errors(
+		xpath,
+		&mut collected,
+	);
 	drain_section_errors(collected, 'E', errors);
 }

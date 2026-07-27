@@ -1,5 +1,5 @@
+use crate::XmlValidationError;
 use libxml::xpath::Context;
-use xml::XmlValidationError;
 
 pub(crate) const FDA_N_FACT_BATCH_RECEIVER_XPATH: &str =
 	"/hl7:MCCI_IN200100UV01/hl7:receiver/hl7:device/hl7:id/@extension";
@@ -21,7 +21,13 @@ fn drain_section_errors(
 
 pub(crate) fn collect(xpath: &mut Context, errors: &mut Vec<XmlValidationError>) {
 	let mut collected = Vec::new();
-	crate::xml::ich_profile::collect_ich_identity_text_errors(xpath, &mut collected);
-	crate::xml::fda_profile::collect_fda_profile_errors(xpath, &mut collected);
+	crate::validation::business::ich_profile::collect_ich_identity_text_errors(
+		xpath,
+		&mut collected,
+	);
+	crate::validation::business::fda_profile::collect_fda_profile_errors(
+		xpath,
+		&mut collected,
+	);
 	drain_section_errors(collected, 'N', errors);
 }

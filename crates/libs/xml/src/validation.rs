@@ -5,6 +5,9 @@ use quick_xml::events::Event;
 use quick_xml::Reader;
 use std::path::{Path, PathBuf};
 
+pub(crate) mod business;
+pub use business::validate_e2b_xml_business;
+
 #[derive(Debug, Clone)]
 pub struct XmlValidatorConfig {
 	pub max_bytes: usize,

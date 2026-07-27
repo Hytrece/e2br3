@@ -1,3 +1,5 @@
+use crate::export::policy::export_normalization_spec_for_rule;
+use crate::XmlValidationError;
 use crate::{
 	AttrNullFlavorPairRuleSpec, AttrOrNullFlavorRequiredRuleSpec,
 	AttrOrTextOrNullRequiredRuleSpec, AttrPrefixRuleSpec,
@@ -16,8 +18,6 @@ use crate::{
 };
 use libxml::tree::Node;
 use libxml::xpath::Context;
-use xml::export::policy::export_normalization_spec_for_rule;
-use xml::XmlValidationError;
 
 use super::{
 	push_rule_error, validate_attr_null_flavor_pair_on_nodes,
@@ -33,7 +33,7 @@ use super::{
 	validate_when_child_present_require_any_children, xpath_any_node,
 	xpath_has_nodes,
 };
-use crate::xml::sections::{
+use crate::validation::business::sections::{
 	c::{
 		ICH_C_CASE_HISTORY_RULE_CODE, ICH_C_CASE_HISTORY_RULE_MESSAGE,
 		ICH_C_IDENTITY_ATTR_NULL_FLAVOR_RULES, ICH_C_IDENTITY_ATTR_OR_NULL_RULES,

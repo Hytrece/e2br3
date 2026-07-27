@@ -1,9 +1,9 @@
+use crate::XmlValidationError;
 use crate::{
 	RequiredAttrsRuleSpec, SupportedXsiTypesRuleSpec,
 	TypedChildrenAttrsOrNullFlavorRuleSpec,
 };
 use libxml::xpath::Context;
-use xml::XmlValidationError;
 
 pub(crate) const ICH_F_STRUCTURAL_REQUIRED_ATTRS_RULES: &[RequiredAttrsRuleSpec] = &[
 	RequiredAttrsRuleSpec {
@@ -48,11 +48,11 @@ fn drain_section_errors(
 
 pub(crate) fn collect(xpath: &mut Context, errors: &mut Vec<XmlValidationError>) {
 	let mut collected = Vec::new();
-	crate::xml::ich_profile::collect_ich_profile_value_presence_errors(
+	crate::validation::business::ich_profile::collect_ich_profile_value_presence_errors(
 		xpath,
 		&mut collected,
 	);
-	crate::xml::ich_profile::collect_ich_structural_value_errors(
+	crate::validation::business::ich_profile::collect_ich_structural_value_errors(
 		xpath,
 		&mut collected,
 	);

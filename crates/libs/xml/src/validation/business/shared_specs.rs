@@ -288,7 +288,7 @@ pub const ICH_STRUCTURAL_NORMALIZED_CODE_RULES: &[NormalizedCodeRuleSpec] = &[
 mod tests {
 	use super::*;
 	use crate::find_canonical_rule;
-	use crate::xml::sections::{
+	use crate::validation::business::sections::{
 		c::{
 			FDA_C_ICH_C13_CONDITIONAL_RULE_CODE,
 			FDA_C_LOCAL_CRITERIA_CONDITIONAL_RULE_CODE,

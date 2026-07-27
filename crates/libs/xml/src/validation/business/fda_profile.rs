@@ -1,3 +1,4 @@
+use crate::XmlValidationError;
 use crate::{
 	has_text, is_fda_batch_receiver, is_fda_message_receiver,
 	is_fda_postmarket_batch_receiver, is_fda_postmarket_message_receiver,
@@ -5,13 +6,12 @@ use crate::{
 	is_fda_premarket_message_receiver, RuleFacts,
 };
 use libxml::xpath::Context;
-use xml::XmlValidationError;
 
 use super::{
 	validate_condition_rule_violation, validate_presence_rule,
 	validate_value_rule_on_nodes, xpath_any_value_prefix, xpath_has_nodes,
 };
-use crate::xml::sections::{
+use crate::validation::business::sections::{
 	c::{
 		FDA_C_FACT_COMBINATION_PRODUCT_XPATH, FDA_C_FACT_FULFIL_EXPEDITED_XPATH,
 		FDA_C_FACT_PREANDA_XPATH, FDA_C_FACT_PRIMARY_SOURCE_EMAIL_XPATH,

@@ -1,5 +1,5 @@
+use crate::XmlValidationError;
 use libxml::xpath::Context;
-use xml::XmlValidationError;
 
 fn drain_section_errors(
 	collected: Vec<XmlValidationError>,
@@ -13,7 +13,7 @@ fn drain_section_errors(
 
 pub(crate) fn collect(xpath: &mut Context, errors: &mut Vec<XmlValidationError>) {
 	let mut collected = Vec::new();
-	crate::xml::ich_profile::collect_ich_profile_value_presence_errors(
+	crate::validation::business::ich_profile::collect_ich_profile_value_presence_errors(
 		xpath,
 		&mut collected,
 	);

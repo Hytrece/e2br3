@@ -25,7 +25,6 @@ sqlx = { workspace = true }
 time = { workspace = true }
 tokio = { version = "1", features = ["full"] }
 uuid = { version = "1", features = ["v4", "fast-rng", "serde"] }
-libxml = "0.3"
 
 [dev-dependencies]
 serial_test = "3"

@@ -1,8 +1,8 @@
 use std::error::Error;
 use std::fs;
 use std::path::{Path, PathBuf};
-use validator::find_canonical_rule;
-use validator::xml::validate_e2b_xml_business;
+use xml::find_canonical_rule;
+use xml::validation::validate_e2b_xml_business;
 use xml::validation::{default_xsd_path, validate_e2b_xml, XmlValidatorConfig};
 
 fn workspace_root() -> PathBuf {

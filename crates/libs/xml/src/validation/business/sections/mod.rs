@@ -6,8 +6,8 @@ pub(crate) mod g;
 pub(crate) mod h;
 pub(crate) mod n;
 
+use crate::XmlValidationError;
 use libxml::xpath::Context;
-use xml::XmlValidationError;
 
 pub(crate) fn error_owned_by_section_letter(
 	error: &XmlValidationError,
@@ -22,17 +22,26 @@ pub(crate) fn error_owned_by_section_letter(
 
 fn collect_generic_xml_errors(xpath: &mut Context) -> Vec<XmlValidationError> {
 	let mut collected = Vec::new();
-	crate::xml::ich_profile::collect_ich_identity_text_errors(xpath, &mut collected);
-	crate::xml::ich_profile::collect_ich_profile_value_presence_errors(
+	crate::validation::business::ich_profile::collect_ich_identity_text_errors(
 		xpath,
 		&mut collected,
 	);
-	crate::xml::ich_profile::collect_ich_structural_value_errors(
+	crate::validation::business::ich_profile::collect_ich_profile_value_presence_errors(
 		xpath,
 		&mut collected,
 	);
-	crate::xml::ich_profile::collect_ich_case_history_errors(xpath, &mut collected);
-	crate::xml::fda_profile::collect_fda_profile_errors(xpath, &mut collected);
+	crate::validation::business::ich_profile::collect_ich_structural_value_errors(
+		xpath,
+		&mut collected,
+	);
+	crate::validation::business::ich_profile::collect_ich_case_history_errors(
+		xpath,
+		&mut collected,
+	);
+	crate::validation::business::fda_profile::collect_fda_profile_errors(
+		xpath,
+		&mut collected,
+	);
 	collected
 		.into_iter()
 		.filter(|error| error.section.as_deref() == Some("xml"))

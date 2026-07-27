@@ -4087,7 +4087,6 @@ version = "0.1.0"
 dependencies = [
  "base64",
  "lib-core",
- "libxml",
  "modql",
  "octofhir-ucum",
  "serde",

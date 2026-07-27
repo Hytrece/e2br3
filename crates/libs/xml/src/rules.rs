@@ -172,7 +172,7 @@ pub struct NullFlavorRuleMetadata {
 	pub source_hash: u64,
 }
 
-#[path = "catalog_dictionary_constraints.rs"]
+#[path = "rules_dictionary_constraints.rs"]
 mod catalog_dictionary_constraints;
 pub use catalog_dictionary_constraints::{
 	ALLOWED_VALUE_RULES, ICH_STRUCTURED_ALLOWED_VALUE_TARGET_CODES,
