@@ -93,7 +93,7 @@ pub(super) const BINDINGS: &[PortableFieldBinding] = &[
 		"safetyReportIdentification.localCriteriaReportType",
 		"localCriteriaReportType",
 		String,
-		["FDA.C.1.7.1.LENGTH.MAX"]
+		["FDA.C.1.7.1.LENGTH.MAX", "FDA.C.1.7.1.ALLOWED.VALUE"]
 	),
 	binding!(
 		"CI",
@@ -151,6 +151,13 @@ pub(super) const BINDINGS: &[PortableFieldBinding] = &[
 		"nullificationReason",
 		String,
 		["ICH.C.1.11.2.LENGTH.MAX"]
+	),
+	binding!(
+		"CI",
+		"safetyReportIdentification.combinationProductReportIndicatorNullFlavor",
+		"combinationProductReportIndicatorNullFlavor",
+		String,
+		["FDA.C.1.12.NULLFLAVOR.ALLOWED"]
 	),
 	binding!("RP", "primarySources[].reporterTitle", "reporterTitle", String, ["ICH.C.2.r.1.1.LENGTH.MAX"], null: "primarySources[].reporterTitleNullFlavor"),
 	binding!(
@@ -248,12 +255,13 @@ pub(super) const BINDINGS: &[PortableFieldBinding] = &[
 		String,
 		["ICH.C.2.r.3.NULLFLAVOR.ALLOWED"]
 	),
+	binding!("RP", "primarySources[].reporterEmail", "reporterEmail", String, ["FDA.C.2.r.2.8.LENGTH.MAX"], null: "primarySources[].reporterEmailNullFlavor"),
 	binding!(
 		"RP",
-		"primarySources[].reporterEmail",
-		"reporterEmail",
+		"primarySources[].reporterEmailNullFlavor",
+		"reporterEmailNullFlavor",
 		String,
-		["FDA.C.2.r.2.8.LENGTH.MAX"]
+		["FDA.C.2.r.2.8.NULLFLAVOR.ALLOWED"]
 	),
 	binding!("RP", "primarySources[].qualification", "qualification", String, ["ICH.C.2.r.4.LENGTH.MAX", "ICH.C.2.r.4.ALLOWED.VALUE"], null: "primarySources[].qualificationNullFlavor"),
 	binding!(
@@ -570,6 +578,10 @@ mod tests {
 				(
 					"safetyReportIdentification.nullificationReason",
 					"nullificationReason"
+				),
+				(
+					"safetyReportIdentification.combinationProductReportIndicatorNullFlavor",
+					"combinationProductReportIndicatorNullFlavor"
 				),
 			]
 		);
