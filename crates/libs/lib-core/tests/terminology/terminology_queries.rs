@@ -1,4 +1,4 @@
-use crate::common::{demo_ctx, demo_user_id, init_test_mm, unique_suffix, Result};
+use crate::common::{demo_ctx, init_test_mm, system_user_id, unique_suffix, Result};
 use lib_core::model::store::set_full_context_dbx_or_rollback;
 use lib_core::model::terminology::{
 	ControlledTermBmc, E2bCodeListBmc, FdaHierarchicalCodeListBmc, IsoCountryBmc,
@@ -22,7 +22,7 @@ async fn active_controlled_terms_and_mfds_products_support_membership() -> Resul
 	dbx.begin_txn().await?;
 	set_full_context_dbx_or_rollback(
 		dbx,
-		demo_user_id(),
+		system_user_id(),
 		ctx.organization_id(),
 		"system_admin",
 	)
@@ -113,7 +113,7 @@ async fn test_terminology_queries() -> Result<()> {
 	dbx.begin_txn().await?;
 	set_full_context_dbx_or_rollback(
 		dbx,
-		demo_user_id(),
+		system_user_id(),
 		ctx.organization_id(),
 		"system_admin",
 	)
