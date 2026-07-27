@@ -24,8 +24,10 @@ provide ownership or isolation and does not protect local concurrent work.
 
 ## Chosen Architecture
 
-Add a repository-owned `scripts/test-isolated-db.sh` runner and expose it as the
-Cargo alias `cargo test-isolated`.
+Add one executable repository-owned entry point:
+`scripts/test-isolated-db.sh`. Stable Cargo aliases can only expand to Cargo
+subcommands and cannot launch a repository shell script, so no launcher or
+alias layer is added.
 
 For each invocation the runner will:
 
@@ -99,4 +101,4 @@ Implementation follows test-driven development:
 - Refactoring production connection management.
 - Repairing unrelated tests or changing RBAC behavior.
 - Automatically intercepting plain `cargo test`; isolated database tests use
-  the explicit `cargo test-isolated` repository command.
+  the explicit `scripts/test-isolated-db.sh` repository command.

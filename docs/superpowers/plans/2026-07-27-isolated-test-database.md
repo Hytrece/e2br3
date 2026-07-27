@@ -10,7 +10,7 @@
 
 ## Global Constraints
 
-- Isolation unit: exactly one database per `cargo test-isolated` invocation.
+- Isolation unit: exactly one database per `scripts/test-isolated-db.sh` invocation.
 - Never read from, mutate, drop, or rebuild the shared development `app_db`.
 - Temporary names must match `^e2br3_test_[a-z0-9_]+$`.
 - Preserve the configured URL except for its final database path segment.
@@ -134,23 +134,21 @@ git commit -m "test: run Rust suites in isolated databases"
 
 ---
 
-### Task 2: Make the isolated runner the repository and CI entry point
+### Task 2: Make the isolated runner the CI entry point
 
 **Files:**
-- Modify: `.cargo/config.toml`
 - Modify: `.github/workflows/ci.yml`
 - Modify: `scripts/tests/test_isolated_db.sh`
 
 **Interfaces:**
 - Consumes: the runner from Task 1.
-- Produces: `cargo test-isolated [cargo-test-args...]`; CI lib-core and remaining-workspace steps use the same runner.
+- Produces: CI lib-core and remaining-workspace steps that use the same executable repository runner.
 
 - [ ] **Step 1: Extend the contract test with repository wiring assertions**
 
-Add exact checks:
+Add this exact check:
 
 ```bash
-grep -F 'test-isolated = "!scripts/test-isolated-db.sh"' "$repo_root/.cargo/config.toml"
 test "$(grep -c 'scripts/test-isolated-db.sh' "$repo_root/.github/workflows/ci.yml")" -eq 2
 ```
 
@@ -158,18 +156,9 @@ test "$(grep -c 'scripts/test-isolated-db.sh' "$repo_root/.github/workflows/ci.y
 
 Run: `bash scripts/tests/test_isolated_db.sh`
 
-Expected: FAIL because the Cargo alias and CI calls do not exist.
+Expected: FAIL because the CI calls do not exist.
 
-- [ ] **Step 3: Add the Cargo alias**
-
-Add this table before `[env]` in `.cargo/config.toml`:
-
-```toml
-[alias]
-test-isolated = "!scripts/test-isolated-db.sh"
-```
-
-- [ ] **Step 4: Route the two main CI test steps through isolation**
+- [ ] **Step 3: Route the two main CI test steps through isolation**
 
 Replace the lib-core command with:
 
@@ -185,21 +174,21 @@ run: scripts/test-isolated-db.sh --workspace --exclude lib-core -- --test-thread
 
 Keep the release validation gates on the preinitialized CI `app_db`; they run after isolated suites and therefore start from unchanged seed state.
 
-- [ ] **Step 5: Run contract and configuration validation**
+- [ ] **Step 4: Run contract and configuration validation**
 
 Run:
 
 ```bash
 bash scripts/tests/test_isolated_db.sh
-cargo test-isolated --help
+bash -n scripts/test-isolated-db.sh
 ```
 
-Expected: the contract passes; the alias reaches Cargo test help and still cleans up its temporary database.
+Expected: the contract and syntax checks pass.
 
-- [ ] **Step 6: Commit repository wiring**
+- [ ] **Step 5: Commit repository wiring**
 
 ```bash
-git add .cargo/config.toml .github/workflows/ci.yml scripts/tests/test_isolated_db.sh
+git add .github/workflows/ci.yml scripts/tests/test_isolated_db.sh docs/superpowers/specs/2026-07-27-isolated-test-database-design.md docs/superpowers/plans/2026-07-27-isolated-test-database.md
 git commit -m "ci: isolate PostgreSQL test invocations"
 ```
 
@@ -211,7 +200,7 @@ git commit -m "ci: isolate PostgreSQL test invocations"
 - Modify only if a verification defect is discovered: `scripts/test-isolated-db.sh`, `scripts/tests/test_isolated_db.sh`
 
 **Interfaces:**
-- Consumes: `cargo test-isolated` from Task 2 and the local PostgreSQL configured by `SERVICE_DB_URL`.
+- Consumes: `scripts/test-isolated-db.sh` from Task 2 and the local PostgreSQL configured by `SERVICE_DB_URL`.
 - Produces: verification evidence that bootstrap, concurrent naming, tests, and cleanup work against real PostgreSQL.
 
 - [ ] **Step 1: Record the pre-run set of temporary databases**
@@ -230,7 +219,7 @@ Expected: record the exact output; do not delete databases not created by this t
 Run:
 
 ```bash
-cargo test-isolated -p lib-core --test rbac_grant_profiles
+scripts/test-isolated-db.sh -p lib-core --test rbac_grant_profiles
 ```
 
 Expected: 5 tests pass and the runner reports cleanup of its generated database.
@@ -246,9 +235,9 @@ Expected: output exactly equals the recorded pre-run set.
 Run each command in its own background job and wait for both:
 
 ```bash
-cargo test-isolated -p lib-core --test rbac_grant_profiles > /tmp/e2br3-isolated-a.log 2>&1 &
+scripts/test-isolated-db.sh -p lib-core --test rbac_grant_profiles > /tmp/e2br3-isolated-a.log 2>&1 &
 pid_a=$!
-cargo test-isolated -p lib-core --test authorization_contract_snapshot > /tmp/e2br3-isolated-b.log 2>&1 &
+scripts/test-isolated-db.sh -p lib-core --test authorization_contract_snapshot > /tmp/e2br3-isolated-b.log 2>&1 &
 pid_b=$!
 wait "$pid_a"
 wait "$pid_b"
@@ -297,7 +286,7 @@ Run:
 
 ```bash
 bash scripts/tests/test_isolated_db.sh
-cargo test-isolated -p lib-core --test rbac_grant_profiles
+scripts/test-isolated-db.sh -p lib-core --test rbac_grant_profiles
 cargo fmt --all -- --check
 git diff --check origin/dev...HEAD
 ```

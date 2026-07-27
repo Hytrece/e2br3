@@ -108,8 +108,14 @@ assert_cleanup_failure_fails_successful_run() {
 	test -s "$case_dir/dropdb.args"
 }
 
+assert_repository_wiring() {
+	[[ "$(grep -c 'scripts/test-isolated-db.sh' \
+		"$repo_root/.github/workflows/ci.yml")" -eq 2 ]]
+}
+
 write_fake_commands
 assert_success_contract
 assert_test_failure_preserves_status_and_cleans_up
 assert_cleanup_failure_fails_successful_run
+assert_repository_wiring
 printf 'isolated database runner contract: PASS\n'
