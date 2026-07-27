@@ -1,7 +1,8 @@
 mod common;
 
 use crate::common::{
-	demo_ctx, demo_org_id, demo_user_id, reset_role, set_auditor_role, Result,
+	demo_ctx, demo_org_id, demo_user_id, reset_role, set_auditor_role,
+	system_user_id, Result,
 };
 use lib_core::_dev_utils;
 use lib_core::ctx::{Ctx, ROLE_SPONSOR_ADMIN_COMPANY, ROLE_SPONSOR_ADMIN_CRO};
@@ -406,7 +407,7 @@ fn sponsor_ctx(org_id: Uuid, role: &str) -> Ctx {
 async fn create_acl_test_org(mm: &ModelManager, label: &str) -> Result<Uuid> {
 	let org_id = Uuid::new_v4();
 	let mut tx = mm.dbx().db().begin().await?;
-	set_user_context(&mut tx, demo_user_id()).await?;
+	set_user_context(&mut tx, system_user_id()).await?;
 	set_org_context(&mut tx, demo_org_id(), "system_admin").await?;
 	sqlx::query(
 		"INSERT INTO organizations (
@@ -1191,7 +1192,7 @@ async fn section_presave_relationships_reject_cross_org_links() -> Result<()> {
 	let product_b_id = Uuid::new_v4();
 	let study_a_id = Uuid::new_v4();
 	let mut tx = mm.dbx().db().begin().await?;
-	set_user_context(&mut tx, demo_user_id()).await?;
+	set_user_context(&mut tx, system_user_id()).await?;
 	set_org_context(&mut tx, demo_org_id(), "system_admin").await?;
 
 	for (org_id, label) in [(org_a_id, "A"), (org_b_id, "B")] {
@@ -1270,7 +1271,7 @@ async fn section_presave_relationships_reject_cross_org_links() -> Result<()> {
 	tx.commit().await?;
 
 	let mut invalid_tx = mm.dbx().db().begin().await?;
-	set_user_context(&mut invalid_tx, demo_user_id()).await?;
+	set_user_context(&mut invalid_tx, system_user_id()).await?;
 	set_org_context(&mut invalid_tx, org_a_id, "system_admin").await?;
 	let cross_org_product = sqlx::query(
 		"INSERT INTO product_presaves (
@@ -1291,7 +1292,7 @@ async fn section_presave_relationships_reject_cross_org_links() -> Result<()> {
 	invalid_tx.rollback().await?;
 
 	let mut invalid_tx = mm.dbx().db().begin().await?;
-	set_user_context(&mut invalid_tx, demo_user_id()).await?;
+	set_user_context(&mut invalid_tx, system_user_id()).await?;
 	set_org_context(&mut invalid_tx, org_a_id, "system_admin").await?;
 	let cross_org_study = sqlx::query(
 		"INSERT INTO study_presaves (
@@ -2392,7 +2393,7 @@ async fn section_presave_receiver_allows_legacy_type_update() -> Result<()> {
 	for legacy_type in ["1", "2", "3", "4", "5", "6"] {
 		let receiver_id = Uuid::new_v4();
 		let mut tx = mm.dbx().db().begin().await?;
-		set_user_context(&mut tx, demo_user_id()).await?;
+		set_user_context(&mut tx, system_user_id()).await?;
 		set_org_context(&mut tx, demo_org_id(), "system_admin").await?;
 
 		sqlx::query(
@@ -3441,7 +3442,7 @@ async fn section_presave_child_audit_uses_parent_organization() -> Result<()> {
 	let study_id = Uuid::new_v4();
 	let study_product_id = Uuid::new_v4();
 	let mut tx = mm.dbx().db().begin().await?;
-	set_user_context(&mut tx, demo_user_id()).await?;
+	set_user_context(&mut tx, system_user_id()).await?;
 	set_org_context(&mut tx, demo_org_id(), "system_admin").await?;
 
 	sqlx::query(
