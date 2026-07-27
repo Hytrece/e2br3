@@ -8,6 +8,39 @@ use serial_test::serial;
 
 #[serial]
 #[tokio::test]
+async fn bootstrap_provides_active_iso_country_reference_data() -> Result<()> {
+	let mm = init_test_mm().await;
+	let ctx = demo_ctx();
+	let dbx = mm.dbx();
+
+	dbx.begin_txn().await?;
+	set_full_context_dbx_or_rollback(
+		dbx,
+		system_user_id(),
+		ctx.organization_id(),
+		"system_admin",
+	)
+	.await?;
+	dbx.execute(sqlx::query("DELETE FROM iso_countries")).await?;
+	dbx.execute(sqlx::query(include_str!(
+		"../../../../../db/bootstrap/09a-iso-countries.sql"
+	)))
+	.await?;
+
+	let countries = IsoCountryBmc::list_all(&ctx, &mm).await?;
+	assert!(
+		countries.len() >= 200,
+		"fresh database must provide a usable ISO country catalog"
+	);
+	assert!(countries.iter().any(|country| country.code == "KR"));
+	assert!(countries.iter().any(|country| country.code == "US"));
+
+	dbx.rollback_txn().await?;
+	Ok(())
+}
+
+#[serial]
+#[tokio::test]
 async fn active_controlled_terms_and_mfds_products_support_membership() -> Result<()>
 {
 	let mm = init_test_mm().await;

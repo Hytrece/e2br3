@@ -1728,7 +1728,7 @@ ALTER TABLE e2b_code_lists ENABLE ROW LEVEL SECURITY;
 ALTER TABLE e2b_code_lists FORCE ROW LEVEL SECURITY;
 CREATE POLICY e2b_code_lists_read ON e2b_code_lists
     FOR SELECT TO e2br3_app_role
-    USING (is_current_user_admin());
+    USING (active = true OR is_current_user_admin());
 CREATE POLICY e2b_code_lists_insert ON e2b_code_lists
     FOR INSERT TO e2br3_app_role
     WITH CHECK (is_current_user_admin());

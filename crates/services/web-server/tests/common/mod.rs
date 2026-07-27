@@ -65,10 +65,12 @@ pub struct SeedOrgsManagerCases {
 }
 
 pub async fn init_test_env() {
-	std::env::set_var(
-		"SERVICE_DB_URL",
-		"postgres://app_user:dev_only_pwd@localhost/app_db",
-	);
+	if std::env::var("E2BR3_TEST_DATABASE_NAME").is_err() {
+		std::env::set_var(
+			"SERVICE_DB_URL",
+			"postgres://app_user:dev_only_pwd@localhost/app_db",
+		);
+	}
 	std::env::set_var("SERVICE_WEB_FOLDER", "web-folder");
 	std::env::set_var("SERVICE_PWD_KEY", "ZmFrZV9rZXk");
 	std::env::set_var("SERVICE_TOKEN_KEY", "ZmFrZV9rZXk");
