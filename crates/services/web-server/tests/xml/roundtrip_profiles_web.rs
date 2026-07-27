@@ -8,9 +8,8 @@ use std::fs;
 use std::path::PathBuf;
 use tower::ServiceExt;
 use uuid::Uuid;
-use validator::xml::{
-	validate_e2b_xml, validate_e2b_xml_business, XmlValidatorConfig,
-};
+use xml::validation::validate_e2b_xml_business;
+use xml::validation::{validate_e2b_xml, XmlValidatorConfig};
 
 #[derive(Clone, Copy)]
 struct RoundtripFixture {

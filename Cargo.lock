@@ -1679,9 +1679,7 @@ dependencies = [
  "derive_more",
  "lib-auth",
  "lib-utils",
- "libxml",
  "modql",
- "quick-xml 0.31.0",
  "rust_decimal",
  "sea-query",
  "sea-query-binder",
@@ -1716,6 +1714,7 @@ dependencies = [
  "sqlx",
  "tokio",
  "uuid",
+ "xml",
 ]
 
 [[package]]
@@ -4088,10 +4087,8 @@ version = "0.1.0"
 dependencies = [
  "base64",
  "lib-core",
- "libxml",
  "modql",
  "octofhir-ucum",
- "quick-xml 0.31.0",
  "serde",
  "serde_json",
  "serial_test",
@@ -4099,6 +4096,7 @@ dependencies = [
  "time",
  "tokio",
  "uuid",
+ "xml",
 ]
 
 [[package]]
@@ -4251,6 +4249,7 @@ dependencies = [
  "utoipa",
  "uuid",
  "validator",
+ "xml",
  "zip",
 ]
 
@@ -4631,6 +4630,27 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "05f360fc0b24296329c78fda852a1e9ae82de9cf7b27dae4b7f62f118f77b9ed"
 dependencies = [
  "tap",
+]
+
+[[package]]
+name = "xml"
+version = "0.1.0"
+dependencies = [
+ "derive_more",
+ "lib-core",
+ "libxml",
+ "modql",
+ "quick-xml 0.31.0",
+ "rust_decimal",
+ "serde",
+ "serde_json",
+ "serde_with",
+ "serial_test",
+ "sqlx",
+ "time",
+ "tokio",
+ "tracing",
+ "uuid",
 ]
 
 [[package]]

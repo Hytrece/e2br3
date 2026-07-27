@@ -2,7 +2,6 @@ mod allowed_value;
 mod c_reporter_policy;
 mod c_safety_report_policy;
 pub mod case;
-mod catalog;
 mod context;
 mod d_patient_policy;
 mod e_reaction_policy;
@@ -15,9 +14,6 @@ mod portable_bindings;
 mod portable_constraints;
 #[cfg(test)]
 mod rule_source_coverage_tests;
-pub mod xml;
-
-pub use self::xml::shared_specs::*;
 pub use c_reporter_policy::has_any_primary_source_content;
 pub use c_safety_report_policy::{
 	has_report_type, should_clear_combination_product_null_flavor_on_value,
@@ -26,7 +22,6 @@ pub use c_safety_report_policy::{
 	should_warn_fda_combination_product_indicator_missing,
 };
 pub use case::{validate_case_for_authorities, validate_case_for_authority};
-pub use catalog::*;
 pub use context::{load_base_validation_context, ValidationContext};
 pub use d_patient_policy::{
 	has_fda_ethnicity, has_fda_race, has_patient_initials, has_patient_payload,
@@ -63,6 +58,7 @@ pub use portable_bindings::*;
 pub use portable_constraints::*;
 use sqlx::types::Uuid;
 use std::collections::BTreeMap;
+pub use xml::rules::*;
 
 pub fn has_text(value: Option<&str>) -> bool {
 	value.map(|v| !v.trim().is_empty()).unwrap_or(false)

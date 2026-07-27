@@ -1,11 +1,11 @@
-pub use lib_core::xml::export::policy::{
+pub use xml::export::policy::{
 	normalize_outcome_code, outcome_display_name,
 	should_case_validation_require_required_intervention,
 	should_emit_required_intervention_null_flavor_ni,
 };
 
 #[cfg(test)]
-pub use lib_core::xml::export::policy::DEFAULT_OUTCOME_DISPLAY;
+pub use xml::export::policy::DEFAULT_OUTCOME_DISPLAY;
 
 #[cfg(test)]
 mod tests {

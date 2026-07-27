@@ -15,14 +15,6 @@ use lib_core::model::xml_import_decision::{
 };
 use lib_core::model::xml_import_history::XmlImportHistoryBmc;
 use lib_core::model::ModelManager;
-use lib_core::xml::import_sections::{
-	c_safety_report::parse_c_safety_report, d_patient::parse_d_patient,
-	e_reaction::parse_e_reactions, g_drug::parse_g_drugs,
-};
-use lib_core::xml::{
-	extract_safety_report_id_from_xml, import_e2b_xml_unvalidated, CImportSettings,
-	XmlImportRequest, XmlValidationReport,
-};
 use lib_rest_core::rest_result::DataRestResult;
 use lib_rest_core::{
 	with_authorized_import_history_collection, with_authorized_import_history_read,
@@ -36,8 +28,16 @@ use std::io::{Cursor, Read};
 use time::format_description::well_known::Rfc3339;
 use tracing::warn;
 use uuid::Uuid;
-use validator::xml::{
+use xml::import_sections::{
+	c_safety_report::parse_c_safety_report, d_patient::parse_d_patient,
+	e_reaction::parse_e_reactions, g_drug::parse_g_drugs,
+};
+use xml::validation::{
 	should_skip_xml_validation, validate_e2b_xml, validate_e2b_xml_basic,
+};
+use xml::{
+	extract_safety_report_id_from_xml, import_e2b_xml_unvalidated, CImportSettings,
+	XmlImportRequest, XmlValidationReport,
 };
 use zip::ZipArchive;
 

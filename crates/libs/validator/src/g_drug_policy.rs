@@ -1,4 +1,4 @@
-pub use lib_core::xml::export::policy::{
+pub use xml::export::policy::{
 	drug_characterization_display_name, has_drug_characterization,
 	has_medicinal_product, normalize_drug_characterization,
 };

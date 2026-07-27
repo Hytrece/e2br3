@@ -1,6 +1,6 @@
 // Shared Section C policy used by exporter + case validators.
 use super::{is_rule_condition_satisfied, RuleFacts};
-use lib_core::xml::export::policy::should_clear_null_flavor_on_value;
+use xml::export::policy::should_clear_null_flavor_on_value;
 
 pub fn has_report_type(value: &str) -> bool {
 	!value.trim().is_empty()

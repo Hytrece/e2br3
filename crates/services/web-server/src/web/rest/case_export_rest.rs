@@ -9,7 +9,6 @@ use lib_core::model::xml_export_history::{
 	XmlExportHistoryBmc, XmlExportHistoryRecord,
 };
 use lib_core::regulatory::RegulatoryAuthority;
-use lib_core::xml::{export_case_xml_with_options, ExportXmlOptions};
 use lib_rest_core::prelude::*;
 use lib_rest_core::rest_result::DataRestResult;
 use lib_rest_core::Error;
@@ -23,7 +22,9 @@ use time::Month;
 use tokio::runtime::Handle;
 use tokio::task;
 use uuid::Uuid;
-use validator::xml::{validate_e2b_xml, validate_e2b_xml_business};
+use xml::validation::validate_e2b_xml;
+use xml::validation::validate_e2b_xml_business;
+use xml::{export_case_xml_with_options, ExportXmlOptions};
 use zip::write::SimpleFileOptions;
 use zip::{CompressionMethod, ZipWriter};
 

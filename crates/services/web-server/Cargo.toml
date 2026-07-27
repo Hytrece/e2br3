@@ -9,6 +9,7 @@ lib-utils = { path = "../../libs/lib-utils"}
 lib-rest-core = { path = "../../libs/lib-rest-core"}
 lib-auth = { path = "../../libs/lib-auth"}
 lib-core = { path = "../../libs/lib-core"}
+xml = { path = "../../libs/xml" }
 lib-web = { path = "../../libs/lib-web"}
 validator = { path = "../../libs/validator"}
 # -- Async
