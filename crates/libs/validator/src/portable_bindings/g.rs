@@ -34,7 +34,7 @@ pub(super) const BINDINGS: &[PortableFieldBinding] = &[
 		"drugs[].fdaOtherCharacterization",
 		"fdaOtherCharacterization",
 		String,
-		["FDA.G.k.1.a.LENGTH.MAX"]
+		["FDA.G.k.1.a.LENGTH.MAX", "FDA.G.k.1.a.ALLOWED.VALUE"]
 	),
 	binding!(
 		"drugs[].mpidVersion",
@@ -148,7 +148,7 @@ pub(super) const BINDINGS: &[PortableFieldBinding] = &[
 		"drugs[].fdaAdditionalInfoCoded",
 		"fdaAdditionalInfoCoded",
 		String,
-		["FDA.G.k.10a.LENGTH.MAX"]
+		["FDA.G.k.10a.LENGTH.MAX", "FDA.G.k.10a.ALLOWED.VALUE"]
 	),
 	binding!(
 		"drugs[].fdaSpecializedProductCategory",
@@ -405,7 +405,7 @@ pub(super) const BINDINGS: &[PortableFieldBinding] = &[
 		"drugs[].fdaDeviceInfo.followUpTypes[].valueCode",
 		"fdaDeviceInfo.followUpTypes[].valueCode",
 		String,
-		["FDA.G.k.12.r.2.r.LENGTH.MAX"]
+		["FDA.G.k.12.r.2.r.LENGTH.MAX", "FDA.G.k.12.r.2.r.ALLOWED.VALUE"]
 	),
 	binding!(
 		"drugs[].fdaDeviceInfo.deviceProblemCodes[].valueCode",
@@ -465,7 +465,7 @@ pub(super) const BINDINGS: &[PortableFieldBinding] = &[
 		"drugs[].fdaDeviceInfo.deviceUsage",
 		"fdaDeviceInfo.deviceUsage",
 		String,
-		["FDA.G.k.12.r.8.LENGTH.MAX"]
+		["FDA.G.k.12.r.8.LENGTH.MAX", "FDA.G.k.12.r.8.ALLOWED.VALUE"]
 	),
 	binding!(
 		"drugs[].fdaDeviceInfo.deviceLotNumber",
@@ -477,7 +477,7 @@ pub(super) const BINDINGS: &[PortableFieldBinding] = &[
 		"drugs[].fdaDeviceInfo.operatorOfDevice",
 		"fdaDeviceInfo.operatorOfDevice",
 		String,
-		["FDA.G.k.12.r.10.LENGTH.MAX"]
+		["FDA.G.k.12.r.10.LENGTH.MAX", "FDA.G.k.12.r.10.ALLOWED.VALUE"]
 	),
 	binding!(
 		"drugs[].fdaDeviceInfo.remedialActions[].valueCode",
@@ -488,6 +488,18 @@ pub(super) const BINDINGS: &[PortableFieldBinding] = &[
 ];
 
 pub(super) const EXCLUSIONS: &[PortableBindingExclusion] = &[
+	PortableBindingExclusion {
+		rule_code: "FDA.G.k.10a.NULLFLAVOR.ALLOWED",
+		reason: "not_in_case_editor_model",
+	},
+	PortableBindingExclusion {
+		rule_code: "FDA.G.k.12.r.4.NULLFLAVOR.ALLOWED",
+		reason: "not_in_case_editor_model",
+	},
+	PortableBindingExclusion {
+		rule_code: "FDA.G.k.12.r.5.NULLFLAVOR.ALLOWED",
+		reason: "not_in_case_editor_model",
+	},
 	PortableBindingExclusion {
 		rule_code: "MFDS.G.k.9.i.2.r.2.KR.1.LENGTH.MAX",
 		reason: "authority_dependent_business_value",
