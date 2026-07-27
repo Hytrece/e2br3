@@ -3096,6 +3096,58 @@ async fn editor_si_page_patch_round_trips_every_contract_field() -> Result<()> {
 
 #[serial]
 #[tokio::test]
+async fn editor_si_page_updates_existing_study_when_patch_omits_id() -> Result<()> {
+	let mm = init_test_mm().await?;
+	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
+	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
+	let cookie = cookie_header(&token.to_string());
+	let app = web_server::app(mm);
+	let case_id =
+		create_case_for_editor(&app, &cookie, "EDITOR-SI-UPSERT", &["ich"]).await?;
+
+	let (status, created) = patch_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/editor/pages/SI"),
+		json!({
+			"authorities": ["ich"],
+			"rows": {
+				"studyInformation": {
+					"sponsorStudyNumber": "SP-2026-001"
+				}
+			}
+		}),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK, "{created}");
+	let original_study_id = created["rows"]["studyInformation"]["id"].clone();
+
+	let (status, updated) = patch_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/editor/pages/SI"),
+		json!({
+			"authorities": ["ich"],
+			"rows": {
+				"studyInformation": {
+					"sponsorStudyNumber": "SP-2026-002"
+				}
+			}
+		}),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK, "{updated}");
+	assert_eq!(updated["rows"]["studyInformation"]["id"], original_study_id);
+	assert_eq!(
+		updated["rows"]["studyInformation"]["sponsor_study_number"],
+		"SP-2026-002"
+	);
+
+	Ok(())
+}
+
+#[serial]
+#[tokio::test]
 async fn editor_si_portable_constraints_return_structured_paths() -> Result<()> {
 	let mm = init_test_mm().await?;
 	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;

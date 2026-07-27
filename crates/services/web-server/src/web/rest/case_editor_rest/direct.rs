@@ -1549,25 +1549,41 @@ async fn apply_si_page_rows_patch(
 			StudyInformationBmc::update(ctx, mm, id, update).await?;
 			id
 		} else {
-			StudyInformationBmc::create(
+			let existing = StudyInformationBmc::list(
 				ctx,
 				mm,
-				StudyInformationForCreate {
-					case_id,
-					source_study_presave_id: update.source_study_presave_id,
-					study_name: update.study_name,
-					study_name_null_flavor: update.study_name_null_flavor,
-					sponsor_study_number: update.sponsor_study_number,
-					sponsor_study_number_null_flavor: update
-						.sponsor_study_number_null_flavor,
-					study_type_reaction: update.study_type_reaction,
-					study_type_reaction_kr1: update.study_type_reaction_kr1,
-					fda_ind_number_occurred: update.fda_ind_number_occurred,
-					fda_pre_anda_number_occurred: update
-						.fda_pre_anda_number_occurred,
-				},
+				Some(vec![StudyInformationFilter {
+					case_id: Some(uuid_eq(case_id)),
+				}]),
+				Some(ListOptions::default()),
 			)
 			.await?
+			.into_iter()
+			.min_by_key(|study| study.created_at);
+			if let Some(existing) = existing {
+				StudyInformationBmc::update(ctx, mm, existing.id, update).await?;
+				existing.id
+			} else {
+				StudyInformationBmc::create(
+					ctx,
+					mm,
+					StudyInformationForCreate {
+						case_id,
+						source_study_presave_id: update.source_study_presave_id,
+						study_name: update.study_name,
+						study_name_null_flavor: update.study_name_null_flavor,
+						sponsor_study_number: update.sponsor_study_number,
+						sponsor_study_number_null_flavor: update
+							.sponsor_study_number_null_flavor,
+						study_type_reaction: update.study_type_reaction,
+						study_type_reaction_kr1: update.study_type_reaction_kr1,
+						fda_ind_number_occurred: update.fda_ind_number_occurred,
+						fda_pre_anda_number_occurred: update
+							.fda_pre_anda_number_occurred,
+					},
+				)
+				.await?
+			}
 		}
 	} else {
 		let studies = StudyInformationBmc::list(
