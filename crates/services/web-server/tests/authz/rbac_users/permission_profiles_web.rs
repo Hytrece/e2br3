@@ -18,6 +18,51 @@ use uuid::Uuid;
 
 #[serial]
 #[tokio::test]
+async fn test_system_admin_profile_menu_privileges_match_eligible_actions(
+) -> Result<()> {
+	let mm = init_test_mm().await?;
+	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
+	let system_admin = insert_user(
+		&mm,
+		seed.org_id,
+		ROLE_SYSTEM_ADMIN,
+		system_user_id(),
+		Some("systempwd"),
+	)
+	.await?;
+	let token = generate_web_token(&system_admin.email, system_admin.token_salt)?;
+	let request = Request::builder()
+		.method("GET")
+		.uri("/api/users/me/profile")
+		.header("cookie", cookie_header(&token.to_string()))
+		.body(Body::empty())?;
+	let response = web_server::app(mm).oneshot(request).await?;
+	assert_eq!(response.status(), StatusCode::OK);
+	let body = to_bytes(response.into_body(), usize::MAX).await?;
+	let profile: serde_json::Value = serde_json::from_slice(&body)?;
+	let privileges = profile["data"]["privileges"]
+		.as_array()
+		.ok_or("profile privileges should be an array")?;
+	assert!(privileges.iter().any(|row| {
+		row["menu_key"] == "admin"
+			&& row["can_read"] == true
+			&& row["can_edit"] == true
+	}));
+	assert!(privileges
+		.iter()
+		.all(|row| row["menu_key"] != "home_notice"));
+
+	let actions = profile["data"]["eligibleActions"]
+		.as_array()
+		.ok_or("eligible actions should be an array")?;
+	assert!(actions.iter().any(|action| action == "settings.update"));
+	assert!(actions.iter().all(|action| action != "notice.read"));
+	assert!(actions.iter().all(|action| action != "notice.update"));
+	Ok(())
+}
+
+#[serial]
+#[tokio::test]
 async fn test_system_admin_permission_profiles_require_target_organization(
 ) -> Result<()> {
 	let mm = init_test_mm().await?;

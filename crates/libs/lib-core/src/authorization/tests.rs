@@ -136,6 +136,90 @@ fn built_in_grants_are_registry_owned_and_pdf_sensitive() {
 }
 
 #[test]
+fn built_in_menu_privileges_platform_matches_effective_grants() {
+	assert_eq!(
+		built_in_menu_privileges(BuiltInIdentityKind::PlatformAdministrator),
+		vec![AdminMenuPrivilege {
+			menu_key: "admin".to_string(),
+			can_read: true,
+			can_edit: true,
+			can_review: false,
+			can_lock: false,
+		}]
+	);
+}
+
+#[test]
+fn built_in_menu_privileges_sponsor_matches_effective_grants() {
+	let expected = vec![
+		AdminMenuPrivilege {
+			menu_key: "admin".to_string(),
+			can_read: true,
+			can_edit: true,
+			can_review: false,
+			can_lock: false,
+		},
+		AdminMenuPrivilege {
+			menu_key: "case".to_string(),
+			can_read: true,
+			can_edit: true,
+			can_review: true,
+			can_lock: true,
+		},
+		AdminMenuPrivilege {
+			menu_key: "case_workflow".to_string(),
+			can_read: true,
+			can_edit: false,
+			can_review: false,
+			can_lock: false,
+		},
+		AdminMenuPrivilege {
+			menu_key: "export_submission".to_string(),
+			can_read: true,
+			can_edit: true,
+			can_review: false,
+			can_lock: false,
+		},
+		AdminMenuPrivilege {
+			menu_key: "home_notice".to_string(),
+			can_read: true,
+			can_edit: true,
+			can_review: false,
+			can_lock: false,
+		},
+		AdminMenuPrivilege {
+			menu_key: "home_workflow".to_string(),
+			can_read: true,
+			can_edit: false,
+			can_review: false,
+			can_lock: false,
+		},
+		AdminMenuPrivilege {
+			menu_key: "import".to_string(),
+			can_read: true,
+			can_edit: true,
+			can_review: false,
+			can_lock: false,
+		},
+		AdminMenuPrivilege {
+			menu_key: "info".to_string(),
+			can_read: true,
+			can_edit: true,
+			can_review: false,
+			can_lock: false,
+		},
+	];
+	assert_eq!(
+		built_in_menu_privileges(BuiltInIdentityKind::SponsorCroAdministrator),
+		expected
+	);
+	assert_eq!(
+		built_in_menu_privileges(BuiltInIdentityKind::SponsorCompanyAdministrator),
+		expected
+	);
+}
+
+#[test]
 fn reserved_grants_are_visible_but_never_assignable() {
 	let error = policy_registry()
 		.validate_assignable_grants(RoleClass::Custom, ["email.report_due.read"])
