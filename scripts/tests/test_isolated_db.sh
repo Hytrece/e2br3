@@ -18,10 +18,17 @@ write_fake_commands() {
 set -euo pipefail
 printf '%s\n' "$*" >>"$FAKE_LOG_DIR/createdb.args"
 EOF
-	cat >"$fake_bin/psql" <<'EOF'
+cat >"$fake_bin/psql" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 printf '%s\n' "$*" >>"$FAKE_LOG_DIR/psql.args"
+if [[ "${FAKE_PSQL_WAIT:-0}" -eq 1 ]]; then
+	printf '%s\n' "$$" >"$FAKE_LOG_DIR/psql.pid"
+	trap 'printf "TERM\n" >"$FAKE_LOG_DIR/psql.signal"; exit 143' TERM
+	while true; do
+		sleep 1
+	done
+fi
 exit "${FAKE_PSQL_EXIT:-0}"
 EOF
 	cat >"$fake_bin/cargo" <<'EOF'
@@ -96,14 +103,18 @@ assert_success_contract() {
 }
 
 assert_interrupt_forwards_signal_and_cleans_up() {
+	local signal_name="$1"
+	local expected_status="$2"
 	local case_dir
-	case_dir="$(new_case_dir interrupt)"
+	case_dir="$(new_case_dir "interrupt-${signal_name}")"
+	set -m
 	SERVICE_DB_URL='postgres://user:secret@db:5432/app_db?sslmode=disable' \
 		FAKE_LOG_DIR="$case_dir" \
 		FAKE_CARGO_WAIT=1 \
 		PATH="$fake_bin:$PATH" \
 		"$runner" -p lib-core >"$case_dir/stdout" 2>"$case_dir/stderr" &
 	local runner_pid=$!
+	set +m
 
 	local attempt
 	for attempt in {1..100}; do
@@ -116,7 +127,7 @@ assert_interrupt_forwards_signal_and_cleans_up() {
 	local cargo_pid
 	cargo_pid="$(cat "$case_dir/cargo.pid")"
 
-	kill -TERM "$runner_pid"
+	kill "-$signal_name" "$runner_pid"
 	local runner_finished=0
 	for attempt in {1..40}; do
 		if ! kill -0 "$runner_pid" 2>/dev/null; then
@@ -135,16 +146,67 @@ assert_interrupt_forwards_signal_and_cleans_up() {
 	set -e
 
 	if [[ "$runner_finished" -ne 1 ]]; then
-		printf 'runner did not exit after forwarding TERM to cargo\n' >&2
+		printf 'runner did not exit after forwarding %s to cargo\n' "$signal_name" >&2
 		return 1
 	fi
-	[[ "$status" -eq 143 ]]
-	grep -Fx -- 'TERM' "$case_dir/cargo.signal" >/dev/null
+	[[ "$status" -eq "$expected_status" ]]
+	grep -Fx -- "$signal_name" "$case_dir/cargo.signal" >/dev/null
 	test -s "$case_dir/dropdb.args"
 	if kill -0 "$cargo_pid" 2>/dev/null; then
 		printf 'runner left cargo process alive after TERM\n' >&2
 		return 1
 	fi
+}
+
+assert_interrupt_stops_database_initialization() {
+	local case_dir
+	case_dir="$(new_case_dir interrupt-initialization)"
+	set -m
+	SERVICE_DB_URL='postgres://user:secret@db:5432/app_db?sslmode=disable' \
+		FAKE_LOG_DIR="$case_dir" \
+		FAKE_PSQL_WAIT=1 \
+		PATH="$fake_bin:$PATH" \
+		"$runner" -p lib-core >"$case_dir/stdout" 2>"$case_dir/stderr" &
+	local runner_pid=$!
+	set +m
+
+	local attempt
+	for attempt in {1..100}; do
+		if [[ -s "$case_dir/psql.pid" ]]; then
+			break
+		fi
+		sleep 0.05
+	done
+	test -s "$case_dir/psql.pid"
+	local psql_pid
+	psql_pid="$(cat "$case_dir/psql.pid")"
+
+	kill -TERM "$runner_pid"
+	local runner_finished=0
+	for attempt in {1..40}; do
+		if ! kill -0 "$runner_pid" 2>/dev/null; then
+			runner_finished=1
+			break
+		fi
+		sleep 0.05
+	done
+
+	if [[ "$runner_finished" -eq 0 ]]; then
+		kill -TERM "$psql_pid" 2>/dev/null || true
+	fi
+	set +e
+	wait "$runner_pid"
+	local status=$?
+	set -e
+
+	if [[ "$runner_finished" -ne 1 ]]; then
+		printf 'runner did not stop active database initialization on TERM\n' >&2
+		return 1
+	fi
+	[[ "$status" -eq 143 ]]
+	grep -Fx -- 'TERM' "$case_dir/psql.signal" >/dev/null
+	test -s "$case_dir/dropdb.args"
+	test ! -e "$case_dir/cargo.args"
 }
 
 assert_test_failure_preserves_status_and_cleans_up() {
@@ -199,7 +261,9 @@ assert_repository_wiring() {
 
 write_fake_commands
 assert_success_contract
-assert_interrupt_forwards_signal_and_cleans_up
+assert_interrupt_forwards_signal_and_cleans_up TERM 143
+assert_interrupt_forwards_signal_and_cleans_up INT 130
+assert_interrupt_stops_database_initialization
 assert_test_failure_preserves_status_and_cleans_up
 assert_cleanup_failure_fails_successful_run
 assert_initialization_failure_preserves_status_and_cleans_up

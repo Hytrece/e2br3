@@ -33,11 +33,41 @@ interrupted_signal=""
 interrupted_status=0
 
 forward_signal() {
-	interrupted_signal="$1"
-	interrupted_status="$2"
-	if [[ -n "$active_child_pid" ]] && kill -0 "$active_child_pid" 2>/dev/null; then
-		kill "-$interrupted_signal" "$active_child_pid" 2>/dev/null || true
+	if [[ "$interrupted_status" -eq 0 ]]; then
+		interrupted_signal="$1"
+		interrupted_status="$2"
 	fi
+	if [[ -n "$active_child_pid" ]] && kill -0 "$active_child_pid" 2>/dev/null; then
+		kill "-$interrupted_signal" -- "-$active_child_pid" 2>/dev/null || true
+	fi
+}
+
+run_interruptible() {
+	if [[ "$interrupted_status" -ne 0 ]]; then
+		return "$interrupted_status"
+	fi
+
+	set -m
+	"$@" &
+	active_child_pid=$!
+	set +m
+
+	if [[ -n "$interrupted_signal" ]]; then
+		kill "-$interrupted_signal" -- "-$active_child_pid" 2>/dev/null || true
+	fi
+
+	set +e
+	wait "$active_child_pid"
+	local child_status=$?
+	if [[ "$interrupted_status" -ne 0 ]]; then
+		while kill -0 "$active_child_pid" 2>/dev/null; do
+			wait "$active_child_pid" 2>/dev/null
+		done
+		child_status="$interrupted_status"
+	fi
+	set -e
+	active_child_pid=""
+	return "$child_status"
 }
 
 cleanup() {
@@ -67,13 +97,14 @@ trap 'forward_signal INT 130' INT
 trap 'forward_signal TERM 143' TERM
 
 printf 'Creating isolated test database %s\n' "$database_name"
-createdb --maintenance-db="$maintenance_url" "$database_name"
+run_interruptible createdb --maintenance-db="$maintenance_url" "$database_name"
 created=1
 
 sql_list="$("$repo_root/scripts/db/list_init_sql.sh" "$repo_root/db" 1)"
 while IFS= read -r sql_file; do
 	if [[ -n "$sql_file" ]]; then
-		psql "$test_url" -v ON_ERROR_STOP=1 -f "$repo_root/db/$sql_file"
+		run_interruptible \
+			psql "$test_url" -v ON_ERROR_STOP=1 -f "$repo_root/db/$sql_file"
 	fi
 done <<<"$sql_list"
 
@@ -82,19 +113,4 @@ export SERVICE_MIGRATION_DB_URL="$test_url"
 export SKIP_DEV_INIT=1
 export E2BR3_TEST_DATABASE_NAME="$database_name"
 
-cargo test "$@" &
-active_child_pid=$!
-if [[ -n "$interrupted_signal" ]]; then
-	kill "-$interrupted_signal" "$active_child_pid" 2>/dev/null || true
-fi
-
-set +e
-wait "$active_child_pid"
-cargo_status=$?
-if [[ "$interrupted_status" -ne 0 ]]; then
-	wait "$active_child_pid" 2>/dev/null
-	cargo_status="$interrupted_status"
-fi
-set -e
-active_child_pid=""
-exit "$cargo_status"
+run_interruptible cargo test "$@"
