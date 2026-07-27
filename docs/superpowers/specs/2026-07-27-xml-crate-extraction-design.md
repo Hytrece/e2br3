@@ -18,8 +18,9 @@ including:
 - FDA, ICH, and MFDS mappings and codes;
 - DOM and round-trip patching;
 - import/export section implementations and shared utilities;
-- XML schema, document-format, and export-normalization validation that is
-  currently housed in `validator` but is not case-edit validation;
+- XML schema, basic document-format, and export-normalization validation that
+  is currently housed in `validator` but does not evaluate its case-rule
+  catalog;
 - XML fixtures and XML-focused tests.
 
 The following remain outside the new crate:
@@ -46,12 +47,12 @@ lib-rest-core──▶ xml
 lib-rest-core──▶ lib-core
 ```
 
-`lib-core` must not depend on `xml`. `validator` remains a case-edit validation
-engine that depends on `lib-core`; it may depend on `xml` only for the pure,
-database-independent export-normalization policy described below. `web-server`
-may depend directly on all three crates. `lib-rest-core` depends on `xml` to
-convert `xml::Error` into API errors and retains its existing `lib-core`
-dependency.
+`lib-core` must not depend on `xml`. `validator` remains a case-rule validation
+engine that depends on `lib-core`; it may depend on `xml` for the pure,
+database-independent XML types, basic document validation, and
+export-normalization policy described below. `web-server` may depend directly
+on all three crates. `lib-rest-core` depends on `xml` to convert `xml::Error`
+into API errors and retains its existing `lib-core` dependency.
 
 The `xml` crate is allowed to depend on `lib-core` in this phase. Import and
 export retain their existing use of `Ctx`, `ModelManager`, domain BMCs, and
@@ -137,20 +138,27 @@ Validation is divided by responsibility:
   XML normalization, and generated-document format checks.
 
 The existing `validator/src/xml` code must be classified by responsibility
-rather than moved wholesale. XML document validation moves to `xml`; any genuine
-case business rule remains in `validator`.
+rather than moved wholesale. `validate_e2b_xml`, `validate_e2b_xml_basic`, XSD
+helpers, configuration, and environment gating move to `xml`. The
+`validate_e2b_xml_business` entry point and its authority/section profiles stay
+in `validator` because they evaluate the validator rule catalog against an XML
+representation. Moving that code to `xml` would introduce an `xml -> validator`
+edge and a dependency cycle.
 
 The existing `xml::export::policy` module is pure and database-independent. The
 case-edit policies in `validator` may continue to import only this policy API
 from `xml`, including null-flavor normalization, outcome display defaults, and
 normalization specifications. This limited `validator -> xml -> lib-core`
-dependency is acyclic and preserves the current rule behavior. XML document
-types, XML errors, schema validation, and document-validation entry points do
-not remain in `validator`.
+dependency is acyclic and preserves the current rule behavior. The business XML
+validator also consumes `xml::XmlValidatorConfig`, `xml::XmlValidationError`,
+`xml::XmlValidationReport`, `xml::Result`, and the basic validation entry point.
+Schema/XSD implementation and XML error/type ownership do not remain in
+`validator`.
 
 Submission continues to require a validated case status. It uses the XML crate
-for document generation and XML-format validation, but does not invoke the
-case-edit validator as part of this extraction.
+for document generation and schema validation and preserves its existing call
+to `validator::xml::validate_e2b_xml_business`. This extraction does not change
+submission validation semantics.
 
 ## Error Handling
 
@@ -169,8 +177,9 @@ Perform the extraction as one workspace change with behavior-preserving steps:
 1. Create `crates/libs/xml` and declare `xml -> lib-core` dependencies.
 2. Move the complete XML module tree, fixtures, and focused tests.
 3. Convert internal paths from `crate::...` to the new crate boundary.
-4. Move XML document validation out of `validator`, retain case validation, and
-   update its limited export-normalization policy imports to `xml`.
+4. Move basic/schema XML validation out of `validator`, retain business XML and
+   case validation, and update their XML type, helper, and normalization-policy
+   imports to `xml`.
 5. Update `web-server`, `validator`, and `lib-rest-core` call sites and manifests.
 6. Remove `pub mod xml` and XML-only dependencies from `lib-core`.
 7. Verify the whole workspace and confirm no `lib_core::xml` references remain.
@@ -184,8 +193,9 @@ The extraction is complete when:
 
 - the entire workspace builds;
 - XML unit, integration, import/export round-trip, and web API tests pass;
-- case-edit validator tests pass with its `xml` usage limited to the public,
-  pure export-normalization policy API;
+- case-edit and business XML validator tests pass with `validator -> xml`
+  limited to public XML types, basic validation helpers, and the pure
+  export-normalization policy API;
 - `lib-core` has no XML module or XML-only dependencies;
 - no source or test imports `lib_core::xml`;
 - the Cargo dependency graph has no cycle;
