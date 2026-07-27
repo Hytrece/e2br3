@@ -1943,6 +1943,212 @@ async fn editor_rp_page_patch_persists_primary_source_row() -> Result<()> {
 
 #[serial]
 #[tokio::test]
+async fn editor_rp_qualification_and_null_flavor_switch_bidirectionally() -> Result<()> {
+	let mm = init_test_mm().await?;
+	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
+	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
+	let cookie = cookie_header(&token.to_string());
+	let app = web_server::app(mm.clone());
+	let case_id =
+		create_case_for_editor(&app, &cookie, "EDITOR-RP-NULL-CLEAR", &["ich"]).await?;
+
+	let (status, body) = patch_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/editor/pages/RP"),
+		json!({
+			"authorities": ["ich"],
+			"rows": {"primarySources": [{
+				"sequenceNumber": 1,
+				"qualificationNullFlavor": "UNK"
+			}]}
+		}),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK, "{body}");
+	let source_id = body["rows"]["primarySources"][0]["id"]
+		.as_str()
+		.ok_or("missing primary source id")?;
+
+	let (status, body) = patch_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/editor/pages/RP"),
+		json!({
+			"authorities": ["ich"],
+			"rows": {"primarySources": [{
+				"id": source_id,
+				"qualification": "2",
+				"qualificationNullFlavor": null
+			}]}
+		}),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK, "{body}");
+	let source = &body["rows"]["primarySources"][0];
+	assert_eq!(source["qualification"], "2", "{body}");
+	assert!(source["qualificationNullFlavor"].is_null(), "{body}");
+
+	mm.dbx().begin_txn().await?;
+	set_full_context_dbx(
+		mm.dbx(),
+		seed.admin.id,
+		seed.org_id,
+		ROLE_SPONSOR_ADMIN_CRO,
+	)
+	.await?;
+	let stored = mm
+		.dbx()
+		.fetch_one(
+			sqlx::query_as::<_, (Option<String>, Option<String>)>(
+				"SELECT qualification, qualification_null_flavor
+				 FROM primary_sources WHERE id = $1",
+			)
+			.bind(Uuid::parse_str(source_id)?),
+		)
+		.await?;
+	mm.dbx().commit_txn().await?;
+	assert_eq!(stored.0.as_deref(), Some("2"));
+	assert_eq!(stored.1, None);
+
+	let (status, body) = patch_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/editor/pages/RP"),
+		json!({
+			"authorities": ["ich"],
+			"rows": {"primarySources": [{
+				"id": source_id,
+				"qualification": null,
+				"qualificationNullFlavor": "UNK"
+			}]}
+		}),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK, "{body}");
+	let source = &body["rows"]["primarySources"][0];
+	assert!(source["qualification"].is_null(), "{body}");
+	assert_eq!(source["qualificationNullFlavor"], "UNK", "{body}");
+
+	mm.dbx().begin_txn().await?;
+	set_full_context_dbx(
+		mm.dbx(),
+		seed.admin.id,
+		seed.org_id,
+		ROLE_SPONSOR_ADMIN_CRO,
+	)
+	.await?;
+	let stored = mm
+		.dbx()
+		.fetch_one(
+			sqlx::query_as::<_, (Option<String>, Option<String>)>(
+				"SELECT qualification, qualification_null_flavor
+				 FROM primary_sources WHERE id = $1",
+			)
+			.bind(Uuid::parse_str(source_id)?),
+		)
+		.await?;
+	mm.dbx().commit_txn().await?;
+	assert_eq!(stored.0, None);
+	assert_eq!(stored.1.as_deref(), Some("UNK"));
+
+	Ok(())
+}
+
+#[serial]
+#[tokio::test]
+async fn database_enforces_every_value_null_flavor_pair() -> Result<()> {
+	let mm = init_test_mm().await?;
+	let pair_count: i64 = sqlx::query_scalar(
+		"SELECT count(*)
+		 FROM information_schema.columns nf
+		 WHERE nf.table_schema = 'public'
+		   AND nf.column_name LIKE '%\\_null\\_flavor' ESCAPE '\\'
+		   AND EXISTS (
+		     SELECT 1 FROM information_schema.columns value
+		     WHERE value.table_schema = nf.table_schema
+		       AND value.table_name = nf.table_name
+		       AND value.column_name = replace(nf.column_name, '_null_flavor', '')
+		   )",
+	)
+	.fetch_one(mm.dbx().db())
+	.await?;
+	let constraint_count: i64 = sqlx::query_scalar(
+		"SELECT count(*) FROM pg_constraint
+		 WHERE connamespace = 'public'::regnamespace
+		   AND contype = 'c'
+		   AND conname LIKE 'ck_nfv_%'",
+	)
+	.fetch_one(mm.dbx().db())
+	.await?;
+	assert!(pair_count > 0);
+	assert_eq!(constraint_count, pair_count);
+
+	let protected_table_count: i64 = sqlx::query_scalar(
+		"SELECT count(DISTINCT nf.table_name)
+		 FROM information_schema.columns nf
+		 WHERE nf.table_schema = 'public'
+		   AND nf.column_name LIKE '%\\_null\\_flavor' ESCAPE '\\'
+		   AND EXISTS (
+		     SELECT 1 FROM information_schema.columns value
+		     WHERE value.table_schema = nf.table_schema
+		       AND value.table_name = nf.table_name
+		       AND value.column_name = replace(nf.column_name, '_null_flavor', '')
+		   )",
+	)
+	.fetch_one(mm.dbx().db())
+	.await?;
+	let trigger_count: i64 = sqlx::query_scalar(
+		"SELECT count(*) FROM pg_trigger
+		 WHERE NOT tgisinternal AND tgname LIKE 'trg_nfv_%'",
+	)
+	.fetch_one(mm.dbx().db())
+	.await?;
+	assert_eq!(trigger_count, protected_table_count);
+
+	Ok(())
+}
+
+#[serial]
+#[tokio::test]
+async fn database_rejects_simultaneous_concrete_value_and_null_flavor() -> Result<()> {
+	let mm = init_test_mm().await?;
+	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
+	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
+	let cookie = cookie_header(&token.to_string());
+	let app = web_server::app(mm);
+	let case_id =
+		create_case_for_editor(&app, &cookie, "EDITOR-RP-NFV-CONFLICT", &["ich"])
+			.await?;
+
+	let (status, body) = patch_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/editor/pages/RP"),
+		json!({
+			"authorities": ["ich"],
+			"rows": {"primarySources": [{
+				"sequenceNumber": 1,
+				"qualification": "2",
+				"qualificationNullFlavor": "UNK"
+			}]}
+		}),
+	)
+	.await?;
+
+	assert_eq!(status, StatusCode::BAD_REQUEST, "{body}");
+	assert_eq!(body["error"]["message"], "SERVICE_ERROR", "{body}");
+	assert_eq!(
+		body["error"]["data"]["detail"],
+		"Invalid value: one or more fields failed a server-side constraint.",
+		"{body}"
+	);
+
+	Ok(())
+}
+
+#[serial]
+#[tokio::test]
 async fn editor_rp_rows_accept_frontend_canonical_fields() -> Result<()> {
 	let mm = init_test_mm().await?;
 	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
