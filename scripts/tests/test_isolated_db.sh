@@ -13,10 +13,16 @@ cleanup_test_root() {
 trap cleanup_test_root EXIT
 
 write_fake_commands() {
-	cat >"$fake_bin/createdb" <<'EOF'
+cat >"$fake_bin/createdb" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 printf '%s\n' "$*" >>"$FAKE_LOG_DIR/createdb.args"
+if [[ "${FAKE_CREATEDB_WAIT:-0}" -eq 1 ]]; then
+	printf '%s\n' "$$" >"$FAKE_LOG_DIR/createdb.pid"
+	trap 'printf "TERM\n" >"$FAKE_LOG_DIR/createdb.signal"; exit 143' TERM
+	sleep 1
+	printf 'completed\n' >"$FAKE_LOG_DIR/createdb.completed"
+fi
 EOF
 cat >"$fake_bin/psql" <<'EOF'
 #!/usr/bin/env bash
@@ -209,6 +215,44 @@ assert_interrupt_stops_database_initialization() {
 	test ! -e "$case_dir/cargo.args"
 }
 
+assert_interrupt_waits_for_database_creation_then_cleans_up() {
+	local case_dir
+	case_dir="$(new_case_dir interrupt-creation)"
+	set -m
+	SERVICE_DB_URL='postgres://user:secret@db:5432/app_db?sslmode=disable' \
+		FAKE_LOG_DIR="$case_dir" \
+		FAKE_CREATEDB_WAIT=1 \
+		PATH="$fake_bin:$PATH" \
+		"$runner" -p lib-core >"$case_dir/stdout" 2>"$case_dir/stderr" &
+	local runner_pid=$!
+	set +m
+
+	local attempt
+	for attempt in {1..100}; do
+		if [[ -s "$case_dir/createdb.pid" ]]; then
+			break
+		fi
+		sleep 0.05
+	done
+	test -s "$case_dir/createdb.pid"
+
+	kill -TERM "$runner_pid"
+	set +e
+	wait "$runner_pid"
+	local status=$?
+	set -e
+
+	[[ "$status" -eq 143 ]]
+	if [[ ! -s "$case_dir/createdb.completed" ]]; then
+		printf 'runner terminated createdb before ownership was known\n' >&2
+		return 1
+	fi
+	test ! -e "$case_dir/createdb.signal"
+	test -s "$case_dir/dropdb.args"
+	test ! -e "$case_dir/psql.args"
+	test ! -e "$case_dir/cargo.args"
+}
+
 assert_test_failure_preserves_status_and_cleans_up() {
 	local case_dir
 	case_dir="$(new_case_dir cargo-failure)"
@@ -263,6 +307,7 @@ write_fake_commands
 assert_success_contract
 assert_interrupt_forwards_signal_and_cleans_up TERM 143
 assert_interrupt_forwards_signal_and_cleans_up INT 130
+assert_interrupt_waits_for_database_creation_then_cleans_up
 assert_interrupt_stops_database_initialization
 assert_test_failure_preserves_status_and_cleans_up
 assert_cleanup_failure_fails_successful_run
