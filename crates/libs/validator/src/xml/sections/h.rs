@@ -1,5 +1,5 @@
-use lib_core::xml::types::XmlValidationError;
 use libxml::xpath::Context;
+use xml::XmlValidationError;
 
 fn drain_section_errors(
 	collected: Vec<XmlValidationError>,

@@ -1,5 +1,5 @@
-use lib_core::xml::types::XmlValidationError;
 use libxml::xpath::Context;
+use xml::XmlValidationError;
 
 pub(crate) const FDA_N_FACT_BATCH_RECEIVER_XPATH: &str =
 	"/hl7:MCCI_IN200100UV01/hl7:receiver/hl7:device/hl7:id/@extension";

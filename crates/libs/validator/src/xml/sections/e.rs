@@ -2,8 +2,8 @@ use crate::{
 	AttrNullFlavorPairRuleSpec, AttrOrNullFlavorRequiredRuleSpec,
 	TextNullFlavorPairRuleSpec, ValueNodeRuleSpec,
 };
-use lib_core::xml::types::XmlValidationError;
 use libxml::xpath::Context;
+use xml::XmlValidationError;
 
 pub(crate) const ICH_E_PROFILE_TEXT_NULL_FLAVOR_RULES:
 	&[TextNullFlavorPairRuleSpec] = &[];

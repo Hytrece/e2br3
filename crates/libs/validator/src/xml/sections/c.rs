@@ -2,8 +2,8 @@ use crate::{
 	AttrNullFlavorPairRuleSpec, AttrOrNullFlavorRequiredRuleSpec,
 	AttrPrefixRuleSpec, TextNullFlavorPairRuleSpec, ValueNodeRuleSpec,
 };
-use lib_core::xml::types::XmlValidationError;
 use libxml::xpath::Context;
+use xml::XmlValidationError;
 
 pub(crate) const ICH_C_IDENTITY_ATTR_PREFIX_RULES: &[AttrPrefixRuleSpec] =
 	&[AttrPrefixRuleSpec {

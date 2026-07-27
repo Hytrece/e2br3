@@ -4089,7 +4089,6 @@ dependencies = [
  "libxml",
  "modql",
  "octofhir-ucum",
- "quick-xml 0.31.0",
  "serde",
  "serde_json",
  "serial_test",
@@ -4097,6 +4096,7 @@ dependencies = [
  "time",
  "tokio",
  "uuid",
+ "xml",
 ]
 
 [[package]]

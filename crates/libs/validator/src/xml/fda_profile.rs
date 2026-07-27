@@ -4,8 +4,8 @@ use crate::{
 	is_fda_pre_anda_message_receiver, is_fda_premarket_batch_receiver,
 	is_fda_premarket_message_receiver, RuleFacts,
 };
-use lib_core::xml::types::XmlValidationError;
 use libxml::xpath::Context;
+use xml::XmlValidationError;
 
 use super::{
 	validate_condition_rule_violation, validate_presence_rule,

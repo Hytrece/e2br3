@@ -2,8 +2,8 @@ use crate::{
 	RequiredAttrsRuleSpec, SupportedXsiTypesRuleSpec,
 	TypedChildrenAttrsOrNullFlavorRuleSpec,
 };
-use lib_core::xml::types::XmlValidationError;
 use libxml::xpath::Context;
+use xml::XmlValidationError;
 
 pub(crate) const ICH_F_STRUCTURAL_REQUIRED_ATTRS_RULES: &[RequiredAttrsRuleSpec] = &[
 	RequiredAttrsRuleSpec {

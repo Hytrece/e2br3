@@ -14,10 +14,10 @@ use crate::{
 	ICH_STRUCTURAL_REQUIRED_CHILD_RULES, ICH_STRUCTURAL_WHEN_ATTR_EQUALS_RULES,
 	ICH_STRUCTURAL_WHEN_CHILD_PRESENT_RULES,
 };
-use lib_core::xml::export::policy::export_normalization_spec_for_rule;
-use lib_core::xml::types::XmlValidationError;
 use libxml::tree::Node;
 use libxml::xpath::Context;
+use xml::export::policy::export_normalization_spec_for_rule;
+use xml::XmlValidationError;
 
 use super::{
 	push_rule_error, validate_attr_null_flavor_pair_on_nodes,

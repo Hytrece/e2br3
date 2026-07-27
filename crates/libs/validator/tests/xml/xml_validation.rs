@@ -2,10 +2,8 @@ use std::error::Error;
 use std::fs;
 use std::path::{Path, PathBuf};
 use validator::find_canonical_rule;
-use validator::xml::{
-	default_xsd_path, validate_e2b_xml, validate_e2b_xml_business,
-	XmlValidatorConfig,
-};
+use validator::xml::validate_e2b_xml_business;
+use xml::validation::{default_xsd_path, validate_e2b_xml, XmlValidatorConfig};
 
 fn workspace_root() -> PathBuf {
 	PathBuf::from(env!("CARGO_MANIFEST_DIR"))

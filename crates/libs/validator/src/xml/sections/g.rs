@@ -3,8 +3,8 @@ use crate::{
 	AttrOrTextOrNullRequiredRuleSpec, CodeOrCodeSystemOrTextOrNullRequiredRuleSpec,
 	TextNullFlavorPairRuleSpec,
 };
-use lib_core::xml::types::XmlValidationError;
 use libxml::xpath::Context;
+use xml::XmlValidationError;
 
 pub(crate) const ICH_G_IDENTITY_TEXT_NULL_FLAVOR_RULES:
 	&[TextNullFlavorPairRuleSpec] = &[];

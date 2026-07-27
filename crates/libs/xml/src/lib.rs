@@ -14,6 +14,7 @@ pub mod raw;
 pub mod error;
 pub mod parser;
 pub mod types;
+pub mod validation;
 
 pub use error::Error;
 pub type Result<T> = core::result::Result<T, Error>;
@@ -29,3 +30,7 @@ pub use import_runtime::c::{
 pub use parser::parse_e2b_xml;
 pub use types::ParsedE2b;
 pub use types::{XmlImportResult, XmlValidationError, XmlValidationReport};
+pub use validation::{
+	default_xsd_path, should_skip_xml_validation, validate_e2b_xml,
+	validate_e2b_xml_basic, XmlValidatorConfig,
+};

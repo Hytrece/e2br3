@@ -6,8 +6,8 @@ pub(crate) mod g;
 pub(crate) mod h;
 pub(crate) mod n;
 
-use lib_core::xml::types::XmlValidationError;
 use libxml::xpath::Context;
+use xml::XmlValidationError;
 
 pub(crate) fn error_owned_by_section_letter(
 	error: &XmlValidationError,
