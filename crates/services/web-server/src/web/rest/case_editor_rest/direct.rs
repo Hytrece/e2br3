@@ -1016,13 +1016,30 @@ async fn patch_direct_page_projection_authorized(
 	mm: &ModelManager,
 	case_id: Uuid,
 	page_id: &'static str,
-	request: CaseEditorPagePatchRequest,
+	mut request: CaseEditorPagePatchRequest,
 ) -> Result<(
 	axum::http::StatusCode,
 	Json<CaseEditorPageProjectionResponse>,
 )> {
 	let requested_authorities =
 		validate_request_projection_context(request.authorities.as_deref())?;
+	if page_id == "SI"
+		&& !request
+			.authorities
+			.as_deref()
+			.unwrap_or_default()
+			.iter()
+			.any(|authority| authority.eq_ignore_ascii_case("mfds"))
+	{
+		if let Some(study) = request
+			.rows
+			.get_mut("studyInformation")
+			.and_then(Value::as_object_mut)
+		{
+			study.remove("studyTypeReactionKr1");
+			study.remove("study_type_reaction_kr1");
+		}
+	}
 	validate_direct_changes(page_id, &request.changes)?;
 	validate_direct_rows(page_id, &request.rows)?;
 

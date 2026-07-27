@@ -3024,10 +3024,7 @@ async fn editor_si_page_patch_round_trips_every_contract_field() -> Result<()> {
 		"SP-2026-001"
 	);
 	assert_eq!(body["rows"]["studyInformation"]["study_type_reaction"], "2");
-	assert_eq!(
-		body["rows"]["studyInformation"]["study_type_reaction_kr1"],
-		"1"
-	);
+	assert!(body["rows"]["studyInformation"]["study_type_reaction_kr1"].is_null());
 	assert_eq!(
 		body["rows"]["studyInformation"]["fda_ind_number_occurred"],
 		"123456"
