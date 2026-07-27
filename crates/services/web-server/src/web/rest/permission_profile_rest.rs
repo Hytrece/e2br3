@@ -168,14 +168,17 @@ fn normalize_admin_privileges(
 	})
 }
 
-fn built_in_role_row(role_id: &str) -> PermissionProfileRow {
+fn built_in_role_row(
+	role_id: &str,
+	kind: BuiltInIdentityKind,
+) -> PermissionProfileRow {
 	let metadata = built_in_role_metadata(role_id)
 		.expect("built-in role row requires canonical metadata");
 	build_role_row(
 		metadata.role_id.to_string(),
 		metadata.display_name.to_string(),
 		Some(metadata.description.to_string()),
-		built_in_menu_privileges(metadata.role_id),
+		built_in_menu_privileges(kind),
 		true,
 		true,
 		false,
@@ -188,15 +191,30 @@ async fn visible_built_in_roles(
 ) -> Result<Vec<PermissionProfileRow>> {
 	let roles = match identity {
 		Some(BuiltInIdentityKind::PlatformAdministrator) => vec![
-			built_in_role_row(ROLE_SYSTEM_ADMIN),
-			built_in_role_row(ROLE_SPONSOR_ADMIN_CRO),
-			built_in_role_row(ROLE_SPONSOR_ADMIN_COMPANY),
+			built_in_role_row(
+				ROLE_SYSTEM_ADMIN,
+				BuiltInIdentityKind::PlatformAdministrator,
+			),
+			built_in_role_row(
+				ROLE_SPONSOR_ADMIN_CRO,
+				BuiltInIdentityKind::SponsorCroAdministrator,
+			),
+			built_in_role_row(
+				ROLE_SPONSOR_ADMIN_COMPANY,
+				BuiltInIdentityKind::SponsorCompanyAdministrator,
+			),
 		],
 		Some(BuiltInIdentityKind::SponsorCroAdministrator) => {
-			vec![built_in_role_row(ROLE_SPONSOR_ADMIN_CRO)]
+			vec![built_in_role_row(
+				ROLE_SPONSOR_ADMIN_CRO,
+				BuiltInIdentityKind::SponsorCroAdministrator,
+			)]
 		}
 		Some(BuiltInIdentityKind::SponsorCompanyAdministrator) => {
-			vec![built_in_role_row(ROLE_SPONSOR_ADMIN_COMPANY)]
+			vec![built_in_role_row(
+				ROLE_SPONSOR_ADMIN_COMPANY,
+				BuiltInIdentityKind::SponsorCompanyAdministrator,
+			)]
 		}
 		_ => Vec::new(),
 	};

@@ -1,4 +1,6 @@
-use super::{policy_registry, Availability, GrantId, GrantUiField};
+use super::{
+	policy_registry, Availability, BuiltInIdentityKind, GrantId, GrantUiField,
+};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -35,21 +37,24 @@ fn set_enabled(privilege: &mut AdminMenuPrivilege, field: GrantUiField) {
 	}
 }
 
-pub fn built_in_menu_privileges(role: &str) -> Vec<AdminMenuPrivilege> {
-	let normalized_role = crate::ctx::canonical_role(role);
-	let allowed_menus: Option<&[&str]> = match normalized_role.as_str() {
-		crate::ctx::ROLE_SYSTEM_ADMIN => Some(&["home_notice", "admin"]),
-		crate::ctx::ROLE_SPONSOR_ADMIN_CRO
-		| crate::ctx::ROLE_SPONSOR_ADMIN_COMPANY => None,
-		_ => return Vec::new(),
+pub fn built_in_menu_privileges(
+	kind: BuiltInIdentityKind,
+) -> Vec<AdminMenuPrivilege> {
+	let registry = policy_registry();
+	let Some(identity) = registry.built_in_identity(kind) else {
+		return Vec::new();
 	};
+	let effective_grants = registry
+		.effective_grants(identity.grants.iter().map(|grant| grant.as_str()))
+		.expect("canonical built-in identity grants must be valid");
 	let mut privileges = BTreeMap::new();
-	for grant in policy_registry().grants().filter(|grant| {
-		grant.availability == Availability::Implemented
-			&& allowed_menus.is_none_or(|menus| {
-				menus.contains(&grant.ui_binding.menu_key.as_str())
-			})
-	}) {
+	for grant_id in effective_grants {
+		let grant = registry
+			.grant(grant_id.as_str())
+			.expect("effective grant must exist in the policy registry");
+		if grant.availability != Availability::Implemented {
+			continue;
+		}
 		let privilege = privileges
 			.entry(grant.ui_binding.menu_key.clone())
 			.or_insert_with(|| empty_privilege(grant.ui_binding.menu_key.clone()));

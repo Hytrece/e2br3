@@ -449,7 +449,9 @@ pub async fn get_current_user_profile(
 	let organization_selection =
 		current_user_organization_selection_view(&ctx, &mm).await?;
 	let routing = routing_profile_for_user(&ctx, &mm).await?;
-	let privileges = current_user_menu_privileges(&ctx, &mm).await?;
+	let privileges =
+		current_user_menu_privileges(&ctx, snapshot.identity().built_in_kind(), &mm)
+			.await?;
 	let eligible_actions = lib_core::authorization::eligible_action_ids(&snapshot);
 	let policy_version = snapshot.version().organization_revision();
 	Ok((
@@ -471,11 +473,11 @@ pub async fn get_current_user_profile(
 
 async fn current_user_menu_privileges(
 	ctx: &Ctx,
+	built_in_kind: Option<BuiltInIdentityKind>,
 	mm: &ModelManager,
 ) -> Result<Vec<AdminMenuPrivilege>> {
-	let built_in = built_in_menu_privileges(ctx.role());
-	if !built_in.is_empty() {
-		return Ok(built_in);
+	if let Some(kind) = built_in_kind {
+		return Ok(built_in_menu_privileges(kind));
 	}
 	let Ok(profile_id) = Uuid::parse_str(ctx.role()) else {
 		return Ok(Vec::new());
