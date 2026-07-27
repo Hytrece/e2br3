@@ -55,7 +55,7 @@ grep -F -- "$database_name" "$fake_log_dir/dropdb.args"
 ! grep -F -- 'user:secret' "$stdout_file" "$stderr_file"
 ```
 
-Run a second scenario with `FAKE_CARGO_EXIT=23`; assert the runner exits `23` and `dropdb` still runs. Run a third scenario with successful Cargo and `FAKE_DROPDB_EXIT=9`; assert the runner returns nonzero.
+Run a second scenario with `FAKE_CARGO_EXIT=23`; assert the runner exits `23` and `dropdb` still runs. Run a third scenario with `FAKE_PSQL_EXIT=31`; assert initialization exits `31` and still cleans up. Run a fourth scenario with successful Cargo and `FAKE_DROPDB_EXIT=9`; assert the runner returns nonzero.
 
 - [ ] **Step 2: Run the contract test and verify RED**
 
@@ -219,7 +219,7 @@ Expected: record the exact output; do not delete databases not created by this t
 Run:
 
 ```bash
-scripts/test-isolated-db.sh -p lib-core --test rbac_grant_profiles
+SERVICE_DB_URL="$maintenance_url" scripts/test-isolated-db.sh -p lib-core --test rbac_grant_profiles
 ```
 
 Expected: 5 tests pass and the runner reports cleanup of its generated database.
@@ -235,9 +235,9 @@ Expected: output exactly equals the recorded pre-run set.
 Run each command in its own background job and wait for both:
 
 ```bash
-scripts/test-isolated-db.sh -p lib-core --test rbac_grant_profiles > /tmp/e2br3-isolated-a.log 2>&1 &
+SERVICE_DB_URL="$maintenance_url" scripts/test-isolated-db.sh -p lib-core --test rbac_grant_profiles > /tmp/e2br3-isolated-a.log 2>&1 &
 pid_a=$!
-scripts/test-isolated-db.sh -p lib-core --test authorization_contract_snapshot > /tmp/e2br3-isolated-b.log 2>&1 &
+SERVICE_DB_URL="$maintenance_url" scripts/test-isolated-db.sh -p lib-core --test authorization_contract_snapshot > /tmp/e2br3-isolated-b.log 2>&1 &
 pid_b=$!
 wait "$pid_a"
 wait "$pid_b"
@@ -286,7 +286,8 @@ Run:
 
 ```bash
 bash scripts/tests/test_isolated_db.sh
-scripts/test-isolated-db.sh -p lib-core --test rbac_grant_profiles
+maintenance_url="${SERVICE_DB_URL:-$(sed -n 's/^SERVICE_DB_URL="\(.*\)"/\1/p' .cargo/config.toml)}"
+SERVICE_DB_URL="$maintenance_url" scripts/test-isolated-db.sh -p lib-core --test rbac_grant_profiles
 cargo fmt --all -- --check
 git diff --check origin/dev...HEAD
 ```

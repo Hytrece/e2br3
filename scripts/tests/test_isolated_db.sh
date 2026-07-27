@@ -22,6 +22,7 @@ EOF
 #!/usr/bin/env bash
 set -euo pipefail
 printf '%s\n' "$*" >>"$FAKE_LOG_DIR/psql.args"
+exit "${FAKE_PSQL_EXIT:-0}"
 EOF
 	cat >"$fake_bin/cargo" <<'EOF'
 #!/usr/bin/env bash
@@ -108,6 +109,21 @@ assert_cleanup_failure_fails_successful_run() {
 	test -s "$case_dir/dropdb.args"
 }
 
+assert_initialization_failure_preserves_status_and_cleans_up() {
+	local case_dir
+	case_dir="$(new_case_dir psql-failure)"
+	set +e
+	SERVICE_DB_URL='postgres://user:secret@db:5432/app_db?sslmode=disable' \
+		FAKE_LOG_DIR="$case_dir" \
+		FAKE_PSQL_EXIT=31 \
+		PATH="$fake_bin:$PATH" \
+		"$runner" -p lib-core >"$case_dir/stdout" 2>"$case_dir/stderr"
+	local status=$?
+	set -e
+	[[ "$status" -eq 31 ]]
+	test -s "$case_dir/dropdb.args"
+}
+
 assert_repository_wiring() {
 	[[ "$(grep -c 'scripts/test-isolated-db.sh' \
 		"$repo_root/.github/workflows/ci.yml")" -eq 2 ]]
@@ -117,5 +133,6 @@ write_fake_commands
 assert_success_contract
 assert_test_failure_preserves_status_and_cleans_up
 assert_cleanup_failure_fails_successful_run
+assert_initialization_failure_preserves_status_and_cleans_up
 assert_repository_wiring
 printf 'isolated database runner contract: PASS\n'
