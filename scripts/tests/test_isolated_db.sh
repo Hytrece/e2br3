@@ -34,6 +34,14 @@ printf '%s\n' "$*" >"$FAKE_LOG_DIR/cargo.args"
 	printf 'SKIP_DEV_INIT=%s\n' "$SKIP_DEV_INIT"
 	printf 'E2BR3_TEST_DATABASE_NAME=%s\n' "$E2BR3_TEST_DATABASE_NAME"
 } >"$FAKE_LOG_DIR/cargo.env"
+if [[ "${FAKE_CARGO_WAIT:-0}" -eq 1 ]]; then
+	printf '%s\n' "$$" >"$FAKE_LOG_DIR/cargo.pid"
+	trap 'printf "INT\n" >"$FAKE_LOG_DIR/cargo.signal"; exit 130' INT
+	trap 'printf "TERM\n" >"$FAKE_LOG_DIR/cargo.signal"; exit 143' TERM
+	while true; do
+		sleep 1
+	done
+fi
 exit "${FAKE_CARGO_EXIT:-0}"
 EOF
 	cat >"$fake_bin/dropdb" <<'EOF'
@@ -73,8 +81,68 @@ assert_success_contract() {
 	grep -Fx -- 'SKIP_DEV_INIT=1' "$case_dir/cargo.env" >/dev/null
 	grep -F -- "$database_name" "$case_dir/createdb.args" >/dev/null
 	grep -F -- "$database_name" "$case_dir/dropdb.args" >/dev/null
+
+	local expected_psql_args="$case_dir/psql.expected"
+	while IFS= read -r sql_file; do
+		printf '%s -v ON_ERROR_STOP=1 -f %s/db/%s\n' \
+			"$test_url" "$repo_root" "$sql_file" >>"$expected_psql_args"
+	done < <("$repo_root/scripts/db/list_init_sql.sh" "$repo_root/db" 1)
+	diff -u "$expected_psql_args" "$case_dir/psql.args"
+
 	if grep -F -- 'user:secret' "$case_dir/stdout" "$case_dir/stderr" >/dev/null; then
 		printf 'runner leaked database credentials\n' >&2
+		return 1
+	fi
+}
+
+assert_interrupt_forwards_signal_and_cleans_up() {
+	local case_dir
+	case_dir="$(new_case_dir interrupt)"
+	SERVICE_DB_URL='postgres://user:secret@db:5432/app_db?sslmode=disable' \
+		FAKE_LOG_DIR="$case_dir" \
+		FAKE_CARGO_WAIT=1 \
+		PATH="$fake_bin:$PATH" \
+		"$runner" -p lib-core >"$case_dir/stdout" 2>"$case_dir/stderr" &
+	local runner_pid=$!
+
+	local attempt
+	for attempt in {1..100}; do
+		if [[ -s "$case_dir/cargo.pid" ]]; then
+			break
+		fi
+		sleep 0.05
+	done
+	test -s "$case_dir/cargo.pid"
+	local cargo_pid
+	cargo_pid="$(cat "$case_dir/cargo.pid")"
+
+	kill -TERM "$runner_pid"
+	local runner_finished=0
+	for attempt in {1..40}; do
+		if ! kill -0 "$runner_pid" 2>/dev/null; then
+			runner_finished=1
+			break
+		fi
+		sleep 0.05
+	done
+
+	if [[ "$runner_finished" -eq 0 ]]; then
+		kill -TERM "$cargo_pid" 2>/dev/null || true
+	fi
+	set +e
+	wait "$runner_pid"
+	local status=$?
+	set -e
+
+	if [[ "$runner_finished" -ne 1 ]]; then
+		printf 'runner did not exit after forwarding TERM to cargo\n' >&2
+		return 1
+	fi
+	[[ "$status" -eq 143 ]]
+	grep -Fx -- 'TERM' "$case_dir/cargo.signal" >/dev/null
+	test -s "$case_dir/dropdb.args"
+	if kill -0 "$cargo_pid" 2>/dev/null; then
+		printf 'runner left cargo process alive after TERM\n' >&2
 		return 1
 	fi
 }
@@ -131,6 +199,7 @@ assert_repository_wiring() {
 
 write_fake_commands
 assert_success_contract
+assert_interrupt_forwards_signal_and_cleans_up
 assert_test_failure_preserves_status_and_cleans_up
 assert_cleanup_failure_fails_successful_run
 assert_initialization_failure_preserves_status_and_cleans_up

@@ -28,16 +28,34 @@ if [[ "$maintenance_url" == *\?* ]]; then
 fi
 test_url="${url_without_query%/*}/${database_name}${query_suffix}"
 created=0
+active_child_pid=""
+interrupted_signal=""
+interrupted_status=0
+
+forward_signal() {
+	interrupted_signal="$1"
+	interrupted_status="$2"
+	if [[ -n "$active_child_pid" ]] && kill -0 "$active_child_pid" 2>/dev/null; then
+		kill "-$interrupted_signal" "$active_child_pid" 2>/dev/null || true
+	fi
+}
 
 cleanup() {
 	local status=$?
 	trap - EXIT INT TERM
 	if [[ "$created" -eq 1 ]]; then
-		printf 'Dropping isolated test database %s\n' "$database_name"
-		if ! dropdb --maintenance-db="$maintenance_url" --force "$database_name"; then
-			printf 'failed to drop isolated test database %s\n' "$database_name" >&2
+		if [[ ! "$database_name" =~ ^e2br3_test_[a-z0-9_]+$ ]]; then
+			printf 'refusing unsafe test database cleanup\n' >&2
 			if [[ "$status" -eq 0 ]]; then
 				status=1
+			fi
+		else
+			printf 'Dropping isolated test database %s\n' "$database_name"
+			if ! dropdb --maintenance-db="$maintenance_url" --force "$database_name"; then
+				printf 'failed to drop isolated test database %s\n' "$database_name" >&2
+				if [[ "$status" -eq 0 ]]; then
+					status=1
+				fi
 			fi
 		fi
 	fi
@@ -45,8 +63,8 @@ cleanup() {
 }
 
 trap cleanup EXIT
-trap 'exit 130' INT
-trap 'exit 143' TERM
+trap 'forward_signal INT 130' INT
+trap 'forward_signal TERM 143' TERM
 
 printf 'Creating isolated test database %s\n' "$database_name"
 createdb --maintenance-db="$maintenance_url" "$database_name"
@@ -64,4 +82,19 @@ export SERVICE_MIGRATION_DB_URL="$test_url"
 export SKIP_DEV_INIT=1
 export E2BR3_TEST_DATABASE_NAME="$database_name"
 
-cargo test "$@"
+cargo test "$@" &
+active_child_pid=$!
+if [[ -n "$interrupted_signal" ]]; then
+	kill "-$interrupted_signal" "$active_child_pid" 2>/dev/null || true
+fi
+
+set +e
+wait "$active_child_pid"
+cargo_status=$?
+if [[ "$interrupted_status" -ne 0 ]]; then
+	wait "$active_child_pid" 2>/dev/null
+	cargo_status="$interrupted_status"
+fi
+set -e
+active_child_pid=""
+exit "$cargo_status"
