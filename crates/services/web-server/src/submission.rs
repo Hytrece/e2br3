@@ -7,7 +7,6 @@ use lib_core::model::store::{
 use lib_core::model::Error as ModelError;
 use lib_core::model::ModelManager;
 use lib_core::regulatory::RegulatoryAuthority;
-use lib_core::xml::export_case_xml;
 use lib_rest_core::{Error, Result};
 use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION};
 use serde::{Deserialize, Serialize};
@@ -21,9 +20,9 @@ use tokio::runtime::Handle;
 use tokio::task;
 use tokio::time::sleep;
 use uuid::Uuid;
-use validator::xml::{
-	should_skip_xml_validation, validate_e2b_xml, validate_e2b_xml_business,
-};
+use validator::xml::validate_e2b_xml_business;
+use xml::export_case_xml;
+use xml::validation::{should_skip_xml_validation, validate_e2b_xml};
 
 const SYSTEM_REASON_ACK_CALLBACK: &str =
 	"system submission: gateway ack callback processing";

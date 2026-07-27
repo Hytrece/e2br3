@@ -25,7 +25,7 @@ pub enum Error {
 	#[from]
 	Model(lib_core::model::Error),
 	#[from]
-	Xml(lib_core::xml::Error),
+	Xml(xml::Error),
 
 	// -- Authorization
 	AccessDenied {

@@ -1714,6 +1714,7 @@ dependencies = [
  "sqlx",
  "tokio",
  "uuid",
+ "xml",
 ]
 
 [[package]]
@@ -4249,6 +4250,7 @@ dependencies = [
  "utoipa",
  "uuid",
  "validator",
+ "xml",
  "zip",
 ]
 
