@@ -298,78 +298,6 @@ pub async fn get_editor_ci_page_projection(
 	.await
 }
 
-fn patch_string_value(
-	field_name: &str,
-	patch: &CaseEditorFieldPatch,
-) -> Result<PatchValue<String>> {
-	let Some(value) = patch.value.as_ref() else {
-		return Ok(PatchValue::Missing);
-	};
-	if value.is_null() {
-		return Ok(PatchValue::Null);
-	}
-	let Some(value) = value.as_str() else {
-		return Err(Error::BadRequest {
-			message: format!("{field_name} must be a string or null"),
-		});
-	};
-	Ok(PatchValue::Value(value.trim().to_string()))
-}
-
-fn patch_bool_value(
-	field_name: &str,
-	patch: &CaseEditorFieldPatch,
-) -> Result<PatchValue<bool>> {
-	let Some(value) = patch.value.as_ref() else {
-		return Ok(PatchValue::Missing);
-	};
-	if value.is_null() {
-		return Ok(PatchValue::Null);
-	}
-	let Some(value) = value.as_bool() else {
-		return Err(Error::BadRequest {
-			message: format!("{field_name} must be a boolean or null"),
-		});
-	};
-	Ok(PatchValue::Value(value))
-}
-
-fn patch_optional_string_value(
-	field_name: &str,
-	patch: &CaseEditorFieldPatch,
-) -> Result<Option<String>> {
-	let Some(value) = patch.value.as_ref() else {
-		return Ok(None);
-	};
-	if value.is_null() {
-		return Ok(None);
-	}
-	let Some(value) = value.as_str() else {
-		return Err(Error::BadRequest {
-			message: format!("{field_name} must be a string or null"),
-		});
-	};
-	Ok(Some(value.trim().to_string()))
-}
-
-fn patch_optional_bool_value(
-	field_name: &str,
-	patch: &CaseEditorFieldPatch,
-) -> Result<Option<bool>> {
-	let Some(value) = patch.value.as_ref() else {
-		return Ok(None);
-	};
-	if value.is_null() {
-		return Ok(None);
-	}
-	let Some(value) = value.as_bool() else {
-		return Err(Error::BadRequest {
-			message: format!("{field_name} must be a boolean or null"),
-		});
-	};
-	Ok(Some(value))
-}
-
 #[derive(Deserialize)]
 struct CiDatePatchValue {
 	#[serde(
@@ -377,18 +305,6 @@ struct CiDatePatchValue {
 		deserialize_with = "lib_core::serde::flex_date::deserialize_option_date"
 	)]
 	value: Option<sqlx::types::time::Date>,
-}
-
-fn patch_date_value(
-	field_name: &str,
-	patch: &CaseEditorFieldPatch,
-) -> Result<Option<sqlx::types::time::Date>> {
-	let value = patch.value.clone().unwrap_or(Value::Null);
-	serde_json::from_value::<CiDatePatchValue>(json!({ "value": value }))
-		.map(|value| value.value)
-		.map_err(|err| Error::BadRequest {
-			message: format!("{field_name} must be an E2B date or null: {err}"),
-		})
 }
 
 #[derive(Deserialize, Default)]
@@ -475,11 +391,9 @@ async fn apply_ci_rows_patch(
 	case_id: Uuid,
 	rows: &BTreeMap<String, Value>,
 ) -> Result<()> {
-	if rows.contains_key("messageHeader")
-		|| rows.contains_key("safetyReportIdentification")
-	{
+	if rows.contains_key("messageHeader") {
 		return Err(Error::BadRequest {
-			message: "CI.messageHeader and CI.safetyReportIdentification row patches are not supported; use changes".to_string(),
+			message: "CI.messageHeader row patches are not supported".to_string(),
 		});
 	}
 	reject_unknown_row_keys(
@@ -501,6 +415,114 @@ async fn apply_ci_rows_patch(
 		.map(|(key, value)| (key.clone(), value.clone()))
 		.collect::<Map<String, Value>>();
 	validate_row_payload("CI", "CI", &portable_row, None)?;
+
+	if let Some(row) = optional_row_object("CI", rows, "safetyReportIdentification")?
+	{
+		fn patch_string(
+			row: &Map<String, Value>,
+			key: &str,
+		) -> Result<PatchValue<String>> {
+			match row.get(key) {
+				None => Ok(PatchValue::Missing),
+				Some(Value::Null) => Ok(PatchValue::Null),
+				Some(Value::String(value)) => Ok(PatchValue::Value(value.clone())),
+				Some(_) => Err(Error::BadRequest {
+					message: format!(
+						"CI.safetyReportIdentification.{key} must be a string or null"
+					),
+				}),
+			}
+		}
+		fn patch_bool(
+			row: &Map<String, Value>,
+			key: &str,
+		) -> Result<PatchValue<bool>> {
+			match row.get(key) {
+				None => Ok(PatchValue::Missing),
+				Some(Value::Null) => Ok(PatchValue::Null),
+				Some(Value::Bool(value)) => Ok(PatchValue::Value(*value)),
+				Some(_) => Err(Error::BadRequest {
+					message: format!(
+						"CI.safetyReportIdentification.{key} must be a boolean or null"
+					),
+				}),
+			}
+		}
+		fn date(
+			row: &Map<String, Value>,
+			key: &str,
+		) -> Result<Option<sqlx::types::time::Date>> {
+			let value = row.get(key).cloned().unwrap_or(Value::Null);
+			serde_json::from_value::<CiDatePatchValue>(json!({ "value": value }))
+				.map(|value| value.value)
+				.map_err(|err| Error::BadRequest {
+					message: format!(
+						"CI.safetyReportIdentification.{key} must be an E2B date or null: {err}"
+					),
+				})
+		}
+
+		SafetyReportIdentificationBmc::update_by_case(
+			ctx,
+			mm,
+			case_id,
+			SafetyReportIdentificationForUpdate {
+				safety_report_id: string_field(row, &["safetyReportId"]),
+				version: i32_field(row, &["version"]),
+				transmission_date: string_field(row, &["transmissionDate"]),
+				report_type: patch_string(row, "reportType")?,
+				date_first_received_from_source: date(
+					row,
+					"dateFirstReceivedFromSource",
+				)?,
+				date_of_most_recent_information: date(
+					row,
+					"dateOfMostRecentInformation",
+				)?,
+				fulfil_expedited_criteria: patch_bool(
+					row,
+					"fulfilExpeditedCriteria",
+				)?,
+				fulfil_expedited_criteria_null_flavor: string_field(
+					row,
+					&["fulfilExpeditedCriteriaNullFlavor"],
+				),
+				local_criteria_report_type: patch_string(
+					row,
+					"localCriteriaReportType",
+				)?,
+				combination_product_report_indicator: patch_string(
+					row,
+					"combinationProductReportIndicator",
+				)?,
+				combination_product_report_indicator_null_flavor: string_field(
+					row,
+					&["combinationProductReportIndicatorNullFlavor"],
+				),
+				worldwide_unique_id: string_field(row, &["worldwideUniqueId"]),
+				first_sender_type: string_field(row, &["firstSenderType"]),
+				additional_documents_available: bool_field(
+					row,
+					&["additionalDocumentsAvailable"],
+				),
+				other_case_identifiers_exist: bool_field(
+					row,
+					&["otherCaseIdentifiersExist"],
+				),
+				other_case_identifiers_exist_null_flavor: string_field(
+					row,
+					&["otherCaseIdentifiersExistNullFlavor"],
+				),
+				nullification_code: string_field(
+					row,
+					&["nullificationAmendmentCode", "nullificationCode"],
+				),
+				nullification_reason: string_field(row, &["nullificationReason"]),
+				receiver_organization: string_field(row, &["receiverOrganization"]),
+			},
+		)
+		.await?;
+	}
 
 	if let Some(value) = rows.get("case") {
 		let patch = serde_json::from_value::<CiCaseRowPatch>(value.clone())
@@ -780,113 +802,10 @@ async fn patch_editor_ci_page_projection_authorized(
 )> {
 	let requested_authorities =
 		validate_request_projection_context(request.authorities.as_deref())?;
-	validate_direct_changes("CI", &request.changes)?;
-
-	let mut update = SafetyReportIdentificationForUpdate {
-		safety_report_id: None,
-		version: None,
-		transmission_date: None,
-		report_type: PatchValue::Missing,
-		date_first_received_from_source: None,
-		date_of_most_recent_information: None,
-		fulfil_expedited_criteria: PatchValue::Missing,
-		fulfil_expedited_criteria_null_flavor: None,
-		local_criteria_report_type: PatchValue::Missing,
-		combination_product_report_indicator: PatchValue::Missing,
-		combination_product_report_indicator_null_flavor: None,
-		worldwide_unique_id: None,
-		first_sender_type: None,
-		additional_documents_available: None,
-		other_case_identifiers_exist: None,
-		other_case_identifiers_exist_null_flavor: None,
-		nullification_code: None,
-		nullification_reason: None,
-		receiver_organization: None,
-	};
-
-	for (field, patch) in &request.changes {
-		match field.as_str() {
-			"safetyReportId" => {
-				update.safety_report_id = patch_optional_string_value(field, patch)?;
-			}
-			"transmissionDate" => {
-				update.transmission_date =
-					patch_optional_string_value(field, patch)?;
-			}
-			"reportType" => {
-				update.report_type = patch_string_value(field, patch)?;
-			}
-			"dateFirstReceivedFromSource" => {
-				update.date_first_received_from_source =
-					patch_date_value(field, patch)?;
-			}
-			"dateOfMostRecentInformation" => {
-				update.date_of_most_recent_information =
-					patch_date_value(field, patch)?;
-			}
-			"additionalDocumentsAvailable" => {
-				update.additional_documents_available =
-					patch_optional_bool_value(field, patch)?;
-			}
-			"fulfilExpeditedCriteria" => {
-				update.fulfil_expedited_criteria = patch_bool_value(field, patch)?;
-			}
-			"fulfilExpeditedCriteriaNullFlavor" => {
-				update.fulfil_expedited_criteria_null_flavor =
-					patch_optional_string_value(field, patch)?;
-			}
-			"localCriteriaReportType" => {
-				update.local_criteria_report_type =
-					patch_string_value(field, patch)?;
-			}
-			"combinationProductReportIndicator" => {
-				update.combination_product_report_indicator =
-					patch_string_value(field, patch)?;
-			}
-			"combinationProductReportIndicatorNullFlavor" => {
-				update.combination_product_report_indicator_null_flavor =
-					patch_optional_string_value(field, patch)?;
-			}
-			"worldwideUniqueId" => {
-				update.worldwide_unique_id =
-					patch_optional_string_value(field, patch)?;
-			}
-			"firstSenderType" => {
-				update.first_sender_type =
-					patch_optional_string_value(field, patch)?;
-			}
-			"otherCaseIdentifiersExist" => {
-				update.other_case_identifiers_exist =
-					patch_optional_bool_value(field, patch)?;
-			}
-			"otherCaseIdentifiersExistNullFlavor" => {
-				update.other_case_identifiers_exist_null_flavor =
-					patch_optional_string_value(field, patch)?;
-			}
-			"nullificationAmendmentCode" => {
-				update.nullification_code =
-					patch_optional_string_value(field, patch)?;
-			}
-			"nullificationReason" => {
-				update.nullification_reason =
-					patch_optional_string_value(field, patch)?;
-			}
-			_ => {
-				return Err(Error::BadRequest {
-					message: format!("unknown CI field '{field}'"),
-				});
-			}
-		}
-	}
-	if !request.changes.is_empty() {
-		SafetyReportIdentificationBmc::update_by_case(ctx, mm, case_id, update)
-			.await?;
-	}
+	validate_direct_rows("CI", &request.rows)?;
 	if !request.rows.is_empty() {
 		apply_ci_rows_patch(&ctx, &mm, case_id, &request.rows).await?;
-	}
-	if !request.changes.is_empty() || !request.rows.is_empty() {
-		refresh_editor_validation_cache(
+		mark_editor_validation_summary_stale(
 			ctx,
 			mm,
 			case_id,
@@ -1040,21 +959,12 @@ async fn patch_direct_page_projection_authorized(
 			study.remove("study_type_reaction_kr1");
 		}
 	}
-	validate_direct_changes(page_id, &request.changes)?;
 	validate_direct_rows(page_id, &request.rows)?;
-
-	if !request.changes.is_empty() {
-		apply_direct_page_changes_patch(ctx, mm, case_id, page_id, &request.changes)
-			.await?;
-	}
 
 	if !request.rows.is_empty() {
 		apply_direct_page_rows_patch(ctx, mm, case_id, page_id, &request.rows)
 			.await?;
-	}
-
-	if !request.changes.is_empty() || !request.rows.is_empty() {
-		refresh_editor_validation_cache(
+		mark_editor_validation_summary_stale(
 			ctx,
 			mm,
 			case_id,
@@ -1106,173 +1016,6 @@ async fn apply_direct_page_rows_patch(
 			message: format!("unsupported direct page '{page_id}'"),
 		}),
 	}
-}
-
-async fn apply_direct_page_changes_patch(
-	ctx: &lib_core::ctx::Ctx,
-	mm: &ModelManager,
-	case_id: Uuid,
-	page_id: &'static str,
-	changes: &BTreeMap<String, CaseEditorFieldPatch>,
-) -> Result<()> {
-	let rows = match page_id {
-		"RP" => row_array_payload_from_changes(
-			page_id,
-			"primarySources",
-			changes,
-			&[
-				("reporterTitle", "reporterTitle"),
-				("reporterTitleNullFlavor", "reporterTitleNullFlavor"),
-				("reporterGivenName", "reporterGivenName"),
-				("reporterGivenNameNullFlavor", "reporterGivenNameNullFlavor"),
-				("reporterMiddleName", "reporterMiddleName"),
-				(
-					"reporterMiddleNameNullFlavor",
-					"reporterMiddleNameNullFlavor",
-				),
-				("reporterFamilyName", "reporterFamilyName"),
-				(
-					"reporterFamilyNameNullFlavor",
-					"reporterFamilyNameNullFlavor",
-				),
-				("reporterOrganization", "reporterOrganization"),
-				(
-					"reporterOrganizationNullFlavor",
-					"reporterOrganizationNullFlavor",
-				),
-				("reporterDepartment", "reporterDepartment"),
-				(
-					"reporterDepartmentNullFlavor",
-					"reporterDepartmentNullFlavor",
-				),
-				("reporterStreet", "reporterStreet"),
-				("reporterStreetNullFlavor", "reporterStreetNullFlavor"),
-				("reporterCity", "reporterCity"),
-				("reporterCityNullFlavor", "reporterCityNullFlavor"),
-				("reporterState", "reporterState"),
-				("reporterStateNullFlavor", "reporterStateNullFlavor"),
-				("reporterPostcode", "reporterPostcode"),
-				("reporterPostcodeNullFlavor", "reporterPostcodeNullFlavor"),
-				("reporterTelephone", "reporterTelephone"),
-				("reporterTelephoneNullFlavor", "reporterTelephoneNullFlavor"),
-				("reporterCountry", "reporterCountry"),
-				("reporterCountryNullFlavor", "reporterCountryNullFlavor"),
-				("reporterEmail", "reporterEmail"),
-				("reporterEmailNullFlavor", "reporterEmailNullFlavor"),
-				("qualification", "qualification"),
-				("qualificationNullFlavor", "qualificationNullFlavor"),
-				("qualificationKr1", "qualificationKr1"),
-				(
-					"primarySourceForRegulatoryPurposes",
-					"primarySourceForRegulatoryPurposes",
-				),
-			],
-		)?,
-		"SD" => direct_sd_rows_from_changes(page_id, changes)?,
-		"LR" => row_array_payload_from_changes(
-			page_id,
-			"literatureReferences",
-			changes,
-			&[
-				("literatureReference", "referenceText"),
-				("referenceText", "referenceText"),
-			],
-		)?,
-		"SI" => row_payload_from_changes(
-			page_id,
-			"studyInformation",
-			changes,
-			&[
-				("studyName", "studyName"),
-				("sponsorStudyNumber", "sponsorStudyNumber"),
-				("studyTypeReaction", "studyTypeReaction"),
-				("studyTypeReactionKr1", "studyTypeReactionKr1"),
-			],
-		)?,
-		"DM" => row_payload_from_changes(
-			page_id,
-			"patientInformation",
-			changes,
-			&[
-				("patientInitials", "patientInitials"),
-				("patientGivenName", "patientGivenName"),
-				("patientFamilyName", "patientFamilyName"),
-				("patientSex", "sex"),
-				("sex", "sex"),
-			],
-		)?,
-		"NR" => row_payload_from_changes(
-			page_id,
-			"narrative",
-			changes,
-			&[
-				("caseNarrative", "caseNarrative"),
-				("reporterComments", "reporterComments"),
-				("senderComments", "senderComments"),
-			],
-		)?,
-		_ => {
-			return Err(Error::BadRequest {
-				message: format!("unsupported direct page '{page_id}'"),
-			})
-		}
-	};
-	apply_direct_page_rows_patch(ctx, mm, case_id, page_id, &rows).await
-}
-
-fn direct_sd_rows_from_changes(
-	page_id: &str,
-	changes: &BTreeMap<String, CaseEditorFieldPatch>,
-) -> Result<BTreeMap<String, Value>> {
-	let mut rows = BTreeMap::new();
-	for (field, patch) in changes {
-		let (row_key, target) = match field.as_str() {
-			"senderType" => ("senderInformation", "senderType"),
-			"senderHealthProfessionalTypeKr1" => {
-				("senderInformation", "healthProfessionalTypeKr1")
-			}
-			"senderOrganization" => ("senderInformation", "organizationName"),
-			"senderDepartment" => ("senderInformation", "department"),
-			"senderPersonTitle" => ("senderInformation", "personTitle"),
-			"senderPersonGivenName" => ("senderInformation", "personGivenName"),
-			"senderPersonMiddleName" => ("senderInformation", "personMiddleName"),
-			"senderPersonFamilyName" => ("senderInformation", "personFamilyName"),
-			"senderStreetAddress" => ("senderInformation", "streetAddress"),
-			"senderCity" => ("senderInformation", "city"),
-			"senderState" => ("senderInformation", "state"),
-			"senderPostcode" => ("senderInformation", "postcode"),
-			"senderCountryCode" => ("senderInformation", "countryCode"),
-			"senderTelephone" => ("senderInformation", "telephone"),
-			"senderFax" => ("senderInformation", "fax"),
-			"senderEmail" => ("senderInformation", "email"),
-			"receiverOrganization" => ("receiverInformation", "organizationName"),
-			"receiverType" => ("receiverInformation", "receiverType"),
-			"receiverDepartment" => ("receiverInformation", "department"),
-			"receiverStreet" => ("receiverInformation", "streetAddress"),
-			"receiverCity" => ("receiverInformation", "city"),
-			"receiverState" => ("receiverInformation", "stateProvince"),
-			"receiverPostcode" => ("receiverInformation", "postcode"),
-			"receiverCountry" => ("receiverInformation", "countryCode"),
-			"receiverTelephone" => ("receiverInformation", "telephone"),
-			"receiverFax" => ("receiverInformation", "fax"),
-			"receiverEmail" => ("receiverInformation", "email"),
-			_ => {
-				return Err(Error::BadRequest {
-					message: format!("unknown {page_id} field '{field}'"),
-				})
-			}
-		};
-		let entry = rows
-			.entry(row_key.to_string())
-			.or_insert_with(|| Value::Object(serde_json::Map::new()));
-		let Some(map) = entry.as_object_mut() else {
-			return Err(Error::BadRequest {
-				message: format!("{page_id}.{row_key} must be an object"),
-			});
-		};
-		map.insert(target.to_string(), patch_json_value(patch));
-	}
-	Ok(rows)
 }
 
 fn datetime_field(
@@ -1347,6 +1090,13 @@ async fn apply_rp_source_patch(
 	case_id: Uuid,
 	source: &serde_json::Map<String, Value>,
 ) -> Result<()> {
+	let id = uuid_field(source, &["id"]);
+	if bool_field(source, &["deleted", "_delete"]) == Some(true) {
+		if let Some(id) = id {
+			PrimarySourceBmc::delete(ctx, mm, id).await?;
+		}
+		return Ok(());
+	}
 	let update = PrimarySourceForUpdate {
 		source_reporter_presave_id: uuid_field(
 			source,
@@ -1455,7 +1205,7 @@ async fn apply_rp_source_patch(
 			],
 		),
 	};
-	if let Some(id) = uuid_field(source, &["id"]) {
+	if let Some(id) = id {
 		PrimarySourceBmc::update(ctx, mm, id, update).await?;
 	} else {
 		PrimarySourceBmc::create(
@@ -3745,55 +3495,3 @@ direct_page_projection_handler!(
 	"NR",
 	load_editor_nr_data,
 );
-
-#[cfg(test)]
-mod tests {
-	use super::*;
-
-	fn changes(field: &str, value: Value) -> BTreeMap<String, CaseEditorFieldPatch> {
-		let patch = serde_json::from_value(json!({ "value": value }))
-			.expect("field patch should deserialize");
-		BTreeMap::from([(field.to_string(), patch)])
-	}
-
-	#[test]
-	fn ci_gate_rejects_invalid_inline_value() {
-		let error = validate_direct_changes(
-			"CI",
-			&changes("reportType", Value::String("9".to_string())),
-		)
-		.expect_err("invalid report type should fail");
-		assert!(format!("{error:?}").contains("ICH.C.1.3.ALLOWED.VALUE"));
-	}
-
-	#[test]
-	fn ci_gate_validates_null_flavor_values() {
-		assert!(validate_direct_changes(
-			"CI",
-			&changes(
-				"fulfilExpeditedCriteriaNullFlavor",
-				Value::String("NI".to_string()),
-			)
-		)
-		.is_ok());
-		let error = validate_direct_changes(
-			"CI",
-			&changes(
-				"fulfilExpeditedCriteriaNullFlavor",
-				Value::String("BAD".to_string()),
-			),
-		)
-		.expect_err("invalid null flavor should fail");
-		assert!(format!("{error:?}").contains("ICH.C.1.7.NULLFLAVOR.ALLOWED"));
-	}
-
-	#[test]
-	fn ci_gate_rejects_non_primitive_patch_values() {
-		let error = validate_direct_changes(
-			"CI",
-			&changes("reportType", json!({ "nested": true })),
-		)
-		.expect_err("object report type should fail");
-		assert!(format!("{error:?}").contains("ICH.C.1.3.LENGTH.MAX"));
-	}
-}

@@ -405,7 +405,10 @@ pub(super) const BINDINGS: &[PortableFieldBinding] = &[
 		"drugs[].fdaDeviceInfo.followUpTypes[].valueCode",
 		"fdaDeviceInfo.followUpTypes[].valueCode",
 		String,
-		["FDA.G.k.12.r.2.r.LENGTH.MAX", "FDA.G.k.12.r.2.r.ALLOWED.VALUE"]
+		[
+			"FDA.G.k.12.r.2.r.LENGTH.MAX",
+			"FDA.G.k.12.r.2.r.ALLOWED.VALUE"
+		]
 	),
 	binding!(
 		"drugs[].fdaDeviceInfo.deviceProblemCodes[].valueCode",
@@ -477,7 +480,10 @@ pub(super) const BINDINGS: &[PortableFieldBinding] = &[
 		"drugs[].fdaDeviceInfo.operatorOfDevice",
 		"fdaDeviceInfo.operatorOfDevice",
 		String,
-		["FDA.G.k.12.r.10.LENGTH.MAX", "FDA.G.k.12.r.10.ALLOWED.VALUE"]
+		[
+			"FDA.G.k.12.r.10.LENGTH.MAX",
+			"FDA.G.k.12.r.10.ALLOWED.VALUE"
+		]
 	),
 	binding!(
 		"drugs[].fdaDeviceInfo.remedialActions[].valueCode",

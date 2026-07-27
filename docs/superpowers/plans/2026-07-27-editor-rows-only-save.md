@@ -11,7 +11,7 @@
 ## Global Constraints
 
 - `changes` is removed immediately without an adapter, feature flag, or deprecation period.
-- A request containing `changes` must return HTTP 400; it must never be ignored.
+- A request containing `changes` must return HTTP 422; it must never be ignored.
 - Read/projection response shapes and row-specific CRUD endpoints remain unchanged.
 - D.7.2 value and null flavor persist through `rows.patientInformation` only.
 - Preserve all unrelated dirty-worktree changes.
@@ -27,7 +27,7 @@
 
 **Interfaces:**
 - Produces: `CaseEditorPagePatchRequest { authorities: Option<Vec<String>>, rows: BTreeMap<String, Value> }`
-- Produces: strict Serde rejection of the removed top-level `changes` property.
+- Produces: strict Serde rejection of the removed top-level `changes` property with HTTP 422.
 - Consumes: existing `patch_json`, `get_json`, and `create_case_for_editor` integration-test helpers.
 
 - [ ] **Step 1: Write the failing removed-contract test**
@@ -63,7 +63,7 @@ async fn editor_page_patch_rejects_removed_changes_contract() -> Result<()> {
 	)
 	.await?;
 
-	assert_eq!(status, StatusCode::BAD_REQUEST, "{body}");
+	assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
 	Ok(())
 }
 ```
@@ -76,7 +76,7 @@ Run:
 cargo test -p web-server --test api case_editor_contract_web::editor_page_patch_rejects_removed_changes_contract -- --exact --nocapture
 ```
 
-Expected: FAIL because `changes` currently deserializes and reaches the page handler instead of being rejected at HTTP 400.
+Expected: FAIL because `changes` currently deserializes and reaches the page handler instead of being rejected at HTTP 422.
 
 - [ ] **Step 3: Make the request DTO rows-only and strict**
 
@@ -195,7 +195,7 @@ cargo check -p web-server --tests
 rg -n 'request\.changes|validate_direct_changes|apply_direct_page_changes_patch|row_payload_from_changes|row_array_payload_from_changes|changes_to_object|CaseEditorFieldPatch' crates/services/web-server/src -g '*.rs'
 ```
 
-Expected: the rejection test passes with HTTP 400, `cargo check` exits 0 because JSON test fixtures are runtime data, and `rg` returns no production matches.
+Expected: the rejection test passes with HTTP 422, `cargo check` exits 0 because JSON test fixtures are runtime data, and `rg` returns no production matches.
 
 - [ ] **Step 12: Commit the complete contract and production-path removal**
 
@@ -217,7 +217,7 @@ git commit -m "refactor(editor): remove changes save contract"
 
 **Interfaces:**
 - Consumes: section-specific row names and canonical field names already accepted by each production row handler.
-- Produces: no `changes` request fixtures except the one intentional HTTP 400 contract test.
+- Produces: no `changes` request fixtures except the one intentional HTTP 422 contract test.
 
 - [ ] **Step 1: Convert direct-page fixtures**
 

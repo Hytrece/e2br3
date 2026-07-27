@@ -21,7 +21,8 @@ async fn bootstrap_provides_active_iso_country_reference_data() -> Result<()> {
 		"system_admin",
 	)
 	.await?;
-	dbx.execute(sqlx::query("DELETE FROM iso_countries")).await?;
+	dbx.execute(sqlx::query("DELETE FROM iso_countries"))
+		.await?;
 	dbx.execute(sqlx::query(include_str!(
 		"../../../../../db/bootstrap/09a-iso-countries.sql"
 	)))

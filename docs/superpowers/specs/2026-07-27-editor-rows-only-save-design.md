@@ -26,7 +26,7 @@ also unchanged.
 - `rows`, defaulting to an empty map.
 
 It no longer contains `changes`. The request type uses strict unknown-field
-deserialization so a payload containing `changes` returns HTTP 400 instead of
+deserialization so a payload containing `changes` returns HTTP 422 instead of
 being silently ignored. The OpenAPI request schema exposes only `authorities`
 and `rows`.
 
@@ -87,7 +87,7 @@ value clears its null flavor, and saving a null flavor clears its text value.
 
 ## Error Handling
 
-- A top-level `changes` property is an invalid request and returns HTTP 400.
+- A top-level `changes` property is an invalid request and returns HTTP 422.
 - Unknown row names and unknown fields inside supported row objects continue to
   use the existing page-specific bad-request errors.
 - Portable constraint violations continue to return HTTP 422 with the existing
@@ -98,7 +98,7 @@ value clears its null flavor, and saving a null flavor clears its text value.
 
 Tests exercise the real HTTP routes and storage layer.
 
-- Add a contract test proving `changes` is rejected with HTTP 400.
+- Add a contract test proving `changes` is rejected with HTTP 422.
 - Convert every existing `changes` request fixture to its canonical `rows`
   equivalent and preserve its behavioral assertions.
 - Keep D.7.2 value and null-flavor round-trip coverage using only `rows`.
@@ -121,7 +121,7 @@ this repository must be coordinated separately by the deployment owner.
 - No production type, handler, validator, OpenAPI schema, or test helper for the
   `changes` request format remains.
 - Every case-editor page patch uses the `rows` validation and persistence path.
-- A request containing `changes` fails visibly with HTTP 400.
+- A request containing `changes` fails visibly with HTTP 422.
 - D.7.2 text and null flavor both persist and reload through `rows`.
 - Focused and full API verification complete without regressions caused by this
   change.

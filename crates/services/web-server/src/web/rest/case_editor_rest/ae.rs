@@ -92,27 +92,6 @@ const REACTION_ROW_ALIASES: &[(&str, &[&str])] = &[
 	("sequence_number", &["sequenceNumber"]),
 ];
 
-const REACTION_CHANGE_ALIASES: &[(&str, &str)] = &[
-	("reactionPrimarySourceNative", "reactionPrimarySourceNative"),
-	(
-		"reactionPrimarySourceTranslation",
-		"reactionPrimarySourceTranslation",
-	),
-	("reactionLanguage", "reactionLanguage"),
-	("meddraVersion", "meddraVersion"),
-	("meddraCode", "meddraCode"),
-	("termHighlighted", "termHighlighted"),
-	("requiredIntervention", "requiredIntervention"),
-	("expectedness", "expectedness"),
-	("severity", "severity"),
-	("reactionStartDate", "reactionStartDate"),
-	("reactionEndDate", "reactionEndDate"),
-	("outcome", "outcome"),
-	("reactionOutcome", "reactionOutcome"),
-	("medicalConfirmation", "medicalConfirmation"),
-	("reactionCountry", "reactionCountry"),
-];
-
 async fn load_editor_ae_list_rows(
 	ctx: &lib_core::ctx::Ctx,
 	mm: &ModelManager,
@@ -267,7 +246,6 @@ repeatable_page_row_patch_handler!(
 	row_key: "reaction",
 	bmc: ReactionBmc,
 	model: ReactionForUpdate,
-	changes: REACTION_CHANGE_ALIASES,
 	aliases: REACTION_ROW_ALIASES,
 	build_response: build_editor_ae_page_row_response,
 );

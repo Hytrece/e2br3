@@ -875,7 +875,7 @@ pub async fn create_editor_dg_page_row(
 				persist_indications(ctx, mm, row_id, row).await?;
 				persist_drug_reaction_assessments(ctx, mm, case_id, row_id, row)
 					.await?;
-				mark_editor_validation_cache_stale(
+				mark_editor_validation_summary_stale(
 					ctx,
 					mm,
 					case_id,
@@ -918,28 +918,8 @@ pub async fn patch_editor_dg_page_row(
 				)?;
 				DrugInformationBmc::get_in_case(ctx, mm, case_id, row_id).await?;
 
-				let synthesized_rows;
-				let rows = if !request.changes.is_empty() {
-					synthesized_rows = row_payload_from_changes(
-						"DG",
-						"drug",
-						&request.changes,
-						&[
-							("medicinalProduct", "medicinalProduct"),
-							("drugCharacterization", "drugRole"),
-							("drugRole", "drugRole"),
-							("actionTaken", "actionTaken"),
-						],
-					)?;
-					&synthesized_rows
-				} else {
-					&request.rows
-				};
-				let row = required_row_object("DG", rows, "drug")?;
-				let changed_paths = (!request.changes.is_empty()).then(|| {
-					request.changes.keys().cloned().collect::<BTreeSet<_>>()
-				});
-				validate_row_payload("DG", "drug", row, changed_paths.as_ref())?;
+				let row = required_row_object("DG", &request.rows, "drug")?;
+				validate_row_payload("DG", "drug", row, None)?;
 
 				let model = row_model_value(row, DRUG_ROW_ALIASES, &[]);
 				let update = parse_row_model::<DrugInformationForUpdate>(
@@ -951,7 +931,7 @@ pub async fn patch_editor_dg_page_row(
 				persist_indications(ctx, mm, row_id, row).await?;
 				persist_drug_reaction_assessments(ctx, mm, case_id, row_id, row)
 					.await?;
-				refresh_editor_validation_cache(
+				mark_editor_validation_summary_stale(
 					ctx,
 					mm,
 					case_id,

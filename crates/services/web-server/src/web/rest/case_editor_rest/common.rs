@@ -1,16 +1,14 @@
 //! Shared imports and helpers for case editor REST modules.
 
-pub(super) use super::portable_save::{
-	validate_direct_changes, validate_direct_rows, validate_row_payload,
-};
+pub(super) use super::portable_save::{validate_direct_rows, validate_row_payload};
 pub(super) use crate::web::rest::case_editor_dto::{
 	CaseEditorAeListRowDto, CaseEditorCiCaseDto, CaseEditorCiDocumentDto,
 	CaseEditorCiLinkedReportDto, CaseEditorCiOtherIdentifierDto,
 	CaseEditorCiRowsDto, CaseEditorCiSafetyReportDto, CaseEditorCiSourceDocumentDto,
 	CaseEditorDgListRowDto, CaseEditorDhListRowDto, CaseEditorDirectSectionResponse,
-	CaseEditorFieldPatch, CaseEditorLbListRowDto, CaseEditorListResponse,
-	CaseEditorPagePatchRequest, CaseEditorPageProjectionResponse,
-	CaseEditorRowDetailResponse, CaseEditorShellDto,
+	CaseEditorLbListRowDto, CaseEditorListResponse, CaseEditorPagePatchRequest,
+	CaseEditorPageProjectionResponse, CaseEditorRowDetailResponse,
+	CaseEditorShellDto,
 };
 pub(super) use crate::web::rest::case_rest::case_to_read_result;
 pub(super) use axum::extract::{Path, Query, State};
@@ -24,7 +22,6 @@ pub(super) use lib_core::model::case_identifiers::{
 	LinkedReportNumberForUpdate, OtherCaseIdentifierBmc, OtherCaseIdentifierFilter,
 	OtherCaseIdentifierForCreate, OtherCaseIdentifierForUpdate,
 };
-pub(super) use lib_core::model::case_validation_report_cache::CaseValidationReportCacheBmc;
 pub(super) use lib_core::model::case_validation_summary::CaseValidationSummaryBmc;
 pub(super) use lib_core::model::drug::{
 	DosageInformationBmc, DosageInformationFilter, DrugActiveSubstanceBmc,
@@ -93,7 +90,7 @@ pub(super) use lib_web::middleware::mw_auth::CtxW;
 pub(super) use modql::filter::{ListOptions, OpValValue, OpValsValue};
 pub(super) use serde::Deserialize;
 pub(super) use serde_json::{json, Map, Value};
-pub(super) use std::collections::{BTreeMap, BTreeSet};
+pub(super) use std::collections::BTreeMap;
 pub(super) use uuid::Uuid;
 
 pub(super) fn uuid_eq(id: Uuid) -> OpValsValue {
@@ -185,32 +182,9 @@ pub(super) fn insert_editor_json_context(
 	Ok(())
 }
 
-/// After an editor save, invalidate the case's cached validation for every
-/// authority and immediately recompute the ones the editor is working with, so
-/// the read-only `/validation/cache` endpoint reflects the edit right away.
-pub(super) async fn refresh_editor_validation_cache(
-	ctx: &lib_core::ctx::Ctx,
-	mm: &ModelManager,
-	case_id: Uuid,
-	requested_authorities: Option<String>,
-) -> Result<()> {
-	let authorities = editor_projection_context(requested_authorities)?;
-	CaseValidationSummaryBmc::mark_stale_for_case(ctx, mm, case_id).await?;
-	CaseValidationReportCacheBmc::mark_stale_for_case(ctx, mm, case_id).await?;
-	crate::web::rest::case_validation_rest::refresh_case_validation_cache(
-		ctx,
-		mm,
-		case_id,
-		&authorities,
-	)
-	.await?;
-	Ok(())
-}
-
-/// Invalidate the case's cached validation for every authority without
-/// recomputing. Used by structural row create/delete/restore, where the
-/// caller is not fetching a fresh report immediately.
-pub(super) async fn mark_editor_validation_cache_stale(
+/// Invalidate list-view validation summaries after any persisted editor change.
+/// Full field-level validation is requested by the editor after the save.
+pub(super) async fn mark_editor_validation_summary_stale(
 	ctx: &lib_core::ctx::Ctx,
 	mm: &ModelManager,
 	case_id: Uuid,
@@ -218,80 +192,7 @@ pub(super) async fn mark_editor_validation_cache_stale(
 ) -> Result<()> {
 	editor_projection_context(requested_authorities)?;
 	CaseValidationSummaryBmc::mark_stale_for_case(ctx, mm, case_id).await?;
-	CaseValidationReportCacheBmc::mark_stale_for_case(ctx, mm, case_id).await?;
 	Ok(())
-}
-
-pub(super) fn patch_string_value(
-	field_name: &str,
-	patch: &CaseEditorFieldPatch,
-) -> Result<PatchValue<String>> {
-	let Some(value) = patch.value.as_ref() else {
-		return Ok(PatchValue::Missing);
-	};
-	if value.is_null() {
-		return Ok(PatchValue::Null);
-	}
-	let Some(value) = value.as_str() else {
-		return Err(Error::BadRequest {
-			message: format!("{field_name} must be a string or null"),
-		});
-	};
-	Ok(PatchValue::Value(value.trim().to_string()))
-}
-
-pub(super) fn patch_bool_value(
-	field_name: &str,
-	patch: &CaseEditorFieldPatch,
-) -> Result<PatchValue<bool>> {
-	let Some(value) = patch.value.as_ref() else {
-		return Ok(PatchValue::Missing);
-	};
-	if value.is_null() {
-		return Ok(PatchValue::Null);
-	}
-	let Some(value) = value.as_bool() else {
-		return Err(Error::BadRequest {
-			message: format!("{field_name} must be a boolean or null"),
-		});
-	};
-	Ok(PatchValue::Value(value))
-}
-
-pub(super) fn patch_optional_string_value(
-	field_name: &str,
-	patch: &CaseEditorFieldPatch,
-) -> Result<Option<String>> {
-	let Some(value) = patch.value.as_ref() else {
-		return Ok(None);
-	};
-	if value.is_null() {
-		return Ok(None);
-	}
-	let Some(value) = value.as_str() else {
-		return Err(Error::BadRequest {
-			message: format!("{field_name} must be a string or null"),
-		});
-	};
-	Ok(Some(value.trim().to_string()))
-}
-
-pub(super) fn patch_optional_bool_value(
-	field_name: &str,
-	patch: &CaseEditorFieldPatch,
-) -> Result<Option<bool>> {
-	let Some(value) = patch.value.as_ref() else {
-		return Ok(None);
-	};
-	if value.is_null() {
-		return Ok(None);
-	}
-	let Some(value) = value.as_bool() else {
-		return Err(Error::BadRequest {
-			message: format!("{field_name} must be a boolean or null"),
-		});
-	};
-	Ok(Some(value))
 }
 
 /// PATCH /api/cases/{case_id}/editor/pages/CI
@@ -355,54 +256,6 @@ pub(super) fn required_row_object<'a>(
 	optional_row_object(page_id, rows, key)?.ok_or_else(|| Error::BadRequest {
 		message: format!("{page_id}.{key} row payload is required"),
 	})
-}
-
-pub(super) fn patch_json_value(patch: &CaseEditorFieldPatch) -> Value {
-	patch.value.clone().unwrap_or(Value::Null)
-}
-
-pub(super) fn changes_to_object(
-	page_id: &str,
-	changes: &BTreeMap<String, CaseEditorFieldPatch>,
-	aliases: &[(&str, &str)],
-) -> Result<serde_json::Map<String, Value>> {
-	let mut row = serde_json::Map::new();
-	for (field, patch) in changes {
-		let Some((_, target)) = aliases.iter().find(|(source, _)| source == field)
-		else {
-			return Err(Error::BadRequest {
-				message: format!("unknown {page_id} field '{field}'"),
-			});
-		};
-		row.insert((*target).to_string(), patch_json_value(patch));
-	}
-	Ok(row)
-}
-
-pub(super) fn row_payload_from_changes(
-	page_id: &str,
-	row_key: &str,
-	changes: &BTreeMap<String, CaseEditorFieldPatch>,
-	aliases: &[(&str, &str)],
-) -> Result<BTreeMap<String, Value>> {
-	Ok(BTreeMap::from([(
-		row_key.to_string(),
-		Value::Object(changes_to_object(page_id, changes, aliases)?),
-	)]))
-}
-
-pub(super) fn row_array_payload_from_changes(
-	page_id: &str,
-	row_key: &str,
-	changes: &BTreeMap<String, CaseEditorFieldPatch>,
-	aliases: &[(&str, &str)],
-) -> Result<BTreeMap<String, Value>> {
-	Ok(BTreeMap::from([(
-		row_key.to_string(),
-		Value::Array(vec![Value::Object(changes_to_object(
-			page_id, changes, aliases,
-		)?)]),
-	)]))
 }
 
 pub(super) fn optional_first_row_object<'a>(
@@ -726,7 +579,7 @@ macro_rules! repeatable_page_row_create_handler {
 					let value = row_model_value(row, $aliases, &extras);
 					let create = parse_row_model::<$model>($section, $row_key, value)?;
 					let row_id = $bmc::create(ctx, mm, create).await?;
-					mark_editor_validation_cache_stale(
+					mark_editor_validation_summary_stale(
 						ctx,
 						mm,
 						case_id,
@@ -779,7 +632,7 @@ macro_rules! repeatable_page_row_create_handler {
 					let value = row_model_value(row, $aliases, &extras);
 					let create = parse_row_model::<$model>($section, $row_key, value)?;
 					let row_id = $bmc::create(ctx, mm, create).await?;
-					mark_editor_validation_cache_stale(
+					mark_editor_validation_summary_stale(
 						ctx,
 						mm,
 						case_id,
@@ -805,7 +658,6 @@ macro_rules! repeatable_page_row_patch_handler {
 		bmc: $bmc:ident,
 		model: $model:ty,
 		verify: $verify_fn:ident,
-		changes: $changes:expr,
 		aliases: $aliases:expr,
 		build_response: $build_response:ident $(,)?
 	) => {
@@ -827,28 +679,12 @@ macro_rules! repeatable_page_row_patch_handler {
 					let requested_authorities =
 						validate_request_projection_context(request.authorities.as_deref())?;
 					$verify_fn(ctx, mm, case_id, row_id).await?;
-					let synthesized_rows;
-					let rows = if !request.changes.is_empty() {
-						synthesized_rows = row_payload_from_changes(
-							$section, $row_key, &request.changes, $changes,
-						)?;
-						&synthesized_rows
-					} else {
-						&request.rows
-					};
-					let row = required_row_object($section, rows, $row_key)?;
-					let changed_paths = (!request.changes.is_empty())
-						.then(|| request.changes.keys().cloned().collect::<BTreeSet<_>>());
-					validate_row_payload(
-						$section,
-						$row_key,
-						row,
-						changed_paths.as_ref(),
-					)?;
+					let row = required_row_object($section, &request.rows, $row_key)?;
+					validate_row_payload($section, $row_key, row, None)?;
 					let value = row_model_value(row, $aliases, &[]);
 					let update = parse_row_model::<$model>($section, $row_key, value)?;
 					$bmc::update(ctx, mm, row_id, update).await?;
-					refresh_editor_validation_cache(
+					mark_editor_validation_summary_stale(
 						ctx, mm, case_id, requested_authorities.clone(),
 					)
 					.await?;
@@ -867,7 +703,6 @@ macro_rules! repeatable_page_row_patch_handler {
 		row_key: $row_key:expr,
 		bmc: $bmc:ident,
 		model: $model:ty,
-		changes: $changes:expr,
 		aliases: $aliases:expr,
 		build_response: $build_response:ident $(,)?
 	) => {
@@ -889,28 +724,12 @@ macro_rules! repeatable_page_row_patch_handler {
 					let requested_authorities =
 						validate_request_projection_context(request.authorities.as_deref())?;
 					$bmc::get_in_case(ctx, mm, case_id, row_id).await?;
-					let synthesized_rows;
-					let rows = if !request.changes.is_empty() {
-						synthesized_rows = row_payload_from_changes(
-							$section, $row_key, &request.changes, $changes,
-						)?;
-						&synthesized_rows
-					} else {
-						&request.rows
-					};
-					let row = required_row_object($section, rows, $row_key)?;
-					let changed_paths = (!request.changes.is_empty())
-						.then(|| request.changes.keys().cloned().collect::<BTreeSet<_>>());
-					validate_row_payload(
-						$section,
-						$row_key,
-						row,
-						changed_paths.as_ref(),
-					)?;
+					let row = required_row_object($section, &request.rows, $row_key)?;
+					validate_row_payload($section, $row_key, row, None)?;
 					let value = row_model_value(row, $aliases, &[]);
 					let update = parse_row_model::<$model>($section, $row_key, value)?;
 					$bmc::update(ctx, mm, row_id, update).await?;
-					refresh_editor_validation_cache(
+					mark_editor_validation_summary_stale(
 						ctx, mm, case_id, requested_authorities.clone(),
 					)
 					.await?;
@@ -947,7 +766,7 @@ macro_rules! repeatable_page_row_delete_handler {
 				move |ctx, mm| Box::pin(async move {
 					$verify_fn(ctx, mm, case_id, row_id).await?;
 					$bmc::delete(ctx, mm, row_id).await?;
-					mark_editor_validation_cache_stale(ctx, mm, case_id, None).await?;
+					mark_editor_validation_summary_stale(ctx, mm, case_id, None).await?;
 					Ok(axum::http::StatusCode::NO_CONTENT)
 				}),
 			)
@@ -1049,7 +868,7 @@ macro_rules! repeatable_page_row_delete_restore_handlers {
 				move |ctx, mm| Box::pin(async move {
 					$bmc::get_in_case(ctx, mm, case_id, row_id).await?;
 					$bmc::delete(ctx, mm, row_id).await?;
-					mark_editor_validation_cache_stale(ctx, mm, case_id, None).await?;
+					mark_editor_validation_summary_stale(ctx, mm, case_id, None).await?;
 					Ok(axum::http::StatusCode::NO_CONTENT)
 				}),
 			)
@@ -1073,7 +892,7 @@ macro_rules! repeatable_page_row_delete_restore_handlers {
 					$bmc::get_in_case_with_deleted(ctx, mm, case_id, row_id, true)
 						.await?;
 					$bmc::restore_in_case(ctx, mm, case_id, row_id).await?;
-					mark_editor_validation_cache_stale(ctx, mm, case_id, None).await?;
+					mark_editor_validation_summary_stale(ctx, mm, case_id, None).await?;
 					let response = $build_response(ctx, mm, case_id, row_id, None).await?;
 					Ok((axum::http::StatusCode::OK, Json(response)))
 				}),

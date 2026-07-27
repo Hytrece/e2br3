@@ -189,7 +189,6 @@ pub fn router() -> Router {
 			CaseEditorDirectSectionResponseDoc,
 			CaseEditorPageProjectionResponseDoc,
 			CaseEditorPagePatchRequestDoc,
-			CaseEditorFieldPatchDoc,
 			CaseEditorFieldEnvelopeDoc,
 			CaseEditorFieldIssueDoc,
 			CaseEditorRowDetailResponseDoc,
@@ -542,17 +541,7 @@ struct CaseEditorPagePatchRequestDoc {
 	/// Validation/render authorities for page projection: ich,fda,mfds.
 	authorities: Option<Vec<String>>,
 	#[schema(value_type = Object)]
-	changes: serde_json::Value,
-	#[schema(value_type = Object)]
 	rows: serde_json::Value,
-}
-
-#[derive(serde::Serialize, serde::Deserialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-struct CaseEditorFieldPatchDoc {
-	#[schema(value_type = Object)]
-	value: serde_json::Value,
-	null_flavor: Option<String>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, ToSchema)]

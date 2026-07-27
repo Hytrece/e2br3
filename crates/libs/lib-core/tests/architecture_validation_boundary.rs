@@ -14,7 +14,6 @@ fn lib_core_runtime_boundaries_do_not_depend_on_validation_module() {
 		"src/xml/export/shared/patch_doc.rs",
 		"src/xml/export/sections/e.rs",
 		"src/xml/export/sections/g.rs",
-		"src/model/case_validation_report_cache.rs",
 		"src/model/case_validation_summary.rs",
 	];
 

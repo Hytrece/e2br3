@@ -179,11 +179,6 @@ repeatable_page_row_patch_handler!(
 	row_key: "testResult",
 	bmc: TestResultBmc,
 	model: TestResultForUpdate,
-	changes: &[
-		("testName", "testName"),
-		("resultValue", "resultValue"),
-		("resultUnit", "resultUnit"),
-	],
 	aliases: TEST_RESULT_ROW_ALIASES,
 	build_response: build_editor_lb_page_row_response,
 );

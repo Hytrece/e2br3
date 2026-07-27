@@ -215,31 +215,6 @@ fn violation(rule_code: &str, path: &str, message: &str) -> Error {
 	})
 }
 
-pub(super) fn validate_direct_changes(
-	section: &str,
-	changes: &BTreeMap<String, CaseEditorFieldPatch>,
-) -> Result<()> {
-	for binding in bindings_for_section(section) {
-		let Some(patch) = changes.get(binding.request_path) else {
-			continue;
-		};
-		let missing = Value::Null;
-		let value = patch.value.as_ref().unwrap_or(&missing);
-		let null_flavor = patch
-			.null_flavor
-			.as_ref()
-			.and_then(Option::as_deref)
-			.or_else(|| {
-				companion_binding(section, binding)
-					.and_then(|companion| changes.get(companion.request_path))
-					.and_then(|patch| patch.value.as_ref())
-					.and_then(Value::as_str)
-			});
-		validate_binding_value(binding, value, null_flavor, binding.frontend_path)?;
-	}
-	Ok(())
-}
-
 fn normalized_direct_object(
 	source: &Map<String, Value>,
 	aliases: &[(&str, &[&str])],
@@ -289,6 +264,110 @@ pub(super) fn validate_direct_rows(
 	rows: &BTreeMap<String, Value>,
 ) -> Result<()> {
 	let normalized = match section {
+		"CI" => optional_row_object(section, rows, "safetyReportIdentification")?
+			.map(|row| {
+				normalized_direct_object(
+					row,
+					&[
+						("safetyReportId", &["safetyReportId", "safety_report_id"]),
+						(
+							"transmissionDate",
+							&["transmissionDate", "transmission_date"],
+						),
+						("reportType", &["reportType", "report_type"]),
+						(
+							"dateFirstReceivedFromSource",
+							&[
+								"dateFirstReceivedFromSource",
+								"date_first_received_from_source",
+							],
+						),
+						(
+							"dateOfMostRecentInformation",
+							&[
+								"dateOfMostRecentInformation",
+								"date_of_most_recent_information",
+							],
+						),
+						(
+							"fulfilExpeditedCriteria",
+							&[
+								"fulfilExpeditedCriteria",
+								"fulfil_expedited_criteria",
+							],
+						),
+						(
+							"fulfilExpeditedCriteriaNullFlavor",
+							&[
+								"fulfilExpeditedCriteriaNullFlavor",
+								"fulfil_expedited_criteria_null_flavor",
+							],
+						),
+						(
+							"localCriteriaReportType",
+							&[
+								"localCriteriaReportType",
+								"local_criteria_report_type",
+							],
+						),
+						(
+							"combinationProductReportIndicator",
+							&[
+								"combinationProductReportIndicator",
+								"combination_product_report_indicator",
+							],
+						),
+						(
+							"combinationProductReportIndicatorNullFlavor",
+							&[
+								"combinationProductReportIndicatorNullFlavor",
+								"combination_product_report_indicator_null_flavor",
+							],
+						),
+						(
+							"worldwideUniqueId",
+							&["worldwideUniqueId", "worldwide_unique_id"],
+						),
+						(
+							"firstSenderType",
+							&["firstSenderType", "first_sender_type"],
+						),
+						(
+							"additionalDocumentsAvailable",
+							&[
+								"additionalDocumentsAvailable",
+								"additional_documents_available",
+							],
+						),
+						(
+							"otherCaseIdentifiersExist",
+							&[
+								"otherCaseIdentifiersExist",
+								"other_case_identifiers_exist",
+							],
+						),
+						(
+							"otherCaseIdentifiersExistNullFlavor",
+							&[
+								"otherCaseIdentifiersExistNullFlavor",
+								"other_case_identifiers_exist_null_flavor",
+							],
+						),
+						(
+							"nullificationAmendmentCode",
+							&[
+								"nullificationAmendmentCode",
+								"nullificationCode",
+								"nullification_code",
+							],
+						),
+						(
+							"nullificationReason",
+							&["nullificationReason", "nullification_reason"],
+						),
+					],
+				)
+			}),
 		"RP" => {
 			let Some(value) = rows.get("primarySources") else {
 				return Ok(());
@@ -1207,16 +1286,6 @@ fn validate_row_payload_with_indexes(
 mod portable_save_tests {
 	use super::*;
 
-	fn changes(field: &str, value: Value) -> BTreeMap<String, CaseEditorFieldPatch> {
-		BTreeMap::from([(
-			field.to_string(),
-			CaseEditorFieldPatch {
-				value: Some(value),
-				null_flavor: None,
-			},
-		)])
-	}
-
 	fn error_message(error: Error) -> String {
 		match error {
 			Error::ConstraintViolation(detail) => format!(
@@ -1240,37 +1309,6 @@ mod portable_save_tests {
 			.find(|constraint| constraint.code == code)
 			.expect("portable Catalog constraint exists")
 			.message
-	}
-
-	#[test]
-	fn portable_save_rejects_direct_inline_and_null_flavor_values() {
-		let inline =
-			validate_direct_changes("CI", &changes("reportType", json!("9")))
-				.unwrap_err();
-		assert!(error_message(inline).contains(
-			"ICH.C.1.3.ALLOWED.VALUE at safetyReportIdentification.reportType"
-		));
-
-		let null_flavor = validate_direct_changes(
-			"CI",
-			&changes("fulfilExpeditedCriteriaNullFlavor", json!("BAD")),
-		)
-		.unwrap_err();
-		assert!(error_message(null_flavor).contains(
-			"ICH.C.1.7.NULLFLAVOR.ALLOWED at safetyReportIdentification.fulfilExpeditedCriteriaNullFlavor"
-		));
-	}
-
-	#[test]
-	fn portable_save_rejects_direct_overlength_values() {
-		let error = validate_direct_changes(
-			"SD",
-			&changes("senderOrganization", json!("X".repeat(101))),
-		)
-		.unwrap_err();
-		assert!(error_message(error).contains(
-			"ICH.C.3.2.LENGTH.MAX at safetyReportIdentification.senderOrganization"
-		));
 	}
 
 	#[test]

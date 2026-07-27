@@ -693,23 +693,23 @@ async fn editor_ci_complete_fields_round_trip() -> Result<()> {
 		&format!("/api/cases/{case_id}/editor/pages/CI"),
 		json!({
 			"authorities": ["ich", "fda", "mfds"],
-			"changes": {
-				"safetyReportId": { "value": roundtrip_safety_report_id.clone() },
-				"transmissionDate": { "value": "20260722120000+0900" },
-				"reportType": { "value": "2" },
-				"dateFirstReceivedFromSource": { "value": "20260721" },
-				"dateOfMostRecentInformation": { "value": "20260722" },
-				"additionalDocumentsAvailable": { "value": true },
-				"fulfilExpeditedCriteria": { "value": true },
-				"localCriteriaReportType": { "value": "1" },
-				"combinationProductReportIndicator": { "value": "1" },
-				"worldwideUniqueId": { "value": "US-QVIS-2026-0001" },
-				"firstSenderType": { "value": "1" },
-				"otherCaseIdentifiersExist": { "value": true },
-				"nullificationAmendmentCode": { "value": "2" },
-				"nullificationReason": { "value": "CI roundtrip reason" }
-			},
 			"rows": {
+				"safetyReportIdentification": {
+					"safetyReportId": roundtrip_safety_report_id.clone(),
+					"transmissionDate": "20260722120000+0900",
+					"reportType": "2",
+					"dateFirstReceivedFromSource": "20260721",
+					"dateOfMostRecentInformation": "20260722",
+					"additionalDocumentsAvailable": true,
+					"fulfilExpeditedCriteria": true,
+					"localCriteriaReportType": "1",
+					"combinationProductReportIndicator": "1",
+					"worldwideUniqueId": "US-QVIS-2026-0001",
+					"firstSenderType": "1",
+					"otherCaseIdentifiersExist": true,
+					"nullificationAmendmentCode": "2",
+					"nullificationReason": "CI roundtrip reason"
+				},
 				"case": {
 					"reportYear": "2026",
 					"fdaReportType": "4",
@@ -806,8 +806,7 @@ async fn editor_ci_complete_fields_round_trip() -> Result<()> {
 			&format!("/api/cases/{case_id}/editor/pages/CI"),
 			json!({
 				"authorities": ["ich", "fda", "mfds"],
-				"changes": { null_flavor_field: { "value": "NI" } },
-				"rows": {}
+				"rows": { "safetyReportIdentification": { null_flavor_field: "NI" } }
 			}),
 		)
 		.await?;
@@ -825,8 +824,7 @@ async fn editor_ci_complete_fields_round_trip() -> Result<()> {
 			&format!("/api/cases/{case_id}/editor/pages/CI"),
 			json!({
 				"authorities": ["ich", "fda", "mfds"],
-				"changes": { value_field: { "value": restore_value.clone() } },
-				"rows": {}
+				"rows": { "safetyReportIdentification": { value_field: restore_value.clone() } }
 			}),
 		)
 		.await?;
@@ -880,8 +878,7 @@ async fn editor_ci_repeating_rows_create_update_delete_and_restore() -> Result<(
 			json!("UPDATED-LINK"),
 		),
 	] {
-		let mut create_request =
-			json!({ "authorities": ["ich"], "changes": {}, "rows": {} });
+		let mut create_request = json!({ "authorities": ["ich"], "rows": {} });
 		create_request["rows"][owner] = json!([create_row]);
 		let (status, created) = patch_json(
 			&app,
@@ -898,8 +895,7 @@ async fn editor_ci_repeating_rows_create_update_delete_and_restore() -> Result<(
 
 		let mut update_row = json!({ "id": id });
 		update_row[update_field] = updated_value.clone();
-		let mut update_request =
-			json!({ "authorities": ["ich"], "changes": {}, "rows": {} });
+		let mut update_request = json!({ "authorities": ["ich"], "rows": {} });
 		update_request["rows"][owner] = json!([update_row]);
 		let (status, updated) = patch_json(
 			&app,
@@ -911,8 +907,7 @@ async fn editor_ci_repeating_rows_create_update_delete_and_restore() -> Result<(
 		assert_eq!(status, StatusCode::OK, "{owner}: {updated}");
 		assert_eq!(updated["rows"][owner][0][update_field], updated_value);
 
-		let mut delete_request =
-			json!({ "authorities": ["ich"], "changes": {}, "rows": {} });
+		let mut delete_request = json!({ "authorities": ["ich"], "rows": {} });
 		delete_request["rows"][owner] = json!([{ "id": id, "deleted": true }]);
 		let (status, deleted) = patch_json(
 			&app,
@@ -929,8 +924,7 @@ async fn editor_ci_repeating_rows_create_update_delete_and_restore() -> Result<(
 
 		let mut restore_row = json!({ "id": id, "deleted": false });
 		restore_row[update_field] = updated_value.clone();
-		let mut restore_request =
-			json!({ "authorities": ["ich"], "changes": {}, "rows": {} });
+		let mut restore_request = json!({ "authorities": ["ich"], "rows": {} });
 		restore_request["rows"][owner] = json!([restore_row]);
 		let (status, restored) = patch_json(
 			&app,
@@ -950,7 +944,6 @@ async fn editor_ci_repeating_rows_create_update_delete_and_restore() -> Result<(
 		&format!("/api/cases/{case_id}/editor/pages/CI"),
 		json!({
 			"authorities": ["ich"],
-			"changes": {},
 			"rows": { "sourceDocuments": [{ "sourceDocumentName": "created.txt" }] }
 		}),
 	)
@@ -965,7 +958,6 @@ async fn editor_ci_repeating_rows_create_update_delete_and_restore() -> Result<(
 		&format!("/api/cases/{case_id}/editor/pages/CI"),
 		json!({
 			"authorities": ["ich"],
-			"changes": {},
 			"rows": { "sourceDocuments": [{ "id": source_id, "sourceDocumentName": "updated.txt" }] }
 		}),
 	)
@@ -995,7 +987,6 @@ async fn editor_ci_repeating_constraint_rejects_before_write() -> Result<()> {
 		&format!("/api/cases/{case_id}/editor/pages/CI"),
 		json!({
 			"authorities": ["ich"],
-			"changes": {},
 			"rows": {
 				"documentsHeldBySender": [{
 					"documentDescription": "D".repeat(2001)
@@ -1091,8 +1082,7 @@ async fn editor_ci_incomplete_registry_fields_enforce_portable_constraints(
 			&format!("/api/cases/{case_id}/editor/pages/CI"),
 			json!({
 				"authorities": ["ich", "fda"],
-				"changes": { field: { "value": invalid_value } },
-				"rows": {}
+				"rows": { "safetyReportIdentification": { field: invalid_value } }
 			}),
 		)
 		.await?;
@@ -1114,7 +1104,6 @@ async fn editor_ci_incomplete_registry_fields_enforce_portable_constraints(
 		&format!("/api/cases/{case_id}/editor/pages/CI"),
 		json!({
 			"authorities": ["ich", "fda"],
-			"changes": {},
 			"rows": {
 				"linkedReports": [{
 					"linkedReportNumber": "L".repeat(101)
@@ -1280,9 +1269,7 @@ async fn editor_ci_page_patch_updates_only_report_type_and_returns_projection(
 		&cookie,
 		&format!("/api/cases/{case_id}/editor/pages/CI"),
 		json!({
-			"changes": {
-				"reportType": { "value": "3" }
-			}
+			"rows": { "safetyReportIdentification": { "reportType": "3" } }
 		}),
 	)
 	.await?;
@@ -1333,9 +1320,7 @@ async fn ci_patch_rejects_catalog_constraint_before_write() -> Result<()> {
 		&cookie,
 		&format!("/api/cases/{case_id}/editor/pages/CI"),
 		json!({
-			"changes": {
-				"otherCaseIdentifiersExist": { "value": true }
-			}
+			"rows": { "safetyReportIdentification": { "otherCaseIdentifiersExist": true } }
 		}),
 	)
 	.await?;
@@ -1360,9 +1345,7 @@ async fn ci_patch_rejects_catalog_constraint_before_write() -> Result<()> {
 		&cookie,
 		&format!("/api/cases/{case_id}/editor/pages/CI"),
 		json!({
-			"changes": {
-				"otherCaseIdentifiersExist": { "value": false }
-			}
+			"rows": { "safetyReportIdentification": { "otherCaseIdentifiersExist": false } }
 		}),
 	)
 	.await?;
@@ -1405,15 +1388,23 @@ async fn ci_patch_rejects_catalog_constraint_before_write() -> Result<()> {
 
 #[serial]
 #[tokio::test]
-async fn test_editor_direct_content_save_refreshes_validation_cache() -> Result<()> {
+async fn test_editor_direct_content_save_invalidates_summary_until_live_validation(
+) -> Result<()> {
 	let mm = init_test_mm().await?;
 	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
 	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
 	let cookie = cookie_header(&token.to_string());
-	let app = web_server::app(mm);
+	let app = web_server::app(mm.clone());
 	let case_id =
 		create_case_for_editor(&app, &cookie, "EDITOR-CI-REFRESH", &["ich"]).await?;
 	create_safety_report(&app, &cookie, &case_id, "1", false).await?;
+	let (status, body) = get_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/validation?authority=ich"),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK, "{body}");
 
 	let (status, body) = patch_json(
 		&app,
@@ -1421,24 +1412,33 @@ async fn test_editor_direct_content_save_refreshes_validation_cache() -> Result<
 		&format!("/api/cases/{case_id}/editor/pages/CI"),
 		json!({
 			"authorities": ["ich"],
-			"changes": {
-				"reportType": { "value": "3" }
-			},
-			"rows": {}
+			"rows": { "safetyReportIdentification": { "reportType": "3" } }
 		}),
 	)
 	.await?;
 	assert_eq!(status, StatusCode::OK, "{body}");
 
+	assert!(
+		stale_validation_summary_count(&mm, seed.admin.id, seed.org_id, &case_id)
+			.await? > 0,
+		"save must invalidate summary without running full validation"
+	);
+
 	let (status, body) = get_json(
 		&app,
 		&cookie,
-		&format!("/api/cases/{case_id}/validation/cache?authority=ich"),
+		&format!("/api/cases/{case_id}/validation?authority=ich"),
 	)
 	.await?;
 	assert_eq!(status, StatusCode::OK, "{body}");
-	assert_eq!(body["data"]["report"]["authority"], "ich", "{body}");
-	assert_eq!(body["data"]["report"]["case_id"], case_id, "{body}");
+	assert_eq!(body["data"]["authority"], "ich", "{body}");
+	assert_eq!(body["data"]["case_id"], case_id, "{body}");
+	assert_eq!(
+		stale_validation_summary_count(&mm, seed.admin.id, seed.org_id, &case_id)
+			.await?,
+		0,
+		"live validation must refresh summary rows"
+	);
 
 	Ok(())
 }
@@ -1459,7 +1459,6 @@ async fn editor_ci_page_patch_accepts_profiles() -> Result<()> {
 		&format!("/api/cases/{case_id}/editor/pages/CI"),
 		json!({
 			"authorities": ["fda", "mfds"],
-			"changes": {},
 			"rows": {}
 		}),
 	)
@@ -1486,7 +1485,6 @@ async fn editor_ci_page_patch_accepts_authorities() -> Result<()> {
 		&format!("/api/cases/{case_id}/editor/pages/CI"),
 		json!({
 			"authorities": ["fda", "mfds"],
-			"changes": {},
 			"rows": {}
 		}),
 	)
@@ -1516,10 +1514,7 @@ async fn editor_ci_page_patch_rejects_invalid_profiles_before_mutation() -> Resu
 		&format!("/api/cases/{case_id}/editor/pages/CI"),
 		json!({
 			"authorities": ["unknown"],
-			"changes": {
-				"reportType": { "value": "3" }
-			},
-			"rows": {}
+			"rows": { "safetyReportIdentification": { "reportType": "3" } }
 		}),
 	)
 	.await?;
@@ -1567,9 +1562,7 @@ async fn editor_ci_page_patch_can_clear_profile_specific_field() -> Result<()> {
 		&format!("/api/cases/{case_id}/editor/pages/CI"),
 		json!({
 			"authorities": ["fda"],
-			"changes": {
-				"localCriteriaReportType": { "value": null }
-			}
+			"rows": { "safetyReportIdentification": { "localCriteriaReportType": null } }
 		}),
 	)
 	.await?;
@@ -1730,8 +1723,7 @@ async fn editor_remaining_direct_pages_accept_page_patch_with_profiles() -> Resu
 			&cookie,
 			&format!("/api/cases/{case_id}/editor/pages/{section}"),
 			json!({
-				"authorities": ["fda"],
-				"changes": {}
+				"authorities": ["fda"]
 			}),
 		)
 		.await?;
@@ -1745,8 +1737,7 @@ async fn editor_remaining_direct_pages_accept_page_patch_with_profiles() -> Resu
 
 #[serial]
 #[tokio::test]
-async fn editor_remaining_direct_pages_accept_field_delta_changes_with_profiles(
-) -> Result<()> {
+async fn editor_remaining_direct_pages_accept_rows_with_profiles() -> Result<()> {
 	let mm = init_test_mm().await?;
 	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
 	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
@@ -1757,29 +1748,40 @@ async fn editor_remaining_direct_pages_accept_field_delta_changes_with_profiles(
 			.await?;
 
 	let requests = [
-		("RP", json!({ "reporterGivenName": { "value": "Jane" } })),
+		(
+			"RP",
+			json!({ "primarySources": [{ "reporterGivenName": "Jane" }] }),
+		),
 		(
 			"SD",
-			json!({ "senderOrganization": { "value": "Sender Org" } }),
+			json!({ "senderInformation": { "organizationName": "Sender Org" } }),
 		),
 		(
 			"LR",
-			json!({ "literatureReference": { "value": "PMID:1" } }),
+			json!({ "literatureReferences": [{ "referenceText": "PMID:1" }] }),
 		),
-		("SI", json!({ "studyName": { "value": "Study A" } })),
-		("DM", json!({ "patientInitials": { "value": "AB" } })),
-		("NR", json!({ "caseNarrative": { "value": "Narrative" } })),
+		(
+			"SI",
+			json!({ "studyInformation": { "studyName": "Study A" } }),
+		),
+		(
+			"DM",
+			json!({ "patientInformation": { "patientInitials": "AB" } }),
+		),
+		(
+			"NR",
+			json!({ "narrative": { "caseNarrative": "Narrative" } }),
+		),
 	];
 
-	for (section, changes) in requests {
+	for (section, rows) in requests {
 		let (status, body) = patch_json(
 			&app,
 			&cookie,
 			&format!("/api/cases/{case_id}/editor/pages/{section}"),
 			json!({
 				"authorities": ["fda", "mfds"],
-				"changes": changes,
-				"rows": {}
+				"rows": rows
 			}),
 		)
 		.await?;
@@ -1797,7 +1799,7 @@ async fn editor_remaining_direct_pages_accept_field_delta_changes_with_profiles(
 
 #[serial]
 #[tokio::test]
-async fn editor_direct_page_patch_rejects_unknown_field() -> Result<()> {
+async fn editor_direct_page_patch_rejects_unknown_row() -> Result<()> {
 	let mm = init_test_mm().await?;
 	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
 	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
@@ -1813,9 +1815,7 @@ async fn editor_direct_page_patch_rejects_unknown_field() -> Result<()> {
 		&format!("/api/cases/{case_id}/editor/pages/RP"),
 		json!({
 			"authorities": ["fda"],
-			"changes": {
-				"notAReporterField": { "value": "x" }
-			}
+			"rows": { "notAReporterRow": {} }
 		}),
 	)
 	.await?;
@@ -1841,8 +1841,7 @@ async fn editor_direct_page_patch_rejects_unknown_profile() -> Result<()> {
 		&cookie,
 		&format!("/api/cases/{case_id}/editor/pages/NR"),
 		json!({
-			"authorities": ["unknown"],
-			"changes": {}
+			"authorities": ["unknown"]
 		}),
 	)
 	.await?;
@@ -1915,13 +1914,36 @@ async fn editor_rp_page_patch_persists_primary_source_row() -> Result<()> {
 
 	assert_eq!(status, StatusCode::OK, "{body}");
 	assert_eq!(body["rows"]["primarySources"][0]["qualification"], "1");
+	let source_id = body["rows"]["primarySources"][0]["id"]
+		.as_str()
+		.ok_or("missing primary source id")?;
+
+	let (status, body) = patch_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/editor/pages/RP"),
+		json!({
+			"authorities": ["ich"],
+			"rows": {
+				"primarySources": [{
+					"id": source_id,
+					"sequenceNumber": 1,
+					"deleted": true
+				}]
+			}
+		}),
+	)
+	.await?;
+
+	assert_eq!(status, StatusCode::OK, "{body}");
+	assert_eq!(body["rows"]["primarySources"], json!([]));
 
 	Ok(())
 }
 
 #[serial]
 #[tokio::test]
-async fn editor_rp_changes_accept_frontend_canonical_fields() -> Result<()> {
+async fn editor_rp_rows_accept_frontend_canonical_fields() -> Result<()> {
 	let mm = init_test_mm().await?;
 	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
 	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
@@ -1936,13 +1958,13 @@ async fn editor_rp_changes_accept_frontend_canonical_fields() -> Result<()> {
 		&format!("/api/cases/{case_id}/editor/pages/RP"),
 		json!({
 			"authorities": ["ich"],
-			"changes": {
-				"reporterGivenName": { "value": "Canonical" },
-				"reporterCountryNullFlavor": { "value": "UNK" },
-				"reporterEmail": { "value": "canonical@example.test" },
-				"qualification": { "value": "1" },
-				"primarySourceForRegulatoryPurposes": { "value": "1" }
-			}
+			"rows": { "primarySources": [{
+				"reporterGivenName": "Canonical",
+				"reporterCountryNullFlavor": "UNK",
+				"reporterEmail": "canonical@example.test",
+				"qualification": "1",
+				"primarySourceForRegulatoryPurposes": "1"
+			}] }
 		}),
 	)
 	.await?;
@@ -2504,16 +2526,16 @@ async fn editor_sd_page_patch_persists_sender_information_row() -> Result<()> {
 	);
 	assert!(body["rows"].get("messageHeader").is_none(), "{body}");
 
-	// A second scalar change must update the existing singleton instead of
+	// A second row patch must update the existing singleton instead of
 	// attempting to create another sender row.
 	let (status, body) = patch_json(
 		&app,
 		&cookie,
 		&format!("/api/cases/{case_id}/editor/pages/SD"),
 		json!({
-			"changes": {
-				"senderOrganization": { "value": "Sender Org Updated" },
-				"receiverOrganization": { "value": "Receiver Org Updated" }
+			"rows": {
+				"senderInformation": { "organizationName": "Sender Org Updated" },
+				"receiverInformation": { "organizationName": "Receiver Org Updated" }
 			}
 		}),
 	)
@@ -2557,36 +2579,25 @@ async fn editor_sd_complete_fields_round_trip() -> Result<()> {
 		&format!("/api/cases/{case_id}/editor/pages/SD"),
 		json!({
 			"authorities": ["ich", "fda", "mfds"],
-			"changes": {
-				"senderType": { "value": "3" },
-				"senderHealthProfessionalTypeKr1": { "value": "4" },
-				"senderOrganization": { "value": "Sender Org" },
-				"senderDepartment": { "value": "Safety" },
-				"senderPersonTitle": { "value": "Dr" },
-				"senderPersonGivenName": { "value": "Sora" },
-				"senderPersonMiddleName": { "value": "J" },
-				"senderPersonFamilyName": { "value": "Kim" },
-				"senderStreetAddress": { "value": "1 Sender Street" },
-				"senderCity": { "value": "Seoul" },
-				"senderState": { "value": "Seoul" },
-				"senderPostcode": { "value": "04524" },
-				"senderCountryCode": { "value": "KR" },
-				"senderTelephone": { "value": "+821012345678" },
-				"senderFax": { "value": "+8221234567" },
-				"senderEmail": { "value": "sender@example.test" },
-				"receiverType": { "value": "2" },
-				"receiverOrganization": { "value": "Receiver Org" },
-				"receiverDepartment": { "value": "Intake" },
-				"receiverStreet": { "value": "2 Receiver Street" },
-				"receiverCity": { "value": "Busan" },
-				"receiverState": { "value": "Busan" },
-				"receiverPostcode": { "value": "48000" },
-				"receiverCountry": { "value": "KR" },
-				"receiverTelephone": { "value": "+82511234567" },
-				"receiverFax": { "value": "+82517654321" },
-				"receiverEmail": { "value": "receiver@example.test" }
-			},
-			"rows": {}
+			"rows": {
+				"senderInformation": {
+					"senderType": "3", "healthProfessionalTypeKr1": "4",
+					"organizationName": "Sender Org", "department": "Safety",
+					"personTitle": "Dr", "personGivenName": "Sora",
+					"personMiddleName": "J", "personFamilyName": "Kim",
+					"streetAddress": "1 Sender Street", "city": "Seoul",
+					"state": "Seoul", "postcode": "04524", "countryCode": "KR",
+					"telephone": "+821012345678", "fax": "+8221234567",
+					"email": "sender@example.test"
+				},
+				"receiverInformation": {
+					"receiverType": "2", "organizationName": "Receiver Org",
+					"department": "Intake", "streetAddress": "2 Receiver Street",
+					"city": "Busan", "stateProvince": "Busan", "postcode": "48000",
+					"countryCode": "KR", "telephone": "+82511234567",
+					"fax": "+82517654321", "email": "receiver@example.test"
+				}
+			}
 		}),
 	)
 	.await?;
@@ -2710,14 +2721,31 @@ async fn editor_sd_portable_constraints_return_structured_paths() -> Result<()> 
 		("senderFax", too_long.clone(), "ICH.C.3.4.7.LENGTH.MAX"),
 		("senderEmail", too_long.clone(), "ICH.C.3.4.8.LENGTH.MAX"),
 	] {
+		let row_field = match field {
+			"senderHealthProfessionalTypeKr1" => "healthProfessionalTypeKr1",
+			"senderOrganization" => "organizationName",
+			"senderDepartment" => "department",
+			"senderPersonTitle" => "personTitle",
+			"senderPersonGivenName" => "personGivenName",
+			"senderPersonMiddleName" => "personMiddleName",
+			"senderPersonFamilyName" => "personFamilyName",
+			"senderStreetAddress" => "streetAddress",
+			"senderCity" => "city",
+			"senderState" => "state",
+			"senderPostcode" => "postcode",
+			"senderCountryCode" => "countryCode",
+			"senderTelephone" => "telephone",
+			"senderFax" => "fax",
+			"senderEmail" => "email",
+			_ => field,
+		};
 		let (status, body) = patch_json(
 			&app,
 			&cookie,
 			&format!("/api/cases/{case_id}/editor/pages/SD"),
 			json!({
 				"authorities": ["ich", "fda", "mfds"],
-				"changes": { field: { "value": invalid } },
-				"rows": {}
+				"rows": { "senderInformation": { row_field: invalid } }
 			}),
 		)
 		.await?;
@@ -2775,19 +2803,18 @@ async fn editor_sd_page_patch_rejects_export_owned_message_header_change(
 		&format!("/api/cases/{case_id}/editor/pages/SD"),
 		json!({
 			"authorities": ["fda"],
-			"changes": {
-				"messageReceiverIdentifier": { "value": "CDER" },
-				"batchReceiverIdentifier": { "value": "ZZFDA" },
-				"batchTransmissionDate": { "value": "20260724153045" }
-			}
+			"rows": { "messageHeader": {
+				"messageReceiverIdentifier": "CDER",
+				"batchReceiverIdentifier": "ZZFDA",
+				"batchTransmissionDate": "20260724153045"
+			} }
 		}),
 	)
 	.await?;
 
 	assert_eq!(status, StatusCode::BAD_REQUEST, "{body}");
 	assert_eq!(
-		body["error"]["data"]["detail"],
-		"unknown SD field 'batchReceiverIdentifier'",
+		body["error"]["data"]["detail"], "unknown SD row 'messageHeader'",
 		"{body}"
 	);
 
@@ -3024,7 +3051,10 @@ async fn editor_si_page_patch_round_trips_every_contract_field() -> Result<()> {
 		"SP-2026-001"
 	);
 	assert_eq!(body["rows"]["studyInformation"]["study_type_reaction"], "2");
-	assert!(body["rows"]["studyInformation"]["study_type_reaction_kr1"].is_null());
+	assert_eq!(
+		body["rows"]["studyInformation"]["study_type_reaction_kr1"],
+		"1"
+	);
 	assert_eq!(
 		body["rows"]["studyInformation"]["fda_ind_number_occurred"],
 		"123456"
@@ -3161,6 +3191,41 @@ async fn editor_si_portable_constraints_return_structured_paths() -> Result<()> 
 
 #[serial]
 #[tokio::test]
+async fn editor_si_fda_save_ignores_mfds_study_type_field() -> Result<()> {
+	let mm = init_test_mm().await?;
+	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
+	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
+	let cookie = cookie_header(&token.to_string());
+	let app = web_server::app(mm);
+	let case_id =
+		create_case_for_editor(&app, &cookie, "EDITOR-SI-FDA-ONLY", &["ich", "fda"])
+			.await?;
+
+	let (status, body) = patch_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/editor/pages/SI"),
+		json!({
+			"authorities": ["ich", "fda"],
+			"rows": {
+				"studyInformation": {
+					"studyTypeReaction": "1",
+					"studyTypeReactionKr1": "4"
+				}
+			}
+		}),
+	)
+	.await?;
+
+	assert_eq!(status, StatusCode::OK, "{body}");
+	assert_eq!(body["rows"]["studyInformation"]["study_type_reaction"], "1");
+	assert!(body["rows"]["studyInformation"]["study_type_reaction_kr1"].is_null());
+
+	Ok(())
+}
+
+#[serial]
+#[tokio::test]
 async fn editor_dm_page_patch_round_trips_base_patient_fields() -> Result<()> {
 	let mm = init_test_mm().await?;
 	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
@@ -3180,11 +3245,11 @@ async fn editor_dm_page_patch_round_trips_base_patient_fields() -> Result<()> {
 				"patientInformation": {
 					"patientInitials": "ABC",
 					"patientBirthDate": "19900102",
-					"patientAge": {"value": 36.5, "unit": "a"},
-					"gestationPeriod": {"value": 22, "unit": "wk"},
+					"patientAge": 36.5, "unit": "a",
+					"gestationPeriod": 22, "unit": "wk",
 					"patientAgeGroup": "5",
-					"patientWeight": {"value": 62.5},
-					"patientHeight": {"value": 171},
+					"patientWeight": 62.5,
+					"patientHeight": 171,
 					"patientSex": "2",
 					"lastMenstrualPeriodDate": "20260102",
 					"medicalHistoryText": "History text",
@@ -3255,7 +3320,7 @@ async fn editor_dm_page_patch_round_trips_base_patient_fields() -> Result<()> {
 			"rows": {
 				"patientInformation": {
 					"patientInitials": "XYZ",
-					"patientWeight": {"value": 63.0}
+					"patientWeight": 63.0
 				}
 			}
 		}),
@@ -3272,6 +3337,96 @@ async fn editor_dm_page_patch_round_trips_base_patient_fields() -> Result<()> {
 		"19900102"
 	);
 
+	Ok(())
+}
+
+#[serial]
+#[tokio::test]
+async fn editor_dm_page_rows_round_trip_d_7_2_value_and_null_flavor() -> Result<()> {
+	let mm = init_test_mm().await?;
+	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
+	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
+	let cookie = cookie_header(&token.to_string());
+	let app = web_server::app(mm);
+	let case_id =
+		create_case_for_editor(&app, &cookie, "EDITOR-DM-D72-ROWS", &["ich"])
+			.await?;
+
+	let (status, saved_value) = patch_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/editor/pages/DM"),
+		json!({
+			"rows": { "patientInformation": {
+				"medicalHistoryText": "Relevant history"
+			} }
+		}),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK, "{saved_value}");
+	assert_eq!(
+		saved_value["rows"]["patientInformation"]["medical_history_text"],
+		"Relevant history"
+	);
+
+	let (status, saved_null_flavor) = patch_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/editor/pages/DM"),
+		json!({
+			"rows": { "patientInformation": {
+				"medicalHistoryTextNullFlavor": "UNK"
+			} }
+		}),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK, "{saved_null_flavor}");
+	assert_eq!(
+		saved_null_flavor["rows"]["patientInformation"]["medical_history_text"],
+		Value::Null
+	);
+	assert_eq!(
+		saved_null_flavor["rows"]["patientInformation"]
+			["medical_history_text_null_flavor"],
+		"UNK"
+	);
+
+	let (status, reloaded) = get_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/editor/pages/DM"),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK, "{reloaded}");
+	assert_eq!(reloaded["rows"], saved_null_flavor["rows"]);
+
+	Ok(())
+}
+
+#[serial]
+#[tokio::test]
+async fn editor_page_patch_rejects_removed_changes_contract() -> Result<()> {
+	let mm = init_test_mm().await?;
+	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
+	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
+	let cookie = cookie_header(&token.to_string());
+	let app = web_server::app(mm);
+	let case_id =
+		create_case_for_editor(&app, &cookie, "EDITOR-ROWS-ONLY", &["ich"]).await?;
+
+	let (status, body) = patch_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/editor/pages/DM"),
+		json!({
+			"changes": {
+				"medicalHistoryText": "must be rejected"
+			}
+		}),
+	)
+	.await?;
+
+	assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
 	Ok(())
 }
 
@@ -3677,10 +3832,10 @@ async fn editor_dm_page_round_trips_parent_information() -> Result<()> {
 				"parentInfo": {
 					"parentIdentification": "MOTHER-01",
 					"parentBirthDate": "19700102",
-					"parentAge": {"value": 54, "unit": "a"},
+					"parentAge": 54, "unit": "a",
 					"parentLastMenstrualPeriodDate": "20230102",
-					"parentWeight": {"value": 64.5},
-					"parentHeight": {"value": 168},
+					"parentWeight": 64.5,
+					"parentHeight": 168,
 					"parentSex": "2",
 					"medicalHistoryText": "Parent history"
 				}
@@ -3722,7 +3877,7 @@ async fn editor_dm_page_round_trips_parent_information() -> Result<()> {
 			"rows": {
 				"parentInfo": {
 					"id": parent_id,
-					"parentWeight": {"value": 65}
+					"parentWeight": 65
 				}
 			}
 		}),
@@ -4637,9 +4792,9 @@ async fn portable_ae_patch_rejects_before_write() -> Result<()> {
 		&cookie,
 		&format!("/api/cases/{case_id}/editor/pages/AE/rows/{reaction_id}"),
 		json!({
-			"changes": {
-				"reactionPrimarySourceNative": { "value": "X".repeat(251) }
-			}
+			"rows": { "reaction": {
+				"reactionPrimarySourceNative": "X".repeat(251)
+			} }
 		}),
 	)
 	.await?;
@@ -4751,15 +4906,23 @@ async fn portable_direct_rows_patch_rejects_before_write() -> Result<()> {
 
 #[serial]
 #[tokio::test]
-async fn test_editor_repeatable_row_save_refreshes_validation_cache() -> Result<()> {
+async fn test_editor_repeatable_row_save_invalidates_summary_until_live_validation(
+) -> Result<()> {
 	let mm = init_test_mm().await?;
 	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
 	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
 	let cookie = cookie_header(&token.to_string());
-	let app = web_server::app(mm);
+	let app = web_server::app(mm.clone());
 	let case_id =
 		create_case_for_editor(&app, &cookie, "EDITOR-AE-REFRESH", &["ich"]).await?;
 	let reaction_id = create_reaction_fixture(&app, &cookie, &case_id).await?;
+	let (status, body) = get_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/validation?authority=ich"),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK, "{body}");
 
 	let (status, body) = patch_json(
 		&app,
@@ -4767,23 +4930,32 @@ async fn test_editor_repeatable_row_save_refreshes_validation_cache() -> Result<
 		&format!("/api/cases/{case_id}/editor/pages/AE/rows/{reaction_id}"),
 		json!({
 			"authorities": ["ich"],
-			"changes": {
-				"reactionPrimarySourceNative": { "value": "Headache updated" }
-			},
-			"rows": {}
+			"rows": { "reaction": {
+				"reactionPrimarySourceNative": "Headache updated"
+			} }
 		}),
 	)
 	.await?;
 	assert_eq!(status, StatusCode::OK, "{body}");
 
+	assert!(
+		stale_validation_summary_count(&mm, seed.admin.id, seed.org_id, &case_id)
+			.await? > 0
+	);
+
 	let (status, body) = get_json(
 		&app,
 		&cookie,
-		&format!("/api/cases/{case_id}/validation/cache?authority=ich"),
+		&format!("/api/cases/{case_id}/validation?authority=ich"),
 	)
 	.await?;
 	assert_eq!(status, StatusCode::OK, "{body}");
-	assert_eq!(body["data"]["report"]["authority"], "ich", "{body}");
+	assert_eq!(body["data"]["authority"], "ich", "{body}");
+	assert_eq!(
+		stale_validation_summary_count(&mm, seed.admin.id, seed.org_id, &case_id)
+			.await?,
+		0
+	);
 
 	Ok(())
 }
@@ -5065,7 +5237,7 @@ async fn editor_ae_page_row_round_trips_supported_fields() -> Result<()> {
 					"severity": "moderate",
 					"reactionStartDate": "20200102",
 					"reactionEndDate": "20200103",
-					"reactionDuration": {"value": 1, "unit": "d"},
+					"reactionDuration": 1, "unit": "d",
 					"outcome": "1",
 					"medicalConfirmation": true,
 					"reactionCountry": "KR",
@@ -6186,8 +6358,7 @@ async fn message_header_api_rejects_catalog_constraint_before_write() -> Result<
 
 #[serial]
 #[tokio::test]
-async fn editor_repeatable_page_rows_accept_field_delta_changes_with_profiles(
-) -> Result<()> {
+async fn editor_repeatable_page_rows_accept_rows_with_profiles() -> Result<()> {
 	let mm = init_test_mm().await?;
 	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
 	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
@@ -6204,34 +6375,39 @@ async fn editor_repeatable_page_rows_accept_field_delta_changes_with_profiles(
 		(
 			"AE",
 			reaction_id,
-			json!({ "reactionPrimarySourceNative": { "value": "Headache" } }),
+			"reaction",
+			json!({ "reactionPrimarySourceNative": "Headache" }),
 		),
 		(
 			"LB",
 			test_result_id,
-			json!({ "resultValue": { "value": "10" } }),
+			"testResult",
+			json!({ "resultValue": "10" }),
 		),
 		(
 			"DG",
 			drug_id,
-			json!({ "medicinalProduct": { "value": "Drug A" } }),
+			"drug",
+			json!({ "medicinalProduct": "Drug A" }),
 		),
 		(
 			"DH",
 			past_drug_id,
-			json!({ "drugName": { "value": "Past Drug" } }),
+			"pastDrugHistory",
+			json!({ "drugName": "Past Drug" }),
 		),
 	];
 
-	for (section, row_id, changes) in requests {
+	for (section, row_id, row_key, row) in requests {
+		let mut rows = serde_json::Map::new();
+		rows.insert(row_key.to_string(), row);
 		let (status, body) = patch_json(
 			&app,
 			&cookie,
 			&format!("/api/cases/{case_id}/editor/pages/{section}/rows/{row_id}"),
 			json!({
 				"authorities": ["fda"],
-				"changes": changes,
-				"rows": {}
+				"rows": rows
 			}),
 		)
 		.await?;

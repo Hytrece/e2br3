@@ -2,14 +2,13 @@ use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::Json;
 use lib_core::ctx::Ctx;
-use lib_core::model::case_validation_report_cache::CaseValidationReportCacheBmc;
 use lib_core::model::case_validation_summary::CaseValidationSummaryBmc;
 use lib_core::model::message_header::MessageHeaderBmc;
 use lib_core::model::ModelManager;
 use lib_rest_core::rest_result::DataRestResult;
 use lib_rest_core::{Error, Result};
 use lib_web::middleware::mw_auth::CtxW;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use uuid::Uuid;
 use validator::{
 	infer_regulatory_authority_from_receivers, validate_case_for_authorities,
@@ -19,14 +18,6 @@ use validator::{
 #[derive(Debug, Deserialize)]
 pub struct ValidationQuery {
 	pub authority: Option<String>,
-}
-
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct CachedValidationResponse {
-	pub authority: String,
-	pub case_id: Uuid,
-	pub report: Option<CaseValidationReport>,
 }
 
 async fn resolve_authority(
@@ -74,9 +65,6 @@ pub async fn refresh_case_validation_cache(
 	let reports =
 		validate_case_for_authorities(ctx, mm, case_id, authorities).await?;
 	CaseValidationSummaryBmc::upsert_for_reports(ctx, mm, case_id, &reports).await?;
-	for report in &reports {
-		CaseValidationReportCacheBmc::upsert(ctx, mm, case_id, report).await?;
-	}
 	Ok(reports)
 }
 
@@ -102,20 +90,6 @@ pub async fn validate_case(
 					resolve_authority(ctx, mm, case_id, query.authority.as_deref())
 						.await?;
 
-				if let Some(report) = CaseValidationReportCacheBmc::get_fresh(
-					ctx,
-					mm,
-					case_id,
-					authority.as_str(),
-				)
-				.await?
-				{
-					return Ok((
-						StatusCode::OK,
-						Json(DataRestResult { data: report }),
-					));
-				}
-
 				let report =
 					validate_case_for_authority(ctx, mm, case_id, authority).await?;
 				CaseValidationSummaryBmc::upsert_for_reports(
@@ -125,55 +99,7 @@ pub async fn validate_case(
 					&[report.clone()],
 				)
 				.await?;
-				CaseValidationReportCacheBmc::upsert(ctx, mm, case_id, &report)
-					.await?;
-
 				Ok((StatusCode::OK, Json(DataRestResult { data: report })))
-			})
-		},
-	)
-	.await
-}
-
-/// GET /api/cases/{case_id}/validation/cache
-/// Returns only a fresh cached validation report, without computing on cache miss.
-pub async fn get_cached_validation(
-	State(mm): State<ModelManager>,
-	ctx_w: CtxW,
-	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
-	Path(case_id): Path<Uuid>,
-	Query(query): Query<ValidationQuery>,
-) -> Result<(StatusCode, Json<DataRestResult<CachedValidationResponse>>)> {
-	let ctx = ctx_w.0;
-	lib_rest_core::with_authorized_case_child_read(
-		&ctx,
-		&snapshot,
-		&mm,
-		case_id,
-		"case-validation-cache",
-		move |ctx, mm| {
-			Box::pin(async move {
-				let authority =
-					resolve_authority(ctx, mm, case_id, query.authority.as_deref())
-						.await?;
-				let report = CaseValidationReportCacheBmc::get_fresh(
-					ctx,
-					mm,
-					case_id,
-					authority.as_str(),
-				)
-				.await?;
-
-				Ok((
-					StatusCode::OK,
-					Json(DataRestResult {
-						data: CachedValidationResponse {
-							authority: authority.as_str().to_owned(),
-							case_id,
-							report,
-						},
-					}),
-				))
 			})
 		},
 	)

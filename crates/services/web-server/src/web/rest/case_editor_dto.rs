@@ -1,6 +1,5 @@
 use crate::web::rest::case_rest::CaseReadResult;
-use serde::de::Error as DeError;
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sqlx::types::time::OffsetDateTime;
 use std::collections::BTreeMap;
@@ -210,38 +209,11 @@ pub struct CaseEditorFieldIssue {
 }
 
 #[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct CaseEditorPagePatchRequest {
 	pub authorities: Option<Vec<String>>,
 	#[serde(default)]
-	pub changes: BTreeMap<String, CaseEditorFieldPatch>,
-	#[serde(default)]
 	pub rows: BTreeMap<String, Value>,
-}
-
-#[derive(Debug)]
-pub struct CaseEditorFieldPatch {
-	pub value: Option<Value>,
-	pub null_flavor: Option<Option<String>>,
-}
-
-impl<'de> Deserialize<'de> for CaseEditorFieldPatch {
-	fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
-	where
-		D: Deserializer<'de>,
-	{
-		let mut raw = serde_json::Map::<String, Value>::deserialize(deserializer)?;
-		let value = raw.remove("value");
-		let null_flavor = match raw.remove("nullFlavor") {
-			None => None,
-			Some(Value::Null) => Some(None),
-			Some(Value::String(value)) => Some(Some(value)),
-			Some(_) => {
-				return Err(D::Error::custom("nullFlavor must be a string or null"))
-			}
-		};
-		Ok(Self { value, null_flavor })
-	}
 }
 
 #[derive(Debug, Serialize)]

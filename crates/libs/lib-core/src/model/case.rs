@@ -751,7 +751,7 @@ impl CaseBmc {
 				.bind(ctx.user_id()),
 			)
 			.await?;
-		for table in ["case_validation_summaries", "case_validation_reports"] {
+		for table in ["case_validation_summaries"] {
 			dbx.execute(
 				sqlx::query(&format!(
 					"UPDATE {table} SET stale = true WHERE case_id = $1"

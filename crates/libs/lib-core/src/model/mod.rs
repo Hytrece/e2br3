@@ -30,7 +30,6 @@ pub mod case;
 pub mod case_numbering;
 pub mod case_query;
 pub mod case_query_catalog;
-pub mod case_validation_report_cache;
 pub mod case_validation_summary;
 pub mod organization;
 pub mod user; // E2B users table (UUID-based) // Organizations table // Core cases table
