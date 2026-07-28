@@ -112,6 +112,13 @@ async fn test_auth_login_wrong_password() -> Result<()> {
 		.body(Body::from(login_body.to_string()))?;
 	let res = app.oneshot(req).await?;
 	assert_eq!(res.status(), StatusCode::FORBIDDEN);
+	let body: Value =
+		serde_json::from_slice(&to_bytes(res.into_body(), usize::MAX).await?)?;
+	assert_eq!(
+		body.pointer("/error/message"),
+		Some(&json!("LOGIN_INVALID_CREDENTIALS")),
+	);
+	assert_eq!(body.pointer("/error/data/detail"), Some(&Value::Null));
 	Ok(())
 }
 
@@ -130,6 +137,13 @@ async fn test_auth_login_unknown_email() -> Result<()> {
 		.body(Body::from(login_body.to_string()))?;
 	let res = app.oneshot(req).await?;
 	assert_eq!(res.status(), StatusCode::FORBIDDEN);
+	let body: Value =
+		serde_json::from_slice(&to_bytes(res.into_body(), usize::MAX).await?)?;
+	assert_eq!(
+		body.pointer("/error/message"),
+		Some(&json!("LOGIN_INVALID_CREDENTIALS")),
+	);
+	assert_eq!(body.pointer("/error/data/detail"), Some(&Value::Null));
 	Ok(())
 }
 
