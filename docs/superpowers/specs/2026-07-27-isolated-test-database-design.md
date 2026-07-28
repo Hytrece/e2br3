@@ -29,6 +29,13 @@ Add one executable repository-owned entry point:
 subcommands and cannot launch a repository shell script, so no launcher or
 alias layer is added.
 
+All database-backed web-server tests must also fail closed when the runner's
+`E2BR3_TEST_DATABASE_NAME` marker is absent. The shared test initializer must
+never replace `SERVICE_DB_URL` with `app_db`; it returns a direct diagnostic
+instructing the caller to use `scripts/test-isolated-db.sh` instead. This makes
+the runner mandatory rather than conventional and prevents plain `cargo test`
+from mutating the development database.
+
 For each invocation the runner will:
 
 1. Read the existing `SERVICE_DB_URL` as the maintenance connection.
@@ -78,6 +85,8 @@ the same isolation runner.
 - Test failure: preserve the test exit status after cleanup.
 - Cleanup failure: report it and return failure when the tests otherwise
   succeeded; never hide an existing test failure.
+- A database-backed test launched without `E2BR3_TEST_DATABASE_NAME`: fail
+  before opening a database connection and name the required runner command.
 
 ## Testing
 
@@ -93,6 +102,8 @@ Implementation follows test-driven development:
    database is absent afterward.
 5. Run two isolated lightweight invocations concurrently and confirm they use
    different database names and both clean up.
+6. Verify the shared web-server test initializer rejects an invocation without
+   the isolation marker and does not silently select `app_db`.
 
 ## Non-Goals
 
@@ -100,5 +111,5 @@ Implementation follows test-driven development:
 - Replacing PostgreSQL with mocks or an in-memory database.
 - Refactoring production connection management.
 - Repairing unrelated tests or changing RBAC behavior.
-- Automatically intercepting plain `cargo test`; isolated database tests use
-  the explicit `scripts/test-isolated-db.sh` repository command.
+- Intercepting tests that do not use the shared database-backed web-server test
+  initializer.
