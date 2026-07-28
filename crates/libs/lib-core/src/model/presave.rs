@@ -1146,15 +1146,19 @@ pub struct ProductPresave {
 	pub product_id: Option<String>,
 	pub medicinal_product: Option<String>,
 	pub medicinal_product_notation: Option<String>,
+	#[serde(rename = "preApprovalIpName")]
 	pub preapproval_ip_name: Option<String>,
+	#[serde(rename = "drugBrandName")]
 	pub brand_name: Option<String>,
 	pub original_manufacturer: Option<String>,
 	pub product_description: Option<String>,
 	pub mpid: Option<String>,
+	#[serde(rename = "mpidVersionDateNumber")]
 	pub mpid_version: Option<String>,
 	pub mfds_mpid: Option<String>,
 	pub mfds_mpid_version: Option<String>,
 	pub phpid: Option<String>,
+	#[serde(rename = "phpidVersionDateNumber")]
 	pub phpid_version: Option<String>,
 	pub investigational_product_blinded: Option<bool>,
 	pub obtain_drug_country: Option<String>,
@@ -1176,15 +1180,19 @@ pub struct ProductPresaveForCreate {
 	pub product_id: Option<String>,
 	pub medicinal_product: Option<String>,
 	pub medicinal_product_notation: Option<String>,
+	#[serde(rename = "preApprovalIpName")]
 	pub preapproval_ip_name: Option<String>,
+	#[serde(rename = "drugBrandName")]
 	pub brand_name: Option<String>,
 	pub original_manufacturer: Option<String>,
 	pub product_description: Option<String>,
 	pub mpid: Option<String>,
+	#[serde(rename = "mpidVersionDateNumber")]
 	pub mpid_version: Option<String>,
 	pub mfds_mpid: Option<String>,
 	pub mfds_mpid_version: Option<String>,
 	pub phpid: Option<String>,
+	#[serde(rename = "phpidVersionDateNumber")]
 	pub phpid_version: Option<String>,
 	pub investigational_product_blinded: Option<bool>,
 	pub obtain_drug_country: Option<String>,
