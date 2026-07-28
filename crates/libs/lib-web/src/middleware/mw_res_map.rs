@@ -28,6 +28,17 @@ fn normalize_detail_for_client(detail: serde_json::Value) -> serde_json::Value {
 	}
 }
 
+fn is_login_error(error: &Error) -> bool {
+	matches!(
+		error,
+		Error::LoginFailUsernameNotFound
+			| Error::LoginFailEmailNotFound
+			| Error::LoginFailUserHasNoPwd { .. }
+			| Error::LoginFailPwdNotMatching { .. }
+			| Error::LoginFailUserCtxCreate { .. }
+	)
+}
+
 fn map_pg_constraint(code: &str) -> Option<(StatusCode, String)> {
 	// Postgres SQLSTATE reference:
 	// - 23502: not_null_violation
@@ -243,7 +254,7 @@ pub async fn mw_response_map(
 			_ => {
 				// Keep existing behavior for auth/permission/etc.
 				let (status, client) = err.client_status_and_error();
-				let detail = if debug_errors {
+				let detail = if debug_errors && !is_login_error(err) {
 					Some(serde_json::Value::String(format!("{err:?}")))
 				} else {
 					None
