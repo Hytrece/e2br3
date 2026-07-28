@@ -6,7 +6,7 @@
 
 **Architecture:** The submitter owns the AS2 protocol in both directions. `Main.java` (1083 lines) is decomposed into `config`, `api`, `as2`, `ack` and `state` packages. Two listeners: the existing internal JSON API on loopback `9090`, and a new public AS2 receiver on `4080`. The `openas2` transport mode is deleted; OpenAS2 becomes the independent counterparty in cross-implementation tests.
 
-**Tech Stack:** Java 21 (toolchain runs JDK 25), Maven 3.9, JUnit 5.11, BouncyCastle 1.78.1 (`bcprov` + `bcpkix`, **adding `bcmail`**), Jakarta Mail (Angus) for MIME, Jackson 2.18, `com.sun.net.httpserver`, Docker Compose + OpenAS2 4.8.0 for interop testing.
+**Tech Stack:** Java 21 (toolchain runs JDK 25), Maven 3.9, JUnit 5.11, BouncyCastle 1.78.1 (`bcprov` + `bcpkix`, **adding `bcjmail`** — the Jakarta-namespaced S/MIME artifact, not `bcmail`), Jakarta Mail (Angus) for MIME, Jackson 2.18, `com.sun.net.httpserver`, Docker Compose + OpenAS2 4.8.0 for interop testing.
 
 **Spec:** [`docs/superpowers/specs/2026-07-27-as2-submitter-fda-design.md`](../specs/2026-07-27-as2-submitter-fda-design.md) in the `e2br3` repo. Requirements provenance: [`docs/superpowers/research/2026-07-27-as2-official-requirements.md`](../research/2026-07-27-as2-official-requirements.md).
 
@@ -173,8 +173,11 @@ Add to `<dependencies>` after the `bcpkix-jdk18on` block:
 
 ```xml
     <dependency>
+      <!-- bcjmail, not bcmail: bcmail-jdk18on is compiled against the legacy
+           javax.mail namespace and cannot see jakarta.mail types. Same
+           org.bouncycastle.mail.smime.* package, so code is unaffected. -->
       <groupId>org.bouncycastle</groupId>
-      <artifactId>bcmail-jdk18on</artifactId>
+      <artifactId>bcjmail-jdk18on</artifactId>
       <version>${bouncycastle.version}</version>
     </dependency>
     <dependency>
