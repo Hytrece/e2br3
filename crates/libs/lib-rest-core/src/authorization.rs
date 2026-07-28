@@ -598,6 +598,47 @@ where
 	operation(&authorized_ctx, mm).await
 }
 
+pub async fn with_authorized_presave_atomic_create<T, F>(
+	request_ctx: &Ctx,
+	snapshot: &RequestAuthorizationSnapshot,
+	mm: &ModelManager,
+	fingerprint: impl AsRef<str>,
+	operation: F,
+) -> Result<T>
+where
+	F: for<'ctx> FnOnce(
+		&'ctx Ctx,
+		&'ctx ModelManager,
+	) -> Pin<Box<dyn Future<Output = Result<T>> + Send + 'ctx>>,
+{
+	let dbx = mm.dbx();
+	dbx.begin_txn()
+		.await
+		.map_err(lib_core::model::Error::from)?;
+	if let Err(error) = set_full_context_from_ctx_dbx(dbx, request_ctx).await {
+		let _ = dbx.rollback_txn().await;
+		return Err(error.into());
+	}
+	let result = async {
+		let context = AuthorizationFactLoader::new(dbx, snapshot)
+			.presave_create_for_mutation(fingerprint)
+			.await
+			.map_err(map_fact_load_error)?;
+		let action = policy_registry()
+			.context_action::<Proposed<PresaveCreateProposal>>("info.create")
+			.ok_or_else(|| Error::AccessDenied {
+				required_role: "registered info.create action".to_string(),
+			})?;
+		let permit = authorize_contextual_mutation(action, snapshot, context)
+			.map_err(denied)?;
+		let authorized_ctx =
+			rls_ctx_for_authorized_mutation(request_ctx, snapshot, &permit)?;
+		operation(&authorized_ctx, mm).await
+	}
+	.await;
+	finish_fact_transaction(dbx, result).await
+}
+
 pub async fn with_authorized_presave_update<T, F>(
 	request_ctx: &Ctx,
 	snapshot: &RequestAuthorizationSnapshot,

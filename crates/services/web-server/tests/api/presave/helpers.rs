@@ -382,14 +382,19 @@ pub(super) async fn create_named_product_presave_for_sender_via_api(
 		"/api/presaves/products".to_string(),
 		json!({
 			"data": {
-				"sender_presave_id": sender_id,
-				"product_id": format!("REST-PRODUCT-{}", Uuid::new_v4()),
-				"medicinal_product": medicinal_product
+				"rows": {
+					"product": {
+						"senderPresaveId": sender_id,
+						"productId": format!("REST-PRODUCT-{}", Uuid::new_v4()),
+						"medicinalProduct": medicinal_product
+					},
+					"activeSubstances": []
+				}
 			}
 		}),
 	)
 	.await?;
-	data_id(&value)
+	data_rows_id(&value, "product")
 }
 
 pub(super) async fn create_product_presave_with_identity_for_sender_via_api(
@@ -405,15 +410,27 @@ pub(super) async fn create_product_presave_with_identity_for_sender_via_api(
 		"/api/presaves/products".to_string(),
 		json!({
 			"data": {
-				"sender_presave_id": sender_id,
-				"product_id": product_id,
-				"preapproval_ip_name": preapproval_ip_name,
-				"medicinal_product": "REST Product Identity"
+				"rows": {
+					"product": {
+						"senderPresaveId": sender_id,
+						"productId": product_id,
+						"preapprovalIpName": preapproval_ip_name,
+						"medicinalProduct": "REST Product Identity"
+					},
+					"activeSubstances": []
+				}
 			}
 		}),
 	)
 	.await?;
-	data_id(&value)
+	data_rows_id(&value, "product")
+}
+
+pub(super) fn data_rows_id(value: &Value, row_name: &str) -> Result<Uuid> {
+	let id = value["data"]["rows"][row_name]["id"]
+		.as_str()
+		.ok_or("missing data.rows row id")?;
+	Ok(Uuid::parse_str(id)?)
 }
 
 pub(super) async fn create_product_active_substance_via_api(

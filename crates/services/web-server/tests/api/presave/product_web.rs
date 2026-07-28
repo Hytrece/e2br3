@@ -6,6 +6,100 @@ use serde_json::json;
 use serial_test::serial;
 use uuid::Uuid;
 
+#[serial]
+#[tokio::test]
+async fn product_presave_details_accept_case_editor_rows_contract() -> Result<()> {
+	let mm = init_test_mm().await?;
+	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
+	let admin_token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
+	let admin_cookie = cookie_header(&admin_token.to_string());
+	let app = web_server::app(mm);
+	let product_id =
+		create_product_presave_via_api(&app, &admin_cookie, "fda").await?;
+
+	let saved = put_json_ok(
+		&app,
+		&admin_cookie,
+		format!("/api/presaves/products/{product_id}/details"),
+		json!({
+			"data": {
+				"rows": {
+					"product": { "medicinalProduct": "Rows Product" },
+					"activeSubstances": [{
+						"sequenceNumber": 1,
+						"substanceName": "Caffeine",
+						"substanceStrengthValue": "10",
+						"substanceStrengthUnit": "mg",
+						"deleted": false
+					}]
+				}
+			}
+		}),
+	)
+	.await?;
+
+	assert_eq!(
+		saved["data"]["rows"]["product"]["medicinalProduct"],
+		"Rows Product"
+	);
+	assert_eq!(
+		saved["data"]["rows"]["activeSubstances"][0]["substanceName"],
+		"Caffeine"
+	);
+	assert_eq!(
+		saved["data"]["rows"]["activeSubstances"][0]["deleted"],
+		false
+	);
+
+	Ok(())
+}
+
+#[serial]
+#[tokio::test]
+async fn product_presave_create_persists_complete_rows_atomically() -> Result<()> {
+	let mm = init_test_mm().await?;
+	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
+	let admin_token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
+	let admin_cookie = cookie_header(&admin_token.to_string());
+	let app = web_server::app(mm);
+	let sender_id =
+		create_sender_presave_via_api(&app, &admin_cookie, "fda").await?;
+
+	let created = post_json_created(
+		&app,
+		&admin_cookie,
+		"/api/presaves/products".to_string(),
+		json!({
+			"data": { "rows": {
+				"product": {
+					"senderPresaveId": sender_id,
+					"productId": format!("ROWS-{}", Uuid::new_v4()),
+					"medicinalProduct": "Atomic Rows Product"
+				},
+				"activeSubstances": [{
+					"sequenceNumber": 1,
+					"substanceName": "Caffeine",
+					"substanceStrengthValue": "10",
+					"substanceStrengthUnit": "mg",
+					"deleted": false
+				}]
+			} }
+		}),
+	)
+	.await?;
+
+	assert_eq!(
+		created["data"]["rows"]["product"]["medicinalProduct"],
+		"Atomic Rows Product"
+	);
+	assert_eq!(
+		created["data"]["rows"]["activeSubstances"][0]["substanceName"],
+		"Caffeine"
+	);
+	assert!(created["data"]["rows"]["activeSubstances"][0]["id"].is_string());
+	Ok(())
+}
+
 #[tokio::test]
 async fn test_canonical_product_presave_is_authorityless_union_record() -> Result<()>
 {

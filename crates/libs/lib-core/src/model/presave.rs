@@ -1169,7 +1169,7 @@ pub struct ProductPresave {
 }
 
 #[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ProductPresaveForCreate {
 	pub sender_presave_id: Option<Uuid>,
 	pub receiver_presave_id: Option<Uuid>,
@@ -1252,7 +1252,7 @@ impl IntoOrgScopedCreate for ProductPresaveForCreate {
 }
 
 #[derive(Default, Fields, Deserialize)]
-#[serde(deny_unknown_fields)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ProductPresaveForUpdate {
 	pub deleted: Option<bool>,
 	pub sender_presave_id: Option<Uuid>,

@@ -41,9 +41,9 @@ pub(super) use lib_core::model::{self, ModelManager};
 pub(super) use lib_rest_core::rest_params::{ParamsForCreate, ParamsForUpdate};
 pub(super) use lib_rest_core::rest_result::DataRestResult;
 pub(super) use lib_rest_core::{
-	with_authorized_presave_atomic_update, with_authorized_presave_collection,
-	with_authorized_presave_create, with_authorized_presave_read,
-	with_authorized_presave_update, Error, Result,
+	with_authorized_presave_atomic_create, with_authorized_presave_atomic_update,
+	with_authorized_presave_collection, with_authorized_presave_create,
+	with_authorized_presave_read, with_authorized_presave_update, Error, Result,
 };
 pub(super) use lib_web::middleware::mw_auth::CtxW;
 pub(super) use lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW;
