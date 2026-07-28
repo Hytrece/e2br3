@@ -240,13 +240,28 @@ First match wins:
 
 1. **MDN** — `Original-Message-ID` against the stored outbound `Message-ID`.
    Exact.
-2. **File** — the ICH `<messagenumb>` parsed from the payload, against the
-   `<messagenumb>` parsed out of `xmlPayload` at submit time and stored on the
-   record. Authority-agnostic and stable.
+2. **File** — an E2B(R3) identifier echoed by the acknowledgement, against the
+   identifiers parsed out of `xmlPayload` at submit time and stored on the
+   record. See below.
 3. **File** — `caseId` appearing in the delivered filename.
 4. **No match** — persisted as an *orphan ACK*, surfaced on `/internal/status`,
    and still answered with a `processed` MDN. Nothing is dropped and nothing
    returns an error status.
+
+E2B(R3) is HL7 v3, not the R2 `<ichicsr>` structure, so the correlation keys are
+attributes rather than elements. Two are captured at submit time from
+`xmlPayload`:
+
+| Field | XPath |
+| --- | --- |
+| N.1.2 Batch Number | `/MCCI_IN200100UV01/id/@extension` |
+| N.2.r.1 Message Identifier | `/MCCI_IN200100UV01/PORR_IN049016UV/id/@extension` |
+
+Rather than hard-coding a path into the acknowledgement message — whose exact
+schema we cannot verify from an official source — matching collects **every**
+`extension` attribute of every `id` element in the inbound acknowledgement and
+succeeds if any equals a stored batch number or message identifier. This is
+robust to variations in where the acknowledgement echoes the identifier.
 
 FDA's Core ID (`ci<timestamp>.<GUID>`) is not used as a correlation key: it is
 delivered in ACK2, which the AERS path never receives.
@@ -279,6 +294,28 @@ entity, including its MIME headers, after decryption and with the
 canonicalization implied by `micalg`. The mock's partnership sets
 `prevent_canonicalization_for_mic=false`, so cross-implementation testing will
 detect any remaining disagreement.
+
+Canonicalization is the classic source of AS2 MIC mismatches, because the two
+sides can disagree about whether it applies to a given media type. That
+ambiguity is removed by normalizing line endings to CRLF **once, before the MIME
+entity is built**. What we sign and what we hash are then byte-identical and
+already canonical, so a partner that canonicalizes and a partner that does not
+compute the same MIC.
+
+### S/MIME structure
+
+`buildSignedEncryptedPayload` emits raw CMS `SignedData` wrapped in CMS
+`EnvelopedData`. That is not S/MIME: there is no MIME entity, so a standards
+conforming partner cannot find the content type of what it just decrypted.
+This is the most likely reason the crypto path was never seen working against
+OpenAS2.
+
+The outbound message becomes proper S/MIME — a `MimeBodyPart` payload, signed
+into `multipart/signed; protocol="application/pkcs7-signature"; micalg=sha-256`,
+then enveloped into `application/pkcs7-mime; smime-type=enveloped-data`. This
+requires adding `bcmail-jdk18on` and a Jakarta Mail implementation to the build,
+which also supplies the MIME parsing the receiver needs for inbound
+`multipart/signed` MDNs.
 
 ### `remote_submission_id`
 
