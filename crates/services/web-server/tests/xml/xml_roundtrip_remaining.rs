@@ -69,7 +69,7 @@ fn extract_data_id(body: &[u8]) -> Result<String> {
 }
 
 async fn setup_imported_case() -> Result<(axum::Router, String, String)> {
-	init_test_env().await;
+	init_test_env().await?;
 	let Some(examples_dir) = std::env::var("E2BR3_EXAMPLES_DIR")
 		.ok()
 		.map(std::path::PathBuf::from)

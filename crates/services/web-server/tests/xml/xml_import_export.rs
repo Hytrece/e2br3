@@ -479,7 +479,7 @@ async fn mark_case_validated(
 #[serial]
 #[tokio::test]
 async fn test_import_then_export_xml() -> Result<()> {
-	init_test_env().await;
+	init_test_env().await?;
 	let Some(examples_dir) = std::env::var("E2BR3_EXAMPLES_DIR")
 		.ok()
 		.map(std::path::PathBuf::from)
@@ -625,7 +625,7 @@ async fn test_import_then_export_xml() -> Result<()> {
 #[serial]
 #[tokio::test]
 async fn test_import_f_nullflavor_then_readback_test_results() -> Result<()> {
-	init_test_env().await;
+	init_test_env().await?;
 	std::env::set_var("E2BR3_XSD_PATH", resolved_xsd_path());
 
 	let mm = init_test_mm().await?;
@@ -667,7 +667,7 @@ async fn test_import_f_nullflavor_then_readback_test_results() -> Result<()> {
 #[serial]
 #[tokio::test]
 async fn test_import_e_nullflavor_then_readback_reactions() -> Result<()> {
-	init_test_env().await;
+	init_test_env().await?;
 	std::env::set_var("E2BR3_XSD_PATH", resolved_xsd_path());
 
 	let mm = init_test_mm().await?;
@@ -708,7 +708,7 @@ async fn test_import_e_nullflavor_then_readback_reactions() -> Result<()> {
 #[serial]
 #[tokio::test]
 async fn test_import_update_dg_fields_then_export_contains_updates() -> Result<()> {
-	init_test_env().await;
+	init_test_env().await?;
 	let Some(examples_dir) = std::env::var("E2BR3_EXAMPLES_DIR")
 		.ok()
 		.map(std::path::PathBuf::from)

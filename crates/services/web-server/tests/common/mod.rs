@@ -64,11 +64,11 @@ pub struct SeedOrgsManagerCases {
 	pub case_org2: Uuid,
 }
 
-pub async fn init_test_env() {
+pub async fn init_test_env() -> Result<()> {
 	if std::env::var("E2BR3_TEST_DATABASE_NAME").is_err() {
-		std::env::set_var(
-			"SERVICE_DB_URL",
-			"postgres://app_user:dev_only_pwd@localhost/app_db",
+		return Err(
+			"database-backed web-server tests require scripts/test-isolated-db.sh"
+				.into(),
 		);
 	}
 	std::env::set_var("SERVICE_WEB_FOLDER", "web-folder");
@@ -91,10 +91,11 @@ pub async fn init_test_env() {
 			.join("docs/exporter/schema/multicacheschemas/MCCI_IN200100UV01.xsd");
 		std::env::set_var("E2BR3_XSD_PATH", xsd_path);
 	}
+	Ok(())
 }
 
 pub async fn init_test_mm() -> Result<ModelManager> {
-	init_test_env().await;
+	init_test_env().await?;
 	_dev_utils::init_dev().await;
 	apply_test_authorization_isolation_migration().await?;
 	let mm = ModelManager::new().await?;

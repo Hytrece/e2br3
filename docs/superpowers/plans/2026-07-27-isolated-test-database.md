@@ -271,7 +271,79 @@ If no correction was needed, create no empty commit.
 
 ---
 
-### Task 4: Review, merge, and push
+### Task 4: Fail closed when the isolated runner marker is absent
+
+**Files:**
+- Create: `crates/services/web-server/tests/isolation_guard.rs`
+- Modify: `crates/services/web-server/tests/common/mod.rs`
+- Modify: direct `init_test_env()` callers under `crates/services/web-server/tests/`
+
+**Interfaces:**
+- Consumes: `E2BR3_TEST_DATABASE_NAME` exported by `scripts/test-isolated-db.sh`.
+- Produces: `init_test_env() -> Result<()>`, which returns an actionable error before changing or opening `SERVICE_DB_URL` when the marker is absent.
+
+- [x] **Step 1: Write the failing integration test**
+
+Create `crates/services/web-server/tests/isolation_guard.rs`:
+
+```rust
+mod common;
+
+#[tokio::test]
+async fn database_test_without_isolation_marker_is_rejected() {
+	std::env::remove_var("E2BR3_TEST_DATABASE_NAME");
+	std::env::set_var("SERVICE_DB_URL", "postgres://sentinel/must_not_change");
+
+	let error = common::init_test_env().await.unwrap_err();
+
+	assert_eq!(
+		error.to_string(),
+		"database-backed web-server tests require scripts/test-isolated-db.sh"
+	);
+	assert_eq!(
+		std::env::var("SERVICE_DB_URL").unwrap(),
+		"postgres://sentinel/must_not_change"
+	);
+}
+```
+
+- [x] **Step 2: Run the focused test and verify RED**
+
+Run: `cargo test -p web-server --test isolation_guard`
+
+Expected: compilation fails because `init_test_env()` returns `()` and therefore has no `unwrap_err()` method.
+
+- [x] **Step 3: Return a direct diagnostic and propagate it**
+
+Change `init_test_env` to return `Result<()>`. At the very start, require `E2BR3_TEST_DATABASE_NAME`; when absent return the exact diagnostic from Step 1. Remove the `SERVICE_DB_URL=.../app_db` fallback. End with `Ok(())`, propagate the result from `init_test_mm`, and add `?` to every direct caller.
+
+- [x] **Step 4: Run the focused test and verify GREEN**
+
+Run: `cargo test -p web-server --test isolation_guard`
+
+Expected: 1 test passes without opening a PostgreSQL connection.
+
+- [x] **Step 5: Verify the normal runner path**
+
+Run:
+
+```bash
+bash scripts/tests/test_isolated_db.sh
+SERVICE_DB_URL="$maintenance_url" scripts/test-isolated-db.sh -p web-server --test isolation_guard
+```
+
+Expected: the shell contract and Rust isolation guard pass.
+
+- [x] **Step 6: Commit the fail-closed guard**
+
+```bash
+git add crates/services/web-server/tests/common/mod.rs crates/services/web-server/tests/isolation_guard.rs docs/superpowers/plans/2026-07-27-isolated-test-database.md
+git commit -m "test: require isolated database runner for web tests"
+```
+
+---
+
+### Task 5: Review, merge, and push
 
 **Files:**
 - Review the complete diff from the design commit through Task 3.

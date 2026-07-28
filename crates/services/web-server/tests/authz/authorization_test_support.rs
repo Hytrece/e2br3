@@ -155,7 +155,7 @@ pub async fn init_clean_bootstrap_authorization_test_db(
 }
 
 async fn new_isolated_database() -> Result<AuthorizationTestDb> {
-	init_test_env().await;
+	init_test_env().await?;
 	let database_url = std::env::var("SERVICE_TEST_MIGRATION_DB_URL")
 		.or_else(|_| std::env::var("SERVICE_DB_URL"))?;
 	let schema = format!("rbac_test_{}", Uuid::new_v4().simple());
