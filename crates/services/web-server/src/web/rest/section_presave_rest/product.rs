@@ -158,11 +158,7 @@ pub async fn delete_product_presave(
 
 #[derive(Debug, Serialize)]
 pub struct ProductPresaveDetails {
-	pub id: Uuid,
 	pub rows: ProductPresaveRows,
-	// Transitional response keys; removed after Product callers migrate.
-	pub parent: Value,
-	pub active_substances: Vec<Value>,
 }
 
 #[derive(Debug, Serialize)]
@@ -175,29 +171,7 @@ pub struct ProductPresaveRows {
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ProductPresaveDetailsForUpdate {
-	pub rows: Option<ProductPresaveRowsForUpdate>,
-	// Transitional request keys; removed after Product callers migrate.
-	pub parent: Option<ProductPresaveForUpdate>,
-	#[serde(alias = "active_substances")]
-	pub active_substances: Option<Vec<ProductActiveSubstanceDetailsForUpdate>>,
-}
-
-impl ProductPresaveDetailsForUpdate {
-	fn into_rows(self) -> Result<ProductPresaveRowsForUpdate> {
-		if let Some(rows) = self.rows {
-			if self.parent.is_some() || self.active_substances.is_some() {
-				return Err(Error::BadRequest {
-					message: "product rows cannot be mixed with legacy detail keys"
-						.into(),
-				});
-			}
-			return Ok(rows);
-		}
-		Ok(ProductPresaveRowsForUpdate {
-			product: self.parent,
-			active_substances: self.active_substances,
-		})
-	}
+	pub rows: ProductPresaveRowsForUpdate,
 }
 
 #[derive(Deserialize)]
@@ -211,23 +185,19 @@ pub struct ProductPresaveRowsForUpdate {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ProductActiveSubstanceDetailsForUpdate {
 	pub id: Option<Uuid>,
-	#[serde(default, alias = "_delete")]
+	#[serde(default)]
 	pub deleted: bool,
-	#[serde(alias = "sequence_number")]
 	pub sequence_number: Option<i32>,
-	#[serde(alias = "substance_name")]
 	pub substance_name: Option<String>,
-	#[serde(alias = "substance_termid_version")]
+	#[serde(rename = "substanceTermIdVersion")]
 	pub substance_termid_version: Option<String>,
-	#[serde(alias = "substance_termid")]
+	#[serde(rename = "substanceTermId")]
 	pub substance_termid: Option<String>,
-	#[serde(alias = "mfds_version")]
 	pub mfds_version: Option<String>,
-	#[serde(alias = "mfds_id")]
 	pub mfds_id: Option<String>,
-	#[serde(rename = "substanceStrengthValue", alias = "strength_value")]
+	#[serde(rename = "substanceStrengthValue")]
 	pub strength_value: Option<rust_decimal::Decimal>,
-	#[serde(rename = "substanceStrengthUnit", alias = "strength_unit")]
+	#[serde(rename = "substanceStrengthUnit")]
 	pub strength_unit: Option<String>,
 }
 
@@ -308,7 +278,7 @@ pub async fn update_product_presave_details(
 		move |ctx, mm| {
 			Box::pin(async move {
 				let ParamsForUpdate { data } = params;
-				let rows = data.into_rows()?;
+				let rows = data.rows;
 				if rows
 					.product
 					.as_ref()
@@ -320,7 +290,7 @@ pub async fn update_product_presave_details(
 								.into(),
 						});
 					}
-					PresaveLifecycleService::archive(
+					PresaveLifecycleService::archive_in_current_txn(
 						ctx,
 						mm,
 						PresaveKind::Product,
@@ -365,17 +335,11 @@ async fn load_product_presave_details(
 	let parent = ProductPresaveBmc::get(ctx, mm, id).await?;
 	let active_substances =
 		ProductPresaveActiveSubstanceBmc::list_by_parent(ctx, mm, id).await?;
-	let parent_value =
-		serde_json::to_value(parent).map_err(|err| Error::BadRequest {
+	let product = camelize_value(serde_json::to_value(parent).map_err(|err| {
+		Error::BadRequest {
 			message: format!("product presave serialization failed: {err}"),
-		})?;
-	let product = camelize_value(parent_value.clone());
-	let legacy_active_substances = active_substances
-		.iter()
-		.map(|row| {
-			serde_json::to_value(row).expect("serializable product substance")
-		})
-		.collect();
+		}
+	})?);
 	let canonical_active_substances = active_substances
 		.into_iter()
 		.map(|substance| {
@@ -384,6 +348,12 @@ async fn load_product_presave_details(
 					.expect("serializable product substance"),
 			);
 			if let Some(row) = value.as_object_mut() {
+				if let Some(term_id_version) = row.remove("substanceTermidVersion") {
+					row.insert("substanceTermIdVersion".into(), term_id_version);
+				}
+				if let Some(term_id) = row.remove("substanceTermid") {
+					row.insert("substanceTermId".into(), term_id);
+				}
 				if let Some(strength) = row.remove("strengthValue") {
 					row.insert("substanceStrengthValue".into(), strength);
 				}
@@ -396,13 +366,10 @@ async fn load_product_presave_details(
 		})
 		.collect();
 	Ok(ProductPresaveDetails {
-		id,
 		rows: ProductPresaveRows {
 			product,
 			active_substances: canonical_active_substances,
 		},
-		parent: parent_value,
-		active_substances: legacy_active_substances,
 	})
 }
 

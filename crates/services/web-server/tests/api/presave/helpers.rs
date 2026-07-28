@@ -414,7 +414,7 @@ pub(super) async fn create_product_presave_with_identity_for_sender_via_api(
 					"product": {
 						"senderPresaveId": sender_id,
 						"productId": product_id,
-						"preapprovalIpName": preapproval_ip_name,
+						"preApprovalIpName": preapproval_ip_name,
 						"medicinalProduct": "REST Product Identity"
 					},
 					"activeSubstances": []

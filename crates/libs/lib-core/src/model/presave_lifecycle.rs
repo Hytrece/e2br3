@@ -58,6 +58,15 @@ impl PresaveLifecycleService {
 		Self::mutate(ctx, mm, kind, id, true).await
 	}
 
+	pub async fn archive_in_current_txn(
+		ctx: &Ctx,
+		mm: &ModelManager,
+		kind: PresaveKind,
+		id: Uuid,
+	) -> Result<()> {
+		Self::mutate_in_current_txn(ctx, mm.dbx(), kind, id, false).await
+	}
+
 	async fn mutate(
 		ctx: &Ctx,
 		mm: &ModelManager,
@@ -73,22 +82,8 @@ impl PresaveLifecycleService {
 			return Err(error);
 		}
 
-		let result = async {
-			let receiver_name = Self::lock_target(dbx, ctx, kind, id).await?;
-			if Self::has_dependencies(dbx, ctx, kind, id, receiver_name.as_deref())
-				.await?
-			{
-				return Err(Error::Conflict {
-					message: kind.conflict_message().to_string(),
-				});
-			}
-			if hard_delete {
-				Self::delete_row_in_current_txn(dbx, kind, id).await
-			} else {
-				Self::archive_row_in_current_txn(dbx, ctx, kind, id).await
-			}
-		}
-		.await;
+		let result =
+			Self::mutate_in_current_txn(ctx, dbx, kind, id, hard_delete).await;
 
 		match result {
 			Ok(()) => {
@@ -99,6 +94,28 @@ impl PresaveLifecycleService {
 				dbx.rollback_txn().await?;
 				Err(error)
 			}
+		}
+	}
+
+	async fn mutate_in_current_txn(
+		ctx: &Ctx,
+		dbx: &crate::model::store::dbx::Dbx,
+		kind: PresaveKind,
+		id: Uuid,
+		hard_delete: bool,
+	) -> Result<()> {
+		let receiver_name = Self::lock_target(dbx, ctx, kind, id).await?;
+		if Self::has_dependencies(dbx, ctx, kind, id, receiver_name.as_deref())
+			.await?
+		{
+			return Err(Error::Conflict {
+				message: kind.conflict_message().to_string(),
+			});
+		}
+		if hard_delete {
+			Self::delete_row_in_current_txn(dbx, kind, id).await
+		} else {
+			Self::archive_row_in_current_txn(dbx, ctx, kind, id).await
 		}
 	}
 
