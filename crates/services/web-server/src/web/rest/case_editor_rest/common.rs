@@ -981,4 +981,35 @@ mod canonical_row_persistence_tests {
 		assert_eq!(model.get("drug_name"), Some(&Value::Null));
 		assert_eq!(model.get("drug_name_null_flavor"), Some(&json!("UNK")));
 	}
+
+	#[test]
+	fn ae_required_intervention_maps_as_bool() {
+		let row = json!({ "requiredIntervention": true })
+			.as_object()
+			.expect("row object")
+			.clone();
+		let value = row_model_value(
+			"AE",
+			"",
+			&row,
+			&[("required_intervention", &["requiredIntervention"])],
+			&[],
+		);
+		let model = parse_row_model::<ReactionForUpdate>("AE", "reaction", value)
+			.expect("typed reaction update");
+
+		assert_eq!(model.required_intervention, Some(true));
+	}
+
+	#[test]
+	fn parent_medical_history_keeps_continuing_null_flavor() {
+		let model = parse_row_model::<ParentMedicalHistoryForUpdate>(
+			"DM",
+			"parentMedicalHistory",
+			json!({"continuing_null_flavor": "NASK"}),
+		)
+		.expect("typed parent history update");
+
+		assert_eq!(model.continuing_null_flavor.as_deref(), Some("NASK"));
+	}
 }

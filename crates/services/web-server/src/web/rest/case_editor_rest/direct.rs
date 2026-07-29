@@ -2318,6 +2318,8 @@ async fn apply_dm_page_rows_patch(
 			let meddra_code = string_field(history, &["meddraCode"]);
 			let start_date_null_flavor =
 				null_flavor_field(history, &["startDateNullFlavor"]);
+			let continuing_null_flavor =
+				null_flavor_field(history, &["continuingNullFlavor"]);
 			let end_date_null_flavor =
 				null_flavor_field(history, &["endDateNullFlavor"]);
 			let update = ParentMedicalHistoryForUpdate {
@@ -2331,6 +2333,7 @@ async fn apply_dm_page_rows_patch(
 				)?,
 				start_date_null_flavor: start_date_null_flavor.clone(),
 				continuing: bool_field(history, &["continuing"]),
+				continuing_null_flavor: continuing_null_flavor.clone(),
 				end_date: date_field(
 					page_id,
 					history,
@@ -2354,6 +2357,7 @@ async fn apply_dm_page_rows_patch(
 							}),
 						meddra_code,
 						start_date_null_flavor,
+						continuing_null_flavor,
 						end_date_null_flavor,
 					},
 				)

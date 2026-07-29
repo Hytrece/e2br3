@@ -337,6 +337,8 @@ CREATE TABLE parent_medical_history (
 
     -- D.10.7.1.r.3 - Continuing
     continuing BOOLEAN,
+    continuing_null_flavor VARCHAR(4) CHECK (continuing_null_flavor IN ('MSK', 'UNK', 'ASKU', 'NASK')),
+    CHECK (continuing IS NULL OR continuing_null_flavor IS NULL),
 
     -- D.10.7.1.r.4 - End Date
     end_date DATE,

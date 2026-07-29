@@ -756,6 +756,48 @@ pub(super) fn validate_direct_rows(
 						)
 					})
 					.unwrap_or_default();
+			if let Some(value) = rows.get("patientIdentifiers") {
+				let identifiers =
+					value.as_array().ok_or_else(|| Error::BadRequest {
+						message: format!(
+							"{section}.patientIdentifiers must be an array"
+						),
+					})?;
+				for value in identifiers {
+					let row = as_object(section, "patientIdentifiers", value)?;
+					if bool_field(row, &["deleted", "_delete"]) == Some(true) {
+						continue;
+					}
+					let Some(target) = string_field(
+						row,
+						&["identifierTypeCode", "identifier_type_code"],
+					)
+					.and_then(|code| match code.as_str() {
+						"1" => Some("gpMedicalRecordNumber"),
+						"2" => Some("specialistRecordNumber"),
+						"3" => Some("hospitalRecordNumber"),
+						"4" => Some("investigationNumber"),
+						_ => None,
+					}) else {
+						continue;
+					};
+					if let Some(value) = row
+						.get("identifierValue")
+						.or_else(|| row.get("identifier_value"))
+						.filter(|value| !value.is_null())
+					{
+						normalized.insert(target.to_string(), value.clone());
+					}
+					if let Some(value) = row
+						.get("identifierValueNullFlavor")
+						.or_else(|| row.get("identifier_value_null_flavor"))
+						.filter(|value| !value.is_null())
+					{
+						normalized
+							.insert(format!("{target}NullFlavor"), value.clone());
+					}
+				}
+			}
 			if let Some(value) = rows.get("medicalHistoryEpisodes") {
 				let Some(episodes) = value.as_array() else {
 					return Err(Error::BadRequest {
@@ -1428,6 +1470,71 @@ mod portable_save_tests {
 		let error = validate_direct_rows("SD", &sender_rows).unwrap_err();
 		assert!(error_message(error)
 			.contains("ICH.C.3.2.LENGTH.MAX at senderInformation.organizationName"));
+	}
+
+	#[test]
+	fn dm_identifier_rows_project_to_flattened_portable_bindings() {
+		let rows = BTreeMap::from([
+			("patientInformation".to_string(), json!({})),
+			(
+				"patientIdentifiers".to_string(),
+				json!([{
+					"identifierTypeCode": "1",
+					"identifierValue": "X".repeat(101),
+					"identifierValueNullFlavor": null
+				}]),
+			),
+		]);
+		let detail =
+			constraint_violation(validate_direct_rows("DM", &rows).unwrap_err());
+		assert_eq!(detail.rule_code, "ICH.D.1.1.1.LENGTH.MAX");
+		assert_eq!(detail.path, "patientInformation.gpMedicalRecordNumber");
+
+		let rows = BTreeMap::from([
+			("patientInformation".to_string(), json!({})),
+			(
+				"patientIdentifiers".to_string(),
+				json!([{
+					"identifierTypeCode": "4",
+					"identifierValue": "INV-1",
+					"identifierValueNullFlavor": "MSK"
+				}]),
+			),
+		]);
+		let detail =
+			constraint_violation(validate_direct_rows("DM", &rows).unwrap_err());
+		assert_eq!(detail.rule_code, "ICH.D.1.1.4.NULLFLAVOR.ALLOWED");
+		assert_eq!(
+			detail.path,
+			"patientInformation.investigationNumberNullFlavor"
+		);
+	}
+
+	#[test]
+	fn dm_parent_history_continuing_uses_split_pair() {
+		let rows = BTreeMap::from([
+			("patientInformation".to_string(), json!({})),
+			(
+				"parentMedicalHistory".to_string(),
+				json!([{"continuing": null, "continuingNullFlavor": "NASK"}]),
+			),
+		]);
+		validate_direct_rows("DM", &rows).unwrap();
+
+		let rows = BTreeMap::from([
+			("patientInformation".to_string(), json!({})),
+			(
+				"parentMedicalHistory".to_string(),
+				json!([{"continuing": true, "continuingNullFlavor": "NASK"}]),
+			),
+		]);
+		let detail =
+			constraint_violation(validate_direct_rows("DM", &rows).unwrap_err());
+		assert_eq!(detail.rule_code, "ICH.D.10.7.1.r.3.NULLFLAVOR.ALLOWED");
+		assert_eq!(
+			detail.path,
+			"patientInformation.parentInformation.medicalHistoryEpisodes.0.continuingNullFlavor"
+		);
 	}
 
 	#[test]
