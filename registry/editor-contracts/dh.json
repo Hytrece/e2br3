@@ -2,18 +2,213 @@
   "pageId": "DH",
   "registryFile": "sections/d-patient.json",
   "fields": [
-    {"code":"D.8.r.1","authority":"ICH","frontendPath":"patientInformation.pastDrugHistory[].drugName","projectionPath":"pastDrugHistory.drug_name","patch":{"kind":"row","owner":"pastDrugHistory"},"roundTripValue":"Prior drug","constraint":{"status":"verified","ruleCode":"ICH.D.8.r.1.LENGTH.MAX"}},
-    {"code":"D.8.r.1.KR.1a","authority":"MFDS","frontendPath":"patientInformation.pastDrugHistory[].mfdsMedicinalProductVersion","projectionPath":"pastDrugHistory.mfds_medicinal_product_version","patch":{"kind":"row","owner":"pastDrugHistory"},"roundTripValue":"2026","constraint":{"status":"verified","ruleCode":"MFDS.D.8.r.1.KR.1a.LENGTH.MAX"}},
-    {"code":"D.8.r.1.KR.1b","authority":"MFDS","frontendPath":"patientInformation.pastDrugHistory[].mfdsMedicinalProductId","projectionPath":"pastDrugHistory.mfds_medicinal_product_id","patch":{"kind":"row","owner":"pastDrugHistory"},"roundTripValue":"MFDS-001","constraint":{"status":"verified","ruleCode":"MFDS.D.8.r.1.KR.1b.LENGTH.MAX"}},
-    {"code":"D.8.r.2a","authority":"ICH","frontendPath":"patientInformation.pastDrugHistory[].mpidVersion","projectionPath":"pastDrugHistory.mpid_version","patch":{"kind":"row","owner":"pastDrugHistory"},"roundTripValue":"1","constraint":{"status":"verified","ruleCode":"ICH.D.8.r.2a.LENGTH.MAX"}},
-    {"code":"D.8.r.2b","authority":"ICH","frontendPath":"patientInformation.pastDrugHistory[].mpid","projectionPath":"pastDrugHistory.mpid","patch":{"kind":"row","owner":"pastDrugHistory"},"roundTripValue":"MPID-001","constraint":{"status":"verified","ruleCode":"ICH.D.8.r.2b.LENGTH.MAX"}},
-    {"code":"D.8.r.3a","authority":"ICH","frontendPath":"patientInformation.pastDrugHistory[].phpidVersion","projectionPath":"pastDrugHistory.phpid_version","patch":{"kind":"row","owner":"pastDrugHistory"},"roundTripValue":"1","constraint":{"status":"verified","ruleCode":"ICH.D.8.r.3a.LENGTH.MAX"}},
-    {"code":"D.8.r.3b","authority":"ICH","frontendPath":"patientInformation.pastDrugHistory[].phpid","projectionPath":"pastDrugHistory.phpid","patch":{"kind":"row","owner":"pastDrugHistory"},"roundTripValue":"PHPID-001","constraint":{"status":"verified","ruleCode":"ICH.D.8.r.3b.LENGTH.MAX"}},
-    {"code":"D.8.r.4","authority":"ICH","frontendPath":"patientInformation.pastDrugHistory[].startDate","projectionPath":"pastDrugHistory.start_date","patch":{"kind":"row","owner":"pastDrugHistory"},"roundTripValue":"2020-01-02","constraint":{"status":"verified","ruleCode":"ICH.D.8.r.4.ALLOWED.VALUE"}},
-    {"code":"D.8.r.5","authority":"ICH","frontendPath":"patientInformation.pastDrugHistory[].endDate","projectionPath":"pastDrugHistory.end_date","patch":{"kind":"row","owner":"pastDrugHistory"},"roundTripValue":"2021-01-02","constraint":{"status":"verified","ruleCode":"ICH.D.8.r.5.ALLOWED.VALUE"}},
-    {"code":"D.8.r.6a","authority":"ICH","frontendPath":"patientInformation.pastDrugHistory[].indicationMeddraVersion","projectionPath":"pastDrugHistory.indication_meddra_version","patch":{"kind":"row","owner":"pastDrugHistory"},"roundTripValue":"26.0","constraint":{"status":"verified","ruleCode":"ICH.D.8.r.6a.LENGTH.MAX"}},
-    {"code":"D.8.r.6b","authority":"ICH","frontendPath":"patientInformation.pastDrugHistory[].indicationMeddraCode","projectionPath":"pastDrugHistory.indication_meddra_code","patch":{"kind":"row","owner":"pastDrugHistory"},"roundTripValue":"10000001","constraint":{"status":"verified","ruleCode":"ICH.D.8.r.6b.LENGTH.MAX"}},
-    {"code":"D.8.r.7a","authority":"ICH","frontendPath":"patientInformation.pastDrugHistory[].reactionMeddraVersion","projectionPath":"pastDrugHistory.reaction_meddra_version","patch":{"kind":"row","owner":"pastDrugHistory"},"roundTripValue":"26.0","constraint":{"status":"verified","ruleCode":"ICH.D.8.r.7a.LENGTH.MAX"}},
-    {"code":"D.8.r.7b","authority":"ICH","frontendPath":"patientInformation.pastDrugHistory[].reactionMeddraCode","projectionPath":"pastDrugHistory.reaction_meddra_code","patch":{"kind":"row","owner":"pastDrugHistory"},"roundTripValue":"10000001","constraint":{"status":"verified","ruleCode":"ICH.D.8.r.7b.LENGTH.MAX"}}
+    {
+      "code": "D.8.r.1",
+      "authority": "ICH",
+      "frontendPath": "patientInformation.pastDrugHistory[].drugName",
+      "projectionPath": "pastDrugHistory.drug_name",
+      "patch": {
+        "kind": "row",
+        "owner": "pastDrugHistory"
+      },
+      "roundTripValue": "Prior drug",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.D.8.r.1.LENGTH.MAX"
+      },
+      "payloadPath": "drugName"
+    },
+    {
+      "code": "D.8.r.1.KR.1a",
+      "authority": "MFDS",
+      "frontendPath": "patientInformation.pastDrugHistory[].mfdsMedicinalProductVersion",
+      "projectionPath": "pastDrugHistory.mfds_medicinal_product_version",
+      "patch": {
+        "kind": "row",
+        "owner": "pastDrugHistory"
+      },
+      "roundTripValue": "2026",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "MFDS.D.8.r.1.KR.1a.LENGTH.MAX"
+      },
+      "payloadPath": "mfdsMedicinalProductVersion"
+    },
+    {
+      "code": "D.8.r.1.KR.1b",
+      "authority": "MFDS",
+      "frontendPath": "patientInformation.pastDrugHistory[].mfdsMedicinalProductId",
+      "projectionPath": "pastDrugHistory.mfds_medicinal_product_id",
+      "patch": {
+        "kind": "row",
+        "owner": "pastDrugHistory"
+      },
+      "roundTripValue": "MFDS-001",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "MFDS.D.8.r.1.KR.1b.LENGTH.MAX"
+      },
+      "payloadPath": "mfdsMedicinalProductId"
+    },
+    {
+      "code": "D.8.r.2a",
+      "authority": "ICH",
+      "frontendPath": "patientInformation.pastDrugHistory[].mpidVersion",
+      "projectionPath": "pastDrugHistory.mpid_version",
+      "patch": {
+        "kind": "row",
+        "owner": "pastDrugHistory"
+      },
+      "roundTripValue": "1",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.D.8.r.2a.LENGTH.MAX"
+      },
+      "payloadPath": "mpidVersion"
+    },
+    {
+      "code": "D.8.r.2b",
+      "authority": "ICH",
+      "frontendPath": "patientInformation.pastDrugHistory[].mpid",
+      "projectionPath": "pastDrugHistory.mpid",
+      "patch": {
+        "kind": "row",
+        "owner": "pastDrugHistory"
+      },
+      "roundTripValue": "MPID-001",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.D.8.r.2b.LENGTH.MAX"
+      },
+      "payloadPath": "mpid"
+    },
+    {
+      "code": "D.8.r.3a",
+      "authority": "ICH",
+      "frontendPath": "patientInformation.pastDrugHistory[].phpidVersion",
+      "projectionPath": "pastDrugHistory.phpid_version",
+      "patch": {
+        "kind": "row",
+        "owner": "pastDrugHistory"
+      },
+      "roundTripValue": "1",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.D.8.r.3a.LENGTH.MAX"
+      },
+      "payloadPath": "phpidVersion"
+    },
+    {
+      "code": "D.8.r.3b",
+      "authority": "ICH",
+      "frontendPath": "patientInformation.pastDrugHistory[].phpid",
+      "projectionPath": "pastDrugHistory.phpid",
+      "patch": {
+        "kind": "row",
+        "owner": "pastDrugHistory"
+      },
+      "roundTripValue": "PHPID-001",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.D.8.r.3b.LENGTH.MAX"
+      },
+      "payloadPath": "phpid"
+    },
+    {
+      "code": "D.8.r.4",
+      "authority": "ICH",
+      "frontendPath": "patientInformation.pastDrugHistory[].startDate",
+      "projectionPath": "pastDrugHistory.start_date",
+      "patch": {
+        "kind": "row",
+        "owner": "pastDrugHistory"
+      },
+      "roundTripValue": "20200102",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.D.8.r.4.ALLOWED.VALUE"
+      },
+      "payloadPath": "startDate"
+    },
+    {
+      "code": "D.8.r.5",
+      "authority": "ICH",
+      "frontendPath": "patientInformation.pastDrugHistory[].endDate",
+      "projectionPath": "pastDrugHistory.end_date",
+      "patch": {
+        "kind": "row",
+        "owner": "pastDrugHistory"
+      },
+      "roundTripValue": "20210102",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.D.8.r.5.ALLOWED.VALUE"
+      },
+      "payloadPath": "endDate"
+    },
+    {
+      "code": "D.8.r.6a",
+      "authority": "ICH",
+      "frontendPath": "patientInformation.pastDrugHistory[].indicationMeddraVersion",
+      "projectionPath": "pastDrugHistory.indication_meddra_version",
+      "patch": {
+        "kind": "row",
+        "owner": "pastDrugHistory"
+      },
+      "roundTripValue": "26.0",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.D.8.r.6a.LENGTH.MAX"
+      },
+      "payloadPath": "indicationMeddraVersion"
+    },
+    {
+      "code": "D.8.r.6b",
+      "authority": "ICH",
+      "frontendPath": "patientInformation.pastDrugHistory[].indicationMeddraCode",
+      "projectionPath": "pastDrugHistory.indication_meddra_code",
+      "patch": {
+        "kind": "row",
+        "owner": "pastDrugHistory"
+      },
+      "roundTripValue": "10000001",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.D.8.r.6b.LENGTH.MAX"
+      },
+      "payloadPath": "indicationMeddraCode"
+    },
+    {
+      "code": "D.8.r.7a",
+      "authority": "ICH",
+      "frontendPath": "patientInformation.pastDrugHistory[].reactionMeddraVersion",
+      "projectionPath": "pastDrugHistory.reaction_meddra_version",
+      "patch": {
+        "kind": "row",
+        "owner": "pastDrugHistory"
+      },
+      "roundTripValue": "26.0",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.D.8.r.7a.LENGTH.MAX"
+      },
+      "payloadPath": "reactionMeddraVersion"
+    },
+    {
+      "code": "D.8.r.7b",
+      "authority": "ICH",
+      "frontendPath": "patientInformation.pastDrugHistory[].reactionMeddraCode",
+      "projectionPath": "pastDrugHistory.reaction_meddra_code",
+      "patch": {
+        "kind": "row",
+        "owner": "pastDrugHistory"
+      },
+      "roundTripValue": "10000001",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.D.8.r.7b.LENGTH.MAX"
+      },
+      "payloadPath": "reactionMeddraCode"
+    }
   ]
 }

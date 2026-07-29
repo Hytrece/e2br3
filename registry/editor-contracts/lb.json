@@ -2,17 +2,197 @@
   "pageId": "LB",
   "registryFile": "sections/f-test.json",
   "fields": [
-    {"code":"F.r.1","authority":"ICH","frontendPath":"testResults[].testDate","projectionPath":"testResult.test_date","patch":{"kind":"row","owner":"testResult"},"roundTripValue":"20200102","constraint":{"status":"verified","ruleCode":"ICH.F.r.1.ALLOWED.VALUE"}},
-    {"code":"F.r.2.1","authority":"ICH","frontendPath":"testResults[].testName","projectionPath":"testResult.test_name","patch":{"kind":"row","owner":"testResult"},"roundTripValue":"ALT","constraint":{"status":"verified","ruleCode":"ICH.F.r.2.1.LENGTH.MAX"}},
-    {"code":"F.r.3.1","authority":"ICH","frontendPath":"testResults[].testResultCode","projectionPath":"testResult.test_result_code","patch":{"kind":"row","owner":"testResult"},"roundTripValue":"1","constraint":{"status":"verified","ruleCode":"ICH.F.r.3.1.LENGTH.MAX"}},
-    {"code":"F.r.3.2","authority":"ICH","frontendPath":"testResults[].testResult","projectionPath":"testResult.test_result_value","patch":{"kind":"row","owner":"testResult"},"roundTripValue":"12.5","constraint":{"status":"verified","ruleCode":"ICH.F.r.3.2.LENGTH.MAX"}},
-    {"code":"F.r.3.3","authority":"ICH","frontendPath":"testResults[].testUnit","projectionPath":"testResult.test_result_unit","patch":{"kind":"row","owner":"testResult"},"roundTripValue":"mg/dL","constraint":{"status":"verified","ruleCode":"ICH.F.r.3.3.LENGTH.MAX"}},
-    {"code":"F.r.2.2a","authority":"ICH","frontendPath":"testResults[].testMeddraVersion","projectionPath":"testResult.test_meddra_version","patch":{"kind":"row","owner":"testResult"},"roundTripValue":"26.0","constraint":{"status":"verified","ruleCode":"ICH.F.r.2.2a.LENGTH.MAX"}},
-    {"code":"F.r.2.2b","authority":"ICH","frontendPath":"testResults[].testMeddraCode","projectionPath":"testResult.test_meddra_code","patch":{"kind":"row","owner":"testResult"},"roundTripValue":"10000001","constraint":{"status":"verified","ruleCode":"ICH.F.r.2.2b.LENGTH.MAX"}},
-    {"code":"F.r.3.4","authority":"ICH","frontendPath":"testResults[].testResultUnstructured","projectionPath":"testResult.result_unstructured","patch":{"kind":"row","owner":"testResult"},"roundTripValue":"Normal","constraint":{"status":"verified","ruleCode":"ICH.F.r.3.4.LENGTH.MAX"}},
-    {"code":"F.r.4","authority":"ICH","frontendPath":"testResults[].lowRange","projectionPath":"testResult.normal_low_value","patch":{"kind":"row","owner":"testResult"},"roundTripValue":"10","constraint":{"status":"verified","ruleCode":"ICH.F.r.4.LENGTH.MAX"}},
-    {"code":"F.r.5","authority":"ICH","frontendPath":"testResults[].highRange","projectionPath":"testResult.normal_high_value","patch":{"kind":"row","owner":"testResult"},"roundTripValue":"20","constraint":{"status":"verified","ruleCode":"ICH.F.r.5.LENGTH.MAX"}},
-    {"code":"F.r.6","authority":"ICH","frontendPath":"testResults[].comments","projectionPath":"testResult.comments","patch":{"kind":"row","owner":"testResult"},"roundTripValue":"Within range","constraint":{"status":"verified","ruleCode":"ICH.F.r.6.LENGTH.MAX"}},
-    {"code":"F.r.7","authority":"ICH","frontendPath":"testResults[].moreInformationAvailable","projectionPath":"testResult.more_info_available","patch":{"kind":"row","owner":"testResult"},"roundTripValue":true,"constraint":{"status":"verified","ruleCode":"ICH.F.r.7.ALLOWED.VALUE"}}
+    {
+      "code": "F.r.1",
+      "authority": "ICH",
+      "frontendPath": "testResults[].testDate",
+      "projectionPath": "testResult.test_date",
+      "patch": {
+        "kind": "row",
+        "owner": "testResult"
+      },
+      "roundTripValue": "20200102",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.F.r.1.ALLOWED.VALUE"
+      },
+      "payloadPath": "testDate"
+    },
+    {
+      "code": "F.r.2.1",
+      "authority": "ICH",
+      "frontendPath": "testResults[].testName",
+      "projectionPath": "testResult.test_name",
+      "patch": {
+        "kind": "row",
+        "owner": "testResult"
+      },
+      "roundTripValue": "ALT",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.F.r.2.1.LENGTH.MAX"
+      },
+      "payloadPath": "testName"
+    },
+    {
+      "code": "F.r.3.1",
+      "authority": "ICH",
+      "frontendPath": "testResults[].testResultCode",
+      "projectionPath": "testResult.test_result_code",
+      "patch": {
+        "kind": "row",
+        "owner": "testResult"
+      },
+      "roundTripValue": "1",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.F.r.3.1.LENGTH.MAX"
+      },
+      "payloadPath": "testResultCode"
+    },
+    {
+      "code": "F.r.3.2",
+      "authority": "ICH",
+      "frontendPath": "testResults[].testResult",
+      "projectionPath": "testResult.test_result_value",
+      "patch": {
+        "kind": "row",
+        "owner": "testResult"
+      },
+      "roundTripValue": "12.5",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.F.r.3.2.LENGTH.MAX"
+      },
+      "payloadPath": "testResult"
+    },
+    {
+      "code": "F.r.3.3",
+      "authority": "ICH",
+      "frontendPath": "testResults[].testUnit",
+      "projectionPath": "testResult.test_result_unit",
+      "patch": {
+        "kind": "row",
+        "owner": "testResult"
+      },
+      "roundTripValue": "mg/dL",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.F.r.3.3.LENGTH.MAX"
+      },
+      "payloadPath": "testUnit"
+    },
+    {
+      "code": "F.r.2.2a",
+      "authority": "ICH",
+      "frontendPath": "testResults[].testMeddraVersion",
+      "projectionPath": "testResult.test_meddra_version",
+      "patch": {
+        "kind": "row",
+        "owner": "testResult"
+      },
+      "roundTripValue": "26.0",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.F.r.2.2a.LENGTH.MAX"
+      },
+      "payloadPath": "testMeddraVersion"
+    },
+    {
+      "code": "F.r.2.2b",
+      "authority": "ICH",
+      "frontendPath": "testResults[].testMeddraCode",
+      "projectionPath": "testResult.test_meddra_code",
+      "patch": {
+        "kind": "row",
+        "owner": "testResult"
+      },
+      "roundTripValue": "10000001",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.F.r.2.2b.LENGTH.MAX"
+      },
+      "payloadPath": "testMeddraCode"
+    },
+    {
+      "code": "F.r.3.4",
+      "authority": "ICH",
+      "frontendPath": "testResults[].testResultUnstructured",
+      "projectionPath": "testResult.result_unstructured",
+      "patch": {
+        "kind": "row",
+        "owner": "testResult"
+      },
+      "roundTripValue": "Normal",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.F.r.3.4.LENGTH.MAX"
+      },
+      "payloadPath": "testResultUnstructured"
+    },
+    {
+      "code": "F.r.4",
+      "authority": "ICH",
+      "frontendPath": "testResults[].lowRange",
+      "projectionPath": "testResult.normal_low_value",
+      "patch": {
+        "kind": "row",
+        "owner": "testResult"
+      },
+      "roundTripValue": "10",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.F.r.4.LENGTH.MAX"
+      },
+      "payloadPath": "lowRange"
+    },
+    {
+      "code": "F.r.5",
+      "authority": "ICH",
+      "frontendPath": "testResults[].highRange",
+      "projectionPath": "testResult.normal_high_value",
+      "patch": {
+        "kind": "row",
+        "owner": "testResult"
+      },
+      "roundTripValue": "20",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.F.r.5.LENGTH.MAX"
+      },
+      "payloadPath": "highRange"
+    },
+    {
+      "code": "F.r.6",
+      "authority": "ICH",
+      "frontendPath": "testResults[].comments",
+      "projectionPath": "testResult.comments",
+      "patch": {
+        "kind": "row",
+        "owner": "testResult"
+      },
+      "roundTripValue": "Within range",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.F.r.6.LENGTH.MAX"
+      },
+      "payloadPath": "comments"
+    },
+    {
+      "code": "F.r.7",
+      "authority": "ICH",
+      "frontendPath": "testResults[].moreInformationAvailable",
+      "projectionPath": "testResult.more_info_available",
+      "patch": {
+        "kind": "row",
+        "owner": "testResult"
+      },
+      "roundTripValue": true,
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.F.r.7.ALLOWED.VALUE"
+      },
+      "payloadPath": "moreInformationAvailable"
+    }
   ]
 }

@@ -127,7 +127,7 @@ CREATE INDEX idx_sender_info_source_presave ON sender_information(source_sender_
 CREATE TABLE literature_references (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     case_id UUID NOT NULL REFERENCES cases(id) ON DELETE CASCADE,
-    reference_text TEXT NOT NULL,  -- C.4.r
+    reference_text TEXT,  -- C.4.r concrete value; NULL when nullFlavor is used
     reference_text_null_flavor VARCHAR(4) CHECK (reference_text_null_flavor IN ('ASKU', 'NASK')),
     sequence_number INTEGER NOT NULL,  -- For ordering
     document_base64 TEXT, -- C.4.r.2 Included Documents (base64)

@@ -2,68 +2,1023 @@
   "pageId": "DG",
   "registryFile": "sections/g-drug.json",
   "fields": [
-    {"code":"G.k.1","authority":"ICH","frontendPath":"drugs[].drugCharacterization","projectionPath":"drug.drug_characterization","patch":{"kind":"row","owner":"drug"},"roundTripValue":"1","constraint":{"status":"verified","ruleCode":"ICH.G.k.1.ALLOWED.VALUE"}},
-    {"code":"G.k.2.2","authority":"ICH","frontendPath":"drugs[].medicinalProduct","projectionPath":"drug.medicinal_product","patch":{"kind":"row","owner":"drug"},"roundTripValue":"Product A","constraint":{"status":"verified","ruleCode":"ICH.G.k.2.2.LENGTH.MAX"}},
-    {"code":"G.k.local.batchLotNumber","authority":"ICH","frontendPath":"drugs[].drugBatchNumber","projectionPath":"drug.batch_lot_number","patch":{"kind":"row","owner":"drug"},"roundTripValue":"LOT-001","constraint":{"status":"not_applicable","reason":"Local batch/lot mirror has no portable catalog constraint."}},
-    {"code":"G.k.8","authority":"ICH","frontendPath":"drugs[].drugActionTaken","projectionPath":"drug.action_taken","patch":{"kind":"row","owner":"drug"},"roundTripValue":"1","constraint":{"status":"verified","ruleCode":"ICH.G.k.8.ALLOWED.VALUE"}},
-    {"code":"G.k.2.1.KR.1a","authority":"MFDS","frontendPath":"drugs[].mfdsMpidVersion","projectionPath":"drug.mfds_mpid_version","patch":{"kind":"row","owner":"drug"},"roundTripValue":"2026","constraint":{"status":"verified","ruleCode":"MFDS.G.k.2.1.KR.1a.LENGTH.MAX"}},
-    {"code":"G.k.2.1.KR.1b","authority":"MFDS","frontendPath":"drugs[].mfdsMpid","projectionPath":"drug.mfds_mpid","patch":{"kind":"row","owner":"drug"},"roundTripValue":"MFDS-001","constraint":{"status":"verified","ruleCode":"MFDS.G.k.2.1.KR.1b.LENGTH.MAX"}},
-    {"code":"G.k.2.1.1a","authority":"ICH","frontendPath":"drugs[].mpidVersion","projectionPath":"drug.mpid_version","patch":{"kind":"row","owner":"drug"},"roundTripValue":"1","constraint":{"status":"verified","ruleCode":"ICH.G.k.2.1.1a.LENGTH.MAX"}},
-    {"code":"G.k.2.1.1b","authority":"ICH","frontendPath":"drugs[].mpid","projectionPath":"drug.mpid","patch":{"kind":"row","owner":"drug"},"roundTripValue":"MPID-001","constraint":{"status":"verified","ruleCode":"ICH.G.k.2.1.1b.LENGTH.MAX"}},
-    {"code":"G.k.2.1.2a","authority":"ICH","frontendPath":"drugs[].phpidVersion","projectionPath":"drug.phpid_version","patch":{"kind":"row","owner":"drug"},"roundTripValue":"1","constraint":{"status":"verified","ruleCode":"ICH.G.k.2.1.2a.LENGTH.MAX"}},
-    {"code":"G.k.2.1.2b","authority":"ICH","frontendPath":"drugs[].phpid","projectionPath":"drug.phpid","patch":{"kind":"row","owner":"drug"},"roundTripValue":"PHPID-001","constraint":{"status":"verified","ruleCode":"ICH.G.k.2.1.2b.LENGTH.MAX"}},
-    {"code":"G.k.2.4","authority":"ICH","frontendPath":"drugs[].obtainDrugCountry","projectionPath":"drug.obtain_drug_country","patch":{"kind":"row","owner":"drug"},"roundTripValue":"KR","constraint":{"status":"verified","ruleCode":"ICH.G.k.2.4.LENGTH.MAX"}},
-    {"code":"G.k.2.5","authority":"ICH","frontendPath":"drugs[].investigationalProductBlinded","projectionPath":"drug.investigational_product_blinded","patch":{"kind":"row","owner":"drug"},"roundTripValue":true,"constraint":{"status":"verified","ruleCode":"ICH.G.k.2.5.ALLOWED.VALUE"}},
-    {"code":"G.k.3.1","authority":"ICH","frontendPath":"drugs[].drugAuthorizationNumber","projectionPath":"drug.drug_authorization_number","patch":{"kind":"row","owner":"drug"},"roundTripValue":"AUTH-001","constraint":{"status":"verified","ruleCode":"ICH.G.k.3.1.LENGTH.MAX"}},
-    {"code":"G.k.3.2","authority":"ICH","frontendPath":"drugs[].drugAuthorizationCountry","projectionPath":"drug.manufacturer_country","patch":{"kind":"row","owner":"drug"},"roundTripValue":"KR","constraint":{"status":"verified","ruleCode":"ICH.G.k.3.2.LENGTH.MAX"}},
-    {"code":"G.k.3.3","authority":"ICH","frontendPath":"drugs[].drugAuthorizationHolder","projectionPath":"drug.manufacturer_name","patch":{"kind":"row","owner":"drug"},"roundTripValue":"Holder","constraint":{"status":"verified","ruleCode":"ICH.G.k.3.3.LENGTH.MAX"}},
-    {"code":"G.k.5a","authority":"ICH","frontendPath":"drugs[].cumulativeDoseValue","projectionPath":"drug.cumulative_dose_first_reaction_value","patch":{"kind":"row","owner":"drug"},"roundTripValue":12.5,"constraint":{"status":"verified","ruleCode":"ICH.G.k.5a.ALLOWED.VALUE"}},
-    {"code":"G.k.5b","authority":"ICH","frontendPath":"drugs[].cumulativeDoseUnit","projectionPath":"drug.cumulative_dose_first_reaction_unit","patch":{"kind":"row","owner":"drug"},"roundTripValue":"mg","constraint":{"status":"verified","ruleCode":"ICH.G.k.5b.LENGTH.MAX"}},
-    {"code":"G.k.6a","authority":"ICH","frontendPath":"drugs[].gestationPeriodExposureValue","projectionPath":"drug.gestation_period_exposure_value","patch":{"kind":"row","owner":"drug"},"roundTripValue":4,"constraint":{"status":"verified","ruleCode":"ICH.G.k.6a.ALLOWED.VALUE"}},
-    {"code":"G.k.6b","authority":"ICH","frontendPath":"drugs[].gestationPeriodExposureUnit","projectionPath":"drug.gestation_period_exposure_unit","patch":{"kind":"row","owner":"drug"},"roundTripValue":"wk","constraint":{"status":"verified","ruleCode":"ICH.G.k.6b.LENGTH.MAX"}},
-    {"code":"G.k.11","authority":"ICH","frontendPath":"drugs[].drugAdditionalInformation","projectionPath":"drug.drug_additional_information","patch":{"kind":"row","owner":"drug"},"roundTripValue":"Additional information","constraint":{"status":"verified","ruleCode":"ICH.G.k.11.LENGTH.MAX"}},
-    {"code":"FDA.G.k.10a","authority":"FDA","frontendPath":"drugs[].fdaAdditionalInfoCoded","projectionPath":"drug.fda_additional_info_coded","patch":{"kind":"row","owner":"drug"},"roundTripValue":"1","constraint":{"status":"verified","ruleCode":"FDA.G.k.10a.LENGTH.MAX"}},
-    {"code":"FDA.G.k.10.1","authority":"FDA","frontendPath":"drugs[].fdaSpecializedProductCategory","projectionPath":"drug.fda_specialized_product_category","patch":{"kind":"row","owner":"drug"},"roundTripValue":"1","constraint":{"status":"verified","ruleCode":"FDA.G.k.10.1.LENGTH.MAX"}},
-    {"code":"FDA.G.k.local.additionalInfoCodesJson","authority":"FDA","frontendPath":"drugs[].drugAdditionalInformationCodes","projectionPath":"drug.drug_additional_info_codes_json","patch":{"kind":"row","owner":"drug"},"roundTripValue":["1"],"constraint":{"status":"verified","ruleCode":"ICH.G.k.10.r.ALLOWED.VALUE"}},
-    {"code":"FDA.G.k.1.a","authority":"FDA","frontendPath":"drugs[].fdaOtherCharacterization","projectionPath":"drug.fda_other_characterization","patch":{"kind":"row","owner":"drug"},"roundTripValue":"1","constraint":{"status":"verified","ruleCode":"FDA.G.k.1.a.LENGTH.MAX"}},
-    {"code":"G.k.2.3.r.1","authority":"ICH","frontendPath":"drugs[].activeSubstances[].substanceName","projectionPath":"drug.activeSubstances[].substance_name","patch":{"kind":"row","owner":"activeSubstance"},"roundTripValue":"Substance A","constraint":{"status":"verified","ruleCode":"ICH.G.k.2.3.r.1.LENGTH.MAX"}},
-    {"code":"G.k.2.3.r.2a","authority":"ICH","frontendPath":"drugs[].activeSubstances[].substanceTermIdVersion","projectionPath":"drug.activeSubstances[].substance_termid_version","patch":{"kind":"row","owner":"activeSubstance"},"roundTripValue":"1","constraint":{"status":"verified","ruleCode":"ICH.G.k.2.3.r.2a.LENGTH.MAX"}},
-    {"code":"G.k.2.3.r.2b","authority":"ICH","frontendPath":"drugs[].activeSubstances[].substanceTermId","projectionPath":"drug.activeSubstances[].substance_termid","patch":{"kind":"row","owner":"activeSubstance"},"roundTripValue":"SUB-1","constraint":{"status":"verified","ruleCode":"ICH.G.k.2.3.r.2b.LENGTH.MAX"}},
-    {"code":"G.k.2.3.r.1.KR.1a","authority":"MFDS","frontendPath":"drugs[].activeSubstances[].mfdsVersion","projectionPath":"drug.activeSubstances[].mfds_version","patch":{"kind":"row","owner":"activeSubstance"},"roundTripValue":"2026","constraint":{"status":"verified","ruleCode":"MFDS.G.k.2.3.r.1.KR.1a.LENGTH.MAX"}},
-    {"code":"G.k.2.3.r.1.KR.1b","authority":"MFDS","frontendPath":"drugs[].activeSubstances[].mfdsId","projectionPath":"drug.activeSubstances[].mfds_id","patch":{"kind":"row","owner":"activeSubstance"},"roundTripValue":"KR-SUB-1","constraint":{"status":"verified","ruleCode":"MFDS.G.k.2.3.r.1.KR.1b.LENGTH.MAX"}},
-    {"code":"G.k.2.3.r.3a","authority":"ICH","frontendPath":"drugs[].activeSubstances[].substanceStrengthValue","projectionPath":"drug.activeSubstances[].strength_value","patch":{"kind":"row","owner":"activeSubstance"},"roundTripValue":10.5,"constraint":{"status":"verified","ruleCode":"ICH.G.k.2.3.r.3a.ALLOWED.VALUE"}},
-    {"code":"G.k.2.3.r.3b","authority":"ICH","frontendPath":"drugs[].activeSubstances[].substanceStrengthUnit","projectionPath":"drug.activeSubstances[].strength_unit","patch":{"kind":"row","owner":"activeSubstance"},"roundTripValue":"mg","constraint":{"status":"verified","ruleCode":"ICH.G.k.2.3.r.3b.LENGTH.MAX"}},
-    {"code":"G.k.4.r.1a","authority":"ICH","frontendPath":"drugs[].dosageInformation[].doseValue","projectionPath":"drug.dosageInformation[].dose_value","patch":{"kind":"row","owner":"dosageInformation"},"roundTripValue":2.5,"constraint":{"status":"verified","ruleCode":"ICH.G.k.4.r.1a.ALLOWED.VALUE"}},
-    {"code":"G.k.4.r.1b","authority":"ICH","frontendPath":"drugs[].dosageInformation[].doseUnit","projectionPath":"drug.dosageInformation[].dose_unit","patch":{"kind":"row","owner":"dosageInformation"},"roundTripValue":"mg","constraint":{"status":"verified","ruleCode":"ICH.G.k.4.r.1b.LENGTH.MAX"}},
-    {"code":"G.k.4.r.2","authority":"ICH","frontendPath":"drugs[].dosageInformation[].numberOfUnits","projectionPath":"drug.dosageInformation[].number_of_units","patch":{"kind":"row","owner":"dosageInformation"},"roundTripValue":1,"constraint":{"status":"verified","ruleCode":"ICH.G.k.4.r.2.ALLOWED.VALUE"}},
-    {"code":"G.k.4.r.3","authority":"ICH","frontendPath":"drugs[].dosageInformation[].frequencyUnit","projectionPath":"drug.dosageInformation[].frequency_unit","patch":{"kind":"row","owner":"dosageInformation"},"roundTripValue":"d","constraint":{"status":"verified","ruleCode":"ICH.G.k.4.r.3.LENGTH.MAX"}},
-    {"code":"G.k.4.r.4","authority":"ICH","frontendPath":"drugs[].dosageInformation[].firstAdministrationDate","projectionPath":"drug.dosageInformation[].first_administration_date","patch":{"kind":"row","owner":"dosageInformation"},"roundTripValue":"20200101","constraint":{"status":"verified","ruleCode":"ICH.G.k.4.r.4.NULLFLAVOR.ALLOWED"}},
-    {"code":"G.k.4.r.5","authority":"ICH","frontendPath":"drugs[].dosageInformation[].lastAdministrationDate","projectionPath":"drug.dosageInformation[].last_administration_date","patch":{"kind":"row","owner":"dosageInformation"},"roundTripValue":"20200102","constraint":{"status":"verified","ruleCode":"ICH.G.k.4.r.5.NULLFLAVOR.ALLOWED"}},
-    {"code":"G.k.4.r.6a","authority":"ICH","frontendPath":"drugs[].dosageInformation[].durationValue","projectionPath":"drug.dosageInformation[].duration_value","patch":{"kind":"row","owner":"dosageInformation"},"roundTripValue":2,"constraint":{"status":"verified","ruleCode":"ICH.G.k.4.r.6a.ALLOWED.VALUE"}},
-    {"code":"G.k.4.r.6b","authority":"ICH","frontendPath":"drugs[].dosageInformation[].durationUnit","projectionPath":"drug.dosageInformation[].duration_unit","patch":{"kind":"row","owner":"dosageInformation"},"roundTripValue":"d","constraint":{"status":"verified","ruleCode":"ICH.G.k.4.r.6b.LENGTH.MAX"}},
-    {"code":"G.k.local.dosage.continuing","authority":"ICH","frontendPath":"drugs[].dosageInformation[].continuing","projectionPath":"drug.dosageInformation[].continuing","patch":{"kind":"row","owner":"dosageInformation"},"roundTripValue":false,"constraint":{"status":"not_applicable","reason":"Local continuing helper has no portable catalog constraint."}},
-    {"code":"G.k.4.r.7","authority":"ICH","frontendPath":"drugs[].dosageInformation[].batchNumber","projectionPath":"drug.dosageInformation[].batch_lot_number","patch":{"kind":"row","owner":"dosageInformation"},"roundTripValue":"LOT-1","constraint":{"status":"verified","ruleCode":"ICH.G.k.4.r.7.LENGTH.MAX"}},
-    {"code":"G.k.4.r.8","authority":"ICH","frontendPath":"drugs[].dosageInformation[].dosageText","projectionPath":"drug.dosageInformation[].dosage_text","patch":{"kind":"row","owner":"dosageInformation"},"roundTripValue":"One tablet daily","constraint":{"status":"verified","ruleCode":"ICH.G.k.4.r.8.LENGTH.MAX"}},
-    {"code":"G.k.4.r.9.1","authority":"ICH","frontendPath":"drugs[].dosageInformation[].doseForm","projectionPath":"drug.dosageInformation[].dose_form","patch":{"kind":"row","owner":"dosageInformation"},"roundTripValue":"Tablet","constraint":{"status":"verified","ruleCode":"ICH.G.k.4.r.9.1.LENGTH.MAX"}},
-    {"code":"G.k.4.r.9.2a","authority":"ICH","frontendPath":"drugs[].dosageInformation[].doseFormTermIdVersion","projectionPath":"drug.dosageInformation[].dose_form_termid_version","patch":{"kind":"row","owner":"dosageInformation"},"roundTripValue":"1","constraint":{"status":"verified","ruleCode":"ICH.G.k.4.r.9.2a.LENGTH.MAX"}},
-    {"code":"G.k.4.r.9.2b","authority":"ICH","frontendPath":"drugs[].dosageInformation[].doseFormTermId","projectionPath":"drug.dosageInformation[].dose_form_termid","patch":{"kind":"row","owner":"dosageInformation"},"roundTripValue":"DF-1","constraint":{"status":"verified","ruleCode":"ICH.G.k.4.r.9.2b.LENGTH.MAX"}},
-    {"code":"G.k.4.r.10.1","authority":"ICH","frontendPath":"drugs[].dosageInformation[].routeOfAdministration","projectionPath":"drug.dosageInformation[].route_of_administration","patch":{"kind":"row","owner":"dosageInformation"},"roundTripValue":"048","constraint":{"status":"verified","ruleCode":"ICH.G.k.4.r.10.1.LENGTH.MAX"}},
-    {"code":"G.k.4.r.10.2a","authority":"ICH","frontendPath":"drugs[].dosageInformation[].routeTermIdVersion","projectionPath":"drug.dosageInformation[].route_termid_version","patch":{"kind":"row","owner":"dosageInformation"},"roundTripValue":"1","constraint":{"status":"verified","ruleCode":"ICH.G.k.4.r.10.2a.LENGTH.MAX"}},
-    {"code":"G.k.4.r.10.2b","authority":"ICH","frontendPath":"drugs[].dosageInformation[].routeTermId","projectionPath":"drug.dosageInformation[].route_termid","patch":{"kind":"row","owner":"dosageInformation"},"roundTripValue":"ROUTE-1","constraint":{"status":"verified","ruleCode":"ICH.G.k.4.r.10.2b.LENGTH.MAX"}},
-    {"code":"G.k.4.r.11.1","authority":"ICH","frontendPath":"drugs[].dosageInformation[].parentRouteOfAdministration","projectionPath":"drug.dosageInformation[].parent_route","patch":{"kind":"row","owner":"dosageInformation"},"roundTripValue":"Oral","constraint":{"status":"verified","ruleCode":"ICH.G.k.4.r.11.1.LENGTH.MAX"}},
-    {"code":"G.k.4.r.11.2a","authority":"ICH","frontendPath":"drugs[].dosageInformation[].parentRouteTermIdVersion","projectionPath":"drug.dosageInformation[].parent_route_termid_version","patch":{"kind":"row","owner":"dosageInformation"},"roundTripValue":"1","constraint":{"status":"verified","ruleCode":"ICH.G.k.4.r.11.2a.LENGTH.MAX"}},
-    {"code":"G.k.4.r.11.2b","authority":"ICH","frontendPath":"drugs[].dosageInformation[].parentRouteTermId","projectionPath":"drug.dosageInformation[].parent_route_termid","patch":{"kind":"row","owner":"dosageInformation"},"roundTripValue":"PROUTE-1","constraint":{"status":"verified","ruleCode":"ICH.G.k.4.r.11.2b.LENGTH.MAX"}},
-    {"code":"G.k.7.r.1","authority":"ICH","frontendPath":"drugs[].indications[].indicationText","projectionPath":"drug.indications[].indication_text","patch":{"kind":"row","owner":"indication"},"roundTripValue":"Pain","constraint":{"status":"verified","ruleCode":"ICH.G.k.7.r.1.LENGTH.MAX"}},
-    {"code":"G.k.7.r.2a","authority":"ICH","frontendPath":"drugs[].indications[].indicationMeddraVersion","projectionPath":"drug.indications[].indication_meddra_version","patch":{"kind":"row","owner":"indication"},"roundTripValue":"26.0","constraint":{"status":"verified","ruleCode":"ICH.G.k.7.r.2a.ALLOWED.VALUE"}},
-    {"code":"G.k.7.r.2b","authority":"ICH","frontendPath":"drugs[].indications[].indicationMeddraCode","projectionPath":"drug.indications[].indication_meddra_code","patch":{"kind":"row","owner":"indication"},"roundTripValue":"10033371","constraint":{"status":"verified","ruleCode":"ICH.G.k.7.r.2b.ALLOWED.VALUE"}},
-    {"code":"G.k.9.i.3.1a","authority":"ICH","frontendPath":"drugs[].drugReactionAssessments[].administrationStartIntervalValue","projectionPath":"drug.drugReactionAssessments[].administration_start_interval_value","patch":{"kind":"row","owner":"drugReactionAssessment"},"roundTripValue":2,"constraint":{"status":"verified","ruleCode":"ICH.G.k.9.i.3.1a.ALLOWED.VALUE"}},
-    {"code":"G.k.9.i.3.1b","authority":"ICH","frontendPath":"drugs[].drugReactionAssessments[].administrationStartIntervalUnit","projectionPath":"drug.drugReactionAssessments[].administration_start_interval_unit","patch":{"kind":"row","owner":"drugReactionAssessment"},"roundTripValue":"d","constraint":{"status":"verified","ruleCode":"ICH.G.k.9.i.3.1b.LENGTH.MAX"}},
-    {"code":"G.k.9.i.3.2a","authority":"ICH","frontendPath":"drugs[].drugReactionAssessments[].lastDoseIntervalValue","projectionPath":"drug.drugReactionAssessments[].last_dose_interval_value","patch":{"kind":"row","owner":"drugReactionAssessment"},"roundTripValue":1,"constraint":{"status":"verified","ruleCode":"ICH.G.k.9.i.3.2a.ALLOWED.VALUE"}},
-    {"code":"G.k.9.i.3.2b","authority":"ICH","frontendPath":"drugs[].drugReactionAssessments[].lastDoseIntervalUnit","projectionPath":"drug.drugReactionAssessments[].last_dose_interval_unit","patch":{"kind":"row","owner":"drugReactionAssessment"},"roundTripValue":"d","constraint":{"status":"verified","ruleCode":"ICH.G.k.9.i.3.2b.LENGTH.MAX"}},
-    {"code":"G.k.9.i.4","authority":"ICH","frontendPath":"drugs[].drugReactionAssessments[].recurrenceAction","projectionPath":"drug.drugReactionAssessments[].recurrence_action","patch":{"kind":"row","owner":"drugReactionAssessment"},"roundTripValue":"1","constraint":{"status":"verified","ruleCode":"ICH.G.k.9.i.4.ALLOWED.VALUE"}},
-    {"code":"G.k.9.i.2.r.1","authority":"ICH","frontendPath":"drugs[].drugReactionAssessments[].sourceOfAssessment","projectionPath":"drug.drugReactionAssessments[].source_of_assessment","patch":{"kind":"row","owner":"drugReactionAssessment"},"roundTripValue":"Reporter","constraint":{"status":"verified","ruleCode":"ICH.G.k.9.i.2.r.1.LENGTH.MAX"}},
-    {"code":"G.k.9.i.2.r.2","authority":"ICH","frontendPath":"drugs[].drugReactionAssessments[].methodOfAssessment","projectionPath":"drug.drugReactionAssessments[].method_of_assessment","patch":{"kind":"row","owner":"drugReactionAssessment"},"roundTripValue":"WHO-UMC","constraint":{"status":"verified","ruleCode":"ICH.G.k.9.i.2.r.2.LENGTH.MAX"}},
-    {"code":"G.k.9.i.2.r.3","authority":"ICH","frontendPath":"drugs[].drugReactionAssessments[].resultOfAssessment","projectionPath":"drug.drugReactionAssessments[].result_of_assessment","patch":{"kind":"row","owner":"drugReactionAssessment"},"roundTripValue":"Possible","constraint":{"status":"verified","ruleCode":"ICH.G.k.9.i.2.r.3.LENGTH.MAX"}},
-    {"code":"G.k.9.i.2.r.3.KR.2","authority":"MFDS","frontendPath":"drugs[].drugReactionAssessments[].resultOfAssessmentKr2","projectionPath":"drug.drugReactionAssessments[].result_of_assessment_kr2","patch":{"kind":"row","owner":"drugReactionAssessment"},"roundTripValue":"1","constraint":{"status":"verified","ruleCode":"MFDS.G.k.9.i.2.r.3.KR.2.LENGTH.MAX"}}
+    {
+      "code": "G.k.1",
+      "authority": "ICH",
+      "frontendPath": "drugs[].drugCharacterization",
+      "projectionPath": "drug.drug_characterization",
+      "patch": {
+        "kind": "row",
+        "owner": "drug"
+      },
+      "roundTripValue": "1",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.G.k.1.ALLOWED.VALUE"
+      },
+      "payloadPath": "drugCharacterization"
+    },
+    {
+      "code": "G.k.2.2",
+      "authority": "ICH",
+      "frontendPath": "drugs[].medicinalProduct",
+      "projectionPath": "drug.medicinal_product",
+      "patch": {
+        "kind": "row",
+        "owner": "drug"
+      },
+      "roundTripValue": "Product A",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.G.k.2.2.LENGTH.MAX"
+      },
+      "payloadPath": "medicinalProduct"
+    },
+    {
+      "code": "G.k.local.batchLotNumber",
+      "authority": "ICH",
+      "frontendPath": "drugs[].drugBatchNumber",
+      "projectionPath": "drug.batch_lot_number",
+      "patch": {
+        "kind": "row",
+        "owner": "drug"
+      },
+      "roundTripValue": "LOT-001",
+      "constraint": {
+        "status": "not_applicable",
+        "reason": "Local batch/lot mirror has no portable catalog constraint."
+      },
+      "payloadPath": "drugBatchNumber"
+    },
+    {
+      "code": "G.k.8",
+      "authority": "ICH",
+      "frontendPath": "drugs[].drugActionTaken",
+      "projectionPath": "drug.action_taken",
+      "patch": {
+        "kind": "row",
+        "owner": "drug"
+      },
+      "roundTripValue": "1",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.G.k.8.ALLOWED.VALUE"
+      },
+      "payloadPath": "drugActionTaken"
+    },
+    {
+      "code": "G.k.2.1.KR.1a",
+      "authority": "MFDS",
+      "frontendPath": "drugs[].mfdsMpidVersion",
+      "projectionPath": "drug.mfds_mpid_version",
+      "patch": {
+        "kind": "row",
+        "owner": "drug"
+      },
+      "roundTripValue": "2026",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "MFDS.G.k.2.1.KR.1a.LENGTH.MAX"
+      },
+      "payloadPath": "mfdsMpidVersion"
+    },
+    {
+      "code": "G.k.2.1.KR.1b",
+      "authority": "MFDS",
+      "frontendPath": "drugs[].mfdsMpid",
+      "projectionPath": "drug.mfds_mpid",
+      "patch": {
+        "kind": "row",
+        "owner": "drug"
+      },
+      "roundTripValue": "MFDS-001",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "MFDS.G.k.2.1.KR.1b.LENGTH.MAX"
+      },
+      "payloadPath": "mfdsMpid"
+    },
+    {
+      "code": "G.k.2.1.1a",
+      "authority": "ICH",
+      "frontendPath": "drugs[].mpidVersion",
+      "projectionPath": "drug.mpid_version",
+      "patch": {
+        "kind": "row",
+        "owner": "drug"
+      },
+      "roundTripValue": "1",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.G.k.2.1.1a.LENGTH.MAX"
+      },
+      "payloadPath": "mpidVersion"
+    },
+    {
+      "code": "G.k.2.1.1b",
+      "authority": "ICH",
+      "frontendPath": "drugs[].mpid",
+      "projectionPath": "drug.mpid",
+      "patch": {
+        "kind": "row",
+        "owner": "drug"
+      },
+      "roundTripValue": "MPID-001",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.G.k.2.1.1b.LENGTH.MAX"
+      },
+      "payloadPath": "mpid"
+    },
+    {
+      "code": "G.k.2.1.2a",
+      "authority": "ICH",
+      "frontendPath": "drugs[].phpidVersion",
+      "projectionPath": "drug.phpid_version",
+      "patch": {
+        "kind": "row",
+        "owner": "drug"
+      },
+      "roundTripValue": "1",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.G.k.2.1.2a.LENGTH.MAX"
+      },
+      "payloadPath": "phpidVersion"
+    },
+    {
+      "code": "G.k.2.1.2b",
+      "authority": "ICH",
+      "frontendPath": "drugs[].phpid",
+      "projectionPath": "drug.phpid",
+      "patch": {
+        "kind": "row",
+        "owner": "drug"
+      },
+      "roundTripValue": "PHPID-001",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.G.k.2.1.2b.LENGTH.MAX"
+      },
+      "payloadPath": "phpid"
+    },
+    {
+      "code": "G.k.2.4",
+      "authority": "ICH",
+      "frontendPath": "drugs[].obtainDrugCountry",
+      "projectionPath": "drug.obtain_drug_country",
+      "patch": {
+        "kind": "row",
+        "owner": "drug"
+      },
+      "roundTripValue": "KR",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.G.k.2.4.LENGTH.MAX"
+      },
+      "payloadPath": "obtainDrugCountry"
+    },
+    {
+      "code": "G.k.2.5",
+      "authority": "ICH",
+      "frontendPath": "drugs[].investigationalProductBlinded",
+      "projectionPath": "drug.investigational_product_blinded",
+      "patch": {
+        "kind": "row",
+        "owner": "drug"
+      },
+      "roundTripValue": true,
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.G.k.2.5.ALLOWED.VALUE"
+      },
+      "payloadPath": "investigationalProductBlinded"
+    },
+    {
+      "code": "G.k.3.1",
+      "authority": "ICH",
+      "frontendPath": "drugs[].drugAuthorizationNumber",
+      "projectionPath": "drug.drug_authorization_number",
+      "patch": {
+        "kind": "row",
+        "owner": "drug"
+      },
+      "roundTripValue": "AUTH-001",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.G.k.3.1.LENGTH.MAX"
+      },
+      "payloadPath": "drugAuthorizationNumber"
+    },
+    {
+      "code": "G.k.3.2",
+      "authority": "ICH",
+      "frontendPath": "drugs[].drugAuthorizationCountry",
+      "projectionPath": "drug.manufacturer_country",
+      "patch": {
+        "kind": "row",
+        "owner": "drug"
+      },
+      "roundTripValue": "KR",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.G.k.3.2.LENGTH.MAX"
+      },
+      "payloadPath": "drugAuthorizationCountry"
+    },
+    {
+      "code": "G.k.3.3",
+      "authority": "ICH",
+      "frontendPath": "drugs[].drugAuthorizationHolder",
+      "projectionPath": "drug.manufacturer_name",
+      "patch": {
+        "kind": "row",
+        "owner": "drug"
+      },
+      "roundTripValue": "Holder",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.G.k.3.3.LENGTH.MAX"
+      },
+      "payloadPath": "drugAuthorizationHolder"
+    },
+    {
+      "code": "G.k.5a",
+      "authority": "ICH",
+      "frontendPath": "drugs[].cumulativeDoseValue",
+      "projectionPath": "drug.cumulative_dose_first_reaction_value",
+      "patch": {
+        "kind": "row",
+        "owner": "drug"
+      },
+      "roundTripValue": 12.5,
+      "projectionValue": "12.50000",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.G.k.5a.ALLOWED.VALUE"
+      },
+      "payloadPath": "cumulativeDoseValue"
+    },
+    {
+      "code": "G.k.5b",
+      "authority": "ICH",
+      "frontendPath": "drugs[].cumulativeDoseUnit",
+      "projectionPath": "drug.cumulative_dose_first_reaction_unit",
+      "patch": {
+        "kind": "row",
+        "owner": "drug"
+      },
+      "roundTripValue": "mg",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.G.k.5b.LENGTH.MAX"
+      },
+      "payloadPath": "cumulativeDoseUnit"
+    },
+    {
+      "code": "G.k.6a",
+      "authority": "ICH",
+      "frontendPath": "drugs[].gestationPeriodExposureValue",
+      "projectionPath": "drug.gestation_period_exposure_value",
+      "patch": {
+        "kind": "row",
+        "owner": "drug"
+      },
+      "roundTripValue": 4,
+      "projectionValue": "4.00",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.G.k.6a.ALLOWED.VALUE"
+      },
+      "payloadPath": "gestationPeriodExposureValue"
+    },
+    {
+      "code": "G.k.6b",
+      "authority": "ICH",
+      "frontendPath": "drugs[].gestationPeriodExposureUnit",
+      "projectionPath": "drug.gestation_period_exposure_unit",
+      "patch": {
+        "kind": "row",
+        "owner": "drug"
+      },
+      "roundTripValue": "wk",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.G.k.6b.LENGTH.MAX"
+      },
+      "payloadPath": "gestationPeriodExposureUnit"
+    },
+    {
+      "code": "G.k.11",
+      "authority": "ICH",
+      "frontendPath": "drugs[].drugAdditionalInformation",
+      "projectionPath": "drug.drug_additional_information",
+      "patch": {
+        "kind": "row",
+        "owner": "drug"
+      },
+      "roundTripValue": "Additional information",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.G.k.11.LENGTH.MAX"
+      },
+      "payloadPath": "drugAdditionalInformation"
+    },
+    {
+      "code": "FDA.G.k.10a",
+      "authority": "FDA",
+      "frontendPath": "drugs[].fdaAdditionalInfoCoded",
+      "projectionPath": "drug.fda_additional_info_coded",
+      "patch": {
+        "kind": "row",
+        "owner": "drug"
+      },
+      "roundTripValue": "1",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "FDA.G.k.10a.LENGTH.MAX"
+      },
+      "payloadPath": "fdaAdditionalInfoCoded"
+    },
+    {
+      "code": "FDA.G.k.10.1",
+      "authority": "FDA",
+      "frontendPath": "drugs[].fdaSpecializedProductCategory",
+      "projectionPath": "drug.fda_specialized_product_category",
+      "patch": {
+        "kind": "row",
+        "owner": "drug"
+      },
+      "roundTripValue": "1",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "FDA.G.k.10.1.LENGTH.MAX"
+      },
+      "payloadPath": "fdaSpecializedProductCategory"
+    },
+    {
+      "code": "FDA.G.k.local.additionalInfoCodesJson",
+      "authority": "FDA",
+      "frontendPath": "drugs[].drugAdditionalInformationCodes",
+      "projectionPath": "drug.drug_additional_info_codes_json",
+      "patch": {
+        "kind": "row",
+        "owner": "drug"
+      },
+      "roundTripValue": [
+        "1"
+      ],
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.G.k.10.r.ALLOWED.VALUE"
+      },
+      "payloadPath": "drugAdditionalInformationCodes"
+    },
+    {
+      "code": "FDA.G.k.1.a",
+      "authority": "FDA",
+      "frontendPath": "drugs[].fdaOtherCharacterization",
+      "projectionPath": "drug.fda_other_characterization",
+      "patch": {
+        "kind": "row",
+        "owner": "drug"
+      },
+      "roundTripValue": "1",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "FDA.G.k.1.a.LENGTH.MAX"
+      },
+      "payloadPath": "fdaOtherCharacterization"
+    },
+    {
+      "code": "G.k.2.3.r.1",
+      "authority": "ICH",
+      "frontendPath": "drugs[].activeSubstances[].substanceName",
+      "projectionPath": "drug.activeSubstances[].substance_name",
+      "patch": {
+        "kind": "row",
+        "owner": "drug"
+      },
+      "roundTripValue": "Substance A",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.G.k.2.3.r.1.LENGTH.MAX"
+      },
+      "payloadPath": "activeSubstances[].substanceName"
+    },
+    {
+      "code": "G.k.2.3.r.2a",
+      "authority": "ICH",
+      "frontendPath": "drugs[].activeSubstances[].substanceTermIdVersion",
+      "projectionPath": "drug.activeSubstances[].substance_termid_version",
+      "patch": {
+        "kind": "row",
+        "owner": "drug"
+      },
+      "roundTripValue": "1",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.G.k.2.3.r.2a.LENGTH.MAX"
+      },
+      "payloadPath": "activeSubstances[].substanceTermIdVersion"
+    },
+    {
+      "code": "G.k.2.3.r.2b",
+      "authority": "ICH",
+      "frontendPath": "drugs[].activeSubstances[].substanceTermId",
+      "projectionPath": "drug.activeSubstances[].substance_termid",
+      "patch": {
+        "kind": "row",
+        "owner": "drug"
+      },
+      "roundTripValue": "SUB-1",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.G.k.2.3.r.2b.LENGTH.MAX"
+      },
+      "payloadPath": "activeSubstances[].substanceTermId"
+    },
+    {
+      "code": "G.k.2.3.r.1.KR.1a",
+      "authority": "MFDS",
+      "frontendPath": "drugs[].activeSubstances[].mfdsVersion",
+      "projectionPath": "drug.activeSubstances[].mfds_version",
+      "patch": {
+        "kind": "row",
+        "owner": "drug"
+      },
+      "roundTripValue": "2026",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "MFDS.G.k.2.3.r.1.KR.1a.LENGTH.MAX"
+      },
+      "payloadPath": "activeSubstances[].mfdsVersion"
+    },
+    {
+      "code": "G.k.2.3.r.1.KR.1b",
+      "authority": "MFDS",
+      "frontendPath": "drugs[].activeSubstances[].mfdsId",
+      "projectionPath": "drug.activeSubstances[].mfds_id",
+      "patch": {
+        "kind": "row",
+        "owner": "drug"
+      },
+      "roundTripValue": "KR-SUB-1",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "MFDS.G.k.2.3.r.1.KR.1b.LENGTH.MAX"
+      },
+      "payloadPath": "activeSubstances[].mfdsId"
+    },
+    {
+      "code": "G.k.2.3.r.3a",
+      "authority": "ICH",
+      "frontendPath": "drugs[].activeSubstances[].substanceStrengthValue",
+      "projectionPath": "drug.activeSubstances[].strength_value",
+      "patch": {
+        "kind": "row",
+        "owner": "drug"
+      },
+      "roundTripValue": 10.5,
+      "projectionValue": "10.50000",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.G.k.2.3.r.3a.ALLOWED.VALUE"
+      },
+      "payloadPath": "activeSubstances[].substanceStrengthValue"
+    },
+    {
+      "code": "G.k.2.3.r.3b",
+      "authority": "ICH",
+      "frontendPath": "drugs[].activeSubstances[].substanceStrengthUnit",
+      "projectionPath": "drug.activeSubstances[].strength_unit",
+      "patch": {
+        "kind": "row",
+        "owner": "drug"
+      },
+      "roundTripValue": "mg",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.G.k.2.3.r.3b.LENGTH.MAX"
+      },
+      "payloadPath": "activeSubstances[].substanceStrengthUnit"
+    },
+    {
+      "code": "G.k.4.r.1a",
+      "authority": "ICH",
+      "frontendPath": "drugs[].dosageInformation[].doseValue",
+      "projectionPath": "drug.dosageInformation[].dose_value",
+      "patch": {
+        "kind": "row",
+        "owner": "drug"
+      },
+      "roundTripValue": 2.5,
+      "projectionValue": "2.50000",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.G.k.4.r.1a.ALLOWED.VALUE"
+      },
+      "payloadPath": "dosageInformation[].doseValue"
+    },
+    {
+      "code": "G.k.4.r.1b",
+      "authority": "ICH",
+      "frontendPath": "drugs[].dosageInformation[].doseUnit",
+      "projectionPath": "drug.dosageInformation[].dose_unit",
+      "patch": {
+        "kind": "row",
+        "owner": "drug"
+      },
+      "roundTripValue": "mg",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.G.k.4.r.1b.LENGTH.MAX"
+      },
+      "payloadPath": "dosageInformation[].doseUnit"
+    },
+    {
+      "code": "G.k.4.r.2",
+      "authority": "ICH",
+      "frontendPath": "drugs[].dosageInformation[].numberOfUnits",
+      "projectionPath": "drug.dosageInformation[].number_of_units",
+      "patch": {
+        "kind": "row",
+        "owner": "drug"
+      },
+      "roundTripValue": 1,
+      "projectionValue": "1.00000",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.G.k.4.r.2.ALLOWED.VALUE"
+      },
+      "payloadPath": "dosageInformation[].numberOfUnits"
+    },
+    {
+      "code": "G.k.4.r.3",
+      "authority": "ICH",
+      "frontendPath": "drugs[].dosageInformation[].frequencyUnit",
+      "projectionPath": "drug.dosageInformation[].frequency_unit",
+      "patch": {
+        "kind": "row",
+        "owner": "drug"
+      },
+      "roundTripValue": "d",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.G.k.4.r.3.LENGTH.MAX"
+      },
+      "payloadPath": "dosageInformation[].frequencyUnit"
+    },
+    {
+      "code": "G.k.4.r.4",
+      "authority": "ICH",
+      "frontendPath": "drugs[].dosageInformation[].firstAdministrationDate",
+      "projectionPath": "drug.dosageInformation[].first_administration_date",
+      "patch": {
+        "kind": "row",
+        "owner": "drug"
+      },
+      "roundTripValue": "20200101",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.G.k.4.r.4.NULLFLAVOR.ALLOWED"
+      },
+      "payloadPath": "dosageInformation[].firstAdministrationDate"
+    },
+    {
+      "code": "G.k.4.r.5",
+      "authority": "ICH",
+      "frontendPath": "drugs[].dosageInformation[].lastAdministrationDate",
+      "projectionPath": "drug.dosageInformation[].last_administration_date",
+      "patch": {
+        "kind": "row",
+        "owner": "drug"
+      },
+      "roundTripValue": "20200102",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.G.k.4.r.5.NULLFLAVOR.ALLOWED"
+      },
+      "payloadPath": "dosageInformation[].lastAdministrationDate"
+    },
+    {
+      "code": "G.k.4.r.6a",
+      "authority": "ICH",
+      "frontendPath": "drugs[].dosageInformation[].durationValue",
+      "projectionPath": "drug.dosageInformation[].duration_value",
+      "patch": {
+        "kind": "row",
+        "owner": "drug"
+      },
+      "roundTripValue": 2,
+      "projectionValue": "2.00",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.G.k.4.r.6a.ALLOWED.VALUE"
+      },
+      "payloadPath": "dosageInformation[].durationValue"
+    },
+    {
+      "code": "G.k.4.r.6b",
+      "authority": "ICH",
+      "frontendPath": "drugs[].dosageInformation[].durationUnit",
+      "projectionPath": "drug.dosageInformation[].duration_unit",
+      "patch": {
+        "kind": "row",
+        "owner": "drug"
+      },
+      "roundTripValue": "d",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.G.k.4.r.6b.LENGTH.MAX"
+      },
+      "payloadPath": "dosageInformation[].durationUnit"
+    },
+    {
+      "code": "G.k.local.dosage.continuing",
+      "authority": "ICH",
+      "frontendPath": "drugs[].dosageInformation[].continuing",
+      "projectionPath": "drug.dosageInformation[].continuing",
+      "patch": {
+        "kind": "row",
+        "owner": "drug"
+      },
+      "roundTripValue": false,
+      "constraint": {
+        "status": "not_applicable",
+        "reason": "Local continuing helper has no portable catalog constraint."
+      },
+      "payloadPath": "dosageInformation[].continuing"
+    },
+    {
+      "code": "G.k.4.r.7",
+      "authority": "ICH",
+      "frontendPath": "drugs[].dosageInformation[].batchNumber",
+      "projectionPath": "drug.dosageInformation[].batch_lot_number",
+      "patch": {
+        "kind": "row",
+        "owner": "drug"
+      },
+      "roundTripValue": "LOT-1",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.G.k.4.r.7.LENGTH.MAX"
+      },
+      "payloadPath": "dosageInformation[].batchNumber"
+    },
+    {
+      "code": "G.k.4.r.8",
+      "authority": "ICH",
+      "frontendPath": "drugs[].dosageInformation[].dosageText",
+      "projectionPath": "drug.dosageInformation[].dosage_text",
+      "patch": {
+        "kind": "row",
+        "owner": "drug"
+      },
+      "roundTripValue": "One tablet daily",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.G.k.4.r.8.LENGTH.MAX"
+      },
+      "payloadPath": "dosageInformation[].dosageText"
+    },
+    {
+      "code": "G.k.4.r.9.1",
+      "authority": "ICH",
+      "frontendPath": "drugs[].dosageInformation[].doseForm",
+      "projectionPath": "drug.dosageInformation[].dose_form",
+      "patch": {
+        "kind": "row",
+        "owner": "drug"
+      },
+      "roundTripValue": "Tablet",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.G.k.4.r.9.1.LENGTH.MAX"
+      },
+      "payloadPath": "dosageInformation[].doseForm"
+    },
+    {
+      "code": "G.k.4.r.9.2a",
+      "authority": "ICH",
+      "frontendPath": "drugs[].dosageInformation[].doseFormTermIdVersion",
+      "projectionPath": "drug.dosageInformation[].dose_form_termid_version",
+      "patch": {
+        "kind": "row",
+        "owner": "drug"
+      },
+      "roundTripValue": "1",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.G.k.4.r.9.2a.LENGTH.MAX"
+      },
+      "payloadPath": "dosageInformation[].doseFormTermIdVersion"
+    },
+    {
+      "code": "G.k.4.r.9.2b",
+      "authority": "ICH",
+      "frontendPath": "drugs[].dosageInformation[].doseFormTermId",
+      "projectionPath": "drug.dosageInformation[].dose_form_termid",
+      "patch": {
+        "kind": "row",
+        "owner": "drug"
+      },
+      "roundTripValue": "DF-1",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.G.k.4.r.9.2b.LENGTH.MAX"
+      },
+      "payloadPath": "dosageInformation[].doseFormTermId"
+    },
+    {
+      "code": "G.k.4.r.10.1",
+      "authority": "ICH",
+      "frontendPath": "drugs[].dosageInformation[].routeOfAdministration",
+      "projectionPath": "drug.dosageInformation[].route_of_administration",
+      "patch": {
+        "kind": "row",
+        "owner": "drug"
+      },
+      "roundTripValue": "048",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.G.k.4.r.10.1.LENGTH.MAX"
+      },
+      "payloadPath": "dosageInformation[].routeOfAdministration"
+    },
+    {
+      "code": "G.k.4.r.10.2a",
+      "authority": "ICH",
+      "frontendPath": "drugs[].dosageInformation[].routeTermIdVersion",
+      "projectionPath": "drug.dosageInformation[].route_termid_version",
+      "patch": {
+        "kind": "row",
+        "owner": "drug"
+      },
+      "roundTripValue": "1",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.G.k.4.r.10.2a.LENGTH.MAX"
+      },
+      "payloadPath": "dosageInformation[].routeTermIdVersion"
+    },
+    {
+      "code": "G.k.4.r.10.2b",
+      "authority": "ICH",
+      "frontendPath": "drugs[].dosageInformation[].routeTermId",
+      "projectionPath": "drug.dosageInformation[].route_termid",
+      "patch": {
+        "kind": "row",
+        "owner": "drug"
+      },
+      "roundTripValue": "ROUTE-1",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.G.k.4.r.10.2b.LENGTH.MAX"
+      },
+      "payloadPath": "dosageInformation[].routeTermId"
+    },
+    {
+      "code": "G.k.4.r.11.1",
+      "authority": "ICH",
+      "frontendPath": "drugs[].dosageInformation[].parentRouteOfAdministration",
+      "projectionPath": "drug.dosageInformation[].parent_route",
+      "patch": {
+        "kind": "row",
+        "owner": "drug"
+      },
+      "roundTripValue": "Oral",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.G.k.4.r.11.1.LENGTH.MAX"
+      },
+      "payloadPath": "dosageInformation[].parentRouteOfAdministration"
+    },
+    {
+      "code": "G.k.4.r.11.2a",
+      "authority": "ICH",
+      "frontendPath": "drugs[].dosageInformation[].parentRouteTermIdVersion",
+      "projectionPath": "drug.dosageInformation[].parent_route_termid_version",
+      "patch": {
+        "kind": "row",
+        "owner": "drug"
+      },
+      "roundTripValue": "1",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.G.k.4.r.11.2a.LENGTH.MAX"
+      },
+      "payloadPath": "dosageInformation[].parentRouteTermIdVersion"
+    },
+    {
+      "code": "G.k.4.r.11.2b",
+      "authority": "ICH",
+      "frontendPath": "drugs[].dosageInformation[].parentRouteTermId",
+      "projectionPath": "drug.dosageInformation[].parent_route_termid",
+      "patch": {
+        "kind": "row",
+        "owner": "drug"
+      },
+      "roundTripValue": "PROUTE-1",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.G.k.4.r.11.2b.LENGTH.MAX"
+      },
+      "payloadPath": "dosageInformation[].parentRouteTermId"
+    },
+    {
+      "code": "G.k.7.r.1",
+      "authority": "ICH",
+      "frontendPath": "drugs[].indications[].indicationText",
+      "projectionPath": "drug.indications[].indication_text",
+      "patch": {
+        "kind": "row",
+        "owner": "drug"
+      },
+      "roundTripValue": "Pain",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.G.k.7.r.1.LENGTH.MAX"
+      },
+      "payloadPath": "indications[].indicationText"
+    },
+    {
+      "code": "G.k.7.r.2a",
+      "authority": "ICH",
+      "frontendPath": "drugs[].indications[].indicationMeddraVersion",
+      "projectionPath": "drug.indications[].indication_meddra_version",
+      "patch": {
+        "kind": "row",
+        "owner": "drug"
+      },
+      "roundTripValue": "26.0",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.G.k.7.r.2a.ALLOWED.VALUE"
+      },
+      "payloadPath": "indications[].indicationMeddraVersion"
+    },
+    {
+      "code": "G.k.7.r.2b",
+      "authority": "ICH",
+      "frontendPath": "drugs[].indications[].indicationMeddraCode",
+      "projectionPath": "drug.indications[].indication_meddra_code",
+      "patch": {
+        "kind": "row",
+        "owner": "drug"
+      },
+      "roundTripValue": "10033371",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.G.k.7.r.2b.ALLOWED.VALUE"
+      },
+      "payloadPath": "indications[].indicationMeddraCode"
+    },
+    {
+      "code": "G.k.9.i.3.1a",
+      "authority": "ICH",
+      "frontendPath": "drugs[].drugReactionAssessments[].administrationStartIntervalValue",
+      "projectionPath": "drug.drugReactionAssessments[].administrationStartIntervalValue",
+      "patch": {
+        "kind": "row",
+        "owner": "drug"
+      },
+      "roundTripValue": 2,
+      "projectionValue": "2.00",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.G.k.9.i.3.1a.ALLOWED.VALUE"
+      },
+      "payloadPath": "drugReactionAssessments[].administrationStartIntervalValue"
+    },
+    {
+      "code": "G.k.9.i.3.1b",
+      "authority": "ICH",
+      "frontendPath": "drugs[].drugReactionAssessments[].administrationStartIntervalUnit",
+      "projectionPath": "drug.drugReactionAssessments[].administrationStartIntervalUnit",
+      "patch": {
+        "kind": "row",
+        "owner": "drug"
+      },
+      "roundTripValue": "d",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.G.k.9.i.3.1b.LENGTH.MAX"
+      },
+      "payloadPath": "drugReactionAssessments[].administrationStartIntervalUnit"
+    },
+    {
+      "code": "G.k.9.i.3.2a",
+      "authority": "ICH",
+      "frontendPath": "drugs[].drugReactionAssessments[].lastDoseIntervalValue",
+      "projectionPath": "drug.drugReactionAssessments[].lastDoseIntervalValue",
+      "patch": {
+        "kind": "row",
+        "owner": "drug"
+      },
+      "roundTripValue": 1,
+      "projectionValue": "1.00",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.G.k.9.i.3.2a.ALLOWED.VALUE"
+      },
+      "payloadPath": "drugReactionAssessments[].lastDoseIntervalValue"
+    },
+    {
+      "code": "G.k.9.i.3.2b",
+      "authority": "ICH",
+      "frontendPath": "drugs[].drugReactionAssessments[].lastDoseIntervalUnit",
+      "projectionPath": "drug.drugReactionAssessments[].lastDoseIntervalUnit",
+      "patch": {
+        "kind": "row",
+        "owner": "drug"
+      },
+      "roundTripValue": "d",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.G.k.9.i.3.2b.LENGTH.MAX"
+      },
+      "payloadPath": "drugReactionAssessments[].lastDoseIntervalUnit"
+    },
+    {
+      "code": "G.k.9.i.4",
+      "authority": "ICH",
+      "frontendPath": "drugs[].drugReactionAssessments[].recurrenceAction",
+      "projectionPath": "drug.drugReactionAssessments[].recurrenceAction",
+      "patch": {
+        "kind": "row",
+        "owner": "drug"
+      },
+      "roundTripValue": "1",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.G.k.9.i.4.ALLOWED.VALUE"
+      },
+      "payloadPath": "drugReactionAssessments[].recurrenceAction"
+    },
+    {
+      "code": "G.k.9.i.2.r.1",
+      "authority": "ICH",
+      "frontendPath": "drugs[].drugReactionAssessments[].sourceOfAssessment",
+      "projectionPath": "drug.drugReactionAssessments[].sourceOfAssessment",
+      "patch": {
+        "kind": "row",
+        "owner": "drug"
+      },
+      "roundTripValue": "Reporter",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.G.k.9.i.2.r.1.LENGTH.MAX"
+      },
+      "payloadPath": "drugReactionAssessments[].sourceOfAssessment"
+    },
+    {
+      "code": "G.k.9.i.2.r.2",
+      "authority": "ICH",
+      "frontendPath": "drugs[].drugReactionAssessments[].methodOfAssessment",
+      "projectionPath": "drug.drugReactionAssessments[].methodOfAssessment",
+      "patch": {
+        "kind": "row",
+        "owner": "drug"
+      },
+      "roundTripValue": "WHO-UMC",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.G.k.9.i.2.r.2.LENGTH.MAX"
+      },
+      "payloadPath": "drugReactionAssessments[].methodOfAssessment"
+    },
+    {
+      "code": "G.k.9.i.2.r.3",
+      "authority": "ICH",
+      "frontendPath": "drugs[].drugReactionAssessments[].resultOfAssessment",
+      "projectionPath": "drug.drugReactionAssessments[].resultOfAssessment",
+      "patch": {
+        "kind": "row",
+        "owner": "drug"
+      },
+      "roundTripValue": "Possible",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.G.k.9.i.2.r.3.LENGTH.MAX"
+      },
+      "payloadPath": "drugReactionAssessments[].resultOfAssessment"
+    },
+    {
+      "code": "G.k.9.i.2.r.3.KR.2",
+      "authority": "MFDS",
+      "frontendPath": "drugs[].drugReactionAssessments[].resultOfAssessmentKr2",
+      "projectionPath": "drug.drugReactionAssessments[].resultOfAssessmentKr2",
+      "patch": {
+        "kind": "row",
+        "owner": "drug"
+      },
+      "roundTripValue": "1",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "MFDS.G.k.9.i.2.r.3.KR.2.LENGTH.MAX"
+      },
+      "payloadPath": "drugReactionAssessments[].resultOfAssessmentKr2"
+    }
   ]
 }

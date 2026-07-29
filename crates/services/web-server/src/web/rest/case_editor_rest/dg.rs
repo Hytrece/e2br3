@@ -13,12 +13,9 @@ use lib_core::model::drug_reaction_assessment::{
 const DRUG_ROW_ALIASES: &[(&str, &[&str])] = &[
 	("source_product_presave_id", &["sourceProductPresaveId"]),
 	("medicinal_product", &["medicinalProduct"]),
-	(
-		"drug_characterization",
-		&["drugCharacterization", "drugRole"],
-	),
+	("drug_characterization", &["drugCharacterization"]),
 	("batch_lot_number", &["drugBatchNumber"]),
-	("action_taken", &["drugActionTaken", "actionTaken"]),
+	("action_taken", &["drugActionTaken"]),
 	("mpid_version", &["mpidVersion"]),
 	("mpid", &["mpid"]),
 	("phpid_version", &["phpidVersion"]),
@@ -89,11 +86,8 @@ const DOSAGE_ALIASES: &[(&str, &[&str])] = &[
 	("duration_value", &["durationValue"]),
 	("duration_unit", &["durationUnit"]),
 	("continuing", &["continuing"]),
-	("batch_lot_number", &["batchNumber", "batchLotNumber"]),
-	(
-		"batch_lot_number_null_flavor",
-		&["batchNumberNullFlavor", "batchLotNumberNullFlavor"],
-	),
+	("batch_lot_number", &["batchNumber"]),
+	("batch_lot_number_null_flavor", &["batchNumberNullFlavor"]),
 	("dosage_text", &["dosageText"]),
 	("dose_form", &["doseForm"]),
 	("dose_form_termid_version", &["doseFormTermIdVersion"]),
@@ -101,10 +95,7 @@ const DOSAGE_ALIASES: &[(&str, &[&str])] = &[
 	("route_of_administration", &["routeOfAdministration"]),
 	("route_termid_version", &["routeTermIdVersion"]),
 	("route_termid", &["routeTermId"]),
-	(
-		"parent_route",
-		&["parentRouteOfAdministration", "parentRoute"],
-	),
+	("parent_route", &["parentRouteOfAdministration"]),
 	("parent_route_termid_version", &["parentRouteTermIdVersion"]),
 	("parent_route_termid", &["parentRouteTermId"]),
 	(
@@ -119,19 +110,10 @@ const DOSAGE_ALIASES: &[(&str, &[&str])] = &[
 
 const INDICATION_ALIASES: &[(&str, &[&str])] = &[
 	("sequence_number", &["sequenceNumber"]),
-	("indication_text", &["indicationText", "drugIndication"]),
-	(
-		"indication_text_null_flavor",
-		&["indicationTextNullFlavor", "drugIndicationNullFlavor"],
-	),
-	(
-		"indication_meddra_version",
-		&["indicationMeddraVersion", "drugIndicationMeddraVersion"],
-	),
-	(
-		"indication_meddra_code",
-		&["indicationMeddraCode", "drugIndicationMeddraCode"],
-	),
+	("indication_text", &["indicationText"]),
+	("indication_text_null_flavor", &["indicationTextNullFlavor"]),
+	("indication_meddra_version", &["indicationMeddraVersion"]),
+	("indication_meddra_code", &["indicationMeddraCode"]),
 ];
 
 const ASSESSMENT_ALIASES: &[(&str, &[&str])] = &[
@@ -183,7 +165,7 @@ async fn persist_active_substances(
 				})
 			})
 			.transpose()?;
-		let deleted = bool_field(row, &["_delete", "deleted"]).unwrap_or(false);
+		let deleted = bool_field(row, &["deleted"]).unwrap_or(false);
 
 		if let Some(id) = id {
 			let persisted = DrugActiveSubstanceBmc::get(ctx, mm, id).await?;
@@ -197,7 +179,13 @@ async fn persist_active_substances(
 			if deleted {
 				DrugActiveSubstanceBmc::delete(ctx, mm, id).await?;
 			} else {
-				let model = row_model_value(row, ACTIVE_SUBSTANCE_ALIASES, &[]);
+				let model = row_model_value(
+					"DG",
+					"activeSubstances[].",
+					row,
+					ACTIVE_SUBSTANCE_ALIASES,
+					&[],
+				);
 				let update = parse_row_model::<DrugActiveSubstanceForUpdate>(
 					"DG",
 					"activeSubstances",
@@ -207,17 +195,16 @@ async fn persist_active_substances(
 			}
 		} else if !deleted {
 			let model = row_model_value(
+				"DG",
+				"activeSubstances[].",
 				row,
 				ACTIVE_SUBSTANCE_ALIASES,
 				&[
 					("drug_id", json!(drug_id)),
 					(
 						"sequence_number",
-						json!(i32_field(
-							row,
-							&["sequenceNumber", "sequence_number"]
-						)
-						.unwrap_or((index + 1) as i32)),
+						json!(i32_field(row, &["sequenceNumber"])
+							.unwrap_or((index + 1) as i32)),
 					),
 				],
 			);
@@ -269,8 +256,7 @@ macro_rules! persist_drug_children {
 						})
 					})
 					.transpose()?;
-				let deleted =
-					bool_field(row, &["_delete", "deleted"]).unwrap_or(false);
+				let deleted = bool_field(row, &["deleted"]).unwrap_or(false);
 
 				if let Some(id) = id {
 					let persisted = $bmc::get(ctx, mm, id).await?;
@@ -285,13 +271,21 @@ macro_rules! persist_drug_children {
 					if deleted {
 						$bmc::delete(ctx, mm, id).await?;
 					} else {
-						let model = row_model_value(row, $aliases, &[]);
+						let model = row_model_value(
+							"DG",
+							concat!($key, "[]."),
+							row,
+							$aliases,
+							&[],
+						);
 						let update =
 							parse_row_model::<$update>("DG", $key, model)?;
 						$bmc::update(ctx, mm, id, update).await?;
 					}
 				} else if !deleted {
 					let model = row_model_value(
+						"DG",
+						concat!($key, "[]."),
 						row,
 						$aliases,
 						&[
@@ -300,7 +294,7 @@ macro_rules! persist_drug_children {
 								"sequence_number",
 								json!(i32_field(
 									row,
-									&["sequenceNumber", "sequence_number"]
+									&["sequenceNumber"]
 								)
 								.unwrap_or((index + 1) as i32)),
 							),
@@ -357,18 +351,15 @@ async fn persist_drug_reaction_assessments(
 				"invalid DG.drug.drugReactionAssessments[{index}] payload: expected an object"
 			),
 		})?;
-		let assessment_id = string_field(
-			row,
-			&["drugReactionAssessmentId", "drug_reaction_assessment_id"],
-		)
-		.map(|value| {
-			Uuid::parse_str(&value).map_err(|_| Error::BadRequest {
-				message: format!(
+		let assessment_id = string_field(row, &["drugReactionAssessmentId"])
+			.map(|value| {
+				Uuid::parse_str(&value).map_err(|_| Error::BadRequest {
+					message: format!(
 					"invalid DG.drug.drugReactionAssessments[{index}].drugReactionAssessmentId"
 				),
+				})
 			})
-		})
-		.transpose()?;
+			.transpose()?;
 
 		let persisted_assessment = if let Some(assessment_id) = assessment_id {
 			let assessment =
@@ -384,7 +375,7 @@ async fn persist_drug_reaction_assessments(
 		} else {
 			None
 		};
-		let reaction_id = string_field(row, &["reactionId", "reaction_id"])
+		let reaction_id = string_field(row, &["reactionId"])
 			.map(|value| {
 				Uuid::parse_str(&value).map_err(|_| Error::BadRequest {
 					message: format!(
@@ -418,7 +409,13 @@ async fn persist_drug_reaction_assessments(
 		}
 
 		let assessment_id = if let Some(assessment) = persisted_assessment {
-			let model = row_model_value(row, ASSESSMENT_ALIASES, &[]);
+			let model = row_model_value(
+				"DG",
+				"drugReactionAssessments[].",
+				row,
+				ASSESSMENT_ALIASES,
+				&[],
+			);
 			let update = parse_row_model::<DrugReactionAssessmentForUpdate>(
 				"DG",
 				"drugReactionAssessments",
@@ -436,7 +433,13 @@ async fn persist_drug_reaction_assessments(
 			)
 			.await?
 		{
-			let model = row_model_value(row, ASSESSMENT_ALIASES, &[]);
+			let model = row_model_value(
+				"DG",
+				"drugReactionAssessments[].",
+				row,
+				ASSESSMENT_ALIASES,
+				&[],
+			);
 			let update = parse_row_model::<DrugReactionAssessmentForUpdate>(
 				"DG",
 				"drugReactionAssessments",
@@ -447,6 +450,8 @@ async fn persist_drug_reaction_assessments(
 			assessment.id
 		} else {
 			let model = row_model_value(
+				"DG",
+				"drugReactionAssessments[].",
 				row,
 				ASSESSMENT_ALIASES,
 				&[
@@ -471,7 +476,7 @@ async fn persist_drug_reaction_assessments(
 				})
 			})
 			.transpose()?;
-		let deleted = bool_field(row, &["_delete", "deleted"]).unwrap_or(false);
+		let deleted = bool_field(row, &["deleted"]).unwrap_or(false);
 		if let Some(relatedness_id) = relatedness_id {
 			let relatedness =
 				RelatednessAssessmentBmc::get(ctx, mm, relatedness_id).await?;
@@ -485,7 +490,13 @@ async fn persist_drug_reaction_assessments(
 			if deleted {
 				RelatednessAssessmentBmc::delete(ctx, mm, relatedness_id).await?;
 			} else {
-				let model = row_model_value(row, RELATEDNESS_ALIASES, &[]);
+				let model = row_model_value(
+					"DG",
+					"drugReactionAssessments[].",
+					row,
+					RELATEDNESS_ALIASES,
+					&[],
+				);
 				let update = parse_row_model::<RelatednessAssessmentForUpdate>(
 					"DG",
 					"drugReactionAssessments",
@@ -501,17 +512,16 @@ async fn persist_drug_reaction_assessments(
 				})
 			}) {
 			let model = row_model_value(
+				"DG",
+				"drugReactionAssessments[].",
 				row,
 				RELATEDNESS_ALIASES,
 				&[
 					("drug_reaction_assessment_id", json!(assessment_id)),
 					(
 						"sequence_number",
-						json!(i32_field(
-							row,
-							&["sequenceNumber", "sequence_number"]
-						)
-						.unwrap_or((index + 1) as i32)),
+						json!(i32_field(row, &["sequenceNumber"])
+							.unwrap_or((index + 1) as i32)),
 					),
 				],
 			);
@@ -840,17 +850,15 @@ pub async fn create_editor_dg_page_row(
 				validate_row_payload("DG", "drug", row, None)?;
 
 				let model = row_model_value(
+					"DG",
+					"",
 					row,
 					DRUG_ROW_ALIASES,
 					&[
 						("case_id", json!(case_id)),
 						(
 							"sequence_number",
-							json!(i32_field(
-								row,
-								&["sequenceNumber", "sequence_number"],
-							)
-							.unwrap_or(1)),
+							json!(i32_field(row, &["sequenceNumber"],).unwrap_or(1)),
 						),
 						(
 							"drug_characterization",
@@ -921,7 +929,7 @@ pub async fn patch_editor_dg_page_row(
 				let row = required_row_object("DG", &request.rows, "drug")?;
 				validate_row_payload("DG", "drug", row, None)?;
 
-				let model = row_model_value(row, DRUG_ROW_ALIASES, &[]);
+				let model = row_model_value("DG", "", row, DRUG_ROW_ALIASES, &[]);
 				let update = parse_row_model::<DrugInformationForUpdate>(
 					"DG", "drug", model,
 				)?;

@@ -4,6 +4,8 @@ use crate::common::{
 use axum::body::{to_bytes, Body};
 use axum::http::{Request, StatusCode};
 use lib_auth::token::generate_web_token;
+use lib_core::ctx::{Ctx, ROLE_SPONSOR_ADMIN_CRO};
+use lib_core::model::ModelManager;
 use serde_json::Value;
 use serial_test::serial;
 use tower::ServiceExt;
@@ -68,7 +70,13 @@ fn extract_data_id(body: &[u8]) -> Result<String> {
 	Ok(id.to_string())
 }
 
-async fn setup_imported_case() -> Result<(axum::Router, String, String)> {
+type ImportedCaseSetup = (axum::Router, String, String, ModelManager, Ctx);
+
+async fn setup_imported_case() -> Result<ImportedCaseSetup> {
+	setup_imported_case_from("FAERS2022Scenario2.xml").await
+}
+
+async fn setup_imported_case_from(fixture_name: &str) -> Result<ImportedCaseSetup> {
 	init_test_env().await?;
 	let Some(examples_dir) = std::env::var("E2BR3_EXAMPLES_DIR")
 		.ok()
@@ -81,11 +89,16 @@ async fn setup_imported_case() -> Result<(axum::Router, String, String)> {
 
 	let mm = init_test_mm().await?;
 	let seed = seed_org_with_users(&mm, "admin_pwd", "viewer_pwd").await?;
+	let ctx = Ctx::new(
+		seed.admin.id,
+		seed.org_id,
+		ROLE_SPONSOR_ADMIN_CRO.to_string(),
+	)?;
 	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
 	let cookie = cookie_header(&token.to_string());
-	let app = web_server::app(mm);
+	let app = web_server::app(mm.clone());
 
-	let xml_path = examples_dir.join("FAERS2022Scenario2.xml");
+	let xml_path = examples_dir.join(fixture_name);
 	let xml = std::fs::read_to_string(xml_path)?;
 	let boundary = "X-BOUNDARY-XML-IMPORT-REMAINING";
 	let body = format!(
@@ -114,15 +127,17 @@ async fn setup_imported_case() -> Result<(axum::Router, String, String)> {
 	let import_value: Value = serde_json::from_slice(&import_body)?;
 	let case_id = import_value
 		.get("data")
-		.and_then(|v| v.get("case_id").or_else(|| v.get("caseId")))
+		.and_then(|v| v.get("caseId"))
 		.and_then(|v| v.as_str())
-		.ok_or("missing case_id in import response")?
+		.ok_or_else(|| {
+			format!("missing data.caseId in import response: {import_value}")
+		})?
 		.to_string();
 	ensure_reaction_language(&app, &cookie, &case_id).await?;
 	ensure_batch_transmission_date(&app, &cookie, &case_id).await?;
 	ensure_fda_device_characteristics(&app, &cookie, &case_id).await?;
 
-	Ok((app, cookie, case_id))
+	Ok((app, cookie, case_id, mm, ctx))
 }
 
 async fn ensure_reaction_language(
@@ -455,9 +470,57 @@ async fn export_xml(
 }
 
 #[serial]
+#[tokio::test(flavor = "multi_thread")]
+async fn parent_null_flavor_xml_roundtrip() -> Result<()> {
+	let (app, cookie, case_id, mm, ctx) =
+		setup_imported_case_from("FAERS2022Scenario1.xml").await?;
+
+	let (status, body) = request_json(
+		&app,
+		&cookie,
+		"PATCH",
+		format!("/api/cases/{case_id}/editor/pages/DM"),
+		Some(serde_json::json!({
+			"authorities": ["ich"],
+			"rows": {
+				"patientInformation": {"patientInitials": "PT-XML"},
+				"parentInfo": {
+					"parentIdentification": "UNK",
+					"parentSex": "NASK"
+				}
+			}
+		})),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK, "{}", String::from_utf8_lossy(&body));
+
+	let parsed_case_id = Uuid::parse_str(&case_id)?;
+	let xml = tokio::task::block_in_place(|| {
+		tokio::runtime::Handle::current().block_on(xml::serialize_case_xml(
+			&ctx,
+			&mm,
+			parsed_case_id,
+		))
+	})?;
+	assert!(xml.contains("nullFlavor=\"UNK\""), "{xml}");
+	assert!(xml.contains("nullFlavor=\"NASK\""), "{xml}");
+	let parsed_parent =
+		xml::import_sections::d_patient::parse_d_parent(xml.as_bytes())?
+			.ok_or("missing parsed parent information")?;
+	assert_eq!(parsed_parent.parent_identification, None);
+	assert_eq!(
+		parsed_parent.parent_identification_null_flavor.as_deref(),
+		Some("UNK")
+	);
+	assert_eq!(parsed_parent.sex, None);
+	assert_eq!(parsed_parent.sex_null_flavor.as_deref(), Some("NASK"));
+	Ok(())
+}
+
+#[serial]
 #[tokio::test]
 async fn test_roundtrip_dm_dh_remaining_fields() -> Result<()> {
-	let (app, cookie, case_id) = match setup_imported_case().await {
+	let (app, cookie, case_id, _mm, _ctx) = match setup_imported_case().await {
 		Ok(v) => v,
 		Err(err) => {
 			eprintln!("skipping DM/DH remaining test: {err}");
@@ -649,7 +712,7 @@ async fn test_roundtrip_dm_dh_remaining_fields() -> Result<()> {
 #[serial]
 #[tokio::test]
 async fn test_roundtrip_ae_remaining_fields() -> Result<()> {
-	let (app, cookie, case_id) = match setup_imported_case().await {
+	let (app, cookie, case_id, _mm, _ctx) = match setup_imported_case().await {
 		Ok(v) => v,
 		Err(err) => {
 			eprintln!("skipping AE remaining test: {err}");
@@ -765,7 +828,7 @@ async fn test_roundtrip_ae_remaining_fields() -> Result<()> {
 #[serial]
 #[tokio::test]
 async fn test_roundtrip_dg_remaining_14_fields() -> Result<()> {
-	let (app, cookie, case_id) = match setup_imported_case().await {
+	let (app, cookie, case_id, _mm, _ctx) = match setup_imported_case().await {
 		Ok(v) => v,
 		Err(err) => {
 			eprintln!("skipping DG remaining test: {err}");
@@ -990,7 +1053,7 @@ async fn test_roundtrip_dg_remaining_14_fields() -> Result<()> {
 #[serial]
 #[tokio::test]
 async fn test_roundtrip_ci_si_fields() -> Result<()> {
-	let (app, cookie, case_id) = setup_imported_case().await?;
+	let (app, cookie, case_id, _mm, _ctx) = setup_imported_case().await?;
 
 	let sentinel_wuid = format!("RTCIW-{}", Uuid::new_v4().simple());
 	let sentinel_null_reason = format!("RTCINULL-{}", Uuid::new_v4().simple());
@@ -1153,7 +1216,7 @@ async fn test_roundtrip_ci_si_fields() -> Result<()> {
 #[serial]
 #[tokio::test]
 async fn test_roundtrip_rp_sd_fields() -> Result<()> {
-	let (app, cookie, case_id) = setup_imported_case().await?;
+	let (app, cookie, case_id, _mm, _ctx) = setup_imported_case().await?;
 
 	let sentinel_rp_given = format!("RTRP-G-{}", Uuid::new_v4().simple());
 	let sentinel_rp_family = format!("RTRP-F-{}", Uuid::new_v4().simple());
@@ -1295,7 +1358,7 @@ async fn test_roundtrip_rp_sd_fields() -> Result<()> {
 #[serial]
 #[tokio::test]
 async fn test_roundtrip_nr_fields() -> Result<()> {
-	let (app, cookie, case_id) = setup_imported_case().await?;
+	let (app, cookie, case_id, _mm, _ctx) = setup_imported_case().await?;
 
 	let sentinel_h1 = format!("RTNR-H1-{}", Uuid::new_v4().simple());
 	let sentinel_h2 = format!("RTNR-H2-{}", Uuid::new_v4().simple());
@@ -1417,7 +1480,7 @@ async fn test_roundtrip_nr_fields() -> Result<()> {
 #[serial]
 #[tokio::test]
 async fn test_api_persistence_ae_sd_all_fields() -> Result<()> {
-	let (app, cookie, case_id) = match setup_imported_case().await {
+	let (app, cookie, case_id, _mm, _ctx) = match setup_imported_case().await {
 		Ok(v) => v,
 		Err(err) => {
 			eprintln!("skipping AE/SD API persistence test: {err}");

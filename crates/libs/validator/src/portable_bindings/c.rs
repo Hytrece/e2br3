@@ -287,113 +287,113 @@ pub(super) const BINDINGS: &[PortableFieldBinding] = &[
 	),
 	binding!(
 		"SD",
-		"safetyReportIdentification.senderType",
+		"senderInformation.senderType",
 		"senderType",
 		String,
 		["ICH.C.3.1.LENGTH.MAX", "ICH.C.3.1.ALLOWED.VALUE"]
 	),
 	binding!(
 		"SD",
-		"safetyReportIdentification.senderHealthProfessionalTypeKr1",
-		"senderHealthProfessionalTypeKr1",
+		"senderInformation.healthProfessionalTypeKr1",
+		"healthProfessionalTypeKr1",
 		String,
 		["MFDS.C.3.1.KR.1.LENGTH.MAX"]
 	),
 	binding!(
 		"SD",
-		"safetyReportIdentification.senderOrganization",
-		"senderOrganization",
+		"senderInformation.organizationName",
+		"organizationName",
 		String,
 		["ICH.C.3.2.LENGTH.MAX"]
 	),
 	binding!(
 		"SD",
-		"safetyReportIdentification.senderDepartment",
-		"senderDepartment",
+		"senderInformation.department",
+		"department",
 		String,
 		["ICH.C.3.3.1.LENGTH.MAX"]
 	),
 	binding!(
 		"SD",
-		"safetyReportIdentification.senderPersonTitle",
-		"senderPersonTitle",
+		"senderInformation.personTitle",
+		"personTitle",
 		String,
 		["ICH.C.3.3.2.LENGTH.MAX"]
 	),
 	binding!(
 		"SD",
-		"safetyReportIdentification.senderPersonGivenName",
-		"senderPersonGivenName",
+		"senderInformation.personGivenName",
+		"personGivenName",
 		String,
 		["ICH.C.3.3.3.LENGTH.MAX"]
 	),
 	binding!(
 		"SD",
-		"safetyReportIdentification.senderPersonMiddleName",
-		"senderPersonMiddleName",
+		"senderInformation.personMiddleName",
+		"personMiddleName",
 		String,
 		["ICH.C.3.3.4.LENGTH.MAX"]
 	),
 	binding!(
 		"SD",
-		"safetyReportIdentification.senderPersonFamilyName",
-		"senderPersonFamilyName",
+		"senderInformation.personFamilyName",
+		"personFamilyName",
 		String,
 		["ICH.C.3.3.5.LENGTH.MAX"]
 	),
 	binding!(
 		"SD",
-		"safetyReportIdentification.senderStreetAddress",
-		"senderStreetAddress",
+		"senderInformation.streetAddress",
+		"streetAddress",
 		String,
 		["ICH.C.3.4.1.LENGTH.MAX"]
 	),
 	binding!(
 		"SD",
-		"safetyReportIdentification.senderCity",
-		"senderCity",
+		"senderInformation.city",
+		"city",
 		String,
 		["ICH.C.3.4.2.LENGTH.MAX"]
 	),
 	binding!(
 		"SD",
-		"safetyReportIdentification.senderState",
-		"senderState",
+		"senderInformation.state",
+		"state",
 		String,
 		["ICH.C.3.4.3.LENGTH.MAX"]
 	),
 	binding!(
 		"SD",
-		"safetyReportIdentification.senderPostcode",
-		"senderPostcode",
+		"senderInformation.postcode",
+		"postcode",
 		String,
 		["ICH.C.3.4.4.LENGTH.MAX"]
 	),
 	binding!(
 		"SD",
-		"safetyReportIdentification.senderCountryCode",
-		"senderCountryCode",
+		"senderInformation.countryCode",
+		"countryCode",
 		String,
 		["ICH.C.3.4.5.LENGTH.MAX"]
 	),
 	binding!(
 		"SD",
-		"safetyReportIdentification.senderTelephone",
-		"senderTelephone",
+		"senderInformation.telephone",
+		"telephone",
 		String,
 		["ICH.C.3.4.6.LENGTH.MAX"]
 	),
 	binding!(
 		"SD",
-		"safetyReportIdentification.senderFax",
-		"senderFax",
+		"senderInformation.fax",
+		"fax",
 		String,
 		["ICH.C.3.4.7.LENGTH.MAX"]
 	),
 	binding!(
 		"SD",
-		"safetyReportIdentification.senderEmail",
-		"senderEmail",
+		"senderInformation.email",
+		"email",
 		String,
 		["ICH.C.3.4.8.LENGTH.MAX"]
 	),

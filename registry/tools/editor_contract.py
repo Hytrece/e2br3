@@ -9,6 +9,7 @@ REQUIRED_FIELD_KEYS = (
     "code",
     "authority",
     "frontendPath",
+    "payloadPath",
     "projectionPath",
     "patch",
     "roundTripValue",
@@ -92,6 +93,18 @@ def validate_editor_contract(
             result.add(f"{page_id} editor contract duplicate code {code}")
             continue
         fields_by_code[code] = field
+        payload_path = field.get("payloadPath")
+        if not isinstance(payload_path, str) or not payload_path:
+            result.add(f"{code} missing payloadPath evidence")
+        patch = field.get("patch")
+        if not isinstance(patch, dict):
+            result.add(f"{code} patch must be an object")
+        else:
+            if patch.get("kind") not in {"row", "rows"}:
+                result.add(f"{code} patch.kind must be row or rows")
+            owner = patch.get("owner")
+            if not isinstance(owner, str) or not owner:
+                result.add(f"{code} patch.owner is required")
         row = rows_by_code.get(code)
         if row is None:
             result.add(f"{code} editor contract has no registry row")

@@ -92,6 +92,7 @@ pub(crate) struct DeathCauseImport {
 #[derive(Debug)]
 pub(crate) struct ParentImport {
 	pub(crate) parent_identification: Option<String>,
+	pub(crate) parent_identification_null_flavor: Option<String>,
 	pub(crate) parent_birth_date: Option<Date>,
 	pub(crate) parent_birth_date_null_flavor: Option<String>,
 	pub(crate) parent_age: Option<Decimal>,
@@ -102,6 +103,7 @@ pub(crate) struct ParentImport {
 	pub(crate) weight_kg: Option<Decimal>,
 	pub(crate) height_cm: Option<Decimal>,
 	pub(crate) sex: Option<String>,
+	pub(crate) sex_null_flavor: Option<String>,
 	pub(crate) medical_history_text: Option<String>,
 	pub(crate) medical_history: Vec<MedicalHistoryImport>,
 	pub(crate) past_drugs: Vec<PastDrugHistoryImport>,
@@ -546,6 +548,12 @@ pub(crate) fn parse_parent_information(xml: &[u8]) -> Result<Option<ParentImport
 
 	let parent_identification =
 		first_text(&mut xpath, node, "hl7:associatedPerson/hl7:name");
+	let parent_identification_null_flavor = first_attr(
+		&mut xpath,
+		node,
+		"hl7:associatedPerson/hl7:name",
+		"nullFlavor",
+	);
 	let parent_birth_date = first_attr(
 		&mut xpath,
 		node,
@@ -565,6 +573,12 @@ pub(crate) fn parse_parent_information(xml: &[u8]) -> Result<Option<ParentImport
 		"hl7:associatedPerson/hl7:administrativeGenderCode",
 		"code",
 	));
+	let sex_null_flavor = first_attr(
+		&mut xpath,
+		node,
+		"hl7:associatedPerson/hl7:administrativeGenderCode",
+		"nullFlavor",
+	);
 	let parent_age = first_attr(
 		&mut xpath,
 		node,
@@ -795,6 +809,7 @@ pub(crate) fn parse_parent_information(xml: &[u8]) -> Result<Option<ParentImport
 
 	Ok(Some(ParentImport {
 		parent_identification,
+		parent_identification_null_flavor,
 		parent_birth_date,
 		parent_birth_date_null_flavor,
 		parent_age,
@@ -805,6 +820,7 @@ pub(crate) fn parse_parent_information(xml: &[u8]) -> Result<Option<ParentImport
 		weight_kg,
 		height_cm,
 		sex,
+		sex_null_flavor,
 		medical_history_text,
 		medical_history,
 		past_drugs,

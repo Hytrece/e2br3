@@ -454,7 +454,7 @@ pub struct PrimarySourceFilter {
 pub struct LiteratureReference {
 	pub id: Uuid,
 	pub case_id: Uuid,
-	pub reference_text: String,
+	pub reference_text: Option<String>,
 	pub reference_text_null_flavor: Option<String>,
 	pub sequence_number: i32,
 	pub document_base64: Option<String>,
@@ -471,7 +471,7 @@ pub struct LiteratureReference {
 #[derive(Fields, Deserialize)]
 pub struct LiteratureReferenceForCreate {
 	pub case_id: Uuid,
-	pub reference_text: String,
+	pub reference_text: Option<String>,
 	pub reference_text_null_flavor: Option<String>,
 	pub sequence_number: i32,
 	pub document_base64: Option<String>,

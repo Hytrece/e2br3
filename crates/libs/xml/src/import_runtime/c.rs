@@ -848,6 +848,8 @@ async fn import_c_4_literature_references(
 	let references = c_helpers::parse_literature_references(xml)?;
 	for (idx, entry) in references.into_iter().enumerate() {
 		let seq = (idx + 1) as i32;
+		let reference_text = (!entry.reference_text.trim().is_empty())
+			.then(|| entry.reference_text.clone());
 		let existing: Option<Uuid> = mm
 			.dbx()
 			.fetch_optional(
@@ -866,7 +868,7 @@ async fn import_c_4_literature_references(
 				mm,
 				id,
 				LiteratureReferenceForUpdate {
-					reference_text: Some(entry.reference_text),
+					reference_text: reference_text.clone(),
 					reference_text_null_flavor: entry.reference_text_null_flavor,
 					sequence_number: Some(seq),
 					document_base64: entry.document_base64,
@@ -882,7 +884,7 @@ async fn import_c_4_literature_references(
 				mm,
 				LiteratureReferenceForCreate {
 					case_id,
-					reference_text: entry.reference_text,
+					reference_text,
 					reference_text_null_flavor: entry.reference_text_null_flavor,
 					sequence_number: seq,
 					document_base64: entry.document_base64,

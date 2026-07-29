@@ -901,7 +901,7 @@
       "section": "safetyReportIdentification",
       "field": "senderType",
       "file": "../frontend/E2BR3-frontend/components/case-form/sections/SectionC3.tsx",
-      "evidence": "SectionC3 binds fieldNumber C.3.1 to safetyReportIdentification.senderType."
+      "evidence": "SenderFields binds fieldNumber C.3.1 to senderInformation.senderType."
     },
     "action": "",
     "notes": ""
@@ -927,7 +927,7 @@
       "section": "safetyReportIdentification",
       "field": "senderHealthProfessionalTypeKr1",
       "file": "../frontend/E2BR3-frontend/components/case-form/sections/SectionC3.tsx",
-      "evidence": "SectionC3 binds fieldNumber C.3.1.KR.1 to safetyReportIdentification.senderHealthProfessionalTypeKr1."
+      "evidence": "SenderFields binds fieldNumber C.3.1.KR.1 to senderInformation.healthProfessionalTypeKr1."
     },
     "action": "",
     "notes": ""
@@ -953,7 +953,7 @@
       "section": "safetyReportIdentification",
       "field": "senderOrganization",
       "file": "../frontend/E2BR3-frontend/components/case-form/sections/SectionC3.tsx",
-      "evidence": "SectionC3 binds fieldNumber C.3.2 to safetyReportIdentification.senderOrganization."
+      "evidence": "SenderFields binds fieldNumber C.3.2 to senderInformation.organizationName."
     },
     "action": "",
     "notes": ""
@@ -979,7 +979,7 @@
       "section": "safetyReportIdentification",
       "field": "senderDepartment",
       "file": "../frontend/E2BR3-frontend/components/case-form/sections/SectionC3.tsx",
-      "evidence": "SectionC3 binds fieldNumber C.3.3.1 to safetyReportIdentification.senderDepartment."
+      "evidence": "SenderFields binds fieldNumber C.3.3.1 to senderInformation.department."
     },
     "action": "",
     "notes": ""
@@ -1005,7 +1005,7 @@
       "section": "safetyReportIdentification",
       "field": "senderPersonTitle",
       "file": "../frontend/E2BR3-frontend/components/case-form/sections/SectionC3.tsx",
-      "evidence": "SectionC3 binds fieldNumber C.3.3.2 to safetyReportIdentification.senderPersonTitle."
+      "evidence": "SenderFields binds fieldNumber C.3.3.2 to senderInformation.personTitle."
     },
     "action": "",
     "notes": ""
@@ -1031,7 +1031,7 @@
       "section": "safetyReportIdentification",
       "field": "senderPersonGivenName",
       "file": "../frontend/E2BR3-frontend/components/case-form/sections/SectionC3.tsx",
-      "evidence": "SectionC3 binds fieldNumber C.3.3.3 to safetyReportIdentification.senderPersonGivenName."
+      "evidence": "SenderFields binds fieldNumber C.3.3.3 to senderInformation.personGivenName."
     },
     "action": "",
     "notes": ""
@@ -1057,7 +1057,7 @@
       "section": "safetyReportIdentification",
       "field": "senderPersonMiddleName",
       "file": "../frontend/E2BR3-frontend/components/case-form/sections/SectionC3.tsx",
-      "evidence": "SectionC3 binds fieldNumber C.3.3.4 to safetyReportIdentification.senderPersonMiddleName."
+      "evidence": "SenderFields binds fieldNumber C.3.3.4 to senderInformation.personMiddleName."
     },
     "action": "",
     "notes": ""
@@ -1083,7 +1083,7 @@
       "section": "safetyReportIdentification",
       "field": "senderPersonFamilyName",
       "file": "../frontend/E2BR3-frontend/components/case-form/sections/SectionC3.tsx",
-      "evidence": "SectionC3 binds fieldNumber C.3.3.5 to safetyReportIdentification.senderPersonFamilyName."
+      "evidence": "SenderFields binds fieldNumber C.3.3.5 to senderInformation.personFamilyName."
     },
     "action": "",
     "notes": ""
@@ -1109,7 +1109,7 @@
       "section": "safetyReportIdentification",
       "field": "senderStreetAddress",
       "file": "../frontend/E2BR3-frontend/components/case-form/sections/SectionC3.tsx",
-      "evidence": "SectionC3 binds fieldNumber C.3.4.1 to safetyReportIdentification.senderStreetAddress."
+      "evidence": "SenderFields binds fieldNumber C.3.4.1 to senderInformation.streetAddress."
     },
     "action": "",
     "notes": ""
@@ -1135,7 +1135,7 @@
       "section": "safetyReportIdentification",
       "field": "senderCity",
       "file": "../frontend/E2BR3-frontend/components/case-form/sections/SectionC3.tsx",
-      "evidence": "SectionC3 binds fieldNumber C.3.4.2 to safetyReportIdentification.senderCity."
+      "evidence": "SenderFields binds fieldNumber C.3.4.2 to senderInformation.city."
     },
     "action": "",
     "notes": ""
@@ -1161,7 +1161,7 @@
       "section": "safetyReportIdentification",
       "field": "senderState",
       "file": "../frontend/E2BR3-frontend/components/case-form/sections/SectionC3.tsx",
-      "evidence": "SectionC3 binds fieldNumber C.3.4.3 to safetyReportIdentification.senderState."
+      "evidence": "SenderFields binds fieldNumber C.3.4.3 to senderInformation.state."
     },
     "action": "",
     "notes": ""
@@ -1187,7 +1187,7 @@
       "section": "safetyReportIdentification",
       "field": "senderPostcode",
       "file": "../frontend/E2BR3-frontend/components/case-form/sections/SectionC3.tsx",
-      "evidence": "SectionC3 binds fieldNumber C.3.4.4 to safetyReportIdentification.senderPostcode."
+      "evidence": "SenderFields binds fieldNumber C.3.4.4 to senderInformation.postcode."
     },
     "action": "",
     "notes": ""
@@ -1213,7 +1213,7 @@
       "section": "safetyReportIdentification",
       "field": "senderCountryCode",
       "file": "../frontend/E2BR3-frontend/components/case-form/sections/SectionC3.tsx",
-      "evidence": "SectionC3 binds fieldNumber C.3.4.5 to safetyReportIdentification.senderCountryCode."
+      "evidence": "SenderFields binds fieldNumber C.3.4.5 to senderInformation.countryCode."
     },
     "action": "",
     "notes": ""
@@ -1239,7 +1239,7 @@
       "section": "safetyReportIdentification",
       "field": "senderTelephone",
       "file": "../frontend/E2BR3-frontend/components/case-form/sections/SectionC3.tsx",
-      "evidence": "SectionC3 binds fieldNumber C.3.4.6 to safetyReportIdentification.senderTelephone."
+      "evidence": "SenderFields binds fieldNumber C.3.4.6 to senderInformation.telephone."
     },
     "action": "",
     "notes": ""
@@ -1265,7 +1265,7 @@
       "section": "safetyReportIdentification",
       "field": "senderFax",
       "file": "../frontend/E2BR3-frontend/components/case-form/sections/SectionC3.tsx",
-      "evidence": "SectionC3 binds fieldNumber C.3.4.7 to safetyReportIdentification.senderFax."
+      "evidence": "SenderFields binds fieldNumber C.3.4.7 to senderInformation.fax."
     },
     "action": "",
     "notes": ""
@@ -1291,7 +1291,7 @@
       "section": "safetyReportIdentification",
       "field": "senderEmail",
       "file": "../frontend/E2BR3-frontend/components/case-form/sections/SectionC3.tsx",
-      "evidence": "SectionC3 binds fieldNumber C.3.4.8 to safetyReportIdentification.senderEmail."
+      "evidence": "SenderFields binds fieldNumber C.3.4.8 to senderInformation.email."
     },
     "action": "",
     "notes": ""
@@ -1733,7 +1733,7 @@
       "section": "safetyReportIdentification",
       "field": "receiverOrganization",
       "file": "../frontend/E2BR3-frontend/lib/case-save/contracts.ts",
-      "evidence": "SectionC3.tsx registers safetyReportIdentification.receiverOrganization (receiver block added in the frontend)."
+      "evidence": "ReceiverFields registers receiverInformation.organizationName."
     },
     "action": "",
     "notes": "App-local receiver organisation/address metadata. Not a C.3 element: official C.3 is the Sender block (mapped via SenderInformation) and the E2B receiver is identified only at message level (N.1.4 / N.2.r.3). Renamed from C.3.receiver.* to local.receiver.* so the code no longer implies an official C.3 sub-element."
@@ -1760,7 +1760,7 @@
       "section": "safetyReportIdentification",
       "field": "receiverType",
       "file": "../frontend/E2BR3-frontend/lib/case-save/contracts.ts",
-      "evidence": "SectionC3.tsx registers safetyReportIdentification.receiverType (receiver block added in the frontend)."
+      "evidence": "ReceiverFields registers receiverInformation.receiverType."
     },
     "action": "",
     "notes": "App-local receiver organisation/address metadata. Not a C.3 element: official C.3 is the Sender block (mapped via SenderInformation) and the E2B receiver is identified only at message level (N.1.4 / N.2.r.3). Renamed from C.3.receiver.* to local.receiver.* so the code no longer implies an official C.3 sub-element."
@@ -1787,7 +1787,7 @@
       "section": "safetyReportIdentification",
       "field": "receiverDepartment",
       "file": "../frontend/E2BR3-frontend/lib/case-save/contracts.ts",
-      "evidence": "SectionC3.tsx registers safetyReportIdentification.receiverDepartment (receiver block added in the frontend)."
+      "evidence": "ReceiverFields registers receiverInformation.department."
     },
     "action": "",
     "notes": "App-local receiver organisation/address metadata. Not a C.3 element: official C.3 is the Sender block (mapped via SenderInformation) and the E2B receiver is identified only at message level (N.1.4 / N.2.r.3). Renamed from C.3.receiver.* to local.receiver.* so the code no longer implies an official C.3 sub-element."
@@ -1814,7 +1814,7 @@
       "section": "safetyReportIdentification",
       "field": "receiverStreet",
       "file": "../frontend/E2BR3-frontend/lib/case-save/contracts.ts",
-      "evidence": "SectionC3.tsx registers safetyReportIdentification.receiverStreet (receiver block added in the frontend)."
+      "evidence": "ReceiverFields registers receiverInformation.streetAddress."
     },
     "action": "",
     "notes": "App-local receiver organisation/address metadata. Not a C.3 element: official C.3 is the Sender block (mapped via SenderInformation) and the E2B receiver is identified only at message level (N.1.4 / N.2.r.3). Renamed from C.3.receiver.* to local.receiver.* so the code no longer implies an official C.3 sub-element."
@@ -1841,7 +1841,7 @@
       "section": "safetyReportIdentification",
       "field": "receiverCity",
       "file": "../frontend/E2BR3-frontend/lib/case-save/contracts.ts",
-      "evidence": "SectionC3.tsx registers safetyReportIdentification.receiverCity (receiver block added in the frontend)."
+      "evidence": "ReceiverFields registers receiverInformation.city."
     },
     "action": "",
     "notes": "App-local receiver organisation/address metadata. Not a C.3 element: official C.3 is the Sender block (mapped via SenderInformation) and the E2B receiver is identified only at message level (N.1.4 / N.2.r.3). Renamed from C.3.receiver.* to local.receiver.* so the code no longer implies an official C.3 sub-element."
@@ -1868,7 +1868,7 @@
       "section": "safetyReportIdentification",
       "field": "receiverState",
       "file": "../frontend/E2BR3-frontend/lib/case-save/contracts.ts",
-      "evidence": "SectionC3.tsx registers safetyReportIdentification.receiverState (receiver block added in the frontend)."
+      "evidence": "ReceiverFields registers receiverInformation.stateProvince."
     },
     "action": "",
     "notes": "App-local receiver organisation/address metadata. Not a C.3 element: official C.3 is the Sender block (mapped via SenderInformation) and the E2B receiver is identified only at message level (N.1.4 / N.2.r.3). Renamed from C.3.receiver.* to local.receiver.* so the code no longer implies an official C.3 sub-element."
@@ -1895,7 +1895,7 @@
       "section": "safetyReportIdentification",
       "field": "receiverPostcode",
       "file": "../frontend/E2BR3-frontend/lib/case-save/contracts.ts",
-      "evidence": "SectionC3.tsx registers safetyReportIdentification.receiverPostcode (receiver block added in the frontend)."
+      "evidence": "ReceiverFields registers receiverInformation.postcode."
     },
     "action": "",
     "notes": "App-local receiver organisation/address metadata. Not a C.3 element: official C.3 is the Sender block (mapped via SenderInformation) and the E2B receiver is identified only at message level (N.1.4 / N.2.r.3). Renamed from C.3.receiver.* to local.receiver.* so the code no longer implies an official C.3 sub-element."
@@ -1922,7 +1922,7 @@
       "section": "safetyReportIdentification",
       "field": "receiverCountry",
       "file": "../frontend/E2BR3-frontend/lib/case-save/contracts.ts",
-      "evidence": "SectionC3.tsx registers safetyReportIdentification.receiverCountry (receiver block added in the frontend)."
+      "evidence": "ReceiverFields registers receiverInformation.countryCode."
     },
     "action": "",
     "notes": "App-local receiver organisation/address metadata. Not a C.3 element: official C.3 is the Sender block (mapped via SenderInformation) and the E2B receiver is identified only at message level (N.1.4 / N.2.r.3). Renamed from C.3.receiver.* to local.receiver.* so the code no longer implies an official C.3 sub-element."
@@ -1949,7 +1949,7 @@
       "section": "safetyReportIdentification",
       "field": "receiverTelephone",
       "file": "../frontend/E2BR3-frontend/lib/case-save/contracts.ts",
-      "evidence": "SectionC3.tsx registers safetyReportIdentification.receiverTelephone (receiver block added in the frontend)."
+      "evidence": "ReceiverFields registers receiverInformation.telephone."
     },
     "action": "",
     "notes": "App-local receiver organisation/address metadata. Not a C.3 element: official C.3 is the Sender block (mapped via SenderInformation) and the E2B receiver is identified only at message level (N.1.4 / N.2.r.3). Renamed from C.3.receiver.* to local.receiver.* so the code no longer implies an official C.3 sub-element."
@@ -1976,7 +1976,7 @@
       "section": "safetyReportIdentification",
       "field": "receiverFax",
       "file": "../frontend/E2BR3-frontend/lib/case-save/contracts.ts",
-      "evidence": "SectionC3.tsx registers safetyReportIdentification.receiverFax (receiver block added in the frontend)."
+      "evidence": "ReceiverFields registers receiverInformation.fax."
     },
     "action": "",
     "notes": "App-local receiver organisation/address metadata. Not a C.3 element: official C.3 is the Sender block (mapped via SenderInformation) and the E2B receiver is identified only at message level (N.1.4 / N.2.r.3). Renamed from C.3.receiver.* to local.receiver.* so the code no longer implies an official C.3 sub-element."
@@ -2003,7 +2003,7 @@
       "section": "safetyReportIdentification",
       "field": "receiverEmail",
       "file": "../frontend/E2BR3-frontend/lib/case-save/contracts.ts",
-      "evidence": "SectionC3.tsx registers safetyReportIdentification.receiverEmail (receiver block added in the frontend)."
+      "evidence": "ReceiverFields registers receiverInformation.email."
     },
     "action": "",
     "notes": "App-local receiver organisation/address metadata. Not a C.3 element: official C.3 is the Sender block (mapped via SenderInformation) and the E2B receiver is identified only at message level (N.1.4 / N.2.r.3). Renamed from C.3.receiver.* to local.receiver.* so the code no longer implies an official C.3 sub-element."

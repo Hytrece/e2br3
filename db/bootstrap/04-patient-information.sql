@@ -275,6 +275,7 @@ CREATE TABLE parent_information (
 
     -- D.10.1 - Parent Identification
     parent_identification VARCHAR(60),
+    parent_identification_null_flavor VARCHAR(4) CHECK (parent_identification_null_flavor IN ('MSK', 'UNK', 'ASKU', 'NASK')),
 
     -- D.10.2.1 - Date of Birth of Parent
     parent_birth_date DATE,
@@ -297,6 +298,7 @@ CREATE TABLE parent_information (
 
     -- D.10.6 - Parent Sex
     sex VARCHAR(1) CHECK (sex IN ('0', '1', '2')),
+    sex_null_flavor VARCHAR(4) CHECK (sex_null_flavor IN ('MSK', 'UNK', 'ASKU', 'NASK')),
 
     -- D.10.7.2 - Text for Relevant Parent Medical History
     medical_history_text TEXT,

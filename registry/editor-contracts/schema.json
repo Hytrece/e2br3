@@ -6,18 +6,36 @@
   "properties": {
     "pageId": { "type": "string" },
     "registryFile": { "type": "string" },
+    "rowPrerequisites": {
+      "type": "object",
+      "additionalProperties": { "type": "object" }
+    },
     "fields": {
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["code", "authority", "frontendPath", "projectionPath", "patch", "roundTripValue"],
+        "required": ["code", "authority", "frontendPath", "payloadPath", "projectionPath", "patch", "roundTripValue"],
+        "additionalProperties": false,
         "properties": {
           "code": { "type": "string" },
           "authority": { "enum": ["ICH", "FDA", "MFDS"] },
           "frontendPath": { "type": "string" },
+          "payloadPath": { "type": "string", "minLength": 1 },
           "projectionPath": { "type": "string" },
-          "patch": { "type": "object" },
+          "patch": {
+            "type": "object",
+            "required": ["kind", "owner"],
+            "additionalProperties": false,
+            "properties": {
+              "kind": { "enum": ["row", "rows"] },
+              "owner": { "type": "string", "minLength": 1 }
+            }
+          },
+          "fixture": {},
+          "rowsFixture": { "type": "object" },
           "roundTripValue": {},
+          "projectionValue": {},
+          "nullFlavorPartnerCode": { "type": "string", "minLength": 1 },
           "constraint": { "$ref": "#/$defs/stage" },
           "businessValidation": { "$ref": "#/$defs/stage" }
         }
@@ -32,7 +50,8 @@
         "status": { "enum": ["verified", "not_applicable"] },
         "ruleCode": { "type": "string" },
         "issuePath": { "type": "string" },
-        "reason": { "type": "string" }
+        "reason": { "type": "string" },
+        "invalidValue": {}
       }
     }
   }

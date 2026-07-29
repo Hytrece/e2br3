@@ -13,6 +13,48 @@ import editor_contract
 
 
 class RegistryValidatorTests(unittest.TestCase):
+    def test_active_editor_contract_fields_are_explicit_rows_payloads(self):
+        repo = Path(__file__).resolve().parents[2]
+        active_pages = {"CI", "RP", "SD", "LR", "SI", "DM", "NR", "AE", "LB", "DG", "DH"}
+
+        violations = []
+        for page_id in sorted(active_pages):
+            contract = editor_contract.load_editor_contract(
+                repo / "registry", page_id
+            )
+            for field in contract["fields"]:
+                patch = field.get("patch", {})
+                if not field.get("payloadPath"):
+                    violations.append(f"{page_id}/{field.get('code')}: missing payloadPath")
+                if patch.get("kind") not in {"row", "rows"}:
+                    violations.append(
+                        f"{page_id}/{field.get('code')}: invalid patch kind {patch.get('kind')}"
+                    )
+                if not patch.get("owner"):
+                    violations.append(f"{page_id}/{field.get('code')}: missing patch owner")
+
+        self.assertEqual([], violations)
+
+    def test_separate_null_flavor_fields_declare_symmetric_partners(self):
+        repo = Path(__file__).resolve().parents[2]
+        violations = []
+        for path in sorted((repo / "registry/editor-contracts").glob("*.json")):
+            if path.name == "schema.json":
+                continue
+            contract = json.loads(path.read_text(encoding="utf-8"))
+            fields = {field["code"]: field for field in contract["fields"]}
+            for field in fields.values():
+                if not field["frontendPath"].endswith("NullFlavor"):
+                    continue
+                partner_code = field.get("nullFlavorPartnerCode")
+                partner = fields.get(partner_code)
+                if partner is None:
+                    violations.append(f"{field['code']}: missing NullFlavor partner")
+                elif partner.get("nullFlavorPartnerCode") != field["code"]:
+                    violations.append(f"{field['code']}: partner is not symmetric")
+
+        self.assertEqual([], violations)
+
     def test_rule_source_coverage_report_cli_outputs_json(self):
         stdout = io.StringIO()
         with (
@@ -202,8 +244,9 @@ class RegistryValidatorTests(unittest.TestCase):
             "code": code,
             "authority": "ICH",
             "frontendPath": "safetyReportIdentification.reportType",
+            "payloadPath": "reportType",
             "projectionPath": "safetyReportIdentification.reportType",
-            "patch": {"kind": "change", "key": "reportType"},
+            "patch": {"kind": "row", "owner": "safetyReportIdentification"},
             "roundTripValue": "2",
             "constraint": {
                 "status": "verified",

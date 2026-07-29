@@ -28,17 +28,17 @@ CREATE TABLE reactions (
     serious BOOLEAN,
 
     -- E.i.3.2 - Seriousness Criteria (at least one if serious=true)
-    criteria_death BOOLEAN NOT NULL DEFAULT FALSE,
+    criteria_death BOOLEAN,
     criteria_death_null_flavor VARCHAR(4) CHECK (criteria_death_null_flavor IN ('NI', 'UNK', 'ASKU', 'NASK', 'MSK')),
-    criteria_life_threatening BOOLEAN NOT NULL DEFAULT FALSE,
+    criteria_life_threatening BOOLEAN,
     criteria_life_threatening_null_flavor VARCHAR(4) CHECK (criteria_life_threatening_null_flavor IN ('NI', 'UNK', 'ASKU', 'NASK', 'MSK')),
-    criteria_hospitalization BOOLEAN NOT NULL DEFAULT FALSE,
+    criteria_hospitalization BOOLEAN,
     criteria_hospitalization_null_flavor VARCHAR(4) CHECK (criteria_hospitalization_null_flavor IN ('NI', 'UNK', 'ASKU', 'NASK', 'MSK')),
-    criteria_disabling BOOLEAN NOT NULL DEFAULT FALSE,
+    criteria_disabling BOOLEAN,
     criteria_disabling_null_flavor VARCHAR(4) CHECK (criteria_disabling_null_flavor IN ('NI', 'UNK', 'ASKU', 'NASK', 'MSK')),
-    criteria_congenital_anomaly BOOLEAN NOT NULL DEFAULT FALSE,
+    criteria_congenital_anomaly BOOLEAN,
     criteria_congenital_anomaly_null_flavor VARCHAR(4) CHECK (criteria_congenital_anomaly_null_flavor IN ('NI', 'UNK', 'ASKU', 'NASK', 'MSK')),
-    criteria_other_medically_important BOOLEAN NOT NULL DEFAULT FALSE,
+    criteria_other_medically_important BOOLEAN,
     criteria_other_medically_important_null_flavor VARCHAR(4) CHECK (criteria_other_medically_important_null_flavor IN ('NI', 'UNK', 'ASKU', 'NASK', 'MSK')),
 
     -- FDA.E.i.3.2h - Required Intervention (FDA)

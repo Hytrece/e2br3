@@ -331,16 +331,18 @@ fn observation_rel_code(code: &str, value: &str) -> String {
 
 fn observation_rel_bool_or_null_flavor(
 	code: &str,
-	value: bool,
+	value: Option<bool>,
 	null_flavor: Option<&str>,
 ) -> String {
-	if value {
-		observation_rel_bool(code, true)
-	} else {
-		format!(
+	match (value, null_flavor) {
+		(Some(value), None) => observation_rel_bool(code, value),
+		(None, null_flavor) => format!(
 			"<outboundRelationship2 typeCode=\"PERT\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code code=\"{code}\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.19\"/><value xsi:type=\"BL\" nullFlavor=\"{}\"/></observation></outboundRelationship2>",
 			xml_escape(null_flavor.unwrap_or("NI"))
-		)
+		),
+		(Some(_), Some(_)) => unreachable!(
+			"database invariant forbids a reaction criterion value and NullFlavor together"
+		),
 	}
 }
 

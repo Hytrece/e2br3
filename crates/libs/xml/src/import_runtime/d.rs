@@ -415,6 +415,9 @@ async fn import_parent_information(
 			ParentInformationForCreate {
 				patient_id,
 				parent_identification: parent.parent_identification.clone(),
+				parent_identification_null_flavor: parent
+					.parent_identification_null_flavor
+					.clone(),
 				parent_birth_date: parent.parent_birth_date,
 				parent_birth_date_null_flavor: parent
 					.parent_birth_date_null_flavor
@@ -429,6 +432,7 @@ async fn import_parent_information(
 				weight_kg: parent.weight_kg,
 				height_cm: parent.height_cm,
 				sex: parent.sex.clone(),
+				sex_null_flavor: parent.sex_null_flavor.clone(),
 				medical_history_text: parent.medical_history_text.clone(),
 			},
 		)
@@ -441,6 +445,8 @@ async fn import_parent_information(
 		parent_id,
 		ParentInformationForUpdate {
 			parent_identification: parent.parent_identification,
+			parent_identification_null_flavor: parent
+				.parent_identification_null_flavor,
 			parent_birth_date: parent.parent_birth_date,
 			parent_birth_date_null_flavor: parent.parent_birth_date_null_flavor,
 			parent_age: parent.parent_age,
@@ -452,6 +458,7 @@ async fn import_parent_information(
 			weight_kg: parent.weight_kg,
 			height_cm: parent.height_cm,
 			sex: parent.sex,
+			sex_null_flavor: parent.sex_null_flavor,
 			medical_history_text: parent.medical_history_text,
 		},
 	)

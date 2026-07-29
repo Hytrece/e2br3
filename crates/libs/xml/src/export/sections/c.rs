@@ -551,7 +551,7 @@ pub(crate) async fn apply_literature_section(
 
 	let mut fragment = String::new();
 	for item in references {
-		let reference_text = item.reference_text.trim();
+		let reference_text = item.reference_text.as_deref().unwrap_or("").trim();
 		let bibliographic = if reference_text.is_empty() {
 			if let Some(null_flavor) = item.reference_text_null_flavor.as_deref() {
 				format!(

@@ -20,6 +20,10 @@ fn decimal_text(value: Option<Decimal>) -> Option<String> {
 	value.map(|value| value.to_string())
 }
 
+fn bool_text(value: Option<bool>) -> Option<&'static str> {
+	value.map(|value| if value { "true" } else { "false" })
+}
+
 struct FdaReactionRuleView {
 	index: usize,
 	required_intervention: Option<String>,
@@ -99,11 +103,7 @@ const E_REACTION_VALUE_RULES: &[IndexedRule<Reaction>] = &[
 		path: |idx| format!("reactions.{idx}.criteriaDeath"),
 		value: |reaction| {
 			RuleValue::borrowed(
-				Some(if reaction.criteria_death {
-					"true"
-				} else {
-					"false"
-				}),
+				bool_text(reaction.criteria_death),
 				reaction.criteria_death_null_flavor.as_deref(),
 			)
 		},
@@ -114,11 +114,7 @@ const E_REACTION_VALUE_RULES: &[IndexedRule<Reaction>] = &[
 		path: |idx| format!("reactions.{idx}.criteriaLifeThreatening"),
 		value: |reaction| {
 			RuleValue::borrowed(
-				Some(if reaction.criteria_life_threatening {
-					"true"
-				} else {
-					"false"
-				}),
+				bool_text(reaction.criteria_life_threatening),
 				reaction.criteria_life_threatening_null_flavor.as_deref(),
 			)
 		},
@@ -129,11 +125,7 @@ const E_REACTION_VALUE_RULES: &[IndexedRule<Reaction>] = &[
 		path: |idx| format!("reactions.{idx}.criteriaHospitalization"),
 		value: |reaction| {
 			RuleValue::borrowed(
-				Some(if reaction.criteria_hospitalization {
-					"true"
-				} else {
-					"false"
-				}),
+				bool_text(reaction.criteria_hospitalization),
 				reaction.criteria_hospitalization_null_flavor.as_deref(),
 			)
 		},
@@ -144,11 +136,7 @@ const E_REACTION_VALUE_RULES: &[IndexedRule<Reaction>] = &[
 		path: |idx| format!("reactions.{idx}.criteriaDisabling"),
 		value: |reaction| {
 			RuleValue::borrowed(
-				Some(if reaction.criteria_disabling {
-					"true"
-				} else {
-					"false"
-				}),
+				bool_text(reaction.criteria_disabling),
 				reaction.criteria_disabling_null_flavor.as_deref(),
 			)
 		},
@@ -159,11 +147,7 @@ const E_REACTION_VALUE_RULES: &[IndexedRule<Reaction>] = &[
 		path: |idx| format!("reactions.{idx}.criteriaCongenitalAnomaly"),
 		value: |reaction| {
 			RuleValue::borrowed(
-				Some(if reaction.criteria_congenital_anomaly {
-					"true"
-				} else {
-					"false"
-				}),
+				bool_text(reaction.criteria_congenital_anomaly),
 				reaction.criteria_congenital_anomaly_null_flavor.as_deref(),
 			)
 		},
@@ -174,11 +158,7 @@ const E_REACTION_VALUE_RULES: &[IndexedRule<Reaction>] = &[
 		path: |idx| format!("reactions.{idx}.criteriaOtherMedicallyImportant"),
 		value: |reaction| {
 			RuleValue::borrowed(
-				Some(if reaction.criteria_other_medically_important {
-					"true"
-				} else {
-					"false"
-				}),
+				bool_text(reaction.criteria_other_medically_important),
 				reaction
 					.criteria_other_medically_important_null_flavor
 					.as_deref(),
@@ -226,7 +206,7 @@ const E_REACTION_CONSTRAINT_RULES: &[IndexedConstraintRule<Reaction>] = &[
 		path: |idx| format!("reactions.{idx}.criteriaDeath"),
 		value: |reaction| {
 			true_marker_value(
-				reaction.criteria_death.then_some(true),
+				reaction.criteria_death,
 				reaction.criteria_death_null_flavor.as_deref(),
 			)
 		},
@@ -236,7 +216,7 @@ const E_REACTION_CONSTRAINT_RULES: &[IndexedConstraintRule<Reaction>] = &[
 		path: |idx| format!("reactions.{idx}.criteriaLifeThreatening"),
 		value: |reaction| {
 			true_marker_value(
-				reaction.criteria_life_threatening.then_some(true),
+				reaction.criteria_life_threatening,
 				reaction.criteria_life_threatening_null_flavor.as_deref(),
 			)
 		},
@@ -246,7 +226,7 @@ const E_REACTION_CONSTRAINT_RULES: &[IndexedConstraintRule<Reaction>] = &[
 		path: |idx| format!("reactions.{idx}.criteriaHospitalization"),
 		value: |reaction| {
 			true_marker_value(
-				reaction.criteria_hospitalization.then_some(true),
+				reaction.criteria_hospitalization,
 				reaction.criteria_hospitalization_null_flavor.as_deref(),
 			)
 		},
@@ -256,7 +236,7 @@ const E_REACTION_CONSTRAINT_RULES: &[IndexedConstraintRule<Reaction>] = &[
 		path: |idx| format!("reactions.{idx}.criteriaDisabling"),
 		value: |reaction| {
 			true_marker_value(
-				reaction.criteria_disabling.then_some(true),
+				reaction.criteria_disabling,
 				reaction.criteria_disabling_null_flavor.as_deref(),
 			)
 		},
@@ -266,7 +246,7 @@ const E_REACTION_CONSTRAINT_RULES: &[IndexedConstraintRule<Reaction>] = &[
 		path: |idx| format!("reactions.{idx}.criteriaCongenitalAnomaly"),
 		value: |reaction| {
 			true_marker_value(
-				reaction.criteria_congenital_anomaly.then_some(true),
+				reaction.criteria_congenital_anomaly,
 				reaction.criteria_congenital_anomaly_null_flavor.as_deref(),
 			)
 		},
@@ -276,7 +256,7 @@ const E_REACTION_CONSTRAINT_RULES: &[IndexedConstraintRule<Reaction>] = &[
 		path: |idx| format!("reactions.{idx}.criteriaOtherMedicallyImportant"),
 		value: |reaction| {
 			true_marker_value(
-				reaction.criteria_other_medically_important.then_some(true),
+				reaction.criteria_other_medically_important,
 				reaction
 					.criteria_other_medically_important_null_flavor
 					.as_deref(),
@@ -449,12 +429,17 @@ pub(crate) fn collect_ich_issues(
 		.iter()
 		.enumerate()
 		.map(|(idx, reaction)| {
-			let any_criteria_true = reaction.criteria_death
-				|| reaction.criteria_life_threatening
-				|| reaction.criteria_hospitalization
-				|| reaction.criteria_disabling
-				|| reaction.criteria_congenital_anomaly
-				|| reaction.criteria_other_medically_important;
+			let any_criteria_true = [
+				reaction.criteria_death,
+				reaction.criteria_life_threatening,
+				reaction.criteria_hospitalization,
+				reaction.criteria_disabling,
+				reaction.criteria_congenital_anomaly,
+				reaction.criteria_other_medically_important,
+			]
+			.into_iter()
+			.flatten()
+			.any(|value| value);
 			let criteria_null_flavors = [
 				reaction.criteria_death_null_flavor.as_deref(),
 				reaction.criteria_life_threatening_null_flavor.as_deref(),
@@ -498,9 +483,8 @@ pub(crate) fn collect_fda_issues(
 				index: idx,
 				required_intervention: reaction.required_intervention.clone(),
 				facts: RuleFacts {
-					fda_reaction_other_medically_important: Some(
-						reaction.criteria_other_medically_important,
-					),
+					fda_reaction_other_medically_important: reaction
+						.criteria_other_medically_important,
 					..RuleFacts::default()
 				},
 			})
@@ -688,17 +672,17 @@ mod tests {
 			reaction_meddra_code: None,
 			term_highlighted: None,
 			serious: None,
-			criteria_death: false,
+			criteria_death: None,
 			criteria_death_null_flavor: None,
-			criteria_life_threatening: false,
+			criteria_life_threatening: None,
 			criteria_life_threatening_null_flavor: None,
-			criteria_hospitalization: false,
+			criteria_hospitalization: None,
 			criteria_hospitalization_null_flavor: None,
-			criteria_disabling: false,
+			criteria_disabling: None,
 			criteria_disabling_null_flavor: None,
-			criteria_congenital_anomaly: false,
+			criteria_congenital_anomaly: None,
 			criteria_congenital_anomaly_null_flavor: None,
-			criteria_other_medically_important: false,
+			criteria_other_medically_important: None,
 			criteria_other_medically_important_null_flavor: None,
 			required_intervention: None,
 			required_intervention_null_flavor: None,
@@ -772,10 +756,14 @@ mod tests {
 	}
 
 	#[test]
-	fn true_marker_rules_ignore_false_storage_defaults_and_honor_null_flavor() {
+	fn true_marker_rules_accept_absent_values_and_honor_null_flavor() {
 		let mut reaction = reaction();
 		reaction.criteria_death_null_flavor = Some("NI".to_string());
-		reaction.criteria_other_medically_important = true;
+		reaction.criteria_life_threatening_null_flavor = Some("NI".to_string());
+		reaction.criteria_hospitalization_null_flavor = Some("NI".to_string());
+		reaction.criteria_disabling_null_flavor = Some("NI".to_string());
+		reaction.criteria_congenital_anomaly_null_flavor = Some("NI".to_string());
+		reaction.criteria_other_medically_important = Some(true);
 		let mut ctx = empty_ctx();
 		ctx.reactions = vec![reaction];
 		let mut issues = Vec::new();

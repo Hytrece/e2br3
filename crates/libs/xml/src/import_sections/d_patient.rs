@@ -36,6 +36,29 @@ pub struct DPatientImport {
 	pub concomitant_therapy: Option<bool>,
 }
 
+#[derive(Debug)]
+pub struct DParentImport {
+	pub parent_identification: Option<String>,
+	pub parent_identification_null_flavor: Option<String>,
+	pub sex: Option<String>,
+	pub sex_null_flavor: Option<String>,
+}
+
+/// Parse the canonical parent value/NullFlavor pairs used by Section D.
+pub fn parse_d_parent(xml: &[u8]) -> Result<Option<DParentImport>> {
+	Ok(
+		crate::import_runtime::helpers::d::parse_parent_information(xml)?.map(
+			|parent| DParentImport {
+				parent_identification: parent.parent_identification,
+				parent_identification_null_flavor: parent
+					.parent_identification_null_flavor,
+				sex: parent.sex,
+				sex_null_flavor: parent.sex_null_flavor,
+			},
+		),
+	)
+}
+
 /// Parse Section D values using FDA/ICH mapping paths.
 pub fn parse_d_patient(xml: &[u8]) -> Result<Option<DPatientImport>> {
 	let xml_str = std::str::from_utf8(xml).map_err(|err| Error::InvalidXml {

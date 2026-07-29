@@ -76,12 +76,14 @@ pub async fn export_case_xml_with_options(
 			.map(|xml| apply_export_xml_options(xml, options));
 	}
 
-	export_case_xml_from_db(ctx, mm, case_id)
+	serialize_case_xml(ctx, mm, case_id)
 		.await
 		.map(|xml| apply_export_xml_options(xml, options))
 }
 
-async fn export_case_xml_from_db(
+/// Serializes the current case data without applying workflow eligibility policy.
+/// Callers that deliver an export to users must use [`export_case_xml`] instead.
+pub async fn serialize_case_xml(
 	ctx: &Ctx,
 	mm: &ModelManager,
 	case_id: sqlx::types::Uuid,

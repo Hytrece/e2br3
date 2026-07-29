@@ -654,7 +654,7 @@ const C_PRIMARY_SOURCE_CONSTRAINT_RULES: &[IndexedConstraintRule<PrimarySource>]
 const C_SENDER_CONSTRAINT_RULES: &[ConstraintRule<SenderInformation>] = &[
 	ConstraintRule {
 		code: "ICH.C.3.1.ALLOWED.VALUE",
-		path: "safetyReportIdentification.senderType",
+		path: "senderInformation.senderType",
 		value: |sender| {
 			ConstraintValue::Text(sender.sender_type.as_deref().map(Cow::Borrowed))
 		},
@@ -671,12 +671,12 @@ const C_SENDER_CONSTRAINT_RULES: &[ConstraintRule<SenderInformation>] = &[
 const C_SENDER_LENGTH_RULES: &[LengthRule<SenderInformation>] = &[
 	LengthRule {
 		code: "ICH.C.3.1.LENGTH.MAX",
-		path: "safetyReportIdentification.senderType",
+		path: "senderInformation.senderType",
 		value: |sender| sender.sender_type.as_deref(),
 	},
 	LengthRule {
 		code: "ICH.C.3.2.LENGTH.MAX",
-		path: "safetyReportIdentification.senderOrganization",
+		path: "senderInformation.organizationName",
 		value: |sender| sender.organization_name.as_deref(),
 	},
 	LengthRule {
@@ -883,7 +883,7 @@ const C_LITERATURE_LENGTH_RULES: &[IndexedLengthRule<LiteratureReference>] =
 	&[IndexedLengthRule {
 		code: "ICH.C.4.r.1.LENGTH.MAX",
 		path: |idx| format!("literatureReferences.{idx}.referenceText"),
-		value: |reference| Some(reference.reference_text.as_str()),
+		value: |reference| reference.reference_text.as_deref(),
 	}];
 
 const C_LITERATURE_CONSTRAINT_RULES: &[IndexedConstraintRule<
@@ -1172,14 +1172,14 @@ pub(crate) fn collect_ich_issues(
 		);
 		eval_c_ich_presence(
 			issues,
-			"safetyReportIdentification.senderType",
+			"senderInformation.senderType",
 			sender.sender_type.clone(),
 			RuleFacts::default(),
 			C_ICH_C31_RULE,
 		);
 		eval_c_ich_presence(
 			issues,
-			"safetyReportIdentification.senderOrganization",
+			"senderInformation.organizationName",
 			sender.organization_name.clone(),
 			RuleFacts {
 				ich_sender_organization_required: Some(
@@ -1192,14 +1192,14 @@ pub(crate) fn collect_ich_issues(
 	} else {
 		eval_c_ich_presence(
 			issues,
-			"safetyReportIdentification.senderType",
+			"senderInformation.senderType",
 			None,
 			RuleFacts::default(),
 			C_ICH_C31_RULE,
 		);
 		eval_c_ich_presence(
 			issues,
-			"safetyReportIdentification.senderOrganization",
+			"senderInformation.organizationName",
 			None,
 			RuleFacts {
 				ich_sender_organization_required: Some(true),
@@ -2007,7 +2007,7 @@ mod golden_c1_value_tests {
 		LiteratureReference {
 			id: Uuid::nil(),
 			case_id: Uuid::nil(),
-			reference_text,
+			reference_text: Some(reference_text),
 			reference_text_null_flavor: None,
 			sequence_number: 0,
 			document_base64: None,
@@ -2373,7 +2373,7 @@ mod golden_c1_value_tests {
 				),
 				issue(
 					"ICH.C.3.1.ALLOWED.VALUE",
-					"safetyReportIdentification.senderType",
+					"senderInformation.senderType",
 					true
 				),
 				issue(
@@ -2594,14 +2594,10 @@ mod golden_c1_value_tests {
 					"primarySources.0.primarySourceForRegulatoryPurposes",
 					true,
 				),
-				issue(
-					"ICH.C.3.1.LENGTH.MAX",
-					"safetyReportIdentification.senderType",
-					true,
-				),
+				issue("ICH.C.3.1.LENGTH.MAX", "senderInformation.senderType", true,),
 				issue(
 					"ICH.C.3.2.LENGTH.MAX",
-					"safetyReportIdentification.senderOrganization",
+					"senderInformation.organizationName",
 					true,
 				),
 				issue(

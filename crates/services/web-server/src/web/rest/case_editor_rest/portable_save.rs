@@ -162,6 +162,16 @@ fn in_band_null_flavor<'a>(
 	})
 }
 
+pub(super) fn request_in_band_null_flavor<'a>(
+	section: &str,
+	request_path: &str,
+	value: &'a Value,
+) -> Option<&'a str> {
+	bindings_for_section(section)
+		.find(|binding| binding.request_path == request_path)
+		.and_then(|binding| in_band_null_flavor(binding, value))
+}
+
 fn binding_has_value_rule(binding: &PortableFieldBinding) -> bool {
 	let constraints = portable_constraints();
 	binding.rule_codes.iter().any(|code| {
@@ -513,52 +523,7 @@ pub(super) fn validate_direct_rows(
 			}
 			return Ok(());
 		}
-		"SD" => {
-			optional_row_object(section, rows, "senderInformation")?.map(|row| {
-				normalized_direct_object(
-					row,
-					&[
-						("senderType", &["senderType", "sender_type"]),
-						(
-							"senderHealthProfessionalTypeKr1",
-							&[
-								"healthProfessionalTypeKr1",
-								"health_professional_type_kr1",
-							],
-						),
-						(
-							"senderOrganization",
-							&["organizationName", "organization_name"],
-						),
-						("senderDepartment", &["department"]),
-						("senderPersonTitle", &["personTitle", "person_title"]),
-						(
-							"senderPersonGivenName",
-							&["personGivenName", "person_given_name"],
-						),
-						(
-							"senderPersonMiddleName",
-							&["personMiddleName", "person_middle_name"],
-						),
-						(
-							"senderPersonFamilyName",
-							&["personFamilyName", "person_family_name"],
-						),
-						(
-							"senderStreetAddress",
-							&["streetAddress", "street_address"],
-						),
-						("senderCity", &["city"]),
-						("senderState", &["state"]),
-						("senderPostcode", &["postcode"]),
-						("senderCountryCode", &["countryCode", "country_code"]),
-						("senderTelephone", &["telephone"]),
-						("senderFax", &["fax"]),
-						("senderEmail", &["email"]),
-					],
-				)
-			})
-		}
+		"SD" => optional_row_object(section, rows, "senderInformation")?.cloned(),
 		"LR" => {
 			let Some(value) = rows.get("literatureReferences") else {
 				return Ok(());
@@ -1409,9 +1374,8 @@ mod portable_save_tests {
 			json!({ "organizationName": "X".repeat(101) }),
 		)]);
 		let error = validate_direct_rows("SD", &sender_rows).unwrap_err();
-		assert!(error_message(error).contains(
-			"ICH.C.3.2.LENGTH.MAX at safetyReportIdentification.senderOrganization"
-		));
+		assert!(error_message(error)
+			.contains("ICH.C.3.2.LENGTH.MAX at senderInformation.organizationName"));
 	}
 
 	#[test]

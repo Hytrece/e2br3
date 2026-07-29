@@ -6,25 +6,13 @@ const TEST_RESULT_ROW_ALIASES: &[(&str, &[&str])] = &[
 	("test_meddra_version", &["testMeddraVersion"]),
 	("test_meddra_code", &["testMeddraCode"]),
 	("test_result_code", &["testResultCode"]),
-	(
-		"test_result_value",
-		&["testResult", "testResultValue", "resultValue"],
-	),
-	(
-		"test_result_unit",
-		&["testUnit", "testResultUnit", "resultUnit"],
-	),
-	(
-		"result_unstructured",
-		&["testResultUnstructured", "resultUnstructured"],
-	),
-	("normal_low_value", &["lowRange", "normalLowValue"]),
-	("normal_high_value", &["highRange", "normalHighValue"]),
+	("test_result_value", &["testResult"]),
+	("test_result_unit", &["testUnit"]),
+	("result_unstructured", &["testResultUnstructured"]),
+	("normal_low_value", &["lowRange"]),
+	("normal_high_value", &["highRange"]),
 	("comments", &["comments"]),
-	(
-		"more_info_available",
-		&["moreInformationAvailable", "moreInfoAvailable"],
-	),
+	("more_info_available", &["moreInformationAvailable"]),
 	("sequence_number", &["sequenceNumber"]),
 ];
 
@@ -167,7 +155,7 @@ repeatable_page_row_create_handler!(
 		("case_id", json!(case_id)),
 		(
 			"sequence_number",
-			json!(i32_field(row, &["sequenceNumber", "sequence_number"]).unwrap_or(1)),
+			json!(i32_field(row, &["sequenceNumber"]).unwrap_or(1)),
 		),
 	],
 	build_response: build_editor_lb_page_row_response,

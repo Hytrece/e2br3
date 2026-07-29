@@ -2,45 +2,647 @@
   "pageId": "AE",
   "registryFile": "sections/e-reaction.json",
   "fields": [
-    {"code":"E.i.1.1a","authority":"ICH","frontendPath":"reactions[].primarySourceReaction","projectionPath":"reaction.primary_source_reaction","patch":{"kind":"row","owner":"reaction"},"roundTripValue":"Headache","constraint":{"status":"verified","ruleCode":"ICH.E.i.1.1a.LENGTH.MAX"}},
-    {"code":"E.i.1.2","authority":"ICH","frontendPath":"reactions[].primarySourceReactionTranslation","projectionPath":"reaction.primary_source_reaction_translation","patch":{"kind":"row","owner":"reaction"},"roundTripValue":"Head pain","constraint":{"status":"verified","ruleCode":"ICH.E.i.1.2.LENGTH.MAX"}},
-    {"code":"E.i.2.1b","authority":"ICH","frontendPath":"reactions[].reactionMeddraCodeLLT","projectionPath":"reaction.reaction_meddra_code","patch":{"kind":"row","owner":"reaction"},"roundTripValue":"10000001","constraint":{"status":"verified","ruleCode":"ICH.E.i.2.1b.LENGTH.MAX"}},
-    {"code":"E.i.4","authority":"ICH","frontendPath":"reactions[].reactionStartDate","projectionPath":"reaction.start_date","patch":{"kind":"row","owner":"reaction"},"roundTripValue":"20200102","constraint":{"status":"verified","ruleCode":"ICH.E.i.4.ALLOWED.VALUE"}},
-    {"code":"E.i.7","authority":"ICH","frontendPath":"reactions[].reactionOutcome","projectionPath":"reaction.outcome","patch":{"kind":"row","owner":"reaction"},"roundTripValue":"1","constraint":{"status":"verified","ruleCode":"ICH.E.i.7.ALLOWED.VALUE"}},
-    {"code":"E.i.1.1b","authority":"ICH","frontendPath":"reactions[].reactionLanguage","projectionPath":"reaction.reaction_language","patch":{"kind":"row","owner":"reaction"},"roundTripValue":"eng","constraint":{"status":"verified","ruleCode":"ICH.E.i.1.1b.LENGTH.MAX"}},
-    {"code":"E.i.2.1a","authority":"ICH","frontendPath":"reactions[].reactionMeddraVersionLLT","projectionPath":"reaction.reaction_meddra_version","patch":{"kind":"row","owner":"reaction"},"roundTripValue":"26.0","constraint":{"status":"verified","ruleCode":"ICH.E.i.2.1a.LENGTH.MAX"}},
-    {"code":"E.i.3.1","authority":"ICH","frontendPath":"reactions[].termHighlighted","projectionPath":"reaction.term_highlighted","patch":{"kind":"row","owner":"reaction"},"roundTripValue":"4","constraint":{"status":"verified","ruleCode":"ICH.E.i.3.1.ALLOWED.VALUE"}},
-    {"code":"E.i.serious","authority":"ICH","frontendPath":"reactions[].seriousness.serious","projectionPath":"reaction.serious","patch":{"kind":"row","owner":"reaction"},"roundTripValue":true,"constraint":{"status":"not_applicable","reason":"Derived local editor flag has no portable catalog constraint."}},
-    {"code":"E.i.3.2a","authority":"ICH","frontendPath":"reactions[].seriousness.criteriaResultsInDeath","projectionPath":"reaction.criteria_death","patch":{"kind":"row","owner":"reaction"},"roundTripValue":true,"constraint":{"status":"verified","ruleCode":"ICH.E.i.3.2a.ALLOWED.VALUE"}},
-    {"code":"E.i.3.2b","authority":"ICH","frontendPath":"reactions[].seriousness.criteriaLifeThreatening","projectionPath":"reaction.criteria_life_threatening","patch":{"kind":"row","owner":"reaction"},"roundTripValue":true,"constraint":{"status":"verified","ruleCode":"ICH.E.i.3.2b.ALLOWED.VALUE"}},
-    {"code":"E.i.3.2c","authority":"ICH","frontendPath":"reactions[].seriousness.criteriaHospitalization","projectionPath":"reaction.criteria_hospitalization","patch":{"kind":"row","owner":"reaction"},"roundTripValue":true,"constraint":{"status":"verified","ruleCode":"ICH.E.i.3.2c.ALLOWED.VALUE"}},
-    {"code":"E.i.3.2d","authority":"ICH","frontendPath":"reactions[].seriousness.criteriaDisabling","projectionPath":"reaction.criteria_disabling","patch":{"kind":"row","owner":"reaction"},"roundTripValue":true,"constraint":{"status":"verified","ruleCode":"ICH.E.i.3.2d.ALLOWED.VALUE"}},
-    {"code":"E.i.3.2e","authority":"ICH","frontendPath":"reactions[].seriousness.criteriaCongenitalAnomaly","projectionPath":"reaction.criteria_congenital_anomaly","patch":{"kind":"row","owner":"reaction"},"roundTripValue":true,"constraint":{"status":"verified","ruleCode":"ICH.E.i.3.2e.ALLOWED.VALUE"}},
-    {"code":"E.i.3.2f","authority":"ICH","frontendPath":"reactions[].seriousness.criteriaOtherMedicallyImportant","projectionPath":"reaction.criteria_other_medically_important","patch":{"kind":"row","owner":"reaction"},"roundTripValue":true,"constraint":{"status":"verified","ruleCode":"ICH.E.i.3.2f.ALLOWED.VALUE"}},
-    {"code":"FDA.E.i.3.2h","authority":"FDA","frontendPath":"reactions[].requiredIntervention","projectionPath":"reaction.required_intervention","patch":{"kind":"row","owner":"reaction"},"roundTripValue":true,"constraint":{"status":"verified","ruleCode":"FDA.E.i.3.2h.ALLOWED.VALUE"}},
-    {"code":"E.local.expectedness","authority":"ICH","frontendPath":"reactions[].expectedness","projectionPath":"reaction.expectedness","patch":{"kind":"row","owner":"reaction"},"roundTripValue":"1","constraint":{"status":"not_applicable","reason":"Local expectedness field has no portable catalog constraint."}},
-    {"code":"E.local.severity","authority":"ICH","frontendPath":"reactions[].severity","projectionPath":"reaction.severity","patch":{"kind":"row","owner":"reaction"},"roundTripValue":"moderate","constraint":{"status":"not_applicable","reason":"Local severity field has no portable catalog constraint."}},
-    {"code":"E.i.5","authority":"ICH","frontendPath":"reactions[].reactionEndDate","projectionPath":"reaction.end_date","patch":{"kind":"row","owner":"reaction"},"roundTripValue":"20200103","constraint":{"status":"verified","ruleCode":"ICH.E.i.5.ALLOWED.VALUE"}},
-    {"code":"E.i.6a","authority":"ICH","frontendPath":"reactions[].reactionDuration.value","projectionPath":"reaction.duration_value","patch":{"kind":"row","owner":"reaction"},"roundTripValue":1,"constraint":{"status":"verified","ruleCode":"ICH.E.i.6a.ALLOWED.VALUE"}},
-    {"code":"E.i.6b","authority":"ICH","frontendPath":"reactions[].reactionDuration.unit","projectionPath":"reaction.duration_unit","patch":{"kind":"row","owner":"reaction"},"roundTripValue":"d","constraint":{"status":"verified","ruleCode":"ICH.E.i.6b.LENGTH.MAX"}},
-    {"code":"E.i.8","authority":"ICH","frontendPath":"reactions[].medicalConfirmation","projectionPath":"reaction.medical_confirmation","patch":{"kind":"row","owner":"reaction"},"roundTripValue":true,"constraint":{"status":"verified","ruleCode":"ICH.E.i.8.ALLOWED.VALUE"}},
-    {"code":"E.i.9","authority":"ICH","frontendPath":"reactions[].reactionCountry","projectionPath":"reaction.country_code","patch":{"kind":"row","owner":"reaction"},"roundTripValue":"KR","constraint":{"status":"verified","ruleCode":"ICH.E.i.9.LENGTH.MAX"}},
-    {"code":"E.i.KR.device.aeClassification","authority":"MFDS","frontendPath":"reactions[].mfdsDeviceAe.aeClassification","projectionPath":"reaction.mfds_device_ae_classification","patch":{"kind":"row","owner":"reaction"},"roundTripValue":"0","constraint":{"status":"not_applicable","reason":"This app-local MFDS device field has no portable catalog constraint."}},
-    {"code":"E.i.KR.device.aeOutcome","authority":"MFDS","frontendPath":"reactions[].mfdsDeviceAe.aeOutcome","projectionPath":"reaction.mfds_device_ae_outcome","patch":{"kind":"row","owner":"reaction"},"roundTripValue":"10","constraint":{"status":"not_applicable","reason":"This app-local MFDS device field has no portable catalog constraint."}},
-    {"code":"E.i.KR.device.causeMedicalDevice","authority":"MFDS","frontendPath":"reactions[].mfdsDeviceAe.causeMedicalDevice","projectionPath":"reaction.mfds_device_cause_medical_device","patch":{"kind":"row","owner":"reaction"},"roundTripValue":true,"constraint":{"status":"not_applicable","reason":"This app-local MFDS device field has no portable catalog constraint."}},
-    {"code":"E.i.KR.device.causeProcedureIssue","authority":"MFDS","frontendPath":"reactions[].mfdsDeviceAe.causeProcedureIssue","projectionPath":"reaction.mfds_device_cause_procedure_issue","patch":{"kind":"row","owner":"reaction"},"roundTripValue":true,"constraint":{"status":"not_applicable","reason":"This app-local MFDS device field has no portable catalog constraint."}},
-    {"code":"E.i.KR.device.causePatientCondition","authority":"MFDS","frontendPath":"reactions[].mfdsDeviceAe.causePatientCondition","projectionPath":"reaction.mfds_device_cause_patient_condition","patch":{"kind":"row","owner":"reaction"},"roundTripValue":true,"constraint":{"status":"not_applicable","reason":"This app-local MFDS device field has no portable catalog constraint."}},
-    {"code":"E.i.KR.device.causeUnableToAssess","authority":"MFDS","frontendPath":"reactions[].mfdsDeviceAe.causeUnableToAssess","projectionPath":"reaction.mfds_device_cause_unable_to_assess","patch":{"kind":"row","owner":"reaction"},"roundTripValue":true,"constraint":{"status":"not_applicable","reason":"This app-local MFDS device field has no portable catalog constraint."}},
-    {"code":"E.i.KR.device.causeOther","authority":"MFDS","frontendPath":"reactions[].mfdsDeviceAe.causeOther","projectionPath":"reaction.mfds_device_cause_other","patch":{"kind":"row","owner":"reaction"},"roundTripValue":"Other cause","constraint":{"status":"not_applicable","reason":"This app-local MFDS device field has no portable catalog constraint."}},
-    {"code":"E.i.KR.device.actionReason","authority":"MFDS","frontendPath":"reactions[].mfdsDeviceAe.actionReason","projectionPath":"reaction.mfds_device_action_reason","patch":{"kind":"row","owner":"reaction"},"roundTripValue":"Action reason","constraint":{"status":"not_applicable","reason":"This app-local MFDS device field has no portable catalog constraint."}},
-    {"code":"E.i.KR.device.actionRecall","authority":"MFDS","frontendPath":"reactions[].mfdsDeviceAe.actionRecall","projectionPath":"reaction.mfds_device_action_recall","patch":{"kind":"row","owner":"reaction"},"roundTripValue":true,"constraint":{"status":"not_applicable","reason":"This app-local MFDS device field has no portable catalog constraint."}},
-    {"code":"E.i.KR.device.actionRepair","authority":"MFDS","frontendPath":"reactions[].mfdsDeviceAe.actionRepair","projectionPath":"reaction.mfds_device_action_repair","patch":{"kind":"row","owner":"reaction"},"roundTripValue":true,"constraint":{"status":"not_applicable","reason":"This app-local MFDS device field has no portable catalog constraint."}},
-    {"code":"E.i.KR.device.actionInspection","authority":"MFDS","frontendPath":"reactions[].mfdsDeviceAe.actionInspection","projectionPath":"reaction.mfds_device_action_inspection","patch":{"kind":"row","owner":"reaction"},"roundTripValue":true,"constraint":{"status":"not_applicable","reason":"This app-local MFDS device field has no portable catalog constraint."}},
-    {"code":"E.i.KR.device.actionReplacement","authority":"MFDS","frontendPath":"reactions[].mfdsDeviceAe.actionReplacement","projectionPath":"reaction.mfds_device_action_replacement","patch":{"kind":"row","owner":"reaction"},"roundTripValue":true,"constraint":{"status":"not_applicable","reason":"This app-local MFDS device field has no portable catalog constraint."}},
-    {"code":"E.i.KR.device.actionImprovement","authority":"MFDS","frontendPath":"reactions[].mfdsDeviceAe.actionImprovement","projectionPath":"reaction.mfds_device_action_improvement","patch":{"kind":"row","owner":"reaction"},"roundTripValue":true,"constraint":{"status":"not_applicable","reason":"This app-local MFDS device field has no portable catalog constraint."}},
-    {"code":"E.i.KR.device.actionMonitoring","authority":"MFDS","frontendPath":"reactions[].mfdsDeviceAe.actionMonitoring","projectionPath":"reaction.mfds_device_action_monitoring","patch":{"kind":"row","owner":"reaction"},"roundTripValue":true,"constraint":{"status":"not_applicable","reason":"This app-local MFDS device field has no portable catalog constraint."}},
-    {"code":"E.i.KR.device.actionNotification","authority":"MFDS","frontendPath":"reactions[].mfdsDeviceAe.actionNotification","projectionPath":"reaction.mfds_device_action_notification","patch":{"kind":"row","owner":"reaction"},"roundTripValue":true,"constraint":{"status":"not_applicable","reason":"This app-local MFDS device field has no portable catalog constraint."}},
-    {"code":"E.i.KR.device.actionLabelChange","authority":"MFDS","frontendPath":"reactions[].mfdsDeviceAe.actionLabelChange","projectionPath":"reaction.mfds_device_action_label_change","patch":{"kind":"row","owner":"reaction"},"roundTripValue":true,"constraint":{"status":"not_applicable","reason":"This app-local MFDS device field has no portable catalog constraint."}},
-    {"code":"E.i.KR.device.actionOther","authority":"MFDS","frontendPath":"reactions[].mfdsDeviceAe.actionOther","projectionPath":"reaction.mfds_device_action_other","patch":{"kind":"row","owner":"reaction"},"roundTripValue":"Other action","constraint":{"status":"not_applicable","reason":"This app-local MFDS device field has no portable catalog constraint."}}
+    {
+      "code": "E.i.1.1a",
+      "authority": "ICH",
+      "frontendPath": "reactions[].primarySourceReaction",
+      "projectionPath": "reaction.primary_source_reaction",
+      "patch": {
+        "kind": "row",
+        "owner": "reaction"
+      },
+      "roundTripValue": "Headache",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.E.i.1.1a.LENGTH.MAX"
+      },
+      "payloadPath": "primarySourceReaction"
+    },
+    {
+      "code": "E.i.1.2",
+      "authority": "ICH",
+      "frontendPath": "reactions[].primarySourceReactionTranslation",
+      "projectionPath": "reaction.primary_source_reaction_translation",
+      "patch": {
+        "kind": "row",
+        "owner": "reaction"
+      },
+      "roundTripValue": "Head pain",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.E.i.1.2.LENGTH.MAX"
+      },
+      "payloadPath": "primarySourceReactionTranslation"
+    },
+    {
+      "code": "E.i.2.1b",
+      "authority": "ICH",
+      "frontendPath": "reactions[].reactionMeddraCodeLLT",
+      "projectionPath": "reaction.reaction_meddra_code",
+      "patch": {
+        "kind": "row",
+        "owner": "reaction"
+      },
+      "roundTripValue": "10000001",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.E.i.2.1b.LENGTH.MAX"
+      },
+      "payloadPath": "reactionMeddraCodeLLT"
+    },
+    {
+      "code": "E.i.4",
+      "authority": "ICH",
+      "frontendPath": "reactions[].reactionStartDate",
+      "projectionPath": "reaction.start_date",
+      "patch": {
+        "kind": "row",
+        "owner": "reaction"
+      },
+      "roundTripValue": "20200102",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.E.i.4.ALLOWED.VALUE"
+      },
+      "payloadPath": "reactionStartDate"
+    },
+    {
+      "code": "E.i.7",
+      "authority": "ICH",
+      "frontendPath": "reactions[].reactionOutcome",
+      "projectionPath": "reaction.outcome",
+      "patch": {
+        "kind": "row",
+        "owner": "reaction"
+      },
+      "roundTripValue": "1",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.E.i.7.ALLOWED.VALUE"
+      },
+      "payloadPath": "reactionOutcome"
+    },
+    {
+      "code": "E.i.1.1b",
+      "authority": "ICH",
+      "frontendPath": "reactions[].reactionLanguage",
+      "projectionPath": "reaction.reaction_language",
+      "patch": {
+        "kind": "row",
+        "owner": "reaction"
+      },
+      "roundTripValue": "eng",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.E.i.1.1b.LENGTH.MAX"
+      },
+      "payloadPath": "reactionLanguage"
+    },
+    {
+      "code": "E.i.2.1a",
+      "authority": "ICH",
+      "frontendPath": "reactions[].reactionMeddraVersionLLT",
+      "projectionPath": "reaction.reaction_meddra_version",
+      "patch": {
+        "kind": "row",
+        "owner": "reaction"
+      },
+      "roundTripValue": "26.0",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.E.i.2.1a.LENGTH.MAX"
+      },
+      "payloadPath": "reactionMeddraVersionLLT"
+    },
+    {
+      "code": "E.i.3.1",
+      "authority": "ICH",
+      "frontendPath": "reactions[].termHighlighted",
+      "projectionPath": "reaction.term_highlighted",
+      "patch": {
+        "kind": "row",
+        "owner": "reaction"
+      },
+      "roundTripValue": "4",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.E.i.3.1.ALLOWED.VALUE"
+      },
+      "payloadPath": "termHighlighted"
+    },
+    {
+      "code": "E.i.serious",
+      "authority": "ICH",
+      "frontendPath": "reactions[].seriousness.serious",
+      "projectionPath": "reaction.serious",
+      "patch": {
+        "kind": "row",
+        "owner": "reaction"
+      },
+      "roundTripValue": true,
+      "constraint": {
+        "status": "not_applicable",
+        "reason": "Derived local editor flag has no portable catalog constraint."
+      },
+      "payloadPath": "seriousness.serious"
+    },
+    {
+      "code": "E.i.3.2a",
+      "authority": "ICH",
+      "frontendPath": "reactions[].seriousness.criteriaResultsInDeath",
+      "projectionPath": "reaction.criteria_death",
+      "patch": {
+        "kind": "row",
+        "owner": "reaction"
+      },
+      "roundTripValue": true,
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.E.i.3.2a.ALLOWED.VALUE"
+      },
+      "payloadPath": "seriousness.criteriaResultsInDeath"
+    },
+    {
+      "code": "E.i.3.2b",
+      "authority": "ICH",
+      "frontendPath": "reactions[].seriousness.criteriaLifeThreatening",
+      "projectionPath": "reaction.criteria_life_threatening",
+      "patch": {
+        "kind": "row",
+        "owner": "reaction"
+      },
+      "roundTripValue": true,
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.E.i.3.2b.ALLOWED.VALUE"
+      },
+      "payloadPath": "seriousness.criteriaLifeThreatening"
+    },
+    {
+      "code": "E.i.3.2c",
+      "authority": "ICH",
+      "frontendPath": "reactions[].seriousness.criteriaHospitalization",
+      "projectionPath": "reaction.criteria_hospitalization",
+      "patch": {
+        "kind": "row",
+        "owner": "reaction"
+      },
+      "roundTripValue": true,
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.E.i.3.2c.ALLOWED.VALUE"
+      },
+      "payloadPath": "seriousness.criteriaHospitalization"
+    },
+    {
+      "code": "E.i.3.2d",
+      "authority": "ICH",
+      "frontendPath": "reactions[].seriousness.criteriaDisabling",
+      "projectionPath": "reaction.criteria_disabling",
+      "patch": {
+        "kind": "row",
+        "owner": "reaction"
+      },
+      "roundTripValue": true,
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.E.i.3.2d.ALLOWED.VALUE"
+      },
+      "payloadPath": "seriousness.criteriaDisabling"
+    },
+    {
+      "code": "E.i.3.2e",
+      "authority": "ICH",
+      "frontendPath": "reactions[].seriousness.criteriaCongenitalAnomaly",
+      "projectionPath": "reaction.criteria_congenital_anomaly",
+      "patch": {
+        "kind": "row",
+        "owner": "reaction"
+      },
+      "roundTripValue": true,
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.E.i.3.2e.ALLOWED.VALUE"
+      },
+      "payloadPath": "seriousness.criteriaCongenitalAnomaly"
+    },
+    {
+      "code": "E.i.3.2f",
+      "authority": "ICH",
+      "frontendPath": "reactions[].seriousness.criteriaOtherMedicallyImportant",
+      "projectionPath": "reaction.criteria_other_medically_important",
+      "patch": {
+        "kind": "row",
+        "owner": "reaction"
+      },
+      "roundTripValue": true,
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.E.i.3.2f.ALLOWED.VALUE"
+      },
+      "payloadPath": "seriousness.criteriaOtherMedicallyImportant"
+    },
+    {
+      "code": "FDA.E.i.3.2h",
+      "authority": "FDA",
+      "frontendPath": "reactions[].requiredIntervention",
+      "projectionPath": "reaction.required_intervention",
+      "patch": {
+        "kind": "row",
+        "owner": "reaction"
+      },
+      "roundTripValue": true,
+      "projectionValue": "true",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "FDA.E.i.3.2h.ALLOWED.VALUE"
+      },
+      "payloadPath": "requiredIntervention"
+    },
+    {
+      "code": "E.local.expectedness",
+      "authority": "ICH",
+      "frontendPath": "reactions[].expectedness",
+      "projectionPath": "reaction.expectedness",
+      "patch": {
+        "kind": "row",
+        "owner": "reaction"
+      },
+      "roundTripValue": "1",
+      "constraint": {
+        "status": "not_applicable",
+        "reason": "Local expectedness field has no portable catalog constraint."
+      },
+      "payloadPath": "expectedness"
+    },
+    {
+      "code": "E.local.severity",
+      "authority": "ICH",
+      "frontendPath": "reactions[].severity",
+      "projectionPath": "reaction.severity",
+      "patch": {
+        "kind": "row",
+        "owner": "reaction"
+      },
+      "roundTripValue": "moderate",
+      "constraint": {
+        "status": "not_applicable",
+        "reason": "Local severity field has no portable catalog constraint."
+      },
+      "payloadPath": "severity"
+    },
+    {
+      "code": "E.i.5",
+      "authority": "ICH",
+      "frontendPath": "reactions[].reactionEndDate",
+      "projectionPath": "reaction.end_date",
+      "patch": {
+        "kind": "row",
+        "owner": "reaction"
+      },
+      "roundTripValue": "20200103",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.E.i.5.ALLOWED.VALUE"
+      },
+      "payloadPath": "reactionEndDate"
+    },
+    {
+      "code": "E.i.6a",
+      "authority": "ICH",
+      "frontendPath": "reactions[].reactionDuration.value",
+      "projectionPath": "reaction.duration_value",
+      "patch": {
+        "kind": "row",
+        "owner": "reaction"
+      },
+      "roundTripValue": 1,
+      "projectionValue": "1.00",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.E.i.6a.ALLOWED.VALUE"
+      },
+      "payloadPath": "reactionDuration.value"
+    },
+    {
+      "code": "E.i.6b",
+      "authority": "ICH",
+      "frontendPath": "reactions[].reactionDuration.unit",
+      "projectionPath": "reaction.duration_unit",
+      "patch": {
+        "kind": "row",
+        "owner": "reaction"
+      },
+      "roundTripValue": "d",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.E.i.6b.LENGTH.MAX"
+      },
+      "payloadPath": "reactionDuration.unit"
+    },
+    {
+      "code": "E.i.8",
+      "authority": "ICH",
+      "frontendPath": "reactions[].medicalConfirmation",
+      "projectionPath": "reaction.medical_confirmation",
+      "patch": {
+        "kind": "row",
+        "owner": "reaction"
+      },
+      "roundTripValue": true,
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.E.i.8.ALLOWED.VALUE"
+      },
+      "payloadPath": "medicalConfirmation"
+    },
+    {
+      "code": "E.i.9",
+      "authority": "ICH",
+      "frontendPath": "reactions[].reactionCountry",
+      "projectionPath": "reaction.country_code",
+      "patch": {
+        "kind": "row",
+        "owner": "reaction"
+      },
+      "roundTripValue": "KR",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.E.i.9.LENGTH.MAX"
+      },
+      "payloadPath": "reactionCountry"
+    },
+    {
+      "code": "E.i.KR.device.aeClassification",
+      "authority": "MFDS",
+      "frontendPath": "reactions[].mfdsDeviceAe.aeClassification",
+      "projectionPath": "reaction.mfds_device_ae_classification",
+      "patch": {
+        "kind": "row",
+        "owner": "reaction"
+      },
+      "roundTripValue": "0",
+      "constraint": {
+        "status": "not_applicable",
+        "reason": "This app-local MFDS device field has no portable catalog constraint."
+      },
+      "payloadPath": "mfdsDeviceAe.aeClassification"
+    },
+    {
+      "code": "E.i.KR.device.aeOutcome",
+      "authority": "MFDS",
+      "frontendPath": "reactions[].mfdsDeviceAe.aeOutcome",
+      "projectionPath": "reaction.mfds_device_ae_outcome",
+      "patch": {
+        "kind": "row",
+        "owner": "reaction"
+      },
+      "roundTripValue": "10",
+      "constraint": {
+        "status": "not_applicable",
+        "reason": "This app-local MFDS device field has no portable catalog constraint."
+      },
+      "payloadPath": "mfdsDeviceAe.aeOutcome"
+    },
+    {
+      "code": "E.i.KR.device.causeMedicalDevice",
+      "authority": "MFDS",
+      "frontendPath": "reactions[].mfdsDeviceAe.causeMedicalDevice",
+      "projectionPath": "reaction.mfds_device_cause_medical_device",
+      "patch": {
+        "kind": "row",
+        "owner": "reaction"
+      },
+      "roundTripValue": true,
+      "constraint": {
+        "status": "not_applicable",
+        "reason": "This app-local MFDS device field has no portable catalog constraint."
+      },
+      "payloadPath": "mfdsDeviceAe.causeMedicalDevice"
+    },
+    {
+      "code": "E.i.KR.device.causeProcedureIssue",
+      "authority": "MFDS",
+      "frontendPath": "reactions[].mfdsDeviceAe.causeProcedureIssue",
+      "projectionPath": "reaction.mfds_device_cause_procedure_issue",
+      "patch": {
+        "kind": "row",
+        "owner": "reaction"
+      },
+      "roundTripValue": true,
+      "constraint": {
+        "status": "not_applicable",
+        "reason": "This app-local MFDS device field has no portable catalog constraint."
+      },
+      "payloadPath": "mfdsDeviceAe.causeProcedureIssue"
+    },
+    {
+      "code": "E.i.KR.device.causePatientCondition",
+      "authority": "MFDS",
+      "frontendPath": "reactions[].mfdsDeviceAe.causePatientCondition",
+      "projectionPath": "reaction.mfds_device_cause_patient_condition",
+      "patch": {
+        "kind": "row",
+        "owner": "reaction"
+      },
+      "roundTripValue": true,
+      "constraint": {
+        "status": "not_applicable",
+        "reason": "This app-local MFDS device field has no portable catalog constraint."
+      },
+      "payloadPath": "mfdsDeviceAe.causePatientCondition"
+    },
+    {
+      "code": "E.i.KR.device.causeUnableToAssess",
+      "authority": "MFDS",
+      "frontendPath": "reactions[].mfdsDeviceAe.causeUnableToAssess",
+      "projectionPath": "reaction.mfds_device_cause_unable_to_assess",
+      "patch": {
+        "kind": "row",
+        "owner": "reaction"
+      },
+      "roundTripValue": true,
+      "constraint": {
+        "status": "not_applicable",
+        "reason": "This app-local MFDS device field has no portable catalog constraint."
+      },
+      "payloadPath": "mfdsDeviceAe.causeUnableToAssess"
+    },
+    {
+      "code": "E.i.KR.device.causeOther",
+      "authority": "MFDS",
+      "frontendPath": "reactions[].mfdsDeviceAe.causeOther",
+      "projectionPath": "reaction.mfds_device_cause_other",
+      "patch": {
+        "kind": "row",
+        "owner": "reaction"
+      },
+      "roundTripValue": "Other cause",
+      "constraint": {
+        "status": "not_applicable",
+        "reason": "This app-local MFDS device field has no portable catalog constraint."
+      },
+      "payloadPath": "mfdsDeviceAe.causeOther"
+    },
+    {
+      "code": "E.i.KR.device.actionReason",
+      "authority": "MFDS",
+      "frontendPath": "reactions[].mfdsDeviceAe.actionReason",
+      "projectionPath": "reaction.mfds_device_action_reason",
+      "patch": {
+        "kind": "row",
+        "owner": "reaction"
+      },
+      "roundTripValue": "Action reason",
+      "constraint": {
+        "status": "not_applicable",
+        "reason": "This app-local MFDS device field has no portable catalog constraint."
+      },
+      "payloadPath": "mfdsDeviceAe.actionReason"
+    },
+    {
+      "code": "E.i.KR.device.actionRecall",
+      "authority": "MFDS",
+      "frontendPath": "reactions[].mfdsDeviceAe.actionRecall",
+      "projectionPath": "reaction.mfds_device_action_recall",
+      "patch": {
+        "kind": "row",
+        "owner": "reaction"
+      },
+      "roundTripValue": true,
+      "constraint": {
+        "status": "not_applicable",
+        "reason": "This app-local MFDS device field has no portable catalog constraint."
+      },
+      "payloadPath": "mfdsDeviceAe.actionRecall"
+    },
+    {
+      "code": "E.i.KR.device.actionRepair",
+      "authority": "MFDS",
+      "frontendPath": "reactions[].mfdsDeviceAe.actionRepair",
+      "projectionPath": "reaction.mfds_device_action_repair",
+      "patch": {
+        "kind": "row",
+        "owner": "reaction"
+      },
+      "roundTripValue": true,
+      "constraint": {
+        "status": "not_applicable",
+        "reason": "This app-local MFDS device field has no portable catalog constraint."
+      },
+      "payloadPath": "mfdsDeviceAe.actionRepair"
+    },
+    {
+      "code": "E.i.KR.device.actionInspection",
+      "authority": "MFDS",
+      "frontendPath": "reactions[].mfdsDeviceAe.actionInspection",
+      "projectionPath": "reaction.mfds_device_action_inspection",
+      "patch": {
+        "kind": "row",
+        "owner": "reaction"
+      },
+      "roundTripValue": true,
+      "constraint": {
+        "status": "not_applicable",
+        "reason": "This app-local MFDS device field has no portable catalog constraint."
+      },
+      "payloadPath": "mfdsDeviceAe.actionInspection"
+    },
+    {
+      "code": "E.i.KR.device.actionReplacement",
+      "authority": "MFDS",
+      "frontendPath": "reactions[].mfdsDeviceAe.actionReplacement",
+      "projectionPath": "reaction.mfds_device_action_replacement",
+      "patch": {
+        "kind": "row",
+        "owner": "reaction"
+      },
+      "roundTripValue": true,
+      "constraint": {
+        "status": "not_applicable",
+        "reason": "This app-local MFDS device field has no portable catalog constraint."
+      },
+      "payloadPath": "mfdsDeviceAe.actionReplacement"
+    },
+    {
+      "code": "E.i.KR.device.actionImprovement",
+      "authority": "MFDS",
+      "frontendPath": "reactions[].mfdsDeviceAe.actionImprovement",
+      "projectionPath": "reaction.mfds_device_action_improvement",
+      "patch": {
+        "kind": "row",
+        "owner": "reaction"
+      },
+      "roundTripValue": true,
+      "constraint": {
+        "status": "not_applicable",
+        "reason": "This app-local MFDS device field has no portable catalog constraint."
+      },
+      "payloadPath": "mfdsDeviceAe.actionImprovement"
+    },
+    {
+      "code": "E.i.KR.device.actionMonitoring",
+      "authority": "MFDS",
+      "frontendPath": "reactions[].mfdsDeviceAe.actionMonitoring",
+      "projectionPath": "reaction.mfds_device_action_monitoring",
+      "patch": {
+        "kind": "row",
+        "owner": "reaction"
+      },
+      "roundTripValue": true,
+      "constraint": {
+        "status": "not_applicable",
+        "reason": "This app-local MFDS device field has no portable catalog constraint."
+      },
+      "payloadPath": "mfdsDeviceAe.actionMonitoring"
+    },
+    {
+      "code": "E.i.KR.device.actionNotification",
+      "authority": "MFDS",
+      "frontendPath": "reactions[].mfdsDeviceAe.actionNotification",
+      "projectionPath": "reaction.mfds_device_action_notification",
+      "patch": {
+        "kind": "row",
+        "owner": "reaction"
+      },
+      "roundTripValue": true,
+      "constraint": {
+        "status": "not_applicable",
+        "reason": "This app-local MFDS device field has no portable catalog constraint."
+      },
+      "payloadPath": "mfdsDeviceAe.actionNotification"
+    },
+    {
+      "code": "E.i.KR.device.actionLabelChange",
+      "authority": "MFDS",
+      "frontendPath": "reactions[].mfdsDeviceAe.actionLabelChange",
+      "projectionPath": "reaction.mfds_device_action_label_change",
+      "patch": {
+        "kind": "row",
+        "owner": "reaction"
+      },
+      "roundTripValue": true,
+      "constraint": {
+        "status": "not_applicable",
+        "reason": "This app-local MFDS device field has no portable catalog constraint."
+      },
+      "payloadPath": "mfdsDeviceAe.actionLabelChange"
+    },
+    {
+      "code": "E.i.KR.device.actionOther",
+      "authority": "MFDS",
+      "frontendPath": "reactions[].mfdsDeviceAe.actionOther",
+      "projectionPath": "reaction.mfds_device_action_other",
+      "patch": {
+        "kind": "row",
+        "owner": "reaction"
+      },
+      "roundTripValue": "Other action",
+      "constraint": {
+        "status": "not_applicable",
+        "reason": "This app-local MFDS device field has no portable catalog constraint."
+      },
+      "payloadPath": "mfdsDeviceAe.actionOther"
+    }
   ]
 }

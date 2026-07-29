@@ -396,11 +396,15 @@ async fn apply_patient_section(
 	if let Some(parent) = parent {
 		ensure_parent_role(xpath, doc, parser)?;
 		if let Some(v) = parent.parent_identification.as_deref() {
-			set_text_first(
-				xpath,
-				"//hl7:primaryRole/hl7:player1/hl7:role[hl7:code[@code='PRN']]/hl7:associatedPerson/hl7:name",
-				v,
-			);
+			let name_xpath = "//hl7:primaryRole/hl7:player1/hl7:role[hl7:code[@code='PRN']]/hl7:associatedPerson/hl7:name";
+			set_text_first(xpath, name_xpath, v);
+			remove_attr_first(xpath, name_xpath, "nullFlavor");
+		} else if let Some(null_flavor) =
+			parent.parent_identification_null_flavor.as_deref()
+		{
+			let name_xpath = "//hl7:primaryRole/hl7:player1/hl7:role[hl7:code[@code='PRN']]/hl7:associatedPerson/hl7:name";
+			set_text_first(xpath, name_xpath, "");
+			set_attr_first(xpath, name_xpath, "nullFlavor", null_flavor);
 		}
 		if let Some(v) = parent.parent_birth_date {
 			set_attr_first(
@@ -445,6 +449,24 @@ async fn apply_patient_section(
 				)?;
 			}
 			set_attr_first(xpath, gender_xpath, "code", v);
+			remove_attr_first(xpath, gender_xpath, "nullFlavor");
+		} else if let Some(null_flavor) = parent.sex_null_flavor.as_deref() {
+			let gender_xpath = "//hl7:primaryRole/hl7:player1/hl7:role[hl7:code[@code='PRN']]/hl7:associatedPerson/hl7:administrativeGenderCode";
+			if xpath
+				.findnodes(gender_xpath, None)
+				.map(|nodes| nodes.is_empty())
+				.unwrap_or(true)
+			{
+				append_fragment_child(
+					doc,
+					parser,
+					xpath,
+					"//hl7:primaryRole/hl7:player1/hl7:role[hl7:code[@code='PRN']]/hl7:associatedPerson",
+					"<administrativeGenderCode/>",
+				)?;
+			}
+			remove_attr_first(xpath, gender_xpath, "code");
+			set_attr_first(xpath, gender_xpath, "nullFlavor", null_flavor);
 		}
 		if let Some(v) = parent.last_menstrual_period_date {
 			set_attr_first(

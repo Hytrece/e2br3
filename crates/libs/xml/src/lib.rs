@@ -27,7 +27,10 @@ pub(crate) fn has_text(value: Option<&str>) -> bool {
 pub use error::Error;
 pub type Result<T> = core::result::Result<T, Error>;
 
-pub use export::{export_case_xml, export_case_xml_with_options, ExportXmlOptions};
+pub use export::{
+	export_case_xml, export_case_xml_with_options, serialize_case_xml,
+	ExportXmlOptions,
+};
 pub use import::{
 	extract_safety_report_id_from_xml, import_e2b_xml, import_e2b_xml_unvalidated,
 	CImportSettings, XmlImportRequest,

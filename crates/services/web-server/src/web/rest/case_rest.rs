@@ -463,12 +463,12 @@ fn timeline_day_count(
 
 fn reaction_is_serious(reaction: &Reaction) -> bool {
 	reaction.serious.unwrap_or(false)
-		|| reaction.criteria_death
-		|| reaction.criteria_life_threatening
-		|| reaction.criteria_hospitalization
-		|| reaction.criteria_disabling
-		|| reaction.criteria_congenital_anomaly
-		|| reaction.criteria_other_medically_important
+		|| reaction.criteria_death.unwrap_or(false)
+		|| reaction.criteria_life_threatening.unwrap_or(false)
+		|| reaction.criteria_hospitalization.unwrap_or(false)
+		|| reaction.criteria_disabling.unwrap_or(false)
+		|| reaction.criteria_congenital_anomaly.unwrap_or(false)
+		|| reaction.criteria_other_medically_important.unwrap_or(false)
 }
 
 fn is_blank_review_receiver_row(object: &Map<String, Value>) -> bool {

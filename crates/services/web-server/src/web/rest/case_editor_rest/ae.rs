@@ -1,14 +1,14 @@
 use super::common::*;
 
 const REACTION_ROW_ALIASES: &[(&str, &[&str])] = &[
-	("primary_source_reaction", &["reactionPrimarySourceNative"]),
+	("primary_source_reaction", &["primarySourceReaction"]),
 	(
 		"primary_source_reaction_translation",
-		&["reactionPrimarySourceTranslation"],
+		&["primarySourceReactionTranslation"],
 	),
 	("reaction_language", &["reactionLanguage"]),
-	("reaction_meddra_version", &["meddraVersion"]),
-	("reaction_meddra_code", &["meddraCode"]),
+	("reaction_meddra_version", &["reactionMeddraVersionLLT"]),
+	("reaction_meddra_code", &["reactionMeddraCodeLLT"]),
 	("term_highlighted", &["termHighlighted"]),
 	("serious", &["seriousness.serious"]),
 	("criteria_death", &["seriousness.criteriaResultsInDeath"]),
@@ -86,7 +86,7 @@ const REACTION_ROW_ALIASES: &[(&str, &[&str])] = &[
 	("end_date", &["reactionEndDate"]),
 	("duration_value", &["reactionDuration.value"]),
 	("duration_unit", &["reactionDuration.unit"]),
-	("outcome", &["outcome", "reactionOutcome"]),
+	("outcome", &["reactionOutcome"]),
 	("medical_confirmation", &["medicalConfirmation"]),
 	("country_code", &["reactionCountry"]),
 	("sequence_number", &["sequenceNumber"]),
@@ -234,7 +234,7 @@ repeatable_page_row_create_handler!(
 		("case_id", json!(case_id)),
 		(
 			"sequence_number",
-			json!(i32_field(row, &["sequenceNumber", "sequence_number"]).unwrap_or(1)),
+			json!(i32_field(row, &["sequenceNumber"]).unwrap_or(1)),
 		),
 	],
 	build_response: build_editor_ae_page_row_response,

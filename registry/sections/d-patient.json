@@ -1081,16 +1081,16 @@
     "backend": {
       "status": "mapped",
       "model": "ParentInformation",
-      "field": "parent_identification",
+      "field": "parent_identification / parent_identification_null_flavor",
       "file": "crates/libs/lib-core/src/model/patient.rs",
-      "evidence": "ParentInformation.parent_identification stores D.10.1 parent identification values."
+      "evidence": "ParentInformation stores D.10.1 as a mutually exclusive parent_identification / parent_identification_null_flavor pair."
     },
     "frontend": {
       "status": "mapped",
       "section": "patientInformation",
       "field": "parentInformation.parentIdentification",
-      "file": "../frontend/E2BR3-frontend/components/case-form/sections/SectionD.tsx",
-      "evidence": "SectionD binds fieldNumber D.10.1 to patientInformation.parentInformation.parentIdentification."
+      "file": "../frontend/E2BR3-frontend/app/(protected)/[authority]/case/[id]/detail/DM/components/ParentBasicInformationFields.tsx",
+      "evidence": "ParentBasicInformationFields binds D.10.1 value and NullFlavor to patientInformation.parentInformation.parentIdentification."
     },
     "action": "",
     "notes": ""
@@ -1256,16 +1256,16 @@
     "backend": {
       "status": "mapped",
       "model": "ParentInformation",
-      "field": "sex",
+      "field": "sex / sex_null_flavor",
       "file": "crates/libs/lib-core/src/model/patient.rs",
-      "evidence": "ParentInformation.sex stores D.10.6 parent sex values."
+      "evidence": "ParentInformation stores D.10.6 as a mutually exclusive sex / sex_null_flavor pair."
     },
     "frontend": {
       "status": "mapped",
       "section": "patientInformation",
       "field": "parentInformation.parentSex",
-      "file": "../frontend/E2BR3-frontend/components/case-form/sections/SectionD.tsx",
-      "evidence": "SectionD binds fieldNumber D.10.6 to patientInformation.parentInformation.parentSex."
+      "file": "../frontend/E2BR3-frontend/app/(protected)/[authority]/case/[id]/detail/DM/components/ParentBasicInformationFields.tsx",
+      "evidence": "ParentBasicInformationFields binds D.10.6 value and NullFlavor to patientInformation.parentInformation.parentSex."
     },
     "action": "",
     "notes": ""

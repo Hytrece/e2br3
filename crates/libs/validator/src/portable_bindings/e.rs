@@ -26,7 +26,7 @@ macro_rules! binding {
 pub(super) const BINDINGS: &[PortableFieldBinding] = &[
 	binding!(
 		"reactions[].primarySourceReaction",
-		"reactionPrimarySourceNative",
+		"primarySourceReaction",
 		String,
 		["ICH.E.i.1.1a.LENGTH.MAX"]
 	),
@@ -38,19 +38,19 @@ pub(super) const BINDINGS: &[PortableFieldBinding] = &[
 	),
 	binding!(
 		"reactions[].primarySourceReactionTranslation",
-		"reactionPrimarySourceTranslation",
+		"primarySourceReactionTranslation",
 		String,
 		["ICH.E.i.1.2.LENGTH.MAX"]
 	),
 	binding!(
 		"reactions[].reactionMeddraVersionLLT",
-		"meddraVersion",
+		"reactionMeddraVersionLLT",
 		String,
 		["ICH.E.i.2.1a.ALLOWED.VALUE", "ICH.E.i.2.1a.LENGTH.MAX"]
 	),
 	binding!(
 		"reactions[].reactionMeddraCodeLLT",
-		"meddraCode",
+		"reactionMeddraCodeLLT",
 		String,
 		["ICH.E.i.2.1b.ALLOWED.VALUE", "ICH.E.i.2.1b.LENGTH.MAX"]
 	),
@@ -150,7 +150,7 @@ pub(super) const BINDINGS: &[PortableFieldBinding] = &[
 	),
 	binding!(
 		"reactions[].reactionOutcome",
-		"outcome",
+		"reactionOutcome",
 		String,
 		["ICH.E.i.7.ALLOWED.VALUE", "ICH.E.i.7.LENGTH.MAX"]
 	),

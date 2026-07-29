@@ -1,6 +1,8 @@
 //! Shared imports and helpers for case editor REST modules.
 
-pub(super) use super::portable_save::{validate_direct_rows, validate_row_payload};
+pub(super) use super::portable_save::{
+	request_in_band_null_flavor, validate_direct_rows, validate_row_payload,
+};
 pub(super) use crate::web::rest::case_editor_dto::{
 	CaseEditorAeListRowDto, CaseEditorCiCaseDto, CaseEditorCiDocumentDto,
 	CaseEditorCiLinkedReportDto, CaseEditorCiOtherIdentifierDto,
@@ -340,6 +342,8 @@ pub(super) fn insert_alias(
 }
 
 pub(super) fn row_model_value(
+	section: &str,
+	request_prefix: &str,
 	row: &serde_json::Map<String, Value>,
 	aliases: &[(&str, &[&str])],
 	extra: &[(&str, Value)],
@@ -347,31 +351,80 @@ pub(super) fn row_model_value(
 	let mut map = row.clone();
 	for (target, aliases) in aliases {
 		insert_alias(&mut map, target, aliases);
+		if let Some((request_path, value)) =
+			aliases.iter().find_map(|request_path| {
+				value_at_nested_path(row, request_path)
+					.map(|value| (*request_path, value))
+			}) {
+			let binding_path = format!("{request_prefix}{request_path}");
+			if let Some(null_flavor) =
+				request_in_band_null_flavor(section, &binding_path, value)
+			{
+				map.remove(*target);
+				map.insert(
+					format!("{target}_null_flavor"),
+					Value::String(null_flavor.to_owned()),
+				);
+			} else if let Some(encoded) =
+				storage_encoded_value(section, &binding_path, target, value)
+			{
+				map.insert((*target).to_owned(), encoded);
+			}
+		}
 	}
-	normalize_required_intervention(&mut map);
 	for (key, value) in extra {
 		map.insert((*key).to_string(), value.clone());
 	}
 	Value::Object(map)
 }
 
-fn normalize_required_intervention(map: &mut serde_json::Map<String, Value>) {
-	match map.get("required_intervention") {
-		Some(Value::Bool(true)) => {
-			map.insert(
-				"required_intervention".to_string(),
-				Value::String("true".to_string()),
-			);
-		}
-		Some(Value::String(value)) if value == "NI" => {
-			map.remove("required_intervention");
-			map.insert(
-				"required_intervention_null_flavor".to_string(),
-				Value::String("NI".to_string()),
-			);
-		}
-		_ => {}
+#[derive(Clone, Copy)]
+enum RowStorageEncoding {
+	BooleanString,
+}
+
+struct RowStorageBinding {
+	section: &'static str,
+	request_path: &'static str,
+	target: &'static str,
+	encoding: RowStorageEncoding,
+}
+
+const ROW_STORAGE_BINDINGS: &[RowStorageBinding] = &[RowStorageBinding {
+	section: "AE",
+	request_path: "requiredIntervention",
+	target: "required_intervention",
+	encoding: RowStorageEncoding::BooleanString,
+}];
+
+fn storage_encoded_value(
+	section: &str,
+	request_path: &str,
+	target: &str,
+	value: &Value,
+) -> Option<Value> {
+	let binding = ROW_STORAGE_BINDINGS.iter().find(|binding| {
+		binding.section == section
+			&& binding.request_path == request_path
+			&& binding.target == target
+	})?;
+	match binding.encoding {
+		RowStorageEncoding::BooleanString => value
+			.as_bool()
+			.map(|value| Value::String(value.to_string())),
 	}
+}
+
+fn value_at_nested_path<'a>(
+	map: &'a serde_json::Map<String, Value>,
+	path: &str,
+) -> Option<&'a Value> {
+	let mut segments = path.split('.');
+	let mut value = map.get(segments.next()?)?;
+	for segment in segments {
+		value = value.as_object()?.get(segment)?;
+	}
+	Some(value)
 }
 
 pub(super) fn parse_row_model<T: serde::de::DeserializeOwned>(
@@ -576,7 +629,7 @@ macro_rules! repeatable_page_row_create_handler {
 					let row = required_row_object($section, &request.rows, $row_key)?;
 					validate_row_payload($section, $row_key, row, None)?;
 					let extras = $extras_fn(ctx, mm, case_id, row).await?;
-					let value = row_model_value(row, $aliases, &extras);
+					let value = row_model_value($section, "", row, $aliases, &extras);
 					let create = parse_row_model::<$model>($section, $row_key, value)?;
 					let row_id = $bmc::create(ctx, mm, create).await?;
 					mark_editor_validation_summary_stale(
@@ -629,7 +682,7 @@ macro_rules! repeatable_page_row_create_handler {
 						let $row = row;
 						$extras
 					};
-					let value = row_model_value(row, $aliases, &extras);
+					let value = row_model_value($section, "", row, $aliases, &extras);
 					let create = parse_row_model::<$model>($section, $row_key, value)?;
 					let row_id = $bmc::create(ctx, mm, create).await?;
 					mark_editor_validation_summary_stale(
@@ -681,7 +734,7 @@ macro_rules! repeatable_page_row_patch_handler {
 					$verify_fn(ctx, mm, case_id, row_id).await?;
 					let row = required_row_object($section, &request.rows, $row_key)?;
 					validate_row_payload($section, $row_key, row, None)?;
-					let value = row_model_value(row, $aliases, &[]);
+					let value = row_model_value($section, "", row, $aliases, &[]);
 					let update = parse_row_model::<$model>($section, $row_key, value)?;
 					$bmc::update(ctx, mm, row_id, update).await?;
 					mark_editor_validation_summary_stale(
@@ -726,7 +779,7 @@ macro_rules! repeatable_page_row_patch_handler {
 					$bmc::get_in_case(ctx, mm, case_id, row_id).await?;
 					let row = required_row_object($section, &request.rows, $row_key)?;
 					validate_row_payload($section, $row_key, row, None)?;
-					let value = row_model_value(row, $aliases, &[]);
+					let value = row_model_value($section, "", row, $aliases, &[]);
 					let update = parse_row_model::<$model>($section, $row_key, value)?;
 					$bmc::update(ctx, mm, row_id, update).await?;
 					mark_editor_validation_summary_stale(
@@ -951,3 +1004,92 @@ pub(super) use repeatable_page_row_delete_handler;
 pub(super) use repeatable_page_row_delete_restore_handlers;
 pub(super) use repeatable_page_row_patch_handler;
 pub(super) use repeatable_page_row_read_handler;
+
+#[cfg(test)]
+mod canonical_row_persistence_tests {
+	use super::*;
+
+	#[test]
+	fn lb_in_band_null_flavor_is_split_before_model_deserialization() {
+		let row = json!({ "testDate": "UNK" })
+			.as_object()
+			.expect("row object")
+			.clone();
+		let value =
+			row_model_value("LB", "", &row, &[("test_date", &["testDate"])], &[]);
+		let model = value.as_object().expect("model object");
+
+		assert!(!model.contains_key("test_date"));
+		assert_eq!(model.get("test_date_null_flavor"), Some(&json!("UNK")));
+	}
+
+	#[test]
+	fn dh_in_band_null_flavor_is_split_before_model_deserialization() {
+		let row = json!({ "drugName": "UNK" })
+			.as_object()
+			.expect("row object")
+			.clone();
+		let value =
+			row_model_value("DH", "", &row, &[("drug_name", &["drugName"])], &[]);
+		let model = value.as_object().expect("model object");
+
+		assert!(!model.contains_key("drug_name"));
+		assert_eq!(model.get("drug_name_null_flavor"), Some(&json!("UNK")));
+	}
+
+	#[test]
+	fn ae_boolean_is_encoded_for_its_string_backed_storage_column() {
+		let row = json!({ "requiredIntervention": true })
+			.as_object()
+			.expect("row object")
+			.clone();
+		let value = row_model_value(
+			"AE",
+			"",
+			&row,
+			&[("required_intervention", &["requiredIntervention"])],
+			&[],
+		);
+
+		assert_eq!(
+			value["required_intervention"],
+			Value::String("true".to_owned())
+		);
+	}
+
+	#[test]
+	fn ae_in_band_null_flavor_uses_the_same_binding_as_constraint_checks() {
+		let row = json!({ "requiredIntervention": "NI" })
+			.as_object()
+			.expect("row object")
+			.clone();
+		let value = row_model_value(
+			"AE",
+			"",
+			&row,
+			&[("required_intervention", &["requiredIntervention"])],
+			&[],
+		);
+
+		assert!(value.get("required_intervention").is_none());
+		assert_eq!(value["required_intervention_null_flavor"], "NI");
+	}
+
+	#[test]
+	fn dg_nested_in_band_null_flavor_uses_its_binding_prefix() {
+		let row = json!({ "firstAdministrationDate": "MSK" })
+			.as_object()
+			.expect("row object")
+			.clone();
+		let value = row_model_value(
+			"DG",
+			"dosageInformation[].",
+			&row,
+			&[("first_administration_date", &["firstAdministrationDate"])],
+			&[],
+		);
+
+		assert!(value.get("first_administration_date").is_none());
+		assert_eq!(value["first_administration_date_null_flavor"], "MSK");
+	}
+}
