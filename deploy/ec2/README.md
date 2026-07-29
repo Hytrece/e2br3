@@ -286,3 +286,101 @@ cd /opt/e2br3
 
 The script reads `SERVICE_DB_URL` from `.env.prod`, downloads the DataHub/Core country-list CSV, and
 upserts `iso_countries`. Existing country rows missing from the source are marked inactive.
+
+## AS2 submitter
+
+The web server does not talk AS2 itself. It POSTs to an AS2 submitter over HTTP
+(`crates/services/web-server/src/submission/gateway.rs`), and that submitter owns
+the protocol in both directions — FDA delivers ACK3 and asynchronous MDNs back to
+*our* gateway over AS2, so the submitter has to be reachable from outside.
+
+Implementation: `github.com/donihyun/as2-submitter`. Design and rationale:
+`docs/superpowers/specs/2026-07-27-as2-submitter-fda-design.md`.
+
+`docker-compose.as2.yml` is an **opt-in overlay**. It changes nothing unless you
+pass it explicitly, and it does not modify `docker-compose.prod.yml`.
+
+### Why the API binds the wildcard
+
+`AS2_SUBMITTER_BIND=0.0.0.0` looks alarming but is required: inside a container,
+loopback is that container's own loopback, so `app` could not reach the submitter
+over the Docker network. The API port is deliberately **not published to the
+host** — only 4080, the AS2 receiver, is. What protects the API is the container
+boundary plus `AS2_INBOUND_TOKEN`.
+
+### One-time setup
+
+1. Clone the submitter, since it publishes no image and is built on the instance:
+
+   ```sh
+   sudo git clone https://github.com/donihyun/as2-submitter /opt/as2-submitter
+   ```
+
+2. Place key material in `/opt/e2br3/as2-certs`:
+
+   - `submitter.p12` — our signing key, one certificate per FDA routing ID
+   - `partner.crt` — FDA's public certificate (ZZFDA), from the Gateway
+     Configuration Information form
+
+   For a pre-onboarding test run, generate throwaway material instead:
+
+   ```sh
+   cd /opt/as2-submitter && ./scripts/gen_test_certs.sh /opt/e2br3/as2-certs
+   ```
+
+3. Add to `/opt/e2br3/.env.prod`:
+
+   ```sh
+   AS2_SUBMITTER_SRC=/opt/as2-submitter
+   AS2_CERTS_DIR=/opt/e2br3/as2-certs
+   AS2_FROM_ID=<our-industry-routing-id>       # assigned by FDA
+   AS2_CALLBACK_TOKEN=<shared-secret>
+   AS2_SIGNING_PKCS12_PASSWORD=<keystore-password>
+   AS2_FDA_ENV=test                            # test until FDA approves production
+   AS2_RECEIVER_PORT=4080
+   ```
+
+   `AS2_SUBMITTER_URL`, `AS2_ACK_CALLBACK_URL` and the app-side
+   `AS2_CALLBACK_TOKEN` are set by the overlay; do not duplicate them.
+
+   Note `E2BR3_STRICT_SUBMISSION_CONFIG=true` makes the web server refuse to
+   start without a configured transport, so these must land before the rollout.
+
+4. Open inbound TCP 4080 in the security group. Restrict the source: your own IP
+   for a test run, and FDA's outbound range `150.148.0.0/16` for production.
+
+### Rollout
+
+```sh
+cd /opt/e2br3
+docker compose --env-file .env.prod \
+  -f deploy/ec2/docker-compose.prod.yml \
+  -f deploy/ec2/docker-compose.as2.yml \
+  up -d --build
+```
+
+`deploy.sh` does not know about the overlay. Either run the command above after
+it, or set `COMPOSE_FILE` to both files.
+
+### Verify
+
+```sh
+# The submitter is up and both listeners bound.
+docker logs e2br3-as2-submitter | head
+
+# The API answers from inside the app container but not from the host.
+docker exec e2br3-web-server curl -s http://as2-submitter:9090/health
+curl -s --max-time 3 http://127.0.0.1:9090/health || echo "correctly not published"
+
+# The AS2 receiver is reachable from outside.
+curl -s -o /dev/null -w '%{http_code}\n' -X POST http://<ec2-host>:4080/as2/receive --data x
+```
+
+A 500 from that last call is expected — it means the port is open and OpenAS2-style
+parsing rejected the garbage body.
+
+### Interop against the mock gateway
+
+Run the OpenAS2 FDA mock on a workstation and point the submitter at it, which
+exercises the path FDA will actually use. See
+`/opt/as2-submitter/docs/interop-ec2.md`.
