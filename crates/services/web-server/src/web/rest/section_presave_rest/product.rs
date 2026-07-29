@@ -1,13 +1,15 @@
+use super::rows::camelize_value;
 use super::shared::*;
+use serde_json::{json, Value};
 
 pub async fn create_product_presave(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
 	snapshot: AuthorizationSnapshotW,
-	Json(params): Json<ParamsForCreate<ProductPresaveForCreate>>,
-) -> Result<(StatusCode, Json<DataRestResult<ProductPresave>>)> {
+	Json(params): Json<ParamsForCreate<ProductPresaveRowsForCreate>>,
+) -> Result<(StatusCode, Json<DataRestResult<ProductPresaveDetails>>)> {
 	let ctx = ctx_w.0;
-	with_authorized_presave_create(
+	with_authorized_presave_atomic_create(
 		&ctx,
 		&snapshot,
 		&mm,
@@ -15,12 +17,47 @@ pub async fn create_product_presave(
 		move |ctx, mm| {
 			Box::pin(async move {
 				let ParamsForCreate { data } = params;
-				let id = ProductPresaveBmc::create(ctx, mm, data).await?;
-				Ok(rest_created(ProductPresaveBmc::get(ctx, mm, id).await?))
+				for substance in &data.rows.active_substances {
+					validate_product_active_substance_detail_create(substance)?;
+					if substance.deleted {
+						return Err(Error::BadRequest {
+							message:
+								"new product active substance cannot be deleted"
+									.into(),
+						});
+					}
+				}
+				let id =
+					ProductPresaveBmc::create(ctx, mm, data.rows.product).await?;
+				for substance in data.rows.active_substances {
+					ProductPresaveActiveSubstanceBmc::create(
+						ctx,
+						mm,
+						substance.into_create(id)?,
+					)
+					.await?;
+				}
+				Ok(rest_created(
+					load_product_presave_details(ctx, mm, id).await?,
+				))
 			})
 		},
 	)
 	.await
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ProductPresaveRowsForCreate {
+	pub rows: ProductPresaveCreateRows,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ProductPresaveCreateRows {
+	pub product: ProductPresaveForCreate,
+	#[serde(default)]
+	pub active_substances: Vec<ProductActiveSubstanceDetailsForUpdate>,
 }
 
 pub async fn list_product_presaves(
@@ -121,30 +158,46 @@ pub async fn delete_product_presave(
 
 #[derive(Debug, Serialize)]
 pub struct ProductPresaveDetails {
-	pub parent: ProductPresave,
-	pub active_substances: Vec<ProductPresaveActiveSubstance>,
+	pub rows: ProductPresaveRows,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProductPresaveRows {
+	pub product: Value,
+	pub active_substances: Vec<Value>,
 }
 
 #[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ProductPresaveDetailsForUpdate {
-	pub parent: Option<ProductPresaveForUpdate>,
+	pub rows: ProductPresaveRowsForUpdate,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ProductPresaveRowsForUpdate {
+	pub product: Option<ProductPresaveForUpdate>,
 	pub active_substances: Option<Vec<ProductActiveSubstanceDetailsForUpdate>>,
 }
 
 #[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ProductActiveSubstanceDetailsForUpdate {
 	pub id: Option<Uuid>,
-	#[serde(default, rename = "_delete")]
-	pub delete: bool,
+	#[serde(default)]
+	pub deleted: bool,
 	pub sequence_number: Option<i32>,
 	pub substance_name: Option<String>,
+	#[serde(rename = "substanceTermIdVersion")]
 	pub substance_termid_version: Option<String>,
+	#[serde(rename = "substanceTermId")]
 	pub substance_termid: Option<String>,
 	pub mfds_version: Option<String>,
 	pub mfds_id: Option<String>,
+	#[serde(rename = "substanceStrengthValue")]
 	pub strength_value: Option<rust_decimal::Decimal>,
+	#[serde(rename = "substanceStrengthUnit")]
 	pub strength_unit: Option<String>,
 }
 
@@ -225,18 +278,19 @@ pub async fn update_product_presave_details(
 		move |ctx, mm| {
 			Box::pin(async move {
 				let ParamsForUpdate { data } = params;
-				if data
-					.parent
+				let rows = data.rows;
+				if rows
+					.product
 					.as_ref()
 					.is_some_and(|parent| parent.deleted == Some(true))
 				{
-					if data.active_substances.is_some() {
+					if rows.active_substances.is_some() {
 						return Err(Error::BadRequest {
 							message: "presave deletion cannot include child changes"
 								.into(),
 						});
 					}
-					PresaveLifecycleService::archive(
+					PresaveLifecycleService::archive_in_current_txn(
 						ctx,
 						mm,
 						PresaveKind::Product,
@@ -247,8 +301,8 @@ pub async fn update_product_presave_details(
 						load_product_presave_details(ctx, mm, id).await?,
 					));
 				}
-				preflight_product_presave_details(ctx, mm, id, &data).await?;
-				apply_product_presave_details_inner(ctx, mm, id, data).await?;
+				preflight_product_presave_details(ctx, mm, id, &rows).await?;
+				apply_product_presave_details_inner(ctx, mm, id, rows).await?;
 				Ok(rest_ok(load_product_presave_details(ctx, mm, id).await?))
 			})
 		},
@@ -260,12 +314,12 @@ async fn apply_product_presave_details_inner(
 	ctx: &lib_core::ctx::Ctx,
 	mm: &ModelManager,
 	id: Uuid,
-	data: ProductPresaveDetailsForUpdate,
+	rows: ProductPresaveRowsForUpdate,
 ) -> Result<()> {
-	if let Some(parent) = data.parent {
+	if let Some(parent) = rows.product {
 		ProductPresaveBmc::update(ctx, mm, id, parent).await?;
 	}
-	if let Some(active_substances) = data.active_substances {
+	if let Some(active_substances) = rows.active_substances {
 		for substance in active_substances {
 			upsert_product_active_substance_detail(ctx, mm, id, substance).await?;
 		}
@@ -281,9 +335,41 @@ async fn load_product_presave_details(
 	let parent = ProductPresaveBmc::get(ctx, mm, id).await?;
 	let active_substances =
 		ProductPresaveActiveSubstanceBmc::list_by_parent(ctx, mm, id).await?;
+	let product = camelize_value(serde_json::to_value(parent).map_err(|err| {
+		Error::BadRequest {
+			message: format!("product presave serialization failed: {err}"),
+		}
+	})?);
+	let canonical_active_substances = active_substances
+		.into_iter()
+		.map(|substance| {
+			let mut value = camelize_value(
+				serde_json::to_value(substance)
+					.expect("serializable product substance"),
+			);
+			if let Some(row) = value.as_object_mut() {
+				if let Some(term_id_version) = row.remove("substanceTermidVersion") {
+					row.insert("substanceTermIdVersion".into(), term_id_version);
+				}
+				if let Some(term_id) = row.remove("substanceTermid") {
+					row.insert("substanceTermId".into(), term_id);
+				}
+				if let Some(strength) = row.remove("strengthValue") {
+					row.insert("substanceStrengthValue".into(), strength);
+				}
+				if let Some(unit) = row.remove("strengthUnit") {
+					row.insert("substanceStrengthUnit".into(), unit);
+				}
+				row.insert("deleted".into(), json!(false));
+			}
+			value
+		})
+		.collect();
 	Ok(ProductPresaveDetails {
-		parent,
-		active_substances,
+		rows: ProductPresaveRows {
+			product,
+			active_substances: canonical_active_substances,
+		},
 	})
 }
 
@@ -291,9 +377,9 @@ async fn preflight_product_presave_details(
 	ctx: &lib_core::ctx::Ctx,
 	mm: &ModelManager,
 	product_id: Uuid,
-	data: &ProductPresaveDetailsForUpdate,
+	rows: &ProductPresaveRowsForUpdate,
 ) -> Result<()> {
-	if let Some(active_substances) = &data.active_substances {
+	if let Some(active_substances) = &rows.active_substances {
 		for substance in active_substances {
 			preflight_product_active_substance_detail(
 				ctx, mm, product_id, substance,
@@ -310,7 +396,7 @@ async fn preflight_product_active_substance_detail(
 	product_id: Uuid,
 	substance: &ProductActiveSubstanceDetailsForUpdate,
 ) -> Result<()> {
-	if substance.delete && substance.id.is_none() {
+	if substance.deleted && substance.id.is_none() {
 		return Err(Error::BadRequest {
 			message: "product active substance delete requires id".to_string(),
 		});
@@ -324,7 +410,7 @@ async fn preflight_product_active_substance_detail(
 			"product",
 			"product_presave_active_substances",
 		)?;
-	} else if !substance.delete {
+	} else if !substance.deleted {
 		validate_product_active_substance_detail_create(substance)?;
 	}
 	Ok(())
@@ -349,7 +435,7 @@ async fn upsert_product_active_substance_detail(
 	product_id: Uuid,
 	substance: ProductActiveSubstanceDetailsForUpdate,
 ) -> Result<()> {
-	if substance.delete && substance.id.is_none() {
+	if substance.deleted && substance.id.is_none() {
 		return Err(Error::BadRequest {
 			message: "product active substance delete requires id".to_string(),
 		});
@@ -363,7 +449,7 @@ async fn upsert_product_active_substance_detail(
 			"product",
 			"product_presave_active_substances",
 		)?;
-		if substance.delete {
+		if substance.deleted {
 			ProductPresaveActiveSubstanceBmc::delete(ctx, mm, id).await?;
 		} else {
 			ProductPresaveActiveSubstanceBmc::update(

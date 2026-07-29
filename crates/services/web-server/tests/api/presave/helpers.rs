@@ -208,16 +208,20 @@ pub(super) async fn create_named_sender_presave_via_api(
 		cookie,
 		"/api/presaves/senders".to_string(),
 		json!({
-			"data": {
-				"sender_type": "1",
-				"organization_name": organization_name,
-				"country_code": "US",
-				"email": "sender-details@example.com"
-			}
+			"data": { "rows": {
+				"sender": {
+					"senderType": "1",
+					"organizationName": organization_name,
+					"countryCode": "US",
+					"email": "sender-details@example.com"
+				},
+				"gateways": [],
+				"responsiblePersons": []
+			} }
 		}),
 	)
 	.await?;
-	data_id(&value)
+	data_rows_id(&value, "sender")
 }
 
 pub(super) async fn create_sender_presave_with_type_via_api(
@@ -232,14 +236,18 @@ pub(super) async fn create_sender_presave_with_type_via_api(
 		cookie,
 		"/api/presaves/senders".to_string(),
 		json!({
-			"data": {
-				"sender_type": sender_type,
-				"organization_name": organization_name
-			}
+			"data": { "rows": {
+				"sender": {
+					"senderType": sender_type,
+					"organizationName": organization_name
+				},
+				"gateways": [],
+				"responsiblePersons": []
+			} }
 		}),
 	)
 	.await?;
-	data_id(&value)
+	data_rows_id(&value, "sender")
 }
 
 pub(super) async fn create_sender_gateway_via_api(
@@ -301,15 +309,19 @@ pub(super) async fn create_receiver_presave_via_api(
 		cookie,
 		"/api/presaves/receivers".to_string(),
 		json!({
-			"data": {
-				"receiver_type": "Regulatory Authority",
-				"organization_name": format!("REST Receiver Details Org {}", Uuid::new_v4()),
-				"receiver_identifier": format!("REC-{}", Uuid::new_v4())
-			}
+			"data": { "rows": {
+				"receiver": {
+					"receiverType": "Regulatory Authority",
+					"organizationName": format!("REST Receiver Details Org {}", Uuid::new_v4()),
+					"receiverIdentifier": format!("REC-{}", Uuid::new_v4())
+				},
+				"consignees": [],
+				"routes": []
+			} }
 		}),
 	)
 	.await?;
-	data_id(&value)
+	data_rows_id(&value, "receiver")
 }
 
 pub(super) async fn create_receiver_consignee_via_api(
@@ -382,14 +394,19 @@ pub(super) async fn create_named_product_presave_for_sender_via_api(
 		"/api/presaves/products".to_string(),
 		json!({
 			"data": {
-				"sender_presave_id": sender_id,
-				"product_id": format!("REST-PRODUCT-{}", Uuid::new_v4()),
-				"medicinal_product": medicinal_product
+				"rows": {
+					"product": {
+						"senderPresaveId": sender_id,
+						"productId": format!("REST-PRODUCT-{}", Uuid::new_v4()),
+						"medicinalProduct": medicinal_product
+					},
+					"activeSubstances": []
+				}
 			}
 		}),
 	)
 	.await?;
-	data_id(&value)
+	data_rows_id(&value, "product")
 }
 
 pub(super) async fn create_product_presave_with_identity_for_sender_via_api(
@@ -405,15 +422,27 @@ pub(super) async fn create_product_presave_with_identity_for_sender_via_api(
 		"/api/presaves/products".to_string(),
 		json!({
 			"data": {
-				"sender_presave_id": sender_id,
-				"product_id": product_id,
-				"preapproval_ip_name": preapproval_ip_name,
-				"medicinal_product": "REST Product Identity"
+				"rows": {
+					"product": {
+						"senderPresaveId": sender_id,
+						"productId": product_id,
+						"preApprovalIpName": preapproval_ip_name,
+						"medicinalProduct": "REST Product Identity"
+					},
+					"activeSubstances": []
+				}
 			}
 		}),
 	)
 	.await?;
-	data_id(&value)
+	data_rows_id(&value, "product")
+}
+
+pub(super) fn data_rows_id(value: &Value, row_name: &str) -> Result<Uuid> {
+	let id = value["data"]["rows"][row_name]["id"]
+		.as_str()
+		.ok_or("missing data.rows row id")?;
+	Ok(Uuid::parse_str(id)?)
 }
 
 pub(super) async fn create_product_active_substance_via_api(
@@ -470,16 +499,20 @@ pub(super) async fn create_named_study_presave_for_product_via_api(
 		cookie,
 		"/api/presaves/studies".to_string(),
 		json!({
-			"data": {
-				"product_presave_id": product_id,
-				"study_name": study_name,
-				"sponsor_study_number": format!("STUDY-{}", Uuid::new_v4()),
-				"study_type_reaction": "1"
-			}
+			"data": { "rows": {
+				"study": {
+					"productPresaveId": product_id,
+					"studyName": study_name,
+					"sponsorStudyNumber": format!("STUDY-{}", Uuid::new_v4()),
+					"studyTypeReaction": "1"
+				},
+				"products": [], "reporters": [],
+				"registrationNumbers": [], "fdaCrossReportedInds": []
+			} }
 		}),
 	)
 	.await?;
-	data_id(&value)
+	data_rows_id(&value, "study")
 }
 
 pub(super) async fn create_study_registration_number_via_api(
@@ -566,16 +599,16 @@ pub(super) async fn create_named_reporter_presave_via_api(
 		cookie,
 		"/api/presaves/reporters".to_string(),
 		json!({
-			"data": {
-				"reporter_given_name": "Reporter",
+			"data": { "rows": { "reporter": {
+				"reporterGivenName": "Reporter",
 				"organization": organization,
 				"qualification": "1",
-				"primary_source_regulatory": "1"
-			}
+				"primarySourceRegulatory": "1"
+			} } }
 		}),
 	)
 	.await?;
-	data_id(&value)
+	data_rows_id(&value, "reporter")
 }
 
 pub(super) async fn create_info_editor(

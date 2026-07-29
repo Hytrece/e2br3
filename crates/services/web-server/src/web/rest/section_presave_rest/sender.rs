@@ -1,20 +1,80 @@
+use super::rows::camelize_value;
 use super::shared::*;
+use serde_json::Value;
 
 pub async fn create_sender_presave(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
 	snapshot: AuthorizationSnapshotW,
-	Json(params): Json<ParamsForCreate<SenderPresaveForCreate>>,
-) -> Result<(StatusCode, Json<DataRestResult<SenderPresave>>)> {
+	Json(params): Json<ParamsForCreate<SenderPresaveRowsForCreate>>,
+) -> Result<(StatusCode, Json<DataRestResult<SenderPresaveDetails>>)> {
 	let ctx = ctx_w.0;
-	with_authorized_presave_create(&ctx, &snapshot, &mm, "sender", move |ctx, mm| {
-		Box::pin(async move {
-			let ParamsForCreate { data } = params;
-			let id = SenderPresaveBmc::create(ctx, mm, data).await?;
-			Ok(rest_created(SenderPresaveBmc::get(ctx, mm, id).await?))
-		})
-	})
+	with_authorized_presave_atomic_create(
+		&ctx,
+		&snapshot,
+		&mm,
+		"sender",
+		move |ctx, mm| {
+			Box::pin(async move {
+				let ParamsForCreate { data } = params;
+				for gateway in &data.rows.gateways {
+					validate_sender_gateway_detail_create(gateway)?;
+					if gateway.deleted {
+						return Err(Error::BadRequest {
+							message: "new sender gateway cannot be deleted".into(),
+						});
+					}
+				}
+				for person in &data.rows.responsible_persons {
+					validate_sender_responsible_person_detail_create(person)?;
+					if person.deleted {
+						return Err(Error::BadRequest {
+							message:
+								"new sender responsible person cannot be deleted"
+									.into(),
+						});
+					}
+				}
+				let id = SenderPresaveBmc::create(ctx, mm, data.rows.sender).await?;
+				for gateway in data.rows.gateways {
+					SenderPresaveGatewayBmc::create(
+						ctx,
+						mm,
+						gateway.into_create(id)?,
+					)
+					.await?;
+				}
+				for person in data.rows.responsible_persons {
+					SenderPresaveResponsiblePersonBmc::create(
+						ctx,
+						mm,
+						person.into_create(id)?,
+					)
+					.await?;
+				}
+				Ok(rest_created(
+					load_sender_presave_details(ctx, mm, id).await?,
+				))
+			})
+		},
+	)
 	.await
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SenderPresaveRowsForCreate {
+	pub rows: SenderPresaveCreateRows,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SenderPresaveCreateRows {
+	pub sender: SenderPresaveForCreate,
+	#[serde(default)]
+	pub gateways: Vec<SenderGatewayDetailsForUpdate>,
+	#[serde(default)]
+	pub responsible_persons: Vec<SenderResponsiblePersonDetailsForUpdate>,
 }
 
 pub async fn list_sender_presaves(
@@ -115,23 +175,37 @@ pub async fn delete_sender_presave(
 
 #[derive(Debug, Serialize)]
 pub struct SenderPresaveDetails {
-	pub parent: SenderPresave,
-	pub gateways: Vec<SenderPresaveGateway>,
-	pub responsible_persons: Vec<SenderPresaveResponsiblePerson>,
+	pub rows: SenderPresaveRows,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SenderPresaveRows {
+	pub sender: Value,
+	pub gateways: Vec<Value>,
+	pub responsible_persons: Vec<Value>,
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SenderPresaveDetailsForUpdate {
-	pub parent: Option<SenderPresaveForUpdate>,
+	pub rows: SenderPresaveRowsForUpdate,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SenderPresaveRowsForUpdate {
+	pub sender: Option<SenderPresaveForUpdate>,
 	pub gateways: Option<Vec<SenderGatewayDetailsForUpdate>>,
 	pub responsible_persons: Option<Vec<SenderResponsiblePersonDetailsForUpdate>>,
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SenderGatewayDetailsForUpdate {
 	pub id: Option<Uuid>,
-	#[serde(default, rename = "_delete")]
-	pub delete: bool,
+	#[serde(default)]
+	pub deleted: bool,
 	pub sequence_number: Option<i32>,
 	pub gateway_authority: Option<String>,
 	pub sender_identifier: Option<String>,
@@ -139,7 +213,6 @@ pub struct SenderGatewayDetailsForUpdate {
 	pub cde_sender_identifier: Option<String>,
 	pub cdr_sender_identifier: Option<String>,
 	pub is_default_for_authority: Option<bool>,
-	pub deleted: Option<bool>,
 }
 
 impl SenderGatewayDetailsForUpdate {
@@ -152,7 +225,7 @@ impl SenderGatewayDetailsForUpdate {
 			cde_sender_identifier: self.cde_sender_identifier,
 			cdr_sender_identifier: self.cdr_sender_identifier,
 			is_default_for_authority: self.is_default_for_authority,
-			deleted: self.deleted,
+			deleted: None,
 		}
 	}
 
@@ -181,16 +254,17 @@ impl SenderGatewayDetailsForUpdate {
 			cde_sender_identifier: self.cde_sender_identifier,
 			cdr_sender_identifier: self.cdr_sender_identifier,
 			is_default_for_authority: self.is_default_for_authority,
-			deleted: self.deleted,
+			deleted: None,
 		})
 	}
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SenderResponsiblePersonDetailsForUpdate {
 	pub id: Option<Uuid>,
-	#[serde(default, rename = "_delete")]
-	pub delete: bool,
+	#[serde(default)]
+	pub deleted: bool,
 	pub sequence_number: Option<i32>,
 	pub department: Option<String>,
 	pub person_title: Option<String>,
@@ -198,7 +272,6 @@ pub struct SenderResponsiblePersonDetailsForUpdate {
 	pub person_middle_name: Option<String>,
 	pub person_family_name: Option<String>,
 	pub is_default: Option<bool>,
-	pub deleted: Option<bool>,
 }
 
 impl SenderResponsiblePersonDetailsForUpdate {
@@ -211,7 +284,7 @@ impl SenderResponsiblePersonDetailsForUpdate {
 			person_middle_name: self.person_middle_name,
 			person_family_name: self.person_family_name,
 			is_default: self.is_default,
-			deleted: self.deleted,
+			deleted: None,
 		}
 	}
 
@@ -234,7 +307,7 @@ impl SenderResponsiblePersonDetailsForUpdate {
 			person_middle_name: self.person_middle_name,
 			person_family_name: self.person_family_name,
 			is_default: self.is_default,
-			deleted: self.deleted,
+			deleted: None,
 		})
 	}
 }
@@ -278,19 +351,20 @@ pub async fn update_sender_presave_details(
 		move |ctx, mm| {
 			Box::pin(async move {
 				let ParamsForUpdate { data } = params;
-				if data
-					.parent
+				let rows = data.rows;
+				if rows
+					.sender
 					.as_ref()
 					.is_some_and(|parent| parent.deleted == Some(true))
 				{
-					if data.gateways.is_some() || data.responsible_persons.is_some()
+					if rows.gateways.is_some() || rows.responsible_persons.is_some()
 					{
 						return Err(Error::BadRequest {
 							message: "presave deletion cannot include child changes"
 								.into(),
 						});
 					}
-					PresaveLifecycleService::archive(
+					PresaveLifecycleService::archive_in_current_txn(
 						ctx,
 						mm,
 						PresaveKind::Sender,
@@ -301,8 +375,8 @@ pub async fn update_sender_presave_details(
 						load_sender_presave_details(ctx, mm, id).await?,
 					));
 				}
-				preflight_sender_presave_details(ctx, mm, id, &data).await?;
-				apply_sender_presave_details_inner(ctx, mm, id, data).await?;
+				preflight_sender_presave_details(ctx, mm, id, &rows).await?;
+				apply_sender_presave_details_inner(ctx, mm, id, rows).await?;
 				Ok(rest_ok(load_sender_presave_details(ctx, mm, id).await?))
 			})
 		},
@@ -314,9 +388,9 @@ async fn apply_sender_presave_details_inner(
 	ctx: &lib_core::ctx::Ctx,
 	mm: &ModelManager,
 	id: Uuid,
-	data: SenderPresaveDetailsForUpdate,
+	data: SenderPresaveRowsForUpdate,
 ) -> Result<()> {
-	if let Some(parent) = data.parent {
+	if let Some(parent) = data.sender {
 		SenderPresaveBmc::update(ctx, mm, id, parent).await?;
 	}
 
@@ -341,14 +415,38 @@ async fn load_sender_presave_details(
 	mm: &ModelManager,
 	id: Uuid,
 ) -> Result<SenderPresaveDetails> {
-	let parent = SenderPresaveBmc::get(ctx, mm, id).await?;
+	let sender = camelize_value(
+		serde_json::to_value(SenderPresaveBmc::get(ctx, mm, id).await?).map_err(
+			|err| Error::BadRequest {
+				message: format!("sender presave serialization failed: {err}"),
+			},
+		)?,
+	);
 	let gateways = SenderPresaveGatewayBmc::list_by_parent(ctx, mm, id).await?;
 	let responsible_persons =
 		SenderPresaveResponsiblePersonBmc::list_by_parent(ctx, mm, id).await?;
 	Ok(SenderPresaveDetails {
-		parent,
-		gateways,
-		responsible_persons,
+		rows: SenderPresaveRows {
+			sender,
+			gateways: gateways
+				.into_iter()
+				.map(|row| {
+					camelize_value(
+						serde_json::to_value(row)
+							.expect("serializable sender gateway"),
+					)
+				})
+				.collect(),
+			responsible_persons: responsible_persons
+				.into_iter()
+				.map(|row| {
+					camelize_value(
+						serde_json::to_value(row)
+							.expect("serializable sender responsible person"),
+					)
+				})
+				.collect(),
+		},
 	})
 }
 
@@ -356,7 +454,7 @@ async fn preflight_sender_presave_details(
 	ctx: &lib_core::ctx::Ctx,
 	mm: &ModelManager,
 	sender_id: Uuid,
-	data: &SenderPresaveDetailsForUpdate,
+	data: &SenderPresaveRowsForUpdate,
 ) -> Result<()> {
 	if let Some(gateways) = &data.gateways {
 		for gateway in gateways {
@@ -385,7 +483,7 @@ async fn preflight_sender_gateway_detail(
 	sender_id: Uuid,
 	gateway: &SenderGatewayDetailsForUpdate,
 ) -> Result<()> {
-	if gateway.delete && gateway.id.is_none() {
+	if gateway.deleted && gateway.id.is_none() {
 		return Err(Error::BadRequest {
 			message: "sender gateway delete requires id".to_string(),
 		});
@@ -399,7 +497,7 @@ async fn preflight_sender_gateway_detail(
 			id,
 			"sender_presave_gateways",
 		)?;
-	} else if !gateway.delete {
+	} else if !gateway.deleted {
 		validate_sender_gateway_detail_create(gateway)?;
 	}
 
@@ -431,7 +529,7 @@ async fn preflight_sender_responsible_person_detail(
 	sender_id: Uuid,
 	responsible_person: &SenderResponsiblePersonDetailsForUpdate,
 ) -> Result<()> {
-	if responsible_person.delete && responsible_person.id.is_none() {
+	if responsible_person.deleted && responsible_person.id.is_none() {
 		return Err(Error::BadRequest {
 			message: "sender responsible person delete requires id".to_string(),
 		});
@@ -445,7 +543,7 @@ async fn preflight_sender_responsible_person_detail(
 			id,
 			"sender_presave_responsible_persons",
 		)?;
-	} else if !responsible_person.delete {
+	} else if !responsible_person.deleted {
 		validate_sender_responsible_person_detail_create(responsible_person)?;
 	}
 
@@ -472,7 +570,7 @@ async fn upsert_sender_gateway_detail(
 	sender_id: Uuid,
 	gateway: SenderGatewayDetailsForUpdate,
 ) -> Result<()> {
-	if gateway.delete && gateway.id.is_none() {
+	if gateway.deleted && gateway.id.is_none() {
 		return Err(Error::BadRequest {
 			message: "sender gateway delete requires id".to_string(),
 		});
@@ -486,7 +584,7 @@ async fn upsert_sender_gateway_detail(
 			id,
 			"sender_presave_gateways",
 		)?;
-		if gateway.delete {
+		if gateway.deleted {
 			SenderPresaveGatewayBmc::update(
 				ctx,
 				mm,
@@ -515,7 +613,7 @@ async fn upsert_sender_responsible_person_detail(
 	sender_id: Uuid,
 	responsible_person: SenderResponsiblePersonDetailsForUpdate,
 ) -> Result<()> {
-	if responsible_person.delete && responsible_person.id.is_none() {
+	if responsible_person.deleted && responsible_person.id.is_none() {
 		return Err(Error::BadRequest {
 			message: "sender responsible person delete requires id".to_string(),
 		});
@@ -529,7 +627,7 @@ async fn upsert_sender_responsible_person_detail(
 			id,
 			"sender_presave_responsible_persons",
 		)?;
-		if responsible_person.delete {
+		if responsible_person.deleted {
 			SenderPresaveResponsiblePersonBmc::update(
 				ctx,
 				mm,

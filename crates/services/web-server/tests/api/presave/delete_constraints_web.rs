@@ -133,8 +133,8 @@ async fn test_canonical_product_parent_soft_delete_allows_editor_with_unset_scop
 		format!("/api/presaves/products/{details_id}/details"),
 		Some(json!({
 			"data": {
-				"parent": {
-					"deleted": true
+				"rows": {
+					"product": { "deleted": true }
 				}
 			}
 		})),

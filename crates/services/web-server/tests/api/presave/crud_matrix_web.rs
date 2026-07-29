@@ -18,20 +18,22 @@ async fn test_section_presave_sender_receiver_product_reporter_rest_contract(
 		&admin_cookie,
 		Method::POST,
 		"/api/presaves/senders".to_string(),
-		Some(json!({
-			"data": {
-				"sender_type": "1",
-				"organization_name": "REST Sender Org",
-				"country_code": "US",
-				"email": "sender@example.com"
-			}
-		})),
+		Some(json!({ "data": { "rows": {
+			"sender": { "senderType": "1", "organizationName": "REST Sender Org", "countryCode": "US", "email": "sender@example.com" },
+			"gateways": [], "responsiblePersons": []
+		} } })),
 	)
 	.await?;
 	assert_eq!(status, StatusCode::CREATED, "{value:?}");
-	assert!(value["data"].get("name").is_none(), "{value:?}");
-	assert!(value["data"].get("comments").is_none(), "{value:?}");
-	let sender_id = data_id(&value)?;
+	assert!(
+		value["data"]["rows"]["sender"].get("name").is_none(),
+		"{value:?}"
+	);
+	assert!(
+		value["data"]["rows"]["sender"].get("comments").is_none(),
+		"{value:?}"
+	);
+	let sender_id = data_rows_id(&value, "sender")?;
 
 	let (status, value) = request_json(
 		&app,
@@ -72,19 +74,22 @@ async fn test_section_presave_sender_receiver_product_reporter_rest_contract(
 		&admin_cookie,
 		Method::POST,
 		"/api/presaves/receivers".to_string(),
-		Some(json!({
-			"data": {
-				"receiver_type": "Regulatory Authority",
-				"organization_name": "REST Receiver Org",
-				"receiver_identifier": "REST-RECEIVER"
-			}
-		})),
+		Some(json!({ "data": { "rows": {
+			"receiver": { "receiverType": "Regulatory Authority", "organizationName": "REST Receiver Org", "receiverIdentifier": "REST-RECEIVER" },
+			"consignees": [], "routes": []
+		} } })),
 	)
 	.await?;
 	assert_eq!(status, StatusCode::CREATED, "{value:?}");
-	assert!(value["data"].get("name").is_none(), "{value:?}");
-	assert!(value["data"].get("comments").is_none(), "{value:?}");
-	let receiver_id = data_id(&value)?;
+	assert!(
+		value["data"]["rows"]["receiver"].get("name").is_none(),
+		"{value:?}"
+	);
+	assert!(
+		value["data"]["rows"]["receiver"].get("comments").is_none(),
+		"{value:?}"
+	);
+	let receiver_id = data_rows_id(&value, "receiver")?;
 
 	let (status, value) = request_json(
 		&app,
@@ -108,19 +113,22 @@ async fn test_section_presave_sender_receiver_product_reporter_rest_contract(
 		&admin_cookie,
 		Method::POST,
 		"/api/presaves/products".to_string(),
-		Some(json!({
-		"data": {
-				"sender_presave_id": sender_id,
-				"product_id": "REST-PRODUCT-CANONICAL",
-				"medicinal_product": "REST Product Canonical"
-			}
-		})),
+		Some(json!({ "data": { "rows": {
+			"product": { "senderPresaveId": sender_id, "productId": "REST-PRODUCT-CANONICAL", "medicinalProduct": "REST Product Canonical" },
+			"activeSubstances": []
+		} } })),
 	)
 	.await?;
 	assert_eq!(status, StatusCode::CREATED, "{value:?}");
-	assert!(value["data"].get("name").is_none(), "{value:?}");
-	assert!(value["data"].get("comments").is_none(), "{value:?}");
-	let product_id = data_id(&value)?;
+	assert!(
+		value["data"]["rows"]["product"].get("name").is_none(),
+		"{value:?}"
+	);
+	assert!(
+		value["data"]["rows"]["product"].get("comments").is_none(),
+		"{value:?}"
+	);
+	let product_id = data_rows_id(&value, "product")?;
 
 	let (status, value) = request_json(
 		&app,
@@ -145,21 +153,25 @@ async fn test_section_presave_sender_receiver_product_reporter_rest_contract(
 		&admin_cookie,
 		Method::POST,
 		"/api/presaves/reporters".to_string(),
-		Some(json!({
-			"data": {
-				"reporter_given_name": "Grace",
-				"reporter_family_name": "Hopper",
+		Some(json!({ "data": { "rows": { "reporter": {
+				"reporterGivenName": "Grace",
+				"reporterFamilyName": "Hopper",
 				"organization": "REST Reporter Org",
-				"country_code": "US",
+				"countryCode": "US",
 				"qualification": "1"
-			}
-		})),
+			} } } })),
 	)
 	.await?;
 	assert_eq!(status, StatusCode::CREATED, "{value:?}");
-	assert!(value["data"].get("name").is_none(), "{value:?}");
-	assert!(value["data"].get("comments").is_none(), "{value:?}");
-	let reporter_id = data_id(&value)?;
+	assert!(
+		value["data"]["rows"]["reporter"].get("name").is_none(),
+		"{value:?}"
+	);
+	assert!(
+		value["data"]["rows"]["reporter"].get("comments").is_none(),
+		"{value:?}"
+	);
+	let reporter_id = data_rows_id(&value, "reporter")?;
 
 	for (uri, id) in [
 		("/api/presaves/senders".to_string(), sender_id),
@@ -175,7 +187,15 @@ async fn test_section_presave_sender_receiver_product_reporter_rest_contract(
 				.as_array()
 				.ok_or("presave list data is not array")?
 				.iter()
-				.any(|row| row["id"].as_str() == Some(&id.to_string())),
+				.any(|row| {
+					row["id"].as_str() == Some(&id.to_string())
+						|| row["rows"]
+							.as_object()
+							.and_then(|rows| {
+								rows.values().find_map(|value| value["id"].as_str())
+							})
+							.is_some_and(|value| value == id.to_string())
+				}),
 			"{value:?}"
 		);
 	}
@@ -198,8 +218,8 @@ async fn test_section_presave_sender_receiver_product_reporter_rest_contract(
 	for (uri, body, field, expected) in [
 		(
 			format!("/api/presaves/senders/{sender_id}"),
-			json!({ "data": { "organization_name": "REST Sender Org Updated" } }),
-			"organization_name",
+			json!({ "data": { "organizationName": "REST Sender Org Updated" } }),
+			"organizationName",
 			"REST Sender Org Updated",
 		),
 		(
@@ -210,14 +230,14 @@ async fn test_section_presave_sender_receiver_product_reporter_rest_contract(
 		),
 		(
 			format!("/api/presaves/products/{product_id}"),
-			json!({ "data": { "brand_name": "REST Brand Updated" } }),
-			"brand_name",
+			json!({ "data": { "drugBrandName": "REST Brand Updated" } }),
+			"drugBrandName",
 			"REST Brand Updated",
 		),
 		(
 			format!("/api/presaves/reporters/{reporter_id}"),
-			json!({ "data": { "reporter_given_name": "Grace Updated" } }),
-			"reporter_given_name",
+			json!({ "data": { "rows": { "reporter": { "reporterGivenName": "Grace Updated" } } } }),
+			"reporterGivenName",
 			"Grace Updated",
 		),
 	] {
@@ -225,7 +245,11 @@ async fn test_section_presave_sender_receiver_product_reporter_rest_contract(
 			request_json(&app, &admin_cookie, Method::PATCH, uri, Some(body))
 				.await?;
 		assert_eq!(status, StatusCode::OK, "{value:?}");
-		assert_eq!(value["data"][field].as_str(), Some(expected));
+		let response_row = value["data"]["rows"]
+			.as_object()
+			.and_then(|rows| rows.values().next())
+			.unwrap_or(&value["data"]);
+		assert_eq!(response_row[field].as_str(), Some(expected));
 	}
 
 	for uri in [

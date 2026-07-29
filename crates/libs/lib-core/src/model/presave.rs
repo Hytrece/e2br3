@@ -249,6 +249,7 @@ trait IntoOrgScopedCreate {
 }
 
 #[derive(Debug, Clone, Fields, FromRow, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SenderPresave {
 	pub id: Uuid,
 	pub organization_id: Uuid,
@@ -272,6 +273,7 @@ pub struct SenderPresave {
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SenderPresaveForCreate {
 	pub is_default: Option<bool>,
 	pub sender_type: Option<String>,
@@ -327,6 +329,7 @@ impl IntoOrgScopedCreate for SenderPresaveForCreate {
 }
 
 #[derive(Default, Fields, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SenderPresaveForUpdate {
 	pub deleted: Option<bool>,
 	pub is_default: Option<bool>,
@@ -596,6 +599,7 @@ impl_child_bmc!(
 );
 
 #[derive(Debug, Clone, Fields, FromRow, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ReceiverPresave {
 	pub id: Uuid,
 	pub organization_id: Uuid,
@@ -620,6 +624,7 @@ pub struct ReceiverPresave {
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ReceiverPresaveForCreate {
 	pub receiver_type: Option<String>,
 	pub organization_name: Option<String>,
@@ -679,6 +684,7 @@ impl IntoOrgScopedCreate for ReceiverPresaveForCreate {
 }
 
 #[derive(Default, Fields, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ReceiverPresaveForUpdate {
 	pub deleted: Option<bool>,
 	pub receiver_type: Option<String>,
@@ -1146,15 +1152,19 @@ pub struct ProductPresave {
 	pub product_id: Option<String>,
 	pub medicinal_product: Option<String>,
 	pub medicinal_product_notation: Option<String>,
+	#[serde(rename = "preApprovalIpName")]
 	pub preapproval_ip_name: Option<String>,
+	#[serde(rename = "drugBrandName")]
 	pub brand_name: Option<String>,
 	pub original_manufacturer: Option<String>,
 	pub product_description: Option<String>,
 	pub mpid: Option<String>,
+	#[serde(rename = "mpidVersionDateNumber")]
 	pub mpid_version: Option<String>,
 	pub mfds_mpid: Option<String>,
 	pub mfds_mpid_version: Option<String>,
 	pub phpid: Option<String>,
+	#[serde(rename = "phpidVersionDateNumber")]
 	pub phpid_version: Option<String>,
 	pub investigational_product_blinded: Option<bool>,
 	pub obtain_drug_country: Option<String>,
@@ -1169,22 +1179,26 @@ pub struct ProductPresave {
 }
 
 #[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ProductPresaveForCreate {
 	pub sender_presave_id: Option<Uuid>,
 	pub receiver_presave_id: Option<Uuid>,
 	pub product_id: Option<String>,
 	pub medicinal_product: Option<String>,
 	pub medicinal_product_notation: Option<String>,
+	#[serde(rename = "preApprovalIpName")]
 	pub preapproval_ip_name: Option<String>,
+	#[serde(rename = "drugBrandName")]
 	pub brand_name: Option<String>,
 	pub original_manufacturer: Option<String>,
 	pub product_description: Option<String>,
 	pub mpid: Option<String>,
+	#[serde(rename = "mpidVersionDateNumber")]
 	pub mpid_version: Option<String>,
 	pub mfds_mpid: Option<String>,
 	pub mfds_mpid_version: Option<String>,
 	pub phpid: Option<String>,
+	#[serde(rename = "phpidVersionDateNumber")]
 	pub phpid_version: Option<String>,
 	pub investigational_product_blinded: Option<bool>,
 	pub obtain_drug_country: Option<String>,
@@ -1252,7 +1266,7 @@ impl IntoOrgScopedCreate for ProductPresaveForCreate {
 }
 
 #[derive(Default, Fields, Deserialize)]
-#[serde(deny_unknown_fields)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ProductPresaveForUpdate {
 	pub deleted: Option<bool>,
 	pub sender_presave_id: Option<Uuid>,
@@ -1260,15 +1274,19 @@ pub struct ProductPresaveForUpdate {
 	pub product_id: Option<String>,
 	pub medicinal_product: Option<String>,
 	pub medicinal_product_notation: Option<String>,
+	#[serde(rename = "preApprovalIpName")]
 	pub preapproval_ip_name: Option<String>,
+	#[serde(rename = "drugBrandName")]
 	pub brand_name: Option<String>,
 	pub original_manufacturer: Option<String>,
 	pub product_description: Option<String>,
 	pub mpid: Option<String>,
+	#[serde(rename = "mpidVersionDateNumber")]
 	pub mpid_version: Option<String>,
 	pub mfds_mpid: Option<String>,
 	pub mfds_mpid_version: Option<String>,
 	pub phpid: Option<String>,
+	#[serde(rename = "phpidVersionDateNumber")]
 	pub phpid_version: Option<String>,
 	pub investigational_product_blinded: Option<bool>,
 	pub obtain_drug_country: Option<String>,
@@ -1515,6 +1533,7 @@ impl_child_bmc!(
 );
 
 #[derive(Debug, Clone, Fields, FromRow, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ReporterPresave {
 	pub id: Uuid,
 	pub organization_id: Uuid,
@@ -1555,6 +1574,7 @@ pub struct ReporterPresave {
 }
 
 #[derive(Default, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ReporterPresaveForCreate {
 	pub reporter_title: Option<String>,
 	pub reporter_title_null_flavor: Option<String>,
@@ -1659,6 +1679,7 @@ impl IntoOrgScopedCreate for ReporterPresaveForCreate {
 }
 
 #[derive(Default, Fields, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ReporterPresaveForUpdate {
 	pub deleted: Option<bool>,
 	pub reporter_title: Option<String>,
@@ -1958,6 +1979,7 @@ impl ReporterPresaveBmc {
 }
 
 #[derive(Debug, Clone, Fields, FromRow, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct StudyPresave {
 	pub id: Uuid,
 	pub organization_id: Uuid,
@@ -1979,6 +2001,7 @@ pub struct StudyPresave {
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct StudyPresaveForCreate {
 	pub product_presave_id: Option<Uuid>,
 	pub study_name: Option<String>,
@@ -2042,6 +2065,7 @@ impl StudyPresaveForCreate {
 }
 
 #[derive(Default, Fields, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct StudyPresaveForUpdate {
 	pub deleted: Option<bool>,
 	pub product_presave_id: Option<Uuid>,
@@ -2485,6 +2509,7 @@ impl_child_bmc!(
 );
 
 #[derive(Debug, Clone, Fields, FromRow, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct NarrativePresave {
 	pub id: Uuid,
 	pub organization_id: Uuid,
@@ -2499,6 +2524,7 @@ pub struct NarrativePresave {
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct NarrativePresaveForCreate {
 	pub case_narrative: Option<String>,
 	pub case_narrative_notation: Option<String>,
@@ -2527,6 +2553,7 @@ impl IntoOrgScopedCreate for NarrativePresaveForCreate {
 }
 
 #[derive(Default, Fields, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct NarrativePresaveForUpdate {
 	pub deleted: Option<bool>,
 	pub case_narrative: Option<String>,

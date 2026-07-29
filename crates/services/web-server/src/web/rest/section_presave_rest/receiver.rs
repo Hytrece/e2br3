@@ -1,13 +1,15 @@
+use super::rows::camelize_value;
 use super::shared::*;
+use serde_json::{json, Value};
 
 pub async fn create_receiver_presave(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
 	snapshot: AuthorizationSnapshotW,
-	Json(params): Json<ParamsForCreate<ReceiverPresaveForCreate>>,
-) -> Result<(StatusCode, Json<DataRestResult<ReceiverPresave>>)> {
+	Json(params): Json<ParamsForCreate<ReceiverPresaveRowsForCreate>>,
+) -> Result<(StatusCode, Json<DataRestResult<ReceiverPresaveDetails>>)> {
 	let ctx = ctx_w.0;
-	with_authorized_presave_create(
+	with_authorized_presave_atomic_create(
 		&ctx,
 		&snapshot,
 		&mm,
@@ -15,12 +17,60 @@ pub async fn create_receiver_presave(
 		move |ctx, mm| {
 			Box::pin(async move {
 				let ParamsForCreate { data } = params;
-				let id = ReceiverPresaveBmc::create(ctx, mm, data).await?;
-				Ok(rest_created(ReceiverPresaveBmc::get(ctx, mm, id).await?))
+				for consignee in &data.rows.consignees {
+					validate_receiver_consignee_detail_create(consignee)?;
+					if consignee.deleted {
+						return Err(Error::BadRequest {
+							message: "new receiver consignee cannot be deleted"
+								.into(),
+						});
+					}
+				}
+				for route in &data.rows.routes {
+					validate_receiver_route_detail_create(route)?;
+					if route.deleted {
+						return Err(Error::BadRequest {
+							message: "new receiver route cannot be deleted".into(),
+						});
+					}
+				}
+				let id =
+					ReceiverPresaveBmc::create(ctx, mm, data.rows.receiver).await?;
+				for consignee in data.rows.consignees {
+					ReceiverPresaveConsigneeBmc::create(
+						ctx,
+						mm,
+						consignee.into_create(id)?,
+					)
+					.await?;
+				}
+				for route in data.rows.routes {
+					ReceiverPresaveRouteBmc::create(ctx, mm, route.into_create(id)?)
+						.await?;
+				}
+				Ok(rest_created(
+					load_receiver_presave_details(ctx, mm, id).await?,
+				))
 			})
 		},
 	)
 	.await
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ReceiverPresaveRowsForCreate {
+	pub rows: ReceiverPresaveCreateRows,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ReceiverPresaveCreateRows {
+	pub receiver: ReceiverPresaveForCreate,
+	#[serde(default)]
+	pub consignees: Vec<ReceiverConsigneeDetailsForUpdate>,
+	#[serde(default)]
+	pub routes: Vec<ReceiverRouteDetailsForUpdate>,
 }
 
 pub async fn list_receiver_presaves(
@@ -120,37 +170,36 @@ pub async fn delete_receiver_presave(
 
 #[derive(Debug, Serialize)]
 pub struct ReceiverPresaveDetails {
-	pub parent: ReceiverPresave,
-	pub consignees: Vec<ReceiverPresaveConsignee>,
-	pub routes: Vec<ReceiverPresaveRoute>,
-	pub children: ReceiverPresaveDetailsChildren,
+	pub rows: ReceiverPresaveRows,
 }
 
 #[derive(Debug, Serialize)]
-pub struct ReceiverPresaveDetailsChildren {
-	pub consignees: Vec<ReceiverPresaveConsignee>,
-	pub routes: Vec<ReceiverPresaveRoute>,
+pub struct ReceiverPresaveRows {
+	pub receiver: Value,
+	pub consignees: Vec<Value>,
+	pub routes: Vec<Value>,
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ReceiverPresaveDetailsForUpdate {
-	pub parent: Option<ReceiverPresaveForUpdate>,
-	pub consignees: Option<Vec<ReceiverConsigneeDetailsForUpdate>>,
-	pub routes: Option<Vec<ReceiverRouteDetailsForUpdate>>,
-	pub children: Option<ReceiverPresaveChildrenDetailsForUpdate>,
+	pub rows: ReceiverPresaveRowsForUpdate,
 }
 
 #[derive(Deserialize)]
-pub struct ReceiverPresaveChildrenDetailsForUpdate {
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ReceiverPresaveRowsForUpdate {
+	pub receiver: Option<ReceiverPresaveForUpdate>,
 	pub consignees: Option<Vec<ReceiverConsigneeDetailsForUpdate>>,
 	pub routes: Option<Vec<ReceiverRouteDetailsForUpdate>>,
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ReceiverConsigneeDetailsForUpdate {
 	pub id: Option<Uuid>,
-	#[serde(default, rename = "_delete")]
-	pub delete: bool,
+	#[serde(default)]
+	pub deleted: bool,
 	pub sequence_number: Option<i32>,
 	pub name: Option<String>,
 	pub phone: Option<String>,
@@ -188,10 +237,11 @@ impl ReceiverConsigneeDetailsForUpdate {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ReceiverRouteDetailsForUpdate {
 	pub id: Option<Uuid>,
-	#[serde(default, rename = "_delete")]
-	pub delete: bool,
+	#[serde(default)]
+	pub deleted: bool,
 	pub sequence_number: Option<i32>,
 	pub authority: Option<String>,
 	pub receiver_label: Option<String>,
@@ -330,21 +380,19 @@ pub async fn update_receiver_presave_details(
 		move |ctx, mm| {
 			Box::pin(async move {
 				let ParamsForUpdate { data } = params;
-				if data
-					.parent
+				let rows = data.rows;
+				if rows
+					.receiver
 					.as_ref()
 					.is_some_and(|parent| parent.deleted == Some(true))
 				{
-					if data.consignees.is_some()
-						|| data.routes.is_some()
-						|| data.children.is_some()
-					{
+					if rows.consignees.is_some() || rows.routes.is_some() {
 						return Err(Error::BadRequest {
 							message: "presave deletion cannot include child changes"
 								.into(),
 						});
 					}
-					PresaveLifecycleService::archive(
+					PresaveLifecycleService::archive_in_current_txn(
 						ctx,
 						mm,
 						PresaveKind::Receiver,
@@ -355,8 +403,8 @@ pub async fn update_receiver_presave_details(
 						load_receiver_presave_details(ctx, mm, id).await?,
 					));
 				}
-				preflight_receiver_presave_details(ctx, mm, id, &data).await?;
-				apply_receiver_presave_details_inner(ctx, mm, id, data).await?;
+				preflight_receiver_presave_details(ctx, mm, id, &rows).await?;
+				apply_receiver_presave_details_inner(ctx, mm, id, rows).await?;
 				Ok(rest_ok(load_receiver_presave_details(ctx, mm, id).await?))
 			})
 		},
@@ -368,9 +416,9 @@ async fn apply_receiver_presave_details_inner(
 	ctx: &lib_core::ctx::Ctx,
 	mm: &ModelManager,
 	id: Uuid,
-	data: ReceiverPresaveDetailsForUpdate,
+	data: ReceiverPresaveRowsForUpdate,
 ) -> Result<()> {
-	if let Some(parent) = data.parent {
+	if let Some(parent) = data.receiver {
 		ReceiverPresaveBmc::update(ctx, mm, id, parent).await?;
 	}
 	if let Some(consignees) = data.consignees {
@@ -383,18 +431,6 @@ async fn apply_receiver_presave_details_inner(
 			upsert_receiver_route_detail(ctx, mm, id, route).await?;
 		}
 	}
-	if let Some(children) = data.children {
-		if let Some(consignees) = children.consignees {
-			for consignee in consignees {
-				upsert_receiver_consignee_detail(ctx, mm, id, consignee).await?;
-			}
-		}
-		if let Some(routes) = children.routes {
-			for route in routes {
-				upsert_receiver_route_detail(ctx, mm, id, route).await?;
-			}
-		}
-	}
 	Ok(())
 }
 
@@ -403,19 +439,45 @@ async fn load_receiver_presave_details(
 	mm: &ModelManager,
 	id: Uuid,
 ) -> Result<ReceiverPresaveDetails> {
-	let parent = ReceiverPresaveBmc::get(ctx, mm, id).await?;
+	let receiver = camelize_value(
+		serde_json::to_value(ReceiverPresaveBmc::get(ctx, mm, id).await?).map_err(
+			|err| Error::BadRequest {
+				message: format!("receiver presave serialization failed: {err}"),
+			},
+		)?,
+	);
 	let consignees =
 		ReceiverPresaveConsigneeBmc::list_by_parent(ctx, mm, id).await?;
 	let routes = ReceiverPresaveRouteBmc::list_by_parent(ctx, mm, id).await?;
-	let children = ReceiverPresaveDetailsChildren {
-		consignees: consignees.clone(),
-		routes: routes.clone(),
+	let canonicalize_child = |row| {
+		let mut value = camelize_value(row);
+		if let Some(object) = value.as_object_mut() {
+			object.insert("deleted".into(), json!(false));
+		}
+		value
 	};
 	Ok(ReceiverPresaveDetails {
-		parent,
-		consignees,
-		routes,
-		children,
+		rows: ReceiverPresaveRows {
+			receiver,
+			consignees: consignees
+				.into_iter()
+				.map(|row| {
+					canonicalize_child(
+						serde_json::to_value(row)
+							.expect("serializable receiver consignee"),
+					)
+				})
+				.collect(),
+			routes: routes
+				.into_iter()
+				.map(|row| {
+					canonicalize_child(
+						serde_json::to_value(row)
+							.expect("serializable receiver route"),
+					)
+				})
+				.collect(),
+		},
 	})
 }
 
@@ -423,7 +485,7 @@ async fn preflight_receiver_presave_details(
 	ctx: &lib_core::ctx::Ctx,
 	mm: &ModelManager,
 	receiver_id: Uuid,
-	data: &ReceiverPresaveDetailsForUpdate,
+	data: &ReceiverPresaveRowsForUpdate,
 ) -> Result<()> {
 	if let Some(consignees) = &data.consignees {
 		for consignee in consignees {
@@ -436,19 +498,6 @@ async fn preflight_receiver_presave_details(
 			preflight_receiver_route_detail(ctx, mm, receiver_id, route).await?;
 		}
 	}
-	if let Some(children) = &data.children {
-		if let Some(consignees) = &children.consignees {
-			for consignee in consignees {
-				preflight_receiver_consignee_detail(ctx, mm, receiver_id, consignee)
-					.await?;
-			}
-		}
-		if let Some(routes) = &children.routes {
-			for route in routes {
-				preflight_receiver_route_detail(ctx, mm, receiver_id, route).await?;
-			}
-		}
-	}
 	Ok(())
 }
 
@@ -458,7 +507,7 @@ async fn preflight_receiver_consignee_detail(
 	receiver_id: Uuid,
 	consignee: &ReceiverConsigneeDetailsForUpdate,
 ) -> Result<()> {
-	if consignee.delete && consignee.id.is_none() {
+	if consignee.deleted && consignee.id.is_none() {
 		return Err(Error::BadRequest {
 			message: "receiver consignee delete requires id".to_string(),
 		});
@@ -473,7 +522,7 @@ async fn preflight_receiver_consignee_detail(
 			"receiver",
 			"receiver_presave_consignees",
 		)?;
-	} else if !consignee.delete {
+	} else if !consignee.deleted {
 		validate_receiver_consignee_detail_create(consignee)?;
 	}
 	Ok(())
@@ -497,7 +546,7 @@ async fn preflight_receiver_route_detail(
 	receiver_id: Uuid,
 	route: &ReceiverRouteDetailsForUpdate,
 ) -> Result<()> {
-	if route.delete && route.id.is_none() {
+	if route.deleted && route.id.is_none() {
 		return Err(Error::BadRequest {
 			message: "receiver route delete requires id".to_string(),
 		});
@@ -512,7 +561,7 @@ async fn preflight_receiver_route_detail(
 			"receiver",
 			"receiver_presave_routes",
 		)?;
-	} else if !route.delete {
+	} else if !route.deleted {
 		validate_receiver_route_detail_create(route)?;
 	}
 	Ok(())
@@ -554,7 +603,7 @@ async fn upsert_receiver_consignee_detail(
 	receiver_id: Uuid,
 	consignee: ReceiverConsigneeDetailsForUpdate,
 ) -> Result<()> {
-	if consignee.delete && consignee.id.is_none() {
+	if consignee.deleted && consignee.id.is_none() {
 		return Err(Error::BadRequest {
 			message: "receiver consignee delete requires id".to_string(),
 		});
@@ -569,7 +618,7 @@ async fn upsert_receiver_consignee_detail(
 			"receiver",
 			"receiver_presave_consignees",
 		)?;
-		if consignee.delete {
+		if consignee.deleted {
 			ReceiverPresaveConsigneeBmc::delete(ctx, mm, id).await?;
 		} else {
 			ReceiverPresaveConsigneeBmc::update(
@@ -597,7 +646,7 @@ async fn upsert_receiver_route_detail(
 	receiver_id: Uuid,
 	route: ReceiverRouteDetailsForUpdate,
 ) -> Result<()> {
-	if route.delete && route.id.is_none() {
+	if route.deleted && route.id.is_none() {
 		return Err(Error::BadRequest {
 			message: "receiver route delete requires id".to_string(),
 		});
@@ -612,7 +661,7 @@ async fn upsert_receiver_route_detail(
 			"receiver",
 			"receiver_presave_routes",
 		)?;
-		if route.delete {
+		if route.deleted {
 			ReceiverPresaveRouteBmc::delete(ctx, mm, id).await?;
 		} else {
 			ReceiverPresaveRouteBmc::update(ctx, mm, id, route.into_update())

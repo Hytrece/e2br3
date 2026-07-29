@@ -106,12 +106,11 @@ async fn test_info_matrix_privileges_grant_effective_presave_permissions(
 		&custom_cookie,
 		"/api/presaves/senders".to_string(),
 		Some(json!({
-			"data": {
-				"authority": "fda",
-				"sender_type": "2",
-				"organization_name": "Info Matrix Sender",
-				"person_given_name": "Safety"
-			}
+			"data": { "rows": {
+				"sender": { "senderType": "2", "organizationName": "Info Matrix Sender" },
+				"gateways": [],
+				"responsiblePersons": [{ "sequenceNumber": 1, "personGivenName": "Safety" }]
+			} }
 		})),
 	)
 	.await?;
@@ -123,9 +122,7 @@ async fn test_info_matrix_privileges_grant_effective_presave_permissions(
 		&custom_cookie,
 		format!("/api/presaves/senders/{editable_template_id}"),
 		Some(json!({
-			"data": {
-				"organization_name": "Info Matrix Readonly Patch"
-			}
+			"data": { "organizationName": "Info Matrix Readonly Patch" }
 		})),
 	)
 	.await?;
@@ -170,12 +167,11 @@ async fn test_info_matrix_privileges_grant_effective_presave_permissions(
 		&custom_cookie,
 		"/api/presaves/senders".to_string(),
 		Some(json!({
-			"data": {
-				"authority": "fda",
-				"sender_type": "2",
-				"organization_name": "INFO-MATRIX-EDIT",
-				"person_given_name": "Safety"
-			}
+			"data": { "rows": {
+				"sender": { "senderType": "2", "organizationName": "INFO-MATRIX-EDIT" },
+				"gateways": [],
+				"responsiblePersons": [{ "sequenceNumber": 1, "personGivenName": "Safety" }]
+			} }
 		})),
 	)
 	.await?;
@@ -188,11 +184,7 @@ async fn test_info_matrix_privileges_grant_effective_presave_permissions(
 		&custom_cookie,
 		format!("/api/presaves/senders/{editable_template_id}"),
 		Some(json!({
-			"data": {
-				"sender_type": "2",
-				"organization_name": editable_sender_name,
-				"person_given_name": "Safety"
-			}
+			"data": { "senderType": "2", "organizationName": editable_sender_name }
 		})),
 	)
 	.await?;
@@ -200,7 +192,7 @@ async fn test_info_matrix_privileges_grant_effective_presave_permissions(
 	assert!(value["data"].get("name").is_none(), "{value:?}");
 	assert!(value["data"].get("comments").is_none(), "{value:?}");
 	assert_eq!(
-		value["data"]["organization_name"].as_str(),
+		value["data"]["organizationName"].as_str(),
 		Some(editable_sender_name.as_str()),
 		"{value:?}"
 	);

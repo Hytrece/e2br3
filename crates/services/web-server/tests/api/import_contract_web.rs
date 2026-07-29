@@ -148,18 +148,19 @@ async fn test_import_selected_product_links_first_drug_and_case_product_id(
 		&cookie,
 		"/api/presaves/senders",
 		json!({
-			"data": {
-				"authority": "fda",
-				"name": "Selected product sender",
-				"sender_type": "2",
-				"organization_name": "Selected Product Sender",
-				"email": "selected-product-sender@example.test"
-			}
+			"data": { "rows": {
+				"sender": {
+					"senderType": "2",
+					"organizationName": "Selected Product Sender",
+					"email": "selected-product-sender@example.test"
+				},
+				"gateways": [], "responsiblePersons": []
+			} }
 		}),
 	)
 	.await?;
 	assert_eq!(status, StatusCode::CREATED, "{body:?}");
-	let sender_presave_id = body["data"]["id"]
+	let sender_presave_id = body["data"]["rows"]["sender"]["id"]
 		.as_str()
 		.ok_or_else(|| format!("missing sender id in body {body:?}"))?;
 	let (status, body) = put_json(
@@ -181,17 +182,19 @@ async fn test_import_selected_product_links_first_drug_and_case_product_id(
 		&cookie,
 		"/api/presaves/products",
 		json!({
-			"data": {
-				"name": "Selected import product",
-				"sender_presave_id": sender_presave_id,
-				"product_id": business_product_id,
-				"medicinal_product": "Selected Import Product"
-			}
+			"data": { "rows": {
+				"product": {
+					"senderPresaveId": sender_presave_id,
+					"productId": business_product_id,
+					"medicinalProduct": "Selected Import Product"
+				},
+				"activeSubstances": []
+			} }
 		}),
 	)
 	.await?;
 	assert_eq!(status, StatusCode::CREATED, "{body:?}");
-	let product_presave_id = body["data"]["id"]
+	let product_presave_id = body["data"]["rows"]["product"]["id"]
 		.as_str()
 		.ok_or_else(|| format!("missing product id in body {body:?}"))?;
 
@@ -467,19 +470,16 @@ async fn test_import_settings_apply_default_sender_only_when_enabled() -> Result
 		&cookie,
 		"/api/presaves/senders",
 		json!({
-			"data": {
-				"authority": "fda",
-				"name": "Default import sender",
-				"comments": "sender used for import defaults",
-				"sender_type": "2",
-				"organization_name": "Admin Default Sender",
-				"department": "Import Ops",
-				"street_address": "10 Default Road",
-				"city": "Seoul",
-				"country_code": "KR",
-				"email": "default-sender@example.test",
-				"is_default": true
-			}
+			"data": { "rows": {
+				"sender": {
+					"senderType": "2", "organizationName": "Admin Default Sender",
+					"streetAddress": "10 Default Road", "city": "Seoul",
+					"countryCode": "KR", "email": "default-sender@example.test",
+					"isDefault": true
+				},
+				"gateways": [],
+				"responsiblePersons": [{ "sequenceNumber": 1, "department": "Import Ops" }]
+			} }
 		}),
 	)
 	.await?;
@@ -605,14 +605,10 @@ async fn test_import_settings_apply_product_linked_sender_by_imported_product_id
 		&cookie,
 		"/api/presaves/senders",
 		json!({
-			"data": {
-				"authority": "fda",
-				"name": "Fallback default sender",
-				"sender_type": "2",
-				"organization_name": "Fallback Default Sender",
-				"email": "fallback-default@example.test",
-				"is_default": true
-			}
+			"data": { "rows": {
+				"sender": { "senderType": "2", "organizationName": "Fallback Default Sender", "email": "fallback-default@example.test", "isDefault": true },
+				"gateways": [], "responsiblePersons": []
+			} }
 		}),
 	)
 	.await?;
@@ -623,18 +619,15 @@ async fn test_import_settings_apply_product_linked_sender_by_imported_product_id
 		&cookie,
 		"/api/presaves/senders",
 		json!({
-			"data": {
-				"authority": "fda",
-				"name": "Product-linked sender",
-				"sender_type": "3",
-				"organization_name": "Product Linked Sender",
-				"email": "product-linked@example.test"
-			}
+			"data": { "rows": {
+				"sender": { "senderType": "3", "organizationName": "Product Linked Sender", "email": "product-linked@example.test" },
+				"gateways": [], "responsiblePersons": []
+			} }
 		}),
 	)
 	.await?;
 	assert_eq!(status, StatusCode::CREATED, "{body:?}");
-	let linked_sender_id = body["data"]["id"]
+	let linked_sender_id = body["data"]["rows"]["sender"]["id"]
 		.as_str()
 		.ok_or_else(|| format!("missing linked sender id in body {body:?}"))?;
 
@@ -643,12 +636,10 @@ async fn test_import_settings_apply_product_linked_sender_by_imported_product_id
 		&cookie,
 		"/api/presaves/products",
 		json!({
-			"data": {
-				"name": "Drug A product",
-				"sender_presave_id": linked_sender_id,
-				"product_id": "Drug A",
-				"medicinal_product": "Drug A"
-			}
+			"data": { "rows": {
+				"product": { "senderPresaveId": linked_sender_id, "productId": "Drug A", "medicinalProduct": "Drug A" },
+				"activeSubstances": []
+			} }
 		}),
 	)
 	.await?;

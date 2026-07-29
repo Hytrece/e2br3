@@ -1,4 +1,6 @@
+use super::rows::{camelize_rows, camelize_value};
 use super::shared::*;
+use serde_json::Value;
 
 #[derive(Debug, Deserialize)]
 pub struct StudyRegistrationNumberForRestCreate {
@@ -71,17 +73,103 @@ pub async fn create_study_presave(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
 	snapshot: AuthorizationSnapshotW,
-	Json(params): Json<ParamsForCreate<StudyPresaveForCreate>>,
-) -> Result<(StatusCode, Json<DataRestResult<StudyPresave>>)> {
+	Json(params): Json<ParamsForCreate<StudyPresaveRowsForCreate>>,
+) -> Result<(StatusCode, Json<DataRestResult<StudyPresaveDetails>>)> {
 	let ctx = ctx_w.0;
-	with_authorized_presave_create(&ctx, &snapshot, &mm, "study", move |ctx, mm| {
-		Box::pin(async move {
-			let ParamsForCreate { data } = params;
-			let id = StudyPresaveBmc::create(ctx, mm, data).await?;
-			Ok(rest_created(StudyPresaveBmc::get(ctx, mm, id).await?))
-		})
-	})
+	with_authorized_presave_atomic_create(
+		&ctx,
+		&snapshot,
+		&mm,
+		"study",
+		move |ctx, mm| {
+			Box::pin(async move {
+				let ParamsForCreate { data } = params;
+				for row in &data.rows.products {
+					validate_study_product_detail_create(row)?;
+					if row.deleted {
+						return Err(Error::BadRequest {
+							message: "new study product cannot be deleted".into(),
+						});
+					}
+				}
+				for row in &data.rows.registration_numbers {
+					validate_study_registration_number_detail_create(row)?;
+					if row.deleted {
+						return Err(Error::BadRequest {
+							message:
+								"new study registration number cannot be deleted"
+									.into(),
+						});
+					}
+				}
+				for row in &data.rows.fda_cross_reported_inds {
+					if row.sequence_number.is_none()
+						|| row.ind_number.is_none()
+						|| row.deleted
+					{
+						return Err(Error::BadRequest {
+							message: "invalid new FDA cross-reported IND".into(),
+						});
+					}
+				}
+				for row in &data.rows.reporters {
+					validate_study_reporter_detail_create(row)?;
+					if row.deleted {
+						return Err(Error::BadRequest {
+							message: "new study reporter cannot be deleted".into(),
+						});
+					}
+				}
+				let id = StudyPresaveBmc::create(ctx, mm, data.rows.study).await?;
+				for row in data.rows.products {
+					StudyPresaveProductBmc::create(ctx, mm, row.into_create(id)?)
+						.await?;
+				}
+				for row in data.rows.registration_numbers {
+					StudyPresaveRegistrationNumberBmc::create(
+						ctx,
+						mm,
+						row.into_create(id)?,
+					)
+					.await?;
+				}
+				for row in data.rows.fda_cross_reported_inds {
+					StudyPresaveFdaCrossReportedIndNumberBmc::create(
+						ctx,
+						mm,
+						row.into_create(id)?,
+					)
+					.await?;
+				}
+				for row in data.rows.reporters {
+					StudyPresaveReporterBmc::create(ctx, mm, row.into_create(id)?)
+						.await?;
+				}
+				Ok(rest_created(load_study_presave_details(ctx, mm, id).await?))
+			})
+		},
+	)
 	.await
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct StudyPresaveRowsForCreate {
+	pub rows: StudyPresaveCreateRows,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct StudyPresaveCreateRows {
+	pub study: StudyPresaveForCreate,
+	#[serde(default)]
+	pub products: Vec<StudyProductDetailsForUpdate>,
+	#[serde(default)]
+	pub reporters: Vec<StudyReporterDetailsForUpdate>,
+	#[serde(default)]
+	pub registration_numbers: Vec<StudyRegistrationNumberDetailsForUpdate>,
+	#[serde(default)]
+	pub fda_cross_reported_inds: Vec<StudyFdaCrossReportedIndNumberDetailsForUpdate>,
 }
 
 pub async fn list_study_presaves(
@@ -182,34 +270,45 @@ pub async fn delete_study_presave(
 
 #[derive(Debug, Serialize)]
 pub struct StudyPresaveDetails {
-	pub parent: StudyPresave,
-	pub products: Vec<StudyPresaveProduct>,
-	pub study_registration_numbers: Vec<StudyPresaveRegistrationNumber>,
-	pub fda_cross_reported_ind_numbers: Vec<StudyPresaveFdaCrossReportedIndNumber>,
-	pub reporters: Vec<StudyPresaveReporter>,
+	pub rows: StudyPresaveRows,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StudyPresaveRows {
+	pub study: Value,
+	pub products: Vec<Value>,
+	pub registration_numbers: Vec<Value>,
+	pub fda_cross_reported_inds: Vec<Value>,
+	pub reporters: Vec<Value>,
 }
 
 #[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct StudyPresaveDetailsForUpdate {
-	pub parent: Option<StudyPresaveForUpdate>,
+	pub rows: StudyPresaveRowsForUpdate,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct StudyPresaveRowsForUpdate {
+	pub study: Option<StudyPresaveForUpdate>,
 	pub products: Option<Vec<StudyProductDetailsForUpdate>>,
-	pub study_registration_numbers:
-		Option<Vec<StudyRegistrationNumberDetailsForUpdate>>,
-	pub fda_cross_reported_ind_numbers:
+	pub registration_numbers: Option<Vec<StudyRegistrationNumberDetailsForUpdate>>,
+	pub fda_cross_reported_inds:
 		Option<Vec<StudyFdaCrossReportedIndNumberDetailsForUpdate>>,
 	pub reporters: Option<Vec<StudyReporterDetailsForUpdate>>,
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct StudyProductDetailsForUpdate {
 	pub id: Option<Uuid>,
-	#[serde(default, rename = "_delete")]
-	pub delete: bool,
+	#[serde(default)]
+	pub deleted: bool,
 	pub sequence_number: Option<i32>,
 	pub product_presave_id: Option<Uuid>,
 	pub product_name: Option<String>,
-	pub deleted: Option<bool>,
 }
 
 impl StudyProductDetailsForUpdate {
@@ -218,7 +317,7 @@ impl StudyProductDetailsForUpdate {
 			sequence_number: self.sequence_number,
 			product_presave_id: self.product_presave_id,
 			product_name: self.product_name,
-			deleted: self.deleted,
+			deleted: None,
 		}
 	}
 
@@ -236,21 +335,20 @@ impl StudyProductDetailsForUpdate {
 			})?,
 			product_presave_id: self.product_presave_id,
 			product_name: self.product_name,
-			deleted: self.deleted,
+			deleted: None,
 		})
 	}
 }
 
 #[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct StudyRegistrationNumberDetailsForUpdate {
 	pub id: Option<Uuid>,
-	#[serde(default, rename = "_delete")]
-	pub delete: bool,
+	#[serde(default)]
+	pub deleted: bool,
 	pub sequence_number: Option<i32>,
 	pub registration_number: Option<String>,
 	pub country_code: Option<String>,
-	pub deleted: Option<bool>,
 }
 
 impl StudyRegistrationNumberDetailsForUpdate {
@@ -259,7 +357,7 @@ impl StudyRegistrationNumberDetailsForUpdate {
 			sequence_number: self.sequence_number,
 			registration_number: self.registration_number,
 			country_code: self.country_code,
-			deleted: self.deleted,
+			deleted: None,
 		}
 	}
 
@@ -278,20 +376,19 @@ impl StudyRegistrationNumberDetailsForUpdate {
 			})?,
 			registration_number: self.registration_number,
 			country_code: self.country_code,
-			deleted: self.deleted,
+			deleted: None,
 		})
 	}
 }
 
 #[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct StudyFdaCrossReportedIndNumberDetailsForUpdate {
 	pub id: Option<Uuid>,
-	#[serde(default, rename = "_delete")]
-	pub delete: bool,
+	#[serde(default)]
+	pub deleted: bool,
 	pub sequence_number: Option<i32>,
 	pub ind_number: Option<String>,
-	pub deleted: Option<bool>,
 }
 
 impl StudyFdaCrossReportedIndNumberDetailsForUpdate {
@@ -299,7 +396,7 @@ impl StudyFdaCrossReportedIndNumberDetailsForUpdate {
 		StudyPresaveFdaCrossReportedIndNumberForUpdate {
 			sequence_number: self.sequence_number,
 			ind_number: self.ind_number,
-			deleted: self.deleted,
+			deleted: None,
 		}
 	}
 
@@ -320,22 +417,22 @@ impl StudyFdaCrossReportedIndNumberDetailsForUpdate {
 				message: "FDA cross-reported IND create requires ind_number"
 					.to_string(),
 			})?,
-			deleted: self.deleted,
+			deleted: None,
 		})
 	}
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct StudyReporterDetailsForUpdate {
 	pub id: Option<Uuid>,
-	#[serde(default, rename = "_delete")]
-	pub delete: bool,
+	#[serde(default)]
+	pub deleted: bool,
 	pub sequence_number: Option<i32>,
 	pub reporter_presave_id: Option<Uuid>,
 	pub reporter_organization: Option<String>,
 	pub reporter_given_name: Option<String>,
 	pub reporter_qualification: Option<String>,
-	pub deleted: Option<bool>,
 }
 
 impl StudyReporterDetailsForUpdate {
@@ -346,7 +443,7 @@ impl StudyReporterDetailsForUpdate {
 			reporter_organization: self.reporter_organization,
 			reporter_given_name: self.reporter_given_name,
 			reporter_qualification: self.reporter_qualification,
-			deleted: self.deleted,
+			deleted: None,
 		}
 	}
 
@@ -367,7 +464,7 @@ impl StudyReporterDetailsForUpdate {
 			reporter_organization: self.reporter_organization,
 			reporter_given_name: self.reporter_given_name,
 			reporter_qualification: self.reporter_qualification,
-			deleted: self.deleted,
+			deleted: None,
 		})
 	}
 }
@@ -411,22 +508,23 @@ pub async fn update_study_presave_details(
 		move |ctx, mm| {
 			Box::pin(async move {
 				let ParamsForUpdate { data } = params;
-				if data
-					.parent
+				let rows = data.rows;
+				if rows
+					.study
 					.as_ref()
 					.is_some_and(|parent| parent.deleted == Some(true))
 				{
-					if data.products.is_some()
-						|| data.study_registration_numbers.is_some()
-						|| data.fda_cross_reported_ind_numbers.is_some()
-						|| data.reporters.is_some()
+					if rows.products.is_some()
+						|| rows.registration_numbers.is_some()
+						|| rows.fda_cross_reported_inds.is_some()
+						|| rows.reporters.is_some()
 					{
 						return Err(Error::BadRequest {
 							message: "presave deletion cannot include child changes"
 								.into(),
 						});
 					}
-					PresaveLifecycleService::archive(
+					PresaveLifecycleService::archive_in_current_txn(
 						ctx,
 						mm,
 						PresaveKind::Study,
@@ -437,8 +535,8 @@ pub async fn update_study_presave_details(
 						load_study_presave_details(ctx, mm, id).await?,
 					));
 				}
-				preflight_study_presave_details(ctx, mm, id, &data).await?;
-				apply_study_presave_details_inner(ctx, mm, id, data).await?;
+				preflight_study_presave_details(ctx, mm, id, &rows).await?;
+				apply_study_presave_details_inner(ctx, mm, id, rows).await?;
 				Ok(rest_ok(load_study_presave_details(ctx, mm, id).await?))
 			})
 		},
@@ -450,9 +548,9 @@ async fn apply_study_presave_details_inner(
 	ctx: &lib_core::ctx::Ctx,
 	mm: &ModelManager,
 	id: Uuid,
-	data: StudyPresaveDetailsForUpdate,
+	data: StudyPresaveRowsForUpdate,
 ) -> Result<()> {
-	if let Some(parent) = data.parent {
+	if let Some(parent) = data.study {
 		StudyPresaveBmc::update(ctx, mm, id, parent).await?;
 	}
 	if let Some(products) = data.products {
@@ -460,7 +558,7 @@ async fn apply_study_presave_details_inner(
 			upsert_study_product_detail(ctx, mm, id, product).await?;
 		}
 	}
-	if let Some(study_registration_numbers) = data.study_registration_numbers {
+	if let Some(study_registration_numbers) = data.registration_numbers {
 		for registration_number in study_registration_numbers {
 			upsert_study_registration_number_detail(
 				ctx,
@@ -471,8 +569,7 @@ async fn apply_study_presave_details_inner(
 			.await?;
 		}
 	}
-	if let Some(fda_cross_reported_ind_numbers) = data.fda_cross_reported_ind_numbers
-	{
+	if let Some(fda_cross_reported_ind_numbers) = data.fda_cross_reported_inds {
 		for item in fda_cross_reported_ind_numbers {
 			upsert_study_fda_cross_reported_ind_number_detail(ctx, mm, id, item)
 				.await?;
@@ -491,7 +588,13 @@ async fn load_study_presave_details(
 	mm: &ModelManager,
 	id: Uuid,
 ) -> Result<StudyPresaveDetails> {
-	let parent = StudyPresaveBmc::get(ctx, mm, id).await?;
+	let study = camelize_value(
+		serde_json::to_value(StudyPresaveBmc::get(ctx, mm, id).await?).map_err(
+			|err| Error::BadRequest {
+				message: format!("study presave serialization failed: {err}"),
+			},
+		)?,
+	);
 	let products = StudyPresaveProductBmc::list_by_parent(ctx, mm, id).await?;
 	let study_registration_numbers =
 		StudyPresaveRegistrationNumberBmc::list_by_parent(ctx, mm, id).await?;
@@ -500,11 +603,13 @@ async fn load_study_presave_details(
 			.await?;
 	let reporters = StudyPresaveReporterBmc::list_by_parent(ctx, mm, id).await?;
 	Ok(StudyPresaveDetails {
-		parent,
-		products,
-		study_registration_numbers,
-		fda_cross_reported_ind_numbers,
-		reporters,
+		rows: StudyPresaveRows {
+			study,
+			products: camelize_rows(products),
+			registration_numbers: camelize_rows(study_registration_numbers),
+			fda_cross_reported_inds: camelize_rows(fda_cross_reported_ind_numbers),
+			reporters: camelize_rows(reporters),
+		},
 	})
 }
 
@@ -512,14 +617,14 @@ async fn preflight_study_presave_details(
 	ctx: &lib_core::ctx::Ctx,
 	mm: &ModelManager,
 	study_id: Uuid,
-	data: &StudyPresaveDetailsForUpdate,
+	data: &StudyPresaveRowsForUpdate,
 ) -> Result<()> {
 	if let Some(products) = &data.products {
 		for product in products {
 			preflight_study_product_detail(ctx, mm, study_id, product).await?;
 		}
 	}
-	if let Some(study_registration_numbers) = &data.study_registration_numbers {
+	if let Some(study_registration_numbers) = &data.registration_numbers {
 		for registration_number in study_registration_numbers {
 			preflight_study_registration_number_detail(
 				ctx,
@@ -530,7 +635,7 @@ async fn preflight_study_presave_details(
 			.await?;
 		}
 	}
-	if let Some(items) = &data.fda_cross_reported_ind_numbers {
+	if let Some(items) = &data.fda_cross_reported_inds {
 		for item in items {
 			preflight_study_fda_cross_reported_ind_number_detail(
 				ctx, mm, study_id, item,
@@ -552,7 +657,7 @@ async fn preflight_study_product_detail(
 	study_id: Uuid,
 	product: &StudyProductDetailsForUpdate,
 ) -> Result<()> {
-	if product.delete && product.id.is_none() {
+	if product.deleted && product.id.is_none() {
 		return Err(Error::BadRequest {
 			message: "study product delete requires id".to_string(),
 		});
@@ -566,7 +671,7 @@ async fn preflight_study_product_detail(
 			"study",
 			"study_presave_products",
 		)?;
-	} else if !product.delete {
+	} else if !product.deleted {
 		validate_study_product_detail_create(product)?;
 	}
 	Ok(())
@@ -590,7 +695,7 @@ async fn preflight_study_registration_number_detail(
 	study_id: Uuid,
 	registration_number: &StudyRegistrationNumberDetailsForUpdate,
 ) -> Result<()> {
-	if registration_number.delete && registration_number.id.is_none() {
+	if registration_number.deleted && registration_number.id.is_none() {
 		return Err(Error::BadRequest {
 			message: "study registration number delete requires id".to_string(),
 		});
@@ -604,7 +709,7 @@ async fn preflight_study_registration_number_detail(
 			"study",
 			"study_presave_registration_numbers",
 		)?;
-	} else if !registration_number.delete {
+	} else if !registration_number.deleted {
 		validate_study_registration_number_detail_create(registration_number)?;
 	}
 	Ok(())
@@ -629,7 +734,7 @@ async fn preflight_study_fda_cross_reported_ind_number_detail(
 	study_id: Uuid,
 	item: &StudyFdaCrossReportedIndNumberDetailsForUpdate,
 ) -> Result<()> {
-	if item.delete && item.id.is_none() {
+	if item.deleted && item.id.is_none() {
 		return Err(Error::BadRequest {
 			message: "FDA cross-reported IND delete requires id".to_string(),
 		});
@@ -644,7 +749,7 @@ async fn preflight_study_fda_cross_reported_ind_number_detail(
 			"study",
 			"study_presave_fda_cross_reported_ind_numbers",
 		)?;
-	} else if !item.delete
+	} else if !item.deleted
 		&& (item.sequence_number.is_none() || item.ind_number.is_none())
 	{
 		return Err(Error::BadRequest {
@@ -660,7 +765,7 @@ async fn preflight_study_reporter_detail(
 	study_id: Uuid,
 	reporter: &StudyReporterDetailsForUpdate,
 ) -> Result<()> {
-	if reporter.delete && reporter.id.is_none() {
+	if reporter.deleted && reporter.id.is_none() {
 		return Err(Error::BadRequest {
 			message: "study reporter delete requires id".to_string(),
 		});
@@ -674,7 +779,7 @@ async fn preflight_study_reporter_detail(
 			"study",
 			"study_presave_reporters",
 		)?;
-	} else if !reporter.delete {
+	} else if !reporter.deleted {
 		validate_study_reporter_detail_create(reporter)?;
 	}
 	Ok(())
@@ -698,7 +803,7 @@ async fn upsert_study_product_detail(
 	study_id: Uuid,
 	product: StudyProductDetailsForUpdate,
 ) -> Result<()> {
-	if product.delete && product.id.is_none() {
+	if product.deleted && product.id.is_none() {
 		return Err(Error::BadRequest {
 			message: "study product delete requires id".to_string(),
 		});
@@ -712,7 +817,7 @@ async fn upsert_study_product_detail(
 			"study",
 			"study_presave_products",
 		)?;
-		if product.delete {
+		if product.deleted {
 			StudyPresaveProductBmc::update(
 				ctx,
 				mm,
@@ -740,7 +845,7 @@ async fn upsert_study_registration_number_detail(
 	study_id: Uuid,
 	registration_number: StudyRegistrationNumberDetailsForUpdate,
 ) -> Result<()> {
-	if registration_number.delete && registration_number.id.is_none() {
+	if registration_number.deleted && registration_number.id.is_none() {
 		return Err(Error::BadRequest {
 			message: "study registration number delete requires id".to_string(),
 		});
@@ -754,7 +859,7 @@ async fn upsert_study_registration_number_detail(
 			"study",
 			"study_presave_registration_numbers",
 		)?;
-		if registration_number.delete {
+		if registration_number.deleted {
 			StudyPresaveRegistrationNumberBmc::update(
 				ctx,
 				mm,
@@ -801,7 +906,7 @@ async fn upsert_study_fda_cross_reported_ind_number_detail(
 			"study",
 			"study_presave_fda_cross_reported_ind_numbers",
 		)?;
-		if item.delete {
+		if item.deleted {
 			StudyPresaveFdaCrossReportedIndNumberBmc::update(
 				ctx,
 				mm,
@@ -821,7 +926,7 @@ async fn upsert_study_fda_cross_reported_ind_number_detail(
 			)
 			.await?;
 		}
-	} else if !item.delete {
+	} else if !item.deleted {
 		StudyPresaveFdaCrossReportedIndNumberBmc::create(
 			ctx,
 			mm,
@@ -838,7 +943,7 @@ async fn upsert_study_reporter_detail(
 	study_id: Uuid,
 	reporter: StudyReporterDetailsForUpdate,
 ) -> Result<()> {
-	if reporter.delete && reporter.id.is_none() {
+	if reporter.deleted && reporter.id.is_none() {
 		return Err(Error::BadRequest {
 			message: "study reporter delete requires id".to_string(),
 		});
@@ -852,7 +957,7 @@ async fn upsert_study_reporter_detail(
 			"study",
 			"study_presave_reporters",
 		)?;
-		if reporter.delete {
+		if reporter.deleted {
 			StudyPresaveReporterBmc::update(
 				ctx,
 				mm,

@@ -20,7 +20,10 @@ use tower::ServiceExt;
 use uuid::Uuid;
 
 pub(super) fn extract_id(value: &Value) -> Result<Uuid> {
-	let id = value["data"]["id"].as_str().ok_or("missing data.id")?;
+	let id = value["data"]["id"]
+		.as_str()
+		.or_else(|| value["data"]["rows"]["sender"]["id"].as_str())
+		.ok_or("missing data id")?;
 	Ok(Uuid::parse_str(id)?)
 }
 
@@ -388,13 +391,11 @@ pub(super) async fn create_sender_presave(
 		cookie,
 		"/api/presaves/senders".to_string(),
 		Some(json!({
-			"data": {
-				"authority": "fda",
-				"sender_type": "2",
-				"organization_name": name,
-				"person_given_name": "Safety",
-				"email": format!("{sender_identifier}@example.test")
-			}
+			"data": { "rows": {
+				"sender": { "senderType": "2", "organizationName": name, "email": format!("{sender_identifier}@example.test") },
+				"gateways": [{ "sequenceNumber": 1, "gatewayAuthority": "fda", "senderIdentifier": sender_identifier, "isDefaultForAuthority": true }],
+				"responsiblePersons": [{ "sequenceNumber": 1, "personGivenName": "Safety" }]
+			} }
 		})),
 	)
 	.await?;
@@ -405,27 +406,6 @@ pub(super) async fn create_sender_presave(
 		.into());
 	}
 	let id = extract_id(&value)?;
-	let (status, value) = request_json(
-		app,
-		"POST",
-		cookie,
-		format!("/api/presaves/senders/{id}/gateways"),
-		Some(json!({
-			"data": {
-				"sequence_number": 1,
-				"gateway_authority": "fda",
-				"sender_identifier": sender_identifier,
-				"is_default_for_authority": true
-			}
-		})),
-	)
-	.await?;
-	if status != StatusCode::CREATED {
-		return Err(format!(
-			"create sender presave gateway failed: status={status} body={value}"
-		)
-		.into());
-	}
 	Ok(id)
 }
 
