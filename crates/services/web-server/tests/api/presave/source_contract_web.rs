@@ -9,7 +9,7 @@ fn simple_presave_modules_use_the_shared_crud_generator() {
 	for module in ["reporter.rs", "narrative.rs"] {
 		let source = fs::read_to_string(rest_dir.join(module)).unwrap();
 		assert!(
-			source.contains("generate_simple_presave_rest_fns!"),
+			source.contains("generate_single_row_presave_rest_fns!"),
 			"{module} should use the shared CRUD generator"
 		);
 		assert!(
