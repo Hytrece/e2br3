@@ -14,7 +14,8 @@
       "roundTripValue": "3",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.C.3.1.ALLOWED.VALUE"
+        "ruleCode": "ICH.C.3.1.ALLOWED.VALUE",
+        "invalidValue": "0"
       },
       "businessValidation": {
         "status": "verified",
@@ -34,7 +35,8 @@
       "roundTripValue": "4",
       "constraint": {
         "status": "verified",
-        "ruleCode": "MFDS.C.3.1.KR.1.LENGTH.MAX"
+        "ruleCode": "MFDS.C.3.1.KR.1.LENGTH.MAX",
+        "invalidValue": "XX"
       },
       "businessValidation": {
         "status": "verified",
@@ -54,7 +56,8 @@
       "roundTripValue": "QVIS Safety",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.C.3.2.LENGTH.MAX"
+        "ruleCode": "ICH.C.3.2.LENGTH.MAX",
+        "invalidValue": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
       },
       "businessValidation": {
         "status": "verified",
@@ -74,7 +77,8 @@
       "roundTripValue": "Pharmacovigilance",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.C.3.3.1.LENGTH.MAX"
+        "ruleCode": "ICH.C.3.3.1.LENGTH.MAX",
+        "invalidValue": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
       },
       "businessValidation": {
         "status": "verified",
@@ -94,7 +98,8 @@
       "roundTripValue": "Dr",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.C.3.3.2.LENGTH.MAX"
+        "ruleCode": "ICH.C.3.3.2.LENGTH.MAX",
+        "invalidValue": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
       },
       "businessValidation": {
         "status": "verified",
@@ -114,7 +119,8 @@
       "roundTripValue": "Sora",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.C.3.3.3.LENGTH.MAX"
+        "ruleCode": "ICH.C.3.3.3.LENGTH.MAX",
+        "invalidValue": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
       },
       "businessValidation": {
         "status": "verified",
@@ -134,7 +140,8 @@
       "roundTripValue": "J",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.C.3.3.4.LENGTH.MAX"
+        "ruleCode": "ICH.C.3.3.4.LENGTH.MAX",
+        "invalidValue": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
       },
       "businessValidation": {
         "status": "verified",
@@ -154,7 +161,8 @@
       "roundTripValue": "Kim",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.C.3.3.5.LENGTH.MAX"
+        "ruleCode": "ICH.C.3.3.5.LENGTH.MAX",
+        "invalidValue": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
       },
       "businessValidation": {
         "status": "verified",
@@ -174,7 +182,8 @@
       "roundTripValue": "1 Test Road",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.C.3.4.1.LENGTH.MAX"
+        "ruleCode": "ICH.C.3.4.1.LENGTH.MAX",
+        "invalidValue": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
       },
       "businessValidation": {
         "status": "verified",
@@ -194,7 +203,8 @@
       "roundTripValue": "Seoul",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.C.3.4.2.LENGTH.MAX"
+        "ruleCode": "ICH.C.3.4.2.LENGTH.MAX",
+        "invalidValue": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
       },
       "businessValidation": {
         "status": "verified",
@@ -214,7 +224,8 @@
       "roundTripValue": "Seoul",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.C.3.4.3.LENGTH.MAX"
+        "ruleCode": "ICH.C.3.4.3.LENGTH.MAX",
+        "invalidValue": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
       },
       "businessValidation": {
         "status": "verified",
@@ -234,7 +245,8 @@
       "roundTripValue": "04524",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.C.3.4.4.LENGTH.MAX"
+        "ruleCode": "ICH.C.3.4.4.LENGTH.MAX",
+        "invalidValue": "XXXXXXXXXXXXXXXX"
       },
       "businessValidation": {
         "status": "verified",
@@ -254,7 +266,8 @@
       "roundTripValue": "KR",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.C.3.4.5.LENGTH.MAX"
+        "ruleCode": "ICH.C.3.4.5.LENGTH.MAX",
+        "invalidValue": "XXX"
       },
       "businessValidation": {
         "status": "verified",
@@ -274,7 +287,8 @@
       "roundTripValue": "+821012345678",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.C.3.4.6.LENGTH.MAX"
+        "ruleCode": "ICH.C.3.4.6.LENGTH.MAX",
+        "invalidValue": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
       },
       "businessValidation": {
         "status": "verified",
@@ -294,7 +308,8 @@
       "roundTripValue": "+8221234567",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.C.3.4.7.LENGTH.MAX"
+        "ruleCode": "ICH.C.3.4.7.LENGTH.MAX",
+        "invalidValue": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
       },
       "businessValidation": {
         "status": "verified",
@@ -314,7 +329,8 @@
       "roundTripValue": "sender@example.test",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.C.3.4.8.LENGTH.MAX"
+        "ruleCode": "ICH.C.3.4.8.LENGTH.MAX",
+        "invalidValue": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
       },
       "businessValidation": {
         "status": "verified",

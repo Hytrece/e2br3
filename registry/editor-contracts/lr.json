@@ -14,7 +14,8 @@
       "roundTripValue": "Smith et al. Safety study, 2026",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.C.4.r.1.LENGTH.MAX"
+        "ruleCode": "ICH.C.4.r.1.LENGTH.MAX",
+        "invalidValue": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
       },
       "businessValidation": {
         "status": "not_applicable",
@@ -42,7 +43,8 @@
       ],
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.C.4.r.1.NULLFLAVOR.ALLOWED"
+        "ruleCode": "ICH.C.4.r.1.NULLFLAVOR.ALLOWED",
+        "invalidValue": "NI"
       },
       "businessValidation": {
         "status": "not_applicable",
@@ -63,7 +65,8 @@
       "roundTripValue": "UEZERg==",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.C.4.r.2.ALLOWED.VALUE"
+        "ruleCode": "ICH.C.4.r.2.ALLOWED.VALUE",
+        "invalidValue": "***"
       },
       "businessValidation": {
         "status": "not_applicable",

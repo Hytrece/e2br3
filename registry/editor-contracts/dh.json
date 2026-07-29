@@ -14,7 +14,8 @@
       "roundTripValue": "Prior drug",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.D.8.r.1.LENGTH.MAX"
+        "ruleCode": "ICH.D.8.r.1.LENGTH.MAX",
+        "invalidValue": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
       },
       "payloadPath": "drugName"
     },
@@ -30,7 +31,8 @@
       "roundTripValue": "2026",
       "constraint": {
         "status": "verified",
-        "ruleCode": "MFDS.D.8.r.1.KR.1a.LENGTH.MAX"
+        "ruleCode": "MFDS.D.8.r.1.KR.1a.LENGTH.MAX",
+        "invalidValue": "XXXXXXXXXXXXXXXXXXXXX"
       },
       "payloadPath": "mfdsMedicinalProductVersion"
     },
@@ -46,7 +48,8 @@
       "roundTripValue": "MFDS-001",
       "constraint": {
         "status": "verified",
-        "ruleCode": "MFDS.D.8.r.1.KR.1b.LENGTH.MAX"
+        "ruleCode": "MFDS.D.8.r.1.KR.1b.LENGTH.MAX",
+        "invalidValue": "XXXXXXXXXXX"
       },
       "payloadPath": "mfdsMedicinalProductId"
     },
@@ -62,7 +65,8 @@
       "roundTripValue": "1",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.D.8.r.2a.LENGTH.MAX"
+        "ruleCode": "ICH.D.8.r.2a.LENGTH.MAX",
+        "invalidValue": "XXXXXXXXXXX"
       },
       "payloadPath": "mpidVersion"
     },
@@ -78,7 +82,8 @@
       "roundTripValue": "MPID-001",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.D.8.r.2b.LENGTH.MAX"
+        "ruleCode": "ICH.D.8.r.2b.LENGTH.MAX",
+        "invalidValue": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
       },
       "payloadPath": "mpid"
     },
@@ -94,7 +99,8 @@
       "roundTripValue": "1",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.D.8.r.3a.LENGTH.MAX"
+        "ruleCode": "ICH.D.8.r.3a.LENGTH.MAX",
+        "invalidValue": "XXXXXXXXXXX"
       },
       "payloadPath": "phpidVersion"
     },
@@ -110,7 +116,8 @@
       "roundTripValue": "PHPID-001",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.D.8.r.3b.LENGTH.MAX"
+        "ruleCode": "ICH.D.8.r.3b.LENGTH.MAX",
+        "invalidValue": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
       },
       "payloadPath": "phpid"
     },
@@ -126,7 +133,8 @@
       "roundTripValue": "20200102",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.D.8.r.4.ALLOWED.VALUE"
+        "ruleCode": "ICH.D.8.r.4.ALLOWED.VALUE",
+        "invalidValue": "not-a-date"
       },
       "payloadPath": "startDate"
     },
@@ -142,7 +150,8 @@
       "roundTripValue": "20210102",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.D.8.r.5.ALLOWED.VALUE"
+        "ruleCode": "ICH.D.8.r.5.ALLOWED.VALUE",
+        "invalidValue": "not-a-date"
       },
       "payloadPath": "endDate"
     },
@@ -158,7 +167,8 @@
       "roundTripValue": "26.0",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.D.8.r.6a.LENGTH.MAX"
+        "ruleCode": "ICH.D.8.r.6a.LENGTH.MAX",
+        "invalidValue": "1.000"
       },
       "payloadPath": "indicationMeddraVersion"
     },
@@ -174,7 +184,8 @@
       "roundTripValue": "10000001",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.D.8.r.6b.LENGTH.MAX"
+        "ruleCode": "ICH.D.8.r.6b.LENGTH.MAX",
+        "invalidValue": "111111111"
       },
       "payloadPath": "indicationMeddraCode"
     },
@@ -190,7 +201,8 @@
       "roundTripValue": "26.0",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.D.8.r.7a.LENGTH.MAX"
+        "ruleCode": "ICH.D.8.r.7a.LENGTH.MAX",
+        "invalidValue": "1.000"
       },
       "payloadPath": "reactionMeddraVersion"
     },
@@ -206,7 +218,8 @@
       "roundTripValue": "10000001",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.D.8.r.7b.LENGTH.MAX"
+        "ruleCode": "ICH.D.8.r.7b.LENGTH.MAX",
+        "invalidValue": "111111111"
       },
       "payloadPath": "reactionMeddraCode"
     }

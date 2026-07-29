@@ -14,7 +14,8 @@
       "roundTripValue": "BATCH-001",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.N.1.2.LENGTH.MAX"
+        "ruleCode": "ICH.N.1.2.LENGTH.MAX",
+        "invalidValue": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
       },
       "payloadPath": "batchNumber"
     },
@@ -30,7 +31,8 @@
       "roundTripValue": "BATCH-SENDER",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.N.1.3.LENGTH.MAX"
+        "ruleCode": "ICH.N.1.3.LENGTH.MAX",
+        "invalidValue": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
       },
       "payloadPath": "batchSenderIdentifier"
     },
@@ -46,7 +48,8 @@
       "roundTripValue": "BATCH-RECEIVER",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.N.1.4.LENGTH.MAX"
+        "ruleCode": "ICH.N.1.4.LENGTH.MAX",
+        "invalidValue": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
       },
       "payloadPath": "batchReceiverIdentifier"
     },
@@ -62,7 +65,8 @@
       "roundTripValue": "MSG-001",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.N.2.r.1.LENGTH.MAX"
+        "ruleCode": "ICH.N.2.r.1.LENGTH.MAX",
+        "invalidValue": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
       },
       "payloadPath": "messageNumber"
     },
@@ -78,7 +82,8 @@
       "roundTripValue": "SENDER",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.N.2.r.2.LENGTH.MAX"
+        "ruleCode": "ICH.N.2.r.2.LENGTH.MAX",
+        "invalidValue": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
       },
       "payloadPath": "messageSenderIdentifier"
     },
@@ -94,7 +99,8 @@
       "roundTripValue": "RECEIVER",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.N.2.r.3.LENGTH.MAX"
+        "ruleCode": "ICH.N.2.r.3.LENGTH.MAX",
+        "invalidValue": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
       },
       "payloadPath": "messageReceiverIdentifier"
     },
@@ -110,7 +116,8 @@
       "roundTripValue": "20260725120000",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.N.2.r.4.ALLOWED.VALUE"
+        "ruleCode": "ICH.N.2.r.4.ALLOWED.VALUE",
+        "invalidValue": "not-a-date"
       },
       "payloadPath": "messageDate"
     },
@@ -126,7 +133,8 @@
       "roundTripValue": "20260725123045",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.N.1.5.ALLOWED.VALUE"
+        "ruleCode": "ICH.N.1.5.ALLOWED.VALUE",
+        "invalidValue": "not-a-date"
       },
       "payloadPath": "batchTransmissionDate"
     }

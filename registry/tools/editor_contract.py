@@ -59,6 +59,8 @@ def _validate_stage(code: str, name: str, stage: Any, result: Any) -> None:
         evidence_key = "ruleCode" if name == "constraint" else "issuePath"
         if not stage.get(evidence_key):
             result.add(f"{code} {name} verified requires {evidence_key}")
+        if name == "constraint" and "invalidValue" not in stage:
+            result.add(f"{code} constraint verified requires invalidValue")
 
 
 def validate_editor_contract(

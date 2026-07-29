@@ -14,7 +14,8 @@
       "roundTripValue": "Headache",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.E.i.1.1a.LENGTH.MAX"
+        "ruleCode": "ICH.E.i.1.1a.LENGTH.MAX",
+        "invalidValue": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
       },
       "payloadPath": "primarySourceReaction"
     },
@@ -30,7 +31,8 @@
       "roundTripValue": "Head pain",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.E.i.1.2.LENGTH.MAX"
+        "ruleCode": "ICH.E.i.1.2.LENGTH.MAX",
+        "invalidValue": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
       },
       "payloadPath": "primarySourceReactionTranslation"
     },
@@ -46,7 +48,8 @@
       "roundTripValue": "10000001",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.E.i.2.1b.LENGTH.MAX"
+        "ruleCode": "ICH.E.i.2.1b.LENGTH.MAX",
+        "invalidValue": "111111111"
       },
       "payloadPath": "reactionMeddraCodeLLT"
     },
@@ -62,7 +65,8 @@
       "roundTripValue": "20200102",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.E.i.4.ALLOWED.VALUE"
+        "ruleCode": "ICH.E.i.4.ALLOWED.VALUE",
+        "invalidValue": "not-a-date"
       },
       "payloadPath": "reactionStartDate"
     },
@@ -78,7 +82,8 @@
       "roundTripValue": "1",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.E.i.7.ALLOWED.VALUE"
+        "ruleCode": "ICH.E.i.7.ALLOWED.VALUE",
+        "invalidValue": "6"
       },
       "payloadPath": "reactionOutcome"
     },
@@ -94,7 +99,8 @@
       "roundTripValue": "eng",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.E.i.1.1b.LENGTH.MAX"
+        "ruleCode": "ICH.E.i.1.1b.LENGTH.MAX",
+        "invalidValue": "XXXX"
       },
       "payloadPath": "reactionLanguage"
     },
@@ -110,7 +116,8 @@
       "roundTripValue": "26.0",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.E.i.2.1a.LENGTH.MAX"
+        "ruleCode": "ICH.E.i.2.1a.LENGTH.MAX",
+        "invalidValue": "1.000"
       },
       "payloadPath": "reactionMeddraVersionLLT"
     },
@@ -126,7 +133,8 @@
       "roundTripValue": "4",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.E.i.3.1.ALLOWED.VALUE"
+        "ruleCode": "ICH.E.i.3.1.ALLOWED.VALUE",
+        "invalidValue": "0"
       },
       "payloadPath": "termHighlighted"
     },
@@ -158,7 +166,8 @@
       "roundTripValue": true,
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.E.i.3.2a.ALLOWED.VALUE"
+        "ruleCode": "ICH.E.i.3.2a.ALLOWED.VALUE",
+        "invalidValue": false
       },
       "payloadPath": "seriousness.criteriaResultsInDeath"
     },
@@ -174,7 +183,8 @@
       "roundTripValue": true,
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.E.i.3.2b.ALLOWED.VALUE"
+        "ruleCode": "ICH.E.i.3.2b.ALLOWED.VALUE",
+        "invalidValue": false
       },
       "payloadPath": "seriousness.criteriaLifeThreatening"
     },
@@ -190,7 +200,8 @@
       "roundTripValue": true,
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.E.i.3.2c.ALLOWED.VALUE"
+        "ruleCode": "ICH.E.i.3.2c.ALLOWED.VALUE",
+        "invalidValue": false
       },
       "payloadPath": "seriousness.criteriaHospitalization"
     },
@@ -206,7 +217,8 @@
       "roundTripValue": true,
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.E.i.3.2d.ALLOWED.VALUE"
+        "ruleCode": "ICH.E.i.3.2d.ALLOWED.VALUE",
+        "invalidValue": false
       },
       "payloadPath": "seriousness.criteriaDisabling"
     },
@@ -222,7 +234,8 @@
       "roundTripValue": true,
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.E.i.3.2e.ALLOWED.VALUE"
+        "ruleCode": "ICH.E.i.3.2e.ALLOWED.VALUE",
+        "invalidValue": false
       },
       "payloadPath": "seriousness.criteriaCongenitalAnomaly"
     },
@@ -238,7 +251,8 @@
       "roundTripValue": true,
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.E.i.3.2f.ALLOWED.VALUE"
+        "ruleCode": "ICH.E.i.3.2f.ALLOWED.VALUE",
+        "invalidValue": false
       },
       "payloadPath": "seriousness.criteriaOtherMedicallyImportant"
     },
@@ -255,7 +269,8 @@
       "projectionValue": "true",
       "constraint": {
         "status": "verified",
-        "ruleCode": "FDA.E.i.3.2h.ALLOWED.VALUE"
+        "ruleCode": "FDA.E.i.3.2h.ALLOWED.VALUE",
+        "invalidValue": false
       },
       "payloadPath": "requiredIntervention"
     },
@@ -303,7 +318,8 @@
       "roundTripValue": "20200103",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.E.i.5.ALLOWED.VALUE"
+        "ruleCode": "ICH.E.i.5.ALLOWED.VALUE",
+        "invalidValue": "not-a-date"
       },
       "payloadPath": "reactionEndDate"
     },
@@ -320,7 +336,8 @@
       "projectionValue": "1.00",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.E.i.6a.ALLOWED.VALUE"
+        "ruleCode": "ICH.E.i.6a.ALLOWED.VALUE",
+        "invalidValue": "not-a-number"
       },
       "payloadPath": "reactionDuration.value"
     },
@@ -336,7 +353,8 @@
       "roundTripValue": "d",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.E.i.6b.LENGTH.MAX"
+        "ruleCode": "ICH.E.i.6b.LENGTH.MAX",
+        "invalidValue": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
       },
       "payloadPath": "reactionDuration.unit"
     },
@@ -352,7 +370,8 @@
       "roundTripValue": true,
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.E.i.8.ALLOWED.VALUE"
+        "ruleCode": "ICH.E.i.8.ALLOWED.VALUE",
+        "invalidValue": "not-a-boolean"
       },
       "payloadPath": "medicalConfirmation"
     },
@@ -368,7 +387,8 @@
       "roundTripValue": "KR",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.E.i.9.LENGTH.MAX"
+        "ruleCode": "ICH.E.i.9.LENGTH.MAX",
+        "invalidValue": "XXX"
       },
       "payloadPath": "reactionCountry"
     },

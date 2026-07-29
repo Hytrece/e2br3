@@ -35,6 +35,24 @@ class RegistryValidatorTests(unittest.TestCase):
 
         self.assertEqual([], violations)
 
+    def test_verified_constraints_declare_explicit_invalid_values(self):
+        repo = Path(__file__).resolve().parents[2]
+        violations = []
+        for path in sorted((repo / "registry/editor-contracts").glob("*.json")):
+            if path.name == "schema.json":
+                continue
+            contract = json.loads(path.read_text(encoding="utf-8"))
+            for field in contract["fields"]:
+                constraint = field.get("constraint", {})
+                if constraint.get("status") != "verified":
+                    continue
+                if "invalidValue" not in constraint:
+                    violations.append(
+                        f"{contract['pageId']}/{field['code']}: missing constraint.invalidValue"
+                    )
+
+        self.assertEqual([], violations)
+
     def test_separate_null_flavor_fields_declare_symmetric_partners(self):
         repo = Path(__file__).resolve().parents[2]
         violations = []
@@ -251,6 +269,7 @@ class RegistryValidatorTests(unittest.TestCase):
             "constraint": {
                 "status": "verified",
                 "ruleCode": "ICH.C.1.3.ALLOWED.VALUE",
+                "invalidValue": "__INVALID__",
             },
             "businessValidation": {
                 "status": "verified",

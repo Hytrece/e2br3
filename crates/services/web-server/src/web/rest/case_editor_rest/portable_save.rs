@@ -151,15 +151,11 @@ fn in_band_null_flavor<'a>(
 		return None;
 	}
 	let candidate = value.as_str()?.trim();
-	binding.rule_codes.iter().find_map(|code| {
-		constraints
-			.iter()
-			.find(|rule| {
-				rule.code == *code && rule.kind == PortableConstraintKind::NullFlavor
-			})
-			.filter(|rule| rule.values.iter().any(|allowed| allowed == candidate))
-			.map(|_| candidate)
-	})
+	constraints
+		.iter()
+		.filter(|rule| rule.kind == PortableConstraintKind::NullFlavor)
+		.any(|rule| rule.values.iter().any(|known| known == candidate))
+		.then_some(candidate)
 }
 
 pub(super) fn request_in_band_null_flavor<'a>(
@@ -1279,7 +1275,7 @@ mod portable_save_tests {
 	#[test]
 	fn portable_save_rejects_repeatable_row_values() {
 		let reaction = Map::from_iter([(
-			"reactionPrimarySourceNative".to_string(),
+			"primarySourceReaction".to_string(),
 			json!("X".repeat(251)),
 		)]);
 		let error =
@@ -1293,7 +1289,7 @@ mod portable_save_tests {
 		);
 
 		let test_result =
-			Map::from_iter([("resultValue".to_string(), json!("not-a-number"))]);
+			Map::from_iter([("testResult".to_string(), json!("not-a-number"))]);
 		let error = validate_row_payload("LB", "testResult", &test_result, None)
 			.unwrap_err();
 		assert!(error_message(error)
@@ -1338,6 +1334,22 @@ mod portable_save_tests {
 			}]),
 		)]);
 		validate_row_payload("DG", "drug", &drug, None).unwrap();
+	}
+
+	#[test]
+	fn portable_save_rejects_disallowed_known_in_band_null_flavor() {
+		let drug = Map::from_iter([(
+			"dosageInformation".to_string(),
+			json!([{
+				"firstAdministrationDate": "NI"
+			}]),
+		)]);
+
+		let error = validate_row_payload("DG", "drug", &drug, None).unwrap_err();
+
+		assert!(error_message(error).contains(
+			"ICH.G.k.4.r.4.NULLFLAVOR.ALLOWED at drugs.0.dosageInformation.0.firstAdministrationDate"
+		));
 	}
 
 	#[test]

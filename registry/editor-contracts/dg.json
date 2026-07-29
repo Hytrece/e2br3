@@ -14,7 +14,8 @@
       "roundTripValue": "1",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.G.k.1.ALLOWED.VALUE"
+        "ruleCode": "ICH.G.k.1.ALLOWED.VALUE",
+        "invalidValue": "0"
       },
       "payloadPath": "drugCharacterization"
     },
@@ -30,7 +31,8 @@
       "roundTripValue": "Product A",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.G.k.2.2.LENGTH.MAX"
+        "ruleCode": "ICH.G.k.2.2.LENGTH.MAX",
+        "invalidValue": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
       },
       "payloadPath": "medicinalProduct"
     },
@@ -62,7 +64,8 @@
       "roundTripValue": "1",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.G.k.8.ALLOWED.VALUE"
+        "ruleCode": "ICH.G.k.8.ALLOWED.VALUE",
+        "invalidValue": "5"
       },
       "payloadPath": "drugActionTaken"
     },
@@ -78,7 +81,8 @@
       "roundTripValue": "2026",
       "constraint": {
         "status": "verified",
-        "ruleCode": "MFDS.G.k.2.1.KR.1a.LENGTH.MAX"
+        "ruleCode": "MFDS.G.k.2.1.KR.1a.LENGTH.MAX",
+        "invalidValue": "XXXXXXXXXXXXXXXXXXXXX"
       },
       "payloadPath": "mfdsMpidVersion"
     },
@@ -94,7 +98,8 @@
       "roundTripValue": "MFDS-001",
       "constraint": {
         "status": "verified",
-        "ruleCode": "MFDS.G.k.2.1.KR.1b.LENGTH.MAX"
+        "ruleCode": "MFDS.G.k.2.1.KR.1b.LENGTH.MAX",
+        "invalidValue": "XXXXXXXXXXX"
       },
       "payloadPath": "mfdsMpid"
     },
@@ -110,7 +115,8 @@
       "roundTripValue": "1",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.G.k.2.1.1a.LENGTH.MAX"
+        "ruleCode": "ICH.G.k.2.1.1a.LENGTH.MAX",
+        "invalidValue": "XXXXXXXXXXX"
       },
       "payloadPath": "mpidVersion"
     },
@@ -126,7 +132,8 @@
       "roundTripValue": "MPID-001",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.G.k.2.1.1b.LENGTH.MAX"
+        "ruleCode": "ICH.G.k.2.1.1b.LENGTH.MAX",
+        "invalidValue": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
       },
       "payloadPath": "mpid"
     },
@@ -142,7 +149,8 @@
       "roundTripValue": "1",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.G.k.2.1.2a.LENGTH.MAX"
+        "ruleCode": "ICH.G.k.2.1.2a.LENGTH.MAX",
+        "invalidValue": "XXXXXXXXXXX"
       },
       "payloadPath": "phpidVersion"
     },
@@ -158,7 +166,8 @@
       "roundTripValue": "PHPID-001",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.G.k.2.1.2b.LENGTH.MAX"
+        "ruleCode": "ICH.G.k.2.1.2b.LENGTH.MAX",
+        "invalidValue": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
       },
       "payloadPath": "phpid"
     },
@@ -174,7 +183,8 @@
       "roundTripValue": "KR",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.G.k.2.4.LENGTH.MAX"
+        "ruleCode": "ICH.G.k.2.4.LENGTH.MAX",
+        "invalidValue": "XXX"
       },
       "payloadPath": "obtainDrugCountry"
     },
@@ -190,7 +200,8 @@
       "roundTripValue": true,
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.G.k.2.5.ALLOWED.VALUE"
+        "ruleCode": "ICH.G.k.2.5.ALLOWED.VALUE",
+        "invalidValue": false
       },
       "payloadPath": "investigationalProductBlinded"
     },
@@ -206,7 +217,8 @@
       "roundTripValue": "AUTH-001",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.G.k.3.1.LENGTH.MAX"
+        "ruleCode": "ICH.G.k.3.1.LENGTH.MAX",
+        "invalidValue": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
       },
       "payloadPath": "drugAuthorizationNumber"
     },
@@ -222,7 +234,8 @@
       "roundTripValue": "KR",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.G.k.3.2.LENGTH.MAX"
+        "ruleCode": "ICH.G.k.3.2.LENGTH.MAX",
+        "invalidValue": "XXX"
       },
       "payloadPath": "drugAuthorizationCountry"
     },
@@ -238,7 +251,8 @@
       "roundTripValue": "Holder",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.G.k.3.3.LENGTH.MAX"
+        "ruleCode": "ICH.G.k.3.3.LENGTH.MAX",
+        "invalidValue": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
       },
       "payloadPath": "drugAuthorizationHolder"
     },
@@ -255,7 +269,8 @@
       "projectionValue": "12.50000",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.G.k.5a.ALLOWED.VALUE"
+        "ruleCode": "ICH.G.k.5a.ALLOWED.VALUE",
+        "invalidValue": "not-a-number"
       },
       "payloadPath": "cumulativeDoseValue"
     },
@@ -271,7 +286,8 @@
       "roundTripValue": "mg",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.G.k.5b.LENGTH.MAX"
+        "ruleCode": "ICH.G.k.5b.LENGTH.MAX",
+        "invalidValue": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
       },
       "payloadPath": "cumulativeDoseUnit"
     },
@@ -288,7 +304,8 @@
       "projectionValue": "4.00",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.G.k.6a.ALLOWED.VALUE"
+        "ruleCode": "ICH.G.k.6a.ALLOWED.VALUE",
+        "invalidValue": "not-a-number"
       },
       "payloadPath": "gestationPeriodExposureValue"
     },
@@ -304,7 +321,8 @@
       "roundTripValue": "wk",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.G.k.6b.LENGTH.MAX"
+        "ruleCode": "ICH.G.k.6b.LENGTH.MAX",
+        "invalidValue": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
       },
       "payloadPath": "gestationPeriodExposureUnit"
     },
@@ -320,7 +338,8 @@
       "roundTripValue": "Additional information",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.G.k.11.LENGTH.MAX"
+        "ruleCode": "ICH.G.k.11.LENGTH.MAX",
+        "invalidValue": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
       },
       "payloadPath": "drugAdditionalInformation"
     },
@@ -336,7 +355,8 @@
       "roundTripValue": "1",
       "constraint": {
         "status": "verified",
-        "ruleCode": "FDA.G.k.10a.LENGTH.MAX"
+        "ruleCode": "FDA.G.k.10a.LENGTH.MAX",
+        "invalidValue": "XXX"
       },
       "payloadPath": "fdaAdditionalInfoCoded"
     },
@@ -352,7 +372,8 @@
       "roundTripValue": "1",
       "constraint": {
         "status": "verified",
-        "ruleCode": "FDA.G.k.10.1.LENGTH.MAX"
+        "ruleCode": "FDA.G.k.10.1.LENGTH.MAX",
+        "invalidValue": "XXXXXXXXXXX"
       },
       "payloadPath": "fdaSpecializedProductCategory"
     },
@@ -370,7 +391,10 @@
       ],
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.G.k.10.r.ALLOWED.VALUE"
+        "ruleCode": "ICH.G.k.10.r.ALLOWED.VALUE",
+        "invalidValue": [
+          "0"
+        ]
       },
       "payloadPath": "drugAdditionalInformationCodes"
     },
@@ -386,7 +410,8 @@
       "roundTripValue": "1",
       "constraint": {
         "status": "verified",
-        "ruleCode": "FDA.G.k.1.a.LENGTH.MAX"
+        "ruleCode": "FDA.G.k.1.a.LENGTH.MAX",
+        "invalidValue": "XX"
       },
       "payloadPath": "fdaOtherCharacterization"
     },
@@ -402,7 +427,8 @@
       "roundTripValue": "Substance A",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.G.k.2.3.r.1.LENGTH.MAX"
+        "ruleCode": "ICH.G.k.2.3.r.1.LENGTH.MAX",
+        "invalidValue": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
       },
       "payloadPath": "activeSubstances[].substanceName"
     },
@@ -418,7 +444,8 @@
       "roundTripValue": "1",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.G.k.2.3.r.2a.LENGTH.MAX"
+        "ruleCode": "ICH.G.k.2.3.r.2a.LENGTH.MAX",
+        "invalidValue": "XXXXXXXXXXX"
       },
       "payloadPath": "activeSubstances[].substanceTermIdVersion"
     },
@@ -434,7 +461,8 @@
       "roundTripValue": "SUB-1",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.G.k.2.3.r.2b.LENGTH.MAX"
+        "ruleCode": "ICH.G.k.2.3.r.2b.LENGTH.MAX",
+        "invalidValue": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
       },
       "payloadPath": "activeSubstances[].substanceTermId"
     },
@@ -450,7 +478,8 @@
       "roundTripValue": "2026",
       "constraint": {
         "status": "verified",
-        "ruleCode": "MFDS.G.k.2.3.r.1.KR.1a.LENGTH.MAX"
+        "ruleCode": "MFDS.G.k.2.3.r.1.KR.1a.LENGTH.MAX",
+        "invalidValue": "XXXXXXXXXXXXXXXXXXXXX"
       },
       "payloadPath": "activeSubstances[].mfdsVersion"
     },
@@ -466,7 +495,8 @@
       "roundTripValue": "KR-SUB-1",
       "constraint": {
         "status": "verified",
-        "ruleCode": "MFDS.G.k.2.3.r.1.KR.1b.LENGTH.MAX"
+        "ruleCode": "MFDS.G.k.2.3.r.1.KR.1b.LENGTH.MAX",
+        "invalidValue": "XXXXXXXXXXX"
       },
       "payloadPath": "activeSubstances[].mfdsId"
     },
@@ -483,7 +513,8 @@
       "projectionValue": "10.50000",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.G.k.2.3.r.3a.ALLOWED.VALUE"
+        "ruleCode": "ICH.G.k.2.3.r.3a.ALLOWED.VALUE",
+        "invalidValue": "not-a-number"
       },
       "payloadPath": "activeSubstances[].substanceStrengthValue"
     },
@@ -499,7 +530,8 @@
       "roundTripValue": "mg",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.G.k.2.3.r.3b.LENGTH.MAX"
+        "ruleCode": "ICH.G.k.2.3.r.3b.LENGTH.MAX",
+        "invalidValue": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
       },
       "payloadPath": "activeSubstances[].substanceStrengthUnit"
     },
@@ -516,7 +548,8 @@
       "projectionValue": "2.50000",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.G.k.4.r.1a.ALLOWED.VALUE"
+        "ruleCode": "ICH.G.k.4.r.1a.ALLOWED.VALUE",
+        "invalidValue": "not-a-number"
       },
       "payloadPath": "dosageInformation[].doseValue"
     },
@@ -532,7 +565,8 @@
       "roundTripValue": "mg",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.G.k.4.r.1b.LENGTH.MAX"
+        "ruleCode": "ICH.G.k.4.r.1b.LENGTH.MAX",
+        "invalidValue": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
       },
       "payloadPath": "dosageInformation[].doseUnit"
     },
@@ -549,7 +583,8 @@
       "projectionValue": "1.00000",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.G.k.4.r.2.ALLOWED.VALUE"
+        "ruleCode": "ICH.G.k.4.r.2.ALLOWED.VALUE",
+        "invalidValue": "not-a-number"
       },
       "payloadPath": "dosageInformation[].numberOfUnits"
     },
@@ -565,7 +600,8 @@
       "roundTripValue": "d",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.G.k.4.r.3.LENGTH.MAX"
+        "ruleCode": "ICH.G.k.4.r.3.LENGTH.MAX",
+        "invalidValue": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
       },
       "payloadPath": "dosageInformation[].frequencyUnit"
     },
@@ -581,7 +617,8 @@
       "roundTripValue": "20200101",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.G.k.4.r.4.NULLFLAVOR.ALLOWED"
+        "ruleCode": "ICH.G.k.4.r.4.NULLFLAVOR.ALLOWED",
+        "invalidValue": "NI"
       },
       "payloadPath": "dosageInformation[].firstAdministrationDate"
     },
@@ -597,7 +634,8 @@
       "roundTripValue": "20200102",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.G.k.4.r.5.NULLFLAVOR.ALLOWED"
+        "ruleCode": "ICH.G.k.4.r.5.NULLFLAVOR.ALLOWED",
+        "invalidValue": "NI"
       },
       "payloadPath": "dosageInformation[].lastAdministrationDate"
     },
@@ -614,7 +652,8 @@
       "projectionValue": "2.00",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.G.k.4.r.6a.ALLOWED.VALUE"
+        "ruleCode": "ICH.G.k.4.r.6a.ALLOWED.VALUE",
+        "invalidValue": "not-a-number"
       },
       "payloadPath": "dosageInformation[].durationValue"
     },
@@ -630,7 +669,8 @@
       "roundTripValue": "d",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.G.k.4.r.6b.LENGTH.MAX"
+        "ruleCode": "ICH.G.k.4.r.6b.LENGTH.MAX",
+        "invalidValue": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
       },
       "payloadPath": "dosageInformation[].durationUnit"
     },
@@ -662,7 +702,8 @@
       "roundTripValue": "LOT-1",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.G.k.4.r.7.LENGTH.MAX"
+        "ruleCode": "ICH.G.k.4.r.7.LENGTH.MAX",
+        "invalidValue": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
       },
       "payloadPath": "dosageInformation[].batchNumber"
     },
@@ -678,7 +719,8 @@
       "roundTripValue": "One tablet daily",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.G.k.4.r.8.LENGTH.MAX"
+        "ruleCode": "ICH.G.k.4.r.8.LENGTH.MAX",
+        "invalidValue": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
       },
       "payloadPath": "dosageInformation[].dosageText"
     },
@@ -694,7 +736,8 @@
       "roundTripValue": "Tablet",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.G.k.4.r.9.1.LENGTH.MAX"
+        "ruleCode": "ICH.G.k.4.r.9.1.LENGTH.MAX",
+        "invalidValue": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
       },
       "payloadPath": "dosageInformation[].doseForm"
     },
@@ -710,7 +753,8 @@
       "roundTripValue": "1",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.G.k.4.r.9.2a.LENGTH.MAX"
+        "ruleCode": "ICH.G.k.4.r.9.2a.LENGTH.MAX",
+        "invalidValue": "XXXXXXXXXXX"
       },
       "payloadPath": "dosageInformation[].doseFormTermIdVersion"
     },
@@ -726,7 +770,8 @@
       "roundTripValue": "DF-1",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.G.k.4.r.9.2b.LENGTH.MAX"
+        "ruleCode": "ICH.G.k.4.r.9.2b.LENGTH.MAX",
+        "invalidValue": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
       },
       "payloadPath": "dosageInformation[].doseFormTermId"
     },
@@ -742,7 +787,8 @@
       "roundTripValue": "048",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.G.k.4.r.10.1.LENGTH.MAX"
+        "ruleCode": "ICH.G.k.4.r.10.1.LENGTH.MAX",
+        "invalidValue": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
       },
       "payloadPath": "dosageInformation[].routeOfAdministration"
     },
@@ -758,7 +804,8 @@
       "roundTripValue": "1",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.G.k.4.r.10.2a.LENGTH.MAX"
+        "ruleCode": "ICH.G.k.4.r.10.2a.LENGTH.MAX",
+        "invalidValue": "XXXXXXXXXXX"
       },
       "payloadPath": "dosageInformation[].routeTermIdVersion"
     },
@@ -774,7 +821,8 @@
       "roundTripValue": "ROUTE-1",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.G.k.4.r.10.2b.LENGTH.MAX"
+        "ruleCode": "ICH.G.k.4.r.10.2b.LENGTH.MAX",
+        "invalidValue": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
       },
       "payloadPath": "dosageInformation[].routeTermId"
     },
@@ -790,7 +838,8 @@
       "roundTripValue": "Oral",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.G.k.4.r.11.1.LENGTH.MAX"
+        "ruleCode": "ICH.G.k.4.r.11.1.LENGTH.MAX",
+        "invalidValue": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
       },
       "payloadPath": "dosageInformation[].parentRouteOfAdministration"
     },
@@ -806,7 +855,8 @@
       "roundTripValue": "1",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.G.k.4.r.11.2a.LENGTH.MAX"
+        "ruleCode": "ICH.G.k.4.r.11.2a.LENGTH.MAX",
+        "invalidValue": "XXXXXXXXXXX"
       },
       "payloadPath": "dosageInformation[].parentRouteTermIdVersion"
     },
@@ -822,7 +872,8 @@
       "roundTripValue": "PROUTE-1",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.G.k.4.r.11.2b.LENGTH.MAX"
+        "ruleCode": "ICH.G.k.4.r.11.2b.LENGTH.MAX",
+        "invalidValue": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
       },
       "payloadPath": "dosageInformation[].parentRouteTermId"
     },
@@ -838,7 +889,8 @@
       "roundTripValue": "Pain",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.G.k.7.r.1.LENGTH.MAX"
+        "ruleCode": "ICH.G.k.7.r.1.LENGTH.MAX",
+        "invalidValue": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
       },
       "payloadPath": "indications[].indicationText"
     },
@@ -854,7 +906,8 @@
       "roundTripValue": "26.0",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.G.k.7.r.2a.ALLOWED.VALUE"
+        "ruleCode": "ICH.G.k.7.r.2a.ALLOWED.VALUE",
+        "invalidValue": "not-a-number"
       },
       "payloadPath": "indications[].indicationMeddraVersion"
     },
@@ -870,7 +923,8 @@
       "roundTripValue": "10033371",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.G.k.7.r.2b.ALLOWED.VALUE"
+        "ruleCode": "ICH.G.k.7.r.2b.ALLOWED.VALUE",
+        "invalidValue": "not-a-number"
       },
       "payloadPath": "indications[].indicationMeddraCode"
     },
@@ -887,7 +941,8 @@
       "projectionValue": "2.00",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.G.k.9.i.3.1a.ALLOWED.VALUE"
+        "ruleCode": "ICH.G.k.9.i.3.1a.ALLOWED.VALUE",
+        "invalidValue": "not-a-number"
       },
       "payloadPath": "drugReactionAssessments[].administrationStartIntervalValue"
     },
@@ -903,7 +958,8 @@
       "roundTripValue": "d",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.G.k.9.i.3.1b.LENGTH.MAX"
+        "ruleCode": "ICH.G.k.9.i.3.1b.LENGTH.MAX",
+        "invalidValue": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
       },
       "payloadPath": "drugReactionAssessments[].administrationStartIntervalUnit"
     },
@@ -920,7 +976,8 @@
       "projectionValue": "1.00",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.G.k.9.i.3.2a.ALLOWED.VALUE"
+        "ruleCode": "ICH.G.k.9.i.3.2a.ALLOWED.VALUE",
+        "invalidValue": "not-a-number"
       },
       "payloadPath": "drugReactionAssessments[].lastDoseIntervalValue"
     },
@@ -936,7 +993,8 @@
       "roundTripValue": "d",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.G.k.9.i.3.2b.LENGTH.MAX"
+        "ruleCode": "ICH.G.k.9.i.3.2b.LENGTH.MAX",
+        "invalidValue": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
       },
       "payloadPath": "drugReactionAssessments[].lastDoseIntervalUnit"
     },
@@ -952,7 +1010,8 @@
       "roundTripValue": "1",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.G.k.9.i.4.ALLOWED.VALUE"
+        "ruleCode": "ICH.G.k.9.i.4.ALLOWED.VALUE",
+        "invalidValue": "0"
       },
       "payloadPath": "drugReactionAssessments[].recurrenceAction"
     },
@@ -968,7 +1027,8 @@
       "roundTripValue": "Reporter",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.G.k.9.i.2.r.1.LENGTH.MAX"
+        "ruleCode": "ICH.G.k.9.i.2.r.1.LENGTH.MAX",
+        "invalidValue": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
       },
       "payloadPath": "drugReactionAssessments[].sourceOfAssessment"
     },
@@ -984,7 +1044,8 @@
       "roundTripValue": "WHO-UMC",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.G.k.9.i.2.r.2.LENGTH.MAX"
+        "ruleCode": "ICH.G.k.9.i.2.r.2.LENGTH.MAX",
+        "invalidValue": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
       },
       "payloadPath": "drugReactionAssessments[].methodOfAssessment"
     },
@@ -1000,7 +1061,8 @@
       "roundTripValue": "Possible",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.G.k.9.i.2.r.3.LENGTH.MAX"
+        "ruleCode": "ICH.G.k.9.i.2.r.3.LENGTH.MAX",
+        "invalidValue": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
       },
       "payloadPath": "drugReactionAssessments[].resultOfAssessment"
     },
@@ -1016,7 +1078,8 @@
       "roundTripValue": "1",
       "constraint": {
         "status": "verified",
-        "ruleCode": "MFDS.G.k.9.i.2.r.3.KR.2.LENGTH.MAX"
+        "ruleCode": "MFDS.G.k.9.i.2.r.3.KR.2.LENGTH.MAX",
+        "invalidValue": "XX"
       },
       "payloadPath": "drugReactionAssessments[].resultOfAssessmentKr2"
     }
