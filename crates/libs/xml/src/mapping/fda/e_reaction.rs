@@ -53,6 +53,8 @@ impl EReactionPaths {
 	// FDA.E.i.3.2h Required Intervention
 	pub const REQUIRED_INTERVENTION: &'static str =
 		"hl7:outboundRelationship2/hl7:observation[hl7:code[@code='7']]/hl7:value/@value";
+	pub const REQUIRED_INTERVENTION_NULL_FLAVOR: &'static str =
+		"hl7:outboundRelationship2/hl7:observation[hl7:code[@code='7']]/hl7:value/@nullFlavor";
 
 	// Dates / duration
 	pub const START_DATE: &'static str =

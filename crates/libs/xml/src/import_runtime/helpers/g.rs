@@ -37,15 +37,18 @@ pub(crate) struct DrugDosageImport {
 	pub(crate) dose_value: Option<Decimal>,
 	pub(crate) dose_unit: Option<String>,
 	pub(crate) route: Option<String>,
+	pub(crate) route_null_flavor: Option<String>,
 	pub(crate) route_termid: Option<String>,
 	pub(crate) route_termid_version: Option<String>,
 	pub(crate) dose_form: Option<String>,
+	pub(crate) dose_form_null_flavor: Option<String>,
 	pub(crate) dose_form_termid: Option<String>,
 	pub(crate) dose_form_termid_version: Option<String>,
 	pub(crate) batch_lot: Option<String>,
 	pub(crate) parent_route_termid: Option<String>,
 	pub(crate) parent_route_termid_version: Option<String>,
 	pub(crate) parent_route: Option<String>,
+	pub(crate) parent_route_null_flavor: Option<String>,
 }
 
 #[derive(Debug)]

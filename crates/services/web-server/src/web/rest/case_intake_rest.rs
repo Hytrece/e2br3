@@ -20,6 +20,7 @@ use lib_core::regulatory::RegulatoryAuthority;
 use lib_rest_core::prelude::*;
 use lib_rest_core::rest_params::ParamsForCreate;
 use lib_rest_core::rest_result::DataRestResult;
+use lib_rest_core::ConstraintViolation;
 use lib_rest_core::Error;
 use lib_web::middleware::mw_auth::CtxW;
 use serde::{Deserialize, Serialize};
@@ -43,11 +44,16 @@ pub struct CaseIntakeCheckInput {
 	pub date_of_most_recent_information: Option<Date>,
 	pub report_type: Option<String>,
 	pub reporter_organization: Option<String>,
+	pub reporter_organization_null_flavor: Option<String>,
 	pub sponsor_study_number: Option<String>,
+	pub sponsor_study_number_null_flavor: Option<String>,
 	pub patient_initials: Option<String>,
+	pub patient_initials_null_flavor: Option<String>,
 	pub investigation_number: Option<String>,
+	pub investigation_number_null_flavor: Option<String>,
 	pub age_d2_2a: Option<String>,
 	pub sex_d5: Option<String>,
+	pub sex_d5_null_flavor: Option<String>,
 	pub dg_prd_key: Option<String>,
 	pub reaction_meddra_version: Option<String>,
 	pub reaction_meddra_code: Option<String>,
@@ -56,6 +62,7 @@ pub struct CaseIntakeCheckInput {
 		deserialize_with = "lib_core::serde::flex_date::deserialize_option_date"
 	)]
 	pub ae_start_date: Option<Date>,
+	pub ae_start_date_null_flavor: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -88,11 +95,16 @@ pub struct CaseFromIntakeInput {
 	pub fda_report_type: Option<String>,
 	pub report_year: Option<String>,
 	pub reporter_organization: Option<String>,
+	pub reporter_organization_null_flavor: Option<String>,
 	pub sponsor_study_number: Option<String>,
+	pub sponsor_study_number_null_flavor: Option<String>,
 	pub patient_initials: Option<String>,
+	pub patient_initials_null_flavor: Option<String>,
 	pub investigation_number: Option<String>,
+	pub investigation_number_null_flavor: Option<String>,
 	pub age_d2_2a: Option<String>,
 	pub sex_d5: Option<String>,
+	pub sex_d5_null_flavor: Option<String>,
 	pub dg_prd_key: Option<String>,
 	pub reaction_meddra_version: Option<String>,
 	pub reaction_meddra_code: Option<String>,
@@ -101,6 +113,7 @@ pub struct CaseFromIntakeInput {
 		deserialize_with = "lib_core::serde::flex_date::deserialize_option_date"
 	)]
 	pub ae_start_date: Option<Date>,
+	pub ae_start_date_null_flavor: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -116,12 +129,6 @@ fn normalize_optional_text(value: Option<String>) -> Option<String> {
 	value.and_then(|raw| {
 		let trimmed = raw.trim();
 		if trimmed.is_empty() {
-			return None;
-		}
-		if matches!(
-			trimmed.to_ascii_uppercase().as_str(),
-			"NI" | "UNK" | "ASKU" | "NASK" | "MSK"
-		) {
 			return None;
 		}
 		Some(trimmed.to_string())
@@ -152,37 +159,68 @@ fn normalize_intake_check_input(data: CaseIntakeCheckInput) -> CaseIntakeCheckIn
 		date_of_most_recent_information: data.date_of_most_recent_information,
 		report_type: normalize_optional_text(data.report_type),
 		reporter_organization: normalize_optional_text(data.reporter_organization),
+		reporter_organization_null_flavor: normalize_optional_text(
+			data.reporter_organization_null_flavor,
+		),
 		sponsor_study_number: normalize_optional_text(data.sponsor_study_number),
+		sponsor_study_number_null_flavor: normalize_optional_text(
+			data.sponsor_study_number_null_flavor,
+		),
 		patient_initials: normalize_optional_text(data.patient_initials),
+		patient_initials_null_flavor: normalize_optional_text(
+			data.patient_initials_null_flavor,
+		),
 		investigation_number: normalize_optional_text(data.investigation_number),
+		investigation_number_null_flavor: normalize_optional_text(
+			data.investigation_number_null_flavor,
+		),
 		age_d2_2a: normalize_optional_text(data.age_d2_2a),
 		sex_d5: normalize_optional_text(data.sex_d5),
+		sex_d5_null_flavor: normalize_optional_text(data.sex_d5_null_flavor),
 		dg_prd_key: normalize_optional_text(data.dg_prd_key),
 		reaction_meddra_version: normalize_optional_text(
 			data.reaction_meddra_version,
 		),
 		reaction_meddra_code: normalize_optional_text(data.reaction_meddra_code),
 		ae_start_date: data.ae_start_date,
+		ae_start_date_null_flavor: normalize_optional_text(
+			data.ae_start_date_null_flavor,
+		),
 	}
 }
 
-fn intake_to_duplicate_key(data: &CaseFromIntakeInput) -> CaseDuplicateKey {
-	let normalized = normalize_intake_check_input(CaseIntakeCheckInput {
+fn normalized_from_intake(data: &CaseFromIntakeInput) -> CaseIntakeCheckInput {
+	normalize_intake_check_input(CaseIntakeCheckInput {
 		safety_report_id: data.safety_report_id.clone(),
 		date_of_most_recent_information: Some(data.date_of_most_recent_information),
 		report_type: Some(data.report_type.clone()),
 		reporter_organization: data.reporter_organization.clone(),
+		reporter_organization_null_flavor: data
+			.reporter_organization_null_flavor
+			.clone(),
 		sponsor_study_number: data.sponsor_study_number.clone(),
+		sponsor_study_number_null_flavor: data
+			.sponsor_study_number_null_flavor
+			.clone(),
 		patient_initials: data.patient_initials.clone(),
+		patient_initials_null_flavor: data.patient_initials_null_flavor.clone(),
 		investigation_number: data.investigation_number.clone(),
+		investigation_number_null_flavor: data
+			.investigation_number_null_flavor
+			.clone(),
 		age_d2_2a: data.age_d2_2a.clone(),
 		sex_d5: data.sex_d5.clone(),
+		sex_d5_null_flavor: data.sex_d5_null_flavor.clone(),
 		dg_prd_key: data.dg_prd_key.clone(),
 		reaction_meddra_version: data.reaction_meddra_version.clone(),
 		reaction_meddra_code: data.reaction_meddra_code.clone(),
 		ae_start_date: data.ae_start_date,
-	});
-	to_duplicate_key(&normalized)
+		ae_start_date_null_flavor: data.ae_start_date_null_flavor.clone(),
+	})
+}
+
+fn intake_to_duplicate_key(data: &CaseFromIntakeInput) -> CaseDuplicateKey {
+	to_duplicate_key(&normalized_from_intake(data))
 }
 
 fn non_empty(input: Option<&str>) -> Option<String> {
@@ -190,6 +228,104 @@ fn non_empty(input: Option<&str>) -> Option<String> {
 		.map(str::trim)
 		.filter(|v| !v.is_empty())
 		.map(ToOwned::to_owned)
+}
+
+fn validate_intake_pair(
+	value_present: bool,
+	value: Option<&str>,
+	null_flavor: Option<&str>,
+	null_flavor_path: &str,
+) -> Result<()> {
+	let null_flavor = null_flavor.map(str::trim).filter(|value| !value.is_empty());
+	let binding = validator::portable_field_bindings()
+		.into_iter()
+		.find(|binding| binding.frontend_path == null_flavor_path)
+		.expect("intake NullFlavor path must exist in portable bindings");
+	let rules = validator::portable_constraints();
+	if value.map(str::trim).is_some_and(|value| {
+		binding.rule_codes.iter().any(|code| {
+			rules
+				.iter()
+				.find(|rule| rule.code == *code)
+				.is_some_and(|rule| {
+					rule.values.iter().any(|allowed| allowed == value)
+				})
+		})
+	}) {
+		return Err(Error::ConstraintViolation(ConstraintViolation {
+			rule_code: binding.rule_codes[0].to_string(),
+			path: null_flavor_path.trim_end_matches("NullFlavor").to_string(),
+			message: "NullFlavor must be sent in its companion field".to_string(),
+		}));
+	}
+	if value_present && null_flavor.is_some() {
+		return Err(Error::ConstraintViolation(ConstraintViolation {
+			rule_code: binding.rule_codes[0].to_string(),
+			path: null_flavor_path.to_string(),
+			message: "value and NullFlavor cannot both be set".to_string(),
+		}));
+	}
+	let Some(null_flavor) = null_flavor else {
+		return Ok(());
+	};
+	for rule_code in binding.rule_codes {
+		if let Err(error) = validator::validate_portable_value(
+			rule_code,
+			validator::PortableInputValue::String(null_flavor),
+			None,
+		) {
+			return Err(Error::ConstraintViolation(ConstraintViolation {
+				rule_code: error.code,
+				path: null_flavor_path.to_string(),
+				message: error.message,
+			}));
+		}
+	}
+	Ok(())
+}
+
+fn validate_intake_pairs(data: &CaseIntakeCheckInput) -> Result<()> {
+	for (present, value, null_flavor, path) in [
+		(
+			data.reporter_organization.is_some(),
+			data.reporter_organization.as_deref(),
+			data.reporter_organization_null_flavor.as_deref(),
+			"primarySources[].reporterOrganizationNullFlavor",
+		),
+		(
+			data.sponsor_study_number.is_some(),
+			data.sponsor_study_number.as_deref(),
+			data.sponsor_study_number_null_flavor.as_deref(),
+			"studyInformation.sponsorStudyNumberNullFlavor",
+		),
+		(
+			data.patient_initials.is_some(),
+			data.patient_initials.as_deref(),
+			data.patient_initials_null_flavor.as_deref(),
+			"patientInformation.patientInitialsNullFlavor",
+		),
+		(
+			data.investigation_number.is_some(),
+			data.investigation_number.as_deref(),
+			data.investigation_number_null_flavor.as_deref(),
+			"patientInformation.investigationNumberNullFlavor",
+		),
+		(
+			data.sex_d5.is_some(),
+			data.sex_d5.as_deref(),
+			data.sex_d5_null_flavor.as_deref(),
+			"patientInformation.patientSexNullFlavor",
+		),
+		(
+			data.ae_start_date.is_some(),
+			None,
+			data.ae_start_date_null_flavor.as_deref(),
+			"reactions[].reactionStartDateNullFlavor",
+		),
+	] {
+		validate_intake_pair(present, value, null_flavor, path)?;
+	}
+	Ok(())
 }
 
 async fn assess_intake_duplicates(
@@ -241,6 +377,7 @@ pub async fn check_case_intake_duplicate(
 		move |ctx, mm| {
 			Box::pin(async move {
 				let data = normalize_intake_check_input(params.data);
+				validate_intake_pairs(&data)?;
 				let key = to_duplicate_key(&data);
 				let (assessment, matches) =
 					assess_intake_duplicates(ctx, mm, &key).await?;
@@ -295,6 +432,7 @@ async fn create_case_from_intake_authorized(
 	use sqlx::types::time::OffsetDateTime;
 
 	let mut safety_report_id = data.safety_report_id.clone().unwrap_or_default();
+	validate_intake_pairs(&normalized_from_intake(&data))?;
 	if data.report_type.trim().is_empty() {
 		return Err(Error::BadRequest {
 			message: "report_type is required".to_string(),
@@ -409,18 +547,21 @@ async fn create_case_from_intake_authorized(
 		.map(str::trim)
 		.filter(|v| !v.is_empty())
 		.is_some()
+		|| data.patient_initials_null_flavor.is_some()
 		|| data
 			.investigation_number
 			.as_deref()
 			.map(str::trim)
 			.filter(|v| !v.is_empty())
 			.is_some()
+		|| data.investigation_number_null_flavor.is_some()
 		|| data
 			.age_d2_2a
 			.as_deref()
 			.map(str::trim)
 			.filter(|v| !v.is_empty())
 			.is_some()
+		|| data.sex_d5_null_flavor.is_some()
 		|| data
 			.sex_d5
 			.as_deref()
@@ -440,7 +581,9 @@ async fn create_case_from_intake_authorized(
 			PatientInformationForCreate {
 				case_id,
 				patient_initials: non_empty(data.patient_initials.as_deref()),
-				patient_initials_null_flavor: None,
+				patient_initials_null_flavor: non_empty(
+					data.patient_initials_null_flavor.as_deref(),
+				),
 				birth_date: None,
 				birth_date_null_flavor: None,
 				age_at_time_of_onset,
@@ -454,7 +597,7 @@ async fn create_case_from_intake_authorized(
 				height_cm: None,
 				height_cm_null_flavor: None,
 				sex: non_empty(data.sex_d5.as_deref()),
-				sex_null_flavor: None,
+				sex_null_flavor: non_empty(data.sex_d5_null_flavor.as_deref()),
 				race_code: None,
 				race_code_null_flavor: None,
 				ethnicity_code: None,
@@ -467,8 +610,11 @@ async fn create_case_from_intake_authorized(
 			},
 		)
 		.await?;
-		if let Some(investigation_number) =
-			non_empty(data.investigation_number.as_deref())
+		let investigation_number = non_empty(data.investigation_number.as_deref());
+		let investigation_number_null_flavor =
+			non_empty(data.investigation_number_null_flavor.as_deref());
+		if investigation_number.is_some()
+			|| investigation_number_null_flavor.is_some()
 		{
 			PatientIdentifierBmc::create(
 				&ctx,
@@ -477,8 +623,8 @@ async fn create_case_from_intake_authorized(
 					patient_id,
 					sequence_number: 1,
 					identifier_type_code: "4".to_string(),
-					identifier_value: Some(investigation_number),
-					identifier_value_null_flavor: None,
+					identifier_value: investigation_number,
+					identifier_value_null_flavor: investigation_number_null_flavor,
 				},
 			)
 			.await?;
@@ -492,6 +638,7 @@ async fn create_case_from_intake_authorized(
 		.filter(|v| !v.is_empty())
 		.is_some()
 		|| data.ae_start_date.is_some()
+		|| data.ae_start_date_null_flavor.is_some()
 	{
 		ReactionBmc::create(
 			&ctx,
@@ -547,7 +694,9 @@ async fn create_case_from_intake_authorized(
 				mfds_device_action_label_change: None,
 				mfds_device_action_other: None,
 				start_date: data.ae_start_date,
-				start_date_null_flavor: None,
+				start_date_null_flavor: non_empty(
+					data.ae_start_date_null_flavor.as_deref(),
+				),
 				end_date: None,
 				end_date_null_flavor: None,
 				duration_value: None,
@@ -580,4 +729,18 @@ fn format_e2b_datetime(date: Date) -> String {
 		u8::from(date.month()),
 		date.day()
 	)
+}
+
+#[cfg(test)]
+mod tests {
+	use super::validate_intake_pair;
+
+	#[test]
+	fn intake_null_flavor_uses_explicit_catalog_companion() {
+		let path = "reactions[].reactionStartDateNullFlavor";
+		assert!(validate_intake_pair(false, None, Some("ASKU"), path).is_ok());
+		assert!(validate_intake_pair(false, None, Some("UNK"), path).is_err());
+		assert!(validate_intake_pair(true, None, Some("ASKU"), path).is_err());
+		assert!(validate_intake_pair(true, Some("ASKU"), None, path).is_err());
+	}
 }

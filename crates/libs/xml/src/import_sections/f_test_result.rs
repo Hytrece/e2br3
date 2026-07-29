@@ -19,6 +19,7 @@ pub struct FTestResultImport {
 	pub test_meddra_code: Option<String>,
 	pub test_result_code: Option<String>,
 	pub test_result_value: Option<String>,
+	pub test_result_null_flavor: Option<String>,
 	pub test_result_unit: Option<String>,
 	pub result_unstructured: Option<String>,
 	pub normal_low_value: Option<String>,
@@ -95,7 +96,7 @@ pub fn parse_f_test_results(xml: &[u8]) -> Result<Vec<FTestResultImport>> {
 		};
 		let test_result_code =
 			first_attr(&mut xpath, &node, FTestResultPaths::RESULT_CODE);
-		let test_result_value = first_attr(
+		let raw_test_result_value = first_attr(
 			&mut xpath,
 			&node,
 			FTestResultPaths::RESULT_VALUE,
@@ -103,6 +104,17 @@ pub fn parse_f_test_results(xml: &[u8]) -> Result<Vec<FTestResultImport>> {
 		.or_else(|| {
 			first_attr(&mut xpath, &node, FTestResultPaths::RESULT_VALUE_FALLBACK)
 		});
+		let test_result_null_flavor =
+			first_attr(&mut xpath, &node, FTestResultPaths::RESULT_NULL_FLAVOR);
+		if raw_test_result_value.is_some() && test_result_null_flavor.is_some() {
+			return Err(Error::InvalidXml {
+				message: "F.r.3.2 value and nullFlavor cannot both be set"
+					.to_string(),
+				line: None,
+				column: None,
+			});
+		}
+		let test_result_value = raw_test_result_value;
 		let test_result_unit = first_attr(
 			&mut xpath,
 			&node,
@@ -132,6 +144,7 @@ pub fn parse_f_test_results(xml: &[u8]) -> Result<Vec<FTestResultImport>> {
 			test_meddra_code,
 			test_result_code,
 			test_result_value,
+			test_result_null_flavor,
 			test_result_unit,
 			result_unstructured,
 			normal_low_value,
@@ -189,4 +202,17 @@ fn parse_date(value: String) -> Option<Date> {
 	let d: u8 = digits[6..8].parse().ok()?;
 	let month = Month::try_from(m).ok()?;
 	Date::from_calendar_date(y, month, d).ok()
+}
+
+#[cfg(test)]
+mod tests {
+	use super::parse_f_test_results;
+
+	#[test]
+	fn imports_test_result_null_flavor_into_companion() {
+		let xml = br#"<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3"><organizer><code code="3" codeSystem="2.16.840.1.113883.3.989.2.1.1.20"/><component><observation><code><originalText>Result</originalText></code><value nullFlavor="NINF"/></observation></component></organizer></MCCI_IN200100UV01>"#;
+		let results = parse_f_test_results(xml).expect("parse");
+		assert_eq!(results[0].test_result_value, None);
+		assert_eq!(results[0].test_result_null_flavor.as_deref(), Some("NINF"));
+	}
 }

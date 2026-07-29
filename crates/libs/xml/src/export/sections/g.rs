@@ -496,14 +496,27 @@ pub(crate) fn drug_fragment(
 			}
 			out.push_str("</effectiveTime>");
 		}
-		if let Some(route) = dose.route_of_administration.as_deref() {
-			out.push_str("<routeCode code=\"");
-			out.push_str(&xml_escape(route));
-			out.push_str("\"");
-			if let Some(ver) = dose.route_termid_version.as_deref() {
-				out.push_str(" codeSystemVersion=\"");
-				out.push_str(&xml_escape(ver));
+		if dose.route_of_administration.is_some()
+			|| dose.route_of_administration_null_flavor.is_some()
+		{
+			out.push_str("<routeCode");
+			if let Some(null_flavor) =
+				dose.route_of_administration_null_flavor.as_deref()
+			{
+				out.push_str(" nullFlavor=\"");
+				out.push_str(&xml_escape(null_flavor));
 				out.push_str("\"");
+			} else if let Some(route) = dose.route_of_administration.as_deref() {
+				out.push_str(" code=\"");
+				out.push_str(&xml_escape(route));
+				out.push_str("\"");
+			}
+			if dose.route_of_administration_null_flavor.is_none() {
+				if let Some(ver) = dose.route_termid_version.as_deref() {
+					out.push_str(" codeSystemVersion=\"");
+					out.push_str(&xml_escape(ver));
+					out.push_str("\"");
+				}
 			}
 			out.push_str("/>");
 		}
@@ -524,6 +537,7 @@ pub(crate) fn drug_fragment(
 		if dose.batch_lot_number.is_some()
 			|| dose.dose_form.is_some()
 			|| dose.dose_form_termid.is_some()
+			|| dose.dose_form_null_flavor.is_some()
 		{
 			out.push_str("<consumable><instanceOfKind>");
 			if let Some(batch) = dose.batch_lot_number.as_deref() {
@@ -531,44 +545,66 @@ pub(crate) fn drug_fragment(
 				out.push_str(&xml_escape(batch));
 				out.push_str("</lotNumberText></productInstanceInstance>");
 			}
-			if dose.dose_form.is_some() || dose.dose_form_termid.is_some() {
+			if dose.dose_form.is_some()
+				|| dose.dose_form_termid.is_some()
+				|| dose.dose_form_null_flavor.is_some()
+			{
 				out.push_str("<kindOfProduct><formCode");
-				if let Some(code) = dose.dose_form_termid.as_deref() {
+				if let Some(null_flavor) = dose.dose_form_null_flavor.as_deref() {
+					out.push_str(" nullFlavor=\"");
+					out.push_str(&xml_escape(null_flavor));
+					out.push_str("\"");
+				} else if let Some(code) = dose.dose_form_termid.as_deref() {
 					out.push_str(" code=\"");
 					out.push_str(&xml_escape(code));
 					out.push_str("\"");
 				}
-				if let Some(ver) = dose.dose_form_termid_version.as_deref() {
-					out.push_str(" codeSystemVersion=\"");
-					out.push_str(&xml_escape(ver));
-					out.push_str("\"");
+				if dose.dose_form_null_flavor.is_none() {
+					if let Some(ver) = dose.dose_form_termid_version.as_deref() {
+						out.push_str(" codeSystemVersion=\"");
+						out.push_str(&xml_escape(ver));
+						out.push_str("\"");
+					}
 				}
 				out.push_str(">");
-				if let Some(text) = dose.dose_form.as_deref() {
-					out.push_str("<originalText>");
-					out.push_str(&xml_escape(text));
-					out.push_str("</originalText>");
+				if dose.dose_form_null_flavor.is_none() {
+					if let Some(text) = dose.dose_form.as_deref() {
+						out.push_str("<originalText>");
+						out.push_str(&xml_escape(text));
+						out.push_str("</originalText>");
+					}
 				}
 				out.push_str("</formCode></kindOfProduct>");
 			}
 			out.push_str("</instanceOfKind></consumable>");
 		}
-		if dose.parent_route_termid.is_some() || dose.parent_route.is_some() {
+		if dose.parent_route_termid.is_some()
+			|| dose.parent_route.is_some()
+			|| dose.parent_route_null_flavor.is_some()
+		{
 			out.push_str("<outboundRelationship2 typeCode=\"COMP\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code code=\"G.k.4.r.11\"/><value");
 			out.push_str(" xsi:type=\"CE\"");
-			if let Some(code) = dose.parent_route_termid.as_deref() {
+			if let Some(null_flavor) = dose.parent_route_null_flavor.as_deref() {
+				out.push_str(" nullFlavor=\"");
+				out.push_str(&xml_escape(null_flavor));
+				out.push_str("\"");
+			} else if let Some(code) = dose.parent_route_termid.as_deref() {
 				out.push_str(" code=\"");
 				out.push_str(&xml_escape(code));
 				out.push_str("\"");
 			}
-			if let Some(ver) = dose.parent_route_termid_version.as_deref() {
-				out.push_str(" codeSystemVersion=\"");
-				out.push_str(&xml_escape(ver));
-				out.push_str("\"");
+			if dose.parent_route_null_flavor.is_none() {
+				if let Some(ver) = dose.parent_route_termid_version.as_deref() {
+					out.push_str(" codeSystemVersion=\"");
+					out.push_str(&xml_escape(ver));
+					out.push_str("\"");
+				}
 			}
 			out.push_str("><originalText>");
-			if let Some(text) = dose.parent_route.as_deref() {
-				out.push_str(&xml_escape(text));
+			if dose.parent_route_null_flavor.is_none() {
+				if let Some(text) = dose.parent_route.as_deref() {
+					out.push_str(&xml_escape(text));
+				}
 			}
 			out.push_str(
 				"</originalText></value></observation></outboundRelationship2>",
@@ -894,12 +930,15 @@ mod tests {
 			batch_lot_number_null_flavor: None,
 			dosage_text: Some("row dosage text".to_string()),
 			dose_form: None,
+			dose_form_null_flavor: None,
 			dose_form_termid: None,
 			dose_form_termid_version: None,
 			route_of_administration: None,
+			route_of_administration_null_flavor: None,
 			route_termid: None,
 			route_termid_version: None,
 			parent_route: None,
+			parent_route_null_flavor: None,
 			parent_route_termid: None,
 			parent_route_termid_version: None,
 			first_administration_date_null_flavor: None,
@@ -1022,6 +1061,23 @@ mod tests {
 			!xml.contains("KR-SUB") && !xml.contains("KR-SV1"),
 			"MFDS substance values must wait for verified MFDS XML paths"
 		);
+	}
+
+	#[test]
+	fn exports_dosage_companions_as_xml_null_flavor_attributes() {
+		let case_id = Uuid::new_v4();
+		let drug_id = Uuid::new_v4();
+		let drug = test_drug(drug_id, case_id);
+		let mut dosage = test_dosage(drug_id);
+		dosage.route_of_administration_null_flavor = Some("ASKU".to_string());
+		dosage.dose_form_null_flavor = Some("UNK".to_string());
+		dosage.parent_route_null_flavor = Some("NASK".to_string());
+
+		let xml = export_g_drugs_xml(&[drug], &[], &[dosage], &[], &[], &[], &[])
+			.expect("export xml");
+		assert!(xml.contains("<routeCode nullFlavor=\"ASKU\"/>"));
+		assert!(xml.contains("<formCode nullFlavor=\"UNK\">"));
+		assert!(xml.contains("<value xsi:type=\"CE\" nullFlavor=\"NASK\">"));
 	}
 
 	fn test_assessment() -> DrugReactionAssessment {

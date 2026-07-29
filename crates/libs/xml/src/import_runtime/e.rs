@@ -67,7 +67,9 @@ pub(crate) async fn import_section_e(
 					.required_intervention
 					.as_deref()
 					.and_then(normalize_xml_bool),
-				required_intervention_null_flavor: None,
+				required_intervention_null_flavor: reaction
+					.required_intervention_null_flavor
+					.clone(),
 				expectedness: reaction.expectedness.clone(),
 				severity: reaction.severity.clone(),
 				mfds_device_ae_classification: reaction

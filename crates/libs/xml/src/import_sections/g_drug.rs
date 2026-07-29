@@ -75,14 +75,17 @@ pub struct GDrugDosageImport {
 	pub dose_value: Option<Decimal>,
 	pub dose_unit: Option<String>,
 	pub route: Option<String>,
+	pub route_null_flavor: Option<String>,
 	pub route_termid_version: Option<String>,
 	pub dose_form: Option<String>,
+	pub dose_form_null_flavor: Option<String>,
 	pub dose_form_termid: Option<String>,
 	pub dose_form_termid_version: Option<String>,
 	pub batch_lot: Option<String>,
 	pub parent_route_termid: Option<String>,
 	pub parent_route_termid_version: Option<String>,
 	pub parent_route: Option<String>,
+	pub parent_route_null_flavor: Option<String>,
 }
 
 #[derive(Debug)]
@@ -312,12 +315,22 @@ pub fn parse_g_drugs(xml: &[u8]) -> Result<Vec<GDrugImport>> {
 				&dose,
 				GDrugPaths::ROUTE_CODE,
 			));
+			let (route, route_null_flavor) = split_null_flavor(
+				route,
+				first_attr(&mut xpath, &dose, GDrugPaths::ROUTE_NULL_FLAVOR),
+				"G.k.4.r.10 route",
+			)?;
 			let route_termid_version = clamp_str(
 				first_attr(&mut xpath, &dose, GDrugPaths::ROUTE_CODE_SYSTEM_VERSION),
 				10,
 			);
 			let dose_form =
 				first_text(&mut xpath, &dose, GDrugPaths::DOSE_FORM_TEXT);
+			let (dose_form, dose_form_null_flavor) = split_null_flavor(
+				dose_form,
+				first_attr(&mut xpath, &dose, GDrugPaths::DOSE_FORM_NULL_FLAVOR),
+				"G.k.4.r.9.1 dose form",
+			)?;
 			let dose_form_termid =
 				first_attr(&mut xpath, &dose, GDrugPaths::DOSE_FORM_TERMID);
 			let dose_form_termid_version = clamp_str(
@@ -341,6 +354,15 @@ pub fn parse_g_drugs(xml: &[u8]) -> Result<Vec<GDrugImport>> {
 			);
 			let parent_route =
 				first_text(&mut xpath, &dose, GDrugPaths::DOSAGE_PARENT_ROUTE_TEXT);
+			let (parent_route, parent_route_null_flavor) = split_null_flavor(
+				parent_route,
+				first_attr(
+					&mut xpath,
+					&dose,
+					GDrugPaths::DOSAGE_PARENT_ROUTE_NULL_FLAVOR,
+				),
+				"G.k.4.r.11 parent route",
+			)?;
 
 			dosage_list.push(GDrugDosageImport {
 				dosage_text,
@@ -357,14 +379,17 @@ pub fn parse_g_drugs(xml: &[u8]) -> Result<Vec<GDrugImport>> {
 				dose_value,
 				dose_unit,
 				route,
+				route_null_flavor,
 				route_termid_version,
 				dose_form,
+				dose_form_null_flavor,
 				dose_form_termid,
 				dose_form_termid_version,
 				batch_lot,
 				parent_route_termid,
 				parent_route_termid_version,
 				parent_route,
+				parent_route_null_flavor,
 			});
 		}
 
@@ -484,6 +509,21 @@ fn first_attr(xpath: &mut Context, node: &Node, expr: &str) -> Option<String> {
 		.ok()?
 		.into_iter()
 		.find(|v| !v.trim().is_empty())
+}
+
+fn split_null_flavor(
+	value: Option<String>,
+	null_flavor: Option<String>,
+	field: &str,
+) -> Result<(Option<String>, Option<String>)> {
+	if value.is_some() && null_flavor.is_some() {
+		return Err(Error::InvalidXml {
+			message: format!("{field} value and nullFlavor cannot both be set"),
+			line: None,
+			column: None,
+		});
+	}
+	Ok((value, null_flavor))
 }
 
 fn first_text(xpath: &mut Context, node: &Node, expr: &str) -> Option<String> {
@@ -613,5 +653,15 @@ mod tests {
 			assert_eq!(dosage.number_of_units, Some(Decimal::new(5, 1)));
 			assert_eq!(dosage.frequency_unit.as_deref(), Some(unit));
 		}
+	}
+
+	#[test]
+	fn imports_dosage_null_flavors_into_companions() {
+		let xml = br#"<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3"><subjectOf2><organizer><code code="4" codeSystem="2.16.840.1.113883.3.989.2.1.1.20"/><component><substanceAdministration><consumable><instanceOfKind><kindOfProduct><name>Drug A</name></kindOfProduct></instanceOfKind></consumable><outboundRelationship2 typeCode="COMP"><substanceAdministration><routeCode nullFlavor="ASKU"/><consumable><instanceOfKind><kindOfProduct><formCode nullFlavor="UNK"/></kindOfProduct></instanceOfKind></consumable><outboundRelationship2 typeCode="COMP"><observation><code code="G.k.4.r.11"/><value nullFlavor="NASK"/></observation></outboundRelationship2></substanceAdministration></outboundRelationship2></substanceAdministration></component></organizer></subjectOf2></MCCI_IN200100UV01>"#;
+		let drugs = parse_g_drugs(xml).expect("parse");
+		let dosage = &drugs[0].dosages[0];
+		assert_eq!(dosage.route_null_flavor.as_deref(), Some("ASKU"));
+		assert_eq!(dosage.dose_form_null_flavor.as_deref(), Some("UNK"));
+		assert_eq!(dosage.parent_route_null_flavor.as_deref(), Some("NASK"));
 	}
 }
