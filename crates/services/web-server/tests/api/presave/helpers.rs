@@ -499,16 +499,20 @@ pub(super) async fn create_named_study_presave_for_product_via_api(
 		cookie,
 		"/api/presaves/studies".to_string(),
 		json!({
-			"data": {
-				"product_presave_id": product_id,
-				"study_name": study_name,
-				"sponsor_study_number": format!("STUDY-{}", Uuid::new_v4()),
-				"study_type_reaction": "1"
-			}
+			"data": { "rows": {
+				"study": {
+					"productPresaveId": product_id,
+					"studyName": study_name,
+					"sponsorStudyNumber": format!("STUDY-{}", Uuid::new_v4()),
+					"studyTypeReaction": "1"
+				},
+				"products": [], "reporters": [],
+				"registrationNumbers": [], "fdaCrossReportedInds": []
+			} }
 		}),
 	)
 	.await?;
-	data_id(&value)
+	data_rows_id(&value, "study")
 }
 
 pub(super) async fn create_study_registration_number_via_api(
@@ -595,16 +599,16 @@ pub(super) async fn create_named_reporter_presave_via_api(
 		cookie,
 		"/api/presaves/reporters".to_string(),
 		json!({
-			"data": {
-				"reporter_given_name": "Reporter",
+			"data": { "rows": { "reporter": {
+				"reporterGivenName": "Reporter",
 				"organization": organization,
 				"qualification": "1",
-				"primary_source_regulatory": "1"
-			}
+				"primarySourceRegulatory": "1"
+			} } }
 		}),
 	)
 	.await?;
-	data_id(&value)
+	data_rows_id(&value, "reporter")
 }
 
 pub(super) async fn create_info_editor(

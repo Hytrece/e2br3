@@ -1979,6 +1979,7 @@ impl ReporterPresaveBmc {
 }
 
 #[derive(Debug, Clone, Fields, FromRow, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct StudyPresave {
 	pub id: Uuid,
 	pub organization_id: Uuid,
@@ -2000,6 +2001,7 @@ pub struct StudyPresave {
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct StudyPresaveForCreate {
 	pub product_presave_id: Option<Uuid>,
 	pub study_name: Option<String>,
@@ -2063,6 +2065,7 @@ impl StudyPresaveForCreate {
 }
 
 #[derive(Default, Fields, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct StudyPresaveForUpdate {
 	pub deleted: Option<bool>,
 	pub product_presave_id: Option<Uuid>,

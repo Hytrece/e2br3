@@ -22,7 +22,7 @@ pub(super) use lib_core::model::presave::{
 	SenderPresaveGatewayForUpdate, SenderPresaveResponsiblePerson,
 	SenderPresaveResponsiblePersonBmc, SenderPresaveResponsiblePersonForCreate,
 	SenderPresaveResponsiblePersonForUpdate, StudyPresave, StudyPresaveBmc,
-	StudyPresaveFdaCrossReportedIndNumber, StudyPresaveFdaCrossReportedIndNumberBmc,
+	StudyPresaveFdaCrossReportedIndNumberBmc,
 	StudyPresaveFdaCrossReportedIndNumberForCreate,
 	StudyPresaveFdaCrossReportedIndNumberForUpdate, StudyPresaveForCreate,
 	StudyPresaveForUpdate, StudyPresaveProduct, StudyPresaveProductBmc,

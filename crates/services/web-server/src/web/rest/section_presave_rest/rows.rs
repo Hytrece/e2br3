@@ -1,5 +1,15 @@
 use serde_json::{Map, Value};
 
+pub(super) fn camelize_rows<T: serde::Serialize>(rows: Vec<T>) -> Vec<Value> {
+	rows.into_iter()
+		.map(|row| {
+			camelize_value(
+				serde_json::to_value(row).expect("serializable presave row"),
+			)
+		})
+		.collect()
+}
+
 pub(super) fn camelize_value(value: Value) -> Value {
 	match value {
 		Value::Object(values) => Value::Object(
