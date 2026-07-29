@@ -18,15 +18,30 @@ async fn test_section_presave_narrative_rest_contract() -> Result<()> {
 		Method::POST,
 		"/api/presaves/narratives".to_string(),
 		Some(json!({
-			"data": {
-				"case_narrative": "REST minimal narrative"
-			}
+			"data": { "rows": { "narrative": {
+				"caseNarrative": "REST minimal narrative"
+			} } }
 		})),
 	)
 	.await?;
 	assert_eq!(status, StatusCode::CREATED, "{value:?}");
-	assert!(value["data"].get("name").is_none(), "{value:?}");
-	assert!(value["data"].get("comments").is_none(), "{value:?}");
+	assert!(
+		value["data"]["rows"]["narrative"].get("name").is_none(),
+		"{value:?}"
+	);
+	assert!(
+		value["data"]["rows"]["narrative"].get("comments").is_none(),
+		"{value:?}"
+	);
+	let (legacy_status, _) = request_json(
+		&app,
+		&admin_cookie,
+		Method::POST,
+		"/api/presaves/narratives".to_string(),
+		Some(json!({ "data": { "case_narrative": "legacy" } })),
+	)
+	.await?;
+	assert_eq!(legacy_status, StatusCode::UNPROCESSABLE_ENTITY);
 
 	let (status, value) = request_json(
 		&app,
@@ -34,26 +49,32 @@ async fn test_section_presave_narrative_rest_contract() -> Result<()> {
 		Method::POST,
 		"/api/presaves/narratives".to_string(),
 		Some(json!({
-			"data": {
-				"case_narrative": "REST auto narrative {D.2.2a} {D.5}",
-				"case_narrative_notation": "REST notation",
-				"additional_information": "REST sponsor additional information"
-			}
+			"data": { "rows": { "narrative": {
+				"caseNarrative": "REST auto narrative {D.2.2a} {D.5}",
+				"caseNarrativeNotation": "REST notation",
+				"additionalInformation": "REST sponsor additional information"
+			} } }
 		})),
 	)
 	.await?;
 	assert_eq!(status, StatusCode::CREATED, "{value:?}");
-	assert!(value["data"].get("name").is_none(), "{value:?}");
-	assert!(value["data"].get("comments").is_none(), "{value:?}");
+	assert!(
+		value["data"]["rows"]["narrative"].get("name").is_none(),
+		"{value:?}"
+	);
+	assert!(
+		value["data"]["rows"]["narrative"].get("comments").is_none(),
+		"{value:?}"
+	);
 	assert_eq!(
-		value["data"]["case_narrative"].as_str(),
+		value["data"]["rows"]["narrative"]["caseNarrative"].as_str(),
 		Some("REST auto narrative {D.2.2a} {D.5}")
 	);
 	assert_eq!(
-		value["data"]["additional_information"].as_str(),
+		value["data"]["rows"]["narrative"]["additionalInformation"].as_str(),
 		Some("REST sponsor additional information")
 	);
-	let narrative_id = data_id(&value)?;
+	let narrative_id = data_rows_id(&value, "narrative")?;
 
 	let (status, value) = request_json(
 		&app,
@@ -69,7 +90,8 @@ async fn test_section_presave_narrative_rest_contract() -> Result<()> {
 			.as_array()
 			.ok_or("narrative list data is not array")?
 			.iter()
-			.any(|row| row["id"].as_str() == Some(&narrative_id.to_string())),
+			.any(|row| row["rows"]["narrative"]["id"].as_str()
+				== Some(&narrative_id.to_string())),
 		"{value:?}"
 	);
 
@@ -79,20 +101,20 @@ async fn test_section_presave_narrative_rest_contract() -> Result<()> {
 		Method::PATCH,
 		format!("/api/presaves/narratives/{narrative_id}"),
 		Some(json!({
-			"data": {
-				"case_narrative": "REST auto narrative updated {D.2.2a} {D.5}",
-				"additional_information": "REST sponsor additional information updated"
-			}
+			"data": { "rows": { "narrative": {
+				"caseNarrative": "REST auto narrative updated {D.2.2a} {D.5}",
+				"additionalInformation": "REST sponsor additional information updated"
+			} } }
 		})),
 	)
 	.await?;
 	assert_eq!(status, StatusCode::OK, "{value:?}");
 	assert_eq!(
-		value["data"]["case_narrative"].as_str(),
+		value["data"]["rows"]["narrative"]["caseNarrative"].as_str(),
 		Some("REST auto narrative updated {D.2.2a} {D.5}")
 	);
 	assert_eq!(
-		value["data"]["additional_information"].as_str(),
+		value["data"]["rows"]["narrative"]["additionalInformation"].as_str(),
 		Some("REST sponsor additional information updated")
 	);
 
@@ -104,7 +126,10 @@ async fn test_section_presave_narrative_rest_contract() -> Result<()> {
 	let (status, value) =
 		request_json(&app, &admin_cookie, Method::GET, uri, None).await?;
 	assert_eq!(status, StatusCode::OK, "{value:?}");
-	assert_eq!(value["data"]["deleted"].as_bool(), Some(true));
+	assert_eq!(
+		value["data"]["rows"]["narrative"]["deleted"].as_bool(),
+		Some(true)
+	);
 
 	let (status, value) = request_json(
 		&app,
@@ -119,9 +144,15 @@ async fn test_section_presave_narrative_rest_contract() -> Result<()> {
 		.as_array()
 		.ok_or("narrative list data is not array")?
 		.iter()
-		.find(|row| row["id"].as_str() == Some(&narrative_id.to_string()))
+		.find(|row| {
+			row["rows"]["narrative"]["id"].as_str()
+				== Some(&narrative_id.to_string())
+		})
 		.ok_or("deleted narrative missing from list")?;
-	assert_eq!(deleted_row["deleted"].as_bool(), Some(true));
+	assert_eq!(
+		deleted_row["rows"]["narrative"]["deleted"].as_bool(),
+		Some(true)
+	);
 
 	Ok(())
 }

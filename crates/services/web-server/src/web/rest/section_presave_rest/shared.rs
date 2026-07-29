@@ -14,11 +14,10 @@ pub(super) use lib_core::model::presave::{
 	ProductPresaveForCreate, ProductPresaveForUpdate, ReceiverPresave,
 	ReceiverPresaveBmc, ReceiverPresaveConsignee, ReceiverPresaveConsigneeBmc,
 	ReceiverPresaveConsigneeForCreate, ReceiverPresaveConsigneeForUpdate,
-	ReceiverPresaveForCreate, ReceiverPresaveForUpdate,
-	ReceiverPresaveRouteBmc, ReceiverPresaveRouteForCreate,
-	ReceiverPresaveRouteForUpdate, ReporterPresave, ReporterPresaveBmc,
-	ReporterPresaveForCreate, ReporterPresaveForUpdate, SenderPresave,
-	SenderPresaveBmc, SenderPresaveForCreate, SenderPresaveForUpdate,
+	ReceiverPresaveForCreate, ReceiverPresaveForUpdate, ReceiverPresaveRouteBmc,
+	ReceiverPresaveRouteForCreate, ReceiverPresaveRouteForUpdate, ReporterPresave,
+	ReporterPresaveBmc, ReporterPresaveForCreate, ReporterPresaveForUpdate,
+	SenderPresave, SenderPresaveBmc, SenderPresaveForCreate, SenderPresaveForUpdate,
 	SenderPresaveGateway, SenderPresaveGatewayBmc, SenderPresaveGatewayForCreate,
 	SenderPresaveGatewayForUpdate, SenderPresaveResponsiblePerson,
 	SenderPresaveResponsiblePersonBmc, SenderPresaveResponsiblePersonForCreate,
@@ -51,6 +50,7 @@ pub(super) use serde::{Deserialize, Serialize};
 pub(super) use std::collections::HashSet;
 pub(super) use uuid::Uuid;
 
+#[allow(unused_macros)]
 macro_rules! generate_simple_presave_rest_fns {
 	(
 		Bmc: $bmc:ident,
@@ -194,7 +194,201 @@ macro_rules! generate_simple_presave_rest_fns {
 	};
 }
 
+#[allow(unused_imports)]
 pub(super) use generate_simple_presave_rest_fns;
+
+macro_rules! generate_single_row_presave_rest_fns {
+	(
+		Bmc: $bmc:ident,
+		Entity: $entity:ident,
+		ForCreate: $for_create:ident,
+		ForUpdate: $for_update:ident,
+		Row: $row:ident,
+		Details: $details:ident,
+		Rows: $rows:ident,
+		CreateRequest: $create_request:ident,
+		CreateRows: $create_rows:ident,
+		UpdateRequest: $update_request:ident,
+		UpdateRows: $update_rows:ident,
+		CreateFn: $create_fn:ident,
+		ListFn: $list_fn:ident,
+		GetFn: $get_fn:ident,
+		UpdateFn: $update_fn:ident,
+		DeleteFn: $delete_fn:ident,
+		Kind: $kind:ident
+	) => {
+		#[derive(Debug, Serialize)]
+		pub struct $rows {
+			pub $row: $entity,
+		}
+		#[derive(Debug, Serialize)]
+		pub struct $details {
+			pub rows: $rows,
+		}
+		#[derive(Deserialize)]
+		#[serde(rename_all = "camelCase", deny_unknown_fields)]
+		pub struct $create_request {
+			pub rows: $create_rows,
+		}
+		#[derive(Deserialize)]
+		#[serde(rename_all = "camelCase", deny_unknown_fields)]
+		pub struct $create_rows {
+			pub $row: $for_create,
+		}
+		#[derive(Deserialize)]
+		#[serde(rename_all = "camelCase", deny_unknown_fields)]
+		pub struct $update_request {
+			pub rows: $update_rows,
+		}
+		#[derive(Deserialize)]
+		#[serde(rename_all = "camelCase", deny_unknown_fields)]
+		pub struct $update_rows {
+			pub $row: $for_update,
+		}
+
+		fn details(entity: $entity) -> $details {
+			$details {
+				rows: $rows { $row: entity },
+			}
+		}
+
+		pub async fn $create_fn(
+			State(mm): State<ModelManager>,
+			ctx_w: CtxW,
+			snapshot: AuthorizationSnapshotW,
+			Json(params): Json<ParamsForCreate<$create_request>>,
+		) -> Result<(StatusCode, Json<DataRestResult<$details>>)> {
+			let ctx = ctx_w.0;
+			with_authorized_presave_create(
+				&ctx,
+				&snapshot,
+				&mm,
+				stringify!($kind),
+				move |ctx, mm| {
+					Box::pin(async move {
+						let id =
+							$bmc::create(ctx, mm, params.data.rows.$row).await?;
+						Ok(rest_created(details($bmc::get(ctx, mm, id).await?)))
+					})
+				},
+			)
+			.await
+		}
+
+		pub async fn $list_fn(
+			State(mm): State<ModelManager>,
+			ctx_w: CtxW,
+			snapshot: AuthorizationSnapshotW,
+		) -> Result<(StatusCode, Json<DataRestResult<Vec<$details>>>)> {
+			let ctx = ctx_w.0;
+			with_authorized_presave_collection(
+				&ctx,
+				&snapshot,
+				&mm,
+				|ctx, mm, _scope| {
+					Box::pin(async move {
+						Ok(rest_ok(
+							$bmc::list(ctx, mm, None)
+								.await?
+								.into_iter()
+								.map(details)
+								.collect(),
+						))
+					})
+				},
+			)
+			.await
+		}
+
+		pub async fn $get_fn(
+			State(mm): State<ModelManager>,
+			ctx_w: CtxW,
+			snapshot: AuthorizationSnapshotW,
+			Path(id): Path<Uuid>,
+		) -> Result<(StatusCode, Json<DataRestResult<$details>>)> {
+			let ctx = ctx_w.0;
+			with_authorized_presave_read(
+				&ctx,
+				&snapshot,
+				&mm,
+				PresaveAuthorizationKind::$kind,
+				id,
+				|ctx, mm| {
+					Box::pin(async move {
+						Ok(rest_ok(details($bmc::get(ctx, mm, id).await?)))
+					})
+				},
+			)
+			.await
+		}
+
+		pub async fn $update_fn(
+			State(mm): State<ModelManager>,
+			ctx_w: CtxW,
+			snapshot: AuthorizationSnapshotW,
+			Path(id): Path<Uuid>,
+			Json(params): Json<ParamsForUpdate<$update_request>>,
+		) -> Result<(StatusCode, Json<DataRestResult<$details>>)> {
+			let ctx = ctx_w.0;
+			with_authorized_presave_update(
+				&ctx,
+				&snapshot,
+				&mm,
+				PresaveAuthorizationKind::$kind,
+				id,
+				move |ctx, mm| {
+					Box::pin(async move {
+						let data = params.data.rows.$row;
+						if data.deleted == Some(true) {
+							PresaveLifecycleService::archive(
+								ctx,
+								mm,
+								PresaveKind::$kind,
+								id,
+							)
+							.await?;
+						} else {
+							$bmc::update(ctx, mm, id, data).await?;
+						}
+						Ok(rest_ok(details($bmc::get(ctx, mm, id).await?)))
+					})
+				},
+			)
+			.await
+		}
+
+		pub async fn $delete_fn(
+			State(mm): State<ModelManager>,
+			ctx_w: CtxW,
+			snapshot: AuthorizationSnapshotW,
+			Path(id): Path<Uuid>,
+		) -> Result<StatusCode> {
+			let ctx = ctx_w.0;
+			with_authorized_presave_update(
+				&ctx,
+				&snapshot,
+				&mm,
+				PresaveAuthorizationKind::$kind,
+				id,
+				|ctx, mm| {
+					Box::pin(async move {
+						PresaveLifecycleService::archive(
+							ctx,
+							mm,
+							PresaveKind::$kind,
+							id,
+						)
+						.await?;
+						Ok(StatusCode::NO_CONTENT)
+					})
+				},
+			)
+			.await
+		}
+	};
+}
+
+pub(super) use generate_single_row_presave_rest_fns;
 
 macro_rules! delete_presave_child {
 	(hard, $bmc:ident, $for_update:ident, $ctx:ident, $mm:ident, $id:ident) => {

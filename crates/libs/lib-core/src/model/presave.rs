@@ -1533,6 +1533,7 @@ impl_child_bmc!(
 );
 
 #[derive(Debug, Clone, Fields, FromRow, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ReporterPresave {
 	pub id: Uuid,
 	pub organization_id: Uuid,
@@ -1573,6 +1574,7 @@ pub struct ReporterPresave {
 }
 
 #[derive(Default, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ReporterPresaveForCreate {
 	pub reporter_title: Option<String>,
 	pub reporter_title_null_flavor: Option<String>,
@@ -1677,6 +1679,7 @@ impl IntoOrgScopedCreate for ReporterPresaveForCreate {
 }
 
 #[derive(Default, Fields, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ReporterPresaveForUpdate {
 	pub deleted: Option<bool>,
 	pub reporter_title: Option<String>,
@@ -2503,6 +2506,7 @@ impl_child_bmc!(
 );
 
 #[derive(Debug, Clone, Fields, FromRow, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct NarrativePresave {
 	pub id: Uuid,
 	pub organization_id: Uuid,
@@ -2517,6 +2521,7 @@ pub struct NarrativePresave {
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct NarrativePresaveForCreate {
 	pub case_narrative: Option<String>,
 	pub case_narrative_notation: Option<String>,
@@ -2545,6 +2550,7 @@ impl IntoOrgScopedCreate for NarrativePresaveForCreate {
 }
 
 #[derive(Default, Fields, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct NarrativePresaveForUpdate {
 	pub deleted: Option<bool>,
 	pub case_narrative: Option<String>,
