@@ -64,77 +64,118 @@ pub(super) const BINDINGS: &[PortableFieldBinding] = &[
 		"reactions[].seriousness.criteriaResultsInDeath",
 		"seriousness.criteriaResultsInDeath",
 		Boolean,
-		[
-			"ICH.E.i.3.2a.ALLOWED.VALUE",
-			"ICH.E.i.3.2a.NULLFLAVOR.ALLOWED"
-		]
+		["ICH.E.i.3.2a.ALLOWED.VALUE"],
+		null: "reactions[].seriousness.criteriaResultsInDeathNullFlavor"
+	),
+	binding!(
+		"reactions[].seriousness.criteriaResultsInDeathNullFlavor",
+		"seriousness.criteriaResultsInDeathNullFlavor",
+		String,
+		["ICH.E.i.3.2a.NULLFLAVOR.ALLOWED"]
 	),
 	binding!(
 		"reactions[].seriousness.criteriaLifeThreatening",
 		"seriousness.criteriaLifeThreatening",
 		Boolean,
-		[
-			"ICH.E.i.3.2b.ALLOWED.VALUE",
-			"ICH.E.i.3.2b.NULLFLAVOR.ALLOWED"
-		]
+		["ICH.E.i.3.2b.ALLOWED.VALUE"],
+		null: "reactions[].seriousness.criteriaLifeThreateningNullFlavor"
+	),
+	binding!(
+		"reactions[].seriousness.criteriaLifeThreateningNullFlavor",
+		"seriousness.criteriaLifeThreateningNullFlavor",
+		String,
+		["ICH.E.i.3.2b.NULLFLAVOR.ALLOWED"]
 	),
 	binding!(
 		"reactions[].seriousness.criteriaHospitalization",
 		"seriousness.criteriaHospitalization",
 		Boolean,
-		[
-			"ICH.E.i.3.2c.ALLOWED.VALUE",
-			"ICH.E.i.3.2c.NULLFLAVOR.ALLOWED"
-		]
+		["ICH.E.i.3.2c.ALLOWED.VALUE"],
+		null: "reactions[].seriousness.criteriaHospitalizationNullFlavor"
+	),
+	binding!(
+		"reactions[].seriousness.criteriaHospitalizationNullFlavor",
+		"seriousness.criteriaHospitalizationNullFlavor",
+		String,
+		["ICH.E.i.3.2c.NULLFLAVOR.ALLOWED"]
 	),
 	binding!(
 		"reactions[].seriousness.criteriaDisabling",
 		"seriousness.criteriaDisabling",
 		Boolean,
-		[
-			"ICH.E.i.3.2d.ALLOWED.VALUE",
-			"ICH.E.i.3.2d.NULLFLAVOR.ALLOWED"
-		]
+		["ICH.E.i.3.2d.ALLOWED.VALUE"],
+		null: "reactions[].seriousness.criteriaDisablingNullFlavor"
+	),
+	binding!(
+		"reactions[].seriousness.criteriaDisablingNullFlavor",
+		"seriousness.criteriaDisablingNullFlavor",
+		String,
+		["ICH.E.i.3.2d.NULLFLAVOR.ALLOWED"]
 	),
 	binding!(
 		"reactions[].seriousness.criteriaCongenitalAnomaly",
 		"seriousness.criteriaCongenitalAnomaly",
 		Boolean,
-		[
-			"ICH.E.i.3.2e.ALLOWED.VALUE",
-			"ICH.E.i.3.2e.NULLFLAVOR.ALLOWED"
-		]
+		["ICH.E.i.3.2e.ALLOWED.VALUE"],
+		null: "reactions[].seriousness.criteriaCongenitalAnomalyNullFlavor"
+	),
+	binding!(
+		"reactions[].seriousness.criteriaCongenitalAnomalyNullFlavor",
+		"seriousness.criteriaCongenitalAnomalyNullFlavor",
+		String,
+		["ICH.E.i.3.2e.NULLFLAVOR.ALLOWED"]
 	),
 	binding!(
 		"reactions[].seriousness.criteriaOtherMedicallyImportant",
 		"seriousness.criteriaOtherMedicallyImportant",
 		Boolean,
-		[
-			"ICH.E.i.3.2f.ALLOWED.VALUE",
-			"ICH.E.i.3.2f.NULLFLAVOR.ALLOWED"
-		]
+		["ICH.E.i.3.2f.ALLOWED.VALUE"],
+		null: "reactions[].seriousness.criteriaOtherMedicallyImportantNullFlavor"
+	),
+	binding!(
+		"reactions[].seriousness.criteriaOtherMedicallyImportantNullFlavor",
+		"seriousness.criteriaOtherMedicallyImportantNullFlavor",
+		String,
+		["ICH.E.i.3.2f.NULLFLAVOR.ALLOWED"]
 	),
 	binding!(
 		"reactions[].requiredIntervention",
 		"requiredIntervention",
 		Boolean,
-		[
-			"FDA.E.i.3.2h.ALLOWED.VALUE",
-			"FDA.E.i.3.2h.NULLFLAVOR.ALLOWED"
-		],
-		null: "reactions[].requiredIntervention"
+		["FDA.E.i.3.2h.ALLOWED.VALUE"],
+		null: "reactions[].requiredInterventionNullFlavor"
+	),
+	binding!(
+		"reactions[].requiredInterventionNullFlavor",
+		"requiredInterventionNullFlavor",
+		String,
+		["FDA.E.i.3.2h.NULLFLAVOR.ALLOWED"]
 	),
 	binding!(
 		"reactions[].reactionStartDate",
 		"reactionStartDate",
 		String,
-		["ICH.E.i.4.ALLOWED.VALUE", "ICH.E.i.4.NULLFLAVOR.ALLOWED"]
+		["ICH.E.i.4.ALLOWED.VALUE"],
+		null: "reactions[].reactionStartDateNullFlavor"
+	),
+	binding!(
+		"reactions[].reactionStartDateNullFlavor",
+		"reactionStartDateNullFlavor",
+		String,
+		["ICH.E.i.4.NULLFLAVOR.ALLOWED"]
 	),
 	binding!(
 		"reactions[].reactionEndDate",
 		"reactionEndDate",
 		String,
-		["ICH.E.i.5.ALLOWED.VALUE", "ICH.E.i.5.NULLFLAVOR.ALLOWED"]
+		["ICH.E.i.5.ALLOWED.VALUE"],
+		null: "reactions[].reactionEndDateNullFlavor"
+	),
+	binding!(
+		"reactions[].reactionEndDateNullFlavor",
+		"reactionEndDateNullFlavor",
+		String,
+		["ICH.E.i.5.NULLFLAVOR.ALLOWED"]
 	),
 	binding!(
 		"reactions[].reactionDuration.value",

@@ -82,6 +82,81 @@ mod portable_bindings_tests {
 	}
 
 	#[test]
+	fn null_flavor_rules_use_explicit_companion_bindings() {
+		let constraints = portable_constraints();
+		let bindings = portable_field_bindings();
+		for binding in &bindings {
+			let rule_kinds = binding
+				.rule_codes
+				.iter()
+				.map(|code| {
+					constraints
+						.iter()
+						.find(|constraint| constraint.code == *code)
+						.unwrap_or_else(|| panic!("unknown portable rule {code}"))
+						.kind
+				})
+				.collect::<Vec<_>>();
+			if !rule_kinds.contains(&crate::PortableConstraintKind::NullFlavor) {
+				continue;
+			}
+			assert!(
+				binding.frontend_path.ends_with("NullFlavor"),
+				"NullFlavor rule must use explicit companion path: {}",
+				binding.frontend_path
+			);
+			assert!(binding.request_path.ends_with("NullFlavor"));
+			assert!(
+				rule_kinds
+					.iter()
+					.all(|kind| *kind == crate::PortableConstraintKind::NullFlavor),
+				"companion binding may only own NullFlavor rules: {}",
+				binding.frontend_path,
+			);
+			assert_eq!(binding.null_flavor_path, None);
+
+			let value_path = binding
+				.frontend_path
+				.strip_suffix("NullFlavor")
+				.expect("checked suffix");
+			let value_bindings = bindings
+				.iter()
+				.filter(|value_binding| {
+					value_binding.section == binding.section
+						&& value_binding.frontend_path == value_path
+						&& value_binding.null_flavor_path
+							== Some(binding.frontend_path)
+				})
+				.count();
+			assert_eq!(
+				value_bindings, 1,
+				"NullFlavor path must have exactly one value sibling: {}",
+				binding.frontend_path,
+			);
+		}
+
+		for binding in bindings
+			.iter()
+			.filter(|binding| binding.null_flavor_path.is_some())
+		{
+			let null_flavor_path = binding.null_flavor_path.unwrap();
+			assert_ne!(binding.frontend_path, null_flavor_path);
+			assert_eq!(
+				bindings
+					.iter()
+					.filter(|companion| {
+						companion.section == binding.section
+							&& companion.frontend_path == null_flavor_path
+					})
+					.count(),
+				1,
+				"value binding must point to exactly one companion: {}",
+				binding.frontend_path,
+			);
+		}
+	}
+
+	#[test]
 	fn binding_paths_are_explicit_and_fallback_free() {
 		for binding in portable_field_bindings() {
 			assert!(!binding.frontend_path.contains(".*"));
@@ -265,7 +340,7 @@ mod portable_bindings_tests {
 		);
 		assert_binding(
 			"AE",
-			"reactions[].seriousness.criteriaResultsInDeath",
+			"reactions[].seriousness.criteriaResultsInDeathNullFlavor",
 			"ICH.E.i.3.2a.NULLFLAVOR.ALLOWED",
 		);
 		let required_intervention = bindings_for_section("AE")
@@ -275,7 +350,7 @@ mod portable_bindings_tests {
 			.expect("FDA required intervention binding");
 		assert_eq!(
 			required_intervention.null_flavor_path,
-			Some("reactions[].requiredIntervention")
+			Some("reactions[].requiredInterventionNullFlavor")
 		);
 		assert_binding(
 			"AE",

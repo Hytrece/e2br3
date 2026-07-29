@@ -11,13 +11,13 @@ macro_rules! binding {
 			null_flavor_path: None,
 		}
 	};
-	($path:literal, $request:literal, $type:ident, [$($code:literal),+ $(,)?], null: $null:literal) => {
+	($path:literal, $request:literal, $type:ident, [$($code:literal),* $(,)?], null: $null:literal) => {
 		PortableFieldBinding {
 			section: "DG",
 			frontend_path: $path,
 			request_path: $request,
 			value_type: PortableValueType::$type,
-			rule_codes: &[$($code),+],
+			rule_codes: &[$($code),*],
 			null_flavor_path: Some($null),
 		}
 	};
@@ -231,8 +231,20 @@ pub(super) const BINDINGS: &[PortableFieldBinding] = &[
 		String,
 		["ICH.G.k.4.r.3.LENGTH.MAX"]
 	),
-	binding!("drugs[].dosageInformation[].firstAdministrationDate", "dosageInformation[].firstAdministrationDate", String, ["ICH.G.k.4.r.4.NULLFLAVOR.ALLOWED"], null: "drugs[].dosageInformation[].firstAdministrationDate"),
-	binding!("drugs[].dosageInformation[].lastAdministrationDate", "dosageInformation[].lastAdministrationDate", String, ["ICH.G.k.4.r.5.NULLFLAVOR.ALLOWED"], null: "drugs[].dosageInformation[].lastAdministrationDate"),
+	binding!("drugs[].dosageInformation[].firstAdministrationDate", "dosageInformation[].firstAdministrationDate", String, [], null: "drugs[].dosageInformation[].firstAdministrationDateNullFlavor"),
+	binding!(
+		"drugs[].dosageInformation[].firstAdministrationDateNullFlavor",
+		"dosageInformation[].firstAdministrationDateNullFlavor",
+		String,
+		["ICH.G.k.4.r.4.NULLFLAVOR.ALLOWED"]
+	),
+	binding!("drugs[].dosageInformation[].lastAdministrationDate", "dosageInformation[].lastAdministrationDate", String, [], null: "drugs[].dosageInformation[].lastAdministrationDateNullFlavor"),
+	binding!(
+		"drugs[].dosageInformation[].lastAdministrationDateNullFlavor",
+		"dosageInformation[].lastAdministrationDateNullFlavor",
+		String,
+		["ICH.G.k.4.r.5.NULLFLAVOR.ALLOWED"]
+	),
 	binding!(
 		"drugs[].dosageInformation[].durationValue",
 		"dosageInformation[].durationValue",
@@ -261,10 +273,14 @@ pub(super) const BINDINGS: &[PortableFieldBinding] = &[
 		"drugs[].dosageInformation[].doseForm",
 		"dosageInformation[].doseForm",
 		String,
-		[
-			"ICH.G.k.4.r.9.1.LENGTH.MAX",
-			"ICH.G.k.4.r.9.1.NULLFLAVOR.ALLOWED"
-		]
+		["ICH.G.k.4.r.9.1.LENGTH.MAX"],
+		null: "drugs[].dosageInformation[].doseFormNullFlavor"
+	),
+	binding!(
+		"drugs[].dosageInformation[].doseFormNullFlavor",
+		"dosageInformation[].doseFormNullFlavor",
+		String,
+		["ICH.G.k.4.r.9.1.NULLFLAVOR.ALLOWED"]
 	),
 	binding!(
 		"drugs[].dosageInformation[].doseFormTermIdVersion",
@@ -282,10 +298,14 @@ pub(super) const BINDINGS: &[PortableFieldBinding] = &[
 		"drugs[].dosageInformation[].routeOfAdministration",
 		"dosageInformation[].routeOfAdministration",
 		String,
-		[
-			"ICH.G.k.4.r.10.1.LENGTH.MAX",
-			"ICH.G.k.4.r.10.1.NULLFLAVOR.ALLOWED"
-		]
+		["ICH.G.k.4.r.10.1.LENGTH.MAX"],
+		null: "drugs[].dosageInformation[].routeOfAdministrationNullFlavor"
+	),
+	binding!(
+		"drugs[].dosageInformation[].routeOfAdministrationNullFlavor",
+		"dosageInformation[].routeOfAdministrationNullFlavor",
+		String,
+		["ICH.G.k.4.r.10.1.NULLFLAVOR.ALLOWED"]
 	),
 	binding!(
 		"drugs[].dosageInformation[].routeTermIdVersion",
@@ -303,10 +323,14 @@ pub(super) const BINDINGS: &[PortableFieldBinding] = &[
 		"drugs[].dosageInformation[].parentRouteOfAdministration",
 		"dosageInformation[].parentRouteOfAdministration",
 		String,
-		[
-			"ICH.G.k.4.r.11.1.LENGTH.MAX",
-			"ICH.G.k.4.r.11.1.NULLFLAVOR.ALLOWED"
-		]
+		["ICH.G.k.4.r.11.1.LENGTH.MAX"],
+		null: "drugs[].dosageInformation[].parentRouteOfAdministrationNullFlavor"
+	),
+	binding!(
+		"drugs[].dosageInformation[].parentRouteOfAdministrationNullFlavor",
+		"dosageInformation[].parentRouteOfAdministrationNullFlavor",
+		String,
+		["ICH.G.k.4.r.11.1.NULLFLAVOR.ALLOWED"]
 	),
 	binding!(
 		"drugs[].dosageInformation[].parentRouteTermIdVersion",
@@ -324,10 +348,14 @@ pub(super) const BINDINGS: &[PortableFieldBinding] = &[
 		"drugs[].indications[].indicationText",
 		"indications[].indicationText",
 		String,
-		[
-			"ICH.G.k.7.r.1.LENGTH.MAX",
-			"ICH.G.k.7.r.1.NULLFLAVOR.ALLOWED"
-		]
+		["ICH.G.k.7.r.1.LENGTH.MAX"],
+		null: "drugs[].indications[].indicationTextNullFlavor"
+	),
+	binding!(
+		"drugs[].indications[].indicationTextNullFlavor",
+		"indications[].indicationTextNullFlavor",
+		String,
+		["ICH.G.k.7.r.1.NULLFLAVOR.ALLOWED"]
 	),
 	binding!(
 		"drugs[].indications[].indicationMeddraVersion",

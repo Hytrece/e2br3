@@ -11,13 +11,13 @@ macro_rules! binding {
 			null_flavor_path: None,
 		}
 	};
-	($section:literal, $path:literal, $request:literal, $type:ident, [$($code:literal),+ $(,)?], null: $null:literal) => {
+	($section:literal, $path:literal, $request:literal, $type:ident, [$($code:literal),* $(,)?], null: $null:literal) => {
 		PortableFieldBinding {
 			section: $section,
 			frontend_path: $path,
 			request_path: $request,
 			value_type: PortableValueType::$type,
-			rule_codes: &[$($code),+],
+			rule_codes: &[$($code),*],
 			null_flavor_path: Some($null),
 		}
 	};
@@ -151,6 +151,14 @@ pub(super) const BINDINGS: &[PortableFieldBinding] = &[
 		"nullificationReason",
 		String,
 		["ICH.C.1.11.2.LENGTH.MAX"]
+	),
+	binding!(
+		"CI",
+		"safetyReportIdentification.combinationProductReportIndicator",
+		"combinationProductReportIndicator",
+		String,
+		[],
+		null: "safetyReportIdentification.combinationProductReportIndicatorNullFlavor"
 	),
 	binding!(
 		"CI",
@@ -477,7 +485,8 @@ pub(super) const BINDINGS: &[PortableFieldBinding] = &[
 		"studyInformation.fdaCrossReportedIndNumbers[].indNumber",
 		"fdaCrossReportedIndNumbers[].indNumber",
 		String,
-		["FDA.C.5.6.r.LENGTH.MAX"]
+		["FDA.C.5.6.r.LENGTH.MAX"],
+		null: "studyInformation.fdaCrossReportedIndNumbers[].indNumberNullFlavor"
 	),
 	binding!(
 		"SI",
@@ -578,6 +587,10 @@ mod tests {
 				(
 					"safetyReportIdentification.nullificationReason",
 					"nullificationReason"
+				),
+				(
+					"safetyReportIdentification.combinationProductReportIndicator",
+					"combinationProductReportIndicator"
 				),
 				(
 					"safetyReportIdentification.combinationProductReportIndicatorNullFlavor",
