@@ -12,6 +12,7 @@ workspace = true
 [dependencies]
 # -- App Libs
 lib-core = { path = "../../libs/lib-core" }
+xml = { path = "../../libs/xml" }
 # -- Web
 axum = { workspace = true }
 # -- Async

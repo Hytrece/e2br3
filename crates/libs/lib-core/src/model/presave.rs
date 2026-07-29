@@ -2,8 +2,8 @@ use crate::ctx::Ctx;
 use crate::e2b::null_flavor::NullFlavor;
 use crate::model::base::base_uuid;
 use crate::model::base::DbBmc;
+use crate::model::presave_lifecycle::{PresaveKind, PresaveLifecycleService};
 use crate::model::store::set_full_context_from_ctx_dbx;
-use crate::model::user::{User, UserBmc};
 use crate::model::ModelManager;
 use crate::model::Result;
 use modql::field::{Fields, HasSeaFields};
@@ -216,30 +216,6 @@ fn relationship_conflict(message: &str) -> crate::model::Error {
 	}
 }
 
-/// Whether a user access-scope (stored as a JSON array of id strings, e.g.
-/// `["id1","id2"]`) contains the given presave id. Used by the in-use delete
-/// guards to block deleting a presave that is still granted to a user
-/// (Admin > User).
-fn id_scope_contains(scope_json: Option<&str>, id: Uuid) -> bool {
-	let target = id.to_string();
-	match scope_json.and_then(|raw| serde_json::from_str::<Vec<String>>(raw).ok()) {
-		Some(ids) => ids.iter().any(|item| item.trim() == target),
-		None => false,
-	}
-}
-
-/// True when any user in the organization grants access to `id` via the
-/// access-scope field selected by `pick`.
-async fn any_user_scope_contains(
-	ctx: &Ctx,
-	mm: &ModelManager,
-	id: Uuid,
-	pick: impl Fn(&User) -> Option<&str>,
-) -> Result<bool> {
-	let users = UserBmc::list(ctx, mm, None, None).await?;
-	Ok(users.iter().any(|user| id_scope_contains(pick(user), id)))
-}
-
 fn validation_error(message: &str) -> crate::model::Error {
 	crate::model::Error::Validation {
 		message: message.to_string(),
@@ -273,6 +249,7 @@ trait IntoOrgScopedCreate {
 }
 
 #[derive(Debug, Clone, Fields, FromRow, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SenderPresave {
 	pub id: Uuid,
 	pub organization_id: Uuid,
@@ -296,6 +273,7 @@ pub struct SenderPresave {
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SenderPresaveForCreate {
 	pub is_default: Option<bool>,
 	pub sender_type: Option<String>,
@@ -351,6 +329,7 @@ impl IntoOrgScopedCreate for SenderPresaveForCreate {
 }
 
 #[derive(Default, Fields, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SenderPresaveForUpdate {
 	pub deleted: Option<bool>,
 	pub is_default: Option<bool>,
@@ -429,47 +408,33 @@ impl SenderPresaveBmc {
 		data: SenderPresaveForUpdate,
 	) -> Result<()> {
 		if data.deleted == Some(true) {
-			Self::ensure_not_referenced_by_products(ctx, mm, id).await?;
-			if any_user_scope_contains(ctx, mm, id, |u| {
-				u.access_sender_ids.as_deref()
-			})
-			.await?
-			{
-				return Err(relationship_conflict(
-					"sender presave is granted to users",
-				));
-			}
-		} else {
-			let current = Self::get(ctx, mm, id).await?;
-			let sender_type = data
-				.sender_type
-				.as_deref()
-				.or(current.sender_type.as_deref());
-			let organization_name = data
-				.organization_name
-				.as_deref()
-				.or(current.organization_name.as_deref());
-			Self::validate_identity(sender_type, organization_name)?;
-			Self::ensure_unique_identity(
-				ctx,
-				mm,
-				Some(id),
-				sender_type,
-				organization_name,
-			)
-			.await?;
+			return Err(validation_error(
+				"presave deletion must use lifecycle service",
+			));
 		}
+		let current = Self::get(ctx, mm, id).await?;
+		let sender_type = data
+			.sender_type
+			.as_deref()
+			.or(current.sender_type.as_deref());
+		let organization_name = data
+			.organization_name
+			.as_deref()
+			.or(current.organization_name.as_deref());
+		Self::validate_identity(sender_type, organization_name)?;
+		Self::ensure_unique_identity(
+			ctx,
+			mm,
+			Some(id),
+			sender_type,
+			organization_name,
+		)
+		.await?;
 		base_uuid::update::<Self, _>(ctx, mm, id, data).await
 	}
 
 	pub async fn delete(ctx: &Ctx, mm: &ModelManager, id: Uuid) -> Result<()> {
-		Self::ensure_not_referenced_by_products(ctx, mm, id).await?;
-		if any_user_scope_contains(ctx, mm, id, |u| u.access_sender_ids.as_deref())
-			.await?
-		{
-			return Err(relationship_conflict("sender presave is granted to users"));
-		}
-		base_uuid::delete::<Self>(ctx, mm, id).await
+		PresaveLifecycleService::hard_delete(ctx, mm, PresaveKind::Sender, id).await
 	}
 
 	fn validate_identity(
@@ -523,24 +488,6 @@ impl SenderPresaveBmc {
 		});
 		if duplicate {
 			Err(duplicate_identity("sender presave duplicate identity"))
-		} else {
-			Ok(())
-		}
-	}
-
-	async fn ensure_not_referenced_by_products(
-		ctx: &Ctx,
-		mm: &ModelManager,
-		id: Uuid,
-	) -> Result<()> {
-		let referenced = ProductPresaveBmc::list(ctx, mm, None)
-			.await?
-			.into_iter()
-			.any(|row| !row.deleted && row.sender_presave_id == Some(id));
-		if referenced {
-			Err(relationship_conflict(
-				"sender presave is used by product presaves",
-			))
 		} else {
 			Ok(())
 		}
@@ -652,6 +599,7 @@ impl_child_bmc!(
 );
 
 #[derive(Debug, Clone, Fields, FromRow, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ReceiverPresave {
 	pub id: Uuid,
 	pub organization_id: Uuid,
@@ -676,6 +624,7 @@ pub struct ReceiverPresave {
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ReceiverPresaveForCreate {
 	pub receiver_type: Option<String>,
 	pub organization_name: Option<String>,
@@ -735,6 +684,7 @@ impl IntoOrgScopedCreate for ReceiverPresaveForCreate {
 }
 
 #[derive(Default, Fields, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ReceiverPresaveForUpdate {
 	pub deleted: Option<bool>,
 	pub receiver_type: Option<String>,
@@ -826,83 +776,82 @@ impl ReceiverPresaveBmc {
 		data: ReceiverPresaveForUpdate,
 	) -> Result<()> {
 		if data.deleted == Some(true) {
-			Self::ensure_not_referenced_by_products(ctx, mm, id).await?;
-		} else {
-			let current = Self::get(ctx, mm, id).await?;
-			let receiver_type = data.receiver_type.as_deref();
-			let current_receiver_type = current.receiver_type.as_deref();
-			let organization_name = data
-				.organization_name
-				.as_deref()
-				.or(current.organization_name.as_deref());
-			Self::validate_update_identity(
-				receiver_type,
-				current_receiver_type,
-				organization_name,
-			)?;
-			let clear_nsae_non_solicited_day_count =
-				data.nsae_non_solicited_not_applicable == Some(true);
-			let clear_sae_non_solicited_day_count =
-				data.sae_non_solicited_not_applicable == Some(true);
-			let clear_nsae_solicited_day_count =
-				data.nsae_solicited_not_applicable == Some(true);
-			let clear_sae_solicited_day_count =
-				data.sae_solicited_not_applicable == Some(true);
-			Self::validate_timeline(
-				if clear_nsae_non_solicited_day_count {
-					None
-				} else {
-					data.nsae_non_solicited_day_count
-						.or(current.nsae_non_solicited_day_count)
-				},
-				data.nsae_non_solicited_not_applicable
-					.or(current.nsae_non_solicited_not_applicable),
-				if clear_sae_non_solicited_day_count {
-					None
-				} else {
-					data.sae_non_solicited_day_count
-						.or(current.sae_non_solicited_day_count)
-				},
-				data.sae_non_solicited_not_applicable
-					.or(current.sae_non_solicited_not_applicable),
-				if clear_nsae_solicited_day_count {
-					None
-				} else {
-					data.nsae_solicited_day_count
-						.or(current.nsae_solicited_day_count)
-				},
-				data.nsae_solicited_not_applicable
-					.or(current.nsae_solicited_not_applicable),
-				if clear_sae_solicited_day_count {
-					None
-				} else {
-					data.sae_solicited_day_count
-						.or(current.sae_solicited_day_count)
-				},
-				data.sae_solicited_not_applicable
-					.or(current.sae_solicited_not_applicable),
-			)?;
-			Self::ensure_unique_identity(ctx, mm, Some(id), organization_name)
-				.await?;
-			base_uuid::update::<Self, _>(ctx, mm, id, data).await?;
-			Self::clear_not_applicable_day_counts(
-				ctx,
-				mm,
-				id,
-				clear_nsae_non_solicited_day_count,
-				clear_sae_non_solicited_day_count,
-				clear_nsae_solicited_day_count,
-				clear_sae_solicited_day_count,
-			)
-			.await?;
-			return Ok(());
+			return Err(validation_error(
+				"presave deletion must use lifecycle service",
+			));
 		}
-		base_uuid::update::<Self, _>(ctx, mm, id, data).await
+		let current = Self::get(ctx, mm, id).await?;
+		let receiver_type = data.receiver_type.as_deref();
+		let current_receiver_type = current.receiver_type.as_deref();
+		let organization_name = data
+			.organization_name
+			.as_deref()
+			.or(current.organization_name.as_deref());
+		Self::validate_update_identity(
+			receiver_type,
+			current_receiver_type,
+			organization_name,
+		)?;
+		let clear_nsae_non_solicited_day_count =
+			data.nsae_non_solicited_not_applicable == Some(true);
+		let clear_sae_non_solicited_day_count =
+			data.sae_non_solicited_not_applicable == Some(true);
+		let clear_nsae_solicited_day_count =
+			data.nsae_solicited_not_applicable == Some(true);
+		let clear_sae_solicited_day_count =
+			data.sae_solicited_not_applicable == Some(true);
+		Self::validate_timeline(
+			if clear_nsae_non_solicited_day_count {
+				None
+			} else {
+				data.nsae_non_solicited_day_count
+					.or(current.nsae_non_solicited_day_count)
+			},
+			data.nsae_non_solicited_not_applicable
+				.or(current.nsae_non_solicited_not_applicable),
+			if clear_sae_non_solicited_day_count {
+				None
+			} else {
+				data.sae_non_solicited_day_count
+					.or(current.sae_non_solicited_day_count)
+			},
+			data.sae_non_solicited_not_applicable
+				.or(current.sae_non_solicited_not_applicable),
+			if clear_nsae_solicited_day_count {
+				None
+			} else {
+				data.nsae_solicited_day_count
+					.or(current.nsae_solicited_day_count)
+			},
+			data.nsae_solicited_not_applicable
+				.or(current.nsae_solicited_not_applicable),
+			if clear_sae_solicited_day_count {
+				None
+			} else {
+				data.sae_solicited_day_count
+					.or(current.sae_solicited_day_count)
+			},
+			data.sae_solicited_not_applicable
+				.or(current.sae_solicited_not_applicable),
+		)?;
+		Self::ensure_unique_identity(ctx, mm, Some(id), organization_name).await?;
+		base_uuid::update::<Self, _>(ctx, mm, id, data).await?;
+		Self::clear_not_applicable_day_counts(
+			ctx,
+			mm,
+			id,
+			clear_nsae_non_solicited_day_count,
+			clear_sae_non_solicited_day_count,
+			clear_nsae_solicited_day_count,
+			clear_sae_solicited_day_count,
+		)
+		.await?;
+		Ok(())
 	}
 
 	pub async fn delete(ctx: &Ctx, mm: &ModelManager, id: Uuid) -> Result<()> {
-		Self::ensure_not_referenced_by_products(ctx, mm, id).await?;
-		base_uuid::delete::<Self>(ctx, mm, id).await
+		PresaveLifecycleService::hard_delete(ctx, mm, PresaveKind::Receiver, id)
+			.await
 	}
 
 	fn validate_identity(
@@ -1029,34 +978,6 @@ impl ReceiverPresaveBmc {
 		});
 		if duplicate {
 			Err(duplicate_identity("receiver presave duplicate identity"))
-		} else {
-			Ok(())
-		}
-	}
-
-	async fn ensure_not_referenced_by_products(
-		ctx: &Ctx,
-		mm: &ModelManager,
-		id: Uuid,
-	) -> Result<()> {
-		let receiver = Self::get(ctx, mm, id).await?;
-		let receiver_name = normalized_text(receiver.organization_name.as_deref());
-		let referenced = ProductPresaveBmc::list(ctx, mm, None)
-			.await?
-			.into_iter()
-			.any(|row| {
-				!row.deleted
-					&& normalized_text(row.original_manufacturer.as_deref())
-						.is_some_and(|manufacturer| {
-							receiver_name.as_ref().is_some_and(|receiver_name| {
-								receiver_name == &manufacturer
-							})
-						})
-			});
-		if referenced {
-			Err(relationship_conflict(
-				"receiver presave is used by product presaves",
-			))
 		} else {
 			Ok(())
 		}
@@ -1227,18 +1148,23 @@ pub struct ProductPresave {
 	pub organization_id: Uuid,
 	pub deleted: bool,
 	pub sender_presave_id: Option<Uuid>,
+	pub receiver_presave_id: Option<Uuid>,
 	pub product_id: Option<String>,
 	pub medicinal_product: Option<String>,
 	pub medicinal_product_notation: Option<String>,
+	#[serde(rename = "preApprovalIpName")]
 	pub preapproval_ip_name: Option<String>,
+	#[serde(rename = "drugBrandName")]
 	pub brand_name: Option<String>,
 	pub original_manufacturer: Option<String>,
 	pub product_description: Option<String>,
 	pub mpid: Option<String>,
+	#[serde(rename = "mpidVersionDateNumber")]
 	pub mpid_version: Option<String>,
 	pub mfds_mpid: Option<String>,
 	pub mfds_mpid_version: Option<String>,
 	pub phpid: Option<String>,
+	#[serde(rename = "phpidVersionDateNumber")]
 	pub phpid_version: Option<String>,
 	pub investigational_product_blinded: Option<bool>,
 	pub obtain_drug_country: Option<String>,
@@ -1253,20 +1179,26 @@ pub struct ProductPresave {
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ProductPresaveForCreate {
 	pub sender_presave_id: Option<Uuid>,
+	pub receiver_presave_id: Option<Uuid>,
 	pub product_id: Option<String>,
 	pub medicinal_product: Option<String>,
 	pub medicinal_product_notation: Option<String>,
+	#[serde(rename = "preApprovalIpName")]
 	pub preapproval_ip_name: Option<String>,
+	#[serde(rename = "drugBrandName")]
 	pub brand_name: Option<String>,
 	pub original_manufacturer: Option<String>,
 	pub product_description: Option<String>,
 	pub mpid: Option<String>,
+	#[serde(rename = "mpidVersionDateNumber")]
 	pub mpid_version: Option<String>,
 	pub mfds_mpid: Option<String>,
 	pub mfds_mpid_version: Option<String>,
 	pub phpid: Option<String>,
+	#[serde(rename = "phpidVersionDateNumber")]
 	pub phpid_version: Option<String>,
 	pub investigational_product_blinded: Option<bool>,
 	pub obtain_drug_country: Option<String>,
@@ -1280,6 +1212,7 @@ pub struct ProductPresaveForCreate {
 struct ProductPresaveForInsert {
 	organization_id: Uuid,
 	sender_presave_id: Option<Uuid>,
+	receiver_presave_id: Option<Uuid>,
 	product_id: Option<String>,
 	medicinal_product: Option<String>,
 	medicinal_product_notation: Option<String>,
@@ -1308,6 +1241,7 @@ impl IntoOrgScopedCreate for ProductPresaveForCreate {
 		ProductPresaveForInsert {
 			organization_id,
 			sender_presave_id: self.sender_presave_id,
+			receiver_presave_id: self.receiver_presave_id,
 			product_id: self.product_id,
 			medicinal_product: self.medicinal_product,
 			medicinal_product_notation: self.medicinal_product_notation,
@@ -1332,21 +1266,27 @@ impl IntoOrgScopedCreate for ProductPresaveForCreate {
 }
 
 #[derive(Default, Fields, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ProductPresaveForUpdate {
 	pub deleted: Option<bool>,
 	pub sender_presave_id: Option<Uuid>,
+	pub receiver_presave_id: Option<Uuid>,
 	pub product_id: Option<String>,
 	pub medicinal_product: Option<String>,
 	pub medicinal_product_notation: Option<String>,
+	#[serde(rename = "preApprovalIpName")]
 	pub preapproval_ip_name: Option<String>,
+	#[serde(rename = "drugBrandName")]
 	pub brand_name: Option<String>,
 	pub original_manufacturer: Option<String>,
 	pub product_description: Option<String>,
 	pub mpid: Option<String>,
+	#[serde(rename = "mpidVersionDateNumber")]
 	pub mpid_version: Option<String>,
 	pub mfds_mpid: Option<String>,
 	pub mfds_mpid_version: Option<String>,
 	pub phpid: Option<String>,
+	#[serde(rename = "phpidVersionDateNumber")]
 	pub phpid_version: Option<String>,
 	pub investigational_product_blinded: Option<bool>,
 	pub obtain_drug_country: Option<String>,
@@ -1369,6 +1309,8 @@ impl ProductPresaveBmc {
 		data: ProductPresaveForCreate,
 	) -> Result<Uuid> {
 		Self::ensure_sender_assignment_allowed(ctx, data.sender_presave_id)?;
+		Self::ensure_receiver_assignment_allowed(ctx, mm, data.receiver_presave_id)
+			.await?;
 		Self::validate_identity(
 			data.sender_presave_id,
 			data.product_id.as_deref(),
@@ -1419,19 +1361,15 @@ impl ProductPresaveBmc {
 		id: Uuid,
 		data: ProductPresaveForUpdate,
 	) -> Result<()> {
-		Self::ensure_sender_assignment_allowed(ctx, data.sender_presave_id)?;
 		if data.deleted == Some(true) {
-			Self::ensure_not_referenced_by_studies(ctx, mm, id).await?;
-			if any_user_scope_contains(ctx, mm, id, |u| {
-				u.access_product_ids.as_deref()
-			})
-			.await?
-			{
-				return Err(relationship_conflict(
-					"product presave is granted to users",
-				));
-			}
-		} else {
+			return Err(validation_error(
+				"presave deletion must use lifecycle service",
+			));
+		}
+		Self::ensure_sender_assignment_allowed(ctx, data.sender_presave_id)?;
+		Self::ensure_receiver_assignment_allowed(ctx, mm, data.receiver_presave_id)
+			.await?;
+		{
 			let current = Self::get(ctx, mm, id).await?;
 			let sender_presave_id =
 				data.sender_presave_id.or(current.sender_presave_id);
@@ -1460,15 +1398,7 @@ impl ProductPresaveBmc {
 	}
 
 	pub async fn delete(ctx: &Ctx, mm: &ModelManager, id: Uuid) -> Result<()> {
-		Self::ensure_not_referenced_by_studies(ctx, mm, id).await?;
-		if any_user_scope_contains(ctx, mm, id, |u| u.access_product_ids.as_deref())
-			.await?
-		{
-			return Err(relationship_conflict(
-				"product presave is granted to users",
-			));
-		}
-		base_uuid::delete::<Self>(ctx, mm, id).await
+		PresaveLifecycleService::hard_delete(ctx, mm, PresaveKind::Product, id).await
 	}
 
 	fn validate_identity(
@@ -1494,6 +1424,29 @@ impl ProductPresaveBmc {
 			));
 		}
 
+		Ok(())
+	}
+
+	async fn ensure_receiver_assignment_allowed(
+		ctx: &Ctx,
+		mm: &ModelManager,
+		receiver_presave_id: Option<Uuid>,
+	) -> Result<()> {
+		let Some(receiver_id) = receiver_presave_id else {
+			return Ok(());
+		};
+		let receiver = ReceiverPresaveBmc::get(ctx, mm, receiver_id)
+			.await
+			.map_err(|_| {
+				relationship_conflict(
+					"product requires an active receiver presave in the same organization",
+				)
+			})?;
+		if receiver.deleted || receiver.organization_id != ctx.organization_id() {
+			return Err(relationship_conflict(
+				"product requires an active receiver presave in the same organization",
+			));
+		}
 		Ok(())
 	}
 
@@ -1523,28 +1476,10 @@ impl ProductPresaveBmc {
 			Ok(())
 		}
 	}
-
-	async fn ensure_not_referenced_by_studies(
-		ctx: &Ctx,
-		mm: &ModelManager,
-		id: Uuid,
-	) -> Result<()> {
-		let referenced = StudyPresaveBmc::list(ctx, mm, None)
-			.await?
-			.into_iter()
-			.any(|row| !row.deleted && row.product_presave_id == Some(id));
-		if referenced {
-			Err(relationship_conflict(
-				"product presave is used by study presaves",
-			))
-		} else {
-			Ok(())
-		}
-	}
 }
 
 #[derive(Debug, Clone, Fields, FromRow, Serialize)]
-pub struct ProductPresaveSubstance {
+pub struct ProductPresaveActiveSubstance {
 	pub id: Uuid,
 	pub product_presave_id: Uuid,
 	pub sequence_number: i32,
@@ -1562,7 +1497,8 @@ pub struct ProductPresaveSubstance {
 }
 
 #[derive(Fields, Deserialize)]
-pub struct ProductPresaveSubstanceForCreate {
+#[serde(deny_unknown_fields)]
+pub struct ProductPresaveActiveSubstanceForCreate {
 	pub product_presave_id: Uuid,
 	pub sequence_number: i32,
 	pub substance_name: Option<String>,
@@ -1575,7 +1511,8 @@ pub struct ProductPresaveSubstanceForCreate {
 }
 
 #[derive(Default, Fields, Deserialize)]
-pub struct ProductPresaveSubstanceForUpdate {
+#[serde(deny_unknown_fields)]
+pub struct ProductPresaveActiveSubstanceForUpdate {
 	pub sequence_number: Option<i32>,
 	pub substance_name: Option<String>,
 	pub substance_termid_version: Option<String>,
@@ -1587,39 +1524,48 @@ pub struct ProductPresaveSubstanceForUpdate {
 }
 
 impl_child_bmc!(
-	ProductPresaveSubstanceBmc,
-	ProductPresaveSubstance,
-	ProductPresaveSubstanceForCreate,
-	ProductPresaveSubstanceForUpdate,
-	"product_presave_substances",
+	ProductPresaveActiveSubstanceBmc,
+	ProductPresaveActiveSubstance,
+	ProductPresaveActiveSubstanceForCreate,
+	ProductPresaveActiveSubstanceForUpdate,
+	"product_presave_active_substances",
 	"product_presave_id"
 );
 
 #[derive(Debug, Clone, Fields, FromRow, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ReporterPresave {
 	pub id: Uuid,
 	pub organization_id: Uuid,
 	pub deleted: bool,
 	pub reporter_title: Option<String>,
+	pub reporter_title_null_flavor: Option<String>,
 	pub reporter_given_name: Option<String>,
+	pub reporter_given_name_null_flavor: Option<String>,
 	pub reporter_middle_name: Option<String>,
+	pub reporter_middle_name_null_flavor: Option<String>,
 	pub reporter_family_name: Option<String>,
+	pub reporter_family_name_null_flavor: Option<String>,
 	pub organization: Option<String>,
+	pub organization_null_flavor: Option<String>,
 	pub department: Option<String>,
+	pub department_null_flavor: Option<String>,
 	pub street: Option<String>,
+	pub street_null_flavor: Option<String>,
 	pub city: Option<String>,
+	pub city_null_flavor: Option<String>,
 	pub state: Option<String>,
+	pub state_null_flavor: Option<String>,
 	pub postcode: Option<String>,
+	pub postcode_null_flavor: Option<String>,
 	pub telephone: Option<String>,
+	pub telephone_null_flavor: Option<String>,
 	pub country_code: Option<String>,
 	pub qualification: Option<String>,
 	// MFDS.C.2.r.4.KR.1 - Other health professional type
 	pub qualification_kr1: Option<String>,
 	pub primary_source_regulatory: Option<String>,
-	// nullFlavor for name (C.2.r.1) and address/telephone (C.2.r.2): MSK/ASKU/NASK;
-	// for qualification (C.2.r.4): UNK.
-	pub reporter_name_null_flavor: Option<String>,
-	pub reporter_address_null_flavor: Option<String>,
+	pub country_code_null_flavor: Option<String>,
 	pub qualification_null_flavor: Option<String>,
 	pub created_at: OffsetDateTime,
 	pub updated_at: OffsetDateTime,
@@ -1627,26 +1573,37 @@ pub struct ReporterPresave {
 	pub updated_by: Option<Uuid>,
 }
 
-#[derive(Deserialize)]
+#[derive(Default, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ReporterPresaveForCreate {
 	pub reporter_title: Option<String>,
+	pub reporter_title_null_flavor: Option<String>,
 	pub reporter_given_name: Option<String>,
+	pub reporter_given_name_null_flavor: Option<String>,
 	pub reporter_middle_name: Option<String>,
+	pub reporter_middle_name_null_flavor: Option<String>,
 	pub reporter_family_name: Option<String>,
+	pub reporter_family_name_null_flavor: Option<String>,
 	pub organization: Option<String>,
+	pub organization_null_flavor: Option<String>,
 	pub department: Option<String>,
+	pub department_null_flavor: Option<String>,
 	pub street: Option<String>,
+	pub street_null_flavor: Option<String>,
 	pub city: Option<String>,
+	pub city_null_flavor: Option<String>,
 	pub state: Option<String>,
+	pub state_null_flavor: Option<String>,
 	pub postcode: Option<String>,
+	pub postcode_null_flavor: Option<String>,
 	pub telephone: Option<String>,
+	pub telephone_null_flavor: Option<String>,
 	pub country_code: Option<String>,
 	pub qualification: Option<String>,
 	// MFDS.C.2.r.4.KR.1 - Other health professional type
 	pub qualification_kr1: Option<String>,
 	pub primary_source_regulatory: Option<String>,
-	pub reporter_name_null_flavor: Option<String>,
-	pub reporter_address_null_flavor: Option<String>,
+	pub country_code_null_flavor: Option<String>,
 	pub qualification_null_flavor: Option<String>,
 }
 
@@ -1654,22 +1611,32 @@ pub struct ReporterPresaveForCreate {
 struct ReporterPresaveForInsert {
 	organization_id: Uuid,
 	reporter_title: Option<String>,
+	reporter_title_null_flavor: Option<String>,
 	reporter_given_name: Option<String>,
+	reporter_given_name_null_flavor: Option<String>,
 	reporter_middle_name: Option<String>,
+	reporter_middle_name_null_flavor: Option<String>,
 	reporter_family_name: Option<String>,
+	reporter_family_name_null_flavor: Option<String>,
 	organization: Option<String>,
+	organization_null_flavor: Option<String>,
 	department: Option<String>,
+	department_null_flavor: Option<String>,
 	street: Option<String>,
+	street_null_flavor: Option<String>,
 	city: Option<String>,
+	city_null_flavor: Option<String>,
 	state: Option<String>,
+	state_null_flavor: Option<String>,
 	postcode: Option<String>,
+	postcode_null_flavor: Option<String>,
 	telephone: Option<String>,
+	telephone_null_flavor: Option<String>,
 	country_code: Option<String>,
 	qualification: Option<String>,
 	qualification_kr1: Option<String>,
 	primary_source_regulatory: Option<String>,
-	reporter_name_null_flavor: Option<String>,
-	reporter_address_null_flavor: Option<String>,
+	country_code_null_flavor: Option<String>,
 	qualification_null_flavor: Option<String>,
 }
 
@@ -1680,48 +1647,69 @@ impl IntoOrgScopedCreate for ReporterPresaveForCreate {
 		ReporterPresaveForInsert {
 			organization_id,
 			reporter_title: self.reporter_title,
+			reporter_title_null_flavor: self.reporter_title_null_flavor,
 			reporter_given_name: self.reporter_given_name,
+			reporter_given_name_null_flavor: self.reporter_given_name_null_flavor,
 			reporter_middle_name: self.reporter_middle_name,
+			reporter_middle_name_null_flavor: self.reporter_middle_name_null_flavor,
 			reporter_family_name: self.reporter_family_name,
+			reporter_family_name_null_flavor: self.reporter_family_name_null_flavor,
 			organization: self.organization,
+			organization_null_flavor: self.organization_null_flavor,
 			department: self.department,
+			department_null_flavor: self.department_null_flavor,
 			street: self.street,
+			street_null_flavor: self.street_null_flavor,
 			city: self.city,
+			city_null_flavor: self.city_null_flavor,
 			state: self.state,
+			state_null_flavor: self.state_null_flavor,
 			postcode: self.postcode,
+			postcode_null_flavor: self.postcode_null_flavor,
 			telephone: self.telephone,
+			telephone_null_flavor: self.telephone_null_flavor,
 			country_code: self.country_code,
 			qualification: self.qualification,
 			qualification_kr1: self.qualification_kr1,
 			primary_source_regulatory: self.primary_source_regulatory,
-			reporter_name_null_flavor: self.reporter_name_null_flavor,
-			reporter_address_null_flavor: self.reporter_address_null_flavor,
+			country_code_null_flavor: self.country_code_null_flavor,
 			qualification_null_flavor: self.qualification_null_flavor,
 		}
 	}
 }
 
 #[derive(Default, Fields, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ReporterPresaveForUpdate {
 	pub deleted: Option<bool>,
 	pub reporter_title: Option<String>,
+	pub reporter_title_null_flavor: Option<String>,
 	pub reporter_given_name: Option<String>,
+	pub reporter_given_name_null_flavor: Option<String>,
 	pub reporter_middle_name: Option<String>,
+	pub reporter_middle_name_null_flavor: Option<String>,
 	pub reporter_family_name: Option<String>,
+	pub reporter_family_name_null_flavor: Option<String>,
 	pub organization: Option<String>,
+	pub organization_null_flavor: Option<String>,
 	pub department: Option<String>,
+	pub department_null_flavor: Option<String>,
 	pub street: Option<String>,
+	pub street_null_flavor: Option<String>,
 	pub city: Option<String>,
+	pub city_null_flavor: Option<String>,
 	pub state: Option<String>,
+	pub state_null_flavor: Option<String>,
 	pub postcode: Option<String>,
+	pub postcode_null_flavor: Option<String>,
 	pub telephone: Option<String>,
+	pub telephone_null_flavor: Option<String>,
 	pub country_code: Option<String>,
 	pub qualification: Option<String>,
 	// MFDS.C.2.r.4.KR.1 - Other health professional type
 	pub qualification_kr1: Option<String>,
 	pub primary_source_regulatory: Option<String>,
-	pub reporter_name_null_flavor: Option<String>,
-	pub reporter_address_null_flavor: Option<String>,
+	pub country_code_null_flavor: Option<String>,
 	pub qualification_null_flavor: Option<String>,
 }
 
@@ -1738,14 +1726,27 @@ impl ReporterPresaveBmc {
 		data: ReporterPresaveForCreate,
 	) -> Result<Uuid> {
 		Self::validate_null_flavors(
-			data.reporter_name_null_flavor.as_deref(),
-			data.reporter_address_null_flavor.as_deref(),
+			data.reporter_title_null_flavor.as_deref(),
+			data.reporter_given_name_null_flavor.as_deref(),
+			data.reporter_middle_name_null_flavor.as_deref(),
+			data.reporter_family_name_null_flavor.as_deref(),
+			data.organization_null_flavor.as_deref(),
+			data.department_null_flavor.as_deref(),
+			data.street_null_flavor.as_deref(),
+			data.city_null_flavor.as_deref(),
+			data.state_null_flavor.as_deref(),
+			data.postcode_null_flavor.as_deref(),
+			data.telephone_null_flavor.as_deref(),
+			data.country_code_null_flavor.as_deref(),
 			data.qualification_null_flavor.as_deref(),
 		)?;
 		Self::validate_identity(
 			data.reporter_given_name.as_deref(),
+			data.reporter_given_name_null_flavor.as_deref(),
 			data.organization.as_deref(),
+			data.organization_null_flavor.as_deref(),
 			data.qualification.as_deref(),
+			data.qualification_null_flavor.as_deref(),
 		)?;
 		Self::ensure_unique_identity(
 			ctx,
@@ -1792,9 +1793,24 @@ impl ReporterPresaveBmc {
 		id: Uuid,
 		data: ReporterPresaveForUpdate,
 	) -> Result<()> {
+		if data.deleted == Some(true) {
+			return Err(validation_error(
+				"presave deletion must use lifecycle service",
+			));
+		}
 		Self::validate_null_flavors(
-			data.reporter_name_null_flavor.as_deref(),
-			data.reporter_address_null_flavor.as_deref(),
+			data.reporter_title_null_flavor.as_deref(),
+			data.reporter_given_name_null_flavor.as_deref(),
+			data.reporter_middle_name_null_flavor.as_deref(),
+			data.reporter_family_name_null_flavor.as_deref(),
+			data.organization_null_flavor.as_deref(),
+			data.department_null_flavor.as_deref(),
+			data.street_null_flavor.as_deref(),
+			data.city_null_flavor.as_deref(),
+			data.state_null_flavor.as_deref(),
+			data.postcode_null_flavor.as_deref(),
+			data.telephone_null_flavor.as_deref(),
+			data.country_code_null_flavor.as_deref(),
 			data.qualification_null_flavor.as_deref(),
 		)?;
 		if data.deleted != Some(true) {
@@ -1813,8 +1829,17 @@ impl ReporterPresaveBmc {
 				.or(current.qualification.as_deref());
 			Self::validate_identity(
 				reporter_given_name,
+				data.reporter_given_name_null_flavor
+					.as_deref()
+					.or(current.reporter_given_name_null_flavor.as_deref()),
 				organization,
+				data.organization_null_flavor
+					.as_deref()
+					.or(current.organization_null_flavor.as_deref()),
 				qualification,
+				data.qualification_null_flavor
+					.as_deref()
+					.or(current.qualification_null_flavor.as_deref()),
 			)?;
 			Self::ensure_unique_identity(
 				ctx,
@@ -1831,40 +1856,93 @@ impl ReporterPresaveBmc {
 	}
 
 	pub async fn delete(ctx: &Ctx, mm: &ModelManager, id: Uuid) -> Result<()> {
-		base_uuid::delete::<Self>(ctx, mm, id).await
+		PresaveLifecycleService::hard_delete(ctx, mm, PresaveKind::Reporter, id)
+			.await
 	}
 
 	fn validate_identity(
 		reporter_given_name: Option<&str>,
+		reporter_given_name_null_flavor: Option<&str>,
 		organization: Option<&str>,
+		organization_null_flavor: Option<&str>,
 		qualification: Option<&str>,
+		qualification_null_flavor: Option<&str>,
 	) -> Result<()> {
 		require_identity(
-			normalized_text(reporter_given_name).is_some()
-				&& normalized_text(organization).is_some()
-				&& normalized_text(qualification).is_some(),
-			"reporter presave requires reporter_given_name, organization, and qualification",
+			(normalized_text(reporter_given_name).is_some()
+				|| normalized_text(reporter_given_name_null_flavor).is_some())
+				&& (normalized_text(organization).is_some()
+					|| normalized_text(organization_null_flavor).is_some())
+				&& (normalized_text(qualification).is_some()
+					|| normalized_text(qualification_null_flavor).is_some()),
+			"reporter presave requires reporter_given_name, organization, and qualification values or nullFlavors",
 		)
 	}
 
 	fn validate_null_flavors(
-		reporter_name_null_flavor: Option<&str>,
-		reporter_address_null_flavor: Option<&str>,
+		reporter_title_null_flavor: Option<&str>,
+		reporter_given_name_null_flavor: Option<&str>,
+		reporter_middle_name_null_flavor: Option<&str>,
+		reporter_family_name_null_flavor: Option<&str>,
+		organization_null_flavor: Option<&str>,
+		department_null_flavor: Option<&str>,
+		street_null_flavor: Option<&str>,
+		city_null_flavor: Option<&str>,
+		state_null_flavor: Option<&str>,
+		postcode_null_flavor: Option<&str>,
+		telephone_null_flavor: Option<&str>,
+		country_code_null_flavor: Option<&str>,
 		qualification_null_flavor: Option<&str>,
 	) -> Result<()> {
-		const NAME_ADDRESS_ALLOWED: &[NullFlavor] =
+		const ELEMENT_ALLOWED: &[NullFlavor] =
 			&[NullFlavor::MSK, NullFlavor::ASKU, NullFlavor::NASK];
+		const TITLE_ALLOWED: &[NullFlavor] = &[
+			NullFlavor::MSK,
+			NullFlavor::UNK,
+			NullFlavor::ASKU,
+			NullFlavor::NASK,
+		];
+		// C.2.r.3 country additionally permits UNK per the ICH dictionary.
+		const COUNTRY_ALLOWED: &[NullFlavor] = &[
+			NullFlavor::MSK,
+			NullFlavor::UNK,
+			NullFlavor::ASKU,
+			NullFlavor::NASK,
+		];
 		const QUALIFICATION_ALLOWED: &[NullFlavor] = &[NullFlavor::UNK];
 
 		validate_null_flavor_set(
-			"reporter_name_null_flavor",
-			reporter_name_null_flavor,
-			NAME_ADDRESS_ALLOWED,
+			"reporter_title_null_flavor",
+			reporter_title_null_flavor,
+			TITLE_ALLOWED,
 		)?;
+		for (field, value) in [
+			(
+				"reporter_given_name_null_flavor",
+				reporter_given_name_null_flavor,
+			),
+			(
+				"reporter_middle_name_null_flavor",
+				reporter_middle_name_null_flavor,
+			),
+			(
+				"reporter_family_name_null_flavor",
+				reporter_family_name_null_flavor,
+			),
+			("organization_null_flavor", organization_null_flavor),
+			("department_null_flavor", department_null_flavor),
+			("street_null_flavor", street_null_flavor),
+			("city_null_flavor", city_null_flavor),
+			("state_null_flavor", state_null_flavor),
+			("postcode_null_flavor", postcode_null_flavor),
+			("telephone_null_flavor", telephone_null_flavor),
+		] {
+			validate_null_flavor_set(field, value, ELEMENT_ALLOWED)?;
+		}
 		validate_null_flavor_set(
-			"reporter_address_null_flavor",
-			reporter_address_null_flavor,
-			NAME_ADDRESS_ALLOWED,
+			"country_code_null_flavor",
+			country_code_null_flavor,
+			COUNTRY_ALLOWED,
 		)?;
 		validate_null_flavor_set(
 			"qualification_null_flavor",
@@ -1901,6 +1979,7 @@ impl ReporterPresaveBmc {
 }
 
 #[derive(Debug, Clone, Fields, FromRow, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct StudyPresave {
 	pub id: Uuid,
 	pub organization_id: Uuid,
@@ -1911,6 +1990,8 @@ pub struct StudyPresave {
 	pub sponsor_study_number: Option<String>,
 	pub sponsor_study_number_kind: Option<String>,
 	pub study_type_reaction: Option<String>,
+	pub fda_ind_number_occurred: Option<String>,
+	pub fda_pre_anda_number_occurred: Option<String>,
 	pub edc_sync: Option<bool>,
 	pub exclude_case_key_from_sync: Option<bool>,
 	pub created_at: OffsetDateTime,
@@ -1920,6 +2001,7 @@ pub struct StudyPresave {
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct StudyPresaveForCreate {
 	pub product_presave_id: Option<Uuid>,
 	pub study_name: Option<String>,
@@ -1927,6 +2009,8 @@ pub struct StudyPresaveForCreate {
 	pub sponsor_study_number: Option<String>,
 	pub sponsor_study_number_kind: Option<String>,
 	pub study_type_reaction: Option<String>,
+	pub fda_ind_number_occurred: Option<String>,
+	pub fda_pre_anda_number_occurred: Option<String>,
 	pub edc_sync: Option<bool>,
 	pub exclude_case_key_from_sync: Option<bool>,
 }
@@ -1940,6 +2024,8 @@ struct StudyPresaveForInsert {
 	sponsor_study_number: Option<String>,
 	sponsor_study_number_kind: Option<String>,
 	study_type_reaction: Option<String>,
+	fda_ind_number_occurred: Option<String>,
+	fda_pre_anda_number_occurred: Option<String>,
 	edc_sync: Option<bool>,
 	exclude_case_key_from_sync: Option<bool>,
 }
@@ -1956,6 +2042,8 @@ impl IntoOrgScopedCreate for StudyPresaveForCreate {
 			sponsor_study_number: self.sponsor_study_number,
 			sponsor_study_number_kind: self.sponsor_study_number_kind,
 			study_type_reaction: self.study_type_reaction,
+			fda_ind_number_occurred: self.fda_ind_number_occurred,
+			fda_pre_anda_number_occurred: self.fda_pre_anda_number_occurred,
 			edc_sync: self.edc_sync,
 			exclude_case_key_from_sync: self.exclude_case_key_from_sync,
 		}
@@ -1977,6 +2065,7 @@ impl StudyPresaveForCreate {
 }
 
 #[derive(Default, Fields, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct StudyPresaveForUpdate {
 	pub deleted: Option<bool>,
 	pub product_presave_id: Option<Uuid>,
@@ -1985,6 +2074,8 @@ pub struct StudyPresaveForUpdate {
 	pub sponsor_study_number: Option<String>,
 	pub sponsor_study_number_kind: Option<String>,
 	pub study_type_reaction: Option<String>,
+	pub fda_ind_number_occurred: Option<String>,
+	pub fda_pre_anda_number_occurred: Option<String>,
 	pub edc_sync: Option<bool>,
 	pub exclude_case_key_from_sync: Option<bool>,
 }
@@ -2076,13 +2167,10 @@ impl StudyPresaveBmc {
 		data: StudyPresaveForUpdate,
 	) -> Result<()> {
 		data.validate_fields()?;
-		if data.deleted == Some(true)
-			&& any_user_scope_contains(ctx, mm, id, |u| {
-				u.access_study_ids.as_deref()
-			})
-			.await?
-		{
-			return Err(relationship_conflict("study presave is granted to users"));
+		if data.deleted == Some(true) {
+			return Err(validation_error(
+				"presave deletion must use lifecycle service",
+			));
 		}
 		if data.deleted != Some(true) {
 			let current = Self::get(ctx, mm, id).await?;
@@ -2117,12 +2205,7 @@ impl StudyPresaveBmc {
 	}
 
 	pub async fn delete(ctx: &Ctx, mm: &ModelManager, id: Uuid) -> Result<()> {
-		if any_user_scope_contains(ctx, mm, id, |u| u.access_study_ids.as_deref())
-			.await?
-		{
-			return Err(relationship_conflict("study presave is granted to users"));
-		}
-		base_uuid::delete::<Self>(ctx, mm, id).await
+		PresaveLifecycleService::hard_delete(ctx, mm, PresaveKind::Study, id).await
 	}
 
 	fn validate_identity(
@@ -2265,7 +2348,8 @@ impl StudyPresaveRegistrationNumberBmc {
 	}
 
 	pub async fn delete(ctx: &Ctx, mm: &ModelManager, id: Uuid) -> Result<()> {
-		base_uuid::delete::<Self>(ctx, mm, id).await
+		PresaveLifecycleService::hard_delete(ctx, mm, PresaveKind::Narrative, id)
+			.await
 	}
 
 	pub async fn list_by_parent(
@@ -2300,6 +2384,43 @@ impl StudyPresaveRegistrationNumberBmc {
 		Ok(rows)
 	}
 }
+
+#[derive(Debug, Clone, Fields, FromRow, Serialize)]
+pub struct StudyPresaveFdaCrossReportedIndNumber {
+	pub id: Uuid,
+	pub study_presave_id: Uuid,
+	pub sequence_number: i32,
+	pub ind_number: String,
+	pub deleted: bool,
+	pub created_at: OffsetDateTime,
+	pub updated_at: OffsetDateTime,
+	pub created_by: Uuid,
+	pub updated_by: Option<Uuid>,
+}
+
+#[derive(Fields, Deserialize)]
+pub struct StudyPresaveFdaCrossReportedIndNumberForCreate {
+	pub study_presave_id: Uuid,
+	pub sequence_number: i32,
+	pub ind_number: String,
+	pub deleted: Option<bool>,
+}
+
+#[derive(Default, Fields, Deserialize)]
+pub struct StudyPresaveFdaCrossReportedIndNumberForUpdate {
+	pub sequence_number: Option<i32>,
+	pub ind_number: Option<String>,
+	pub deleted: Option<bool>,
+}
+
+impl_child_bmc!(
+	StudyPresaveFdaCrossReportedIndNumberBmc,
+	StudyPresaveFdaCrossReportedIndNumber,
+	StudyPresaveFdaCrossReportedIndNumberForCreate,
+	StudyPresaveFdaCrossReportedIndNumberForUpdate,
+	"study_presave_fda_cross_reported_ind_numbers",
+	"study_presave_id"
+);
 
 #[derive(Debug, Clone, Fields, FromRow, Serialize)]
 pub struct StudyPresaveProduct {
@@ -2388,6 +2509,7 @@ impl_child_bmc!(
 );
 
 #[derive(Debug, Clone, Fields, FromRow, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct NarrativePresave {
 	pub id: Uuid,
 	pub organization_id: Uuid,
@@ -2402,6 +2524,7 @@ pub struct NarrativePresave {
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct NarrativePresaveForCreate {
 	pub case_narrative: Option<String>,
 	pub case_narrative_notation: Option<String>,
@@ -2430,6 +2553,7 @@ impl IntoOrgScopedCreate for NarrativePresaveForCreate {
 }
 
 #[derive(Default, Fields, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct NarrativePresaveForUpdate {
 	pub deleted: Option<bool>,
 	pub case_narrative: Option<String>,
@@ -2491,6 +2615,11 @@ impl NarrativePresaveBmc {
 		id: Uuid,
 		data: NarrativePresaveForUpdate,
 	) -> Result<()> {
+		if data.deleted == Some(true) {
+			return Err(validation_error(
+				"presave deletion must use lifecycle service",
+			));
+		}
 		if data.deleted != Some(true) {
 			let current = Self::get(ctx, mm, id).await?;
 			let case_narrative = data
@@ -2542,37 +2671,5 @@ impl NarrativePresaveBmc {
 		} else {
 			Ok(())
 		}
-	}
-}
-
-#[cfg(test)]
-mod presave_guard_tests {
-	use super::id_scope_contains;
-	use sqlx::types::Uuid;
-
-	#[test]
-	fn scope_contains_matches_json_array_membership() {
-		let id = Uuid::new_v4();
-		let other = Uuid::new_v4();
-		let json = format!("[\"{id}\",\"{other}\"]");
-		assert!(id_scope_contains(Some(&json), id));
-		assert!(id_scope_contains(Some(&json), other));
-	}
-
-	#[test]
-	fn scope_absent_or_empty_is_false() {
-		let id = Uuid::new_v4();
-		assert!(!id_scope_contains(None, id));
-		assert!(!id_scope_contains(Some("[]"), id));
-		assert!(!id_scope_contains(
-			Some(&format!("[\"{}\"]", Uuid::new_v4())),
-			id
-		));
-	}
-
-	#[test]
-	fn malformed_scope_is_false_not_panic() {
-		let id = Uuid::new_v4();
-		assert!(!id_scope_contains(Some("not json"), id));
 	}
 }

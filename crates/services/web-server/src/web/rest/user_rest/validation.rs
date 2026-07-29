@@ -78,36 +78,48 @@ pub(super) fn serialize_scope_input(
 	})
 }
 
-pub(super) fn role_display_name(role: &str) -> String {
-	match canonical_role(role).as_str() {
-		ROLE_SYSTEM_ADMIN => "System Administrator".to_string(),
-		ROLE_SPONSOR_ADMIN_CRO => "Sponsor Administrator (CRO)".to_string(),
-		ROLE_SPONSOR_ADMIN_COMPANY => {
-			"Sponsor Administrator (Pharmaceutical Company)".to_string()
-		}
-		other => other.replace('_', " "),
+pub(super) fn validate_uuid_scope(
+	field: &str,
+	input: &Option<ScopeListInput>,
+) -> Result<()> {
+	for value in parse_scope_input(input.clone()).unwrap_or_default() {
+		Uuid::parse_str(value.trim()).map_err(|_| Error::BadRequest {
+			message: format!("{field} accepts UUID values only"),
+		})?;
 	}
+	Ok(())
+}
+
+pub(super) fn validate_optional_uuid_identifier(
+	field: &str,
+	value: Option<&str>,
+) -> Result<()> {
+	let Some(value) = value.map(str::trim).filter(|value| !value.is_empty()) else {
+		return Ok(());
+	};
+	Uuid::parse_str(value).map_err(|_| Error::BadRequest {
+		message: format!("{field} accepts a UUID value only"),
+	})?;
+	Ok(())
+}
+
+pub(super) fn role_display_name(role: &str) -> String {
+	let canonical = canonical_role(role);
+	built_in_role_metadata(&canonical)
+		.map(|metadata| metadata.display_name.to_string())
+		.unwrap_or_else(|| canonical.replace('_', " "))
 }
 
 pub(super) fn role_metadata(role: &str, _unused: Option<&str>) -> UserRoleMetadata {
 	let canonical_role_id = canonical_role(role);
-	let permission_subject = &canonical_role_id;
-	let is_builtin = matches!(
-		canonical_role_id.as_str(),
-		ROLE_SYSTEM_ADMIN | ROLE_SPONSOR_ADMIN_CRO | ROLE_SPONSOR_ADMIN_COMPANY
-	);
-	let is_sponsor_admin = matches!(
-		canonical_role_id.as_str(),
-		ROLE_SPONSOR_ADMIN_CRO | ROLE_SPONSOR_ADMIN_COMPANY
-	);
+	let built_in = built_in_role_metadata(&canonical_role_id);
 	UserRoleMetadata {
 		display_name: role_display_name(&canonical_role_id),
 		canonical_role_id: canonical_role_id.clone(),
-		is_builtin,
-		is_editable: !is_builtin,
-		is_sponsor_admin,
-		is_operational: canonical_role_id != ROLE_SYSTEM_ADMIN,
-		can_admin: is_builtin || has_permission(permission_subject, USER_CREATE),
+		is_builtin: built_in.is_some(),
+		is_editable: built_in.is_none(),
+		is_sponsor_admin: built_in.is_some_and(|metadata| metadata.sponsor_admin),
+		is_operational: built_in.is_none_or(|metadata| metadata.operational),
 	}
 }
 
@@ -126,12 +138,11 @@ pub(super) fn is_sponsor_admin_role(role: &str) -> bool {
 	matches!(role, ROLE_SPONSOR_ADMIN_CRO | ROLE_SPONSOR_ADMIN_COMPANY)
 }
 
-pub(super) fn sponsor_admin_mutation_error() -> Error {
-	Error::BadRequest {
-		message:
-			"Sponsor Administrator users can only be changed by a System Administrator"
-				.to_string(),
-	}
+pub(super) fn is_built_in_admin_role(role: &str) -> bool {
+	matches!(
+		role,
+		ROLE_SYSTEM_ADMIN | ROLE_SPONSOR_ADMIN_CRO | ROLE_SPONSOR_ADMIN_COMPANY
+	)
 }
 
 pub(super) fn sponsor_admin_singleton_error() -> Error {
@@ -139,36 +150,6 @@ pub(super) fn sponsor_admin_singleton_error() -> Error {
 		message:
 			"Only one Sponsor Administrator can be assigned for an organization"
 				.to_string(),
-	}
-}
-
-pub(super) fn validate_sponsor_admin_assignment_authority(
-	ctx: &Ctx,
-	role: Option<&str>,
-) -> Result<()> {
-	if role.is_some_and(is_sponsor_admin_role) && !ctx.is_system_admin() {
-		return Err(Error::BadRequest {
-			message: "Sponsor Administrator roles can only be assigned by a System Administrator".to_string(),
-		});
-	}
-	Ok(())
-}
-
-pub(super) fn validate_create_role_selection(role: Option<&str>) -> Result<()> {
-	match role {
-		Some(ROLE_USER) | None => Err(Error::BadRequest {
-			message: "permission profile selection is required".to_string(),
-		}),
-		_ => Ok(()),
-	}
-}
-
-pub(super) fn validate_update_role_selection(role: Option<&str>) -> Result<()> {
-	match role {
-		Some(ROLE_USER) => Err(Error::BadRequest {
-			message: "permission profile selection is required".to_string(),
-		}),
-		_ => Ok(()),
 	}
 }
 
@@ -182,7 +163,10 @@ pub(super) async fn validate_permission_profile_role_for_org(
 	};
 	if matches!(
 		role,
-		ROLE_SYSTEM_ADMIN | ROLE_SPONSOR_ADMIN_CRO | ROLE_SPONSOR_ADMIN_COMPANY
+		ROLE_SYSTEM_ADMIN
+			| ROLE_SPONSOR_ADMIN_CRO
+			| ROLE_SPONSOR_ADMIN_COMPANY
+			| ROLE_USER
 	) {
 		return Ok(());
 	}
@@ -222,16 +206,6 @@ pub(super) async fn validate_sponsor_admin_role_for_org(
 		| (ROLE_SPONSOR_ADMIN_COMPANY, Some(ORG_TYPE_PHARMACEUTICAL_COMPANY)) => Ok(()),
 		_ => Err(sponsor_admin_role_error()),
 	}
-}
-
-pub(super) fn validate_existing_sponsor_admin_mutation(
-	ctx: &Ctx,
-	user: &User,
-) -> Result<()> {
-	if is_sponsor_admin_role(&user.role) && !ctx.is_system_admin() {
-		return Err(sponsor_admin_mutation_error());
-	}
-	Ok(())
 }
 
 pub(super) async fn validate_single_sponsor_admin_for_org(
@@ -343,7 +317,12 @@ pub(super) fn has_sender_scope_assignment(
 	active_sender_identifier: &Option<String>,
 	access_sender_ids: &Option<ScopeListInput>,
 ) -> bool {
-	active_sender_identifier.is_some() || access_sender_ids.is_some()
+	active_sender_identifier
+		.as_deref()
+		.is_some_and(|value| !value.trim().is_empty())
+		|| parse_scope_input(access_sender_ids.clone()).is_some_and(|values| {
+			values.iter().any(|value| !value.trim().is_empty())
+		})
 }
 
 pub(super) fn sender_scope_assignment_forbidden_for_ctx(ctx: &Ctx) -> bool {
@@ -353,5 +332,54 @@ pub(super) fn sender_scope_assignment_forbidden_for_ctx(ctx: &Ctx) -> bool {
 pub(super) fn sender_scope_assignment_forbidden() -> Error {
 	Error::AccessDenied {
 		required_role: "sender_scope_assignment_cro_admin".to_string(),
+	}
+}
+
+#[cfg(test)]
+mod uuid_scope_tests {
+	use super::*;
+
+	#[test]
+	fn presave_scope_values_must_be_uuids() {
+		let valid_id = Uuid::new_v4().to_string();
+		assert!(validate_uuid_scope(
+			"access_sender_ids",
+			&Some(ScopeListInput::List(vec![valid_id])),
+		)
+		.is_ok());
+		assert!(validate_uuid_scope(
+			"access_sender_ids",
+			&Some(ScopeListInput::List(vec!["Sender Org A".to_string()])),
+		)
+		.is_err());
+		assert!(validate_optional_uuid_identifier(
+			"active_sender_identifier",
+			Some("Sender Org A"),
+		)
+		.is_err());
+	}
+
+	#[test]
+	fn empty_sender_scope_is_not_an_assignment() {
+		assert!(!has_sender_scope_assignment(
+			&None,
+			&Some(ScopeListInput::List(Vec::new())),
+		));
+		assert!(!has_sender_scope_assignment(
+			&Some("  ".to_string()),
+			&Some(ScopeListInput::Encoded(String::new())),
+		));
+	}
+
+	#[test]
+	fn populated_sender_scope_is_an_assignment() {
+		assert!(has_sender_scope_assignment(
+			&Some(Uuid::new_v4().to_string()),
+			&None,
+		));
+		assert!(has_sender_scope_assignment(
+			&None,
+			&Some(ScopeListInput::List(vec![Uuid::new_v4().to_string()])),
+		));
 	}
 }

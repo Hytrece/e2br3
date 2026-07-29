@@ -1,0 +1,418 @@
+{
+  "version": 1,
+  "auditedPages": ["CI", "LR", "RP", "SD", "SI"],
+  "sources": [
+    {"authority":"FDA","element":"C.1.1","sourceHash":"fnv1a64:b0e23d24156fb5b6","requirements":[{"id":"identifier-continuity-guidance","sourceExcerpt":"Guidance: Use the same Sender’s (case) Safety Report Unique Identifier","disposition":"guidance","reason":"Identifier continuity across previously submitted reports is submission-history guidance, not a single-case field check."}]},
+    {"authority":"ICH","element":"C.1.1","sourceHash":"fnv1a64:8c096ff17883e7a4","requirements":[{"id":"identifier-country-component","sourceExcerpt":"A two character country code","disposition":"deferred","reason":"The deployed case-validation catalog enforces length but not the ICH country-component identifier profile."}]},
+    {"authority":"MFDS","element":"C.1.1","sourceHash":"fnv1a64:1f26a14374dc075d","requirements":[{"id":"identifier-required-and-length","sourceExcerpt":"필수값으로 항목값 여부 검증","disposition":"business_rule","ruleCodes":["ICH.C.1.1.REQUIRED","ICH.C.1.1.LENGTH.MAX"]}]},
+    {"authority":"FDA","element":"C.1.10.r","sourceHash":"fnv1a64:f087bc5798c9a68a","requirements":[{"id":"aggregate-linked-report","sourceExcerpt":"If Patient (name or initials) (D.1) = AGGREGRATE","disposition":"deferred","reason":"No FDA aggregate-patient conditional linked-report rule is registered or evaluated."}]},
+    {"authority":"MFDS","element":"C.1.10.r","sourceHash":"fnv1a64:f6d2719b2ffb6be0","requirements":[{"id":"linked-report-length","sourceExcerpt":"입력값이 100자 이하인지 검증","disposition":"business_rule","ruleCodes":["ICH.C.1.10.r.LENGTH.MAX"]}]},
+    {"authority":"FDA","element":"C.1.11.1","sourceHash":"fnv1a64:8e833eaf10b466ac","requirements":[{"id":"initial-report-nullification-forbidden","sourceExcerpt":"Initial report cannot be a nullified","disposition":"deferred","reason":"No FDA initial-report nullification/amendment prohibition is registered or evaluated."}]},
+    {"authority":"MFDS","element":"C.1.11.1","sourceHash":"fnv1a64:4af16ad6f0525904","requirements":[{"id":"nullification-code-shape","sourceExcerpt":"입력값은 \"1\",\"2\"만 허용함","disposition":"business_rule","ruleCodes":["ICH.C.1.11.1.ALLOWED.VALUE","ICH.C.1.11.1.LENGTH.MAX"]}]},
+    {"authority":"MFDS","element":"C.1.11.2","sourceHash":"fnv1a64:1cd0c12288203f84","requirements":[{"id":"nullification-reason-required-and-length","sourceExcerpt":"조건부필수값으로 C.1.11.1","disposition":"business_rule","ruleCodes":["ICH.C.1.11.2.REQUIRED","ICH.C.1.11.2.LENGTH.MAX"]}]},
+    {"authority":"ICH","element":"C.1.2","sourceHash":"fnv1a64:535a4063b667b68a","requirements":[{"id":"transmission-date-shape","sourceExcerpt":"cannot refer to a future date","disposition":"business_rule","ruleCodes":["ICH.C.1.2.REQUIRED","ICH.C.1.2.ALLOWED.VALUE","ICH.C.1.2.FUTURE_DATE.FORBIDDEN"]}]},
+    {"authority":"MFDS","element":"C.1.2","sourceHash":"fnv1a64:425b87c2926cecb0","requirements":[{"id":"transmission-date-message-date-match","sourceExcerpt":"N.2.r.4와 동일한지 검증","disposition":"deferred","reason":"The case validator does not compare C.1.2 with the submission-generated N.2.r.4 message date."}]},
+    {"authority":"FDA","element":"C.1.3","sourceHash":"fnv1a64:f85a2bba3f3787d4","requirements":[{"id":"premarket-report-type","sourceExcerpt":"Batch Receiver Identifier (N.1.4) = ZZFDA_PREMKT","disposition":"deferred","reason":"Case validation does not receive the submission batch receiver needed for this FDA conditional rule."}]},
+    {"authority":"MFDS","element":"C.1.3","sourceHash":"fnv1a64:2e68ab2b9d393993","requirements":[{"id":"receiver-specific-report-type","sourceExcerpt":"N.2.r.3 항목값이 임상시험","disposition":"deferred","reason":"Case validation does not bind the submission receiver classification to the MFDS report-type condition."}]},
+    {"authority":"ICH","element":"C.1.4","sourceHash":"fnv1a64:9a8c50c1b19df7b0","requirements":[{"id":"first-received-date-business","sourceExcerpt":"cannot refer to a future date","disposition":"business_rule","ruleCodes":["ICH.C.1.4.REQUIRED","ICH.C.1.4.FUTURE_DATE.FORBIDDEN"]},{"id":"first-received-date-format","sourceExcerpt":"Minimum precision required is the day","disposition":"constraint","ruleCodes":["ICH.C.1.4.ALLOWED.VALUE"]}]},
+    {"authority":"MFDS","element":"C.1.4","sourceHash":"fnv1a64:76e2e9961220fbfd","requirements":[{"id":"first-received-date-business-mfds","sourceExcerpt":"미래날짜는 입력불가","disposition":"business_rule","ruleCodes":["ICH.C.1.4.REQUIRED","ICH.C.1.4.FUTURE_DATE.FORBIDDEN"]},{"id":"first-received-date-format-mfds","sourceExcerpt":"날짜 형식인지 검증","disposition":"constraint","ruleCodes":["ICH.C.1.4.ALLOWED.VALUE"]}]},
+    {"authority":"ICH","element":"C.1.5","sourceHash":"fnv1a64:9a8c50c1b19df7b0","requirements":[{"id":"most-recent-date-business","sourceExcerpt":"cannot refer to a future date","disposition":"business_rule","ruleCodes":["ICH.C.1.5.REQUIRED","ICH.C.1.5.FUTURE_DATE.FORBIDDEN"]},{"id":"most-recent-date-format","sourceExcerpt":"Minimum precision required is the day","disposition":"constraint","ruleCodes":["ICH.C.1.5.ALLOWED.VALUE"]}]},
+    {"authority":"MFDS","element":"C.1.5","sourceHash":"fnv1a64:92cfc820b8d024b2","requirements":[{"id":"most-recent-date-order","sourceExcerpt":"C.1.4 항목에서의 날짜보다 과거일수 없음","disposition":"business_rule","ruleCodes":["ICH.C.1.5.REQUIRED","ICH.C.1.5.FUTURE_DATE.FORBIDDEN","ICH.C.1.4.AFTER_C.1.5.FORBIDDEN"]},{"id":"most-recent-date-format-mfds","sourceExcerpt":"날짜 형식인지 검증","disposition":"constraint","ruleCodes":["ICH.C.1.5.ALLOWED.VALUE"]}]},
+    {"authority":"ICH","element":"C.1.6.1","sourceHash":"fnv1a64:7960dffc1238fcdc","requirements":[{"id":"attachment-guide-reference","sourceExcerpt":"please see Section 3.5","disposition":"guidance","reason":"The prose delegates attachment mechanics to the implementation guide."}]},
+    {"authority":"MFDS","element":"C.1.6.1","sourceHash":"fnv1a64:cf7e61d45b17ba24","requirements":[{"id":"documents-available-required","sourceExcerpt":"필수값으로 항목값 여부 검증","disposition":"business_rule","ruleCodes":["ICH.C.1.6.1.REQUIRED"]},{"id":"documents-available-value","sourceExcerpt":"입력값은 \"예\",\"아니오\"만 허용함","disposition":"constraint","ruleCodes":["ICH.C.1.6.1.ALLOWED.VALUE"]}]},
+    {"authority":"MFDS","element":"C.1.6.1.r.1","sourceHash":"fnv1a64:5b132ea84a7feb4a","requirements":[{"id":"document-description-conditional","sourceExcerpt":"C.1.6.1항목값이 \"예\"인 경우 필수","disposition":"business_rule","ruleCodes":["ICH.C.1.6.1.r.1.REQUIRED","ICH.C.1.6.1.r.1.LENGTH.MAX"]}]},
+    {"authority":"FDA","element":"C.1.6.1.r.2","sourceHash":"fnv1a64:3c3b8b0d9bece73d","requirements":[{"id":"attachment-base64-only","sourceExcerpt":"encoding is limited to B64","disposition":"business_rule","ruleCodes":["ICH.C.1.6.1.r.2.ALLOWED.VALUE"]}]},
+    {"authority":"ICH","element":"C.1.6.1.r.2","sourceHash":"fnv1a64:aca64c8320986d95","requirements":[{"id":"regional-attachment-policy","sourceExcerpt":"Value Allowed","disposition":"guidance","reason":"ICH delegates attachment value policy to each receiving region."}]},
+    {"authority":"MFDS","element":"C.1.6.1.r.2","sourceHash":"fnv1a64:f9afae00e605db93","requirements":[{"id":"attachment-format","sourceExcerpt":"첨부된 파일이 허용하는 형식인지 검증","disposition":"business_rule","ruleCodes":["ICH.C.1.6.1.r.2.ALLOWED.VALUE"]}]},
+    {"authority":"FDA","element":"C.1.7","sourceHash":"fnv1a64:7174cb8650635816","requirements":[{"id":"initial-null-flavor-ni-forbidden","sourceExcerpt":"does not support use of the nullFlavor 'NI'","disposition":"deferred","reason":"The validator does not distinguish initial FDA submissions for the NI nullFlavor prohibition."}]},
+    {"authority":"ICH","element":"C.1.7","sourceHash":"fnv1a64:22c89fcda453d8ce","requirements":[{"id":"expedited-criteria-required","sourceExcerpt":"only ‘false’ or ‘true’ should be used","disposition":"business_rule","ruleCodes":["ICH.C.1.7.REQUIRED"]},{"id":"expedited-criteria-value","sourceExcerpt":"nullFlavor’ is only allowed","disposition":"constraint","ruleCodes":["ICH.C.1.7.ALLOWED.VALUE","ICH.C.1.7.NULLFLAVOR.ALLOWED"]}]},
+    {"authority":"MFDS","element":"C.1.7","sourceHash":"fnv1a64:0f88b336fa77026b","requirements":[{"id":"receiver-specific-expedited-criteria","sourceExcerpt":"N.2.r.3 항목값이 임상시험","disposition":"deferred","reason":"Case validation does not bind submission receiver classification to this MFDS condition."}]},
+    {"authority":"FDA","element":"C.1.8.1","sourceHash":"fnv1a64:6627adcec7e5e945","requirements":[{"id":"vaers-external-guidance","sourceExcerpt":"provides additional user guidance","disposition":"guidance","reason":"The source points to a separate VAERS guidance document and states no executable condition."}]},
+    {"authority":"ICH","element":"C.1.8.1","sourceHash":"fnv1a64:e93d7855d50deb25","requirements":[{"id":"xml-identifier-mapping","sourceExcerpt":"mapped to the repeatable XML attribute","disposition":"guidance","reason":"This describes XML serialization structure rather than a field validation condition."}]},
+    {"authority":"MFDS","element":"C.1.8.1","sourceHash":"fnv1a64:1f26a14374dc075d","requirements":[{"id":"worldwide-id-required-and-length","sourceExcerpt":"필수값으로 항목값 여부 검증","disposition":"business_rule","ruleCodes":["ICH.C.1.8.1.REQUIRED","ICH.C.1.8.1.LENGTH.MAX"]}]},
+    {"authority":"MFDS","element":"C.1.8.2","sourceHash":"fnv1a64:3f7c26a8e40e6856","requirements":[{"id":"first-sender-type","sourceExcerpt":"입력값은 \"1\",\"2\"만 허용함","disposition":"business_rule","ruleCodes":["ICH.C.1.8.2.REQUIRED","ICH.C.1.8.2.ALLOWED.VALUE","ICH.C.1.8.2.LENGTH.MAX"]}]},
+    {"authority":"ICH","element":"C.1.9.1","sourceHash":"fnv1a64:1ab6b95674ce4086","requirements":[{"id":"other-identifiers-marker","sourceExcerpt":"False is not a value allowed","disposition":"business_rule","ruleCodes":["ICH.C.1.9.1.REQUIRED","ICH.C.1.9.1.ALLOWED.VALUE"]},{"id":"other-identifiers-null-flavor","sourceExcerpt":"nullFlavor","disposition":"constraint","ruleCodes":["ICH.C.1.9.1.NULLFLAVOR.ALLOWED"]}]},
+    {"authority":"MFDS","element":"C.1.9.1","sourceHash":"fnv1a64:9240bdebb8bba688","requirements":[{"id":"other-identifiers-marker-and-children","sourceExcerpt":"C.1.9.1.r.1, C.1.9.1.r.2항목이 필수","disposition":"business_rule","ruleCodes":["ICH.C.1.9.1.REQUIRED","ICH.C.1.9.1.ALLOWED.VALUE","ICH.C.1.9.1.r.1.REQUIRED","ICH.C.1.9.1.r.2.REQUIRED"]},{"id":"other-identifiers-null-flavor-mfds","sourceExcerpt":"nullflavor","disposition":"constraint","ruleCodes":["ICH.C.1.9.1.NULLFLAVOR.ALLOWED"]}]},
+    {"authority":"FDA","element":"C.1.9.1.r.1","sourceHash":"fnv1a64:9eac0684d9f93af6","requirements":[{"id":"identifier-source-required","sourceExcerpt":"cannot be empty","disposition":"business_rule","ruleCodes":["ICH.C.1.9.1.r.1.REQUIRED"]}]},
+    {"authority":"ICH","element":"C.1.9.1.r.1","sourceHash":"fnv1a64:1435591914c84bf3","requirements":[{"id":"identifier-source-xml-mapping","sourceExcerpt":"The following notation will be used","disposition":"guidance","reason":"This prose describes XML attribute placement rather than a validation condition."}]},
+    {"authority":"MFDS","element":"C.1.9.1.r.1","sourceHash":"fnv1a64:c12f113881ed4180","requirements":[{"id":"identifier-source-required-and-length","sourceExcerpt":"조건부필수값으로 C.1.9.1","disposition":"business_rule","ruleCodes":["ICH.C.1.9.1.r.1.REQUIRED","ICH.C.1.9.1.r.1.LENGTH.MAX"]}]},
+    {"authority":"FDA","element":"C.1.9.1.r.2","sourceHash":"fnv1a64:3b9795ce3b72ef36","requirements":[{"id":"case-identifier-required","sourceExcerpt":"cannot be empty","disposition":"business_rule","ruleCodes":["ICH.C.1.9.1.r.2.REQUIRED"]}]},
+    {"authority":"ICH","element":"C.1.9.1.r.2","sourceHash":"fnv1a64:abd6c4b1f1c0f66b","requirements":[{"id":"case-identifier-xml-mapping","sourceExcerpt":"The following notation will be used","disposition":"guidance","reason":"This prose describes XML attribute placement rather than a validation condition."}]},
+    {"authority":"MFDS","element":"C.1.9.1.r.2","sourceHash":"fnv1a64:c12f113881ed4180","requirements":[{"id":"case-identifier-required-and-length","sourceExcerpt":"조건부필수값으로 C.1.9.1","disposition":"business_rule","ruleCodes":["ICH.C.1.9.1.r.2.REQUIRED","ICH.C.1.9.1.r.2.LENGTH.MAX"]}]},
+    {"authority":"FDA","element":"FDA.C.1.12","sourceHash":"fnv1a64:01e50ef2bfea52d5","requirements":[{"id":"combination-product-indicator","sourceExcerpt":"Required per FDA Regional guidance","disposition":"business_rule","ruleCodes":["FDA.C.1.12.REQUIRED","FDA.C.1.12.RECOMMENDED"]}]},
+    {"authority":"FDA","element":"FDA.C.1.7.1","sourceHash":"fnv1a64:7b6df9bf98115495","requirements":[{"id":"local-criteria-report-type-required","sourceExcerpt":"Combination Product Report Indicator","disposition":"business_rule","ruleCodes":["FDA.C.1.7.1.REQUIRED"]},{"id":"local-criteria-report-type-length","sourceExcerpt":"Use element values 4 for remedial action","disposition":"constraint","ruleCodes":["FDA.C.1.7.1.LENGTH.MAX"]},{"id":"local-criteria-report-type-values","sourceExcerpt":"Use element values 4 for remedial action","disposition":"deferred","reason":"The FDA local-criteria value policy is present in prose but absent from the compiled case-validation and portable constraint catalogs."}]},
+    {"authority":"ICH","element":"C.2.r.1.1","sourceHash":"fnv1a64:ffa0cd6ce242edc4","requirements":[{"id":"reporter-title-business-rule-reference","sourceExcerpt":"See the business rules","disposition":"guidance","reason":"This source block only points to the C.2.r business rules; representation checks are classified by the regional source."}]},
+    {"authority":"MFDS","element":"C.2.r.1.1","sourceHash":"fnv1a64:d1b6c4bbdaf8d9fc","requirements":[{"id":"reporter-title-shape","sourceExcerpt":"입력값이 50자 이하인지 검증","disposition":"constraint","ruleCodes":["ICH.C.2.r.1.1.LENGTH.MAX","ICH.C.2.r.1.1.NULLFLAVOR.ALLOWED"]}]},
+    {"authority":"FDA","element":"C.2.r.1.2","sourceHash":"fnv1a64:b10ef08ab7f4b7de","requirements":[{"id":"vaers-primary-reporter-given-name","sourceExcerpt":"required when C.2.r.5 = 1","disposition":"deferred","reason":"The FDA primary-reporter required/MSK restriction is not registered or evaluated."}]},
+    {"authority":"ICH","element":"C.2.r.1.2","sourceHash":"fnv1a64:ffa0cd6ce242edc4","requirements":[{"id":"reporter-given-name-business-rule-reference","sourceExcerpt":"See the business rules","disposition":"guidance","reason":"This source block only points to the C.2.r business rules."}]},
+    {"authority":"MFDS","element":"C.2.r.1.2","sourceHash":"fnv1a64:dd2863ceb1f8f98d","requirements":[{"id":"reporter-given-name-regional-condition","sourceExcerpt":"임상시험과 치료목적 사용승인의 경우 필수값","disposition":"deferred","reason":"The MFDS study/therapeutic-use reporter-name condition is not registered or evaluated."}]},
+    {"authority":"ICH","element":"C.2.r.1.3","sourceHash":"fnv1a64:1b56a111a50bdc53","requirements":[{"id":"reporter-middle-name-xml-guidance","sourceExcerpt":"does not support the concept of ‘middle name’","disposition":"guidance","reason":"This describes XML name serialization rather than a validation condition."}]},
+    {"authority":"MFDS","element":"C.2.r.1.3","sourceHash":"fnv1a64:0cdf378eb3a34913","requirements":[{"id":"reporter-middle-name-shape","sourceExcerpt":"입력값이 60자 이하인지 검증","disposition":"constraint","ruleCodes":["ICH.C.2.r.1.3.LENGTH.MAX","ICH.C.2.r.1.3.NULLFLAVOR.ALLOWED"]}]},
+    {"authority":"FDA","element":"C.2.r.1.4","sourceHash":"fnv1a64:b10ef08ab7f4b7de","requirements":[{"id":"vaers-primary-reporter-family-name","sourceExcerpt":"required when C.2.r.5 = 1","disposition":"deferred","reason":"The FDA primary-reporter required/MSK restriction is not registered or evaluated."}]},
+    {"authority":"ICH","element":"C.2.r.1.4","sourceHash":"fnv1a64:ffa0cd6ce242edc4","requirements":[{"id":"reporter-family-name-business-rule-reference","sourceExcerpt":"See the business rules","disposition":"guidance","reason":"This source block only points to the C.2.r business rules."}]},
+    {"authority":"MFDS","element":"C.2.r.1.4","sourceHash":"fnv1a64:0cdf378eb3a34913","requirements":[{"id":"reporter-family-name-shape","sourceExcerpt":"입력값이 60자 이하인지 검증","disposition":"constraint","ruleCodes":["ICH.C.2.r.1.4.LENGTH.MAX","ICH.C.2.r.1.4.NULLFLAVOR.ALLOWED"]}]},
+    {"authority":"ICH","element":"C.2.r.2.1","sourceHash":"fnv1a64:ffa0cd6ce242edc4","requirements":[{"id":"reporter-organization-business-rule-reference","sourceExcerpt":"See the business rules","disposition":"guidance","reason":"This source block only points to the C.2.r business rules."}]},
+    {"authority":"MFDS","element":"C.2.r.2.1","sourceHash":"fnv1a64:b7c6b326130ca23e","requirements":[{"id":"reporter-organization-regional-condition","sourceExcerpt":"임상시험과 치료목적 사용승인의 경우 필수값","disposition":"deferred","reason":"The MFDS study/therapeutic-use organization condition is not registered or evaluated."}]},
+    {"authority":"ICH","element":"C.2.r.2.2","sourceHash":"fnv1a64:ffa0cd6ce242edc4","requirements":[{"id":"reporter-department-business-rule-reference","sourceExcerpt":"See the business rules","disposition":"guidance","reason":"This source block only points to the C.2.r business rules."}]},
+    {"authority":"MFDS","element":"C.2.r.2.2","sourceHash":"fnv1a64:0cdf378eb3a34913","requirements":[{"id":"reporter-department-shape","sourceExcerpt":"입력값이 60자 이하인지 검증","disposition":"constraint","ruleCodes":["ICH.C.2.r.2.2.LENGTH.MAX","ICH.C.2.r.2.2.NULLFLAVOR.ALLOWED"]}]},
+    {"authority":"FDA","element":"C.2.r.2.3","sourceHash":"fnv1a64:b10ef08ab7f4b7de","requirements":[{"id":"vaers-primary-reporter-street","sourceExcerpt":"required when C.2.r.5 = 1","disposition":"deferred","reason":"The FDA primary-reporter required/MSK restriction is not registered or evaluated."}]},
+    {"authority":"ICH","element":"C.2.r.2.3","sourceHash":"fnv1a64:ffa0cd6ce242edc4","requirements":[{"id":"reporter-street-business-rule-reference","sourceExcerpt":"See the business rules","disposition":"guidance","reason":"This source block only points to the C.2.r business rules."}]},
+    {"authority":"MFDS","element":"C.2.r.2.3","sourceHash":"fnv1a64:ddd0d7647b1c086b","requirements":[{"id":"reporter-address-regional-condition","sourceExcerpt":"최소 1항목 입력 검증","disposition":"deferred","reason":"The MFDS conditional address-group minimum is not registered or evaluated."}]},
+    {"authority":"FDA","element":"C.2.r.2.4","sourceHash":"fnv1a64:b10ef08ab7f4b7de","requirements":[{"id":"vaers-primary-reporter-city","sourceExcerpt":"required when C.2.r.5 = 1","disposition":"deferred","reason":"The FDA primary-reporter required/MSK restriction is not registered or evaluated."}]},
+    {"authority":"ICH","element":"C.2.r.2.4","sourceHash":"fnv1a64:ffa0cd6ce242edc4","requirements":[{"id":"reporter-city-business-rule-reference","sourceExcerpt":"See the business rules","disposition":"guidance","reason":"This source block only points to the C.2.r business rules."}]},
+    {"authority":"MFDS","element":"C.2.r.2.4","sourceHash":"fnv1a64:622cfdfeca42c24e","requirements":[{"id":"reporter-city-regional-condition","sourceExcerpt":"최소 1항목 입력 검증","disposition":"deferred","reason":"The MFDS conditional address-group minimum is not registered or evaluated."}]},
+    {"authority":"FDA","element":"C.2.r.2.5","sourceHash":"fnv1a64:b10ef08ab7f4b7de","requirements":[{"id":"vaers-primary-reporter-state","sourceExcerpt":"required when C.2.r.5 = 1","disposition":"deferred","reason":"The FDA primary-reporter required/MSK restriction is not registered or evaluated."}]},
+    {"authority":"ICH","element":"C.2.r.2.5","sourceHash":"fnv1a64:ffa0cd6ce242edc4","requirements":[{"id":"reporter-state-business-rule-reference","sourceExcerpt":"See the business rules","disposition":"guidance","reason":"This source block only points to the C.2.r business rules."}]},
+    {"authority":"MFDS","element":"C.2.r.2.5","sourceHash":"fnv1a64:ff988d8c98ca8f2e","requirements":[{"id":"reporter-state-regional-condition","sourceExcerpt":"최소 1항목 입력 검증","disposition":"deferred","reason":"The MFDS conditional address-group minimum is not registered or evaluated."}]},
+    {"authority":"FDA","element":"C.2.r.2.6","sourceHash":"fnv1a64:b10ef08ab7f4b7de","requirements":[{"id":"vaers-primary-reporter-postcode","sourceExcerpt":"required when C.2.r.5 = 1","disposition":"deferred","reason":"The FDA primary-reporter required/MSK restriction is not registered or evaluated."}]},
+    {"authority":"ICH","element":"C.2.r.2.6","sourceHash":"fnv1a64:ffa0cd6ce242edc4","requirements":[{"id":"reporter-postcode-business-rule-reference","sourceExcerpt":"See the business rules","disposition":"guidance","reason":"This source block only points to the C.2.r business rules."}]},
+    {"authority":"MFDS","element":"C.2.r.2.6","sourceHash":"fnv1a64:2e87d772bf4f49a7","requirements":[{"id":"reporter-postcode-shape","sourceExcerpt":"입력값이 15자 이하인지 검증","disposition":"constraint","ruleCodes":["ICH.C.2.r.2.6.LENGTH.MAX","ICH.C.2.r.2.6.NULLFLAVOR.ALLOWED"]}]},
+    {"authority":"FDA","element":"C.2.r.2.7","sourceHash":"fnv1a64:70287a9c7095b039","requirements":[{"id":"vaers-primary-reporter-telephone","sourceExcerpt":"required when C.2.r.5 = 1","disposition":"deferred","reason":"The FDA required/MSK and telecom-prefix rules are not fully registered or evaluated."}]},
+    {"authority":"ICH","element":"C.2.r.2.7","sourceHash":"fnv1a64:ffa0cd6ce242edc4","requirements":[{"id":"reporter-telephone-business-rule-reference","sourceExcerpt":"See the business rules","disposition":"guidance","reason":"This source block only points to the C.2.r business rules."}]},
+    {"authority":"MFDS","element":"C.2.r.2.7","sourceHash":"fnv1a64:f3cef1bdb35bf987","requirements":[{"id":"reporter-telephone-shape","sourceExcerpt":"입력값이 33자 이하인지 검증","disposition":"constraint","ruleCodes":["ICH.C.2.r.2.7.LENGTH.MAX","ICH.C.2.r.2.7.NULLFLAVOR.ALLOWED"]}]},
+    {"authority":"FDA","element":"C.2.r.3","sourceHash":"fnv1a64:b10ef08ab7f4b7de","requirements":[{"id":"vaers-primary-reporter-country","sourceExcerpt":"required when C.2.r.5 = 1","disposition":"deferred","reason":"The FDA primary-reporter required/MSK restriction is not fully registered or evaluated."}]},
+    {"authority":"ICH","element":"C.2.r.3","sourceHash":"fnv1a64:2e0397d616300b2d","requirements":[{"id":"reporter-country-vocabulary","sourceExcerpt":"A two character country code","disposition":"business_rule","ruleCodes":["ICH.C.2.r.3.VOCABULARY"]}]},
+    {"authority":"MFDS","element":"C.2.r.3","sourceHash":"fnv1a64:5ac28f576ca09c54","requirements":[{"id":"reporter-country-regional-condition","sourceExcerpt":"C.2.r.5 항목값이 \"1\"인 경우 필수","disposition":"deferred","reason":"The full MFDS reporter-country condition and alphabetic policy are not represented as a distinct executable source mapping."}]},
+    {"authority":"ICH","element":"C.2.r.4","sourceHash":"fnv1a64:9d5d223a7b976754","requirements":[{"id":"reporter-qualification","sourceExcerpt":"nullFlavor = UNK","disposition":"business_rule","ruleCodes":["ICH.C.2.r.4.REQUIRED"]},{"id":"reporter-qualification-null-flavor","sourceExcerpt":"nullFlavor","disposition":"constraint","ruleCodes":["ICH.C.2.r.4.ALLOWED.VALUE","ICH.C.2.r.4.NULLFLAVOR.ALLOWED"]}]},
+    {"authority":"MFDS","element":"C.2.r.4","sourceHash":"fnv1a64:ad1358f8762a76af","requirements":[{"id":"reporter-qualification-regional-condition","sourceExcerpt":"임상시험 보고인 경우 nullflavor 허용하지 않음","disposition":"deferred","reason":"The MFDS receiver-specific qualification nullFlavor prohibition is not registered or evaluated."}]},
+    {"authority":"MFDS","element":"C.2.r.4.KR.1","sourceHash":"fnv1a64:0d4dbccdb90b0512","requirements":[{"id":"qualification-kr1-regional-condition","sourceExcerpt":"국내보고의 경우","disposition":"deferred","reason":"The MFDS domestic-report conditional and defaulting behavior are not fully registered or evaluated."}]},
+    {"authority":"ICH","element":"C.2.r.5","sourceHash":"fnv1a64:7c03e7db461f73d1","requirements":[{"id":"primary-source-exactly-once","sourceExcerpt":"once, and only once","disposition":"business_rule","ruleCodes":["ICH.C.2.r.5.REQUIRED"]}]},
+    {"authority":"MFDS","element":"C.2.r.5","sourceHash":"fnv1a64:5b6f239fd9ac6669","requirements":[{"id":"primary-source-exactly-once-mfds","sourceExcerpt":"1번만 입력되어야 함","disposition":"business_rule","ruleCodes":["ICH.C.2.r.5.REQUIRED"]},{"id":"primary-source-marker-shape","sourceExcerpt":"입력값은 \"1\"만 허용함","disposition":"constraint","ruleCodes":["ICH.C.2.r.5.ALLOWED.VALUE"]}]},
+    {"authority":"FDA","element":"FDA.C.2.r.2.8","sourceHash":"fnv1a64:0426dff78c7e5197","requirements":[{"id":"reporter-email-telecom-prefix","sourceExcerpt":"include the telecom prefix","disposition":"deferred","reason":"The FDA reporter-email telecom-prefix/nullFlavor representation rule is not fully registered or evaluated."}]},
+    {"authority":"MFDS","element":"C.3.1","sourceHash":"fnv1a64:8e978220b2575073","requirements":[{"id":"sender-type","sourceExcerpt":"필수값으로 항목값 여부 검증","disposition":"business_rule","ruleCodes":["ICH.C.3.1.REQUIRED"]},{"id":"sender-type-shape","sourceExcerpt":"입력값은 \"1\",\"2\",\"3\",\"4\",\"5\",\"6\",\"7\"만 허용함","disposition":"constraint","ruleCodes":["ICH.C.3.1.ALLOWED.VALUE"]}]},
+    {"authority":"MFDS","element":"C.3.1.KR.1","sourceHash":"fnv1a64:46486154c30ab411","requirements":[{"id":"sender-health-professional-type-kr1","sourceExcerpt":"국내보고의 경우","disposition":"deferred","reason":"The MFDS domestic-report condition and defaulting behavior are not fully registered or evaluated."}]},
+    {"authority":"MFDS","element":"C.3.2","sourceHash":"fnv1a64:63ec23393f57c465","requirements":[{"id":"sender-organization-conditional","sourceExcerpt":"C.3.1값이 \"1\",\"2\",\"3\",\"4\",\"5\",\"6\"인 경우","disposition":"business_rule","ruleCodes":["ICH.C.3.2.REQUIRED"]},{"id":"sender-organization-length","sourceExcerpt":"입력값이 100자 이하인지 검증","disposition":"constraint","ruleCodes":["ICH.C.3.2.LENGTH.MAX"]}]},
+    {"authority":"FDA","element":"C.3.3.1","sourceHash":"fnv1a64:4b03aa7d269b0c9d","requirements":[{"id":"fda-sender-department-required","sourceExcerpt":"Regionally required for all reports","disposition":"deferred","reason":"The FDA sender-contact required rule is not registered or evaluated for this field."}]},
+    {"authority":"ICH","element":"C.3.3.1","sourceHash":"fnv1a64:50e05f73e9647fa8","requirements":[{"id":"sender-department-business-rule-reference","sourceExcerpt":"See the business rules","disposition":"guidance","reason":"This source block only points to the C.3.3 business rules."}]},
+    {"authority":"MFDS","element":"C.3.3.1","sourceHash":"fnv1a64:76df3fc9d1ec5891","requirements":[{"id":"sender-department-length","sourceExcerpt":"입력값이 60자 이하인지 검증","disposition":"constraint","ruleCodes":["ICH.C.3.3.1.LENGTH.MAX"]}]},
+    {"authority":"FDA","element":"C.3.3.2","sourceHash":"fnv1a64:4b03aa7d269b0c9d","requirements":[{"id":"fda-sender-title-required","sourceExcerpt":"Regionally required for all reports","disposition":"deferred","reason":"The FDA sender-contact required rule is not registered or evaluated for this field."}]},
+    {"authority":"ICH","element":"C.3.3.2","sourceHash":"fnv1a64:50e05f73e9647fa8","requirements":[{"id":"sender-title-business-rule-reference","sourceExcerpt":"See the business rules","disposition":"guidance","reason":"This source block only points to the C.3.3 business rules."}]},
+    {"authority":"MFDS","element":"C.3.3.2","sourceHash":"fnv1a64:d6b96201acb5aca4","requirements":[{"id":"sender-title-length","sourceExcerpt":"입력값이 50자 이하인지 검증","disposition":"constraint","ruleCodes":["ICH.C.3.3.2.LENGTH.MAX"]}]},
+    {"authority":"FDA","element":"C.3.3.3","sourceHash":"fnv1a64:4b03aa7d269b0c9d","requirements":[{"id":"fda-sender-given-name-required","sourceExcerpt":"Regionally required for all reports","disposition":"deferred","reason":"The FDA sender-contact required rule is not registered or evaluated for this field."}]},
+    {"authority":"ICH","element":"C.3.3.3","sourceHash":"fnv1a64:50e05f73e9647fa8","requirements":[{"id":"sender-given-name-business-rule-reference","sourceExcerpt":"See the business rules","disposition":"guidance","reason":"This source block only points to the C.3.3 business rules."}]},
+    {"authority":"MFDS","element":"C.3.3.3","sourceHash":"fnv1a64:f21397b9bfad1e7a","requirements":[{"id":"sender-given-name-regional-condition","sourceExcerpt":"임상시험과 치료목적 사용승인의 경우 필수값","disposition":"deferred","reason":"The MFDS study/therapeutic-use sender-name condition is not registered or evaluated."}]},
+    {"authority":"ICH","element":"C.3.3.4","sourceHash":"fnv1a64:28468914d05440fb","requirements":[{"id":"sender-middle-name-xml-guidance","sourceExcerpt":"does not support the concept of ‘middle name’","disposition":"guidance","reason":"This describes XML name serialization rather than a validation condition."}]},
+    {"authority":"MFDS","element":"C.3.3.4","sourceHash":"fnv1a64:76df3fc9d1ec5891","requirements":[{"id":"sender-middle-name-length","sourceExcerpt":"입력값이 60자 이하인지 검증","disposition":"constraint","ruleCodes":["ICH.C.3.3.4.LENGTH.MAX"]}]},
+    {"authority":"FDA","element":"C.3.3.5","sourceHash":"fnv1a64:4b03aa7d269b0c9d","requirements":[{"id":"fda-sender-family-name-required","sourceExcerpt":"Regionally required for all reports","disposition":"deferred","reason":"The FDA sender-contact required rule is not registered or evaluated for this field."}]},
+    {"authority":"ICH","element":"C.3.3.5","sourceHash":"fnv1a64:50e05f73e9647fa8","requirements":[{"id":"sender-family-name-business-rule-reference","sourceExcerpt":"See the business rules","disposition":"guidance","reason":"This source block only points to the C.3.3 business rules."}]},
+    {"authority":"MFDS","element":"C.3.3.5","sourceHash":"fnv1a64:76df3fc9d1ec5891","requirements":[{"id":"sender-family-name-length","sourceExcerpt":"입력값이 60자 이하인지 검증","disposition":"constraint","ruleCodes":["ICH.C.3.3.5.LENGTH.MAX"]}]},
+    {"authority":"FDA","element":"C.3.4.1","sourceHash":"fnv1a64:4b03aa7d269b0c9d","requirements":[{"id":"fda-sender-street-required","sourceExcerpt":"Regionally required for all reports","disposition":"deferred","reason":"The FDA sender-contact required rule is not registered or evaluated for this field."}]},
+    {"authority":"ICH","element":"C.3.4.1","sourceHash":"fnv1a64:50e05f73e9647fa8","requirements":[{"id":"sender-street-business-rule-reference","sourceExcerpt":"See the business rules","disposition":"guidance","reason":"This source block only points to the C.3.3 business rules."}]},
+    {"authority":"MFDS","element":"C.3.4.1","sourceHash":"fnv1a64:d6211c4390bf2b98","requirements":[{"id":"sender-street-length","sourceExcerpt":"입력값이 100자 이하인지 검증","disposition":"constraint","ruleCodes":["ICH.C.3.4.1.LENGTH.MAX"]}]},
+    {"authority":"FDA","element":"C.3.4.2","sourceHash":"fnv1a64:4b03aa7d269b0c9d","requirements":[{"id":"fda-sender-city-required","sourceExcerpt":"Regionally required for all reports","disposition":"deferred","reason":"The FDA sender-contact required rule is not registered or evaluated for this field."}]},
+    {"authority":"ICH","element":"C.3.4.2","sourceHash":"fnv1a64:50e05f73e9647fa8","requirements":[{"id":"sender-city-business-rule-reference","sourceExcerpt":"See the business rules","disposition":"guidance","reason":"This source block only points to the C.3.3 business rules."}]},
+    {"authority":"MFDS","element":"C.3.4.2","sourceHash":"fnv1a64:820f022d034eafeb","requirements":[{"id":"sender-city-length","sourceExcerpt":"입력값이 35자 이하인지 검증","disposition":"constraint","ruleCodes":["ICH.C.3.4.2.LENGTH.MAX"]}]},
+    {"authority":"FDA","element":"C.3.4.3","sourceHash":"fnv1a64:4b03aa7d269b0c9d","requirements":[{"id":"fda-sender-state-required","sourceExcerpt":"Regionally required for all reports","disposition":"deferred","reason":"The FDA sender-contact required rule is not registered or evaluated for this field."}]},
+    {"authority":"ICH","element":"C.3.4.3","sourceHash":"fnv1a64:50e05f73e9647fa8","requirements":[{"id":"sender-state-business-rule-reference","sourceExcerpt":"See the business rules","disposition":"guidance","reason":"This source block only points to the C.3.3 business rules."}]},
+    {"authority":"MFDS","element":"C.3.4.3","sourceHash":"fnv1a64:bdedd2fe8654cd27","requirements":[{"id":"sender-state-length","sourceExcerpt":"입력값이 40자 이하인지 검증","disposition":"constraint","ruleCodes":["ICH.C.3.4.3.LENGTH.MAX"]}]},
+    {"authority":"FDA","element":"C.3.4.4","sourceHash":"fnv1a64:4b03aa7d269b0c9d","requirements":[{"id":"fda-sender-postcode-required","sourceExcerpt":"Regionally required for all reports","disposition":"deferred","reason":"The FDA sender-contact required rule is not registered or evaluated for this field."}]},
+    {"authority":"ICH","element":"C.3.4.4","sourceHash":"fnv1a64:50e05f73e9647fa8","requirements":[{"id":"sender-postcode-business-rule-reference","sourceExcerpt":"See the business rules","disposition":"guidance","reason":"This source block only points to the C.3.3 business rules."}]},
+    {"authority":"MFDS","element":"C.3.4.4","sourceHash":"fnv1a64:23e488bec2dc2aa1","requirements":[{"id":"sender-postcode-length","sourceExcerpt":"입력값이 15자 이하인지 검증","disposition":"constraint","ruleCodes":["ICH.C.3.4.4.LENGTH.MAX"]}]},
+    {"authority":"FDA","element":"C.3.4.5","sourceHash":"fnv1a64:4b03aa7d269b0c9d","requirements":[{"id":"fda-sender-country-required","sourceExcerpt":"Regionally required for all reports","disposition":"deferred","reason":"The FDA sender-contact required rule is not registered or evaluated for this field."}]},
+    {"authority":"ICH","element":"C.3.4.5","sourceHash":"fnv1a64:50e05f73e9647fa8","requirements":[{"id":"sender-country-business-rule-reference","sourceExcerpt":"See the business rules","disposition":"guidance","reason":"This source block only points to the C.3.3 business rules."}]},
+    {"authority":"MFDS","element":"C.3.4.5","sourceHash":"fnv1a64:105128305166ac9f","requirements":[{"id":"sender-country-shape","sourceExcerpt":"ISO 3166-1 alpha-2","disposition":"business_rule","ruleCodes":["ICH.C.3.4.5.VOCABULARY"]},{"id":"sender-country-length","sourceExcerpt":"입력값이 2자 이하인지 검증","disposition":"constraint","ruleCodes":["ICH.C.3.4.5.LENGTH.MAX"]}]},
+    {"authority":"FDA","element":"C.3.4.6","sourceHash":"fnv1a64:4b03aa7d269b0c9d","requirements":[{"id":"fda-sender-telephone-required","sourceExcerpt":"Regionally required for all reports","disposition":"deferred","reason":"The FDA sender-contact required rule is not registered or evaluated for this field."}]},
+    {"authority":"ICH","element":"C.3.4.6","sourceHash":"fnv1a64:50e05f73e9647fa8","requirements":[{"id":"sender-telephone-business-rule-reference","sourceExcerpt":"See the business rules","disposition":"guidance","reason":"This source block only points to the C.3.3 business rules."}]},
+    {"authority":"MFDS","element":"C.3.4.6","sourceHash":"fnv1a64:3a6f7b2e429e2279","requirements":[{"id":"sender-telephone-length","sourceExcerpt":"입력값이 33자 이하인지 검증","disposition":"constraint","ruleCodes":["ICH.C.3.4.6.LENGTH.MAX"]}]},
+    {"authority":"FDA","element":"C.3.4.7","sourceHash":"fnv1a64:4b03aa7d269b0c9d","requirements":[{"id":"fda-sender-fax-required","sourceExcerpt":"Regionally required for all reports","disposition":"deferred","reason":"The FDA sender-contact required rule is not registered or evaluated for this field."}]},
+    {"authority":"ICH","element":"C.3.4.7","sourceHash":"fnv1a64:50e05f73e9647fa8","requirements":[{"id":"sender-fax-business-rule-reference","sourceExcerpt":"See the business rules","disposition":"guidance","reason":"This source block only points to the C.3.3 business rules."}]},
+    {"authority":"MFDS","element":"C.3.4.7","sourceHash":"fnv1a64:3a6f7b2e429e2279","requirements":[{"id":"sender-fax-length","sourceExcerpt":"입력값이 33자 이하인지 검증","disposition":"constraint","ruleCodes":["ICH.C.3.4.7.LENGTH.MAX"]}]},
+    {"authority":"FDA","element":"C.3.4.8","sourceHash":"fnv1a64:4b03aa7d269b0c9d","requirements":[{"id":"fda-sender-email-required","sourceExcerpt":"Regionally required for all reports","disposition":"deferred","reason":"The FDA sender-contact required rule is not registered or evaluated for this field."}]},
+    {"authority":"ICH","element":"C.3.4.8","sourceHash":"fnv1a64:50e05f73e9647fa8","requirements":[{"id":"sender-email-business-rule-reference","sourceExcerpt":"See the business rules","disposition":"guidance","reason":"This source block only points to the C.3.3 business rules."}]},
+    {"authority":"MFDS","element":"C.3.4.8","sourceHash":"fnv1a64:d6211c4390bf2b98","requirements":[{"id":"sender-email-length","sourceExcerpt":"입력값이 100자 이하인지 검증","disposition":"constraint","ruleCodes":["ICH.C.3.4.8.LENGTH.MAX"]}]},
+    {
+      "authority": "ICH",
+      "element": "C.4.r.1",
+      "sourceHash": "fnv1a64:915141c7b36208f9",
+      "requirements": [
+        {
+          "id": "null-flavor-guide-reference",
+          "sourceExcerpt": "further guidance on the use of nullFlavor",
+          "disposition": "guidance",
+          "reason": "The prose points to implementation guidance; allowed nullFlavors are structured dictionary constraints."
+        }
+      ]
+    },
+    {
+      "authority": "MFDS",
+      "element": "C.4.r.1",
+      "sourceHash": "fnv1a64:8c29e91d7e740d0b",
+      "requirements": [
+        {
+          "id": "reference-length-and-null-flavor",
+          "sourceExcerpt": "입력값이 500자 이하인지 검증",
+          "disposition": "constraint",
+          "ruleCodes": [
+            "ICH.C.4.r.1.LENGTH.MAX",
+            "ICH.C.4.r.1.NULLFLAVOR.ALLOWED"
+          ]
+        }
+      ]
+    },
+    {
+      "authority": "ICH",
+      "element": "C.4.r.2",
+      "sourceHash": "fnv1a64:1be37ffe28af13c2",
+      "requirements": [
+        {
+          "id": "regional-attachment-policy",
+          "sourceExcerpt": "'Value Allowed' is defined by each region",
+          "disposition": "guidance",
+          "reason": "ICH delegates attachment value policy to each receiving region."
+        }
+      ]
+    },
+    {
+      "authority": "FDA",
+      "element": "C.4.r.2",
+      "sourceHash": "fnv1a64:4a5f58db9609295e",
+      "requirements": [
+        {
+          "id": "filename-media-type-match",
+          "sourceExcerpt": "file extension in the filename does not match the media type",
+          "disposition": "deferred",
+          "reason": "Literature attachment filename is not preserved through UI, API, DB, or XML roundtrip."
+        }
+      ]
+    },
+    {
+      "authority": "MFDS",
+      "element": "C.4.r.2",
+      "sourceHash": "fnv1a64:70bb2be38a12cb39",
+      "requirements": [
+        {
+          "id": "attachment-format",
+          "sourceExcerpt": "첨부된 파일이 허용하는 형식인지 검증",
+          "disposition": "constraint",
+          "ruleCodes": ["ICH.C.4.r.2.ALLOWED.VALUE"]
+        }
+      ]
+    },
+    {
+      "authority": "ICH",
+      "element": "C.5.1.r.1",
+      "sourceHash": "fnv1a64:1cd86139cb83ffe2",
+      "requirements": [
+        {
+          "id": "registration-number-xml-and-null-flavor-guidance",
+          "sourceExcerpt": "further guidance on the use of nullFlavor",
+          "disposition": "guidance",
+          "reason": "The source describes XML serialization and delegates nullFlavor policy to implementation guidance."
+        }
+      ]
+    },
+    {
+      "authority": "MFDS",
+      "element": "C.5.1.r.1",
+      "sourceHash": "fnv1a64:598e229fb45a2595",
+      "requirements": [
+        {
+          "id": "registration-number-regional-policy",
+          "sourceExcerpt": "임상시험승인대장의 승인번호와 대조 검증",
+          "disposition": "deferred",
+          "reason": "Length and nullFlavor shape exist, but receiver-specific presence/nullFlavor prohibition and external approval-registry matching are not registered and evaluated."
+        }
+      ]
+    },
+    {
+      "authority": "ICH",
+      "element": "C.5.1.r.2",
+      "sourceHash": "fnv1a64:3050dca11b7c956c",
+      "requirements": [
+        {
+          "id": "registration-country-vocabulary",
+          "sourceExcerpt": "A two character country code",
+          "disposition": "business_rule",
+          "ruleCodes": ["ICH.C.5.1.r.2.VOCABULARY"]
+        },
+        {
+          "id": "registration-country-shape",
+          "sourceExcerpt": "use of nullFlavor",
+          "disposition": "constraint",
+          "ruleCodes": ["ICH.C.5.1.r.2.LENGTH.MAX", "ICH.C.5.1.r.2.NULLFLAVOR.ALLOWED"]
+        }
+      ]
+    },
+    {
+      "authority": "MFDS",
+      "element": "C.5.1.r.2",
+      "sourceHash": "fnv1a64:954fb8c21d08ad4c",
+      "requirements": [
+        {
+          "id": "registration-country-vocabulary-mfds",
+          "sourceExcerpt": "ISO 3166-1 alpha-2, EU",
+          "disposition": "business_rule",
+          "ruleCodes": ["ICH.C.5.1.r.2.VOCABULARY"]
+        },
+        {
+          "id": "registration-country-shape-mfds",
+          "sourceExcerpt": "nullflavor는 \"ASKU\", \"NASK\"",
+          "disposition": "constraint",
+          "ruleCodes": ["ICH.C.5.1.r.2.LENGTH.MAX", "ICH.C.5.1.r.2.NULLFLAVOR.ALLOWED"]
+        }
+      ]
+    },
+    {
+      "authority": "FDA",
+      "element": "C.5.2",
+      "sourceHash": "fnv1a64:f09b5f73b3119521",
+      "requirements": [
+        {
+          "id": "premarket-study-name-format",
+          "sourceExcerpt": "Study ID$Abbreviated Trial Name",
+          "disposition": "deferred",
+          "reason": "No receiver-aware FDA study-name format rule is registered or evaluated."
+        }
+      ]
+    },
+    {
+      "authority": "ICH",
+      "element": "C.5.2",
+      "sourceHash": "fnv1a64:0fdf175115993c8d",
+      "requirements": [
+        {
+          "id": "study-name-null-flavor-guidance",
+          "sourceExcerpt": "further guidance on the use of nullFlavor",
+          "disposition": "guidance",
+          "reason": "The source only points to general nullFlavor guidance."
+        }
+      ]
+    },
+    {
+      "authority": "MFDS",
+      "element": "C.5.2",
+      "sourceHash": "fnv1a64:d097d72b356ad706",
+      "requirements": [
+        {
+          "id": "study-name-regional-policy",
+          "sourceExcerpt": "임상시험승인대장의 승인번호와 대조 검증",
+          "disposition": "deferred",
+          "reason": "The deployed length limit is the ICH 2000-character constraint, while MFDS requires 50 characters plus receiver-specific presence and external approval-registry matching."
+        }
+      ]
+    },
+    {
+      "authority": "ICH",
+      "element": "C.5.3",
+      "sourceHash": "fnv1a64:63cdc939eddcd873",
+      "requirements": [
+        {
+          "id": "sponsor-study-number-xml-guidance",
+          "sourceExcerpt": "actual sponsor study number is populated at id extension",
+          "disposition": "guidance",
+          "reason": "The source describes XML serialization and general nullFlavor guidance."
+        }
+      ]
+    },
+    {
+      "authority": "MFDS",
+      "element": "C.5.3",
+      "sourceHash": "fnv1a64:688d65fdb51fc124",
+      "requirements": [
+        {
+          "id": "sponsor-study-number-regional-policy",
+          "sourceExcerpt": "임상시험승인대장의 일련번호와 대조 검증",
+          "disposition": "deferred",
+          "reason": "ICH study-report presence and length exist, but MFDS receiver-specific presence/nullFlavor prohibition and external approval-registry matching are not registered and evaluated."
+        }
+      ]
+    },
+    {
+      "authority": "FDA",
+      "element": "C.5.4",
+      "sourceHash": "fnv1a64:85565efdb387d5c3",
+      "requirements": [
+        {
+          "id": "premarket-or-aggregate-study-type",
+          "sourceExcerpt": "Observation Code: (Value allowed: 1)",
+          "disposition": "deferred",
+          "reason": "No FDA aggregate-patient or premarket-receiver condition restricts C.5.4 to value 1."
+        }
+      ]
+    },
+    {
+      "authority": "ICH",
+      "element": "C.5.4",
+      "sourceHash": "fnv1a64:67c27ce0b9ad070e",
+      "requirements": [
+        {
+          "id": "study-type-required",
+          "sourceExcerpt": "required if C.1.3=2",
+          "disposition": "business_rule",
+          "ruleCodes": ["ICH.C.5.4.REQUIRED"]
+        }
+      ]
+    },
+    {
+      "authority": "MFDS",
+      "element": "C.5.4",
+      "sourceHash": "fnv1a64:8826aef509a85f29",
+      "requirements": [
+        {
+          "id": "study-type-base-policy",
+          "sourceExcerpt": "입력값은 \"1\",\"2\",\"3\"만 허용함",
+          "disposition": "business_rule",
+          "ruleCodes": ["ICH.C.5.4.REQUIRED", "ICH.C.5.4.ALLOWED.VALUE"]
+        },
+        {
+          "id": "study-type-receiver-restriction",
+          "sourceExcerpt": "임상시험(CT)의 경우 \"1\"만 허용",
+          "disposition": "deferred",
+          "reason": "The receiver-specific CT/CU value restriction is not registered or evaluated."
+        }
+      ]
+    },
+    {
+      "authority": "MFDS",
+      "element": "C.5.4.KR.1",
+      "sourceHash": "fnv1a64:194683b93f49c520",
+      "requirements": [
+        {
+          "id": "other-study-type-regional-policy",
+          "sourceExcerpt": "입력값이 없을경우 \"4\" 자동 입력",
+          "disposition": "deferred",
+          "reason": "A C.5.4=3 presence rule and length constraint exist, but domestic-report gating, allowed values 1-4, and defaulting to 4 are not fully implemented."
+        }
+      ]
+    },
+    {
+      "authority": "FDA",
+      "element": "FDA.C.5.5a",
+      "sourceHash": "fnv1a64:08afc2b4f560a4fa",
+      "requirements": [
+        {
+          "id": "ind-number-regional-policy",
+          "sourceExcerpt": "format must be \"123456\"",
+          "disposition": "deferred",
+          "reason": "The catalog has receiver-aware presence and six-digit value logic, but case evaluation reads sponsorStudyNumber instead of the canonical fdaIndNumberOccurred field and does not implement the aggregate Parent IND policy."
+        }
+      ]
+    },
+    {
+      "authority": "FDA",
+      "element": "FDA.C.5.5b",
+      "sourceHash": "fnv1a64:4b8dea500d86b2ef",
+      "requirements": [
+        {
+          "id": "pre-anda-number-regional-policy",
+          "sourceExcerpt": "format must be \"234567\"",
+          "disposition": "deferred",
+          "reason": "The catalog has receiver-aware presence and six-digit value logic, but case evaluation reads sponsorStudyNumber instead of the canonical fdaPreAndaNumberOccurred field."
+        }
+      ]
+    },
+    {
+      "authority": "FDA",
+      "element": "FDA.C.5.6.r",
+      "sourceHash": "fnv1a64:4c9ee16e2455a399",
+      "requirements": [
+        {
+          "id": "cross-reported-ind-policy",
+          "sourceExcerpt": "Use nullFlavor=NA if there are no other cross reported IND",
+          "disposition": "deferred",
+          "reason": "The presence rule is wired to generic study registrations and sponsorStudyNumber rather than the canonical FDA IND and cross-reported IND fields, and NA nullFlavor handling is not evaluated."
+        }
+      ]
+    }
+  ]
+}

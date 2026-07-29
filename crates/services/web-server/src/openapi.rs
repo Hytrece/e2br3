@@ -1,13 +1,9 @@
 use axum::Router;
 use utoipa::openapi::security::{ApiKey, ApiKeyValue, SecurityScheme};
 use utoipa::{Modify, OpenApi, ToSchema};
-use utoipa_swagger_ui::SwaggerUi;
 
 pub fn router() -> Router {
-	Router::new().merge(
-		SwaggerUi::new("/swagger-ui")
-			.url("/api-docs/openapi.json", ApiDoc::openapi()),
-	)
+	Router::new()
 }
 
 #[derive(OpenApi)]
@@ -120,6 +116,7 @@ pub fn router() -> Router {
 		list_case_submissions,
 		search_meddra,
 		search_whodrug,
+		search_mfds_products,
 		import_meddra,
 		import_whodrug,
 		list_terminology_releases,
@@ -174,12 +171,6 @@ pub fn router() -> Router {
 			RoutingProfileDoc,
 			RoutingSenderOptionDoc,
 			EffectiveScopeSummaryDoc,
-			UserCapabilitiesDoc,
-			ModuleCrudCapabilitiesDoc,
-			CaseCapabilitiesDoc,
-			ExecuteCapabilitiesDoc,
-			DataCapabilitiesDoc,
-			AdminCapabilitiesDoc,
 			CreateUserRequest,
 			UpdateUserRequest,
 			SetMyPasswordBodyDoc,
@@ -198,7 +189,6 @@ pub fn router() -> Router {
 			CaseEditorDirectSectionResponseDoc,
 			CaseEditorPageProjectionResponseDoc,
 			CaseEditorPagePatchRequestDoc,
-			CaseEditorFieldPatchDoc,
 			CaseEditorFieldEnvelopeDoc,
 			CaseEditorFieldIssueDoc,
 			CaseEditorRowDetailResponseDoc,
@@ -500,7 +490,7 @@ struct CaseEditorShellDoc {
 	id: String,
 	status: String,
 	organization_id: String,
-	safety_report_id: String,
+	safety_report_identification: CaseEditorShellSafetyReportDoc,
 	dg_prd_key: Option<String>,
 	created_at: String,
 	updated_at: String,
@@ -514,6 +504,12 @@ struct CaseEditorShellDoc {
 	is_locked: bool,
 	can_act_on_workflow: bool,
 	workflow_block_reason: Option<String>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+struct CaseEditorShellSafetyReportDoc {
+	safety_report_id: String,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, ToSchema)]
@@ -545,17 +541,7 @@ struct CaseEditorPagePatchRequestDoc {
 	/// Validation/render authorities for page projection: ich,fda,mfds.
 	authorities: Option<Vec<String>>,
 	#[schema(value_type = Object)]
-	changes: serde_json::Value,
-	#[schema(value_type = Object)]
 	rows: serde_json::Value,
-}
-
-#[derive(serde::Serialize, serde::Deserialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-struct CaseEditorFieldPatchDoc {
-	#[schema(value_type = Object)]
-	value: serde_json::Value,
-	null_flavor: Option<String>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, ToSchema)]
@@ -932,7 +918,6 @@ struct UserRoleMetadataDoc {
 	is_editable: bool,
 	is_sponsor_admin: bool,
 	is_operational: bool,
-	can_admin: bool,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, ToSchema)]
@@ -1006,89 +991,13 @@ struct RoutingProfileDoc {
 
 #[derive(serde::Serialize, serde::Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
-struct ModuleCrudCapabilitiesDoc {
-	/// Permission to view records in this module.
-	read: bool,
-	/// Permission to create records in this module.
-	create: bool,
-	/// Permission to update records in this module.
-	update: bool,
-	/// Permission to delete records in this module.
-	delete: bool,
-}
-
-#[derive(serde::Serialize, serde::Deserialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-struct CaseCapabilitiesDoc {
-	read: bool,
-	create: bool,
-	update: bool,
-	delete: bool,
-	/// Permission to approve or review cases.
-	review: bool,
-	/// Permission to lock cases. Currently follows case approval permission.
-	lock: bool,
-}
-
-#[derive(serde::Serialize, serde::Deserialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-struct ExecuteCapabilitiesDoc {
-	/// Permission to view history or metadata for this operation.
-	read: bool,
-	/// Permission to run this operation.
-	execute: bool,
-}
-
-#[derive(serde::Serialize, serde::Deserialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-struct DataCapabilitiesDoc {
-	read: bool,
-	/// Permission to import terminology data.
-	import: bool,
-	/// Permission to approve terminology data.
-	approve: bool,
-}
-
-#[derive(serde::Serialize, serde::Deserialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-struct AdminCapabilitiesDoc {
-	/// Permission to open admin surfaces.
-	read: bool,
-	/// Permission to make admin-level changes.
-	update: bool,
-}
-
-#[derive(serde::Serialize, serde::Deserialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-struct HomeNoticeCapabilitiesDoc {
-	/// Permission to read HOME notices.
-	read: bool,
-	/// Permission to create, update, or delete HOME notices.
-	update: bool,
-}
-
-#[derive(serde::Serialize, serde::Deserialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-struct UserCapabilitiesDoc {
-	case: CaseCapabilitiesDoc,
-	info: ModuleCrudCapabilitiesDoc,
-	import: ExecuteCapabilitiesDoc,
-	export_submission: ExecuteCapabilitiesDoc,
-	data: DataCapabilitiesDoc,
-	admin: AdminCapabilitiesDoc,
-	users: ModuleCrudCapabilitiesDoc,
-	roles: ModuleCrudCapabilitiesDoc,
-	settings: AdminCapabilitiesDoc,
-	home_notice: HomeNoticeCapabilitiesDoc,
-}
-
-#[derive(serde::Serialize, serde::Deserialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
 struct CurrentUserProfileDoc {
 	user: UserDoc,
 	routing: RoutingProfileDoc,
-	/// Backend-derived permissions for the authenticated user's UI affordances.
-	capabilities: UserCapabilitiesDoc,
+	/// Canonical actions eligible for the authenticated user before resource checks.
+	eligible_actions: Vec<String>,
+	/// Monotonic version of the effective RBAC policy.
+	policy_version: i64,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, ToSchema)]
@@ -1337,8 +1246,6 @@ struct PatientInformationDoc {
 	id: String,
 	case_id: String,
 	patient_initials: Option<String>,
-	patient_given_name: Option<String>,
-	patient_family_name: Option<String>,
 	birth_date: Option<String>,
 	age_at_time_of_onset: Option<String>,
 	age_unit: Option<String>,
@@ -1377,8 +1284,6 @@ struct PatientInformationForCreateDoc {
 #[derive(serde::Serialize, serde::Deserialize, ToSchema)]
 struct PatientInformationForUpdateDoc {
 	patient_initials: Option<String>,
-	patient_given_name: Option<String>,
-	patient_family_name: Option<String>,
 	patient_initials_null_flavor: Option<String>,
 	birth_date: Option<String>,
 	birth_date_null_flavor: Option<String>,
@@ -1412,7 +1317,7 @@ struct ReactionDoc {
 	reaction_language: Option<String>,
 	reaction_meddra_version: Option<String>,
 	reaction_meddra_code: Option<String>,
-	term_highlighted: Option<bool>,
+	term_highlighted: Option<String>,
 	serious: Option<bool>,
 	criteria_death: bool,
 	criteria_death_null_flavor: Option<String>,
@@ -1427,7 +1332,6 @@ struct ReactionDoc {
 	criteria_other_medically_important: bool,
 	criteria_other_medically_important_null_flavor: Option<String>,
 	required_intervention: Option<String>,
-	included_in_ema_ime_list: Option<bool>,
 	expectedness: Option<String>,
 	severity: Option<String>,
 	mfds_device_ae_classification: Option<String>,
@@ -1467,7 +1371,6 @@ struct ReactionForCreateDoc {
 	case_id: String,
 	sequence_number: i32,
 	primary_source_reaction: String,
-	included_in_ema_ime_list: Option<bool>,
 	expectedness: Option<String>,
 	severity: Option<String>,
 	mfds_device_ae_classification: Option<String>,
@@ -1496,7 +1399,7 @@ struct ReactionForUpdateDoc {
 	reaction_language: Option<String>,
 	reaction_meddra_code: Option<String>,
 	reaction_meddra_version: Option<String>,
-	term_highlighted: Option<bool>,
+	term_highlighted: Option<String>,
 	serious: Option<bool>,
 	criteria_death: Option<bool>,
 	criteria_death_null_flavor: Option<String>,
@@ -1511,7 +1414,6 @@ struct ReactionForUpdateDoc {
 	criteria_other_medically_important: Option<bool>,
 	criteria_other_medically_important_null_flavor: Option<String>,
 	required_intervention: Option<String>,
-	included_in_ema_ime_list: Option<bool>,
 	expectedness: Option<String>,
 	severity: Option<String>,
 	mfds_device_ae_classification: Option<String>,
@@ -1558,8 +1460,6 @@ struct DrugInformationDoc {
 	phpid_version: Option<String>,
 	investigational_product_blinded: Option<bool>,
 	obtain_drug_country: Option<String>,
-	brand_name: Option<String>,
-	drug_generic_name: Option<String>,
 	drug_authorization_number: Option<String>,
 	manufacturer_name: Option<String>,
 	manufacturer_country: Option<String>,
@@ -1568,10 +1468,7 @@ struct DrugInformationDoc {
 	cumulative_dose_first_reaction_unit: Option<String>,
 	gestation_period_exposure_value: Option<String>,
 	gestation_period_exposure_unit: Option<String>,
-	dosage_text: Option<String>,
 	action_taken: Option<String>,
-	rechallenge: Option<String>,
-	parent_dosage_text: Option<String>,
 	fda_additional_info_coded: Option<String>,
 	#[schema(value_type = Object)]
 	drug_additional_info_codes_json: Option<serde_json::Value>,
@@ -1602,8 +1499,6 @@ struct DrugInformationForUpdateDoc {
 	source_product_presave_id: Option<String>,
 	medicinal_product: Option<String>,
 	drug_characterization: Option<String>,
-	brand_name: Option<String>,
-	drug_generic_name: Option<String>,
 	drug_authorization_number: Option<String>,
 	manufacturer_name: Option<String>,
 	manufacturer_country: Option<String>,
@@ -1612,9 +1507,7 @@ struct DrugInformationForUpdateDoc {
 	cumulative_dose_first_reaction_unit: Option<String>,
 	gestation_period_exposure_value: Option<String>,
 	gestation_period_exposure_unit: Option<String>,
-	dosage_text: Option<String>,
 	action_taken: Option<String>,
-	rechallenge: Option<String>,
 	investigational_product_blinded: Option<bool>,
 	mpid: Option<String>,
 	mpid_version: Option<String>,
@@ -1623,7 +1516,6 @@ struct DrugInformationForUpdateDoc {
 	phpid: Option<String>,
 	phpid_version: Option<String>,
 	obtain_drug_country: Option<String>,
-	parent_dosage_text: Option<String>,
 	fda_additional_info_coded: Option<String>,
 	#[schema(value_type = Object)]
 	drug_additional_info_codes_json: Option<serde_json::Value>,
@@ -3718,6 +3610,21 @@ fn search_meddra() {}
 	responses((status = 200, description = "WHO Drug results", body = GenericDataResponse))
 )]
 fn search_whodrug() {}
+
+#[utoipa::path(
+	get,
+	path = "/api/terminology/mfds-products",
+	tag = "terminology",
+	security(
+		("auth_token" = [])
+	),
+	params(
+		("q" = String, Query, description = "ITEM_SEQ, product, or manufacturer search term"),
+		("limit" = Option<i64>, Query, description = "Maximum rows (1-100)")
+	),
+	responses((status = 200, description = "Active MFDS product results", body = GenericDataResponse))
+)]
+fn search_mfds_products() {}
 
 #[utoipa::path(
 	post,

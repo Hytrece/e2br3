@@ -1,6 +1,6 @@
 use crate::common::{
-	cookie_header, init_test_mm, insert_user, seed_org_with_all_roles,
-	seed_org_with_users, system_user_id, Result,
+	cookie_header, init_test_mm, insert_user, seed_active_test_meddra_term,
+	seed_org_with_all_roles, seed_org_with_users, system_user_id, Result,
 };
 use axum::body::{to_bytes, Body};
 use axum::http::{Request, StatusCode};
@@ -82,9 +82,11 @@ async fn create_safety_report(
 			"transmission_date": [2024, 1],
 			"report_type": "1",
 			"date_first_received_from_source": [2024, 1],
-			"date_of_most_recent_information": [2024, 1],
-			"fulfil_expedited_criteria": false,
-			"combination_product_report_indicator": "false"
+				"date_of_most_recent_information": [2024, 1],
+				"fulfil_expedited_criteria": false,
+				"combination_product_report_indicator": "false",
+				"other_case_identifiers_exist": null,
+				"other_case_identifiers_exist_null_flavor": "NI"
 		}
 	});
 	let req = Request::builder()
@@ -159,10 +161,11 @@ async fn create_primary_source(
 	let body = json!({
 		"data": {
 			"case_id": case_id,
-			"sequence_number": 1,
-			"qualification": "1",
-			"email": "reporter@example.com",
-			"primary_source_regulatory": "1"
+				"sequence_number": 1,
+				"qualification": "1",
+				"country_code_null_flavor": "UNK",
+				"email": "reporter@example.com",
+				"primary_source_regulatory": "1"
 		}
 	});
 	let req = Request::builder()
@@ -190,9 +193,10 @@ async fn create_primary_source(
 		.ok_or("missing primary source id")?;
 	let update = json!({
 		"data": {
-			"qualification": "1",
-			"email": "reporter@example.com",
-			"primary_source_regulatory": "1"
+				"qualification": "1",
+				"country_code_null_flavor": "UNK",
+				"email": "reporter@example.com",
+				"primary_source_regulatory": "1"
 		}
 	});
 	let req = Request::builder()
@@ -233,9 +237,32 @@ async fn force_all_primary_sources_non_primary(
 	mm.dbx()
 		.execute(
 			sqlx::query(
-				"UPDATE primary_sources SET primary_source_regulatory = '2' WHERE case_id = $1",
+				"UPDATE primary_sources SET primary_source_regulatory = NULL WHERE case_id = $1",
 			)
 			.bind(case_id),
+		)
+		.await?;
+	mm.dbx().commit_txn().await?;
+	Ok(())
+}
+
+async fn force_validated_case_fixture(
+	mm: &lib_core::model::ModelManager,
+	user_id: Uuid,
+	org_id: Uuid,
+	case_id: Uuid,
+) -> Result<()> {
+	mm.dbx().begin_txn().await?;
+	if let Err(err) =
+		set_full_context_dbx(mm.dbx(), user_id, org_id, ROLE_SPONSOR_ADMIN_CRO).await
+	{
+		let _ = mm.dbx().rollback_txn().await;
+		return Err(err.into());
+	}
+	mm.dbx()
+		.execute(
+			sqlx::query("UPDATE cases SET status = 'validated' WHERE id = $1")
+				.bind(case_id),
 		)
 		.await?;
 	mm.dbx().commit_txn().await?;
@@ -274,7 +301,8 @@ async fn create_patient(
 	let update = json!({
 		"data": {
 			"race_code": "C41260",
-			"ethnicity_code": "C41222"
+			"ethnicity_code": "C41222",
+			"medical_history_text": "No relevant medical history."
 		}
 	});
 	let req = Request::builder()
@@ -329,11 +357,11 @@ async fn create_reaction(
 	}
 	let reaction_id = value["data"]["id"].as_str().ok_or("missing reaction id")?;
 	let update = json!({
-		"data": {
-			"reaction_meddra_version": "27.0",
-			"reaction_meddra_code": "10019211",
-			"outcome": "1",
-			"reaction_language": "en"
+			"data": {
+				"reaction_meddra_version": "26.0",
+				"reaction_meddra_code": "10000001",
+				"outcome": "1",
+				"reaction_language": "eng"
 		}
 	});
 	let req = Request::builder()
@@ -488,10 +516,12 @@ async fn create_narrative(
 }
 
 async fn seed_rule_clean_case(
+	mm: &lib_core::model::ModelManager,
 	app: &axum::Router,
 	cookie: &str,
 	case_id: Uuid,
 ) -> Result<()> {
+	seed_active_test_meddra_term(mm).await?;
 	create_safety_report(app, cookie, case_id).await?;
 	create_message_header(app, cookie, case_id).await?;
 	create_sender(app, cookie, case_id, "1").await?;
@@ -509,9 +539,9 @@ async fn create_message_header(
 	case_id: Uuid,
 ) -> Result<()> {
 	let body = json!({
-		"data": {
-			"case_id": case_id,
-			"message_number": format!("MSG-{case_id}"),
+			"data": {
+				"case_id": case_id,
+				"message_number": format!("MSG-{case_id}"),
 			"message_sender_identifier": "SENDER01",
 			"message_receiver_identifier": "RECEIVER01",
 			"message_date": "20240201010101"
@@ -732,66 +762,6 @@ async fn get_validation(
 	Ok((status, value))
 }
 
-async fn patch_json(
-	app: &axum::Router,
-	cookie: &str,
-	uri: &str,
-	body: Value,
-) -> Result<(StatusCode, Value)> {
-	let req = Request::builder()
-		.method("PATCH")
-		.uri(uri)
-		.header("cookie", cookie)
-		.header("content-type", "application/json")
-		.body(Body::from(body.to_string()))?;
-	let res = app.clone().oneshot(req).await?;
-	let status = res.status();
-	let body = to_bytes(res.into_body(), usize::MAX).await?;
-	let value = serde_json::from_slice::<Value>(&body)
-		.unwrap_or_else(|_| json!({ "raw": String::from_utf8_lossy(&body) }));
-	Ok((status, value))
-}
-
-async fn full_validation_report_cache_stale(
-	mm: &lib_core::model::ModelManager,
-	user_id: Uuid,
-	org_id: Uuid,
-	case_id: Uuid,
-	authority: &str,
-) -> Result<Option<bool>> {
-	mm.dbx().begin_txn().await?;
-	if let Err(err) =
-		set_full_context_dbx(mm.dbx(), user_id, org_id, ROLE_SPONSOR_ADMIN_CRO).await
-	{
-		let _ = mm.dbx().rollback_txn().await;
-		return Err(err.into());
-	}
-	let row = match mm
-		.dbx()
-		.fetch_optional(
-			sqlx::query_as::<_, (bool,)>(
-				r#"
-				SELECT stale
-				  FROM case_validation_reports
-				 WHERE case_id = $1
-				   AND authority = $2
-				"#,
-			)
-			.bind(case_id)
-			.bind(authority),
-		)
-		.await
-	{
-		Ok(row) => row,
-		Err(err) => {
-			let _ = mm.dbx().rollback_txn().await;
-			return Err(err.into());
-		}
-	};
-	mm.dbx().commit_txn().await?;
-	Ok(row.map(|(stale,)| stale))
-}
-
 async fn update_case_status(
 	app: &axum::Router,
 	cookie: &str,
@@ -816,6 +786,25 @@ async fn update_case_status(
 		.header("cookie", cookie)
 		.header("content-type", "application/json")
 		.body(Body::from(body.to_string()))?;
+	let res = app.clone().oneshot(req).await?;
+	let status = res.status();
+	let body = to_bytes(res.into_body(), usize::MAX).await?;
+	let value = serde_json::from_slice::<Value>(&body)?;
+	Ok((status, value))
+}
+
+async fn toggle_case_action(
+	app: &axum::Router,
+	cookie: &str,
+	case_id: Uuid,
+	action: &str,
+) -> Result<(StatusCode, Value)> {
+	let req = Request::builder()
+		.method("POST")
+		.uri(format!("/api/cases/{case_id}/{action}/toggle"))
+		.header("cookie", cookie)
+		.header("content-type", "application/json")
+		.body(Body::from("{}"))?;
 	let res = app.clone().oneshot(req).await?;
 	let status = res.status();
 	let body = to_bytes(res.into_body(), usize::MAX).await?;
@@ -1087,7 +1076,7 @@ async fn test_primary_source_without_regulatory_primary_emits_warning() -> Resul
 	let app = web_server::app(mm.clone());
 
 	let case_id = create_case(&app, &cookie, seed.org_id).await?;
-	seed_rule_clean_case(&app, &cookie, case_id).await?;
+	seed_rule_clean_case(&mm, &app, &cookie, case_id).await?;
 	force_all_primary_sources_non_primary(&mm, seed.admin.id, seed.org_id, case_id)
 		.await?;
 
@@ -1121,7 +1110,7 @@ async fn test_mfds_parent_past_drug_rules_emit_mfds_field_paths() -> Result<()> 
 	let app = web_server::app(mm.clone());
 
 	let missing_id_case_id = create_case(&app, &cookie, seed.org_id).await?;
-	seed_rule_clean_case(&app, &cookie, missing_id_case_id).await?;
+	seed_rule_clean_case(&mm, &app, &cookie, missing_id_case_id).await?;
 	update_message_header_message_receiver(&app, &cookie, missing_id_case_id, "FR")
 		.await?;
 	let parent_id =
@@ -1166,7 +1155,7 @@ async fn test_mfds_parent_past_drug_rules_emit_mfds_field_paths() -> Result<()> 
 	);
 
 	let missing_version_case_id = create_case(&app, &cookie, seed.org_id).await?;
-	seed_rule_clean_case(&app, &cookie, missing_version_case_id).await?;
+	seed_rule_clean_case(&mm, &app, &cookie, missing_version_case_id).await?;
 	update_message_header_message_receiver(
 		&app,
 		&cookie,
@@ -1375,6 +1364,49 @@ async fn test_update_case_rejects_invalid_status() -> Result<()> {
 
 #[serial]
 #[tokio::test]
+async fn test_create_case_rejects_every_protected_lifecycle_status() -> Result<()> {
+	let mm = init_test_mm().await?;
+	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
+	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
+	let cookie = cookie_header(&token.to_string());
+	let app = web_server::app(mm);
+
+	for protected_status in [
+		"reviewed",
+		"validated",
+		"locked",
+		"submitted",
+		"deleted",
+		"archived",
+		"nullified",
+	] {
+		let (status, body) = create_case_with_payload(
+			&app,
+			&cookie,
+			json!({
+				"data": {
+					"safetyReportIdentification": {
+						"safetyReportId": format!("PROTECTED-{protected_status}-{}", Uuid::new_v4())
+					},
+					"status": protected_status
+				}
+			}),
+		)
+		.await?;
+		assert_eq!(
+			status,
+			StatusCode::BAD_REQUEST,
+			"{protected_status}: {body}"
+		);
+		assert!(body
+			.to_string()
+			.contains("case creation only accepts draft"));
+	}
+	Ok(())
+}
+
+#[serial]
+#[tokio::test]
 async fn test_case_status_transition_prevents_regression_after_submitted(
 ) -> Result<()> {
 	let mm = init_test_mm().await?;
@@ -1389,8 +1421,8 @@ async fn test_case_status_transition_prevents_regression_after_submitted(
 	assert_eq!(status, StatusCode::OK, "{body:?}");
 
 	let (status, body) = update_case_status(&app, &cookie, case_id, "draft").await?;
-	assert_eq!(status, StatusCode::BAD_REQUEST, "{body:?}");
-	assert!(body.to_string().contains("illegal case status transition"));
+	assert_eq!(status, StatusCode::FORBIDDEN, "{body:?}");
+	assert!(body.to_string().contains("PERMISSION_DENIED"));
 	Ok(())
 }
 
@@ -1641,7 +1673,7 @@ async fn test_validator_endpoint_marks_validated_when_clean() -> Result<()> {
 	let app = web_server::app(mm.clone());
 
 	let case_id = create_case(&app, &cookie, seed.org_id).await?;
-	seed_rule_clean_case(&app, &cookie, case_id).await?;
+	seed_rule_clean_case(&mm, &app, &cookie, case_id).await?;
 
 	let (status, body) =
 		validator_mark_validated(&app, &cookie, case_id, Some("validator-secret"))
@@ -1685,23 +1717,18 @@ async fn test_validator_endpoint_marks_validated_when_clean() -> Result<()> {
 
 #[serial]
 #[tokio::test]
-async fn test_case_save_allows_validated_to_draft_transition() -> Result<()> {
-	std::env::set_var("E2BR3_VALIDATOR_TOKEN", "validator-secret");
+async fn test_review_toggle_allows_validated_to_draft_transition() -> Result<()> {
 	let mm = init_test_mm().await?;
 	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
 	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
 	let cookie = cookie_header(&token.to_string());
-	let app = web_server::app(mm);
+	let app = web_server::app(mm.clone());
 
 	let case_id = create_case(&app, &cookie, seed.org_id).await?;
-	seed_rule_clean_case(&app, &cookie, case_id).await?;
-	let (status, body) =
-		validator_mark_validated(&app, &cookie, case_id, Some("validator-secret"))
-			.await?;
-	assert_eq!(status, StatusCode::OK, "{body:?}");
-	assert_eq!(body["data"]["status"].as_str(), Some("validated"));
+	force_validated_case_fixture(&mm, seed.admin.id, seed.org_id, case_id).await?;
 
-	let (status, body) = update_case_status(&app, &cookie, case_id, "draft").await?;
+	let (status, body) =
+		toggle_case_action(&app, &cookie, case_id, "review").await?;
 	assert_eq!(status, StatusCode::OK, "{body:?}");
 	assert!(body.get("data").is_some(), "{body:?}");
 
@@ -1718,8 +1745,7 @@ async fn test_case_can_be_marked_locked() -> Result<()> {
 	let app = web_server::app(mm);
 
 	let case_id = create_case(&app, &cookie, seed.org_id).await?;
-	let (status, body) =
-		update_case_status(&app, &cookie, case_id, "locked").await?;
+	let (status, body) = toggle_case_action(&app, &cookie, case_id, "lock").await?;
 	assert_eq!(status, StatusCode::OK, "{body:?}");
 	assert_eq!(body["data"]["status"].as_str(), Some("locked"));
 
@@ -1736,8 +1762,7 @@ async fn test_locked_case_rejects_content_updates() -> Result<()> {
 	let app = web_server::app(mm);
 
 	let case_id = create_case(&app, &cookie, seed.org_id).await?;
-	let (status, body) =
-		update_case_status(&app, &cookie, case_id, "locked").await?;
+	let (status, body) = toggle_case_action(&app, &cookie, case_id, "lock").await?;
 	assert_eq!(status, StatusCode::OK, "{body:?}");
 
 	let req = Request::builder()
@@ -1757,8 +1782,8 @@ async fn test_locked_case_rejects_content_updates() -> Result<()> {
 	let status = res.status();
 	let body = to_bytes(res.into_body(), usize::MAX).await?;
 	let body: Value = serde_json::from_slice(&body)?;
-	assert_eq!(status, StatusCode::BAD_REQUEST, "{body:?}");
-	assert!(body.to_string().contains("locked cases are read-only"));
+	assert_eq!(status, StatusCode::FORBIDDEN, "{body:?}");
+	assert!(body.to_string().contains("PERMISSION_DENIED"));
 
 	Ok(())
 }
@@ -1837,192 +1862,6 @@ async fn test_single_profile_validation_caches_summary() -> Result<()> {
 
 	assert_eq!(status, StatusCode::OK, "{body:?}");
 	assert_eq!(body["data"]["authority"], json!("fda"));
-
-	Ok(())
-}
-
-#[serial]
-#[tokio::test]
-async fn test_cached_validation_read_does_not_compute_when_cache_missing(
-) -> Result<()> {
-	let mm = init_test_mm().await?;
-	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
-	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
-	let cookie = cookie_header(&token.to_string());
-	let app = web_server::app(mm.clone());
-
-	let case_id = create_case(&app, &cookie, seed.org_id).await?;
-	create_safety_report(&app, &cookie, case_id).await?;
-
-	let (status, body) = get_validation(
-		&app,
-		&cookie,
-		&format!("/api/cases/{case_id}/validation/cache?authority=ich"),
-	)
-	.await?;
-	assert_eq!(status, StatusCode::OK, "{body:?}");
-	assert!(
-		body["data"]["report"].is_null(),
-		"cached read must not compute"
-	);
-
-	assert_eq!(
-		full_validation_report_cache_stale(
-			&mm,
-			seed.admin.id,
-			seed.org_id,
-			case_id,
-			"ich",
-		)
-		.await?,
-		None,
-		"cached read must not write cache rows",
-	);
-
-	Ok(())
-}
-
-#[serial]
-#[tokio::test]
-async fn test_validation_reuses_fresh_full_report_cache() -> Result<()> {
-	let mm = init_test_mm().await?;
-	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
-	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
-	let cookie = cookie_header(&token.to_string());
-	let app = web_server::app(mm.clone());
-
-	let case_id = create_case(&app, &cookie, seed.org_id).await?;
-	create_safety_report(&app, &cookie, case_id).await?;
-	create_sender(&app, &cookie, case_id, "3").await?;
-
-	let validation_uri = format!("/api/cases/{case_id}/validation?authority=fda");
-	let (status, first_body) =
-		get_validation(&app, &cookie, &validation_uri).await?;
-	assert_eq!(status, StatusCode::OK, "{first_body:?}");
-	assert_eq!(first_body["data"]["authority"], json!("fda"));
-
-	let sentinel_message = format!("fresh cache sentinel {}", Uuid::new_v4());
-	let mut cached_report = first_body["data"].clone();
-	cached_report["issues"]
-		.as_array_mut()
-		.ok_or("missing data.issues")?
-		.push(json!({
-			"code": "FDA.CACHE.SENTINEL",
-			"message": sentinel_message,
-			"field_path": "case.cache",
-			"path": "case.cache",
-			"section": "case-identification",
-			"subsection": "cache",
-			"blocking": false
-		}));
-
-	mm.dbx().begin_txn().await?;
-	set_full_context_dbx(
-		mm.dbx(),
-		seed.admin.id,
-		seed.org_id,
-		ROLE_SPONSOR_ADMIN_CRO,
-	)
-	.await?;
-	let rows = mm
-		.dbx()
-		.execute(
-			sqlx::query(
-				r#"
-				UPDATE case_validation_reports
-				   SET report = $1,
-				       stale = false,
-				       generated_at = now()
-				 WHERE case_id = $2
-				   AND authority = 'fda'
-				"#,
-			)
-			.bind(sqlx::types::Json(cached_report))
-			.bind(case_id),
-		)
-		.await?;
-	mm.dbx().commit_txn().await?;
-	assert_eq!(
-		rows, 1,
-		"expected first validation call to populate a full report cache row"
-	);
-
-	let (status, second_body) =
-		get_validation(&app, &cookie, &validation_uri).await?;
-	assert_eq!(status, StatusCode::OK, "{second_body:?}");
-	assert!(
-		second_body["data"]["issues"]
-			.as_array()
-			.map(|items| {
-				items.iter().any(|issue| {
-					issue["message"].as_str() == Some(sentinel_message.as_str())
-				})
-			})
-			.unwrap_or(false),
-		"expected validation response to include cached sentinel message, body={second_body}"
-	);
-
-	Ok(())
-}
-
-#[serial]
-#[tokio::test]
-async fn test_case_edit_marks_full_validation_report_cache_stale() -> Result<()> {
-	let mm = init_test_mm().await?;
-	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
-	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
-	let cookie = cookie_header(&token.to_string());
-	let app = web_server::app(mm.clone());
-
-	let case_id = create_case(&app, &cookie, seed.org_id).await?;
-	create_safety_report(&app, &cookie, case_id).await?;
-
-	let (status, body) = get_validation(
-		&app,
-		&cookie,
-		&format!("/api/cases/{case_id}/validation?authority=ich"),
-	)
-	.await?;
-	assert_eq!(status, StatusCode::OK, "{body:?}");
-	assert_eq!(body["data"]["authority"], json!("ich"));
-	assert_eq!(
-		full_validation_report_cache_stale(
-			&mm,
-			seed.admin.id,
-			seed.org_id,
-			case_id,
-			"ich",
-		)
-		.await?,
-		Some(false),
-		"validation should populate a fresh full report cache row"
-	);
-
-	let (status, body) = patch_json(
-		&app,
-		&cookie,
-		&format!("/api/cases/{case_id}/editor/pages/CI"),
-		json!({
-			"changes": {
-				"reportType": { "value": "3" }
-			}
-		}),
-	)
-	.await?;
-	assert_eq!(status, StatusCode::OK, "{body}");
-
-	assert_eq!(
-		full_validation_report_cache_stale(
-			&mm,
-			seed.admin.id,
-			seed.org_id,
-			case_id,
-			"ich",
-		)
-		.await?,
-		Some(true),
-		"case editor changes should mark full validation report cache stale"
-	);
 
 	Ok(())
 }
@@ -2729,7 +2568,7 @@ async fn test_qced_case_blocks_content_updates_even_when_workflow_saved_is_edita
 	create_safety_report(&app, &cookie, case_id).await?;
 
 	let (status, body) =
-		update_case_status(&app, &cookie, case_id, "reviewed").await?;
+		toggle_case_action(&app, &cookie, case_id, "review").await?;
 	assert_eq!(status, StatusCode::OK, "{body:?}");
 
 	let (status, body) = update_safety_report(
@@ -2760,7 +2599,7 @@ async fn test_validated_case_blocks_content_updates_even_when_workflow_saved_is_
 	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
 	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
 	let cookie = cookie_header(&token.to_string());
-	let app = web_server::app(mm);
+	let app = web_server::app(mm.clone());
 
 	let (status, body) = update_admin_settings(
 		&app,
@@ -2786,10 +2625,7 @@ async fn test_validated_case_blocks_content_updates_even_when_workflow_saved_is_
 
 	let case_id = create_case(&app, &cookie, seed.org_id).await?;
 	create_safety_report(&app, &cookie, case_id).await?;
-
-	let (status, body) =
-		update_case_status(&app, &cookie, case_id, "validated").await?;
-	assert_eq!(status, StatusCode::OK, "{body:?}");
+	force_validated_case_fixture(&mm, seed.admin.id, seed.org_id, case_id).await?;
 
 	let (status, body) = update_safety_report(
 		&app,
@@ -2866,7 +2702,7 @@ async fn test_workflow_transition_rejects_user_outside_current_step_role(
 	)
 	.await?;
 	assert_eq!(status, StatusCode::FORBIDDEN, "{body:?}");
-	assert!(body.to_string().contains("Case.Update"), "{body:?}");
+	assert!(body.to_string().contains("PERMISSION_DENIED"), "{body:?}");
 	Ok(())
 }
 
@@ -2952,7 +2788,7 @@ async fn test_workflow_transition_rejects_user_outside_current_assignee(
 	)
 	.await?;
 	assert_eq!(status, StatusCode::FORBIDDEN, "{body:?}");
-	assert!(body.to_string().contains("Case.Update"), "{body:?}");
+	assert!(body.to_string().contains("PERMISSION_DENIED"), "{body:?}");
 
 	let (status, body) = transition_case_workflow(
 		&app,
@@ -2968,7 +2804,7 @@ async fn test_workflow_transition_rejects_user_outside_current_assignee(
 	)
 	.await?;
 	assert_eq!(status, StatusCode::FORBIDDEN, "{body:?}");
-	assert!(body.to_string().contains("Case.Update"), "{body:?}");
+	assert!(body.to_string().contains("PERMISSION_DENIED"), "{body:?}");
 	Ok(())
 }
 
@@ -3085,7 +2921,7 @@ async fn test_locked_case_blocks_workflow_transition_even_for_admin_override(
 
 	let case_id = create_case(&app, &admin_cookie, seed.org_id).await?;
 	let (status, body) =
-		update_case_status(&app, &admin_cookie, case_id, "locked").await?;
+		toggle_case_action(&app, &admin_cookie, case_id, "lock").await?;
 	assert_eq!(status, StatusCode::OK, "{body:?}");
 
 	let (status, body) = transition_case_workflow(
@@ -3100,11 +2936,8 @@ async fn test_locked_case_blocks_workflow_transition_even_for_admin_override(
 		}),
 	)
 	.await?;
-	assert_eq!(status, StatusCode::BAD_REQUEST, "{body:?}");
-	assert!(
-		body.to_string().contains("locked cases are read-only"),
-		"{body:?}"
-	);
+	assert_eq!(status, StatusCode::FORBIDDEN, "{body:?}");
+	assert!(body.to_string().contains("PERMISSION_DENIED"), "{body:?}");
 	Ok(())
 }
 
@@ -3124,15 +2957,14 @@ async fn test_case_read_returns_separate_qc_and_lock_axes() -> Result<()> {
 	assert_eq!(body["data"]["is_locked"].as_bool(), Some(false));
 
 	let (status, body) =
-		update_case_status(&app, &cookie, case_id, "reviewed").await?;
+		toggle_case_action(&app, &cookie, case_id, "review").await?;
 	assert_eq!(status, StatusCode::OK, "{body:?}");
 	let (status, body) = get_case(&app, &cookie, case_id).await?;
 	assert_eq!(status, StatusCode::OK, "{body:?}");
 	assert_eq!(body["data"]["qc_state"].as_str(), Some("QCed"));
 	assert_eq!(body["data"]["is_locked"].as_bool(), Some(false));
 
-	let (status, body) =
-		update_case_status(&app, &cookie, case_id, "locked").await?;
+	let (status, body) = toggle_case_action(&app, &cookie, case_id, "lock").await?;
 	assert_eq!(status, StatusCode::OK, "{body:?}");
 	let (status, body) = get_case(&app, &cookie, case_id).await?;
 	assert_eq!(status, StatusCode::OK, "{body:?}");

@@ -1,29 +1,35 @@
 mod common;
 
 use crate::common::{
-	demo_ctx, demo_org_id, demo_user_id, reset_role, set_auditor_role, Result,
+	demo_ctx, demo_org_id, demo_user_id, reset_role, set_auditor_role,
+	system_user_id, Result,
 };
 use lib_core::_dev_utils;
 use lib_core::ctx::{Ctx, ROLE_SPONSOR_ADMIN_COMPANY, ROLE_SPONSOR_ADMIN_CRO};
 use lib_core::model::presave::{
-	NarrativePresaveBmc, NarrativePresaveForCreate, ProductPresaveBmc,
-	ProductPresaveForCreate, ProductPresaveForUpdate, ProductPresaveSubstanceBmc,
-	ProductPresaveSubstanceForCreate, ProductPresaveSubstanceForUpdate,
-	ReceiverPresaveBmc, ReceiverPresaveConsigneeBmc,
-	ReceiverPresaveConsigneeForCreate, ReceiverPresaveConsigneeForUpdate,
-	ReceiverPresaveForCreate, ReceiverPresaveForUpdate, ReceiverPresaveRouteBmc,
+	NarrativePresaveBmc, NarrativePresaveForCreate,
+	ProductPresaveActiveSubstanceBmc, ProductPresaveActiveSubstanceForCreate,
+	ProductPresaveActiveSubstanceForUpdate, ProductPresaveBmc,
+	ProductPresaveForCreate, ProductPresaveForUpdate, ReceiverPresaveBmc,
+	ReceiverPresaveConsigneeBmc, ReceiverPresaveConsigneeForCreate,
+	ReceiverPresaveConsigneeForUpdate, ReceiverPresaveForCreate,
+	ReceiverPresaveForUpdate, ReceiverPresaveRouteBmc,
 	ReceiverPresaveRouteForCreate, ReceiverPresaveRouteForUpdate,
 	ReporterPresaveBmc, ReporterPresaveForCreate, ReporterPresaveForUpdate,
 	SenderPresaveBmc, SenderPresaveForCreate, SenderPresaveForUpdate,
 	SenderPresaveGatewayBmc, SenderPresaveGatewayForCreate,
 	SenderPresaveGatewayForUpdate, SenderPresaveResponsiblePersonBmc,
 	SenderPresaveResponsiblePersonForCreate,
-	SenderPresaveResponsiblePersonForUpdate, StudyPresaveBmc, StudyPresaveForCreate,
+	SenderPresaveResponsiblePersonForUpdate, StudyPresaveBmc,
+	StudyPresaveFdaCrossReportedIndNumberBmc,
+	StudyPresaveFdaCrossReportedIndNumberForCreate,
+	StudyPresaveFdaCrossReportedIndNumberForUpdate, StudyPresaveForCreate,
 	StudyPresaveProductBmc, StudyPresaveProductForCreate,
 	StudyPresaveProductForUpdate, StudyPresaveRegistrationNumberBmc,
 	StudyPresaveRegistrationNumberForCreate,
 	StudyPresaveRegistrationNumberForUpdate,
 };
+use lib_core::model::presave_lifecycle::{PresaveKind, PresaveLifecycleService};
 use lib_core::model::store::{set_org_context, set_user_context};
 use lib_core::model::Error as ModelError;
 use lib_core::model::ModelManager;
@@ -44,20 +50,314 @@ const SECTION_PRESAVE_TABLES: &[&str] = &[
 	"receiver_presave_consignees",
 	"receiver_presave_routes",
 	"product_presaves",
-	"product_presave_substances",
+	"product_presave_active_substances",
 	"reporter_presaves",
 	"study_presaves",
 	"study_presave_registration_numbers",
+	"study_presave_fda_cross_reported_ind_numbers",
 	"study_presave_products",
 	"study_presave_reporters",
 	"narrative_presaves",
 ];
 
-fn is_foreign_key_violation(err: &SqlxError) -> bool {
+fn is_inactive_presave_reference(err: &SqlxError) -> bool {
 	match err {
-		SqlxError::Database(db_err) => db_err.code().as_deref() == Some("23503"),
+		SqlxError::Database(db_err) => db_err.code().as_deref() == Some("P2001"),
 		_ => false,
 	}
+}
+
+#[test]
+fn inactive_presave_reference_migration_covers_every_uuid_link() {
+	let migration = include_str!(
+		"../../../../db/migrations/20260714_presave_lifecycle_guards.sql"
+	);
+	for trigger in [
+		"guard_sender_information_source_sender_presave",
+		"guard_drug_information_source_product_presave",
+		"guard_study_information_source_study_presave",
+		"guard_primary_sources_source_reporter_presave",
+		"guard_narrative_information_source_narrative_presave",
+		"guard_product_presaves_sender_presave",
+		"guard_product_presaves_receiver_presave",
+		"guard_study_presaves_product_presave",
+		"guard_study_presave_products_product_presave",
+		"guard_study_presave_reporters_reporter_presave",
+	] {
+		assert!(migration.contains(trigger), "missing trigger {trigger}");
+	}
+	assert!(migration.contains("ERRCODE = 'P2001'"));
+	assert!(migration.contains("FOR KEY SHARE"));
+}
+
+#[test]
+fn schema_alignment_covers_auditor_access_and_reaction_language() {
+	let bootstrap = include_str!("../../../../db/bootstrap/01-safetydb-schema.sql");
+	let reactions = include_str!("../../../../db/bootstrap/05-reactions.sql");
+	let migration =
+		include_str!("../../../../db/migrations/20260719_schema_alignment.sql");
+	let grant = "GRANT USAGE ON SCHEMA public TO e2br3_auditor_role;";
+
+	assert!(bootstrap.contains(grant));
+	assert!(migration.contains(grant));
+	assert!(reactions.contains("reaction_language VARCHAR(3)"));
+	assert!(migration.contains("reaction_language TYPE VARCHAR(3)"));
+}
+
+#[serial]
+#[tokio::test]
+async fn inactive_presave_reference_returns_p2001_for_receiver_link() -> Result<()> {
+	_dev_utils::init_dev().await;
+	let mm = ModelManager::new().await?;
+	let ctx = demo_ctx();
+	let sender_id = SenderPresaveBmc::create(
+		&ctx,
+		&mm,
+		sender_presave_create("Trigger sender".into()),
+	)
+	.await?;
+	let receiver_id = ReceiverPresaveBmc::create(
+		&ctx,
+		&mm,
+		ReceiverPresaveForCreate {
+			receiver_type: Some("Regulatory Authority".into()),
+			organization_name: Some(format!("Archived receiver {}", Uuid::new_v4())),
+			receiver_identifier: None,
+			day_count_rule: None,
+			nsae_solicited_day_count: None,
+			nsae_solicited_not_applicable: None,
+			nsae_non_solicited_day_count: None,
+			nsae_non_solicited_not_applicable: None,
+			sae_solicited_day_count: None,
+			sae_solicited_not_applicable: None,
+			sae_non_solicited_day_count: None,
+			sae_non_solicited_not_applicable: None,
+			description: None,
+		},
+	)
+	.await?;
+
+	let mut tx = mm.dbx().db().begin().await?;
+	set_user_context(&mut tx, demo_user_id()).await?;
+	set_org_context(&mut tx, demo_org_id(), ROLE_SPONSOR_ADMIN_CRO).await?;
+	sqlx::query("UPDATE receiver_presaves SET deleted = true WHERE id = $1")
+		.bind(receiver_id)
+		.execute(&mut *tx)
+		.await?;
+	let result = sqlx::query(
+		"INSERT INTO product_presaves (
+			id, organization_id, sender_presave_id, receiver_presave_id,
+			created_by, updated_by
+		) VALUES ($1, $2, $3, $4, $5, $5)",
+	)
+	.bind(Uuid::new_v4())
+	.bind(demo_org_id())
+	.bind(sender_id)
+	.bind(receiver_id)
+	.bind(demo_user_id())
+	.execute(&mut *tx)
+	.await;
+	assert!(
+		matches!(result, Err(ref error) if error.as_database_error().and_then(|db| db.code()).as_deref() == Some("P2001")),
+		"expected P2001, got {result:?}"
+	);
+	tx.rollback().await?;
+	Ok(())
+}
+
+#[serial]
+#[tokio::test]
+async fn presave_lifecycle_archives_unreferenced_and_blocks_used_receiver(
+) -> Result<()> {
+	_dev_utils::init_dev().await;
+	let mm = ModelManager::new().await?;
+	let ctx = demo_ctx();
+	let sender_id = SenderPresaveBmc::create(
+		&ctx,
+		&mm,
+		sender_presave_create(format!("Lifecycle sender {}", Uuid::new_v4())),
+	)
+	.await?;
+	let available_receiver = ReceiverPresaveBmc::create(
+		&ctx,
+		&mm,
+		receiver_presave_create(format!(
+			"Lifecycle available receiver {}",
+			Uuid::new_v4()
+		)),
+	)
+	.await?;
+	PresaveLifecycleService::archive(
+		&ctx,
+		&mm,
+		PresaveKind::Receiver,
+		available_receiver,
+	)
+	.await?;
+	assert!(
+		ReceiverPresaveBmc::get(&ctx, &mm, available_receiver)
+			.await?
+			.deleted
+	);
+
+	let used_receiver = ReceiverPresaveBmc::create(
+		&ctx,
+		&mm,
+		receiver_presave_create(format!(
+			"Lifecycle used receiver {}",
+			Uuid::new_v4()
+		)),
+	)
+	.await?;
+	let mut product = product_presave_create(
+		RegulatoryAuthority::Fda,
+		format!("Lifecycle receiver product {}", Uuid::new_v4()),
+		sender_id,
+	);
+	product.receiver_presave_id = Some(used_receiver);
+	ProductPresaveBmc::create(&ctx, &mm, product).await?;
+	expect_conflict_error(
+		PresaveLifecycleService::archive(
+			&ctx,
+			&mm,
+			PresaveKind::Receiver,
+			used_receiver,
+		)
+		.await,
+		"receiver presave is in use",
+	);
+	Ok(())
+}
+
+#[serial]
+#[tokio::test]
+async fn presave_lifecycle_reference_race_preserves_active_reference_invariant(
+) -> Result<()> {
+	use tokio::time::{sleep, Duration};
+
+	_dev_utils::init_dev().await;
+	let setup_mm = ModelManager::new().await?;
+	let ctx = demo_ctx();
+	let sender_id = SenderPresaveBmc::create(
+		&ctx,
+		&setup_mm,
+		sender_presave_create(format!("Race sender {}", Uuid::new_v4())),
+	)
+	.await?;
+	let receiver_id = ReceiverPresaveBmc::create(
+		&ctx,
+		&setup_mm,
+		receiver_presave_create(format!("Race receiver {}", Uuid::new_v4())),
+	)
+	.await?;
+
+	let lock_mm = ModelManager::new().await?;
+	let mut archive_tx = lock_mm.dbx().db().begin().await?;
+	set_user_context(&mut archive_tx, demo_user_id()).await?;
+	set_org_context(&mut archive_tx, demo_org_id(), ROLE_SPONSOR_ADMIN_CRO).await?;
+	sqlx::query("SELECT id FROM receiver_presaves WHERE id = $1 FOR UPDATE")
+		.bind(receiver_id)
+		.execute(&mut *archive_tx)
+		.await?;
+	sqlx::query("UPDATE receiver_presaves SET deleted = true WHERE id = $1")
+		.bind(receiver_id)
+		.execute(&mut *archive_tx)
+		.await?;
+
+	let reference_task = tokio::spawn(async move {
+		let mm = ModelManager::new().await.expect("race model manager");
+		let mut tx = mm.dbx().db().begin().await.expect("race transaction");
+		set_user_context(&mut tx, demo_user_id())
+			.await
+			.expect("race user context");
+		set_org_context(&mut tx, demo_org_id(), ROLE_SPONSOR_ADMIN_CRO)
+			.await
+			.expect("race org context");
+		let result = sqlx::query(
+			"INSERT INTO product_presaves (
+				id, organization_id, sender_presave_id, receiver_presave_id,
+				created_by, updated_by
+			) VALUES ($1, $2, $3, $4, $5, $5)",
+		)
+		.bind(Uuid::new_v4())
+		.bind(demo_org_id())
+		.bind(sender_id)
+		.bind(receiver_id)
+		.bind(demo_user_id())
+		.execute(&mut *tx)
+		.await;
+		tx.rollback().await.expect("race rollback");
+		result
+	});
+	sleep(Duration::from_millis(50)).await;
+	archive_tx.commit().await?;
+	let result = reference_task.await?;
+	assert!(
+		matches!(result, Err(ref error) if error.as_database_error().and_then(|db| db.code()).as_deref() == Some("P2001")),
+		"reference created after archive lock must fail with P2001: {result:?}"
+	);
+
+	let mut verify_tx = setup_mm.dbx().db().begin().await?;
+	set_user_context(&mut verify_tx, demo_user_id()).await?;
+	set_org_context(&mut verify_tx, demo_org_id(), ROLE_SPONSOR_ADMIN_CRO).await?;
+	let deleted: bool =
+		sqlx::query_scalar("SELECT deleted FROM receiver_presaves WHERE id = $1")
+			.bind(receiver_id)
+			.fetch_one(&mut *verify_tx)
+			.await?;
+	let reference_exists: bool = sqlx::query_scalar(
+		"SELECT EXISTS (SELECT 1 FROM product_presaves WHERE receiver_presave_id = $1)",
+	)
+	.bind(receiver_id)
+	.fetch_one(&mut *verify_tx)
+	.await?;
+	assert!(deleted && !reference_exists);
+	verify_tx.rollback().await?;
+
+	let receiver_id = ReceiverPresaveBmc::create(
+		&ctx,
+		&setup_mm,
+		receiver_presave_create(format!(
+			"Race referenced receiver {}",
+			Uuid::new_v4()
+		)),
+	)
+	.await?;
+	let reference_mm = ModelManager::new().await?;
+	let mut reference_tx = reference_mm.dbx().db().begin().await?;
+	set_user_context(&mut reference_tx, demo_user_id()).await?;
+	set_org_context(&mut reference_tx, demo_org_id(), ROLE_SPONSOR_ADMIN_CRO)
+		.await?;
+	sqlx::query(
+		"INSERT INTO product_presaves (
+			id, organization_id, sender_presave_id, receiver_presave_id,
+			created_by, updated_by
+		) VALUES ($1, $2, $3, $4, $5, $5)",
+	)
+	.bind(Uuid::new_v4())
+	.bind(demo_org_id())
+	.bind(sender_id)
+	.bind(receiver_id)
+	.bind(demo_user_id())
+	.execute(&mut *reference_tx)
+	.await?;
+
+	let archive_task = tokio::spawn(async move {
+		let mm = ModelManager::new().await.expect("archive race manager");
+		PresaveLifecycleService::archive(
+			&demo_ctx(),
+			&mm,
+			PresaveKind::Receiver,
+			receiver_id,
+		)
+		.await
+	});
+	sleep(Duration::from_millis(50)).await;
+	reference_tx.commit().await?;
+	expect_conflict_error(archive_task.await?, "receiver presave is in use");
+	let receiver = ReceiverPresaveBmc::get(&ctx, &setup_mm, receiver_id).await?;
+	assert!(!receiver.deleted);
+	Ok(())
 }
 
 fn expect_store_error<T>(result: lib_core::model::Result<T>, expected: &str) {
@@ -107,7 +407,7 @@ fn sponsor_ctx(org_id: Uuid, role: &str) -> Ctx {
 async fn create_acl_test_org(mm: &ModelManager, label: &str) -> Result<Uuid> {
 	let org_id = Uuid::new_v4();
 	let mut tx = mm.dbx().db().begin().await?;
-	set_user_context(&mut tx, demo_user_id()).await?;
+	set_user_context(&mut tx, system_user_id()).await?;
 	set_org_context(&mut tx, demo_org_id(), "system_admin").await?;
 	sqlx::query(
 		"INSERT INTO organizations (
@@ -177,6 +477,7 @@ fn product_presave_create(
 ) -> ProductPresaveForCreate {
 	ProductPresaveForCreate {
 		sender_presave_id: Some(sender_presave_id),
+		receiver_presave_id: None,
 		product_id: Some(format!("PRODUCT-{}", Uuid::new_v4())),
 		medicinal_product: Some("Authority Product".into()),
 		medicinal_product_notation: None,
@@ -196,6 +497,24 @@ fn product_presave_create(
 		drug_authorization_country: None,
 		drug_authorization_holder: None,
 		holder_applicant_name_notation: None,
+	}
+}
+
+fn receiver_presave_create(organization_name: String) -> ReceiverPresaveForCreate {
+	ReceiverPresaveForCreate {
+		receiver_type: Some("Regulatory Authority".into()),
+		organization_name: Some(organization_name),
+		receiver_identifier: None,
+		day_count_rule: None,
+		nsae_solicited_day_count: None,
+		nsae_solicited_not_applicable: None,
+		nsae_non_solicited_day_count: None,
+		nsae_non_solicited_not_applicable: None,
+		sae_solicited_day_count: None,
+		sae_solicited_not_applicable: None,
+		sae_non_solicited_day_count: None,
+		sae_non_solicited_not_applicable: None,
+		description: None,
 	}
 }
 
@@ -235,10 +554,10 @@ fn reporter_presave_create(
 		country_code: Some("KR".into()),
 		qualification: Some("1".into()),
 		qualification_kr1: None,
-		reporter_name_null_flavor: None,
-		reporter_address_null_flavor: None,
+		country_code_null_flavor: None,
 		qualification_null_flavor: None,
 		primary_source_regulatory: None,
+		..Default::default()
 	}
 }
 
@@ -253,6 +572,8 @@ fn study_presave_create(
 		sponsor_study_number: Some("AUTH-STUDY".into()),
 		sponsor_study_number_kind: None,
 		study_type_reaction: Some("1".into()),
+		fda_ind_number_occurred: None,
+		fda_pre_anda_number_occurred: None,
 		edc_sync: None,
 		exclude_case_key_from_sync: None,
 	}
@@ -269,6 +590,8 @@ fn study_presave_create_for_product(
 		sponsor_study_number: Some(format!("REL-STUDY-{}", Uuid::new_v4())),
 		sponsor_study_number_kind: None,
 		study_type_reaction: Some("1".into()),
+		fda_ind_number_occurred: None,
+		fda_pre_anda_number_occurred: None,
 		edc_sync: None,
 		exclude_case_key_from_sync: None,
 	}
@@ -300,16 +623,8 @@ async fn sponsor_company_sender_presave_limited_to_one_active_record() -> Result
 		"pharmaceutical company sponsor administrators can register only one active sender presave",
 	);
 
-	SenderPresaveBmc::update(
-		&ctx,
-		&mm,
-		first_id,
-		SenderPresaveForUpdate {
-			deleted: Some(true),
-			..Default::default()
-		},
-	)
-	.await?;
+	PresaveLifecycleService::archive(&ctx, &mm, PresaveKind::Sender, first_id)
+		.await?;
 
 	SenderPresaveBmc::create(
 		&ctx,
@@ -342,6 +657,138 @@ async fn sponsor_cro_sender_presave_allows_multiple_active_records() -> Result<(
 	)
 	.await?;
 
+	Ok(())
+}
+
+#[serial]
+#[tokio::test]
+async fn product_presave_round_trips_receiver_presave_id() -> Result<()> {
+	_dev_utils::init_dev().await;
+	let mm = ModelManager::new().await?;
+	let ctx = demo_ctx();
+	let sender_id = SenderPresaveBmc::create(
+		&ctx,
+		&mm,
+		sender_presave_create("Receiver-linked product sender".into()),
+	)
+	.await?;
+	let receiver_id = ReceiverPresaveBmc::create(
+		&ctx,
+		&mm,
+		ReceiverPresaveForCreate {
+			receiver_type: Some("Regulatory Authority".into()),
+			organization_name: Some(format!("Receiver Link {}", Uuid::new_v4())),
+			receiver_identifier: None,
+			day_count_rule: None,
+			nsae_solicited_day_count: None,
+			nsae_solicited_not_applicable: None,
+			nsae_non_solicited_day_count: None,
+			nsae_non_solicited_not_applicable: None,
+			sae_solicited_day_count: None,
+			sae_solicited_not_applicable: None,
+			sae_non_solicited_day_count: None,
+			sae_non_solicited_not_applicable: None,
+			description: None,
+		},
+	)
+	.await?;
+	let mut input = product_presave_create(
+		RegulatoryAuthority::Fda,
+		"Receiver-linked product".into(),
+		sender_id,
+	);
+	input.receiver_presave_id = Some(receiver_id);
+	let product_id = ProductPresaveBmc::create(&ctx, &mm, input).await?;
+
+	assert_eq!(
+		ProductPresaveBmc::get(&ctx, &mm, product_id)
+			.await?
+			.receiver_presave_id,
+		Some(receiver_id)
+	);
+	expect_conflict_error(
+		PresaveLifecycleService::archive(
+			&ctx,
+			&mm,
+			PresaveKind::Receiver,
+			receiver_id,
+		)
+		.await,
+		"receiver presave is in use",
+	);
+	let deleted_receiver_id = ReceiverPresaveBmc::create(
+		&ctx,
+		&mm,
+		ReceiverPresaveForCreate {
+			receiver_type: Some("Regulatory Authority".into()),
+			organization_name: Some(format!("Deleted Receiver {}", Uuid::new_v4())),
+			receiver_identifier: None,
+			day_count_rule: None,
+			nsae_solicited_day_count: None,
+			nsae_solicited_not_applicable: None,
+			nsae_non_solicited_day_count: None,
+			nsae_non_solicited_not_applicable: None,
+			sae_solicited_day_count: None,
+			sae_solicited_not_applicable: None,
+			sae_non_solicited_day_count: None,
+			sae_non_solicited_not_applicable: None,
+			description: None,
+		},
+	)
+	.await?;
+	PresaveLifecycleService::archive(
+		&ctx,
+		&mm,
+		PresaveKind::Receiver,
+		deleted_receiver_id,
+	)
+	.await?;
+	let mut deleted_input = product_presave_create(
+		RegulatoryAuthority::Fda,
+		"Deleted receiver product".into(),
+		sender_id,
+	);
+	deleted_input.receiver_presave_id = Some(deleted_receiver_id);
+	expect_conflict_error(
+		ProductPresaveBmc::create(&ctx, &mm, deleted_input).await,
+		"active receiver presave",
+	);
+	Ok(())
+}
+
+#[serial]
+#[tokio::test]
+async fn study_presave_round_trips_fda_regional_numbers() -> Result<()> {
+	_dev_utils::init_dev().await;
+	let mm = ModelManager::new().await?;
+	let ctx = demo_ctx();
+	let sender_id = SenderPresaveBmc::create(
+		&ctx,
+		&mm,
+		sender_presave_create("FDA study sender".into()),
+	)
+	.await?;
+	let product_id = ProductPresaveBmc::create(
+		&ctx,
+		&mm,
+		product_presave_create(
+			RegulatoryAuthority::Fda,
+			"FDA study product".into(),
+			sender_id,
+		),
+	)
+	.await?;
+	let mut input =
+		study_presave_create_for_product("FDA regional study".into(), product_id);
+	input.fda_ind_number_occurred = Some("123456".into());
+	input.fda_pre_anda_number_occurred = Some("234567".into());
+	let id = StudyPresaveBmc::create(&ctx, &mm, input).await?;
+	let saved = StudyPresaveBmc::get(&ctx, &mm, id).await?;
+	assert_eq!(saved.fda_ind_number_occurred.as_deref(), Some("123456"));
+	assert_eq!(
+		saved.fda_pre_anda_number_occurred.as_deref(),
+		Some("234567")
+	);
 	Ok(())
 }
 
@@ -557,8 +1004,8 @@ async fn section_presave_tables_have_rls_and_relationship_guards() -> Result<()>
 		),
 		("product_presaves", "product_presaves_org_isolation"),
 		(
-			"product_presave_substances",
-			"product_presave_substances_via_parent",
+			"product_presave_active_substances",
+			"product_presave_active_substances_via_parent",
 		),
 		("reporter_presaves", "reporter_presaves_org_isolation"),
 		("study_presaves", "study_presaves_org_isolation"),
@@ -745,7 +1192,7 @@ async fn section_presave_relationships_reject_cross_org_links() -> Result<()> {
 	let product_b_id = Uuid::new_v4();
 	let study_a_id = Uuid::new_v4();
 	let mut tx = mm.dbx().db().begin().await?;
-	set_user_context(&mut tx, demo_user_id()).await?;
+	set_user_context(&mut tx, system_user_id()).await?;
 	set_org_context(&mut tx, demo_org_id(), "system_admin").await?;
 
 	for (org_id, label) in [(org_a_id, "A"), (org_b_id, "B")] {
@@ -824,7 +1271,7 @@ async fn section_presave_relationships_reject_cross_org_links() -> Result<()> {
 	tx.commit().await?;
 
 	let mut invalid_tx = mm.dbx().db().begin().await?;
-	set_user_context(&mut invalid_tx, demo_user_id()).await?;
+	set_user_context(&mut invalid_tx, system_user_id()).await?;
 	set_org_context(&mut invalid_tx, org_a_id, "system_admin").await?;
 	let cross_org_product = sqlx::query(
 		"INSERT INTO product_presaves (
@@ -839,13 +1286,13 @@ async fn section_presave_relationships_reject_cross_org_links() -> Result<()> {
 	.execute(&mut *invalid_tx)
 	.await;
 	assert!(
-		matches!(cross_org_product, Err(ref err) if is_foreign_key_violation(err)),
-		"cross-org product->sender link should fail composite FK: {cross_org_product:?}"
+		matches!(cross_org_product, Err(ref err) if is_inactive_presave_reference(err)),
+		"cross-org product->sender link should fail the active-reference boundary: {cross_org_product:?}"
 	);
 	invalid_tx.rollback().await?;
 
 	let mut invalid_tx = mm.dbx().db().begin().await?;
-	set_user_context(&mut invalid_tx, demo_user_id()).await?;
+	set_user_context(&mut invalid_tx, system_user_id()).await?;
 	set_org_context(&mut invalid_tx, org_a_id, "system_admin").await?;
 	let cross_org_study = sqlx::query(
 		"INSERT INTO study_presaves (
@@ -860,8 +1307,8 @@ async fn section_presave_relationships_reject_cross_org_links() -> Result<()> {
 	.execute(&mut *invalid_tx)
 	.await;
 	assert!(
-		matches!(cross_org_study, Err(ref err) if is_foreign_key_violation(err)),
-		"cross-org study->product link should fail composite FK: {cross_org_study:?}"
+		matches!(cross_org_study, Err(ref err) if is_inactive_presave_reference(err)),
+		"cross-org study->product link should fail the active-reference boundary: {cross_org_study:?}"
 	);
 	invalid_tx.rollback().await?;
 
@@ -956,6 +1403,7 @@ async fn section_presave_parent_bmcs_crud_roundtrip() -> Result<()> {
 		&mm,
 		ProductPresaveForCreate {
 			sender_presave_id: Some(sender_id),
+			receiver_presave_id: None,
 			product_id: Some(format!("PRODUCT-{suffix}")),
 			medicinal_product: Some(format!("Medicinal Product {suffix}")),
 			medicinal_product_notation: None,
@@ -1002,10 +1450,10 @@ async fn section_presave_parent_bmcs_crud_roundtrip() -> Result<()> {
 			country_code: Some("KR".into()),
 			qualification: Some("1".into()),
 			qualification_kr1: None,
-			reporter_name_null_flavor: None,
-			reporter_address_null_flavor: None,
+			country_code_null_flavor: None,
 			qualification_null_flavor: None,
 			primary_source_regulatory: Some("1".into()),
+			..Default::default()
 		},
 	)
 	.await?;
@@ -1022,6 +1470,8 @@ async fn section_presave_parent_bmcs_crud_roundtrip() -> Result<()> {
 			sponsor_study_number: Some(format!("ST-001-{suffix}")),
 			sponsor_study_number_kind: Some("PROTOCOL_NO".into()),
 			study_type_reaction: Some("1".into()),
+			fda_ind_number_occurred: None,
+			fda_pre_anda_number_occurred: None,
 			edc_sync: Some(true),
 			exclude_case_key_from_sync: Some(true),
 		},
@@ -1207,30 +1657,45 @@ async fn reporter_presave_accepts_field_specific_null_flavors() -> Result<()> {
 		&mm,
 		ReporterPresaveForCreate {
 			reporter_title: None,
+			reporter_title_null_flavor: Some("UNK".into()),
 			reporter_given_name: Some(format!("Reporter {suffix}")),
+			reporter_given_name_null_flavor: Some("ASKU".into()),
 			reporter_middle_name: None,
+			reporter_middle_name_null_flavor: None,
 			reporter_family_name: None,
+			reporter_family_name_null_flavor: None,
 			organization: Some(format!("Reporter Org {suffix}")),
+			organization_null_flavor: Some("NASK".into()),
 			department: None,
+			department_null_flavor: None,
 			street: None,
+			street_null_flavor: None,
 			city: None,
+			city_null_flavor: None,
 			state: None,
+			state_null_flavor: None,
 			postcode: None,
+			postcode_null_flavor: None,
 			telephone: None,
+			telephone_null_flavor: Some("MSK".into()),
 			country_code: None,
 			qualification: Some("1".into()),
 			qualification_kr1: None,
 			primary_source_regulatory: None,
-			reporter_name_null_flavor: Some("MSK".into()),
-			reporter_address_null_flavor: Some("ASKU".into()),
+			country_code_null_flavor: None,
 			qualification_null_flavor: Some("UNK".into()),
 		},
 	)
 	.await?;
 
 	let saved = ReporterPresaveBmc::get(&ctx, &mm, id).await?;
-	assert_eq!(saved.reporter_name_null_flavor.as_deref(), Some("MSK"));
-	assert_eq!(saved.reporter_address_null_flavor.as_deref(), Some("ASKU"));
+	assert_eq!(saved.reporter_title_null_flavor.as_deref(), Some("UNK"));
+	assert_eq!(
+		saved.reporter_given_name_null_flavor.as_deref(),
+		Some("ASKU")
+	);
+	assert_eq!(saved.organization_null_flavor.as_deref(), Some("NASK"));
+	assert_eq!(saved.telephone_null_flavor.as_deref(), Some("MSK"));
 	assert_eq!(saved.qualification_null_flavor.as_deref(), Some("UNK"));
 	Ok(())
 }
@@ -1250,27 +1715,37 @@ async fn reporter_presave_rejects_invalid_field_specific_null_flavors() -> Resul
 			&mm,
 			ReporterPresaveForCreate {
 				reporter_title: None,
+				reporter_title_null_flavor: None,
 				reporter_given_name: Some(format!("Reporter {suffix}")),
+				reporter_given_name_null_flavor: Some("UNK".into()),
 				reporter_middle_name: None,
+				reporter_middle_name_null_flavor: None,
 				reporter_family_name: None,
+				reporter_family_name_null_flavor: None,
 				organization: Some(format!("Reporter Org {suffix}")),
+				organization_null_flavor: Some("MSK".into()),
 				department: None,
+				department_null_flavor: None,
 				street: None,
+				street_null_flavor: None,
 				city: None,
+				city_null_flavor: None,
 				state: None,
+				state_null_flavor: None,
 				postcode: None,
+				postcode_null_flavor: None,
 				telephone: None,
+				telephone_null_flavor: None,
 				country_code: None,
 				qualification: Some("1".into()),
 				qualification_kr1: None,
 				primary_source_regulatory: None,
-				reporter_name_null_flavor: Some("UNK".into()),
-				reporter_address_null_flavor: Some("MSK".into()),
+				country_code_null_flavor: None,
 				qualification_null_flavor: Some("MSK".into()),
 			},
 		)
 		.await,
-		"reporter_name_null_flavor",
+		"reporter_given_name_null_flavor",
 	);
 	Ok(())
 }
@@ -1427,6 +1902,7 @@ async fn section_presave_parent_bmcs_enforce_minimal_identity_requirements(
 			&mm,
 			ProductPresaveForCreate {
 				sender_presave_id: None,
+				receiver_presave_id: None,
 				product_id: None,
 				medicinal_product: None,
 				medicinal_product_notation: None,
@@ -1480,10 +1956,10 @@ async fn section_presave_parent_bmcs_enforce_minimal_identity_requirements(
 					country_code: None,
 					qualification: qualification.map(str::to_string),
 					qualification_kr1: None,
-					reporter_name_null_flavor: None,
-					reporter_address_null_flavor: None,
+					country_code_null_flavor: None,
 					qualification_null_flavor: None,
 					primary_source_regulatory: None,
+					..Default::default()
 				},
 			)
 			.await,
@@ -1501,6 +1977,8 @@ async fn section_presave_parent_bmcs_enforce_minimal_identity_requirements(
 				sponsor_study_number: Some("INVALID-STUDY".into()),
 				sponsor_study_number_kind: None,
 				study_type_reaction: None,
+				fda_ind_number_occurred: None,
+				fda_pre_anda_number_occurred: None,
 				edc_sync: None,
 				exclude_case_key_from_sync: None,
 			},
@@ -1650,6 +2128,7 @@ async fn section_presave_parent_bmcs_reject_duplicate_identity_within_org(
 		&mm,
 		ProductPresaveForCreate {
 			sender_presave_id: Some(sender_id),
+			receiver_presave_id: None,
 			product_id: Some(format!("DUP-PRODUCT-{suffix}")),
 			medicinal_product: None,
 			medicinal_product_notation: None,
@@ -1678,6 +2157,7 @@ async fn section_presave_parent_bmcs_reject_duplicate_identity_within_org(
 			&mm,
 			ProductPresaveForCreate {
 				sender_presave_id: Some(sender_id),
+				receiver_presave_id: None,
 				product_id: Some(format!(" dup-product-{suffix} ")),
 				medicinal_product: None,
 				medicinal_product_notation: None,
@@ -1721,10 +2201,10 @@ async fn section_presave_parent_bmcs_reject_duplicate_identity_within_org(
 			country_code: None,
 			qualification: Some("1".into()),
 			qualification_kr1: None,
-			reporter_name_null_flavor: None,
-			reporter_address_null_flavor: None,
+			country_code_null_flavor: None,
 			qualification_null_flavor: None,
 			primary_source_regulatory: None,
+			..Default::default()
 		},
 	)
 	.await?;
@@ -1747,10 +2227,10 @@ async fn section_presave_parent_bmcs_reject_duplicate_identity_within_org(
 				country_code: None,
 				qualification: Some("1".into()),
 				qualification_kr1: None,
-				reporter_name_null_flavor: None,
-				reporter_address_null_flavor: None,
+				country_code_null_flavor: None,
 				qualification_null_flavor: None,
 				primary_source_regulatory: None,
+				..Default::default()
 			},
 		)
 		.await,
@@ -1767,6 +2247,8 @@ async fn section_presave_parent_bmcs_reject_duplicate_identity_within_org(
 			sponsor_study_number: Some(format!("DUP-STUDY-{suffix}")),
 			sponsor_study_number_kind: None,
 			study_type_reaction: Some("1".into()),
+			fda_ind_number_occurred: None,
+			fda_pre_anda_number_occurred: None,
 			edc_sync: None,
 			exclude_case_key_from_sync: None,
 		},
@@ -1783,6 +2265,8 @@ async fn section_presave_parent_bmcs_reject_duplicate_identity_within_org(
 				sponsor_study_number: Some(format!(" dup-study-{suffix} ")),
 				sponsor_study_number_kind: None,
 				study_type_reaction: Some("2".into()),
+				fda_ind_number_occurred: None,
+				fda_pre_anda_number_occurred: None,
 				edc_sync: None,
 				exclude_case_key_from_sync: None,
 			},
@@ -1859,7 +2343,7 @@ async fn section_presave_parent_bmcs_reject_delete_when_referenced() -> Result<(
 	)
 	.await?;
 
-	expect_conflict_error(
+	expect_validation_error(
 		SenderPresaveBmc::update(
 			&ctx,
 			&mm,
@@ -1870,14 +2354,14 @@ async fn section_presave_parent_bmcs_reject_delete_when_referenced() -> Result<(
 			},
 		)
 		.await,
-		"sender presave is used by product presaves",
+		"presave deletion must use lifecycle service",
 	);
 	expect_conflict_error(
 		SenderPresaveBmc::delete(&ctx, &mm, sender_id).await,
-		"sender presave is used by product presaves",
+		"sender presave is in use",
 	);
 
-	expect_conflict_error(
+	expect_validation_error(
 		ProductPresaveBmc::update(
 			&ctx,
 			&mm,
@@ -1888,11 +2372,11 @@ async fn section_presave_parent_bmcs_reject_delete_when_referenced() -> Result<(
 			},
 		)
 		.await,
-		"product presave is used by study presaves",
+		"presave deletion must use lifecycle service",
 	);
 	expect_conflict_error(
 		ProductPresaveBmc::delete(&ctx, &mm, product_id).await,
-		"product presave is used by study presaves",
+		"product presave is in use",
 	);
 
 	Ok(())
@@ -1909,7 +2393,7 @@ async fn section_presave_receiver_allows_legacy_type_update() -> Result<()> {
 	for legacy_type in ["1", "2", "3", "4", "5", "6"] {
 		let receiver_id = Uuid::new_v4();
 		let mut tx = mm.dbx().db().begin().await?;
-		set_user_context(&mut tx, demo_user_id()).await?;
+		set_user_context(&mut tx, system_user_id()).await?;
 		set_org_context(&mut tx, demo_org_id(), "system_admin").await?;
 
 		sqlx::query(
@@ -2076,6 +2560,7 @@ async fn section_presave_child_bmcs_crud_roundtrip() -> Result<()> {
 		&mm,
 		ProductPresaveForCreate {
 			sender_presave_id: Some(sender_id),
+			receiver_presave_id: None,
 			product_id: Some(format!("CHILD-PRODUCT-{suffix}")),
 			medicinal_product: Some("Child Product".into()),
 			medicinal_product_notation: None,
@@ -2103,6 +2588,7 @@ async fn section_presave_child_bmcs_crud_roundtrip() -> Result<()> {
 		&mm,
 		ProductPresaveForCreate {
 			sender_presave_id: Some(sender_id),
+			receiver_presave_id: None,
 			product_id: Some(format!("CHILD-FDA-PRODUCT-{suffix}")),
 			medicinal_product: Some("Child FDA Product".into()),
 			medicinal_product_notation: None,
@@ -2135,6 +2621,8 @@ async fn section_presave_child_bmcs_crud_roundtrip() -> Result<()> {
 			sponsor_study_number: Some(format!("CHILD-STUDY-{suffix}")),
 			sponsor_study_number_kind: None,
 			study_type_reaction: Some("1".into()),
+			fda_ind_number_occurred: None,
+			fda_pre_anda_number_occurred: None,
 			edc_sync: None,
 			exclude_case_key_from_sync: None,
 		},
@@ -2312,10 +2800,10 @@ async fn section_presave_child_bmcs_crud_roundtrip() -> Result<()> {
 		consignee_id
 	);
 
-	let substance_id = ProductPresaveSubstanceBmc::create(
+	let substance_id = ProductPresaveActiveSubstanceBmc::create(
 		&ctx,
 		&mm,
-		ProductPresaveSubstanceForCreate {
+		ProductPresaveActiveSubstanceForCreate {
 			product_presave_id: product_id,
 			sequence_number: 1,
 			substance_name: Some("Substance Before".into()),
@@ -2328,22 +2816,23 @@ async fn section_presave_child_bmcs_crud_roundtrip() -> Result<()> {
 		},
 	)
 	.await?;
-	ProductPresaveSubstanceBmc::update(
+	ProductPresaveActiveSubstanceBmc::update(
 		&ctx,
 		&mm,
 		substance_id,
-		ProductPresaveSubstanceForUpdate {
+		ProductPresaveActiveSubstanceForUpdate {
 			substance_name: Some("Substance After".into()),
 			..Default::default()
 		},
 	)
 	.await?;
-	let substance = ProductPresaveSubstanceBmc::get(&ctx, &mm, substance_id).await?;
+	let substance =
+		ProductPresaveActiveSubstanceBmc::get(&ctx, &mm, substance_id).await?;
 	assert_eq!(substance.product_presave_id, product_id);
 	assert_eq!(substance.substance_name.as_deref(), Some("Substance After"));
 	assert_audit_changed_field(
 		&mm,
-		"product_presave_substances",
+		"product_presave_active_substances",
 		substance_id,
 		"substance_name",
 		json!("Substance Before"),
@@ -2351,7 +2840,8 @@ async fn section_presave_child_bmcs_crud_roundtrip() -> Result<()> {
 	)
 	.await?;
 	assert_eq!(
-		ProductPresaveSubstanceBmc::list_by_parent(&ctx, &mm, product_id).await?[0]
+		ProductPresaveActiveSubstanceBmc::list_by_parent(&ctx, &mm, product_id)
+			.await?[0]
 			.id,
 		substance_id
 	);
@@ -2403,6 +2893,45 @@ async fn section_presave_child_bmcs_crud_roundtrip() -> Result<()> {
 		registration_id
 	);
 
+	let cross_reported_ind_id = StudyPresaveFdaCrossReportedIndNumberBmc::create(
+		&ctx,
+		&mm,
+		StudyPresaveFdaCrossReportedIndNumberForCreate {
+			study_presave_id: study_id,
+			sequence_number: 1,
+			ind_number: "IND-123".into(),
+			deleted: Some(false),
+		},
+	)
+	.await?;
+	StudyPresaveFdaCrossReportedIndNumberBmc::update(
+		&ctx,
+		&mm,
+		cross_reported_ind_id,
+		StudyPresaveFdaCrossReportedIndNumberForUpdate {
+			ind_number: Some("IND-456".into()),
+			deleted: Some(true),
+			..Default::default()
+		},
+	)
+	.await?;
+	let cross_reported_ind = StudyPresaveFdaCrossReportedIndNumberBmc::get(
+		&ctx,
+		&mm,
+		cross_reported_ind_id,
+	)
+	.await?;
+	assert_eq!(cross_reported_ind.ind_number, "IND-456");
+	assert!(cross_reported_ind.deleted);
+	assert_eq!(
+		StudyPresaveFdaCrossReportedIndNumberBmc::list_by_parent(
+			&ctx, &mm, study_id
+		)
+		.await?[0]
+			.id,
+		cross_reported_ind_id
+	);
+
 	let study_product_id = StudyPresaveProductBmc::create(
 		&ctx,
 		&mm,
@@ -2449,8 +2978,14 @@ async fn section_presave_child_bmcs_crud_roundtrip() -> Result<()> {
 	);
 
 	StudyPresaveProductBmc::delete(&ctx, &mm, study_product_id).await?;
+	StudyPresaveFdaCrossReportedIndNumberBmc::delete(
+		&ctx,
+		&mm,
+		cross_reported_ind_id,
+	)
+	.await?;
 	StudyPresaveRegistrationNumberBmc::delete(&ctx, &mm, registration_id).await?;
-	ProductPresaveSubstanceBmc::delete(&ctx, &mm, substance_id).await?;
+	ProductPresaveActiveSubstanceBmc::delete(&ctx, &mm, substance_id).await?;
 	ReceiverPresaveConsigneeBmc::delete(&ctx, &mm, consignee_id).await?;
 	SenderPresaveResponsiblePersonBmc::delete(&ctx, &mm, responsible_id).await?;
 	SenderPresaveGatewayBmc::delete(&ctx, &mm, gateway_first_id).await?;
@@ -2907,7 +3442,7 @@ async fn section_presave_child_audit_uses_parent_organization() -> Result<()> {
 	let study_id = Uuid::new_v4();
 	let study_product_id = Uuid::new_v4();
 	let mut tx = mm.dbx().db().begin().await?;
-	set_user_context(&mut tx, demo_user_id()).await?;
+	set_user_context(&mut tx, system_user_id()).await?;
 	set_org_context(&mut tx, demo_org_id(), "system_admin").await?;
 
 	sqlx::query(

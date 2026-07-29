@@ -1,4 +1,7 @@
-use crate::common::{cookie_header, init_test_mm, seed_org_with_users, Result};
+use crate::common::{
+	cookie_header, init_test_mm, seed_active_test_meddra_term, seed_org_with_users,
+	Result,
+};
 use axum::body::{to_bytes, Body};
 use axum::extract::State;
 use axum::http::{Request, StatusCode};
@@ -82,6 +85,25 @@ async fn post_json_with_headers(
 		req = req.header(*k, *v);
 	}
 	let req = req.body(Body::from(body.to_string()))?;
+	let res = app.clone().oneshot(req).await?;
+	let status = res.status();
+	let body = to_bytes(res.into_body(), usize::MAX).await?;
+	let value = parse_json_or_raw(&body);
+	Ok((status, value))
+}
+
+async fn put_json(
+	app: &axum::Router,
+	cookie: &str,
+	uri: &str,
+	body: Value,
+) -> Result<(StatusCode, Value)> {
+	let req = Request::builder()
+		.method("PUT")
+		.uri(uri)
+		.header("cookie", cookie)
+		.header("content-type", "application/json")
+		.body(Body::from(body.to_string()))?;
 	let res = app.clone().oneshot(req).await?;
 	let status = res.status();
 	let body = to_bytes(res.into_body(), usize::MAX).await?;
@@ -233,10 +255,13 @@ async fn create_safety_report(
 		"data": {
 			"case_id": case_id,
 			"transmission_date": [2024, 10],
-			"report_type": "1",
-			"date_first_received_from_source": [2024, 10],
-			"date_of_most_recent_information": [2024, 10],
-			"fulfil_expedited_criteria": false
+				"report_type": "1",
+				"date_first_received_from_source": [2024, 10],
+				"date_of_most_recent_information": [2024, 10],
+				"fulfil_expedited_criteria": false,
+				"combination_product_report_indicator": "false",
+				"other_case_identifiers_exist": null,
+				"other_case_identifiers_exist_null_flavor": "NI"
 		}
 	});
 	let (status, value) = post_json(
@@ -345,10 +370,12 @@ async fn create_primary_source(
 ) -> Result<()> {
 	let body = json!({
 		"data": {
-			"case_id": case_id,
-			"sequence_number": 1,
-			"qualification": "1",
-			"email": "reporter@example.com"
+				"case_id": case_id,
+				"sequence_number": 1,
+				"qualification": "1",
+				"country_code_null_flavor": "UNK",
+				"email": "reporter@example.com",
+				"primary_source_regulatory": "1"
 		}
 	});
 	let (status, value) = post_json(
@@ -375,7 +402,12 @@ async fn create_primary_source(
 		.header("cookie", cookie)
 		.header("content-type", "application/json")
 		.body(Body::from(
-			json!({"data": { "email": "reporter@example.com" }}).to_string(),
+			json!({"data": {
+				"country_code_null_flavor": "UNK",
+				"email": "reporter@example.com",
+				"primary_source_regulatory": "1"
+			}})
+			.to_string(),
 		))?;
 	let res = app.clone().oneshot(req).await?;
 	let status = res.status();
@@ -419,7 +451,8 @@ async fn create_patient(
 			json!({
 				"data": {
 					"race_code": "C41260",
-					"ethnicity_code": "C41222"
+					"ethnicity_code": "C41222",
+					"medical_history_text": "No relevant medical history."
 				}
 			})
 			.to_string(),
@@ -468,10 +501,10 @@ async fn create_reaction(
 		.header("content-type", "application/json")
 		.body(Body::from(
 			json!({ "data": {
-				"reaction_meddra_version": "27.0",
-				"reaction_meddra_code": "10019211",
+					"reaction_meddra_version": "26.0",
+					"reaction_meddra_code": "10000001",
 				"outcome": "1",
-				"reaction_language": "en"
+				"reaction_language": "eng"
 			}})
 			.to_string(),
 		))?;
@@ -534,10 +567,12 @@ async fn create_narrative(
 }
 
 async fn seed_rule_clean_case(
+	mm: &lib_core::model::ModelManager,
 	app: &axum::Router,
 	cookie: &str,
 	case_id: Uuid,
 ) -> Result<()> {
+	seed_active_test_meddra_term(mm).await?;
 	create_safety_report(app, cookie, case_id).await?;
 	create_message_header(app, cookie, case_id).await?;
 	create_sender(app, cookie, case_id).await?;
@@ -615,7 +650,7 @@ async fn test_submission_ack_out_of_order_does_not_regress_status() -> Result<()
 	let app = web_server::app(mm.clone());
 
 	let case_id = create_case(&app, &cookie, seed.org_id).await?;
-	seed_rule_clean_case(&app, &cookie, case_id).await?;
+	seed_rule_clean_case(&mm, &app, &cookie, case_id).await?;
 	mm.dbx().begin_txn().await?;
 	set_full_context_dbx(
 		mm.dbx(),
@@ -892,6 +927,67 @@ async fn test_submission_receiver_options_list_defaults_by_authority() -> Result
 
 #[serial]
 #[tokio::test]
+async fn test_submission_receiver_selection_updates_message_header_n_identifiers(
+) -> Result<()> {
+	clear_esg_env();
+	let mm = init_test_mm().await?;
+	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
+	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
+	let cookie = cookie_header(&token.to_string());
+	let app = web_server::app(mm);
+
+	let case_id = create_case(&app, &cookie, seed.org_id).await?;
+	create_message_header(&app, &cookie, case_id).await?;
+
+	let (status, body) = put_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/submission-receiver"),
+		json!({
+			"data": {
+				"authority": "mfds",
+				"receiver_label": "MFDS(KR)",
+				"batch_receiver_identifier": "MFDS",
+				"message_receiver_identifier": "KR"
+			}
+		}),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK, "{body:?}");
+	assert_eq!(
+		body["data"]["batch_receiver_identifier"].as_str(),
+		Some("MFDS"),
+		"{body:?}"
+	);
+	assert_eq!(
+		body["data"]["message_receiver_identifier"].as_str(),
+		Some("KR"),
+		"{body:?}"
+	);
+
+	let (header_status, header) = get_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/message-header"),
+	)
+	.await?;
+	assert_eq!(header_status, StatusCode::OK, "{header:?}");
+	assert_eq!(
+		header["data"]["batch_receiver_identifier"].as_str(),
+		Some("MFDS"),
+		"{header:?}"
+	);
+	assert_eq!(
+		header["data"]["message_receiver_identifier"].as_str(),
+		Some("KR"),
+		"{header:?}"
+	);
+
+	Ok(())
+}
+
+#[serial]
+#[tokio::test]
 async fn test_submission_ack_can_be_downloaded_as_text() -> Result<()> {
 	clear_esg_env();
 	let mm = init_test_mm().await?;
@@ -993,20 +1089,8 @@ async fn test_submission_ack_terminal_status_does_not_change() -> Result<()> {
 	let app = web_server::app(mm.clone());
 
 	let case_id = create_case(&app, &cookie, seed.org_id).await?;
-	seed_rule_clean_case(&app, &cookie, case_id).await?;
-	set_full_context_dbx(
-		mm.dbx(),
-		seed.admin.id,
-		seed.org_id,
-		ROLE_SPONSOR_ADMIN_CRO,
-	)
-	.await?;
-	mm.dbx()
-		.execute(
-			sqlx::query("UPDATE cases SET status = 'validated' WHERE id = $1")
-				.bind(case_id),
-		)
-		.await?;
+	seed_rule_clean_case(&mm, &app, &cookie, case_id).await?;
+	mark_case_validated(&app, &cookie, case_id, "validator-secret").await?;
 
 	let (status, submit_body) = post_json(
 		&app,
@@ -1068,10 +1152,10 @@ async fn test_submission_rejects_enabled_esg_without_base_url() -> Result<()> {
 	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
 	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
 	let cookie = cookie_header(&token.to_string());
-	let app = web_server::app(mm);
+	let app = web_server::app(mm.clone());
 
 	let case_id = create_case(&app, &cookie, seed.org_id).await?;
-	seed_rule_clean_case(&app, &cookie, case_id).await?;
+	seed_rule_clean_case(&mm, &app, &cookie, case_id).await?;
 	mark_case_validated(&app, &cookie, case_id, "validator-secret").await?;
 
 	let (status, body) = post_json(
@@ -1111,11 +1195,11 @@ async fn test_submission_esg_transport_sends_expected_headers_and_payload(
 	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
 	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
 	let cookie = cookie_header(&token.to_string());
-	let app = web_server::app(mm);
+	let app = web_server::app(mm.clone());
 
 	let case_id =
 		create_case_with_profile(&app, &cookie, seed.org_id, "fda").await?;
-	seed_rule_clean_case(&app, &cookie, case_id).await?;
+	seed_rule_clean_case(&mm, &app, &cookie, case_id).await?;
 	mark_case_validated(&app, &cookie, case_id, "validator-secret").await?;
 
 	let (status, body) = post_json(
@@ -1160,11 +1244,11 @@ async fn test_submission_esg_non_success_response_returns_bad_request() -> Resul
 	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
 	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
 	let cookie = cookie_header(&token.to_string());
-	let app = web_server::app(mm);
+	let app = web_server::app(mm.clone());
 
 	let case_id =
 		create_case_with_profile(&app, &cookie, seed.org_id, "fda").await?;
-	seed_rule_clean_case(&app, &cookie, case_id).await?;
+	seed_rule_clean_case(&mm, &app, &cookie, case_id).await?;
 	mark_case_validated(&app, &cookie, case_id, "validator-secret").await?;
 
 	let (status, body) = post_json(
@@ -1195,11 +1279,11 @@ async fn test_submission_accepts_mfds_route_for_mfds_profile() -> Result<()> {
 	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
 	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
 	let cookie = cookie_header(&token.to_string());
-	let app = web_server::app(mm);
+	let app = web_server::app(mm.clone());
 
 	let case_id =
 		create_case_with_profile(&app, &cookie, seed.org_id, "mfds").await?;
-	seed_rule_clean_case(&app, &cookie, case_id).await?;
+	seed_rule_clean_case(&mm, &app, &cookie, case_id).await?;
 	mark_case_validated(&app, &cookie, case_id, "validator-secret").await?;
 
 	let (status, submit_body) = post_json(
@@ -1233,7 +1317,7 @@ async fn test_submission_uses_request_authority_not_case_appendices() -> Result<
 	let app = web_server::app(mm.clone());
 
 	let case_id = create_case(&app, &cookie, seed.org_id).await?;
-	seed_rule_clean_case(&app, &cookie, case_id).await?;
+	seed_rule_clean_case(&mm, &app, &cookie, case_id).await?;
 	mm.dbx().begin_txn().await?;
 	set_full_context_dbx(
 		mm.dbx(),
@@ -1279,10 +1363,10 @@ async fn test_submission_rejects_when_as2_submitter_unreachable() -> Result<()> 
 	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
 	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
 	let cookie = cookie_header(&token.to_string());
-	let app = web_server::app(mm);
+	let app = web_server::app(mm.clone());
 
 	let case_id = create_case(&app, &cookie, seed.org_id).await?;
-	seed_rule_clean_case(&app, &cookie, case_id).await?;
+	seed_rule_clean_case(&mm, &app, &cookie, case_id).await?;
 	mark_case_validated(&app, &cookie, case_id, "validator-secret").await?;
 
 	let (status, body) = post_json(
@@ -1327,10 +1411,10 @@ async fn test_internal_ack_callback_updates_submission_by_remote_id() -> Result<
 	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
 	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
 	let cookie = cookie_header(&token.to_string());
-	let app = web_server::app(mm);
+	let app = web_server::app(mm.clone());
 
 	let case_id = create_case(&app, &cookie, seed.org_id).await?;
-	seed_rule_clean_case(&app, &cookie, case_id).await?;
+	seed_rule_clean_case(&mm, &app, &cookie, case_id).await?;
 	mark_case_validated(&app, &cookie, case_id, "validator-secret").await?;
 
 	let (status, submit_body) = post_json(
@@ -1435,10 +1519,10 @@ async fn test_submission_idempotency_key_reuses_submission_when_enabled(
 	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
 	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
 	let cookie = cookie_header(&token.to_string());
-	let app = web_server::app(mm);
+	let app = web_server::app(mm.clone());
 
 	let case_id = create_case(&app, &cookie, seed.org_id).await?;
-	seed_rule_clean_case(&app, &cookie, case_id).await?;
+	seed_rule_clean_case(&mm, &app, &cookie, case_id).await?;
 	mark_case_validated(&app, &cookie, case_id, "validator-secret").await?;
 
 	let idem_key = "idem-fda-001";
@@ -1505,10 +1589,10 @@ async fn test_submission_idempotency_key_parallel_requests_single_submission(
 	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
 	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
 	let cookie = cookie_header(&token.to_string());
-	let app = web_server::app(mm);
+	let app = web_server::app(mm.clone());
 
 	let case_id = create_case(&app, &cookie, seed.org_id).await?;
-	seed_rule_clean_case(&app, &cookie, case_id).await?;
+	seed_rule_clean_case(&mm, &app, &cookie, case_id).await?;
 	mark_case_validated(&app, &cookie, case_id, "validator-secret").await?;
 
 	let idem_key = "idem-fda-parallel-001";
@@ -1670,7 +1754,7 @@ async fn test_internal_reconcile_retries_failed_submission_to_success() -> Resul
 	let app = web_server::app(mm.clone());
 
 	let case_id = create_case(&app, &cookie, seed.org_id).await?;
-	seed_rule_clean_case(&app, &cookie, case_id).await?;
+	seed_rule_clean_case(&mm, &app, &cookie, case_id).await?;
 	mark_case_validated(&app, &cookie, case_id, "validator-secret").await?;
 
 	let (submit_status, submit_body) = post_json(
@@ -1798,7 +1882,7 @@ async fn test_internal_reconcile_retries_failed_submission_and_keeps_rejected_on
 	let app = web_server::app(mm.clone());
 
 	let case_id = create_case(&app, &cookie, seed.org_id).await?;
-	seed_rule_clean_case(&app, &cookie, case_id).await?;
+	seed_rule_clean_case(&mm, &app, &cookie, case_id).await?;
 	mark_case_validated(&app, &cookie, case_id, "validator-secret").await?;
 
 	let (submit_status, submit_body) = post_json(
@@ -2011,11 +2095,11 @@ async fn test_rust_to_submitter_bridge_payload_and_ack_flow() -> Result<()> {
 	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
 	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
 	let cookie = cookie_header(&token.to_string());
-	let app = web_server::app(mm);
+	let app = web_server::app(mm.clone());
 
 	let case_id =
 		create_case_with_profile(&app, &cookie, seed.org_id, "mfds").await?;
-	seed_rule_clean_case(&app, &cookie, case_id).await?;
+	seed_rule_clean_case(&mm, &app, &cookie, case_id).await?;
 	mark_case_validated(&app, &cookie, case_id, "validator-secret").await?;
 
 	let (status, submit_body) = post_json(
@@ -2095,10 +2179,10 @@ async fn test_internal_ack_callback_duplicate_payload_is_idempotent() -> Result<
 	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
 	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
 	let cookie = cookie_header(&token.to_string());
-	let app = web_server::app(mm);
+	let app = web_server::app(mm.clone());
 
 	let case_id = create_case(&app, &cookie, seed.org_id).await?;
-	seed_rule_clean_case(&app, &cookie, case_id).await?;
+	seed_rule_clean_case(&mm, &app, &cookie, case_id).await?;
 	mark_case_validated(&app, &cookie, case_id, "validator-secret").await?;
 
 	let (status, submit_body) = post_json(
@@ -2238,11 +2322,11 @@ async fn test_real_java_submitter_integration_mfds() -> Result<()> {
 	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
 	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
 	let cookie = cookie_header(&token.to_string());
-	let app = web_server::app(mm);
+	let app = web_server::app(mm.clone());
 
 	let case_id =
 		create_case_with_profile(&app, &cookie, seed.org_id, "mfds").await?;
-	seed_rule_clean_case(&app, &cookie, case_id).await?;
+	seed_rule_clean_case(&mm, &app, &cookie, case_id).await?;
 	mark_case_validated(&app, &cookie, case_id, "validator-secret").await?;
 
 	let (status, submit_body) = post_json(

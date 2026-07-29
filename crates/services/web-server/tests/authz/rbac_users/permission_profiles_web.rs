@@ -16,6 +16,144 @@ use serial_test::serial;
 use tower::ServiceExt;
 use uuid::Uuid;
 
+#[serial]
+#[tokio::test]
+async fn test_system_admin_profile_menu_privileges_match_eligible_actions(
+) -> Result<()> {
+	let mm = init_test_mm().await?;
+	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
+	let system_admin = insert_user(
+		&mm,
+		seed.org_id,
+		ROLE_SYSTEM_ADMIN,
+		system_user_id(),
+		Some("systempwd"),
+	)
+	.await?;
+	let token = generate_web_token(&system_admin.email, system_admin.token_salt)?;
+	let request = Request::builder()
+		.method("GET")
+		.uri("/api/users/me/profile")
+		.header("cookie", cookie_header(&token.to_string()))
+		.body(Body::empty())?;
+	let response = web_server::app(mm).oneshot(request).await?;
+	assert_eq!(response.status(), StatusCode::OK);
+	let body = to_bytes(response.into_body(), usize::MAX).await?;
+	let profile: serde_json::Value = serde_json::from_slice(&body)?;
+	let privileges = profile["data"]["privileges"]
+		.as_array()
+		.ok_or("profile privileges should be an array")?;
+	assert!(privileges.iter().any(|row| {
+		row["menu_key"] == "admin"
+			&& row["can_read"] == true
+			&& row["can_edit"] == true
+	}));
+	assert!(privileges
+		.iter()
+		.all(|row| row["menu_key"] != "home_notice"));
+
+	let actions = profile["data"]["eligibleActions"]
+		.as_array()
+		.ok_or("eligible actions should be an array")?;
+	assert!(actions.iter().any(|action| action == "settings.update"));
+	assert!(actions.iter().all(|action| action != "notice.read"));
+	assert!(actions.iter().all(|action| action != "notice.update"));
+	Ok(())
+}
+
+#[serial]
+#[tokio::test]
+async fn test_system_admin_permission_profiles_require_target_organization(
+) -> Result<()> {
+	let mm = init_test_mm().await?;
+	let source = seed_org_with_users(&mm, "sourcepwd", "sourceview").await?;
+	let target = seed_org_with_users(&mm, "targetpwd", "targetview").await?;
+	let system_admin = insert_user(
+		&mm,
+		source.org_id,
+		ROLE_SYSTEM_ADMIN,
+		system_user_id(),
+		Some("systempwd"),
+	)
+	.await?;
+	let token = generate_web_token(&system_admin.email, system_admin.token_salt)?;
+	let cookie = cookie_header(&token.to_string());
+	let app = web_server::app(mm);
+	let source_role_name = format!("Source Role {}", Uuid::new_v4());
+	let role_name = format!("Target Role {}", Uuid::new_v4());
+	let role_body = |name: &str| {
+		json!({
+			"data": {
+				"name": name,
+				"privileges": [{
+					"menu_key": "case",
+					"can_read": true,
+					"can_edit": false,
+					"can_review": false,
+					"can_lock": false
+				}]
+			}
+		})
+	};
+	let body = role_body(&role_name);
+
+	let missing_scope = Request::builder()
+		.method("POST")
+		.uri("/api/admin/permission-profiles")
+		.header("cookie", &cookie)
+		.header("content-type", "application/json")
+		.body(Body::from(body.to_string()))?;
+	let missing_scope = app.clone().oneshot(missing_scope).await?;
+	assert_eq!(missing_scope.status(), StatusCode::BAD_REQUEST);
+
+	let source_uri = format!(
+		"/api/admin/permission-profiles?organization_id={}",
+		source.org_id
+	);
+	let source_role = Request::builder()
+		.method("POST")
+		.uri(&source_uri)
+		.header("cookie", &cookie)
+		.header("content-type", "application/json")
+		.body(Body::from(role_body(&source_role_name).to_string()))?;
+	let source_role = app.clone().oneshot(source_role).await?;
+	assert_eq!(source_role.status(), StatusCode::CREATED);
+
+	let target_uri = format!(
+		"/api/admin/permission-profiles?organization_id={}",
+		target.org_id
+	);
+	let scoped = Request::builder()
+		.method("POST")
+		.uri(&target_uri)
+		.header("cookie", &cookie)
+		.header("content-type", "application/json")
+		.body(Body::from(body.to_string()))?;
+	let scoped = app.clone().oneshot(scoped).await?;
+	assert_eq!(scoped.status(), StatusCode::CREATED);
+
+	let list = Request::builder()
+		.method("GET")
+		.uri(&target_uri)
+		.header("cookie", cookie)
+		.body(Body::empty())?;
+	let list = app.oneshot(list).await?;
+	assert_eq!(list.status(), StatusCode::OK);
+	let list_body = to_bytes(list.into_body(), usize::MAX).await?;
+	let rows: serde_json::Value = serde_json::from_slice(&list_body)?;
+	assert!(rows
+		.as_array()
+		.ok_or("expected profile list")?
+		.iter()
+		.any(|row| row["name"] == role_name));
+	assert!(rows
+		.as_array()
+		.ok_or("expected profile list")?
+		.iter()
+		.all(|row| row["name"] != source_role_name));
+	Ok(())
+}
+
 #[tokio::test]
 async fn test_permission_profiles_are_scoped_by_organization_for_sponsor_admins(
 ) -> Result<()> {
@@ -85,9 +223,17 @@ async fn test_permission_profiles_are_scoped_by_organization_for_sponsor_admins(
 	assert!(
 		profiles
 			.iter()
-			.all(|profile| profile["id"] != ROLE_SPONSOR_ADMIN_CRO
-				&& profile["id"] != ROLE_SPONSOR_ADMIN_COMPANY),
-		"Sponsor Administrator built-in roles should not be exposed: {rows:?}"
+			.any(|profile| profile["id"] == ROLE_SPONSOR_ADMIN_CRO
+				&& profile["built_in"] == true
+				&& profile["editable"] == false),
+		"CRO account should expose its assigned Sponsor Administrator as read-only: {rows:?}"
+	);
+	assert!(
+		profiles.iter().all(|profile| {
+			profile["id"] != ROLE_SPONSOR_ADMIN_COMPANY
+				&& profile["id"] != ROLE_SYSTEM_ADMIN
+		}),
+		"CRO account should not expose unrelated built-in administrator roles: {rows:?}"
 	);
 
 	Ok(())
@@ -142,7 +288,7 @@ async fn test_permission_profiles_reject_twenty_first_custom_role_per_org(
 	let body = to_bytes(res.into_body(), usize::MAX).await?;
 	let json: serde_json::Value = serde_json::from_slice(&body)?;
 
-	assert_eq!(status, StatusCode::BAD_REQUEST, "{json:?}");
+	assert_eq!(status, StatusCode::CONFLICT, "{json:?}");
 	assert!(
 		json.to_string().contains("20"),
 		"limit error should mention the maximum role count: {json:?}"

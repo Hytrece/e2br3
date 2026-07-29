@@ -1,4 +1,541 @@
 use super::common::*;
+use lib_core::model::drug::{
+	DosageInformationForCreate, DosageInformationForUpdate,
+	DrugActiveSubstanceForCreate, DrugActiveSubstanceForUpdate,
+	DrugIndicationForCreate, DrugIndicationForUpdate,
+};
+use lib_core::model::drug_reaction_assessment::{
+	DrugReactionAssessmentForCreate, DrugReactionAssessmentForUpdate,
+	RelatednessAssessmentBmc, RelatednessAssessmentFilter,
+	RelatednessAssessmentForCreate, RelatednessAssessmentForUpdate,
+};
+
+const DRUG_ROW_ALIASES: &[(&str, &[&str])] = &[
+	("source_product_presave_id", &["sourceProductPresaveId"]),
+	("medicinal_product", &["medicinalProduct"]),
+	("drug_characterization", &["drugCharacterization"]),
+	("batch_lot_number", &["drugBatchNumber"]),
+	("action_taken", &["drugActionTaken"]),
+	("mpid_version", &["mpidVersion"]),
+	("mpid", &["mpid"]),
+	("phpid_version", &["phpidVersion"]),
+	("phpid", &["phpid"]),
+	("mfds_mpid_version", &["mfdsMpidVersion"]),
+	("mfds_mpid", &["mfdsMpid"]),
+	("obtain_drug_country", &["obtainDrugCountry"]),
+	(
+		"investigational_product_blinded",
+		&["investigationalProductBlinded"],
+	),
+	("drug_authorization_number", &["drugAuthorizationNumber"]),
+	("manufacturer_country", &["drugAuthorizationCountry"]),
+	("manufacturer_name", &["drugAuthorizationHolder"]),
+	(
+		"cumulative_dose_first_reaction_value",
+		&["cumulativeDoseValue"],
+	),
+	(
+		"cumulative_dose_first_reaction_unit",
+		&["cumulativeDoseUnit"],
+	),
+	(
+		"gestation_period_exposure_value",
+		&["gestationPeriodExposureValue"],
+	),
+	(
+		"gestation_period_exposure_unit",
+		&["gestationPeriodExposureUnit"],
+	),
+	("fda_additional_info_coded", &["fdaAdditionalInfoCoded"]),
+	(
+		"drug_additional_info_codes_json",
+		&["drugAdditionalInformationCodes"],
+	),
+	(
+		"drug_additional_information",
+		&["drugAdditionalInformation"],
+	),
+	(
+		"fda_specialized_product_category",
+		&["fdaSpecializedProductCategory"],
+	),
+	("fda_device_info_json", &["fdaDeviceInfo"]),
+	("fda_other_characterization", &["fdaOtherCharacterization"]),
+	("sequence_number", &["sequenceNumber"]),
+];
+
+const ACTIVE_SUBSTANCE_ALIASES: &[(&str, &[&str])] = &[
+	("sequence_number", &["sequenceNumber"]),
+	("substance_name", &["substanceName"]),
+	("substance_termid_version", &["substanceTermIdVersion"]),
+	("substance_termid", &["substanceTermId"]),
+	("mfds_version", &["mfdsVersion"]),
+	("mfds_id", &["mfdsId"]),
+	("strength_value", &["substanceStrengthValue"]),
+	("strength_unit", &["substanceStrengthUnit"]),
+];
+
+const DOSAGE_ALIASES: &[(&str, &[&str])] = &[
+	("sequence_number", &["sequenceNumber"]),
+	("dose_value", &["doseValue"]),
+	("dose_unit", &["doseUnit"]),
+	("number_of_units", &["numberOfUnits"]),
+	("frequency_unit", &["frequencyUnit"]),
+	("first_administration_date", &["firstAdministrationDate"]),
+	("last_administration_date", &["lastAdministrationDate"]),
+	("duration_value", &["durationValue"]),
+	("duration_unit", &["durationUnit"]),
+	("continuing", &["continuing"]),
+	("batch_lot_number", &["batchNumber"]),
+	("batch_lot_number_null_flavor", &["batchNumberNullFlavor"]),
+	("dosage_text", &["dosageText"]),
+	("dose_form", &["doseForm"]),
+	("dose_form_termid_version", &["doseFormTermIdVersion"]),
+	("dose_form_termid", &["doseFormTermId"]),
+	("route_of_administration", &["routeOfAdministration"]),
+	("route_termid_version", &["routeTermIdVersion"]),
+	("route_termid", &["routeTermId"]),
+	("parent_route", &["parentRouteOfAdministration"]),
+	("parent_route_termid_version", &["parentRouteTermIdVersion"]),
+	("parent_route_termid", &["parentRouteTermId"]),
+	(
+		"first_administration_date_null_flavor",
+		&["firstAdministrationDateNullFlavor"],
+	),
+	(
+		"last_administration_date_null_flavor",
+		&["lastAdministrationDateNullFlavor"],
+	),
+];
+
+const INDICATION_ALIASES: &[(&str, &[&str])] = &[
+	("sequence_number", &["sequenceNumber"]),
+	("indication_text", &["indicationText"]),
+	("indication_text_null_flavor", &["indicationTextNullFlavor"]),
+	("indication_meddra_version", &["indicationMeddraVersion"]),
+	("indication_meddra_code", &["indicationMeddraCode"]),
+];
+
+const ASSESSMENT_ALIASES: &[(&str, &[&str])] = &[
+	(
+		"administration_start_interval_value",
+		&["administrationStartIntervalValue"],
+	),
+	(
+		"administration_start_interval_unit",
+		&["administrationStartIntervalUnit"],
+	),
+	("last_dose_interval_value", &["lastDoseIntervalValue"]),
+	("last_dose_interval_unit", &["lastDoseIntervalUnit"]),
+	("recurrence_action", &["recurrenceAction"]),
+	("reaction_recurred", &["reactionRecurred"]),
+];
+
+const RELATEDNESS_ALIASES: &[(&str, &[&str])] = &[
+	("source_of_assessment", &["sourceOfAssessment"]),
+	("method_of_assessment", &["methodOfAssessment"]),
+	("result_of_assessment", &["resultOfAssessment"]),
+	("result_of_assessment_kr2", &["resultOfAssessmentKr2"]),
+];
+
+async fn persist_active_substances(
+	ctx: &lib_core::ctx::Ctx,
+	mm: &ModelManager,
+	drug_id: Uuid,
+	drug_row: &Map<String, Value>,
+) -> Result<()> {
+	let Some(value) = drug_row.get("activeSubstances") else {
+		return Ok(());
+	};
+	let rows = value.as_array().ok_or_else(|| Error::BadRequest {
+		message: "invalid DG.drug.activeSubstances payload: expected an array"
+			.to_string(),
+	})?;
+
+	for (index, value) in rows.iter().enumerate() {
+		let row = value.as_object().ok_or_else(|| Error::BadRequest {
+			message: format!(
+				"invalid DG.drug.activeSubstances[{index}] payload: expected an object"
+			),
+		})?;
+		let id = string_field(row, &["id"])
+			.map(|value| {
+				Uuid::parse_str(&value).map_err(|_| Error::BadRequest {
+					message: format!("invalid DG.drug.activeSubstances[{index}].id"),
+				})
+			})
+			.transpose()?;
+		let deleted = bool_field(row, &["deleted"]).unwrap_or(false);
+
+		if let Some(id) = id {
+			let persisted = DrugActiveSubstanceBmc::get(ctx, mm, id).await?;
+			if persisted.drug_id != drug_id {
+				return Err(Error::BadRequest {
+					message: format!(
+						"DG.drug.activeSubstances[{index}].id does not belong to the current drug"
+					),
+				});
+			}
+			if deleted {
+				DrugActiveSubstanceBmc::delete(ctx, mm, id).await?;
+			} else {
+				let model = row_model_value(
+					"DG",
+					"activeSubstances[].",
+					row,
+					ACTIVE_SUBSTANCE_ALIASES,
+					&[],
+				);
+				let update = parse_row_model::<DrugActiveSubstanceForUpdate>(
+					"DG",
+					"activeSubstances",
+					model,
+				)?;
+				DrugActiveSubstanceBmc::update(ctx, mm, id, update).await?;
+			}
+		} else if !deleted {
+			let model = row_model_value(
+				"DG",
+				"activeSubstances[].",
+				row,
+				ACTIVE_SUBSTANCE_ALIASES,
+				&[
+					("drug_id", json!(drug_id)),
+					(
+						"sequence_number",
+						json!(i32_field(row, &["sequenceNumber"])
+							.unwrap_or((index + 1) as i32)),
+					),
+				],
+			);
+			let create = parse_row_model::<DrugActiveSubstanceForCreate>(
+				"DG",
+				"activeSubstances",
+				model,
+			)?;
+			DrugActiveSubstanceBmc::create(ctx, mm, create).await?;
+		}
+	}
+
+	Ok(())
+}
+
+macro_rules! persist_drug_children {
+	(
+		$fn_name:ident,
+		key: $key:literal,
+		aliases: $aliases:expr,
+		bmc: $bmc:ident,
+		create: $create:ty,
+		update: $update:ty
+	) => {
+		async fn $fn_name(
+			ctx: &lib_core::ctx::Ctx,
+			mm: &ModelManager,
+			drug_id: Uuid,
+			drug_row: &Map<String, Value>,
+		) -> Result<()> {
+			let Some(value) = drug_row.get($key) else {
+				return Ok(());
+			};
+			let rows = value.as_array().ok_or_else(|| Error::BadRequest {
+				message: format!("invalid DG.drug.{} payload: expected an array", $key),
+			})?;
+
+			for (index, value) in rows.iter().enumerate() {
+				let row = value.as_object().ok_or_else(|| Error::BadRequest {
+					message: format!(
+						"invalid DG.drug.{}[{index}] payload: expected an object",
+						$key
+					),
+				})?;
+				let id = string_field(row, &["id"])
+					.map(|value| {
+						Uuid::parse_str(&value).map_err(|_| Error::BadRequest {
+							message: format!("invalid DG.drug.{}[{index}].id", $key),
+						})
+					})
+					.transpose()?;
+				let deleted = bool_field(row, &["deleted"]).unwrap_or(false);
+
+				if let Some(id) = id {
+					let persisted = $bmc::get(ctx, mm, id).await?;
+					if persisted.drug_id != drug_id {
+						return Err(Error::BadRequest {
+							message: format!(
+								"DG.drug.{}[{index}].id does not belong to the current drug",
+								$key
+							),
+						});
+					}
+					if deleted {
+						$bmc::delete(ctx, mm, id).await?;
+					} else {
+						let model = row_model_value(
+							"DG",
+							concat!($key, "[]."),
+							row,
+							$aliases,
+							&[],
+						);
+						let update =
+							parse_row_model::<$update>("DG", $key, model)?;
+						$bmc::update(ctx, mm, id, update).await?;
+					}
+				} else if !deleted {
+					let model = row_model_value(
+						"DG",
+						concat!($key, "[]."),
+						row,
+						$aliases,
+						&[
+							("drug_id", json!(drug_id)),
+							(
+								"sequence_number",
+								json!(i32_field(
+									row,
+									&["sequenceNumber"]
+								)
+								.unwrap_or((index + 1) as i32)),
+							),
+						],
+					);
+					let create =
+						parse_row_model::<$create>("DG", $key, model)?;
+					$bmc::create(ctx, mm, create).await?;
+				}
+			}
+
+			Ok(())
+		}
+	};
+}
+
+persist_drug_children!(
+	persist_dosage_information,
+	key: "dosageInformation",
+	aliases: DOSAGE_ALIASES,
+	bmc: DosageInformationBmc,
+	create: DosageInformationForCreate,
+	update: DosageInformationForUpdate
+);
+
+persist_drug_children!(
+	persist_indications,
+	key: "indications",
+	aliases: INDICATION_ALIASES,
+	bmc: DrugIndicationBmc,
+	create: DrugIndicationForCreate,
+	update: DrugIndicationForUpdate
+);
+
+async fn persist_drug_reaction_assessments(
+	ctx: &lib_core::ctx::Ctx,
+	mm: &ModelManager,
+	case_id: Uuid,
+	drug_id: Uuid,
+	drug_row: &Map<String, Value>,
+) -> Result<()> {
+	let Some(value) = drug_row.get("drugReactionAssessments") else {
+		return Ok(());
+	};
+	let rows = value.as_array().ok_or_else(|| Error::BadRequest {
+		message:
+			"invalid DG.drug.drugReactionAssessments payload: expected an array"
+				.to_string(),
+	})?;
+
+	for (index, value) in rows.iter().enumerate() {
+		let row = value.as_object().ok_or_else(|| Error::BadRequest {
+			message: format!(
+				"invalid DG.drug.drugReactionAssessments[{index}] payload: expected an object"
+			),
+		})?;
+		let assessment_id = string_field(row, &["drugReactionAssessmentId"])
+			.map(|value| {
+				Uuid::parse_str(&value).map_err(|_| Error::BadRequest {
+					message: format!(
+					"invalid DG.drug.drugReactionAssessments[{index}].drugReactionAssessmentId"
+				),
+				})
+			})
+			.transpose()?;
+
+		let persisted_assessment = if let Some(assessment_id) = assessment_id {
+			let assessment =
+				DrugReactionAssessmentBmc::get(ctx, mm, assessment_id).await?;
+			if assessment.drug_id != drug_id {
+				return Err(Error::BadRequest {
+					message: format!(
+						"DG.drug.drugReactionAssessments[{index}] does not belong to the current drug"
+					),
+				});
+			}
+			Some(assessment)
+		} else {
+			None
+		};
+		let reaction_id = string_field(row, &["reactionId"])
+			.map(|value| {
+				Uuid::parse_str(&value).map_err(|_| Error::BadRequest {
+					message: format!(
+						"invalid DG.drug.drugReactionAssessments[{index}].reactionId"
+					),
+				})
+			})
+			.transpose()?
+			.or_else(|| {
+				persisted_assessment
+					.as_ref()
+					.map(|assessment| assessment.reaction_id)
+			})
+			.ok_or_else(|| Error::BadRequest {
+				message: format!(
+					"missing DG.drug.drugReactionAssessments[{index}].reactionId"
+				),
+			})?;
+		ReactionBmc::get_in_case(ctx, mm, case_id, reaction_id).await?;
+
+		let delete_assessment =
+			bool_field(row, &["_deleteAssessment"]).unwrap_or(false);
+		if delete_assessment {
+			let assessment = persisted_assessment.ok_or_else(|| Error::BadRequest {
+				message: format!(
+					"missing DG.drug.drugReactionAssessments[{index}].drugReactionAssessmentId for deletion"
+				),
+			})?;
+			DrugReactionAssessmentBmc::delete(ctx, mm, assessment.id).await?;
+			continue;
+		}
+
+		let assessment_id = if let Some(assessment) = persisted_assessment {
+			let model = row_model_value(
+				"DG",
+				"drugReactionAssessments[].",
+				row,
+				ASSESSMENT_ALIASES,
+				&[],
+			);
+			let update = parse_row_model::<DrugReactionAssessmentForUpdate>(
+				"DG",
+				"drugReactionAssessments",
+				model,
+			)?;
+			DrugReactionAssessmentBmc::update(ctx, mm, assessment.id, update)
+				.await?;
+			assessment.id
+		} else if let Some(assessment) =
+			DrugReactionAssessmentBmc::get_by_drug_and_reaction(
+				ctx,
+				mm,
+				drug_id,
+				reaction_id,
+			)
+			.await?
+		{
+			let model = row_model_value(
+				"DG",
+				"drugReactionAssessments[].",
+				row,
+				ASSESSMENT_ALIASES,
+				&[],
+			);
+			let update = parse_row_model::<DrugReactionAssessmentForUpdate>(
+				"DG",
+				"drugReactionAssessments",
+				model,
+			)?;
+			DrugReactionAssessmentBmc::update(ctx, mm, assessment.id, update)
+				.await?;
+			assessment.id
+		} else {
+			let model = row_model_value(
+				"DG",
+				"drugReactionAssessments[].",
+				row,
+				ASSESSMENT_ALIASES,
+				&[
+					("drug_id", json!(drug_id)),
+					("reaction_id", json!(reaction_id)),
+				],
+			);
+			let create = parse_row_model::<DrugReactionAssessmentForCreate>(
+				"DG",
+				"drugReactionAssessments",
+				model,
+			)?;
+			DrugReactionAssessmentBmc::create(ctx, mm, create).await?
+		};
+
+		let relatedness_id = string_field(row, &["id"])
+			.map(|value| {
+				Uuid::parse_str(&value).map_err(|_| Error::BadRequest {
+					message: format!(
+						"invalid DG.drug.drugReactionAssessments[{index}].id"
+					),
+				})
+			})
+			.transpose()?;
+		let deleted = bool_field(row, &["deleted"]).unwrap_or(false);
+		if let Some(relatedness_id) = relatedness_id {
+			let relatedness =
+				RelatednessAssessmentBmc::get(ctx, mm, relatedness_id).await?;
+			if relatedness.drug_reaction_assessment_id != assessment_id {
+				return Err(Error::BadRequest {
+					message: format!(
+						"DG.drug.drugReactionAssessments[{index}].id does not belong to the current assessment"
+					),
+				});
+			}
+			if deleted {
+				RelatednessAssessmentBmc::delete(ctx, mm, relatedness_id).await?;
+			} else {
+				let model = row_model_value(
+					"DG",
+					"drugReactionAssessments[].",
+					row,
+					RELATEDNESS_ALIASES,
+					&[],
+				);
+				let update = parse_row_model::<RelatednessAssessmentForUpdate>(
+					"DG",
+					"drugReactionAssessments",
+					model,
+				)?;
+				RelatednessAssessmentBmc::update(ctx, mm, relatedness_id, update)
+					.await?;
+			}
+		} else if !deleted
+			&& RELATEDNESS_ALIASES.iter().any(|(_, aliases)| {
+				aliases.iter().any(|alias| {
+					row.get(*alias).is_some_and(|value| !value.is_null())
+				})
+			}) {
+			let model = row_model_value(
+				"DG",
+				"drugReactionAssessments[].",
+				row,
+				RELATEDNESS_ALIASES,
+				&[
+					("drug_reaction_assessment_id", json!(assessment_id)),
+					(
+						"sequence_number",
+						json!(i32_field(row, &["sequenceNumber"])
+							.unwrap_or((index + 1) as i32)),
+					),
+				],
+			);
+			let create = parse_row_model::<RelatednessAssessmentForCreate>(
+				"DG",
+				"drugReactionAssessments",
+				model,
+			)?;
+			RelatednessAssessmentBmc::create(ctx, mm, create).await?;
+		}
+	}
+
+	Ok(())
+}
 
 async fn load_editor_dg_list_rows(
 	ctx: &lib_core::ctx::Ctx,
@@ -30,7 +567,6 @@ async fn load_editor_dg_list_rows(
 repeatable_list_handler!(
 	list_editor_dg,
 	CaseEditorDgListRowDto,
-	DRUG_LIST,
 	load_editor_dg_list_rows,
 	include_deleted,
 );
@@ -38,6 +574,7 @@ repeatable_list_handler!(
 pub async fn get_editor_dg_page_projection(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 	Path(case_id): Path<Uuid>,
 	Query(query): Query<CaseEditorPageProjectionQuery>,
 ) -> Result<(
@@ -45,24 +582,32 @@ pub async fn get_editor_dg_page_projection(
 	Json<CaseEditorPageProjectionResponse>,
 )> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, CASE_READ)?;
-	require_permission(&ctx, DRUG_LIST)?;
-	lib_rest_core::require_case_read_allowed(&ctx, &mm, case_id).await?;
-
-	let rows = load_editor_dg_list_rows(
+	lib_rest_core::with_authorized_case_child_read(
 		&ctx,
+		&snapshot,
 		&mm,
 		case_id,
-		query.include_deleted.unwrap_or(false),
+		"editor/DG",
+		move |ctx, mm| {
+			Box::pin(async move {
+				let rows = load_editor_dg_list_rows(
+					ctx,
+					mm,
+					case_id,
+					query.include_deleted.unwrap_or(false),
+				)
+				.await?;
+				let projection = repeatable_page_projection_response(
+					case_id,
+					"DG",
+					query_authorities_csv(&query)?,
+					json!({ "rows": rows }),
+				)?;
+				Ok((axum::http::StatusCode::OK, Json(projection)))
+			})
+		},
 	)
-	.await?;
-	let projection = repeatable_page_projection_response(
-		case_id,
-		"DG",
-		query_authorities_csv(&query)?,
-		json!({ "rows": rows }),
-	)?;
-	Ok((axum::http::StatusCode::OK, Json(projection)))
+	.await
 }
 
 fn drug_id_filter<T>(drug_id: Uuid) -> Option<Vec<T>>
@@ -131,6 +676,26 @@ async fn load_editor_dg_row_detail(
 		Some(ListOptions::default()),
 	)
 	.await?;
+	let dosage_information = dosage_information
+		.into_iter()
+		.map(|dosage| {
+			let first_administration_date =
+				ci_date(dosage.first_administration_date);
+			let last_administration_date = ci_date(dosage.last_administration_date);
+			let mut value = json!(dosage);
+			if let Value::Object(ref mut map) = value {
+				map.insert(
+					"first_administration_date".to_string(),
+					json!(first_administration_date),
+				);
+				map.insert(
+					"last_administration_date".to_string(),
+					json!(last_administration_date),
+				);
+			}
+			value
+		})
+		.collect::<Vec<_>>();
 	let indications = DrugIndicationBmc::list(
 		ctx,
 		mm,
@@ -138,11 +703,64 @@ async fn load_editor_dg_row_detail(
 		Some(ListOptions::default()),
 	)
 	.await?;
-	let drug_reaction_assessments =
+	let assessments =
 		DrugReactionAssessmentBmc::list_by_drug(ctx, mm, drug_id).await?;
-	let drug_recurrences =
-		DrugRecurrenceInformationBmc::list_by_drug(ctx, mm, drug_id).await?;
-
+	let mut drug_reaction_assessments = Vec::new();
+	for assessment in assessments {
+		let relatedness = RelatednessAssessmentBmc::list(
+			ctx,
+			mm,
+			Some(vec![RelatednessAssessmentFilter {
+				drug_reaction_assessment_id: Some(uuid_eq(assessment.id)),
+				..Default::default()
+			}]),
+			Some(ListOptions::default()),
+		)
+		.await?;
+		let base = json!({
+			"drugReactionAssessmentId": assessment.id,
+			"reactionId": assessment.reaction_id,
+			"administrationStartIntervalValue":
+				assessment.administration_start_interval_value,
+			"administrationStartIntervalUnit":
+				assessment.administration_start_interval_unit,
+			"lastDoseIntervalValue": assessment.last_dose_interval_value,
+			"lastDoseIntervalUnit": assessment.last_dose_interval_unit,
+			"recurrenceAction": assessment.recurrence_action,
+			"reactionRecurred": assessment.reaction_recurred,
+		});
+		if relatedness.is_empty() {
+			drug_reaction_assessments.push(base);
+		} else {
+			for relatedness in relatedness {
+				let mut row = base.clone();
+				if let Value::Object(ref mut map) = row {
+					map.insert("id".to_string(), json!(relatedness.id));
+					map.insert(
+						"sequenceNumber".to_string(),
+						json!(relatedness.sequence_number),
+					);
+					map.insert(
+						"sourceOfAssessment".to_string(),
+						json!(relatedness.source_of_assessment),
+					);
+					map.insert(
+						"methodOfAssessment".to_string(),
+						json!(relatedness.method_of_assessment),
+					);
+					map.insert(
+						"resultOfAssessment".to_string(),
+						json!(relatedness.result_of_assessment),
+					);
+					map.insert(
+						"resultOfAssessmentKr2".to_string(),
+						json!(relatedness.result_of_assessment_kr2),
+					);
+				}
+				drug_reaction_assessments.push(row);
+			}
+		}
+	}
 	let mut drug = json!(drug);
 	if let Value::Object(ref mut map) = drug {
 		map.insert("activeSubstances".to_string(), json!(active_substances));
@@ -152,7 +770,6 @@ async fn load_editor_dg_row_detail(
 			"drugReactionAssessments".to_string(),
 			json!(drug_reaction_assessments),
 		);
-		map.insert("drugRecurrences".to_string(), json!(drug_recurrences));
 	}
 	Ok(drug)
 }
@@ -160,41 +777,36 @@ async fn load_editor_dg_row_detail(
 pub async fn get_editor_dg(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 	Path((case_id, drug_id)): Path<(Uuid, Uuid)>,
 ) -> Result<(axum::http::StatusCode, Json<CaseEditorRowDetailResponse>)> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, CASE_READ)?;
-	require_permission(&ctx, DRUG_READ)?;
-	require_permission(&ctx, DRUG_SUBSTANCE_LIST)?;
-	require_permission(&ctx, DRUG_DOSAGE_LIST)?;
-	require_permission(&ctx, DRUG_INDICATION_LIST)?;
-	require_permission(&ctx, DRUG_REACTION_ASSESSMENT_LIST)?;
-	require_permission(&ctx, DRUG_RECURRENCE_LIST)?;
-	lib_rest_core::require_case_read_allowed(&ctx, &mm, case_id).await?;
-
-	let drug = load_editor_dg_row_detail(&ctx, &mm, case_id, drug_id).await?;
-
-	Ok((
-		axum::http::StatusCode::OK,
-		Json(CaseEditorRowDetailResponse {
-			case_id,
-			row_id: drug_id,
-			data: json!({ "drugs": [drug] }),
-		}),
-	))
+	lib_rest_core::with_authorized_case_child_read(
+		&ctx,
+		&snapshot,
+		&mm,
+		case_id,
+		format!("editor/DG/{drug_id}"),
+		move |ctx, mm| {
+			Box::pin(async move {
+				let drug =
+					load_editor_dg_row_detail(ctx, mm, case_id, drug_id).await?;
+				Ok((
+					axum::http::StatusCode::OK,
+					Json(CaseEditorRowDetailResponse {
+						case_id,
+						row_id: drug_id,
+						data: json!({ "drugs": [drug] }),
+					}),
+				))
+			})
+		},
+	)
+	.await
 }
 
 repeatable_page_row_read_handler!(
 	get_editor_dg_page_row,
-	[
-		CASE_READ,
-		DRUG_READ,
-		DRUG_SUBSTANCE_LIST,
-		DRUG_DOSAGE_LIST,
-		DRUG_INDICATION_LIST,
-		DRUG_REACTION_ASSESSMENT_LIST,
-		DRUG_RECURRENCE_LIST,
-	],
 	build_editor_dg_page_row_response,
 );
 
@@ -215,64 +827,143 @@ async fn build_editor_dg_page_row_response(
 	)
 }
 
-repeatable_page_row_create_handler!(
-	create_editor_dg_page_row,
-	section: "DG",
-	row_key: "drug",
-	permission: DRUG_CREATE,
-	bmc: DrugInformationBmc,
-	model: DrugInformationForCreate,
-	aliases: &[
-		("source_product_presave_id", &["sourceProductPresaveId"][..]),
-		("medicinal_product", &["medicinalProduct"][..]),
-		("drug_characterization", &["drugRole"][..]),
-		("action_taken", &["actionTaken"][..]),
-		("sequence_number", &["sequenceNumber"][..]),
-	],
-	extras: |case_id, row| [
-		("case_id", json!(case_id)),
-		(
-			"sequence_number",
-			json!(i32_field(row, &["sequenceNumber", "sequence_number"]).unwrap_or(1)),
-		),
-		(
-			"drug_characterization",
-			json!(
-				string_field(row, &["drugRole", "drug_characterization"])
-					.unwrap_or_else(|| "1".to_string())
-			),
-		),
-	],
-	build_response: build_editor_dg_page_row_response,
-);
+pub async fn create_editor_dg_page_row(
+	State(mm): State<ModelManager>,
+	ctx_w: CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
+	Path(case_id): Path<Uuid>,
+	Json(request): Json<CaseEditorPagePatchRequest>,
+) -> Result<(axum::http::StatusCode, Json<Value>)> {
+	let ctx = ctx_w.0;
+	lib_rest_core::with_authorized_case_child_mutation(
+		&ctx,
+		&snapshot,
+		&mm,
+		case_id,
+		"editor/DG/drug",
+		move |ctx, mm| {
+			Box::pin(async move {
+				let requested_authorities = validate_request_projection_context(
+					request.authorities.as_deref(),
+				)?;
+				let row = required_row_object("DG", &request.rows, "drug")?;
+				validate_row_payload("DG", "drug", row, None)?;
 
-repeatable_page_row_patch_handler!(
-	patch_editor_dg_page_row,
-	section: "DG",
-	row_key: "drug",
-	permission: DRUG_UPDATE,
-	bmc: DrugInformationBmc,
-	model: DrugInformationForUpdate,
-	changes: &[
-		("medicinalProduct", "medicinalProduct"),
-		("drugCharacterization", "drugRole"),
-		("drugRole", "drugRole"),
-		("actionTaken", "actionTaken"),
-	],
-	aliases: &[
-		("source_product_presave_id", &["sourceProductPresaveId"][..]),
-		("medicinal_product", &["medicinalProduct"][..]),
-		("drug_characterization", &["drugRole"][..]),
-		("action_taken", &["actionTaken"][..]),
-	],
-	build_response: build_editor_dg_page_row_response,
-);
+				let model = row_model_value(
+					"DG",
+					"",
+					row,
+					DRUG_ROW_ALIASES,
+					&[
+						("case_id", json!(case_id)),
+						(
+							"sequence_number",
+							json!(i32_field(row, &["sequenceNumber"],).unwrap_or(1)),
+						),
+						(
+							"drug_characterization",
+							json!(string_field(
+								row,
+								&[
+									"drugCharacterization",
+									"drugRole",
+									"drug_characterization",
+								],
+							)
+							.unwrap_or_else(|| "1".to_string())),
+						),
+					],
+				);
+				let create = parse_row_model::<DrugInformationForCreate>(
+					"DG", "drug", model,
+				)?;
+				let row_id = DrugInformationBmc::create(ctx, mm, create).await?;
+				persist_active_substances(ctx, mm, row_id, row).await?;
+				persist_dosage_information(ctx, mm, row_id, row).await?;
+				persist_indications(ctx, mm, row_id, row).await?;
+				persist_drug_reaction_assessments(ctx, mm, case_id, row_id, row)
+					.await?;
+				mark_editor_validation_summary_stale(
+					ctx,
+					mm,
+					case_id,
+					requested_authorities.clone(),
+				)
+				.await?;
+				let response = build_editor_dg_page_row_response(
+					ctx,
+					mm,
+					case_id,
+					row_id,
+					requested_authorities,
+				)
+				.await?;
+				Ok((axum::http::StatusCode::CREATED, Json(response)))
+			})
+		},
+	)
+	.await
+}
+
+pub async fn patch_editor_dg_page_row(
+	State(mm): State<ModelManager>,
+	ctx_w: CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
+	Path((case_id, row_id)): Path<(Uuid, Uuid)>,
+	Json(request): Json<CaseEditorPagePatchRequest>,
+) -> Result<(axum::http::StatusCode, Json<Value>)> {
+	let ctx = ctx_w.0;
+	lib_rest_core::with_authorized_case_child_mutation(
+		&ctx,
+		&snapshot,
+		&mm,
+		case_id,
+		"editor/DG/drug",
+		move |ctx, mm| {
+			Box::pin(async move {
+				let requested_authorities = validate_request_projection_context(
+					request.authorities.as_deref(),
+				)?;
+				DrugInformationBmc::get_in_case(ctx, mm, case_id, row_id).await?;
+
+				let row = required_row_object("DG", &request.rows, "drug")?;
+				validate_row_payload("DG", "drug", row, None)?;
+
+				let model = row_model_value("DG", "", row, DRUG_ROW_ALIASES, &[]);
+				let update = parse_row_model::<DrugInformationForUpdate>(
+					"DG", "drug", model,
+				)?;
+				DrugInformationBmc::update(ctx, mm, row_id, update).await?;
+				persist_active_substances(ctx, mm, row_id, row).await?;
+				persist_dosage_information(ctx, mm, row_id, row).await?;
+				persist_indications(ctx, mm, row_id, row).await?;
+				persist_drug_reaction_assessments(ctx, mm, case_id, row_id, row)
+					.await?;
+				mark_editor_validation_summary_stale(
+					ctx,
+					mm,
+					case_id,
+					requested_authorities.clone(),
+				)
+				.await?;
+				let response = build_editor_dg_page_row_response(
+					ctx,
+					mm,
+					case_id,
+					row_id,
+					requested_authorities,
+				)
+				.await?;
+				Ok((axum::http::StatusCode::OK, Json(response)))
+			})
+		},
+	)
+	.await
+}
 
 repeatable_page_row_delete_restore_handlers!(
 	delete: delete_editor_dg_page_row,
 	restore: restore_editor_dg_page_row,
 	bmc: DrugInformationBmc,
-	delete_permission: DRUG_DELETE,
-	update_permission: DRUG_UPDATE,
 	build_response: build_editor_dg_page_row_response,
 );

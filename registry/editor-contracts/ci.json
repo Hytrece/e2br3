@@ -1,0 +1,562 @@
+{
+  "pageId": "CI",
+  "registryFile": "sections/c-safety-report.json",
+  "fields": [
+    {
+      "code": "C.1.1",
+      "authority": "ICH",
+      "frontendPath": "safetyReportIdentification.safetyReportId",
+      "projectionPath": "safetyReportIdentification.safetyReportId",
+      "patch": {
+        "kind": "row",
+        "owner": "safetyReportIdentification"
+      },
+      "roundTripValue": "CI-ROUNDTRIP-001",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.C.1.1.LENGTH.MAX",
+        "invalidValue": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+      },
+      "businessValidation": {
+        "status": "verified",
+        "issuePath": "safetyReportIdentification.safetyReportId"
+      },
+      "payloadPath": "safetyReportId"
+    },
+    {
+      "code": "C.1.2",
+      "authority": "ICH",
+      "frontendPath": "safetyReportIdentification.transmissionDate",
+      "projectionPath": "safetyReportIdentification.transmissionDate",
+      "patch": {
+        "kind": "row",
+        "owner": "safetyReportIdentification"
+      },
+      "roundTripValue": "20260722120000+0900",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.C.1.2.ALLOWED.VALUE",
+        "invalidValue": "not-a-date"
+      },
+      "businessValidation": {
+        "status": "verified",
+        "issuePath": "safetyReportIdentification.transmissionDate"
+      },
+      "payloadPath": "transmissionDate"
+    },
+    {
+      "code": "C.1.3",
+      "authority": "ICH",
+      "frontendPath": "safetyReportIdentification.reportType",
+      "projectionPath": "safetyReportIdentification.reportType",
+      "patch": {
+        "kind": "row",
+        "owner": "safetyReportIdentification"
+      },
+      "roundTripValue": "2",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.C.1.3.ALLOWED.VALUE",
+        "invalidValue": "0"
+      },
+      "businessValidation": {
+        "status": "verified",
+        "issuePath": "safetyReportIdentification.reportType"
+      },
+      "payloadPath": "reportType"
+    },
+    {
+      "code": "C.1.4",
+      "authority": "ICH",
+      "frontendPath": "safetyReportIdentification.dateFirstReceivedFromSource",
+      "projectionPath": "safetyReportIdentification.dateFirstReceivedFromSource",
+      "patch": {
+        "kind": "row",
+        "owner": "safetyReportIdentification"
+      },
+      "roundTripValue": "20260721",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.C.1.4.ALLOWED.VALUE",
+        "invalidValue": "not-a-date"
+      },
+      "businessValidation": {
+        "status": "verified",
+        "issuePath": "safetyReportIdentification.dateFirstReceivedFromSource"
+      },
+      "payloadPath": "dateFirstReceivedFromSource"
+    },
+    {
+      "code": "C.1.5",
+      "authority": "ICH",
+      "frontendPath": "safetyReportIdentification.dateOfMostRecentInformation",
+      "projectionPath": "safetyReportIdentification.dateOfMostRecentInformation",
+      "patch": {
+        "kind": "row",
+        "owner": "safetyReportIdentification"
+      },
+      "roundTripValue": "20260722",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.C.1.5.ALLOWED.VALUE",
+        "invalidValue": "not-a-date"
+      },
+      "businessValidation": {
+        "status": "verified",
+        "issuePath": "safetyReportIdentification.dateOfMostRecentInformation"
+      },
+      "payloadPath": "dateOfMostRecentInformation"
+    },
+    {
+      "code": "C.1.6.1",
+      "authority": "ICH",
+      "frontendPath": "safetyReportIdentification.additionalDocumentsAvailable",
+      "projectionPath": "safetyReportIdentification.additionalDocumentsAvailable",
+      "patch": {
+        "kind": "row",
+        "owner": "safetyReportIdentification"
+      },
+      "roundTripValue": true,
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.C.1.6.1.ALLOWED.VALUE",
+        "invalidValue": "not-a-boolean"
+      },
+      "businessValidation": {
+        "status": "verified",
+        "issuePath": "safetyReportIdentification.additionalDocumentsAvailable"
+      },
+      "payloadPath": "additionalDocumentsAvailable"
+    },
+    {
+      "code": "C.1.6.1.r.1",
+      "authority": "ICH",
+      "frontendPath": "documentsHeldBySender[].documentDescription",
+      "projectionPath": "documentsHeldBySender[].documentDescription",
+      "patch": {
+        "kind": "rows",
+        "owner": "documentsHeldBySender"
+      },
+      "roundTripValue": "CI document",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.C.1.6.1.r.1.LENGTH.MAX",
+        "invalidValue": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+      },
+      "businessValidation": {
+        "status": "verified",
+        "issuePath": "documentsHeldBySender.0.documentDescription"
+      },
+      "payloadPath": "[].documentDescription"
+    },
+    {
+      "code": "C.1.6.1.r.2",
+      "authority": "ICH",
+      "frontendPath": "documentsHeldBySender[].includedDocument",
+      "projectionPath": "documentsHeldBySender[].includedDocument",
+      "patch": {
+        "kind": "rows",
+        "owner": "documentsHeldBySender"
+      },
+      "roundTripValue": "Q0ktZG9jdW1lbnQ=",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.C.1.6.1.r.2.ALLOWED.VALUE",
+        "invalidValue": "***"
+      },
+      "businessValidation": {
+        "status": "verified",
+        "issuePath": "documentsHeldBySender.0.includedDocument"
+      },
+      "payloadPath": "[].includedDocument"
+    },
+    {
+      "code": "C.1.7",
+      "authority": "ICH",
+      "frontendPath": "safetyReportIdentification.fulfilExpeditedCriteria",
+      "projectionPath": "safetyReportIdentification.fulfilExpeditedCriteria",
+      "patch": {
+        "kind": "row",
+        "owner": "safetyReportIdentification"
+      },
+      "roundTripValue": true,
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.C.1.7.ALLOWED.VALUE",
+        "invalidValue": "not-a-boolean"
+      },
+      "businessValidation": {
+        "status": "verified",
+        "issuePath": "safetyReportIdentification.fulfilExpeditedCriteria"
+      },
+      "payloadPath": "fulfilExpeditedCriteria",
+      "nullFlavorPartnerCode": "C.1.local.fulfilExpeditedCriteriaNullFlavor"
+    },
+    {
+      "code": "FDA.C.1.7.1",
+      "authority": "FDA",
+      "frontendPath": "safetyReportIdentification.localCriteriaReportType",
+      "projectionPath": "safetyReportIdentification.localCriteriaReportType",
+      "patch": {
+        "kind": "row",
+        "owner": "safetyReportIdentification"
+      },
+      "roundTripValue": "1",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "FDA.C.1.7.1.LENGTH.MAX",
+        "invalidValue": "XX"
+      },
+      "businessValidation": {
+        "status": "verified",
+        "issuePath": "safetyReportIdentification.localCriteriaReportType"
+      },
+      "payloadPath": "localCriteriaReportType"
+    },
+    {
+      "code": "FDA.C.1.12",
+      "authority": "FDA",
+      "frontendPath": "safetyReportIdentification.combinationProductReportIndicator",
+      "projectionPath": "safetyReportIdentification.combinationProductReportIndicator",
+      "patch": {
+        "kind": "row",
+        "owner": "safetyReportIdentification"
+      },
+      "roundTripValue": "1",
+      "constraint": {
+        "status": "not_applicable",
+        "reason": "The catalog has no portable constraint binding for FDA.C.1.12."
+      },
+      "businessValidation": {
+        "status": "verified",
+        "issuePath": "safetyReportIdentification.combinationProductReportIndicator"
+      },
+      "payloadPath": "combinationProductReportIndicator",
+      "nullFlavorPartnerCode": "C.1.local.combinationProductReportIndicatorNullFlavor"
+    },
+    {
+      "code": "C.1.8.1",
+      "authority": "ICH",
+      "frontendPath": "safetyReportIdentification.worldwideUniqueId",
+      "projectionPath": "safetyReportIdentification.worldwideUniqueId",
+      "patch": {
+        "kind": "row",
+        "owner": "safetyReportIdentification"
+      },
+      "roundTripValue": "US-QVIS-2026-0001",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.C.1.8.1.LENGTH.MAX",
+        "invalidValue": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+      },
+      "businessValidation": {
+        "status": "verified",
+        "issuePath": "safetyReportIdentification.worldwideUniqueId"
+      },
+      "payloadPath": "worldwideUniqueId"
+    },
+    {
+      "code": "C.1.8.2",
+      "authority": "ICH",
+      "frontendPath": "safetyReportIdentification.firstSenderType",
+      "projectionPath": "safetyReportIdentification.firstSenderType",
+      "patch": {
+        "kind": "row",
+        "owner": "safetyReportIdentification"
+      },
+      "roundTripValue": "1",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.C.1.8.2.ALLOWED.VALUE",
+        "invalidValue": "0"
+      },
+      "businessValidation": {
+        "status": "verified",
+        "issuePath": "safetyReportIdentification.firstSenderType"
+      },
+      "payloadPath": "firstSenderType"
+    },
+    {
+      "code": "C.1.9.1",
+      "authority": "ICH",
+      "frontendPath": "safetyReportIdentification.otherCaseIdentifiersExist",
+      "projectionPath": "safetyReportIdentification.otherCaseIdentifiersExist",
+      "patch": {
+        "kind": "row",
+        "owner": "safetyReportIdentification"
+      },
+      "roundTripValue": true,
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.C.1.9.1.ALLOWED.VALUE",
+        "invalidValue": false
+      },
+      "businessValidation": {
+        "status": "verified",
+        "issuePath": "safetyReportIdentification.otherCaseIdentifiersExist"
+      },
+      "payloadPath": "otherCaseIdentifiersExist",
+      "nullFlavorPartnerCode": "C.1.local.otherCaseIdentifiersExistNullFlavor"
+    },
+    {
+      "code": "C.1.9.1.r.1",
+      "authority": "ICH",
+      "frontendPath": "otherCaseIdentifiers[].source",
+      "projectionPath": "otherCaseIdentifiers[].source",
+      "patch": {
+        "kind": "rows",
+        "owner": "otherCaseIdentifiers"
+      },
+      "roundTripValue": "CI source",
+      "fixture": [
+        {
+          "caseIdentifier": "CI-OTHER-FIXTURE"
+        }
+      ],
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.C.1.9.1.r.1.LENGTH.MAX",
+        "invalidValue": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+      },
+      "businessValidation": {
+        "status": "verified",
+        "issuePath": "otherCaseIdentifiers.0.source"
+      },
+      "payloadPath": "[].source"
+    },
+    {
+      "code": "C.1.9.1.r.2",
+      "authority": "ICH",
+      "frontendPath": "otherCaseIdentifiers[].caseIdentifier",
+      "projectionPath": "otherCaseIdentifiers[].caseIdentifier",
+      "patch": {
+        "kind": "rows",
+        "owner": "otherCaseIdentifiers"
+      },
+      "roundTripValue": "CI-OTHER-001",
+      "fixture": [
+        {
+          "source": "CI source fixture"
+        }
+      ],
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.C.1.9.1.r.2.LENGTH.MAX",
+        "invalidValue": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+      },
+      "businessValidation": {
+        "status": "verified",
+        "issuePath": "otherCaseIdentifiers.0.caseIdentifier"
+      },
+      "payloadPath": "[].caseIdentifier"
+    },
+    {
+      "code": "C.1.10.r",
+      "authority": "ICH",
+      "frontendPath": "linkedReports[].linkedReportNumber",
+      "projectionPath": "linkedReports[].linkedReportNumber",
+      "patch": {
+        "kind": "rows",
+        "owner": "linkedReports"
+      },
+      "roundTripValue": "CI-LINK-001",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.C.1.10.r.LENGTH.MAX",
+        "invalidValue": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+      },
+      "businessValidation": {
+        "status": "verified",
+        "issuePath": "linkedReports.0.linkedReportNumber"
+      },
+      "payloadPath": "[].linkedReportNumber"
+    },
+    {
+      "code": "C.1.11.1",
+      "authority": "ICH",
+      "frontendPath": "safetyReportIdentification.nullificationAmendmentCode",
+      "projectionPath": "safetyReportIdentification.nullificationAmendmentCode",
+      "patch": {
+        "kind": "row",
+        "owner": "safetyReportIdentification"
+      },
+      "roundTripValue": "2",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.C.1.11.1.ALLOWED.VALUE",
+        "invalidValue": "0"
+      },
+      "businessValidation": {
+        "status": "verified",
+        "issuePath": "safetyReportIdentification.nullificationAmendmentCode"
+      },
+      "payloadPath": "nullificationAmendmentCode"
+    },
+    {
+      "code": "C.1.11.2",
+      "authority": "ICH",
+      "frontendPath": "safetyReportIdentification.nullificationReason",
+      "projectionPath": "safetyReportIdentification.nullificationReason",
+      "patch": {
+        "kind": "row",
+        "owner": "safetyReportIdentification"
+      },
+      "roundTripValue": "CI roundtrip reason",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.C.1.11.2.LENGTH.MAX",
+        "invalidValue": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+      },
+      "businessValidation": {
+        "status": "verified",
+        "issuePath": "safetyReportIdentification.nullificationReason"
+      },
+      "payloadPath": "nullificationReason"
+    },
+    {
+      "code": "C.local.reportYear",
+      "authority": "ICH",
+      "frontendPath": "case.reportYear",
+      "projectionPath": "case.reportYear",
+      "patch": {
+        "kind": "rows",
+        "owner": "case"
+      },
+      "roundTripValue": "2026",
+      "constraint": {
+        "status": "not_applicable",
+        "reason": "Report year is app-local and has no catalog portable constraint."
+      },
+      "businessValidation": {
+        "status": "not_applicable",
+        "reason": "Report year is app-local and has no business validation rule."
+      },
+      "payloadPath": "reportYear"
+    },
+    {
+      "code": "C.local.sourceDocumentName",
+      "authority": "ICH",
+      "frontendPath": "sourceDocuments[].sourceDocumentName",
+      "projectionPath": "sourceDocuments[].sourceDocumentName",
+      "patch": {
+        "kind": "rows",
+        "owner": "sourceDocuments"
+      },
+      "roundTripValue": "ci-source.txt",
+      "constraint": {
+        "status": "not_applicable",
+        "reason": "Source document name is app-local and has no catalog portable constraint."
+      },
+      "businessValidation": {
+        "status": "not_applicable",
+        "reason": "Source document name is app-local and has no business validation rule."
+      },
+      "payloadPath": "[].sourceDocumentName"
+    },
+    {
+      "code": "C.1.local.fulfilExpeditedCriteriaNullFlavor",
+      "authority": "ICH",
+      "frontendPath": "safetyReportIdentification.fulfilExpeditedCriteriaNullFlavor",
+      "projectionPath": "safetyReportIdentification.fulfilExpeditedCriteriaNullFlavor",
+      "patch": {
+        "kind": "row",
+        "owner": "safetyReportIdentification"
+      },
+      "roundTripValue": "NI",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.C.1.7.NULLFLAVOR.ALLOWED",
+        "invalidValue": "MSK"
+      },
+      "businessValidation": {
+        "status": "not_applicable",
+        "reason": "Business validation consumes this companion value but emits issues on fulfilExpeditedCriteria."
+      },
+      "payloadPath": "fulfilExpeditedCriteriaNullFlavor",
+      "nullFlavorPartnerCode": "C.1.7"
+    },
+    {
+      "code": "C.1.local.combinationProductReportIndicatorNullFlavor",
+      "authority": "ICH",
+      "frontendPath": "safetyReportIdentification.combinationProductReportIndicatorNullFlavor",
+      "projectionPath": "safetyReportIdentification.combinationProductReportIndicatorNullFlavor",
+      "patch": {
+        "kind": "row",
+        "owner": "safetyReportIdentification"
+      },
+      "roundTripValue": "NI",
+      "constraint": {
+        "status": "not_applicable",
+        "reason": "The catalog has no portable constraint binding for this FDA companion null flavor."
+      },
+      "businessValidation": {
+        "status": "not_applicable",
+        "reason": "Business validation emits FDA.C.1.12 issues on combinationProductReportIndicator."
+      },
+      "payloadPath": "combinationProductReportIndicatorNullFlavor",
+      "nullFlavorPartnerCode": "FDA.C.1.12"
+    },
+    {
+      "code": "C.1.local.otherCaseIdentifiersExistNullFlavor",
+      "authority": "ICH",
+      "frontendPath": "safetyReportIdentification.otherCaseIdentifiersExistNullFlavor",
+      "projectionPath": "safetyReportIdentification.otherCaseIdentifiersExistNullFlavor",
+      "patch": {
+        "kind": "row",
+        "owner": "safetyReportIdentification"
+      },
+      "roundTripValue": "NI",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.C.1.9.1.NULLFLAVOR.ALLOWED",
+        "invalidValue": "MSK"
+      },
+      "businessValidation": {
+        "status": "not_applicable",
+        "reason": "Business validation consumes this companion value but emits issues on otherCaseIdentifiersExist."
+      },
+      "payloadPath": "otherCaseIdentifiersExistNullFlavor",
+      "nullFlavorPartnerCode": "C.1.9.1"
+    },
+    {
+      "code": "FDA.C.1.local.fdaReportType",
+      "authority": "FDA",
+      "frontendPath": "case.fdaReportType",
+      "projectionPath": "case.fdaReportType",
+      "patch": {
+        "kind": "rows",
+        "owner": "case"
+      },
+      "roundTripValue": "4",
+      "constraint": {
+        "status": "not_applicable",
+        "reason": "FDA report type is app-local and has no catalog portable constraint."
+      },
+      "businessValidation": {
+        "status": "not_applicable",
+        "reason": "FDA report type is app-local and has no business validation rule."
+      },
+      "payloadPath": "fdaReportType"
+    },
+    {
+      "code": "C.1.KR.mfdsReportType",
+      "authority": "MFDS",
+      "frontendPath": "case.mfdsReportType",
+      "projectionPath": "case.mfdsReportType",
+      "patch": {
+        "kind": "rows",
+        "owner": "case"
+      },
+      "roundTripValue": "6",
+      "constraint": {
+        "status": "not_applicable",
+        "reason": "MFDS report type is app-local and has no catalog portable constraint."
+      },
+      "businessValidation": {
+        "status": "not_applicable",
+        "reason": "MFDS report type is app-local and has no business validation rule."
+      },
+      "payloadPath": "mfdsReportType"
+    }
+  ]
+}

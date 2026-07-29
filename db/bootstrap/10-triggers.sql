@@ -1,3 +1,124 @@
+CREATE OR REPLACE FUNCTION require_active_presave_reference()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    referenced_id UUID;
+    owning_organization_id UUID;
+    active_id UUID;
+BEGIN
+    referenced_id := NULLIF(to_jsonb(NEW) ->> TG_ARGV[1], '')::UUID;
+    IF referenced_id IS NULL THEN
+        RETURN NEW;
+    END IF;
+
+    CASE TG_ARGV[2]
+        WHEN 'organization' THEN
+            owning_organization_id :=
+                NULLIF(to_jsonb(NEW) ->> 'organization_id', '')::UUID;
+        WHEN 'case' THEN
+            SELECT organization_id
+              INTO owning_organization_id
+              FROM cases
+             WHERE id = NULLIF(to_jsonb(NEW) ->> 'case_id', '')::UUID;
+        WHEN 'study' THEN
+            SELECT organization_id
+              INTO owning_organization_id
+              FROM study_presaves
+             WHERE id = NULLIF(to_jsonb(NEW) ->> 'study_presave_id', '')::UUID;
+        ELSE
+            RAISE EXCEPTION 'unsupported presave owner source: %', TG_ARGV[2];
+    END CASE;
+
+    EXECUTE format(
+        'SELECT id FROM %I WHERE id = $1 AND organization_id = $2 AND deleted = false FOR KEY SHARE',
+        TG_ARGV[0]
+    )
+    INTO active_id
+    USING referenced_id, owning_organization_id;
+
+    IF active_id IS NULL THEN
+        RAISE EXCEPTION USING
+            ERRCODE = 'P2001',
+            MESSAGE = 'inactive presave reference',
+            DETAIL = format('%s:%s', TG_ARGV[0], referenced_id);
+    END IF;
+
+    RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS guard_sender_information_source_sender_presave ON sender_information;
+CREATE TRIGGER guard_sender_information_source_sender_presave
+BEFORE INSERT OR UPDATE OF source_sender_presave_id ON sender_information
+FOR EACH ROW EXECUTE FUNCTION require_active_presave_reference(
+    'sender_presaves', 'source_sender_presave_id', 'case'
+);
+
+DROP TRIGGER IF EXISTS guard_drug_information_source_product_presave ON drug_information;
+CREATE TRIGGER guard_drug_information_source_product_presave
+BEFORE INSERT OR UPDATE OF source_product_presave_id ON drug_information
+FOR EACH ROW EXECUTE FUNCTION require_active_presave_reference(
+    'product_presaves', 'source_product_presave_id', 'case'
+);
+
+DROP TRIGGER IF EXISTS guard_study_information_source_study_presave ON study_information;
+CREATE TRIGGER guard_study_information_source_study_presave
+BEFORE INSERT OR UPDATE OF source_study_presave_id ON study_information
+FOR EACH ROW EXECUTE FUNCTION require_active_presave_reference(
+    'study_presaves', 'source_study_presave_id', 'case'
+);
+
+DROP TRIGGER IF EXISTS guard_primary_sources_source_reporter_presave ON primary_sources;
+CREATE TRIGGER guard_primary_sources_source_reporter_presave
+BEFORE INSERT OR UPDATE OF source_reporter_presave_id ON primary_sources
+FOR EACH ROW EXECUTE FUNCTION require_active_presave_reference(
+    'reporter_presaves', 'source_reporter_presave_id', 'case'
+);
+
+DROP TRIGGER IF EXISTS guard_narrative_information_source_narrative_presave ON narrative_information;
+CREATE TRIGGER guard_narrative_information_source_narrative_presave
+BEFORE INSERT OR UPDATE OF source_narrative_presave_id ON narrative_information
+FOR EACH ROW EXECUTE FUNCTION require_active_presave_reference(
+    'narrative_presaves', 'source_narrative_presave_id', 'case'
+);
+
+DROP TRIGGER IF EXISTS guard_product_presaves_sender_presave ON product_presaves;
+CREATE TRIGGER guard_product_presaves_sender_presave
+BEFORE INSERT OR UPDATE OF sender_presave_id ON product_presaves
+FOR EACH ROW EXECUTE FUNCTION require_active_presave_reference(
+    'sender_presaves', 'sender_presave_id', 'organization'
+);
+
+DROP TRIGGER IF EXISTS guard_product_presaves_receiver_presave ON product_presaves;
+CREATE TRIGGER guard_product_presaves_receiver_presave
+BEFORE INSERT OR UPDATE OF receiver_presave_id ON product_presaves
+FOR EACH ROW EXECUTE FUNCTION require_active_presave_reference(
+    'receiver_presaves', 'receiver_presave_id', 'organization'
+);
+
+DROP TRIGGER IF EXISTS guard_study_presaves_product_presave ON study_presaves;
+CREATE TRIGGER guard_study_presaves_product_presave
+BEFORE INSERT OR UPDATE OF product_presave_id ON study_presaves
+FOR EACH ROW EXECUTE FUNCTION require_active_presave_reference(
+    'product_presaves', 'product_presave_id', 'organization'
+);
+
+DROP TRIGGER IF EXISTS guard_study_presave_products_product_presave ON study_presave_products;
+CREATE TRIGGER guard_study_presave_products_product_presave
+BEFORE INSERT OR UPDATE OF product_presave_id ON study_presave_products
+FOR EACH ROW EXECUTE FUNCTION require_active_presave_reference(
+    'product_presaves', 'product_presave_id', 'study'
+);
+
+DROP TRIGGER IF EXISTS guard_study_presave_reporters_reporter_presave ON study_presave_reporters;
+CREATE TRIGGER guard_study_presave_reporters_reporter_presave
+BEFORE INSERT OR UPDATE OF reporter_presave_id ON study_presave_reporters
+FOR EACH ROW EXECUTE FUNCTION require_active_presave_reference(
+    'reporter_presaves', 'reporter_presave_id', 'study'
+);
+
+
 CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -196,7 +317,7 @@ BEGIN
         END IF;
     END IF;
 
-	IF p_table_name = 'product_presave_substances' THEN
+	IF p_table_name = 'product_presave_active_substances' THEN
         SELECT p.organization_id INTO v_org_id
         FROM product_presaves p
         WHERE p.id = NULLIF(v_values->>'product_presave_id', '')::UUID;
@@ -208,6 +329,7 @@ BEGIN
 
     IF p_table_name IN (
         'study_presave_registration_numbers',
+        'study_presave_fda_cross_reported_ind_numbers',
         'study_presave_products',
         'study_presave_reporters'
     ) THEN
@@ -578,7 +700,7 @@ CREATE TRIGGER audit_receiver_presave_routes AFTER INSERT OR UPDATE OR DELETE ON
 CREATE TRIGGER audit_product_presaves AFTER INSERT OR UPDATE OR DELETE ON product_presaves
     FOR EACH ROW EXECUTE FUNCTION audit_trigger_function();
 
-CREATE TRIGGER audit_product_presave_substances AFTER INSERT OR UPDATE OR DELETE ON product_presave_substances
+CREATE TRIGGER audit_product_presave_active_substances AFTER INSERT OR UPDATE OR DELETE ON product_presave_active_substances
     FOR EACH ROW EXECUTE FUNCTION audit_trigger_function();
 
 CREATE TRIGGER audit_reporter_presaves AFTER INSERT OR UPDATE OR DELETE ON reporter_presaves
@@ -588,6 +710,9 @@ CREATE TRIGGER audit_study_presaves AFTER INSERT OR UPDATE OR DELETE ON study_pr
     FOR EACH ROW EXECUTE FUNCTION audit_trigger_function();
 
 CREATE TRIGGER audit_study_presave_registration_numbers AFTER INSERT OR UPDATE OR DELETE ON study_presave_registration_numbers
+    FOR EACH ROW EXECUTE FUNCTION audit_trigger_function();
+
+CREATE TRIGGER audit_study_presave_fda_cross_reported_ind_numbers AFTER INSERT OR UPDATE OR DELETE ON study_presave_fda_cross_reported_ind_numbers
     FOR EACH ROW EXECUTE FUNCTION audit_trigger_function();
 
 CREATE TRIGGER audit_study_presave_products AFTER INSERT OR UPDATE OR DELETE ON study_presave_products
@@ -652,9 +777,6 @@ CREATE TRIGGER audit_parent_medical_history AFTER INSERT OR UPDATE OR DELETE ON 
 CREATE TRIGGER audit_parent_past_drug_history AFTER INSERT OR UPDATE OR DELETE ON parent_past_drug_history
     FOR EACH ROW EXECUTE FUNCTION audit_trigger_function();
 
-CREATE TRIGGER audit_drug_recurrence_information AFTER INSERT OR UPDATE OR DELETE ON drug_recurrence_information
-    FOR EACH ROW EXECUTE FUNCTION audit_trigger_function();
-
 CREATE TRIGGER audit_drug_reaction_assessments AFTER INSERT OR UPDATE OR DELETE ON drug_reaction_assessments
     FOR EACH ROW EXECUTE FUNCTION audit_trigger_function();
 
@@ -666,6 +788,12 @@ CREATE TRIGGER audit_meddra_terms AFTER INSERT OR UPDATE OR DELETE ON meddra_ter
     FOR EACH ROW EXECUTE FUNCTION audit_trigger_function_with_audit_id();
 
 CREATE TRIGGER audit_whodrug_products AFTER INSERT OR UPDATE OR DELETE ON whodrug_products
+    FOR EACH ROW EXECUTE FUNCTION audit_trigger_function_with_audit_id();
+
+CREATE TRIGGER audit_controlled_terminology_terms AFTER INSERT OR UPDATE OR DELETE ON controlled_terminology_terms
+    FOR EACH ROW EXECUTE FUNCTION audit_trigger_function_with_audit_id();
+
+CREATE TRIGGER audit_mfds_products AFTER INSERT OR UPDATE OR DELETE ON mfds_products
     FOR EACH ROW EXECUTE FUNCTION audit_trigger_function_with_audit_id();
 
 CREATE TRIGGER audit_iso_countries AFTER INSERT OR UPDATE OR DELETE ON iso_countries
@@ -739,9 +867,6 @@ CREATE TRIGGER update_parent_medical_history_updated_at BEFORE UPDATE ON parent_
 CREATE TRIGGER update_parent_past_drug_history_updated_at BEFORE UPDATE ON parent_past_drug_history
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
-CREATE TRIGGER update_drug_recurrence_information_updated_at BEFORE UPDATE ON drug_recurrence_information
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
 CREATE TRIGGER update_drug_reaction_assessments_updated_at BEFORE UPDATE ON drug_reaction_assessments
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
@@ -769,7 +894,7 @@ CREATE TRIGGER update_receiver_presave_routes_updated_at BEFORE UPDATE ON receiv
 CREATE TRIGGER update_product_presaves_updated_at BEFORE UPDATE ON product_presaves
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
-CREATE TRIGGER update_product_presave_substances_updated_at BEFORE UPDATE ON product_presave_substances
+CREATE TRIGGER update_product_presave_active_substances_updated_at BEFORE UPDATE ON product_presave_active_substances
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 CREATE TRIGGER update_reporter_presaves_updated_at BEFORE UPDATE ON reporter_presaves
@@ -779,6 +904,9 @@ CREATE TRIGGER update_study_presaves_updated_at BEFORE UPDATE ON study_presaves
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 CREATE TRIGGER update_study_presave_registration_numbers_updated_at BEFORE UPDATE ON study_presave_registration_numbers
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_study_presave_fda_cross_reported_ind_numbers_updated_at BEFORE UPDATE ON study_presave_fda_cross_reported_ind_numbers
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 CREATE TRIGGER update_study_presave_products_updated_at BEFORE UPDATE ON study_presave_products
@@ -1486,28 +1614,6 @@ CREATE POLICY parent_past_drug_history_via_case ON parent_past_drug_history
         )
     );
 
--- Drug Recurrence Information (via drug_information)
-ALTER TABLE drug_recurrence_information ENABLE ROW LEVEL SECURITY;
-ALTER TABLE drug_recurrence_information FORCE ROW LEVEL SECURITY;
-CREATE POLICY drug_recurrence_via_case ON drug_recurrence_information
-    FOR ALL TO e2br3_app_role
-    USING (
-        EXISTS (
-            SELECT 1 FROM drug_information di
-            JOIN cases c ON c.id = di.case_id
-            WHERE di.id = drug_recurrence_information.drug_id
-            AND (c.organization_id = current_organization_id() OR is_current_user_admin())
-        )
-    )
-    WITH CHECK (
-        EXISTS (
-            SELECT 1 FROM drug_information di
-            JOIN cases c ON c.id = di.case_id
-            WHERE di.id = drug_recurrence_information.drug_id
-            AND (c.organization_id = current_organization_id() OR is_current_user_admin())
-        )
-    );
-
 -- Relatedness Assessments (via drug_reaction_assessments -> drug_information)
 ALTER TABLE relatedness_assessments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE relatedness_assessments FORCE ROW LEVEL SECURITY;
@@ -1570,6 +1676,38 @@ CREATE POLICY whodrug_products_delete ON whodrug_products
     FOR DELETE TO e2br3_app_role
     USING (is_current_user_admin());
 
+ALTER TABLE controlled_terminology_terms ENABLE ROW LEVEL SECURITY;
+ALTER TABLE controlled_terminology_terms FORCE ROW LEVEL SECURITY;
+CREATE POLICY controlled_terminology_terms_read ON controlled_terminology_terms
+    FOR SELECT TO e2br3_app_role
+    USING (active = true OR is_current_user_admin());
+CREATE POLICY controlled_terminology_terms_insert ON controlled_terminology_terms
+    FOR INSERT TO e2br3_app_role
+    WITH CHECK (is_current_user_admin());
+CREATE POLICY controlled_terminology_terms_update ON controlled_terminology_terms
+    FOR UPDATE TO e2br3_app_role
+    USING (is_current_user_admin())
+    WITH CHECK (is_current_user_admin());
+CREATE POLICY controlled_terminology_terms_delete ON controlled_terminology_terms
+    FOR DELETE TO e2br3_app_role
+    USING (is_current_user_admin());
+
+ALTER TABLE mfds_products ENABLE ROW LEVEL SECURITY;
+ALTER TABLE mfds_products FORCE ROW LEVEL SECURITY;
+CREATE POLICY mfds_products_read ON mfds_products
+    FOR SELECT TO e2br3_app_role
+    USING (active = true OR is_current_user_admin());
+CREATE POLICY mfds_products_insert ON mfds_products
+    FOR INSERT TO e2br3_app_role
+    WITH CHECK (is_current_user_admin());
+CREATE POLICY mfds_products_update ON mfds_products
+    FOR UPDATE TO e2br3_app_role
+    USING (is_current_user_admin())
+    WITH CHECK (is_current_user_admin());
+CREATE POLICY mfds_products_delete ON mfds_products
+    FOR DELETE TO e2br3_app_role
+    USING (is_current_user_admin());
+
 ALTER TABLE iso_countries ENABLE ROW LEVEL SECURITY;
 ALTER TABLE iso_countries FORCE ROW LEVEL SECURITY;
 CREATE POLICY iso_countries_read ON iso_countries
@@ -1590,7 +1728,7 @@ ALTER TABLE e2b_code_lists ENABLE ROW LEVEL SECURITY;
 ALTER TABLE e2b_code_lists FORCE ROW LEVEL SECURITY;
 CREATE POLICY e2b_code_lists_read ON e2b_code_lists
     FOR SELECT TO e2br3_app_role
-    USING (is_current_user_admin());
+    USING (active = true OR is_current_user_admin());
 CREATE POLICY e2b_code_lists_insert ON e2b_code_lists
     FOR INSERT TO e2br3_app_role
     WITH CHECK (is_current_user_admin());
@@ -1878,9 +2016,6 @@ CREATE TRIGGER aa_dirty_g_drug_indications
   FOR EACH ROW EXECUTE FUNCTION mark_case_dirty_g_from_drug();
 CREATE TRIGGER aa_dirty_g_drug_device_characteristics
   AFTER INSERT OR UPDATE OR DELETE ON drug_device_characteristics
-  FOR EACH ROW EXECUTE FUNCTION mark_case_dirty_g_from_drug();
-CREATE TRIGGER aa_dirty_g_drug_recurrence_information
-  AFTER INSERT OR UPDATE OR DELETE ON drug_recurrence_information
   FOR EACH ROW EXECUTE FUNCTION mark_case_dirty_g_from_drug();
 CREATE TRIGGER aa_dirty_g_drug_reaction_assessments
   AFTER INSERT OR UPDATE OR DELETE ON drug_reaction_assessments

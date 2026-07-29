@@ -9,6 +9,7 @@ use modql::filter::{FilterNodes, OpValsBool, OpValsString};
 use serde::{Deserialize, Serialize};
 use sqlx::types::time::OffsetDateTime;
 use sqlx::{FromRow, Postgres, QueryBuilder};
+use std::collections::HashSet;
 
 // -- MeddraTerm
 
@@ -22,6 +23,12 @@ pub struct MeddraTerm {
 	pub language: String,
 	pub active: bool,
 	pub created_at: OffsetDateTime,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, FromRow)]
+pub struct MeddraTermKey {
+	pub version: String,
+	pub code: String,
 }
 
 #[derive(Fields, Deserialize)]
@@ -124,6 +131,22 @@ pub struct UcumUnit {
 }
 
 #[derive(Debug, Clone, Fields, FromRow, Serialize)]
+pub struct MfdsProduct {
+	pub id: i64,
+	pub item_seq: String,
+	pub product_name_kr: String,
+	pub product_name_en: Option<String>,
+	pub manufacturer_name_kr: Option<String>,
+	pub manufacturer_name_en: Option<String>,
+	pub permit_date: Option<sqlx::types::time::Date>,
+	pub cancellation_date: Option<sqlx::types::time::Date>,
+	pub cancellation_status: Option<String>,
+	pub version: String,
+	pub active: bool,
+	pub created_at: OffsetDateTime,
+}
+
+#[derive(Debug, Clone, Fields, FromRow, Serialize)]
 pub struct FdaHierarchicalCodeList {
 	pub id: i64,
 	pub list_name: String,
@@ -143,6 +166,45 @@ impl DbBmc for MeddraTermBmc {
 }
 
 impl MeddraTermBmc {
+	pub async fn active_versions(mm: &ModelManager) -> Result<Vec<String>> {
+		let sql = format!(
+			"SELECT DISTINCT version FROM {} WHERE active = true ORDER BY version",
+			Self::TABLE
+		);
+		let rows = mm
+			.dbx()
+			.fetch_all(sqlx::query_as::<_, (String,)>(&sql))
+			.await?;
+		Ok(rows.into_iter().map(|(version,)| version).collect())
+	}
+
+	pub async fn existing_active_keys(
+		mm: &ModelManager,
+		keys: &[MeddraTermKey],
+	) -> Result<Vec<MeddraTermKey>> {
+		if keys.is_empty() {
+			return Ok(Vec::new());
+		}
+
+		let mut qb: QueryBuilder<Postgres> =
+			QueryBuilder::new("WITH requested(version, code) AS (");
+		qb.push_values(keys, |mut row, key| {
+			row.push_bind(&key.version).push_bind(&key.code);
+		});
+		qb.push(
+			") SELECT DISTINCT terms.version, terms.code \
+			 FROM meddra_terms terms \
+			 JOIN requested ON requested.version = terms.version \
+			 AND requested.code = terms.code \
+			 WHERE terms.active = true",
+		);
+
+		Ok(mm
+			.dbx()
+			.fetch_all(qb.build_query_as::<MeddraTermKey>())
+			.await?)
+	}
+
 	pub async fn search(
 		_ctx: &Ctx,
 		mm: &ModelManager,
@@ -181,6 +243,28 @@ impl DbBmc for WhodrugProductBmc {
 }
 
 impl WhodrugProductBmc {
+	pub async fn existing_active_codes(
+		mm: &ModelManager,
+		codes: &[String],
+	) -> Result<HashSet<String>> {
+		if codes.is_empty() {
+			return Ok(HashSet::new());
+		}
+
+		let mut qb: QueryBuilder<Postgres> = QueryBuilder::new(
+			"SELECT DISTINCT code FROM whodrug_products \
+			 WHERE active = true AND code IN (",
+		);
+		let mut separated = qb.separated(", ");
+		for code in codes {
+			separated.push_bind(code);
+		}
+		separated.push_unseparated(")");
+
+		let rows = mm.dbx().fetch_all(qb.build_query_as::<(String,)>()).await?;
+		Ok(rows.into_iter().map(|(code,)| code).collect())
+	}
+
 	pub async fn search(
 		_ctx: &Ctx,
 		mm: &ModelManager,
@@ -264,6 +348,114 @@ impl UcumUnitBmc {
 			.fetch_all(sqlx::query_as::<_, UcumUnit>(&sql))
 			.await?;
 		Ok(units)
+	}
+}
+
+pub struct ControlledTermBmc;
+
+impl ControlledTermBmc {
+	pub async fn active_release_versions(
+		mm: &ModelManager,
+		dictionary: &str,
+		language: &str,
+	) -> Result<HashSet<String>> {
+		let rows = mm
+			.dbx()
+			.fetch_all(
+				sqlx::query_as::<_, (String,)>(
+					"SELECT version FROM terminology_releases
+					 WHERE dictionary = $1 AND language = $2 AND status = 'active'",
+				)
+				.bind(dictionary)
+				.bind(language),
+			)
+			.await?;
+		Ok(rows.into_iter().map(|(version,)| version).collect())
+	}
+
+	pub async fn existing_active_codes(
+		mm: &ModelManager,
+		dictionary: &str,
+		scope: &str,
+		codes: &[String],
+	) -> Result<HashSet<String>> {
+		if codes.is_empty() {
+			return Ok(HashSet::new());
+		}
+
+		let mut qb: QueryBuilder<Postgres> = QueryBuilder::new(
+			"SELECT DISTINCT code FROM controlled_terminology_terms \
+			 WHERE active = true AND dictionary = ",
+		);
+		qb.push_bind(dictionary)
+			.push(" AND scope = ")
+			.push_bind(scope)
+			.push(" AND code IN (");
+		let mut separated = qb.separated(", ");
+		for code in codes {
+			separated.push_bind(code);
+		}
+		separated.push_unseparated(")");
+
+		let rows = mm.dbx().fetch_all(qb.build_query_as::<(String,)>()).await?;
+		Ok(rows.into_iter().map(|(code,)| code).collect())
+	}
+}
+
+pub struct MfdsProductBmc;
+impl DbBmc for MfdsProductBmc {
+	const TABLE: &'static str = "mfds_products";
+}
+
+impl MfdsProductBmc {
+	pub async fn search(
+		_ctx: &Ctx,
+		mm: &ModelManager,
+		query: &str,
+		limit: i64,
+	) -> Result<Vec<MfdsProduct>> {
+		let pattern = format!("%{}%", query.trim());
+		let rows = mm
+			.dbx()
+			.fetch_all(
+				sqlx::query_as::<_, MfdsProduct>(
+					"SELECT * FROM mfds_products
+					 WHERE active = true
+					   AND (item_seq ILIKE $1
+					        OR product_name_kr ILIKE $1
+					        OR product_name_en ILIKE $1
+					        OR manufacturer_name_kr ILIKE $1
+					        OR manufacturer_name_en ILIKE $1)
+					 ORDER BY product_name_kr, item_seq
+					 LIMIT $2",
+				)
+				.bind(pattern)
+				.bind(limit.clamp(1, 100)),
+			)
+			.await?;
+		Ok(rows)
+	}
+
+	pub async fn existing_active_item_seqs(
+		mm: &ModelManager,
+		codes: &[String],
+	) -> Result<HashSet<String>> {
+		if codes.is_empty() {
+			return Ok(HashSet::new());
+		}
+
+		let mut qb: QueryBuilder<Postgres> = QueryBuilder::new(
+			"SELECT DISTINCT item_seq FROM mfds_products \
+			 WHERE active = true AND item_seq IN (",
+		);
+		let mut separated = qb.separated(", ");
+		for code in codes {
+			separated.push_bind(code);
+		}
+		separated.push_unseparated(")");
+
+		let rows = mm.dbx().fetch_all(qb.build_query_as::<(String,)>()).await?;
+		Ok(rows.into_iter().map(|(code,)| code).collect())
 	}
 }
 

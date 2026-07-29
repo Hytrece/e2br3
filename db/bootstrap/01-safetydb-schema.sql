@@ -127,10 +127,21 @@ CREATE TABLE IF NOT EXISTS permission_profiles (
     privileges_json jsonb NOT NULL DEFAULT '[]'::jsonb,
     built_in boolean NOT NULL DEFAULT false,
     editable boolean NOT NULL DEFAULT true,
-    sponsor_admin_capable boolean NOT NULL DEFAULT false,
     active boolean NOT NULL DEFAULT true,
     updated_at timestamptz NOT NULL DEFAULT now()
 );
+
+CREATE TABLE IF NOT EXISTS rbac_policy_state (
+    singleton boolean PRIMARY KEY DEFAULT true CHECK (singleton),
+    version bigint NOT NULL DEFAULT 1 CHECK (version > 0),
+    updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+INSERT INTO rbac_policy_state (singleton, version)
+VALUES (true, 1)
+ON CONFLICT (singleton) DO NOTHING;
+
+GRANT SELECT, UPDATE ON rbac_policy_state TO e2br3_app_role;
 
 CREATE TABLE IF NOT EXISTS sender_presaves (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -262,6 +273,7 @@ CREATE TABLE IF NOT EXISTS product_presaves (
     organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE RESTRICT,
     deleted BOOLEAN NOT NULL DEFAULT false,
     sender_presave_id UUID,
+    receiver_presave_id UUID REFERENCES receiver_presaves(id) ON DELETE RESTRICT,
     product_id VARCHAR(255),
     medicinal_product VARCHAR(2000),
     medicinal_product_notation VARCHAR(50),
@@ -293,8 +305,15 @@ CREATE TABLE IF NOT EXISTS product_presaves (
         ON DELETE SET NULL (sender_presave_id)
 );
 
+ALTER TABLE product_presaves
+    ADD COLUMN IF NOT EXISTS receiver_presave_id UUID REFERENCES receiver_presaves(id) ON DELETE RESTRICT;
 
-CREATE TABLE IF NOT EXISTS product_presave_substances (
+CREATE INDEX IF NOT EXISTS idx_product_presaves_receiver
+    ON product_presaves(receiver_presave_id)
+    WHERE receiver_presave_id IS NOT NULL;
+
+
+CREATE TABLE IF NOT EXISTS product_presave_active_substances (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     product_presave_id UUID NOT NULL REFERENCES product_presaves(id) ON DELETE CASCADE,
     sequence_number INTEGER NOT NULL,
@@ -310,7 +329,7 @@ CREATE TABLE IF NOT EXISTS product_presave_substances (
     created_by UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
     updated_by UUID REFERENCES users(id) ON DELETE RESTRICT,
 
-    CONSTRAINT product_presave_substances_sequence_unique UNIQUE (product_presave_id, sequence_number)
+    CONSTRAINT product_presave_active_substances_sequence_unique UNIQUE (product_presave_id, sequence_number)
 );
 
 CREATE TABLE IF NOT EXISTS reporter_presaves (
@@ -318,29 +337,41 @@ CREATE TABLE IF NOT EXISTS reporter_presaves (
     organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE RESTRICT,
     deleted BOOLEAN NOT NULL DEFAULT false,
     reporter_title VARCHAR(100),
+    reporter_title_null_flavor VARCHAR(4) CHECK (reporter_title_null_flavor IN ('MSK', 'UNK', 'ASKU', 'NASK')),
     reporter_given_name VARCHAR(200),
+    reporter_given_name_null_flavor VARCHAR(4) CHECK (reporter_given_name_null_flavor IN ('MSK', 'ASKU', 'NASK')),
     reporter_middle_name VARCHAR(200),
+    reporter_middle_name_null_flavor VARCHAR(4) CHECK (reporter_middle_name_null_flavor IN ('MSK', 'ASKU', 'NASK')),
     reporter_family_name VARCHAR(200),
+    reporter_family_name_null_flavor VARCHAR(4) CHECK (reporter_family_name_null_flavor IN ('MSK', 'ASKU', 'NASK')),
     organization VARCHAR(500),
+    organization_null_flavor VARCHAR(4) CHECK (organization_null_flavor IN ('MSK', 'ASKU', 'NASK')),
     department VARCHAR(500),
+    department_null_flavor VARCHAR(4) CHECK (department_null_flavor IN ('MSK', 'ASKU', 'NASK')),
     street TEXT,
+    street_null_flavor VARCHAR(4) CHECK (street_null_flavor IN ('MSK', 'ASKU', 'NASK')),
     city VARCHAR(200),
+    city_null_flavor VARCHAR(4) CHECK (city_null_flavor IN ('MSK', 'ASKU', 'NASK')),
     state VARCHAR(100),
+    state_null_flavor VARCHAR(4) CHECK (state_null_flavor IN ('MSK', 'ASKU', 'NASK')),
     postcode VARCHAR(50),
+    postcode_null_flavor VARCHAR(4) CHECK (postcode_null_flavor IN ('MSK', 'ASKU', 'NASK')),
     telephone VARCHAR(50),
+    telephone_null_flavor VARCHAR(4) CHECK (telephone_null_flavor IN ('MSK', 'ASKU', 'NASK')),
     country_code VARCHAR(2),
     qualification VARCHAR(50),
     qualification_kr1 VARCHAR(50),  -- MFDS.C.2.r.4.KR.1 Other health professional type
     primary_source_regulatory VARCHAR(50),
-    -- nullFlavor: name (C.2.r.1) / address+telephone (C.2.r.2) = MSK/ASKU/NASK; qualification (C.2.r.4) = UNK
-    reporter_name_null_flavor VARCHAR(4),
-    reporter_address_null_flavor VARCHAR(4),
+    country_code_null_flavor VARCHAR(4),
     qualification_null_flavor VARCHAR(4),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     created_by UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
     updated_by UUID REFERENCES users(id) ON DELETE RESTRICT
 );
+
+ALTER TABLE reporter_presaves
+    ADD COLUMN IF NOT EXISTS country_code_null_flavor VARCHAR(4);
 
 CREATE TABLE IF NOT EXISTS study_presaves (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -352,6 +383,8 @@ CREATE TABLE IF NOT EXISTS study_presaves (
     sponsor_study_number VARCHAR(50),
     sponsor_study_number_kind VARCHAR(50),
     study_type_reaction VARCHAR(50),
+    fda_ind_number_occurred VARCHAR(10),
+    fda_pre_anda_number_occurred VARCHAR(10),
     edc_sync BOOLEAN,
     exclude_case_key_from_sync BOOLEAN,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -369,6 +402,10 @@ CREATE TABLE IF NOT EXISTS study_presaves (
         ON DELETE SET NULL (product_presave_id)
 );
 
+ALTER TABLE study_presaves
+    ADD COLUMN IF NOT EXISTS fda_ind_number_occurred VARCHAR(10),
+    ADD COLUMN IF NOT EXISTS fda_pre_anda_number_occurred VARCHAR(10);
+
 CREATE TABLE IF NOT EXISTS study_presave_registration_numbers (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     study_presave_id UUID NOT NULL REFERENCES study_presaves(id) ON DELETE CASCADE,
@@ -382,6 +419,20 @@ CREATE TABLE IF NOT EXISTS study_presave_registration_numbers (
     updated_by UUID REFERENCES users(id) ON DELETE RESTRICT,
 
     CONSTRAINT study_presave_registration_numbers_sequence_unique UNIQUE (study_presave_id, sequence_number)
+);
+
+CREATE TABLE IF NOT EXISTS study_presave_fda_cross_reported_ind_numbers (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    study_presave_id UUID NOT NULL REFERENCES study_presaves(id) ON DELETE CASCADE,
+    sequence_number INTEGER NOT NULL,
+    ind_number VARCHAR(10) NOT NULL,
+    deleted BOOLEAN NOT NULL DEFAULT false,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    created_by UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+    updated_by UUID REFERENCES users(id) ON DELETE RESTRICT,
+
+    CONSTRAINT study_presave_fda_cross_reported_ind_numbers_sequence_unique UNIQUE (study_presave_id, sequence_number)
 );
 
 CREATE TABLE IF NOT EXISTS study_presave_products (
@@ -442,11 +493,12 @@ CREATE INDEX idx_receiver_presave_routes_parent ON receiver_presave_routes(recei
 CREATE INDEX idx_receiver_presave_routes_authority ON receiver_presave_routes(authority);
 CREATE INDEX idx_product_presaves_org ON product_presaves(organization_id);
 CREATE INDEX idx_product_presaves_sender ON product_presaves(sender_presave_id);
-CREATE INDEX idx_product_presave_substances_parent ON product_presave_substances(product_presave_id);
+CREATE INDEX idx_product_presave_active_substances_parent ON product_presave_active_substances(product_presave_id);
 CREATE INDEX idx_reporter_presaves_org ON reporter_presaves(organization_id);
 CREATE INDEX idx_study_presaves_org ON study_presaves(organization_id);
 CREATE INDEX idx_study_presaves_product ON study_presaves(product_presave_id);
 CREATE INDEX idx_study_presave_registration_numbers_parent ON study_presave_registration_numbers(study_presave_id);
+CREATE INDEX idx_study_presave_fda_cross_reported_ind_numbers_parent ON study_presave_fda_cross_reported_ind_numbers(study_presave_id);
 CREATE INDEX idx_study_presave_products_parent ON study_presave_products(study_presave_id);
 CREATE INDEX idx_study_presave_reporters_parent ON study_presave_reporters(study_presave_id);
 CREATE INDEX idx_narrative_presaves_org ON narrative_presaves(organization_id);
@@ -477,6 +529,7 @@ CREATE TABLE if NOT EXISTS cases (
 
     dg_prd_key TEXT,
     status VARCHAR(50) NOT NULL DEFAULT 'draft',
+    status_before_lock VARCHAR(50),
     review_receivers_json TEXT,
     workflow_routes_json TEXT,
     workflow_status TEXT NOT NULL DEFAULT 'Saved',
@@ -510,7 +563,8 @@ CREATE TABLE if NOT EXISTS cases (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
-    CONSTRAINT case_status_valid CHECK (status IN ('draft', 'reviewed', 'validated', 'locked', 'submitted', 'deleted', 'archived', 'nullified'))
+    CONSTRAINT case_status_valid CHECK (status IN ('draft', 'reviewed', 'validated', 'locked', 'submitted', 'deleted', 'archived', 'nullified')),
+    CONSTRAINT case_status_before_lock_valid CHECK (status_before_lock IS NULL OR status_before_lock IN ('draft', 'reviewed', 'validated'))
 );
 
 CREATE INDEX idx_cases_organization ON cases(organization_id);
@@ -558,20 +612,6 @@ CREATE INDEX idx_case_validation_summaries_case
     ON case_validation_summaries(case_id);
 CREATE INDEX idx_case_validation_summaries_page
     ON case_validation_summaries(case_id, page_id, stale);
-
-CREATE TABLE IF NOT EXISTS case_validation_reports (
-    case_id UUID NOT NULL REFERENCES cases(id) ON DELETE CASCADE,
-    authority TEXT NOT NULL,
-    report JSONB NOT NULL,
-    stale BOOLEAN NOT NULL DEFAULT false,
-    generated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    PRIMARY KEY (case_id, authority),
-    CONSTRAINT case_validation_reports_authority_valid CHECK (authority IN ('ich', 'fda', 'mfds'))
-);
-
-CREATE INDEX IF NOT EXISTS idx_case_validation_reports_case_fresh
-    ON case_validation_reports (case_id, authority)
-    WHERE stale = false;
 
     -- ============================================================================
     -- 4. Case Versions (for history tracking)
@@ -899,6 +939,43 @@ CREATE TABLE if NOT EXISTS audit_logs (
     CONSTRAINT audit_action_valid CHECK (action IN ('CREATE', 'UPDATE', 'DELETE', 'SUBMIT', 'NULLIFY'))
 );
 
+CREATE TABLE IF NOT EXISTS authorization_audit_events (
+    id bigserial PRIMARY KEY,
+    principal_id uuid NOT NULL,
+    organization_id uuid NOT NULL,
+    role_id uuid NOT NULL,
+    action_id text NOT NULL,
+    decision varchar(16) NOT NULL,
+    denial_reason text,
+    catalog_hash text NOT NULL,
+    organization_revision bigint NOT NULL,
+    principal_revision bigint NOT NULL,
+    target_identifier text,
+    request_id uuid NOT NULL,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    CONSTRAINT authorization_audit_decision_valid
+        CHECK (decision IN ('allowed', 'denied')),
+    CONSTRAINT authorization_audit_denial_reason_valid
+        CHECK (
+            (decision = 'allowed' AND denial_reason IS NULL)
+            OR (decision = 'denied' AND denial_reason IS NOT NULL)
+        )
+);
+
+CREATE OR REPLACE FUNCTION prevent_authorization_audit_mutation()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    RAISE EXCEPTION 'authorization audit events are append-only'
+        USING ERRCODE = '55000';
+END;
+$$;
+
+CREATE TRIGGER authorization_audit_append_only
+    BEFORE UPDATE OR DELETE ON authorization_audit_events
+    FOR EACH ROW EXECUTE FUNCTION prevent_authorization_audit_mutation();
+
 CREATE INDEX idx_audit_logs_table_record ON audit_logs(table_name, record_id);
 CREATE INDEX idx_audit_logs_user ON audit_logs(user_id);
 CREATE INDEX idx_audit_logs_created_at ON audit_logs(created_at);
@@ -914,6 +991,10 @@ CREATE INDEX idx_audit_logs_esignature ON audit_logs(e_signature_id);
 CREATE INDEX idx_audit_logs_changed_fields ON audit_logs USING GIN (changed_fields);
 CREATE INDEX idx_audit_logs_prev_hash ON audit_logs(prev_hash);
 CREATE UNIQUE INDEX idx_audit_logs_entry_hash ON audit_logs(entry_hash);
+CREATE INDEX idx_authorization_audit_org_created
+    ON authorization_audit_events (organization_id, created_at DESC);
+CREATE INDEX idx_authorization_audit_request
+    ON authorization_audit_events (request_id);
 
 -- ============================================================================
 -- 6. System User and Foreign Key Constraints
@@ -966,6 +1047,20 @@ INSERT INTO organizations (
 UPDATE users
 SET organization_id = '00000000-0000-0000-0000-000000000000'::UUID
 WHERE id = '00000000-0000-0000-0000-000000000001'::UUID;
+
+INSERT INTO user_organization_memberships (
+    user_id, organization_id, active, created_by, updated_by
+) VALUES (
+    '00000000-0000-0000-0000-000000000001'::uuid,
+    '00000000-0000-0000-0000-000000000000'::uuid,
+    true,
+    '00000000-0000-0000-0000-000000000001'::uuid,
+    '00000000-0000-0000-0000-000000000001'::uuid
+)
+ON CONFLICT (user_id, organization_id) DO UPDATE SET
+    active = true,
+    updated_at = now(),
+    updated_by = EXCLUDED.updated_by;
 
 -- Now add foreign key constraints
 ALTER TABLE users
@@ -1224,6 +1319,8 @@ $$;
 -- Enable Row-Level Security on audit_logs
 ALTER TABLE audit_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE audit_logs FORCE ROW LEVEL SECURITY;
+ALTER TABLE authorization_audit_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE authorization_audit_events FORCE ROW LEVEL SECURITY;
 GRANT e2br3_auditor_role TO app_user;
 
 -- Function to get current organization from session. Defined here as well so
@@ -1240,7 +1337,10 @@ $$ LANGUAGE plpgsql STABLE;
 -- Function to check if current user has safety-database admin bypass.
 CREATE OR REPLACE FUNCTION is_current_user_admin() RETURNS BOOLEAN AS $$
 BEGIN
-    RETURN COALESCE(current_setting('app.current_user_role', true), '') = 'system_admin';
+    RETURN COALESCE(
+        NULLIF(current_setting('app.platform_isolation_bypass', true), ''),
+        'false'
+    )::boolean;
 EXCEPTION
     WHEN OTHERS THEN
         RETURN false;
@@ -1249,6 +1349,14 @@ $$ LANGUAGE plpgsql STABLE;
 
 -- Policy 1: Allow INSERT only for application role (append-only)
 CREATE POLICY audit_logs_append_only ON audit_logs
+    FOR INSERT
+    TO e2br3_app_role
+    WITH CHECK (
+        organization_id = current_organization_id()
+        OR is_current_user_admin()
+    );
+
+CREATE POLICY authorization_audit_insert ON authorization_audit_events
     FOR INSERT
     TO e2br3_app_role
     WITH CHECK (
@@ -1268,37 +1376,26 @@ CREATE POLICY audit_logs_read_for_auditors ON audit_logs
     TO e2br3_auditor_role
     USING (true);
 
--- Policy 4: Allow SELECT for app role only when current user has elevated audit access
--- App connections run with SET ROLE e2br3_app_role and carry logical role in
--- app.current_user_role via set_org_context().
+-- Policy 4: RLS enforces tenant isolation. Application authorization is
+-- decided by the registered audit action and its typed permit.
 CREATE POLICY audit_logs_read_for_admin_manager ON audit_logs
     FOR SELECT
     TO e2br3_app_role
     USING (
-        (
-            COALESCE(current_setting('app.current_user_role', true), '') IN (
-                'system_admin',
-                'sponsor_admin_cro',
-                'sponsor_admin_company'
-            )
-            OR EXISTS (
-                SELECT 1
-                FROM permission_profiles pp
-                WHERE pp.id::text = COALESCE(current_setting('app.current_user_role', true), '')
-                  AND pp.active = true
-                  AND pp.privileges_json @> '[{"menu_key":"audit","can_read":true}]'::jsonb
-            )
-        )
-        AND (
-            organization_id = current_organization_id()
-            OR is_current_user_admin()
-        )
+        organization_id = current_organization_id()
+        OR is_current_user_admin()
     );
 
 -- Grant necessary permissions
 GRANT INSERT ON audit_logs TO e2br3_app_role;
+REVOKE ALL ON authorization_audit_events FROM PUBLIC;
+REVOKE UPDATE, DELETE ON authorization_audit_events FROM e2br3_app_role;
+GRANT INSERT ON authorization_audit_events TO e2br3_app_role;
+GRANT USAGE ON SCHEMA public TO e2br3_auditor_role;
 GRANT SELECT ON audit_logs TO e2br3_auditor_role;
 GRANT USAGE ON SEQUENCE audit_logs_id_seq TO e2br3_app_role;
+GRANT USAGE, SELECT ON SEQUENCE authorization_audit_events_id_seq
+    TO e2br3_app_role;
 
 -- Grant execute permissions for helper functions
 GRANT EXECUTE ON FUNCTION set_current_user_context(UUID) TO e2br3_app_role;
@@ -1329,24 +1426,121 @@ $$ LANGUAGE plpgsql STABLE;
 -- Function to check if current user has safety-database admin bypass.
 CREATE OR REPLACE FUNCTION is_current_user_admin() RETURNS BOOLEAN AS $$
 BEGIN
-    RETURN COALESCE(current_setting('app.current_user_role', true), '') = 'system_admin';
+    RETURN COALESCE(
+        NULLIF(current_setting('app.platform_isolation_bypass', true), ''),
+        'false'
+    )::boolean;
 EXCEPTION
     WHEN OTHERS THEN
         RETURN false;
 END;
 $$ LANGUAGE plpgsql STABLE;
 
--- Function to set the organization and role context for the current session
+-- Typed isolation setter. The platform request is validated against the fixed
+-- normalized assignment.
+CREATE OR REPLACE FUNCTION set_authorization_isolation_context(
+	org_id UUID,
+	requested_platform_bypass BOOLEAN
+) RETURNS VOID AS $$
+DECLARE
+	actor_user_id UUID;
+    normalized_platform_administrator BOOLEAN;
+    authorization_not_reconciled BOOLEAN;
+BEGIN
+    actor_user_id := NULLIF(
+        current_setting('app.current_user_id', true), ''
+    )::UUID;
+    IF actor_user_id IS NULL THEN
+        RAISE EXCEPTION 'user context must be set before isolation context'
+            USING ERRCODE = '42501';
+    END IF;
+    SELECT EXISTS (
+        SELECT 1
+        FROM user_role_assignments assignment
+        JOIN authorization_roles role ON role.id = assignment.role_id
+		WHERE assignment.user_id = actor_user_id
+		  AND assignment.active
+		  AND role.active
+          AND role.deleted_at IS NULL
+          AND role.id = '00000000-0000-0000-0000-000000000101'::UUID
+          AND role.identity_kind = 'platform_administrator'
+    ) INTO normalized_platform_administrator;
+    authorization_not_reconciled := NOT EXISTS (
+        SELECT 1 FROM authorization_catalog_state WHERE singleton
+    );
+    IF requested_platform_bypass
+       AND NOT normalized_platform_administrator
+       AND NOT (
+           authorization_not_reconciled
+           AND actor_user_id = '00000000-0000-0000-0000-000000000001'::UUID
+       ) THEN
+        RAISE EXCEPTION 'platform isolation bypass requires the fixed platform assignment'
+            USING ERRCODE = '42501';
+    END IF;
+    PERFORM set_config('app.current_organization_id', org_id::TEXT, true);
+    PERFORM set_config(
+        'app.platform_isolation_bypass',
+        CASE WHEN requested_platform_bypass THEN 'true' ELSE 'false' END,
+        true
+    );
+    PERFORM set_config('app.current_user_role', '', true);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path FROM CURRENT;
+
+CREATE OR REPLACE FUNCTION select_current_user_organization(
+	target_organization_id UUID
+) RETURNS BOOLEAN AS $$
+DECLARE
+	actor_user_id UUID;
+BEGIN
+	actor_user_id := NULLIF(
+		current_setting('app.current_user_id', true), ''
+	)::UUID;
+	IF actor_user_id IS NULL OR target_organization_id IS NULL THEN
+		RETURN FALSE;
+	END IF;
+
+	IF NOT EXISTS (
+		SELECT 1
+		FROM user_organization_memberships membership
+		JOIN organizations organization
+		  ON organization.id = membership.organization_id
+		WHERE membership.user_id = actor_user_id
+		  AND membership.organization_id = target_organization_id
+		  AND membership.active
+		  AND organization.active
+	) THEN
+		RETURN FALSE;
+	END IF;
+
+	UPDATE users
+	SET organization_id = target_organization_id,
+		updated_by = actor_user_id,
+		updated_at = NOW()
+	WHERE id = actor_user_id;
+
+	RETURN FOUND;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path FROM CURRENT;
+
+-- Compatibility adapter for legacy callers. The role label is translated once
+-- and is never stored or read by RLS.
 CREATE OR REPLACE FUNCTION set_org_context(org_id UUID, user_role VARCHAR) RETURNS VOID AS $$
 BEGIN
-    PERFORM set_config('app.current_organization_id', org_id::TEXT, true);
-    PERFORM set_config('app.current_user_role', user_role, true);
+	PERFORM set_authorization_isolation_context(
+		org_id,
+		lower(btrim(user_role)) = 'system_admin'
+	);
 END;
 $$ LANGUAGE plpgsql;
 
 -- Grant permissions for context functions
 GRANT EXECUTE ON FUNCTION current_organization_id() TO e2br3_app_role;
 GRANT EXECUTE ON FUNCTION is_current_user_admin() TO e2br3_app_role;
+REVOKE ALL ON FUNCTION set_authorization_isolation_context(UUID, BOOLEAN) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION set_authorization_isolation_context(UUID, BOOLEAN) TO e2br3_app_role;
+REVOKE ALL ON FUNCTION select_current_user_organization(UUID) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION select_current_user_organization(UUID) TO e2br3_app_role;
 GRANT EXECUTE ON FUNCTION set_org_context(UUID, VARCHAR) TO e2br3_app_role;
 
 -- Grant table access for application role (RLS will still enforce isolation)
@@ -1387,26 +1581,6 @@ CREATE POLICY case_validation_summaries_via_case ON case_validation_summaries
         EXISTS (
             SELECT 1 FROM cases c
             WHERE c.id = case_validation_summaries.case_id
-            AND (c.organization_id = current_organization_id() OR is_current_user_admin())
-        )
-    );
-
-ALTER TABLE case_validation_reports ENABLE ROW LEVEL SECURITY;
-ALTER TABLE case_validation_reports FORCE ROW LEVEL SECURITY;
-CREATE POLICY case_validation_reports_via_case ON case_validation_reports
-    FOR ALL
-    TO e2br3_app_role
-    USING (
-        EXISTS (
-            SELECT 1 FROM cases c
-            WHERE c.id = case_validation_reports.case_id
-            AND (c.organization_id = current_organization_id() OR is_current_user_admin())
-        )
-    )
-    WITH CHECK (
-        EXISTS (
-            SELECT 1 FROM cases c
-            WHERE c.id = case_validation_reports.case_id
             AND (c.organization_id = current_organization_id() OR is_current_user_admin())
         )
     );
@@ -1765,22 +1939,22 @@ CREATE POLICY product_presaves_org_isolation ON product_presaves
         organization_id = current_organization_id() OR is_current_user_admin()
     );
 
-ALTER TABLE product_presave_substances ENABLE ROW LEVEL SECURITY;
-ALTER TABLE product_presave_substances FORCE ROW LEVEL SECURITY;
-CREATE POLICY product_presave_substances_via_parent ON product_presave_substances
+ALTER TABLE product_presave_active_substances ENABLE ROW LEVEL SECURITY;
+ALTER TABLE product_presave_active_substances FORCE ROW LEVEL SECURITY;
+CREATE POLICY product_presave_active_substances_via_parent ON product_presave_active_substances
     FOR ALL
     TO e2br3_app_role
     USING (
         EXISTS (
             SELECT 1 FROM product_presaves p
-            WHERE p.id = product_presave_substances.product_presave_id
+            WHERE p.id = product_presave_active_substances.product_presave_id
             AND (p.organization_id = current_organization_id() OR is_current_user_admin())
         )
     )
     WITH CHECK (
         EXISTS (
             SELECT 1 FROM product_presaves p
-            WHERE p.id = product_presave_substances.product_presave_id
+            WHERE p.id = product_presave_active_substances.product_presave_id
             AND (p.organization_id = current_organization_id() OR is_current_user_admin())
         )
     );
@@ -1825,6 +1999,26 @@ CREATE POLICY study_presave_registration_numbers_via_parent ON study_presave_reg
         EXISTS (
             SELECT 1 FROM study_presaves p
             WHERE p.id = study_presave_registration_numbers.study_presave_id
+            AND (p.organization_id = current_organization_id() OR is_current_user_admin())
+        )
+    );
+
+ALTER TABLE study_presave_fda_cross_reported_ind_numbers ENABLE ROW LEVEL SECURITY;
+ALTER TABLE study_presave_fda_cross_reported_ind_numbers FORCE ROW LEVEL SECURITY;
+CREATE POLICY study_presave_fda_cross_reported_ind_numbers_via_parent ON study_presave_fda_cross_reported_ind_numbers
+    FOR ALL
+    TO e2br3_app_role
+    USING (
+        EXISTS (
+            SELECT 1 FROM study_presaves p
+            WHERE p.id = study_presave_fda_cross_reported_ind_numbers.study_presave_id
+            AND (p.organization_id = current_organization_id() OR is_current_user_admin())
+        )
+    )
+    WITH CHECK (
+        EXISTS (
+            SELECT 1 FROM study_presaves p
+            WHERE p.id = study_presave_fda_cross_reported_ind_numbers.study_presave_id
             AND (p.organization_id = current_organization_id() OR is_current_user_admin())
         )
     );
@@ -2027,3 +2221,8 @@ CREATE POLICY orgs_modify ON organizations
     TO e2br3_app_role
     USING (is_current_user_admin())
     WITH CHECK (is_current_user_admin());
+
+-- Authorization Policy Kernel storage is intentionally not duplicated here.
+-- Clean bootstrap and upgrades both apply the single authoritative versioned
+-- migration: db/migrations/20260720_authorization_kernel.sql. All supported
+-- database initializers run bootstrap files followed by every migration.

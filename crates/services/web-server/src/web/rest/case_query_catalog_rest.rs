@@ -9,16 +9,15 @@
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::Json;
-use lib_core::model::acs::CASE_LIST;
+use lib_core::model::case::{CaseBmc, CaseListViewRow};
 use lib_core::model::case_query::{
 	build_where, combine_where, validate_conditions, RawCondition, ReportFilters,
 };
 use lib_core::model::case_query_catalog::{catalog, CatalogPage};
+use lib_core::model::case_validation_summary::CaseValidationSummaryBmc;
 use lib_core::model::ModelManager;
 use lib_rest_core::rest_result::DataRestResult;
-use lib_rest_core::{
-	case_matches_user_scope, require_permission, with_rls_read, Error, Result,
-};
+use lib_rest_core::{case_matches_user_scope, with_rls_read, Error, Result};
 use lib_web::middleware::mw_auth::CtxW;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -27,11 +26,21 @@ use uuid::Uuid;
 pub async fn get_case_query_catalog(
 	State(_mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 ) -> Result<(StatusCode, Json<DataRestResult<Vec<CatalogPage>>>)> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, CASE_LIST)?;
-	let pages = catalog().to_vec();
-	Ok((StatusCode::OK, Json(DataRestResult { data: pages })))
+	lib_rest_core::with_authorized_case_collection(
+		&ctx,
+		&snapshot,
+		&_mm,
+		move |_ctx, _mm| {
+			Box::pin(async move {
+				let pages = catalog().to_vec();
+				Ok((StatusCode::OK, Json(DataRestResult { data: pages })))
+			})
+		},
+	)
+	.await
 }
 
 #[derive(Debug, Deserialize)]
@@ -49,6 +58,7 @@ pub struct CaseQueryRequest {
 #[serde(rename_all = "camelCase")]
 pub struct CaseQueryResult {
 	pub case_ids: Vec<Uuid>,
+	pub items: Vec<CaseListViewRow>,
 	pub total: usize,
 }
 
@@ -61,56 +71,90 @@ struct CaseIdRow {
 pub async fn search_cases(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 	Json(request): Json<CaseQueryRequest>,
 ) -> Result<(StatusCode, Json<DataRestResult<CaseQueryResult>>)> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, CASE_LIST)?;
+	lib_rest_core::with_authorized_case_collection(
+		&ctx,
+		&snapshot,
+		&mm,
+		move |ctx, mm| {
+			Box::pin(async move {
+				let conditions =
+					validate_conditions(&request.conditions).map_err(|err| {
+						Error::BadRequest {
+							message: err.to_string(),
+						}
+					})?;
+				let (where_sql, binds) = build_where(&conditions);
+				let filters = ReportFilters {
+					last_fu: request.report_type_last,
+					no_ack_accept: request.no_ack_accept_history,
+				};
+				let where_sql = combine_where(&where_sql, &filters);
 
-	let conditions = validate_conditions(&request.conditions).map_err(|err| {
-		Error::BadRequest {
-			message: err.to_string(),
-		}
-	})?;
-	let (where_sql, binds) = build_where(&conditions);
-	let filters = ReportFilters {
-		last_fu: request.report_type_last,
-		no_ack_accept: request.no_ack_accept_history,
-	};
-	let where_sql = combine_where(&where_sql, &filters);
-
-	let sql = format!(
-		"SELECT c.id FROM cases c WHERE {where_sql} \
+				let sql = format!(
+					"SELECT c.id FROM cases c WHERE {where_sql} \
 		 ORDER BY c.created_at DESC, c.id DESC"
-	);
+				);
 
-	let rows = with_rls_read(&mm, &ctx, |dbx| {
-		let sql = sql.clone();
-		let binds = binds.clone();
-		Box::pin(async move {
-			let mut query = sqlx::query_as::<_, CaseIdRow>(&sql);
-			for value in binds {
-				query = query.bind(value);
-			}
-			dbx.fetch_all(query)
-				.await
-				.map_err(|err| Error::Model(err.into()))
-		})
-	})
-	.await?;
+				let rows = with_rls_read(mm, ctx, |dbx| {
+					let sql = sql.clone();
+					let binds = binds.clone();
+					Box::pin(async move {
+						let mut query = sqlx::query_as::<_, CaseIdRow>(&sql);
+						for value in binds {
+							query = query.bind(value);
+						}
+						dbx.fetch_all(query)
+							.await
+							.map_err(|err| Error::Model(err.into()))
+					})
+				})
+				.await?;
 
-	// Enforce per-user case scope on top of RLS.
-	let mut case_ids = Vec::new();
-	for row in rows {
-		if case_matches_user_scope(&ctx, &mm, row.id).await? {
-			case_ids.push(row.id);
-		}
-	}
+				// Enforce per-user case scope on top of RLS.
+				let mut case_ids = Vec::new();
+				for row in rows {
+					if case_matches_user_scope(ctx, mm, row.id).await? {
+						case_ids.push(row.id);
+					}
+				}
 
-	let total = case_ids.len();
-	Ok((
-		StatusCode::OK,
-		Json(DataRestResult {
-			data: CaseQueryResult { case_ids, total },
-		}),
-	))
+				let total = case_ids.len();
+				let mut items = with_rls_read(mm, ctx, |dbx| {
+					let case_ids = case_ids.clone();
+					Box::pin(async move {
+						CaseBmc::list_view_rows_by_ids(dbx, &case_ids)
+							.await
+							.map_err(Error::from)
+					})
+				})
+				.await?;
+				let cached_totals = CaseValidationSummaryBmc::cached_totals_by_case(
+					ctx, mm, &case_ids,
+				)
+				.await?;
+				for item in &mut items {
+					item.warn = cached_totals
+						.get(&item.case_id)
+						.copied()
+						.unwrap_or(0)
+						.to_string();
+				}
+				Ok((
+					StatusCode::OK,
+					Json(DataRestResult {
+						data: CaseQueryResult {
+							case_ids,
+							items,
+							total,
+						},
+					}),
+				))
+			})
+		},
+	)
+	.await
 }

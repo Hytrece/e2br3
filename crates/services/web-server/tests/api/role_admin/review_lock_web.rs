@@ -1,0 +1,467 @@
+//! Reference privilege model: Review/Lock exist only as CASE menu rows
+//! (CASE|Review|Edit, CASE|Lock|Edit) plus reserved E-mail subscription rows.
+//! These tests pin (1) normalization of review/lock flags to the case key,
+//! (2) the dedicated CASE_APPROVE / CASE_LOCK grants, and (3) enforcement of
+//! reviewed/validated/locked case-status transitions.
+
+use super::helpers::*;
+use crate::common::{cookie_header, init_test_mm, seed_org_with_users, Result};
+use axum::http::StatusCode;
+use lib_auth::token::generate_web_token;
+use lib_core::ctx::ROLE_SPONSOR_ADMIN_CRO;
+use lib_core::model::store::set_full_context_dbx;
+use lib_core::model::ModelManager;
+use serde_json::json;
+use serial_test::serial;
+use uuid::Uuid;
+
+async fn update_case_status(
+	app: &axum::Router,
+	cookie: &str,
+	case_id: Uuid,
+	status: &str,
+) -> Result<(StatusCode, serde_json::Value)> {
+	request_json(
+		app,
+		"PUT",
+		cookie,
+		format!("/api/cases/{case_id}"),
+		Some(json!({ "data": { "status": status } })),
+	)
+	.await
+}
+
+async fn toggle_case_action(
+	app: &axum::Router,
+	cookie: &str,
+	case_id: Uuid,
+	action: &str,
+) -> Result<(StatusCode, serde_json::Value)> {
+	request_json(
+		app,
+		"POST",
+		cookie,
+		format!("/api/cases/{case_id}/{action}/toggle"),
+		Some(json!({})),
+	)
+	.await
+}
+
+async fn create_case_with_status(
+	app: &axum::Router,
+	cookie: &str,
+	status: &str,
+) -> Result<Uuid> {
+	let safety_report_id = format!("QA-REVLOCK-{}", Uuid::new_v4().simple());
+	let (response_status, value) = request_json(
+		app,
+		"POST",
+		cookie,
+		"/api/cases".to_string(),
+		Some(json!({
+			"data": {
+				"safetyReportIdentification": {
+					"safetyReportId": safety_report_id
+				},
+				"status": status
+			}
+		})),
+	)
+	.await?;
+	assert_eq!(response_status, StatusCode::CREATED, "{value:?}");
+	extract_id(&value)
+}
+
+async fn force_case_status_for_validator_fixture(
+	mm: &ModelManager,
+	user_id: Uuid,
+	organization_id: Uuid,
+	case_id: Uuid,
+	status: &str,
+) -> Result<()> {
+	let dbx = mm.dbx();
+	dbx.begin_txn().await?;
+	set_full_context_dbx(dbx, user_id, organization_id, ROLE_SPONSOR_ADMIN_CRO)
+		.await?;
+	dbx.execute(
+		sqlx::query("UPDATE cases SET status = $2 WHERE id = $1")
+			.bind(case_id)
+			.bind(status),
+	)
+	.await?;
+	dbx.commit_txn().await?;
+	Ok(())
+}
+
+#[serial]
+#[tokio::test]
+async fn test_review_lock_flags_are_normalized_to_case_menu_only() -> Result<()> {
+	let mm = init_test_mm().await?;
+	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
+	let admin_token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
+	let admin_cookie = cookie_header(&admin_token.to_string());
+	let app = web_server::app(mm.clone());
+
+	let profile_id = create_empty_custom_role(
+		&app,
+		&admin_cookie,
+		&format!("qa_review_lock_norm_{}", Uuid::new_v4().simple()),
+	)
+	.await?;
+
+	let value = update_role_privileges(
+		&app,
+		&admin_cookie,
+		&profile_id,
+		json!([
+			{
+				"menu_key": "case",
+				"can_read": true,
+				"can_edit": false,
+				"can_review": true,
+				"can_lock": true
+			},
+			{
+				"menu_key": "case_workflow",
+				"can_read": true,
+				"can_edit": false,
+				"can_review": true,
+				"can_lock": true
+			},
+			{
+				"menu_key": "home_notice",
+				"can_read": true,
+				"can_edit": false,
+				"can_review": true,
+				"can_lock": true
+			},
+			{
+				"menu_key": "info",
+				"can_read": true,
+				"can_edit": false,
+				"can_review": true,
+				"can_lock": true
+			},
+			{
+				"menu_key": "import",
+				"can_read": true,
+				"can_edit": false,
+				"can_review": true,
+				"can_lock": true
+			}
+		]),
+	)
+	.await?;
+
+	let privileges = value["privileges"]
+		.as_array()
+		.ok_or("privileges should be an array")?;
+	for row in privileges {
+		let menu_key = row["menu_key"].as_str().unwrap_or_default();
+		let expected_review_lock = menu_key == "case";
+		assert_eq!(
+			row["can_review"].as_bool(),
+			Some(expected_review_lock),
+			"{menu_key} can_review"
+		);
+		assert_eq!(
+			row["can_lock"].as_bool(),
+			Some(expected_review_lock),
+			"{menu_key} can_lock"
+		);
+	}
+
+	Ok(())
+}
+
+#[serial]
+#[tokio::test]
+async fn test_reserved_email_subscription_rows_are_not_persisted_or_granted(
+) -> Result<()> {
+	let mm = init_test_mm().await?;
+	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
+	let admin_token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
+	let admin_cookie = cookie_header(&admin_token.to_string());
+	let app = web_server::app(mm.clone());
+
+	let profile_id = create_empty_custom_role(
+		&app,
+		&admin_cookie,
+		&format!("qa_email_rows_{}", Uuid::new_v4().simple()),
+	)
+	.await?;
+
+	let value = update_role_privileges(
+		&app,
+		&admin_cookie,
+		&profile_id,
+		json!([
+			{
+				"menu_key": "email_report_due",
+				"can_read": true,
+				"can_edit": true,
+				"can_review": false,
+				"can_lock": false
+			}
+		]),
+	)
+	.await?;
+
+	let privileges = value["privileges"]
+		.as_array()
+		.ok_or("privileges should be an array")?;
+	assert!(privileges.is_empty(), "{privileges:?}");
+
+	Ok(())
+}
+
+#[serial]
+#[tokio::test]
+async fn test_case_review_and_lock_profile_permissions_are_distinct() -> Result<()> {
+	let mm = init_test_mm().await?;
+	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
+	let admin_token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
+	let admin_cookie = cookie_header(&admin_token.to_string());
+	let app = web_server::app(mm.clone());
+
+	let profile_id = create_empty_custom_role(
+		&app,
+		&admin_cookie,
+		&format!("qa_review_caps_{}", Uuid::new_v4().simple()),
+	)
+	.await?;
+	let (_custom_user_id, custom_cookie) =
+		custom_role_user(&mm, seed.org_id, &profile_id).await?;
+
+	update_role_privileges(
+		&app,
+		&admin_cookie,
+		&profile_id,
+		json!([
+			{
+				"menu_key": "case",
+				"can_read": true,
+				"can_edit": false,
+				"can_review": true,
+				"can_lock": false
+			}
+		]),
+	)
+	.await?;
+	assert_profile_actions(
+		&app,
+		&custom_cookie,
+		&["case.read", "case.review.toggle"],
+		&["case.update", "case.lock.toggle"],
+	)
+	.await?;
+
+	update_role_privileges(
+		&app,
+		&admin_cookie,
+		&profile_id,
+		json!([
+			{
+				"menu_key": "case",
+				"can_read": true,
+				"can_edit": false,
+				"can_review": false,
+				"can_lock": true
+			}
+		]),
+	)
+	.await?;
+	assert_profile_actions(
+		&app,
+		&custom_cookie,
+		&["case.read", "case.lock.toggle"],
+		&["case.update", "case.review.toggle"],
+	)
+	.await?;
+
+	Ok(())
+}
+
+#[serial]
+#[tokio::test]
+async fn test_reviewed_and_locked_status_transitions_require_dedicated_privileges(
+) -> Result<()> {
+	let mm = init_test_mm().await?;
+	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
+	let admin_token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
+	let admin_cookie = cookie_header(&admin_token.to_string());
+	let app = web_server::app(mm.clone());
+
+	// Editor: case read+edit, no review/lock.
+	let editor_profile = create_empty_custom_role(
+		&app,
+		&admin_cookie,
+		&format!("qa_case_editor_{}", Uuid::new_v4().simple()),
+	)
+	.await?;
+	update_role_privileges(
+		&app,
+		&admin_cookie,
+		&editor_profile,
+		json!([
+			{
+				"menu_key": "case",
+				"can_read": true,
+				"can_edit": true,
+				"can_review": false,
+				"can_lock": false
+			}
+		]),
+	)
+	.await?;
+	let (_editor_id, editor_cookie) =
+		custom_role_user(&mm, seed.org_id, &editor_profile).await?;
+
+	// Reviewer: case read+review, no edit/lock.
+	let reviewer_profile = create_empty_custom_role(
+		&app,
+		&admin_cookie,
+		&format!("qa_case_reviewer_{}", Uuid::new_v4().simple()),
+	)
+	.await?;
+	update_role_privileges(
+		&app,
+		&admin_cookie,
+		&reviewer_profile,
+		json!([
+			{
+				"menu_key": "case",
+				"can_read": true,
+				"can_edit": false,
+				"can_review": true,
+				"can_lock": false
+			}
+		]),
+	)
+	.await?;
+	let (_reviewer_id, reviewer_cookie) =
+		custom_role_user(&mm, seed.org_id, &reviewer_profile).await?;
+
+	// Locker: case read+lock, no edit/review.
+	let locker_profile = create_empty_custom_role(
+		&app,
+		&admin_cookie,
+		&format!("qa_case_locker_{}", Uuid::new_v4().simple()),
+	)
+	.await?;
+	update_role_privileges(
+		&app,
+		&admin_cookie,
+		&locker_profile,
+		json!([
+			{
+				"menu_key": "case",
+				"can_read": true,
+				"can_edit": false,
+				"can_review": false,
+				"can_lock": true
+			}
+		]),
+	)
+	.await?;
+	let (_locker_id, locker_cookie) =
+		custom_role_user(&mm, seed.org_id, &locker_profile).await?;
+
+	let case_id = create_case(
+		&app,
+		&admin_cookie,
+		&format!("QA-REVLOCK-{}", Uuid::new_v4().simple()),
+		None,
+	)
+	.await?;
+
+	// Generic case update cannot bypass the dedicated PDF actions.
+	let (status, value) =
+		update_case_status(&app, &editor_cookie, case_id, "reviewed").await?;
+	assert_eq!(status, StatusCode::BAD_REQUEST, "{value:?}");
+	let (status, value) =
+		update_case_status(&app, &reviewer_cookie, case_id, "reviewed").await?;
+	assert_eq!(status, StatusCode::FORBIDDEN, "{value:?}");
+
+	// Review is a same-button toggle and requires only the PDF Case Review grant.
+	let (status, value) =
+		toggle_case_action(&app, &editor_cookie, case_id, "review").await?;
+	assert_eq!(status, StatusCode::FORBIDDEN, "{value:?}");
+	let (status, value) =
+		toggle_case_action(&app, &reviewer_cookie, case_id, "review").await?;
+	assert_eq!(status, StatusCode::OK, "{value:?}");
+	assert_eq!(value["data"]["status"], "reviewed");
+	let (status, value) =
+		toggle_case_action(&app, &reviewer_cookie, case_id, "review").await?;
+	assert_eq!(status, StatusCode::OK, "{value:?}");
+	assert_eq!(value["data"]["status"], "draft");
+
+	// Lock requires only Case.Lock and restores the exact pre-lock state.
+	let (status, value) =
+		toggle_case_action(&app, &reviewer_cookie, case_id, "lock").await?;
+	assert_eq!(status, StatusCode::FORBIDDEN, "{value:?}");
+	let (status, value) =
+		toggle_case_action(&app, &locker_cookie, case_id, "lock").await?;
+	assert_eq!(status, StatusCode::OK, "{value:?}");
+	assert_eq!(value["data"]["status"], "locked");
+	let (status, value) =
+		toggle_case_action(&app, &locker_cookie, case_id, "lock").await?;
+	assert_eq!(status, StatusCode::OK, "{value:?}");
+	assert_eq!(value["data"]["status"], "draft");
+
+	// Reviewer without edit cannot touch non-status fields.
+	let (status, value) = request_json(
+		&app,
+		"PUT",
+		&reviewer_cookie,
+		format!("/api/cases/{case_id}"),
+		Some(json!({ "data": { "dg_prd_key": "PRD-REVLOCK" } })),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::FORBIDDEN, "{value:?}");
+
+	// All PDF lockable states round-trip without collapsing to a default.
+	for original in ["draft", "reviewed", "validated"] {
+		let case_id = create_case_with_status(&app, &admin_cookie, "draft").await?;
+		if original == "reviewed" {
+			let (status, value) =
+				toggle_case_action(&app, &reviewer_cookie, case_id, "review")
+					.await?;
+			assert_eq!(status, StatusCode::OK, "{value:?}");
+		} else if original == "validated" {
+			force_case_status_for_validator_fixture(
+				&mm,
+				seed.admin.id,
+				seed.org_id,
+				case_id,
+				original,
+			)
+			.await?;
+		}
+		let (status, value) =
+			toggle_case_action(&app, &admin_cookie, case_id, "lock").await?;
+		assert_eq!(status, StatusCode::OK, "{value:?}");
+		assert_eq!(value["data"]["status"], "locked");
+		let (status, value) =
+			toggle_case_action(&app, &admin_cookie, case_id, "lock").await?;
+		assert_eq!(status, StatusCode::OK, "{value:?}");
+		assert_eq!(value["data"]["status"], original);
+	}
+
+	// A legacy locked row without a persisted prior state must not guess.
+	let legacy_case_id =
+		create_case_with_status(&app, &admin_cookie, "draft").await?;
+	force_case_status_for_validator_fixture(
+		&mm,
+		seed.admin.id,
+		seed.org_id,
+		legacy_case_id,
+		"locked",
+	)
+	.await?;
+	let (status, value) =
+		toggle_case_action(&app, &admin_cookie, legacy_case_id, "lock").await?;
+	assert_eq!(status, StatusCode::CONFLICT, "{value:?}");
+
+	Ok(())
+}

@@ -577,7 +577,7 @@ async fn test_singleton_post_endpoints_are_idempotent() -> Result<()> {
 		body,
 	)
 	.await?;
-	assert_eq!(status, StatusCode::OK);
+	assert_eq!(status, StatusCode::CREATED);
 	let (status, body) =
 		get_json(&app, &cookie, format!("/api/cases/{case_id}/safety-report"))
 			.await?;
@@ -844,7 +844,6 @@ async fn test_reaction_supports_ae_common_and_mfds_device_fields() -> Result<()>
 		"case_id": case_id,
 		"sequence_number": 1,
 		"primary_source_reaction": "Device site pain",
-		"included_in_ema_ime_list": true,
 		"expectedness": "2",
 		"severity": "severe",
 		"mfds_device_ae_classification": "0",
@@ -1213,6 +1212,51 @@ async fn test_patient_subresources_endpoints_ok() -> Result<()> {
 
 #[serial]
 #[tokio::test]
+async fn patient_identifier_preserves_scope_and_delete_response() -> Result<()> {
+	let mm = init_test_mm().await?;
+	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
+	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
+	let cookie = cookie_header(&token.to_string());
+	let app = web_server::app(mm);
+	let first_case_id = create_case(&app, &cookie, seed.org_id).await?;
+	let second_case_id = create_case(&app, &cookie, seed.org_id).await?;
+	let first_patient_id = create_patient(&app, &cookie, first_case_id).await?;
+	create_patient(&app, &cookie, second_case_id).await?;
+	let (status, body) = post_json(
+		&app,
+		&cookie,
+		format!("/api/cases/{first_case_id}/patient/identifiers"),
+		json!({"data": {
+			"patient_id": first_patient_id,
+			"sequence_number": 1,
+			"identifier_type_code": "1",
+			"identifier_value": "contract-id"
+		}}),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::CREATED);
+	let id = extract_id(&body)?;
+	let (status, _) = get_json(
+		&app,
+		&cookie,
+		format!("/api/cases/{second_case_id}/patient/identifiers/{id}"),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::NOT_FOUND);
+	let (status, body) = delete_json(
+		&app,
+		&cookie,
+		format!("/api/cases/{first_case_id}/patient/identifiers/{id}"),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK);
+	let value: Value = serde_json::from_slice(&body)?;
+	assert_eq!(value["data"]["id"], id.to_string());
+	Ok(())
+}
+
+#[serial]
+#[tokio::test]
 async fn test_past_drugs_support_mfds_product_fields_and_200_char_ids() -> Result<()>
 {
 	let mm = init_test_mm().await?;
@@ -1259,6 +1303,49 @@ async fn test_past_drugs_support_mfds_product_fields_and_200_char_ids() -> Resul
 	assert_eq!(data["mpid"], long_mpid);
 	assert_eq!(data["phpid"], long_phpid);
 
+	Ok(())
+}
+
+#[serial]
+#[tokio::test]
+async fn drug_child_id_is_hidden_under_a_different_drug() -> Result<()> {
+	let mm = init_test_mm().await?;
+	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
+	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
+	let cookie = cookie_header(&token.to_string());
+	let app = web_server::app(mm);
+	let first_case_id = create_case(&app, &cookie, seed.org_id).await?;
+	let second_case_id = create_case(&app, &cookie, seed.org_id).await?;
+	let first_drug_id = create_drug(&app, &cookie, first_case_id).await?;
+	let second_drug_id = create_drug(&app, &cookie, second_case_id).await?;
+	let (status, created) = post_json(
+		&app,
+		&cookie,
+		format!(
+			"/api/cases/{first_case_id}/drugs/{first_drug_id}/active-substances"
+		),
+		json!({"data": {
+			"drug_id": first_drug_id,
+			"sequence_number": 1,
+			"substance_name": "contract",
+			"substance_termid": "TERM-CONTRACT",
+			"substance_termid_version": "2026-01",
+			"strength_value": 1.0,
+			"strength_unit": "mg"
+		}}),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::CREATED);
+	let id = extract_id(&created)?;
+	let (status, _) = get_json(
+		&app,
+		&cookie,
+		format!(
+			"/api/cases/{second_case_id}/drugs/{second_drug_id}/active-substances/{id}"
+		),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::NOT_FOUND);
 	Ok(())
 }
 
@@ -1386,8 +1473,7 @@ async fn test_drug_subresources_endpoints_ok() -> Result<()> {
 		"sequence_number": 1,
 		"dose_value": 10,
 		"dose_unit": "mg",
-		"number_of_units": 2,
-		"frequency_value": 1,
+		"number_of_units": 0.5,
 		"frequency_unit": "d",
 		"duration_value": 3,
 		"duration_unit": "800",
@@ -1418,7 +1504,9 @@ async fn test_drug_subresources_endpoints_ok() -> Result<()> {
 	);
 	let value: Value = serde_json::from_slice(&body)?;
 	assert_eq!(value["data"]["dose_unit"], "mg");
+	assert_eq!(value["data"]["number_of_units"], "0.50000");
 	assert_eq!(value["data"]["frequency_unit"], "d");
+	assert!(value["data"].get("frequency_value").is_none());
 	assert_eq!(value["data"]["duration_unit"], "800");
 	assert_eq!(value["data"]["batch_lot_number"], "LOT-1");
 	assert_eq!(value["data"]["dosage_text"], "10 mg daily");
@@ -1935,10 +2023,12 @@ async fn test_primary_source_supports_regional_rp_fields() -> Result<()> {
 	let body = json!({"data": {
 			"case_id": case_id,
 			"sequence_number": 1,
+			"reporter_title_null_flavor": "UNK",
 			"reporter_given_name": "Mina",
-			"reporter_name_null_flavor": "MSK",
+			"reporter_given_name_null_flavor": "ASKU",
 			"organization": "Seoul General Hospital",
-			"reporter_address_null_flavor": "ASKU",
+			"organization_null_flavor": "NASK",
+			"telephone_null_flavor": "MSK",
 			"country_code": "KR",
 			"email": "mina.initial@example.test",
 			"qualification": "3",
@@ -1960,10 +2050,14 @@ async fn test_primary_source_supports_regional_rp_fields() -> Result<()> {
 		String::from_utf8_lossy(&body)
 	);
 	let value: Value = serde_json::from_slice(&body)?;
+	assert_eq!(value["data"]["reporter_title_null_flavor"], "UNK");
 	assert_eq!(value["data"]["reporter_given_name"], "Mina");
-	assert_eq!(value["data"]["reporter_name_null_flavor"], "MSK");
+	assert_eq!(value["data"]["reporter_given_name_null_flavor"], "ASKU");
 	assert_eq!(value["data"]["organization"], "Seoul General Hospital");
-	assert_eq!(value["data"]["reporter_address_null_flavor"], "ASKU");
+	assert_eq!(value["data"]["organization_null_flavor"], "NASK");
+	assert_eq!(value["data"]["telephone_null_flavor"], "MSK");
+	assert!(value["data"].get("reporter_name_null_flavor").is_none());
+	assert!(value["data"].get("reporter_address_null_flavor").is_none());
 	assert_eq!(value["data"]["country_code"], "KR");
 	assert_eq!(value["data"]["email"], "mina.initial@example.test");
 	assert_eq!(value["data"]["qualification"], "3");
@@ -1997,8 +2091,8 @@ async fn test_primary_source_supports_regional_rp_fields() -> Result<()> {
 
 	let body = json!({"data": {
 		"email": "mina.updated@example.test",
-		"reporter_name_null_flavor": "NASK",
-		"reporter_address_null_flavor": "MSK",
+		"reporter_given_name_null_flavor": "NASK",
+		"organization_null_flavor": "MSK",
 		"qualification_kr1": "2",
 		"qualification_null_flavor": "UNK",
 		"primary_source_regulatory": "2"
@@ -2016,8 +2110,8 @@ async fn test_primary_source_supports_regional_rp_fields() -> Result<()> {
 	assert_eq!(status, StatusCode::OK, "{}", String::from_utf8_lossy(&body));
 	let value: Value = serde_json::from_slice(&body)?;
 	assert_eq!(value["data"]["email"], "mina.updated@example.test");
-	assert_eq!(value["data"]["reporter_name_null_flavor"], "NASK");
-	assert_eq!(value["data"]["reporter_address_null_flavor"], "MSK");
+	assert_eq!(value["data"]["reporter_given_name_null_flavor"], "NASK");
+	assert_eq!(value["data"]["organization_null_flavor"], "MSK");
 	assert_eq!(value["data"]["qualification_kr1"], "2");
 	assert_eq!(value["data"]["qualification_null_flavor"], "UNK");
 	assert_eq!(value["data"]["primary_source_regulatory"], "2");
@@ -2038,8 +2132,12 @@ async fn test_primary_source_supports_regional_rp_fields() -> Result<()> {
 		.iter()
 		.find(|source| source["id"].as_str() == Some(primary_source_id_str.as_str()))
 		.ok_or("missing saved primary source")?;
-	assert_eq!(saved["reporter_name_null_flavor"], "NASK");
-	assert_eq!(saved["reporter_address_null_flavor"], "MSK");
+	assert_eq!(saved["reporter_title_null_flavor"], "UNK");
+	assert_eq!(saved["reporter_given_name_null_flavor"], "NASK");
+	assert_eq!(saved["organization_null_flavor"], "MSK");
+	assert_eq!(saved["telephone_null_flavor"], "MSK");
+	assert!(saved.get("reporter_name_null_flavor").is_none());
+	assert!(saved.get("reporter_address_null_flavor").is_none());
 	assert_eq!(saved["qualification_null_flavor"], "UNK");
 
 	Ok(())

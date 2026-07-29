@@ -1,11 +1,32 @@
 // region:    --- Modules
 
+pub mod authorization;
 mod error;
 pub mod rest_params;
 pub mod rest_result;
 mod utils;
 
-pub use self::error::{Error, Result};
+pub use self::error::{ConstraintViolation, Error, Result};
+pub use authorization::{
+	denied as authorization_denied, notice_read_allowed,
+	rls_ctx_for_authorized_mutation, rls_ctx_for_authorized_read,
+	rls_ctx_for_authorized_subject, with_authorized_audit_log_collection,
+	with_authorized_case_audit_read, with_authorized_case_child_mutation,
+	with_authorized_case_child_read, with_authorized_case_collection,
+	with_authorized_case_create, with_authorized_case_export,
+	with_authorized_case_mutation, with_authorized_case_read,
+	with_authorized_export_history_collection, with_authorized_export_history_read,
+	with_authorized_import_history_collection, with_authorized_import_history_read,
+	with_authorized_notice_update, with_authorized_presave_atomic_create,
+	with_authorized_presave_atomic_update, with_authorized_presave_collection,
+	with_authorized_presave_create, with_authorized_presave_read,
+	with_authorized_presave_update, with_authorized_settings_read,
+	with_authorized_settings_update, with_authorized_subject_action,
+	with_authorized_submission_collection, with_authorized_submission_mutation,
+	with_authorized_submission_read, with_authorized_terminology_mutation,
+	with_authorized_terminology_read, with_authorized_user_mutation,
+	with_authorized_xml_import,
+};
 pub use rest_params::*;
 pub use rest_result::*;
 
@@ -50,9 +71,8 @@ use lib_core::ctx::{
 	canonical_role, Ctx, ROLE_SPONSOR_ADMIN_COMPANY, ROLE_SPONSOR_ADMIN_CRO,
 	ROLE_USER,
 };
-use lib_core::model::acs::{has_permission, Permission, USER_CREATE};
 use lib_core::model::admin_settings::AdminSettingsBmc;
-use lib_core::model::case::{Case, CaseBmc};
+use lib_core::model::case::Case;
 use lib_core::model::user::UserBmc;
 use lib_core::model::ModelManager;
 use serde::{Deserialize, Serialize};
@@ -73,54 +93,6 @@ pub fn is_unique_violation(err: &lib_core::model::Error) -> bool {
 		let text = format!("{err:?}").to_ascii_lowercase();
 		text.contains("duplicate") || text.contains("unique")
 	}
-}
-
-pub async fn is_admin(ctx: &Ctx, mm: &ModelManager) -> Result<bool> {
-	let _ = mm;
-	Ok(ctx.is_admin())
-}
-
-pub fn can_access_admin(ctx: &Ctx) -> bool {
-	ctx.is_admin() || has_permission(ctx.permission_subject(), USER_CREATE)
-}
-
-pub async fn require_admin(ctx: &Ctx, mm: &ModelManager) -> Result<()> {
-	let _ = mm;
-	if !can_access_admin(ctx) {
-		return Err(Error::AccessDenied {
-			required_role: "admin".to_string(),
-		});
-	}
-	Ok(())
-}
-
-pub async fn admin_db_ctx(ctx: &Ctx, mm: &ModelManager) -> Result<Ctx> {
-	require_admin(ctx, mm).await?;
-	if ctx.is_system_admin() || ctx.is_sponsor_admin() {
-		return Ok(ctx.clone());
-	}
-	let elevated = Ctx::new(
-		ctx.user_id(),
-		ctx.organization_id(),
-		ROLE_SPONSOR_ADMIN_CRO.to_string(),
-	)
-	.map_err(|_| Error::AccessDenied {
-		required_role: "admin".to_string(),
-	})?
-	.with_compliance(
-		ctx.change_reason().map(ToString::to_string),
-		ctx.e_signature_id(),
-	);
-	Ok(elevated)
-}
-
-pub fn require_permission(ctx: &Ctx, permission: Permission) -> Result<()> {
-	if !has_permission(ctx.permission_subject(), permission) {
-		return Err(Error::PermissionDenied {
-			required_permission: format!("{permission}"),
-		});
-	}
-	Ok(())
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -345,7 +317,6 @@ pub async fn load_workflow_runtime_settings(
 #[derive(Debug, FromRow)]
 struct CaseScopeRow {
 	sender_identifiers: Vec<String>,
-	routing_sender_identifiers: Vec<String>,
 	product_identifiers: Vec<String>,
 	study_identifiers: Vec<String>,
 	has_blinded_data: bool,
@@ -388,6 +359,7 @@ pub struct RoutingProfile {
 #[derive(Debug, FromRow)]
 struct SenderOptionRow {
 	sender_identifier: String,
+	sender_organization: Option<String>,
 	scope_identifiers: Vec<String>,
 	case_count: i64,
 }
@@ -399,13 +371,13 @@ fn parse_scope_values(raw: Option<&str>) -> HashSet<String> {
 	if let Ok(values) = serde_json::from_str::<Vec<String>>(raw) {
 		return values
 			.into_iter()
-			.map(|value| value.trim().to_ascii_lowercase())
-			.filter(|value| !value.is_empty())
+			.filter_map(|value| Uuid::parse_str(value.trim()).ok())
+			.map(|value| value.to_string())
 			.collect();
 	}
 	raw.split(',')
-		.map(|value| value.trim().to_ascii_lowercase())
-		.filter(|value| !value.is_empty())
+		.filter_map(|value| Uuid::parse_str(value.trim()).ok())
+		.map(|value| value.to_string())
 		.collect()
 }
 
@@ -423,107 +395,53 @@ fn normalize_values(values: &[String]) -> HashSet<String> {
 		.collect()
 }
 
-fn optional_scope_matches(assigned: &HashSet<String>, available: &[String]) -> bool {
+/// Case-list scope gate. Filters a case out only when the user has an explicit
+/// scope for the dimension AND the case carries a value for it that does not
+/// match. An unset user scope means "allow all"; a case with no value for the
+/// dimension is always allowed. Applied uniformly to sender/product/study.
+fn scope_allows(assigned: &HashSet<String>, available: &[String]) -> bool {
 	if assigned.is_empty() {
 		return true;
 	}
 	let available = normalize_values(available);
-	!available.is_empty() && available.iter().any(|value| assigned.contains(value))
-}
-
-fn required_scope_matches(assigned: &HashSet<String>, available: &[String]) -> bool {
-	let available = normalize_values(available);
-	if available.is_empty() {
-		return true;
-	}
-	!assigned.is_empty() && available.iter().any(|value| assigned.contains(value))
-}
-
-fn selected_sender_matches(
-	selected_sender: Option<&str>,
-	available: &[String],
-) -> bool {
-	let Some(selected_sender) = selected_sender
-		.map(str::trim)
-		.filter(|value| !value.is_empty())
-		.map(|value| value.to_ascii_lowercase())
-	else {
-		return true;
-	};
-	let available = normalize_values(available);
-	available.contains(&selected_sender)
+	available.iter().any(|value| assigned.contains(value))
 }
 
 async fn load_sender_options_for_org(
+	ctx: &Ctx,
 	mm: &ModelManager,
 	organization_id: Uuid,
 ) -> Result<Vec<RoutingSenderOption>> {
-	let rows = mm
-		.dbx()
-		.fetch_all(
-			sqlx::query_as::<_, SenderOptionRow>(
-				r#"
-			WITH sender_master_rows AS (
-				SELECT DISTINCT
-				       NULLIF(BTRIM(g.sender_identifier), '') AS sender_identifier,
-				       NULLIF(BTRIM(s.organization_name), '') AS scope_identifier
-				FROM sender_presaves s
-				JOIN sender_presave_gateways g ON g.sender_presave_id = s.id
-				WHERE s.organization_id = $1
-				  AND s.deleted = FALSE
-				  AND NULLIF(BTRIM(g.sender_identifier), '') IS NOT NULL
-			),
-			case_sender_rows AS (
-				SELECT DISTINCT senders.case_id,
-				       senders.sender_identifier,
-				       NULLIF(BTRIM(sender.organization_name), '') AS scope_identifier
-				FROM (
-					SELECT mh.case_id,
-					       NULLIF(BTRIM(mh.message_sender_identifier), '') AS sender_identifier
-					FROM message_headers mh
-					UNION ALL
-					SELECT mh.case_id,
-					       NULLIF(BTRIM(mh.batch_sender_identifier), '') AS sender_identifier
-					FROM message_headers mh
-				) senders
-				JOIN cases c ON c.id = senders.case_id
-				LEFT JOIN sender_information sender ON sender.case_id = senders.case_id
-				WHERE c.organization_id = $1
-				  AND sender_identifier IS NOT NULL
-			),
-			case_sender_counts AS (
-				SELECT sender_identifier, COUNT(DISTINCT case_id) AS case_count
-				FROM case_sender_rows
-				GROUP BY sender_identifier
-			),
-			sender_scope_rows AS (
-				SELECT sender_identifier, scope_identifier FROM sender_master_rows
-				UNION
-				SELECT sender_identifier, scope_identifier FROM case_sender_rows
+	let rows = with_rls_read(mm, ctx, |dbx| {
+		Box::pin(async move {
+			dbx.fetch_all(
+				sqlx::query_as::<_, SenderOptionRow>(
+					r#"
+			SELECT s.id::text AS sender_identifier,
+			       NULLIF(BTRIM(s.organization_name), '') AS sender_organization,
+			       ARRAY[s.id::text] AS scope_identifiers,
+			       COUNT(DISTINCT sender.case_id)::bigint AS case_count
+			FROM sender_presaves s
+			LEFT JOIN sender_information sender
+			  ON sender.source_sender_presave_id = s.id
+			WHERE s.organization_id = $1
+			  AND s.deleted = FALSE
+			GROUP BY s.id, s.organization_name
+			ORDER BY s.organization_name ASC NULLS LAST, s.id ASC
+				"#,
+				)
+				.bind(organization_id),
 			)
-			SELECT r.sender_identifier,
-			       COALESCE(
-				       ARRAY_AGG(DISTINCT r.scope_identifier)
-				       FILTER (WHERE r.scope_identifier IS NOT NULL),
-				       ARRAY[]::text[]
-			       ) AS scope_identifiers,
-			       COALESCE(c.case_count, 0)::bigint AS case_count
-			FROM sender_scope_rows r
-			LEFT JOIN case_sender_counts c ON c.sender_identifier = r.sender_identifier
-			WHERE r.sender_identifier IS NOT NULL
-			GROUP BY r.sender_identifier, c.case_count
-			ORDER BY sender_identifier ASC
-			"#,
-			)
-			.bind(organization_id),
-		)
-		.await
-		.map_err(|e| Error::from(lib_core::model::Error::from(e)))?;
+			.await
+			.map_err(|e| Error::from(lib_core::model::Error::from(e)))
+		})
+	})
+	.await?;
 
 	Ok(rows
 		.into_iter()
 		.map(|row| RoutingSenderOption {
-			sender_organization: row.scope_identifiers.first().cloned(),
+			sender_organization: row.sender_organization,
 			sender_identifier: row.sender_identifier,
 			case_count: row.case_count,
 			scope_identifiers: row.scope_identifiers,
@@ -553,7 +471,7 @@ pub async fn routing_profile_for_user(
 	let all_senders = if ctx.is_system_admin() {
 		Vec::new()
 	} else {
-		load_sender_options_for_org(mm, ctx.organization_id()).await?
+		load_sender_options_for_org(ctx, mm, ctx.organization_id()).await?
 	};
 
 	let available_senders = if ctx.is_sponsor_admin() {
@@ -608,6 +526,12 @@ pub async fn validate_active_sender_selection(
 	}
 	let profile = routing_profile_for_user(ctx, mm).await?;
 	let requested = next.clone().expect("checked is_some");
+	let requested = Uuid::parse_str(&requested)
+		.map_err(|_| Error::BadRequest {
+			message: "active_sender_identifier accepts a UUID value only"
+				.to_string(),
+		})?
+		.to_string();
 	let allowed = profile
 		.available_senders
 		.iter()
@@ -617,7 +541,7 @@ pub async fn validate_active_sender_selection(
 			required_permission: "Routing.SenderSelection".to_string(),
 		});
 	}
-	Ok(next)
+	Ok(Some(requested))
 }
 
 async fn load_case_scope(
@@ -633,53 +557,28 @@ async fn load_case_scope(
 			SELECT
 				COALESCE(
 					(
-						SELECT array_agg(DISTINCT ident)
-						FROM (
-							SELECT NULLIF(BTRIM(sender.organization_name), '') AS ident
-							FROM sender_information sender
-							WHERE sender.case_id = c.id
-						) senders
-						WHERE ident IS NOT NULL
+						SELECT array_agg(DISTINCT sender.source_sender_presave_id::text)
+						FROM sender_information sender
+						WHERE sender.case_id = c.id
+						  AND sender.source_sender_presave_id IS NOT NULL
 					),
 					ARRAY[]::text[]
 				) AS sender_identifiers,
 				COALESCE(
 					(
-						SELECT array_agg(DISTINCT ident)
-						FROM (
-							SELECT NULLIF(BTRIM(mh.message_sender_identifier), '') AS ident
-							FROM message_headers mh
-							WHERE mh.case_id = c.id
-							UNION ALL
-							SELECT NULLIF(BTRIM(mh.batch_sender_identifier), '')
-							FROM message_headers mh
-							WHERE mh.case_id = c.id
-						) routing_senders
-						WHERE ident IS NOT NULL
-					),
-					ARRAY[]::text[]
-				) AS routing_sender_identifiers,
-				COALESCE(
-					(
-						SELECT array_agg(DISTINCT ident)
-						FROM (
-							SELECT NULLIF(BTRIM(d.brand_name), '') AS ident
-							FROM drug_information d
-							WHERE d.case_id = c.id
-						) products
-						WHERE ident IS NOT NULL
+						SELECT array_agg(DISTINCT d.source_product_presave_id::text)
+						FROM drug_information d
+						WHERE d.case_id = c.id
+						  AND d.source_product_presave_id IS NOT NULL
 					),
 					ARRAY[]::text[]
 				) AS product_identifiers,
 				COALESCE(
 					(
-						SELECT array_agg(DISTINCT ident)
-						FROM (
-							SELECT NULLIF(BTRIM(s.sponsor_study_number), '') AS ident
-							FROM study_information s
-							WHERE s.case_id = c.id
-						) studies
-						WHERE ident IS NOT NULL
+						SELECT array_agg(DISTINCT s.source_study_presave_id::text)
+						FROM study_information s
+						WHERE s.case_id = c.id
+						  AND s.source_study_presave_id IS NOT NULL
 					),
 					ARRAY[]::text[]
 				) AS study_identifiers,
@@ -707,7 +606,7 @@ pub async fn case_matches_user_scope(
 	mm: &ModelManager,
 	case_id: Uuid,
 ) -> Result<bool> {
-	if is_admin(ctx, mm).await? {
+	if ctx.is_system_admin() || ctx.is_sponsor_admin() {
 		return Ok(true);
 	}
 
@@ -726,28 +625,19 @@ pub async fn case_matches_user_scope(
 	}
 
 	let scope = load_case_scope(ctx, mm, case_id).await?;
-	let assigned_sender_ids = parse_scope_values(user.access_sender_ids.as_deref());
-	if assigned_sender_ids.is_empty() && !scope.sender_identifiers.is_empty() {
-		return Ok(false);
-	}
-	if !assigned_sender_ids.is_empty()
-		&& !optional_scope_matches(&assigned_sender_ids, &scope.sender_identifiers)
-	{
-		return Ok(false);
-	}
-	if !selected_sender_matches(
-		user.active_sender_identifier.as_deref(),
-		&scope.routing_sender_identifiers,
+	if !scope_allows(
+		&parse_scope_values(user.access_sender_ids.as_deref()),
+		&scope.sender_identifiers,
 	) {
 		return Ok(false);
 	}
-	if !required_scope_matches(
+	if !scope_allows(
 		&parse_scope_values(user.access_product_ids.as_deref()),
 		&scope.product_identifiers,
 	) {
 		return Ok(false);
 	}
-	if !required_scope_matches(
+	if !scope_allows(
 		&parse_scope_values(user.access_study_ids.as_deref()),
 		&scope.study_identifiers,
 	) {
@@ -757,20 +647,6 @@ pub async fn case_matches_user_scope(
 		return Ok(false);
 	}
 	Ok(true)
-}
-
-pub async fn require_case_read_allowed(
-	ctx: &Ctx,
-	mm: &ModelManager,
-	case_id: Uuid,
-) -> Result<()> {
-	CaseBmc::get(ctx, mm, case_id).await?;
-	if case_matches_user_scope(ctx, mm, case_id).await? {
-		return Ok(());
-	}
-	Err(Error::PermissionDenied {
-		required_permission: "Case.Scope".to_string(),
-	})
 }
 
 pub async fn case_write_block_reason_for_case(
@@ -896,21 +772,6 @@ pub async fn workflow_actionability_for_case(
 		can_act_on_workflow: true,
 		workflow_block_reason: None,
 	})
-}
-
-pub async fn require_case_write_allowed(
-	ctx: &Ctx,
-	mm: &ModelManager,
-	case_id: Uuid,
-) -> Result<()> {
-	require_case_read_allowed(ctx, mm, case_id).await?;
-	let case = CaseBmc::get(ctx, mm, case_id).await?;
-	if let Some(reason) = case_write_block_reason_for_case(ctx, mm, &case).await? {
-		return Err(Error::BadRequest {
-			message: reason.message,
-		});
-	}
-	Ok(())
 }
 
 pub mod prelude;

@@ -4,7 +4,9 @@
 //! scope/permission helpers live in `shared`. Handlers are re-exported so the
 //! router paths (`section_presave_rest::<handler>`) stay unchanged.
 
+mod rows;
 mod shared;
+pub(crate) use shared::product_presave_allowed;
 
 mod narrative;
 mod product;

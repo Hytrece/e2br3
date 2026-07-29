@@ -6,6 +6,7 @@
     "section": "D",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "DM",
     "backend": {
       "status": "mapped",
       "model": "PatientInformation",
@@ -22,52 +23,6 @@
     },
     "action": "",
     "notes": ""
-  },
-  {
-    "id": "D.local.patientGivenName",
-    "e2br3_code": "D.local.patientGivenName",
-    "label": "Patient Given Name",
-    "section": "D",
-    "authority": "ICH",
-    "status": "frontend_missing",
-    "local_only": true,
-    "backend": {
-      "status": "mapped",
-      "model": "PatientInformation",
-      "field": "patient_given_name",
-      "file": "crates/libs/lib-core/src/model/patient.rs",
-      "evidence": "PatientInformation.patient_given_name exists as a D.1 patient-name component in the backend model."
-    },
-    "frontend": {
-      "status": "missing",
-      "file": "../frontend/E2BR3-frontend/components/case-form/sections/SectionD.tsx",
-      "evidence": "SectionD renders patientInformation.patientInitials for D.1 but no separate given-name or family-name input was found."
-    },
-    "action": "Add a frontend field or intentionally remove/ignore the backend field if product scope only supports initials.",
-    "notes": "Backend inventory is covered; this is not a complete 1-1 frontend mapping. Local given/family split; the official single name element D.1 is mapped to patient_initials."
-  },
-  {
-    "id": "D.local.patientFamilyName",
-    "e2br3_code": "D.local.patientFamilyName",
-    "label": "Patient Family Name",
-    "section": "D",
-    "authority": "ICH",
-    "status": "frontend_missing",
-    "local_only": true,
-    "backend": {
-      "status": "mapped",
-      "model": "PatientInformation",
-      "field": "patient_family_name",
-      "file": "crates/libs/lib-core/src/model/patient.rs",
-      "evidence": "PatientInformation.patient_family_name exists as a D.1 patient-name component in the backend model."
-    },
-    "frontend": {
-      "status": "missing",
-      "file": "../frontend/E2BR3-frontend/components/case-form/sections/SectionD.tsx",
-      "evidence": "SectionD renders patientInformation.patientInitials for D.1 but no separate given-name or family-name input was found."
-    },
-    "action": "Add a frontend field or intentionally remove/ignore the backend field if product scope only supports initials.",
-    "notes": "Backend inventory is covered; this is not a complete 1-1 frontend mapping. Local given/family split; the official single name element D.1 is mapped to patient_initials."
   },
   {
     "id": "D.local.patientIdentifier.typeCode",
@@ -122,6 +77,7 @@
     "section": "D",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "DM",
     "backend": {
       "status": "mapped",
       "model": "PatientInformation",
@@ -146,6 +102,7 @@
     "section": "D",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "DM",
     "backend": {
       "status": "mapped",
       "model": "PatientInformation",
@@ -170,6 +127,7 @@
     "section": "D",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "DM",
     "backend": {
       "status": "mapped",
       "model": "PatientInformation",
@@ -194,6 +152,7 @@
     "section": "D",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "DM",
     "backend": {
       "status": "mapped",
       "model": "PatientInformation",
@@ -218,6 +177,7 @@
     "section": "D",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "DM",
     "backend": {
       "status": "mapped",
       "model": "PatientInformation",
@@ -242,6 +202,7 @@
     "section": "D",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "DM",
     "backend": {
       "status": "mapped",
       "model": "PatientInformation",
@@ -266,6 +227,7 @@
     "section": "D",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "DM",
     "backend": {
       "status": "mapped",
       "model": "PatientInformation",
@@ -290,6 +252,7 @@
     "section": "D",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "DM",
     "backend": {
       "status": "mapped",
       "model": "PatientInformation",
@@ -314,6 +277,7 @@
     "section": "D",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "DM",
     "backend": {
       "status": "mapped",
       "model": "PatientInformation",
@@ -338,6 +302,7 @@
     "section": "D",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "DM",
     "backend": {
       "status": "mapped",
       "model": "PatientInformation",
@@ -362,6 +327,7 @@
     "section": "D",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "DM",
     "backend": {
       "status": "mapped",
       "model": "PatientInformation",
@@ -386,6 +352,7 @@
     "section": "D",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "DM",
     "backend": {
       "status": "mapped",
       "model": "PatientInformation",
@@ -410,6 +377,7 @@
     "section": "D",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "DM",
     "backend": {
       "status": "mapped",
       "model": "MedicalHistoryEpisode",
@@ -434,6 +402,7 @@
     "section": "D",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "DM",
     "backend": {
       "status": "mapped",
       "model": "MedicalHistoryEpisode",
@@ -458,6 +427,7 @@
     "section": "D",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "DM",
     "backend": {
       "status": "mapped",
       "model": "MedicalHistoryEpisode",
@@ -482,6 +452,7 @@
     "section": "D",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "DM",
     "backend": {
       "status": "mapped",
       "model": "MedicalHistoryEpisode",
@@ -506,6 +477,7 @@
     "section": "D",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "DM",
     "backend": {
       "status": "mapped",
       "model": "MedicalHistoryEpisode",
@@ -530,6 +502,7 @@
     "section": "D",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "DM",
     "backend": {
       "status": "mapped",
       "model": "MedicalHistoryEpisode",
@@ -554,6 +527,7 @@
     "section": "D",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "DM",
     "backend": {
       "status": "mapped",
       "model": "MedicalHistoryEpisode",
@@ -578,6 +552,7 @@
     "section": "D",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "DH",
     "backend": {
       "status": "mapped",
       "model": "PastDrugHistory",
@@ -602,6 +577,7 @@
     "section": "D",
     "authority": "MFDS",
     "status": "complete",
+    "editor_page": "DH",
     "backend": {
       "status": "mapped",
       "model": "PastDrugHistory",
@@ -626,6 +602,7 @@
     "section": "D",
     "authority": "MFDS",
     "status": "complete",
+    "editor_page": "DH",
     "backend": {
       "status": "mapped",
       "model": "PastDrugHistory",
@@ -650,6 +627,7 @@
     "section": "D",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "DH",
     "backend": {
       "status": "mapped",
       "model": "PastDrugHistory",
@@ -674,6 +652,7 @@
     "section": "D",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "DH",
     "backend": {
       "status": "mapped",
       "model": "PastDrugHistory",
@@ -698,6 +677,7 @@
     "section": "D",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "DH",
     "backend": {
       "status": "mapped",
       "model": "PastDrugHistory",
@@ -722,6 +702,7 @@
     "section": "D",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "DH",
     "backend": {
       "status": "mapped",
       "model": "PastDrugHistory",
@@ -746,6 +727,7 @@
     "section": "D",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "DH",
     "backend": {
       "status": "mapped",
       "model": "PastDrugHistory",
@@ -770,6 +752,7 @@
     "section": "D",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "DH",
     "backend": {
       "status": "mapped",
       "model": "PastDrugHistory",
@@ -794,6 +777,7 @@
     "section": "D",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "DH",
     "backend": {
       "status": "mapped",
       "model": "PastDrugHistory",
@@ -818,6 +802,7 @@
     "section": "D",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "DH",
     "backend": {
       "status": "mapped",
       "model": "PastDrugHistory",
@@ -842,6 +827,7 @@
     "section": "D",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "DH",
     "backend": {
       "status": "mapped",
       "model": "PastDrugHistory",
@@ -866,6 +852,7 @@
     "section": "D",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "DH",
     "backend": {
       "status": "mapped",
       "model": "PastDrugHistory",
@@ -890,6 +877,7 @@
     "section": "D",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "DM",
     "backend": {
       "status": "mapped",
       "model": "PatientDeathInformation",
@@ -914,6 +902,7 @@
     "section": "D",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "DM",
     "backend": {
       "status": "mapped",
       "model": "ReportedCauseOfDeath",
@@ -938,6 +927,7 @@
     "section": "D",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "DM",
     "backend": {
       "status": "mapped",
       "model": "ReportedCauseOfDeath",
@@ -962,6 +952,7 @@
     "section": "D",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "DM",
     "backend": {
       "status": "mapped",
       "model": "ReportedCauseOfDeath",
@@ -986,6 +977,7 @@
     "section": "D",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "DM",
     "backend": {
       "status": "mapped",
       "model": "PatientDeathInformation",
@@ -1010,6 +1002,7 @@
     "section": "D",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "DM",
     "backend": {
       "status": "mapped",
       "model": "AutopsyCauseOfDeath",
@@ -1034,6 +1027,7 @@
     "section": "D",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "DM",
     "backend": {
       "status": "mapped",
       "model": "AutopsyCauseOfDeath",
@@ -1058,6 +1052,7 @@
     "section": "D",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "DM",
     "backend": {
       "status": "mapped",
       "model": "AutopsyCauseOfDeath",
@@ -1082,19 +1077,20 @@
     "section": "D",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "DM",
     "backend": {
       "status": "mapped",
       "model": "ParentInformation",
-      "field": "parent_identification",
+      "field": "parent_identification / parent_identification_null_flavor",
       "file": "crates/libs/lib-core/src/model/patient.rs",
-      "evidence": "ParentInformation.parent_identification stores D.10.1 parent identification values."
+      "evidence": "ParentInformation stores D.10.1 as a mutually exclusive parent_identification / parent_identification_null_flavor pair."
     },
     "frontend": {
       "status": "mapped",
       "section": "patientInformation",
       "field": "parentInformation.parentIdentification",
-      "file": "../frontend/E2BR3-frontend/components/case-form/sections/SectionD.tsx",
-      "evidence": "SectionD binds fieldNumber D.10.1 to patientInformation.parentInformation.parentIdentification."
+      "file": "../frontend/E2BR3-frontend/app/(protected)/[authority]/case/[id]/detail/DM/components/ParentBasicInformationFields.tsx",
+      "evidence": "ParentBasicInformationFields binds D.10.1 value and NullFlavor to patientInformation.parentInformation.parentIdentification."
     },
     "action": "",
     "notes": ""
@@ -1106,6 +1102,7 @@
     "section": "D",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "DM",
     "backend": {
       "status": "mapped",
       "model": "ParentInformation",
@@ -1130,6 +1127,7 @@
     "section": "D",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "DM",
     "backend": {
       "status": "mapped",
       "model": "ParentInformation",
@@ -1154,6 +1152,7 @@
     "section": "D",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "DM",
     "backend": {
       "status": "mapped",
       "model": "ParentInformation",
@@ -1178,6 +1177,7 @@
     "section": "D",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "DM",
     "backend": {
       "status": "mapped",
       "model": "ParentInformation",
@@ -1202,6 +1202,7 @@
     "section": "D",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "DM",
     "backend": {
       "status": "mapped",
       "model": "ParentInformation",
@@ -1226,6 +1227,7 @@
     "section": "D",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "DM",
     "backend": {
       "status": "mapped",
       "model": "ParentInformation",
@@ -1250,19 +1252,20 @@
     "section": "D",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "DM",
     "backend": {
       "status": "mapped",
       "model": "ParentInformation",
-      "field": "sex",
+      "field": "sex / sex_null_flavor",
       "file": "crates/libs/lib-core/src/model/patient.rs",
-      "evidence": "ParentInformation.sex stores D.10.6 parent sex values."
+      "evidence": "ParentInformation stores D.10.6 as a mutually exclusive sex / sex_null_flavor pair."
     },
     "frontend": {
       "status": "mapped",
       "section": "patientInformation",
       "field": "parentInformation.parentSex",
-      "file": "../frontend/E2BR3-frontend/components/case-form/sections/SectionD.tsx",
-      "evidence": "SectionD binds fieldNumber D.10.6 to patientInformation.parentInformation.parentSex."
+      "file": "../frontend/E2BR3-frontend/app/(protected)/[authority]/case/[id]/detail/DM/components/ParentBasicInformationFields.tsx",
+      "evidence": "ParentBasicInformationFields binds D.10.6 value and NullFlavor to patientInformation.parentInformation.parentSex."
     },
     "action": "",
     "notes": ""
@@ -1274,6 +1277,7 @@
     "section": "D",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "DM",
     "backend": {
       "status": "mapped",
       "model": "ParentMedicalHistory",
@@ -1298,6 +1302,7 @@
     "section": "D",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "DM",
     "backend": {
       "status": "mapped",
       "model": "ParentMedicalHistory",
@@ -1322,6 +1327,7 @@
     "section": "D",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "DM",
     "backend": {
       "status": "mapped",
       "model": "ParentMedicalHistory",
@@ -1346,6 +1352,7 @@
     "section": "D",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "DM",
     "backend": {
       "status": "mapped",
       "model": "ParentMedicalHistory",
@@ -1370,6 +1377,7 @@
     "section": "D",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "DM",
     "backend": {
       "status": "mapped",
       "model": "ParentMedicalHistory",
@@ -1394,6 +1402,7 @@
     "section": "D",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "DM",
     "backend": {
       "status": "mapped",
       "model": "ParentMedicalHistory",
@@ -1418,6 +1427,7 @@
     "section": "D",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "DM",
     "backend": {
       "status": "mapped",
       "model": "ParentInformation",
@@ -1442,6 +1452,7 @@
     "section": "D",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "DM",
     "backend": {
       "status": "mapped",
       "model": "ParentPastDrugHistory",
@@ -1466,6 +1477,7 @@
     "section": "D",
     "authority": "MFDS",
     "status": "complete",
+    "editor_page": "DM",
     "backend": {
       "status": "mapped",
       "model": "ParentPastDrugHistory",
@@ -1490,6 +1502,7 @@
     "section": "D",
     "authority": "MFDS",
     "status": "complete",
+    "editor_page": "DM",
     "backend": {
       "status": "mapped",
       "model": "ParentPastDrugHistory",
@@ -1514,6 +1527,7 @@
     "section": "D",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "DM",
     "backend": {
       "status": "mapped",
       "model": "ParentPastDrugHistory",
@@ -1538,6 +1552,7 @@
     "section": "D",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "DM",
     "backend": {
       "status": "mapped",
       "model": "ParentPastDrugHistory",
@@ -1562,6 +1577,7 @@
     "section": "D",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "DM",
     "backend": {
       "status": "mapped",
       "model": "ParentPastDrugHistory",
@@ -1586,6 +1602,7 @@
     "section": "D",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "DM",
     "backend": {
       "status": "mapped",
       "model": "ParentPastDrugHistory",
@@ -1610,6 +1627,7 @@
     "section": "D",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "DM",
     "backend": {
       "status": "mapped",
       "model": "ParentPastDrugHistory",
@@ -1634,6 +1652,7 @@
     "section": "D",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "DM",
     "backend": {
       "status": "mapped",
       "model": "ParentPastDrugHistory",
@@ -1658,6 +1677,7 @@
     "section": "D",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "DM",
     "backend": {
       "status": "mapped",
       "model": "ParentPastDrugHistory",
@@ -1682,6 +1702,7 @@
     "section": "D",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "DM",
     "backend": {
       "status": "mapped",
       "model": "ParentPastDrugHistory",
@@ -1706,6 +1727,7 @@
     "section": "D",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "DM",
     "backend": {
       "status": "mapped",
       "model": "ParentPastDrugHistory",
@@ -1730,6 +1752,7 @@
     "section": "D",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "DM",
     "backend": {
       "status": "mapped",
       "model": "ParentPastDrugHistory",
@@ -1754,6 +1777,7 @@
     "section": "D",
     "authority": "FDA",
     "status": "complete",
+    "editor_page": "DM",
     "backend": {
       "status": "mapped",
       "model": "PatientInformation",
@@ -1778,6 +1802,7 @@
     "section": "D",
     "authority": "FDA",
     "status": "complete",
+    "editor_page": "DM",
     "backend": {
       "status": "mapped",
       "model": "PatientInformation",

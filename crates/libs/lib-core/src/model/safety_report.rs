@@ -73,6 +73,7 @@ pub struct SafetyReportIdentification {
 
 	// FDA.C.1.12 - Combination Product Report Indicator (FDA)
 	pub combination_product_report_indicator: Option<String>,
+	pub combination_product_report_indicator_null_flavor: Option<String>,
 
 	// C.1.8.1 - Worldwide Unique Case Identification
 	pub worldwide_unique_id: Option<String>,
@@ -129,6 +130,7 @@ pub struct SafetyReportIdentificationForCreate {
 	pub fulfil_expedited_criteria_null_flavor: Option<String>,
 	pub local_criteria_report_type: Option<String>,
 	pub combination_product_report_indicator: Option<String>,
+	pub combination_product_report_indicator_null_flavor: Option<String>,
 	pub first_sender_type: Option<String>,
 	pub additional_documents_available: Option<bool>,
 	pub other_case_identifiers_exist: Option<bool>,
@@ -207,6 +209,7 @@ pub struct SafetyReportIdentificationForUpdate {
 	pub local_criteria_report_type: PatchValue<String>,
 	#[serde(default, deserialize_with = "deserialize_patch_value")]
 	pub combination_product_report_indicator: PatchValue<String>,
+	pub combination_product_report_indicator_null_flavor: Option<String>,
 	pub worldwide_unique_id: Option<String>,
 	pub first_sender_type: Option<String>,
 	pub additional_documents_available: Option<bool>,
@@ -317,24 +320,35 @@ pub struct PrimarySource {
 
 	// C.2.r.1 - Reporter's Name
 	pub reporter_title: Option<String>,
+	pub reporter_title_null_flavor: Option<String>,
 	pub reporter_given_name: Option<String>,
+	pub reporter_given_name_null_flavor: Option<String>,
 	pub reporter_middle_name: Option<String>,
+	pub reporter_middle_name_null_flavor: Option<String>,
 	pub reporter_family_name: Option<String>,
-	pub reporter_name_null_flavor: Option<String>,
+	pub reporter_family_name_null_flavor: Option<String>,
 
 	// C.2.r.2 - Reporter's Address
 	pub organization: Option<String>,
+	pub organization_null_flavor: Option<String>,
 	pub department: Option<String>,
+	pub department_null_flavor: Option<String>,
 	pub street: Option<String>,
+	pub street_null_flavor: Option<String>,
 	pub city: Option<String>,
+	pub city_null_flavor: Option<String>,
 	pub state: Option<String>,
+	pub state_null_flavor: Option<String>,
 	pub postcode: Option<String>,
+	pub postcode_null_flavor: Option<String>,
 	pub telephone: Option<String>,
-	pub reporter_address_null_flavor: Option<String>,
+	pub telephone_null_flavor: Option<String>,
 
 	// C.2.r.3 - Country Code
 	pub country_code: Option<String>,
+	pub country_code_null_flavor: Option<String>,
 	pub email: Option<String>,
+	pub email_null_flavor: Option<String>,
 
 	// C.2.r.4 - Qualification (MANDATORY within primary source)
 	pub qualification: Option<String>,
@@ -354,50 +368,72 @@ pub struct PrimarySource {
 	pub updated_by: Option<Uuid>,
 }
 
-#[derive(Fields, Deserialize)]
+#[derive(Default, Fields, Deserialize)]
 pub struct PrimarySourceForCreate {
 	pub case_id: Uuid,
 	pub source_reporter_presave_id: Option<Uuid>,
 	pub sequence_number: i32,
 	pub reporter_title: Option<String>,
+	pub reporter_title_null_flavor: Option<String>,
 	pub reporter_given_name: Option<String>,
+	pub reporter_given_name_null_flavor: Option<String>,
 	pub reporter_middle_name: Option<String>,
+	pub reporter_middle_name_null_flavor: Option<String>,
 	pub reporter_family_name: Option<String>,
-	pub reporter_name_null_flavor: Option<String>,
+	pub reporter_family_name_null_flavor: Option<String>,
 	pub organization: Option<String>,
+	pub organization_null_flavor: Option<String>,
 	pub department: Option<String>,
+	pub department_null_flavor: Option<String>,
 	pub street: Option<String>,
+	pub street_null_flavor: Option<String>,
 	pub city: Option<String>,
+	pub city_null_flavor: Option<String>,
 	pub state: Option<String>,
+	pub state_null_flavor: Option<String>,
 	pub postcode: Option<String>,
+	pub postcode_null_flavor: Option<String>,
 	pub telephone: Option<String>,
-	pub reporter_address_null_flavor: Option<String>,
+	pub telephone_null_flavor: Option<String>,
 	pub country_code: Option<String>,
+	pub country_code_null_flavor: Option<String>,
 	pub email: Option<String>,
+	pub email_null_flavor: Option<String>,
 	pub qualification: Option<String>,
 	pub qualification_null_flavor: Option<String>,
 	pub qualification_kr1: Option<String>,
 	pub primary_source_regulatory: Option<String>,
 }
 
-#[derive(Fields, Deserialize)]
+#[derive(Default, Fields, Deserialize)]
 pub struct PrimarySourceForUpdate {
 	pub source_reporter_presave_id: Option<Uuid>,
 	pub reporter_title: Option<String>,
+	pub reporter_title_null_flavor: Option<String>,
 	pub reporter_given_name: Option<String>,
+	pub reporter_given_name_null_flavor: Option<String>,
 	pub reporter_middle_name: Option<String>,
+	pub reporter_middle_name_null_flavor: Option<String>,
 	pub reporter_family_name: Option<String>,
-	pub reporter_name_null_flavor: Option<String>,
+	pub reporter_family_name_null_flavor: Option<String>,
 	pub organization: Option<String>,
+	pub organization_null_flavor: Option<String>,
 	pub department: Option<String>,
+	pub department_null_flavor: Option<String>,
 	pub street: Option<String>,
+	pub street_null_flavor: Option<String>,
 	pub city: Option<String>,
+	pub city_null_flavor: Option<String>,
 	pub state: Option<String>,
+	pub state_null_flavor: Option<String>,
 	pub postcode: Option<String>,
+	pub postcode_null_flavor: Option<String>,
 	pub telephone: Option<String>,
-	pub reporter_address_null_flavor: Option<String>,
+	pub telephone_null_flavor: Option<String>,
 	pub country_code: Option<String>,
+	pub country_code_null_flavor: Option<String>,
 	pub email: Option<String>,
+	pub email_null_flavor: Option<String>,
 	pub qualification: Option<String>,
 	pub qualification_null_flavor: Option<String>,
 	pub qualification_kr1: Option<String>,
@@ -418,7 +454,7 @@ pub struct PrimarySourceFilter {
 pub struct LiteratureReference {
 	pub id: Uuid,
 	pub case_id: Uuid,
-	pub reference_text: String,
+	pub reference_text: Option<String>,
 	pub reference_text_null_flavor: Option<String>,
 	pub sequence_number: i32,
 	pub document_base64: Option<String>,
@@ -435,7 +471,7 @@ pub struct LiteratureReference {
 #[derive(Fields, Deserialize)]
 pub struct LiteratureReferenceForCreate {
 	pub case_id: Uuid,
-	pub reference_text: String,
+	pub reference_text: Option<String>,
 	pub reference_text_null_flavor: Option<String>,
 	pub sequence_number: i32,
 	pub document_base64: Option<String>,
@@ -699,8 +735,8 @@ impl SafetyReportIdentificationBmc {
 		set_full_context_from_ctx_dbx(mm.dbx(), ctx).await?;
 
 		let sql = format!(
-			"INSERT INTO {} (case_id, safety_report_id, version, transmission_date, report_type, date_first_received_from_source, date_of_most_recent_information, fulfil_expedited_criteria, fulfil_expedited_criteria_null_flavor, local_criteria_report_type, combination_product_report_indicator, worldwide_unique_id, first_sender_type, additional_documents_available, other_case_identifiers_exist, other_case_identifiers_exist_null_flavor, nullification_code, nullification_reason, receiver_organization, created_at, updated_at, created_by)
-			 VALUES ($1, $2, COALESCE($3, 1), $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, now(), now(), $20)
+			"INSERT INTO {} (case_id, safety_report_id, version, transmission_date, report_type, date_first_received_from_source, date_of_most_recent_information, fulfil_expedited_criteria, fulfil_expedited_criteria_null_flavor, local_criteria_report_type, combination_product_report_indicator, combination_product_report_indicator_null_flavor, worldwide_unique_id, first_sender_type, additional_documents_available, other_case_identifiers_exist, other_case_identifiers_exist_null_flavor, nullification_code, nullification_reason, receiver_organization, created_at, updated_at, created_by)
+			 VALUES ($1, $2, COALESCE($3, 1), $4, $5, $6, $7, $8, $9, $10, $11, $21, $12, $13, $14, $15, $16, $17, $18, $19, now(), now(), $20)
 			 RETURNING id",
 			Self::TABLE
 		);
@@ -727,7 +763,8 @@ impl SafetyReportIdentificationBmc {
 					.bind(data.nullification_code)
 					.bind(data.nullification_reason)
 					.bind(data.receiver_organization)
-					.bind(ctx.user_id()),
+					.bind(ctx.user_id())
+					.bind(data.combination_product_report_indicator_null_flavor),
 			)
 			.await?;
 		mm.dbx().commit_txn().await?;
@@ -847,7 +884,8 @@ impl SafetyReportIdentificationBmc {
 			     fulfil_expedited_criteria = CASE WHEN $9 OR $11 IS NOT NULL THEN NULL ELSE COALESCE($10, fulfil_expedited_criteria) END,
 			     fulfil_expedited_criteria_null_flavor = CASE WHEN $10 IS NOT NULL THEN NULL ELSE COALESCE($11, fulfil_expedited_criteria_null_flavor) END,
 			     local_criteria_report_type = CASE WHEN $12 THEN NULL ELSE COALESCE($13, local_criteria_report_type) END,
-			     combination_product_report_indicator = CASE WHEN $14 THEN NULL ELSE COALESCE($15, combination_product_report_indicator) END,
+			     combination_product_report_indicator = CASE WHEN $14 OR $25 IS NOT NULL THEN NULL ELSE COALESCE($15, combination_product_report_indicator) END,
+			     combination_product_report_indicator_null_flavor = CASE WHEN $15 IS NOT NULL THEN NULL ELSE COALESCE($25, combination_product_report_indicator_null_flavor) END,
 			     worldwide_unique_id = COALESCE($16, worldwide_unique_id),
 			     first_sender_type = COALESCE($17, first_sender_type),
 			     additional_documents_available = COALESCE($18, additional_documents_available),
@@ -888,7 +926,8 @@ impl SafetyReportIdentificationBmc {
 					.bind(data.nullification_code)
 					.bind(data.nullification_reason)
 					.bind(data.receiver_organization)
-					.bind(ctx.user_id()),
+					.bind(ctx.user_id())
+					.bind(data.combination_product_report_indicator_null_flavor),
 			)
 			.await?;
 		if result == 0 {
@@ -1002,8 +1041,19 @@ impl PrimarySourceBmc {
 		data: PrimarySourceForCreate,
 	) -> Result<Uuid> {
 		Self::validate_null_flavors(
-			data.reporter_name_null_flavor.as_deref(),
-			data.reporter_address_null_flavor.as_deref(),
+			data.reporter_title_null_flavor.as_deref(),
+			data.reporter_given_name_null_flavor.as_deref(),
+			data.reporter_middle_name_null_flavor.as_deref(),
+			data.reporter_family_name_null_flavor.as_deref(),
+			data.organization_null_flavor.as_deref(),
+			data.department_null_flavor.as_deref(),
+			data.street_null_flavor.as_deref(),
+			data.city_null_flavor.as_deref(),
+			data.state_null_flavor.as_deref(),
+			data.postcode_null_flavor.as_deref(),
+			data.telephone_null_flavor.as_deref(),
+			data.country_code_null_flavor.as_deref(),
+			data.email_null_flavor.as_deref(),
 			data.qualification_null_flavor.as_deref(),
 		)?;
 		base_uuid::create::<Self, _>(ctx, mm, data).await
@@ -1024,10 +1074,12 @@ impl PrimarySourceBmc {
 		list_options: Option<ListOptions>,
 	) -> Result<Vec<PrimarySource>> {
 		let mut filters = filters.unwrap_or_default();
-		filters.push(PrimarySourceFilter {
-			deleted: Some(OpValBool::Eq(false).into()),
-			..Default::default()
-		});
+		if filters.is_empty() {
+			filters.push(PrimarySourceFilter::default());
+		}
+		for filter in &mut filters {
+			filter.deleted = Some(OpValBool::Eq(false).into());
+		}
 		base_uuid::list::<Self, _, _>(ctx, mm, Some(filters), list_options).await
 	}
 
@@ -1038,8 +1090,19 @@ impl PrimarySourceBmc {
 		data: PrimarySourceForUpdate,
 	) -> Result<()> {
 		Self::validate_null_flavors(
-			data.reporter_name_null_flavor.as_deref(),
-			data.reporter_address_null_flavor.as_deref(),
+			data.reporter_title_null_flavor.as_deref(),
+			data.reporter_given_name_null_flavor.as_deref(),
+			data.reporter_middle_name_null_flavor.as_deref(),
+			data.reporter_family_name_null_flavor.as_deref(),
+			data.organization_null_flavor.as_deref(),
+			data.department_null_flavor.as_deref(),
+			data.street_null_flavor.as_deref(),
+			data.city_null_flavor.as_deref(),
+			data.state_null_flavor.as_deref(),
+			data.postcode_null_flavor.as_deref(),
+			data.telephone_null_flavor.as_deref(),
+			data.country_code_null_flavor.as_deref(),
+			data.email_null_flavor.as_deref(),
 			data.qualification_null_flavor.as_deref(),
 		)?;
 		base_uuid::update::<Self, _>(ctx, mm, id, data).await
@@ -1054,23 +1117,78 @@ impl PrimarySourceBmc {
 	}
 
 	fn validate_null_flavors(
-		reporter_name_null_flavor: Option<&str>,
-		reporter_address_null_flavor: Option<&str>,
+		reporter_title_null_flavor: Option<&str>,
+		reporter_given_name_null_flavor: Option<&str>,
+		reporter_middle_name_null_flavor: Option<&str>,
+		reporter_family_name_null_flavor: Option<&str>,
+		organization_null_flavor: Option<&str>,
+		department_null_flavor: Option<&str>,
+		street_null_flavor: Option<&str>,
+		city_null_flavor: Option<&str>,
+		state_null_flavor: Option<&str>,
+		postcode_null_flavor: Option<&str>,
+		telephone_null_flavor: Option<&str>,
+		country_code_null_flavor: Option<&str>,
+		email_null_flavor: Option<&str>,
 		qualification_null_flavor: Option<&str>,
 	) -> Result<()> {
-		const NAME_ADDRESS_ALLOWED: &[NullFlavor] =
+		const ELEMENT_EMAIL_ALLOWED: &[NullFlavor] =
 			&[NullFlavor::MSK, NullFlavor::ASKU, NullFlavor::NASK];
+		const TITLE_ALLOWED: &[NullFlavor] = &[
+			NullFlavor::MSK,
+			NullFlavor::UNK,
+			NullFlavor::ASKU,
+			NullFlavor::NASK,
+		];
+		const COUNTRY_ALLOWED: &[NullFlavor] = &[
+			NullFlavor::MSK,
+			NullFlavor::UNK,
+			NullFlavor::ASKU,
+			NullFlavor::NASK,
+		];
 		const QUALIFICATION_ALLOWED: &[NullFlavor] = &[NullFlavor::UNK];
 
 		validate_primary_source_null_flavor_set(
-			"reporter_name_null_flavor",
-			reporter_name_null_flavor,
-			NAME_ADDRESS_ALLOWED,
+			"reporter_title_null_flavor",
+			reporter_title_null_flavor,
+			TITLE_ALLOWED,
+		)?;
+		for (field, value) in [
+			(
+				"reporter_given_name_null_flavor",
+				reporter_given_name_null_flavor,
+			),
+			(
+				"reporter_middle_name_null_flavor",
+				reporter_middle_name_null_flavor,
+			),
+			(
+				"reporter_family_name_null_flavor",
+				reporter_family_name_null_flavor,
+			),
+			("organization_null_flavor", organization_null_flavor),
+			("department_null_flavor", department_null_flavor),
+			("street_null_flavor", street_null_flavor),
+			("city_null_flavor", city_null_flavor),
+			("state_null_flavor", state_null_flavor),
+			("postcode_null_flavor", postcode_null_flavor),
+			("telephone_null_flavor", telephone_null_flavor),
+		] {
+			validate_primary_source_null_flavor_set(
+				field,
+				value,
+				ELEMENT_EMAIL_ALLOWED,
+			)?;
+		}
+		validate_primary_source_null_flavor_set(
+			"country_code_null_flavor",
+			country_code_null_flavor,
+			COUNTRY_ALLOWED,
 		)?;
 		validate_primary_source_null_flavor_set(
-			"reporter_address_null_flavor",
-			reporter_address_null_flavor,
-			NAME_ADDRESS_ALLOWED,
+			"email_null_flavor",
+			email_null_flavor,
+			ELEMENT_EMAIL_ALLOWED,
 		)?;
 		validate_primary_source_null_flavor_set(
 			"qualification_null_flavor",
@@ -1162,11 +1280,10 @@ impl DocumentsHeldBySenderBmc {
 		filters: Option<Vec<DocumentsHeldBySenderFilter>>,
 		list_options: Option<ListOptions>,
 	) -> Result<Vec<DocumentsHeldBySender>> {
-		let mut filters = filters.unwrap_or_default();
-		filters.push(DocumentsHeldBySenderFilter {
-			deleted: Some(OpValBool::Eq(false).into()),
-			..Default::default()
-		});
+		let mut filters = filters.unwrap_or_else(|| vec![Default::default()]);
+		for filter in &mut filters {
+			filter.deleted = Some(OpValBool::Eq(false).into());
+		}
 		base_uuid::list::<Self, _, _>(ctx, mm, Some(filters), list_options).await
 	}
 

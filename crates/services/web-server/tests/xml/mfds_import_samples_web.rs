@@ -2,18 +2,18 @@ use crate::common::{cookie_header, init_test_mm, seed_org_with_users, Result};
 use axum::body::{to_bytes, Body};
 use axum::http::{Request, StatusCode};
 use lib_auth::token::generate_web_token;
-use lib_core::xml::import_sections::c_safety_report::parse_c_safety_report;
-use lib_core::xml::import_sections::d_patient::parse_d_patient;
-use lib_core::xml::import_sections::e_reaction::parse_e_reactions;
-use lib_core::xml::import_sections::f_test_result::parse_f_test_results;
-use lib_core::xml::import_sections::g_drug::parse_g_drugs;
-use lib_core::xml::import_sections::h_narrative::parse_h_narrative;
 use serde_json::Value;
 use serial_test::serial;
 use std::fs;
 use std::path::{Path, PathBuf};
 use tower::ServiceExt;
-use validator::xml::validate_e2b_xml;
+use xml::import_sections::c_safety_report::parse_c_safety_report;
+use xml::import_sections::d_patient::parse_d_patient;
+use xml::import_sections::e_reaction::parse_e_reactions;
+use xml::import_sections::f_test_result::parse_f_test_results;
+use xml::import_sections::g_drug::parse_g_drugs;
+use xml::import_sections::h_narrative::parse_h_narrative;
+use xml::validation::validate_e2b_xml;
 
 fn workspace_root() -> PathBuf {
 	PathBuf::from(env!("CARGO_MANIFEST_DIR"))

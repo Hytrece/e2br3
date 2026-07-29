@@ -5,7 +5,7 @@
     "label": "Message Type",
     "section": "N",
     "authority": "ICH",
-    "status": "complete",
+    "status": "frontend_missing",
     "backend": {
       "status": "mapped",
       "model": "MessageHeader",
@@ -14,14 +14,14 @@
       "evidence": "MessageHeader.message_type stores the message type value exported to /hl7:MCCI_IN200100UV01/hl7:name/@displayName."
     },
     "frontend": {
-      "status": "mapped",
+      "status": "missing",
       "section": "messageHeader",
       "field": "messageType",
       "file": "../frontend/E2BR3-frontend/lib/schemas/e2br3.ts",
-      "evidence": "Frontend E2BR3 schema defines messageHeader.messageType."
+      "evidence": "Strict frontend inventory did not find a case-form input for this mapped frontend key; the value lives in the case form schema and is not exposed as an input."
     },
-    "action": "",
-    "notes": ""
+    "action": "Add a case-form input, or reclassify as not_applicable if the batch/message envelope is generated at transmission.",
+    "notes": "Batch/message envelope element; SectionC3 renders only N.1.5, N.2.r.1, N.2.r.2 and N.2.r.3 as editable message header inputs."
   },
   {
     "id": "N.1.2",
@@ -30,6 +30,7 @@
     "section": "N",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "N",
     "backend": {
       "status": "mapped",
       "model": "MessageHeader",
@@ -41,11 +42,11 @@
       "status": "mapped",
       "section": "messageHeader",
       "field": "batchNumber",
-      "file": "../frontend/E2BR3-frontend/__tests__/case-save/caseIdentification.coordinator.test.ts",
-      "evidence": "Frontend case identification coordinator tests write messageHeader.batchNumber."
+      "file": "../frontend/E2BR3-frontend/app/(protected)/submission/message-header.ts",
+      "evidence": "Outbound submission builds batchNumber and the message-header API persists it."
     },
     "action": "",
-    "notes": ""
+    "notes": "Outbound transport-envelope value generated on the submission surface, not in the case editor."
   },
   {
     "id": "N.1.3",
@@ -54,6 +55,7 @@
     "section": "N",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "N",
     "backend": {
       "status": "mapped",
       "model": "MessageHeader",
@@ -65,11 +67,11 @@
       "status": "mapped",
       "section": "messageHeader",
       "field": "batchSenderIdentifier",
-      "file": "../frontend/E2BR3-frontend/node-tests/validation.matrix.full-parity.test.ts",
-      "evidence": "Frontend parity tests normalize messageHeader.batchSenderIdentifier."
+      "file": "../frontend/E2BR3-frontend/app/(protected)/submission/message-header.ts",
+      "evidence": "Outbound submission builds batchSenderIdentifier and the message-header API persists it."
     },
     "action": "",
-    "notes": ""
+    "notes": "Outbound transport-envelope value generated on the submission surface, not in the case editor."
   },
   {
     "id": "N.1.4",
@@ -78,6 +80,7 @@
     "section": "N",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "N",
     "backend": {
       "status": "mapped",
       "model": "MessageHeader",
@@ -89,11 +92,11 @@
       "status": "mapped",
       "section": "messageHeader",
       "field": "batchReceiverIdentifier",
-      "file": "../frontend/E2BR3-frontend/node-tests/validation.matrix.full-parity.test.ts",
-      "evidence": "Frontend parity tests normalize messageHeader.batchReceiverIdentifier."
+      "file": "../frontend/E2BR3-frontend/app/(protected)/submission/message-header.ts",
+      "evidence": "Outbound submission builds batchReceiverIdentifier and the message-header API persists it."
     },
     "action": "",
-    "notes": ""
+    "notes": "Outbound transport-envelope value generated on the submission surface, not in the case editor."
   },
   {
     "id": "N.1.5",
@@ -102,6 +105,7 @@
     "section": "N",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "N",
     "backend": {
       "status": "mapped",
       "model": "MessageHeader",
@@ -113,8 +117,8 @@
       "status": "mapped",
       "section": "messageHeader",
       "field": "batchTransmissionDate",
-      "file": "../frontend/E2BR3-frontend/node-tests/validation.matrix.full-parity.test.ts",
-      "evidence": "Frontend parity tests normalize messageHeader.batchTransmissionDate."
+      "file": "../frontend/E2BR3-frontend/app/(protected)/submission/message-header.ts",
+      "evidence": "Export/submission preparation generates the batch transmission timestamp immediately before outbound XML creation."
     },
     "action": "",
     "notes": ""
@@ -126,6 +130,7 @@
     "section": "N",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "N",
     "backend": {
       "status": "mapped",
       "model": "MessageHeader",
@@ -137,11 +142,11 @@
       "status": "mapped",
       "section": "messageHeader",
       "field": "messageNumber",
-      "file": "../frontend/E2BR3-frontend/__tests__/case-save/pathOwnership.test.ts",
-      "evidence": "Frontend path ownership tests route messageHeader.messageNumber to message-header."
+      "file": "../frontend/E2BR3-frontend/app/(protected)/submission/message-header.ts",
+      "evidence": "Export/submission preparation generates a fresh message identifier for the outbound transmission."
     },
     "action": "",
-    "notes": ""
+    "notes": "Outbound transport-envelope value; it is not editable in the case editor."
   },
   {
     "id": "N.2.r.2",
@@ -150,6 +155,7 @@
     "section": "N",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "N",
     "backend": {
       "status": "mapped",
       "model": "MessageHeader",
@@ -161,8 +167,8 @@
       "status": "mapped",
       "section": "messageHeader",
       "field": "messageSenderIdentifier",
-      "file": "../frontend/E2BR3-frontend/lib/case-save/pages/CI/save.ts",
-      "evidence": "Frontend case-identification save maps messageHeader.messageSenderIdentifier to the message header payload."
+      "file": "../frontend/E2BR3-frontend/app/(protected)/submission/message-header.ts",
+      "evidence": "Export/submission preparation applies the sender routing identifier selected for the outbound authority."
     },
     "action": "",
     "notes": ""
@@ -174,6 +180,7 @@
     "section": "N",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "N",
     "backend": {
       "status": "mapped",
       "model": "MessageHeader",
@@ -185,8 +192,8 @@
       "status": "mapped",
       "section": "messageHeader",
       "field": "messageReceiverIdentifier",
-      "file": "../frontend/E2BR3-frontend/lib/case-save/pages/CI/save.ts",
-      "evidence": "Frontend case-identification save maps messageHeader.messageReceiverIdentifier to the message header payload."
+      "file": "../frontend/E2BR3-frontend/app/(protected)/submission/message-header.ts",
+      "evidence": "Export/submission preparation applies the selected receiver routing identifier."
     },
     "action": "",
     "notes": ""
@@ -198,6 +205,7 @@
     "section": "N",
     "authority": "ICH",
     "status": "complete",
+    "editor_page": "N",
     "backend": {
       "status": "mapped",
       "model": "MessageHeader",
@@ -209,10 +217,10 @@
       "status": "mapped",
       "section": "messageHeader",
       "field": "messageDate",
-      "file": "../frontend/E2BR3-frontend/lib/case-save/pages/CI/save.ts",
-      "evidence": "Frontend case-identification save maps messageHeader.messageDate to the message header payload."
+      "file": "../frontend/E2BR3-frontend/app/(protected)/submission/message-header.ts",
+      "evidence": "Outbound submission generates messageDate and the message-header API persists it."
     },
     "action": "",
-    "notes": ""
+    "notes": "Outbound transport-envelope value generated on the submission surface, not in the case editor."
   }
 ]

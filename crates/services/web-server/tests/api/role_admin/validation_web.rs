@@ -12,19 +12,44 @@ use lib_auth::token::generate_web_token;
 use lib_core::ctx::{
 	ROLE_SPONSOR_ADMIN_COMPANY, ROLE_SPONSOR_ADMIN_CRO, ROLE_SYSTEM_ADMIN,
 };
-use lib_core::model::acs::{
-	has_permission, CASE_APPROVE, CASE_CREATE, CASE_UPDATE, PRESAVE_TEMPLATE_CREATE,
-	PRESAVE_TEMPLATE_DELETE, PRESAVE_TEMPLATE_LIST, PRESAVE_TEMPLATE_READ,
-	PRESAVE_TEMPLATE_UPDATE, SETTINGS_READ, SETTINGS_UPDATE, TERMINOLOGY_APPROVE,
-	TERMINOLOGY_IMPORT, USER_CREATE, USER_DELETE, USER_LIST, USER_READ, USER_UPDATE,
-	XML_EXPORT, XML_EXPORT_READ, XML_IMPORT, XML_IMPORT_READ,
-};
 use lib_core::model::store::set_full_context_dbx;
 use lib_core::model::ModelManager;
 use serde_json::{json, Value};
 use serial_test::serial;
 use tower::ServiceExt;
 use uuid::Uuid;
+
+#[serial]
+#[tokio::test]
+async fn test_role_admin_api_rejects_migration_only_menu_aliases() -> Result<()> {
+	let mm = init_test_mm().await?;
+	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
+	let admin_token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
+	let admin_cookie = cookie_header(&admin_token.to_string());
+	let app = web_server::app(mm);
+
+	let (status, value) = request_json(
+		&app,
+		"POST",
+		&admin_cookie,
+		"/api/admin/permission-profiles".to_string(),
+		Some(json!({
+			"data": {
+				"name": "Reject Legacy Export Alias",
+				"privileges": [{
+					"menu_key": "export",
+					"can_read": true,
+					"can_edit": false,
+					"can_review": false,
+					"can_lock": false
+				}]
+			}
+		})),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::BAD_REQUEST, "{value:?}");
+	Ok(())
+}
 
 #[serial]
 #[tokio::test]

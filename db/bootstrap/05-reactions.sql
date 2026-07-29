@@ -13,30 +13,32 @@ CREATE TABLE reactions (
     primary_source_reaction_translation VARCHAR(250),
 
     -- E.i.1.2 - Reaction/Event Language
-    reaction_language VARCHAR(2),  -- ISO 639-1 code
+    reaction_language VARCHAR(3),  -- ISO 639-2 code (E.i.1.1b)
 
     -- E.i.2.1 - MedDRA Coding (LLT or PT)
     reaction_meddra_version VARCHAR(10),  -- Version of MedDRA used
     reaction_meddra_code VARCHAR(20),      -- LLT or PT code
 
     -- E.i.3 - Term Highlighted by Reporter
-    term_highlighted BOOLEAN,
+    term_highlighted VARCHAR(1)
+        CONSTRAINT reactions_term_highlighted_code
+        CHECK (term_highlighted IN ('1', '2', '3', '4')),
 
     -- E.i.3.1 - Seriousness (MANDATORY if any seriousness criteria selected)
     serious BOOLEAN,
 
     -- E.i.3.2 - Seriousness Criteria (at least one if serious=true)
-    criteria_death BOOLEAN NOT NULL DEFAULT FALSE,
+    criteria_death BOOLEAN,
     criteria_death_null_flavor VARCHAR(4) CHECK (criteria_death_null_flavor IN ('NI', 'UNK', 'ASKU', 'NASK', 'MSK')),
-    criteria_life_threatening BOOLEAN NOT NULL DEFAULT FALSE,
+    criteria_life_threatening BOOLEAN,
     criteria_life_threatening_null_flavor VARCHAR(4) CHECK (criteria_life_threatening_null_flavor IN ('NI', 'UNK', 'ASKU', 'NASK', 'MSK')),
-    criteria_hospitalization BOOLEAN NOT NULL DEFAULT FALSE,
+    criteria_hospitalization BOOLEAN,
     criteria_hospitalization_null_flavor VARCHAR(4) CHECK (criteria_hospitalization_null_flavor IN ('NI', 'UNK', 'ASKU', 'NASK', 'MSK')),
-    criteria_disabling BOOLEAN NOT NULL DEFAULT FALSE,
+    criteria_disabling BOOLEAN,
     criteria_disabling_null_flavor VARCHAR(4) CHECK (criteria_disabling_null_flavor IN ('NI', 'UNK', 'ASKU', 'NASK', 'MSK')),
-    criteria_congenital_anomaly BOOLEAN NOT NULL DEFAULT FALSE,
+    criteria_congenital_anomaly BOOLEAN,
     criteria_congenital_anomaly_null_flavor VARCHAR(4) CHECK (criteria_congenital_anomaly_null_flavor IN ('NI', 'UNK', 'ASKU', 'NASK', 'MSK')),
-    criteria_other_medically_important BOOLEAN NOT NULL DEFAULT FALSE,
+    criteria_other_medically_important BOOLEAN,
     criteria_other_medically_important_null_flavor VARCHAR(4) CHECK (criteria_other_medically_important_null_flavor IN ('NI', 'UNK', 'ASKU', 'NASK', 'MSK')),
 
     -- FDA.E.i.3.2h - Required Intervention (FDA)
@@ -44,7 +46,6 @@ CREATE TABLE reactions (
     required_intervention_null_flavor VARCHAR(4) CHECK (required_intervention_null_flavor IN ('NI', 'UNK', 'ASKU', 'NASK', 'MSK')),
 
     -- Reference AE common metadata
-    included_in_ema_ime_list BOOLEAN,
     expectedness VARCHAR(1) CHECK (expectedness IS NULL OR expectedness IN ('1', '2')),
     severity VARCHAR(20),
 
@@ -91,7 +92,6 @@ CREATE TABLE reactions (
     -- Null Flavor Support (E2B(R3) compliant: NI, UNK, ASKU, NASK, MSK)
     start_date_null_flavor VARCHAR(4) CHECK (start_date_null_flavor IN ('NI', 'UNK', 'ASKU', 'NASK', 'MSK')),
     end_date_null_flavor VARCHAR(4) CHECK (end_date_null_flavor IN ('NI', 'UNK', 'ASKU', 'NASK', 'MSK')),
-    outcome_null_flavor VARCHAR(4) CHECK (outcome_null_flavor IN ('NI', 'UNK', 'ASKU', 'NASK', 'MSK')),
 
     deleted BOOLEAN NOT NULL DEFAULT false,
 

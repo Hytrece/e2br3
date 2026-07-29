@@ -27,6 +27,15 @@ Tools:
 - `registry/tools/validate.py`
 - `registry/tools/extract_frontend_fields.py`
 
+Editor contract evidence lives under `registry/editor-contracts/`. It is test
+metadata consumed by registry, backend HTTP, and frontend tests; production
+editor code must not read it. `editor_page` assigns a registry row to one route
+section. A field-level `complete` claim is valid only when its section contract
+contains projection, frontend path, patch/readback value, constraint, and
+business-validation evidence. A previously complete row that lacks runtime
+evidence uses `incomplete`; this does not replace the existing missing,
+conflict, or not-applicable statuses.
+
 There must not be a committed `registry/generated/` directory, generated matrix
 JSON, generated inventory JSON, generated markdown report, or second canonical
 mapping file. Source inventories are derived by the validator at runtime and are
@@ -312,6 +321,17 @@ artifacts, scripts, schemas, type-only files, and API client response mappers
 unless a future registry change explicitly adds them to the frontend extractor
 configuration.
 
+Presave forms are handled by the separate `registry/presaves/` namespace and
+presave inventory extractor. Presave rows retain this specification's row
+shape and join to case rows by `e2br3_code`; duplicates remain forbidden within
+either namespace. Strict presave coverage includes Sender, Receiver, Product,
+Reporter, Study, and Narrative. Each configured section must independently
+cover its frontend form fields, Rust model fields, case-registry destinations,
+and implemented presave-to-case transfer assignments.
+
+Dedicated presave and case nullFlavor columns receive local companion rows.
+NullFlavor encoded in-band in a field does not create a second mapping row.
+
 ### Frontend Field Normalization
 
 The extractor must normalize dynamic repeatable indexes to a stable registry
@@ -428,6 +448,13 @@ Strict frontend validation is explicit:
 
 ```sh
 python3 registry/tools/validate.py --strict-frontend-inventory
+```
+
+Presave structural and source/transfer validation are explicit:
+
+```sh
+python3 registry/tools/validate.py --strict-presave-registry
+python3 registry/tools/validate.py --strict-presave-inventory
 ```
 
 Strict frontend validation compares:

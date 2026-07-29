@@ -1,0 +1,2201 @@
+로그인 페이지
+               해당 User에게 권한이 부여된
+               Database 출력 필요
+               (예 1개만 부여된 경우 해당
+               Database만 출력,
+               여러 개 부여된 경우 Dropdown으로
+               여러 개 출력)
+
+               `All,
+               해당 User에게 배정된
+               Sender's Organisation (C.3.2)`
+               출력 필요
+
+
+UI 아래와 같이 수정
+                                                       Refresh, Clear Filters 다른 기능
+                                    삭제
+                                                       이 아니라면 1개만 유지. Refresh
+                                                       삭제
+
+
+
+
+삭
+제
+    필터 조건에 해당되는 정보가 없으면,     `Start date`, End date`     1.   삭제하는 경우 취소선 형태로
+    Table Head가 사라짐. 수정 필요   설정에 따른 Status 변                  표시하고 내용 유지
+                             경 여부 확인 필요                  2.   Table Head에 삭제 여부 항목
+                  삭제                                          도 추가하여, 필터링하여 삭제
+                                                              되지 않은 User만 확인할 수 있
+                                                              도록 수정
+                                                                 1)    `Name`으로 Label 수정
+                                                                 2)    하나의 항목으로 변경
+
+
+
+
+                                                                 1)    System Administrator 및
+                                                                       Sponsor Administrator(CRO),
+                                                                       Sponsor Administrator
+                                                                       (Pharmaceutical Company)는
+                                                                       삭제 필요. System
+                                                                       Administrator 만 설정 가능
+                                                                 2)    System Administrator가 설정한
+                                                                       Sponsor Administrator(CRO),
+                                                                       Sponsor Administrator
+                                                                       (Pharmaceutical Company)
+ 삭                                                                     User는 변경 불가하도록 설정
+ 제                                                                     필요
+                                                                 3)    System Administrator 는
+전체 항목: 항목별로                                                            Sponsor Administrator(CRO),
+Audit Trail 확인 가                                                       Sponsor Administrator
+능하도록 수정 필요                                                             (Pharmaceutical Company)를
+                                                                       한명만 지정 가능
+                                                                      1)   Table의 Label과 현재 창에
+                                                                           서 Label이 다름, `Start
+기타: 현재 User 화면 상 등록 가능하나, 실제 User에게 알림   1)   Dropdown/별도 팝업창에
+                                                                           date`, `End date`로 수정
+메일 등 가지 않으며 User 추가된 계정으로 접속 불가               서 선택 후 화면에 표시되
+                                                                      2)   Date 설정 시 User 생성되지
+                                              는 방식으로 수정 필요
+                                                                           않음
+                                         2)   Blind 항목 추가
+Edit 시 본 문구 삭제
+
+
+
+
+1.   Edit 클릭 시 기존
+     의 입력된 데이터
+     가 포함된 상태로
+     본 페이지 뜨는
+     방식으로 수정
+2.   상세 내용은
+     Create User 슬라
+     이드(3번째 슬라
+     이드) 의견 반영
+     하여 동일하게 적
+     용
+현재 생성되지 않
+음
+                             참고
+                            본 페이지의 설정과 관계 없이 관리자는
+Default로                    Safety Database 관리를 위해 접근 가능
+System                      하며, 이를 User Manual에 명시 필요
+                       삭제
+Administrator가
+부여한 Sponsor
+Administrator만
+뜨도록 설정
+
+
+
+
+삭제. Default Role로
+System Administrator
+및 Sponsor
+Administrator만 제공
+
+
+ 삭제
+                                    1)   작동하지 않음
+                                    2)   Audit Trail 표시용이 맞
+                                         을지 확인 필요
+                                                        체크박스 수정 불가
+
+
+
+
+                     본 테이블과 관련하여 UI 개선 필요.
+                     아래 캡쳐와 같이 작동함.
+
+                                                              1.   Role 추가에 따른
+                                                                   업데이트 사항 확
+                                                                   인 불가
+                                                              2.   추가 가능한 Role
+                                                                   의 개수는 20개로
+1)   좌측에 메뉴명과                                                      제한
+     맞지 않
+     음.(HOME,
+     CASE, INFO 등)
+2)   Role 별로 실제      1)   실제 메뉴별 상세 항목과 맞지 않음
+     메뉴 권한에 맞        2)   Role 별로 실제 메뉴 권한에 맞게 설정되는
+     게 설정되는 것             것을 고려하여 설계 되었는지 확인 필요.
+     을 고려하여 설
+     계 되었는지 확
+     인 필요. HOME
+     메뉴는 표시상              1)   CASE의 RE 페이지에서 설정된 일정
+     아무도 권한이                   에 따라 메일 보내는 기능. Read와
+     없으나 현재                    Send의 의도 재확인 필요하며, 다른
+     User 화면에서                 의도가 없는 경우 Send는 삭제
+     접근 가능                2)   본 항목 기능 여부 Case 입력 테스트
+                               단계에서 재확인 예정
+                                                           참고
+                                                          Import History, Export/Submit
+     이하 메뉴 별 의견 반영 필요, 이외의 항목은 유지                         History의 Read 권한에는 해당 페이
+                                                          지 내의 다운로드 등 상호작용 권한
+                                                          을 포함
+                                    1)   Notice: Read(Notice를 볼 수
+                                         있는 권한), Edit(Notice를 볼
+                                         수 있는 권한)
+                                    2)   My To Do: Read(설정된 WF
+                                         에 따른 사례를 볼 수 있는 권
+                                         한)
+                                    1)   Case: Read(Case 페이지를 볼 수 있는 권한), Edit(Case
+                                         페이지 내 Case 입력/수정 권한)
+                                    2)   Workflow: Read(Case 페이지 내 Case 별 Workflow 상
+                                         태를 볼 수 있는 권한, 컬럼으로 표시)
+                                    3)   QC: Edit(Case 별 QC를 체크할 수 있는 권한)
+                                    4)   Lock: Edit(Case 별 Lock를 체크할 수 있는 권한)
+
+                                    1)   CASE INFO.를 INFO로 수정
+                                    2)   [하위 메뉴] Case Info: Read(INFO 페이지를 볼 수 있는
+                                         권한), Edit(INFO 페이지 내 정보를 입력/수정 권한)
+유지                          1)   DATA를 IMPORT 로 수정
+                            2)   [하위 메뉴] Import Files: Edit(Import Files 를 볼 수 있으며, Data를
+                                 Import 할 수 있는 권한)
+                            3)   [하위 메뉴] Import History: Read(Import History를 볼 수 있는 권한)
+                            1)   SUBMISSION을 EXPORT/SUBMISSION으로 수정
+                            2)   [하위 메뉴] Export/Submit: Edit(Export/Submit 를 볼 수 있으며,
+                                 Case를 Export/Submit 할 수 있는 권한)
+                            3)   [하위 메뉴] Export/Submit History: Read(Export/Submit History를
+                                 볼 수 있는 권한)
+                                            표시: 추후 변경 가능성 있음 1 2)
+                                                                   1)   작동하는 것이 맞는지 확인 필요
+                                                                        MedDRA Version은 입력 시 User가
+                                                                        CASE 입력 시 선택하는 MedDRA 버전
+                                                                        을 해당 버전으로 제한할 수 있음
+                                                                    3) 모든 버전을 업로드하진 않을 예정이
+                                                                        며, 우선 최근 2개 버전만 업로드
+                                                                    *WHO-DD는 최신 버전으로 유지(과거 버
+                                                                    전 누적할 필요 없음), System
+             2 삭제                                                   Administrator 접근 페이지에서 관련 정보
+                                                                    기술할 항목 필요
+                                                               3   CIOMS 출력 시 설정 항목으로 PDF print 방
+                 4 삭제
+                                                                   향 및 print 순서 표시 사항.
+                                                                   CASE 페이지 검토 시 재확인 예정
+                                                                   *1)현재 CIOMS 출력 기능 반영필요
+                                                                   예시, mapping 파일 위치(Sharepoint): Fillable-Form_CIO
+                                                                                                       MS-to-E2B
+                                                                   Documents > References>ICH>CIOMS
+          6 삭제                                                     2)Orientation Landscape는 가로 출력,
+                                                                   Orientation Portrait는 세로 출력
+8                                                                  3)Data Ordering은 다음 슬라이드(10번 슬
+     삭제                                                            라이드) 참조
+                                                                   4)현재 Case 페이지에서 수정 시 저장 버튼
+                                                                   활성화 되지 않음, 확인 필요
+                                                               5 CASE 페이지에서 Notation 필드를 추가 하는
+                                                                기능으로, CASE 페이지 검토 시 재확인 예정
+9                                                               Notation에 자동 번역 기능 아직 포함되어 있지
+1)   IMPORT 시 각 해당 항목의 입력 방법 설정 항, 실제 설정 가능한 경우                 않으며, Case 페이지 검토 전까지 반영 예정
+     적용 여부 CASE 페이지 검토 시 재확인 예정
+2)   E2B R3 Business rule에 따르면 c.1.4는 c.1.2,c.1.5 보       7 IMPORT 페이지에서 CASE IMPORT
+     다 미래일 수 없으며 c.1.5 는 c.1.2보다 미래일 수 없                   시 Sender 정보 일괄 반영하는 기능
+     음. 해당 규칙 반영하여 업데이트 필요                                 IMPORT 페이지 검토 시 재확인 예
+Data Ordering: Primary data will appear first
+                                                        복되어 입력되는 항목의 경우,
+                                                        첫번째 행으로 입력된 Data를
+                                                        상단에 출력하고, 두번째 행부
+                                                        터는 Report 하단의 Continued
+Report 하단                                               Table 생성하여 표시
+
+
+
+
+Data Ordering: Basic
+                                                반복 입력되는 항목을
+                                                하나의 Table로 표시
+항목에 대해 앞서 의견 반영하고
+UI 아래와 같은 형식으로 수정
+                                            1)   해당 항목 Case 입력 시 선택할
+                                                 수 있는 종류로 작동 여부 재확
+                                                 인. 현Appendix재 선택 여부와
+                                                 무관하게 선택 가능
+Default 값                                   2)   아무것도 선택되지 않는 경우
+Saved 정보는                                        Default로 ICH 로 선택. 한 개는
+수정되지 않도                                          선택되도록 강제
+록 비활성화                                      3)   EMA, NMPA, PMDA 삭제
+                                            4)   항목별 Audit Trail 추가
+
+1)   추가되는 항
+     목들 삭제 가
+     능하게 수정
+2)   삭제 시 취소
+     선으로 정보
+     유지된 상태
+     로 삭제되고,
+                                         C.1.1, C.1.8.1 값 자동 부여 기능으로,
+     추후 다시 복
+                                         CASE 페이지 검토 시 재확인 예정
+     구 및 수정
+                                         *https://manual.crscube.io/emsafety/k_
+     가능하도록
+                                         10-4-admin_settings 매뉴얼 참고
+     변경
+
+
+                                           공란(지정하지 않음)도 가능하게 설정
+                                           변경
+               1)   Role 명칭 보이도록 UI 수정
+                    (Dropdown 및 체크박스)
+               2)   여러 Role 선택 가능해야 함.
+               3)   추가된 Role 적절히 반영되는
+                    지 재확인 필요
+Case 페이지와 동일하게 적용
+Appendix 표시
+
+
+
+
+         1)   Notice는 게시판과 같은   WF 관련 정보가
+              기능을 의도 현재 기재된     표시되어야 함.
+              내용들 삭제            WF에 따라 해당
+         2) 권한을 가진 User*가 공지    User에 할당된
+              를 작성/수정/삭제 할 수    Case가 표시되어
+              있도록 수정            야 함.
+         * Admin 페이지의 Role &
+         Privilege와 연동
+
+
+
+
+삭제
+권한 참고용 슬라이드
+권한 참고용 슬라이드
+                                                       Appendix 마다 차이가 있는
+                                                       메뉴들이 있으며, CASE 페이
+                                                       지와 동일하게 아래 항목 반영
+                                                       필요(이하 페이지 공통)
+                                                                                                          삭제
+     삭제
+
+
+
+
+1)   Admin 메뉴에서 User 등록하는 형식(Slide#2 참조)과 유사하게 수정. 포함 항목은 아래 예시 그림 참조
+
+          Sender Type (C.3.1)   Sender's Organisation (C.3.2)    Sender's Given Name (C.3.3.3)   Delete
+
+
+
+
+2) System Administrator가 Sponsor Administrator(CRO) 권한을 부여한 User/회사는 여러 Sender 등록 가능.
+System Administrator가 Sponsor Administrator (Pharmaceutical Company) 을 부여한 User/회사는 1개의 Sender만 등록 가능
+3) Actions의 Delete는 Slide#2의 Delete와 동일한 방식으로 작동(삭제 시 취소선 표시 및 정보 유지, Delete에 삭제 Yes 표시)
+4) 해당 항목의 값이 사용되고 있는 경우(Info > Product에서 해당 Sender가 연결되어 있는 경우, Admin > User에서 해당 Sender가 활
+용된 경우) 삭제 불가하게 적용 필요
+삭제
+
+
+
+
+              저장 가능 조건 확인 필요
+
+              1.모든 필수값 입력 필요(현재 C.3.3.3 입력되
+              지 않아도 저장 가능)
+              2.C.3.2 중복 시 저장되지 않도록 수정 필요
+
+
+
+          모든 필드 공통 적용
+          1. 설명용 기술 문구 삭제
+          (본 메뉴 외에도 모든 항목 대상)
+          2.칸의 위치 개선. 항목의 오른쪽 위치
+
+
+
+
+     삭제
+                      삭제
+
+삭제
+                      삭제
+
+삭제
+
+
+
+
+     최초 저장 후 수정을 위해
+     삭제 시 기존의 정보 유지
+     된 상태로 취소선 표시
+최초 입력 후 수정 페이지에서 모든 항목에 반영
+1) Audit trail 추가. 내용은 아래와 같이 기재
+
+
+No: 순서, Date/Time: 아래 창 입력 시점, User: 수정한 사용자 ID, Item: 수정 항목명, Value 및 Notation:
+수정된 값, Reason: 아래 창 입력값
+
+2) 수정 후 저장 시 아래 팝업창 뜨고 입력 필요 변경. Audit Trail에서 Reason은 값
+해당 팝업창에서 입력 값 표시
+     Ch an ge Con firmati on
+
+
+
+
+데이터 표시 예시(Regulator's info. for Electronic Submission Gateway 수정)
+
+
+ 1           2026-03-25 07:21:58+09:00   Suh.Jinuk   Sender ID   1234   Typo
+                                                Appendix (Slide#20 참조)
+
+
+
+
+                                                                                                삭제
+
+     삭제
+
+
+
+
+1)   Admin 메뉴에서 User 등록하는 형식(Slide#2 참조)과 유사하게 수정. 포함 항목은 아래 예시 그림 참조
+
+          Receiver Name                       Receiver Type                         Timeline
+                                                               Sender's Given Name (C.3.3.3)          Delete
+
+
+
+
+2) Timeline의 내용은 Non-SAE Spontaneous, SAE Spontaneous, Non-SAE Solicited, SAE Solicited 를 구분하여 출력(Slide#25참조)
+3) Actions의 Delete는 Slide#2의 Delete와 동일한 방식으로 작동(삭제 시 취소선 표시 및 정보 유지, Delete에 삭제 Yes 표시)
+4) 해당 항목의 값이 사용되고 있는 경우(Info > Product에서 해당 Receiver가 연결되어 있는 경우) 삭제 불가하게 적용 필요
+저장 불가 조건
+
+1.필수 입력 항목 누락
+2.`Receiver Name`이 이미 등록된 정보와 중복되는 경우
+
+
+1) 현재 설정된 전체 항목 삭제하고 아래의 항목 포함
+                                                                               위치: CASE 페이지 > CASE 사례 별 페이지> RE 페이지
+
+                                                                               Receiver Name, Report due, Report due date가 있음
+                                                                               해당 Case의 담당 User(User 권한에서 Sender, Product,
+             Non-SAE
+                                                                               Study 설정)에게 Report due date가 다가옴에 따른 알림
+          Spontaneous                                                          메일 전달
+       SAE Spontaneous
+                                                                               Receiver 설정 적용 예시
+      Non-SAE Solicited
+                                                                               -Receiver Name 항목: INFO 페이지에서 등록된 Receiver
+           SAE Solicited                                                       선택
+                                                                               -Report due: 아래 조건에 따라서 설정된 값이 자동으로
+                                                                               1차 입력되고 필요시 직접 수정.
+                                                                               1)C.1.3가 `2:Report form study` 외의 값 & E.i.3.2a~f가
+                                                                               모두 nullflavor NI: Non-SAE Spontaneous
+2) 항목별 아래 사항 반영
+                                                                               2)C.1.3가 `2:Report form study` 외의 값 & E.i.3.2a~f 중
+Receiver Type: Dropdown으로 Regulatory Authority, Original Manufacturer 중 선택
+                                                                               하나가 True: SAE Spontaneous
+Receiver Name: Receiver 명칭 설정
+                                                                               3)C.1.3가 `2:Report form study` & E.i.3.2a~f가 모두
+Non-SAE Spontaneous, SAE Spontaneous, Non-SAE Solicited, SAE Solicited: 기준 일
+                                                                               nullflavor NI: Non-SAE Solicited
+정. 이하 ~ 번 사항 참고
+                                                                               4)C.1.3가 `2:Report form study` & E.i.3.2a~f 중 하나가
+일정 관리가 대상 Receiver 별로 사례의 처리 Timeline 설정 항목
+                                                                               True: SAE Solicited
+항목별 필요한 일정 설정(Calendar Day 기준)
+                                                                               - Report due date: C.1.5 + Report due 값 출력
+해당사항 없는 경우(활용하지 않는 경우) Not Applicable 체크
+입력된 사항은 Timeline에서 항목별로 구분하여 출력
+
+3) 수정 저장 시 Audit Trail 및 팝업창은 Silde#23과 동일하게 적용
+                                         Appendix (Slide#20 참조)
+
+
+
+
+                                                                                                삭제
+     삭제
+
+
+
+
+1)   Admin 메뉴에서 User 등록하는 형식(Slide#2 참조)과 유사하게 수정. 포함 항목은 아래 예시 그림 참조
+
+           Product ID    IP Name       Sender               Original Manfacturer       Delete
+
+
+
+
+2) Actions의 Delete는 Slide#2의 Delete와 동일한 방식으로 작동(삭제 시 취소선 표시 및 정보 유지, Delete에 삭제 Yes 표시)
+
+3) 해당 항목의 값이 사용되고 있는 경우(Case 페이지에서 해당 품목 정보를 활용한 사례, Info > Study에서 해당 품목이 연결되어 있는
+경우, Admin > User에서 해당 품목이 활용된 경우) 삭제 불가하게 적용 필요
+                 본 페이지의 항목 Appendix에 따라 차이가 있으며, Slide#20의 Appendix 설정에
+                 따라 일부 필드 포함 여부 수정되어야 함.
+  삭제
+                 수정 저장 시 Audit Trail 및 팝업창은            저장 조건 확인 필요
+                 Silde#23과 동일하게 적용
+                                                       1. `IP Name`,
+                 Sender 관련 항목 내용                       `Product ID` 중 1개
+                                                       필수 입력 값으로 설
+                 1.System Administrator가 Sponsor       정
+                 Administrator(CRO)로 권한을 부여한 회사는       2.두 값이 모두 중복
+                 `Sender` 항목 추가 필요                     혹은 1개의 항목만 존
+                 2.`Sender`는 Sender 페이지에서 입력된 정보를 가    재하는 경우 해당 항
+                 져와서 선택. 아래와 같은 창이 뜨고 검색 및 선택          목이 중복되는 경우
+                   Sender
+                                                       저장 불가
+
+
+
+
+                                                          `IP Name`으로
+1.Receiver 페이지                                            label 수정
+에서 입력된 정보
+를 가져와서 선택        4.필수 입력값으로 설정
+2.Sender와 같은
+방식으로 검색 및
+선택
+                                                           `Product ID`로
+                                                           label 수정
+                                                 1. Appendix MFDS에
+                                                 따라 포함 항목에 차
+                                                 이가 있는 점 반영 필
+                                                 요
+                                                 MFDS 인 경우
+                                                 Medicinal Product
+                                                 Version
+                                                 (G.k.2.1.KR.1a),
+                                                 Medicinal Product ID
+                                                 (G.k.2.1.KR.1b) 항목
+                                                 추가 필요
+                                                 2. Medicinal Product
+                                                 ID (G.k.2.1.KR.1b) 항
+                            UCUM codes           목은 국내 품목기준코
+                            출력 필요                드로 입력 필요
+     1. Appendix MFDS에
+     따라 포함 항목에 차
+     이가 있는 점 반영 필
+     요
+     Substance Version
+                                   삭제하는 경우 취소선
+     (G.k.2.3.r.1.KR.1a),
+                                   형태로 표시하고 기존
+     Substance ID
+                                   내용 유지
+삭제   (G.k.2.3.r.1.KR.1b)
+     항목 추가 필요
+     2. Substance ID
+     (G.k.2.3.r.1.KR.1b)
+     항목은 국내 성분기준
+     코드 입력 필요
+            삭제
+
+
+
+
+`ISO 3166-1 alpha-2,
+EU`에 따른 2자리 국가
+코드 출력 필요
+                                                                   Appendix (Slide#20 참조)
+
+
+
+
+                                                                                                                           삭제
+     삭제
+
+
+
+
+1)   Admin 메뉴에서 User 등록하는 형식(Slide#2 참조)과 유사하게 수정. 포함 항목은 아래 예시 그림 참조
+
+          Reporter's Organisation   Reporter's Given Name (C.2.r.1.2)                   Qualification (C.2.r.4)   Delete
+          (C.2.r.2.1)
+
+
+
+
+2) Actions의 Delete는 Slide#2의 Delete와 동일한 방식으로 작동(삭제 시 취소선 표시 및 정보 유지, Delete에 삭제 Yes 표시)
+삭제
+
+
+
+
+     수정 저장 시 Audit Trail 및 팝업창은
+     Silde#23과 동일하게 적용
+
+     nullFlavor 값 추가 적용 필요
+     (nullFlavor: MSK, ASKU, NASK)
+
+
+     저장 가능 조건 확인 필요
+     필수 입력 항목이 모두 입력된 경우 저장 가능
+                                nullFlavor 값 추가 적용 필요
+                                (nullFlavor: MSK, ASKU, NASK)
+
+
+
+
+                             2자리 국가 코드 선택하는 것으로 수정
+                             필요
+                             (ISO 3166-1 (alpha 2), EU)
+
+                          FDA Appendix의 Regional 항목으로
+                          Appendix에 따라 출력되도록 수정 필요
+MFDS Appendix 설정
+시 Other Health
+professional Type    nullFlavor 값 추가 적용 필요
+(C.2.r.4.KR.1) 표시되   (nullFlavor: UNK)
+도록 업데이트 필요
+
+                     해당 항목의 값 재확인 필요
+                     (Allowed Value `1`)
+                                                               Appendix (Slide#20 참조)
+
+
+
+
+     삭제
+
+
+
+                                                                                                                             삭제
+
+
+
+
+1)   Admin 메뉴에서 User 등록하는 형식(Slide#2 참조)과 유사하게 수정. 포함 항목은 아래 예시 그림 참조
+
+          Sponsor Study No. (C.5.3)   Study Name (C.5.2)                      Study Type Where Reaction(s) / Event(s) Were   Delete
+                                                           Product ID
+                                                                                           Observed (C.5.4)
+
+
+
+
+2) Actions의 Delete는 Slide#2의 Delete와 동일한 방식으로 작동(삭제 시 취소선 표시 및 정보 유지, Delete에 삭제 Yes 표시)
+
+3) 해당 항목의 값이 사용되고 있는 경우(Admin > User에서 해당 Study가 활용된 경우) 삭제 불가하게 적용 필요
+   삭제                 수정 저장 시 Audit Trail 및 팝업창은
+                      Silde#23과 동일하게 적용
+
+                      저장 가능 조건 확인 필요
+                      필수 입력 항목이 모두 입력된 경우 저장 가능
+
+
+
+
+1.Product ID과 연결되어
+야 함.(현재 G.k.2.2와 연결
+되어 있음)                       2자리 국가 코드 선택하는 것으로 수정
+2.본 항목 버튼 클릭 시 아             필요
+래와 같은 검색 팝업창이                (ISO 3166-1 (alpha 2), EU)
+생성되며, 해당 대상들을
+선택
+
+
+
+                           최초 저장 후 수정을 위해 삭제 시 기존의
+                           정보 유지된 상태로 취소선 표시
+
+
+
+3.팝업창에서 선택된 대상        본 항목 MFDS 일 경우만 뜨도록 수정
+들이 본 페이지에 표시
+                                                삭제. C.5.3과 중복
+
+
+
+
+MFDS Appendix일 경우
+표시되도록 수정
+
+
+
+
+                    1.FDA Appendix일 경우   최초 저장 후 수정을 위해 삭제 시 기존의
+                    표시되도록 수정             정보 유지된 상태로 취소선 표시
+                    2.항목 기재 방식 동일하
+                    게 수정 (IND Number
+                    where AE Occurred
+                    (FDA.C.5.5a))
+                                         Appendix (Slide#20 참조)
+
+
+
+
+                                                                                                    삭제
+     삭제
+
+
+
+
+1)   Admin 메뉴에서 User 등록하는 형식(Slide#2 참조)과 유사하게 수정. 포함 항목은 아래 예시 그림 참조
+
+          Template Title                                                                   Delete
+
+
+
+
+2) Actions의 Delete는 Slide#2의 Delete와 동일한 방식으로 작동(삭제 시 취소선 표시 및 정보 유지, Delete에 삭제 Yes 표시)
+Template Title로 수정
+                     입력될 내용을 입력해두고 E2B
+                     R3 항목을 이용하여 자동으로
+                     입력되게 설정 필요
+
+                     예시)
+                     30세의 여성 환자
+                     ”{D.2.2a}세의 “{D.5} 환자
+
+ 삭제
+                                                               한 페이지 당 행 개수 설정하는
+                                                               기능 추가
+
+
+
+     Date of Most Recent Information
+     for This Report 추가                       Reviewed를 QCed로 수정
+
+
+                        DG_PRD_KEY label 수정
+                        Product ID로 수정
+
+어떤 항목 출력되는 것인
+지 확인 필요. (C.1.1 항목
+으로 출력 필요)
+
+➔ C.1.1 항목으로 출력됨
+(의견 삭제)
+                          Type of report:1      동작하지 않음
+                                                              삭제                             1.중복 기능 동작 알고리
+                                                                                             즘 재확인 필요:모든 항
+                                                                     1.비활성화 상태에서도            목 입력하였으나 아래의
+                                                                     NF 클릭을 통한 입력 가          경고 문구 생성.
+                                                                     능하여 입력되지 않도록            2.처음 입력되는 사례도
+                                                                     수정 필요                   동일한 창 생성
+                                                                     2. Nullflavor 재확인       3. 활성화된 비필수값이
+                                                                     (현재 NI만 입력됨)            모두 입력되지 않는 경우
+                        Product ID로 수정                                                       현재의 경고 문구 생성되
+                                                                         Nullflavor 재확인      도록 수정
+                                                                         (현재 MSK 만 입
+                                                                         력됨)
+
+                                                                        Nullflavor 재확인
+                                                                        (대상 항목 아님)
+필수값 아닌 항목으로
+변경
+(필수값은                                                           Nullflavor 재확인
+C.1.1, C.1.5, C.1.3 이                                           (동작하지 않음)
+며 나머지는 중복여부                                                                               중복 시 확인창
+만 확인 항목)                                                       삭제
+
+                                                               삭제
+
+ MedDRA 검색창
+ 생성(Slide#49 참                 Nullflavor 재확인                Label 표시
+ 조)                            (현재 UNK 만 입
+                               력됨)                E.i.2.1b의 값으로 표시
+Type of report:2
+
+
+                   이 외의 항목 의견은 Type
+                   of Report: 1과 동일
+
+
+
+
+                   Type of Report: 2 선택 시
+                   비활성화 대상 항목이나
+                   활성화되어 있음
+                           1.CIOMS 출력 시 오류 발생하며
+                           출력되지 않음
+                           2.Notation 선택 칸 추가 필요
+                           (Notation 정보 출력 여부 선택)
+
+
+Review 기능(Lock 기능에도 동일)    삭제 기능
+1.Review 취소 가능하도록 수정       1.삭제 시 처리 방법 확인 불가. 기
+(해당 버튼 다시 클릭)              능 작동하지 않음
+2.Review 클릭 후에도 Not        2.삭제 시 Audit trail을 위해 작동
+checked 표시 유지됨. 해당 항목      comment 입력 창 뜨는 것 확인하       Lock 기능
+다른 기능이 없는 경우 삭제 필요         였으나 삭제되지 않아 작동 여부           1. Lock 취소 가능하도록 수정
+3.Audit Trail 도 비활성화되어 확   확인 불가                       (해당 버튼 다시 클릭)
+인 불가상태로 변함. Audit Trail은                               2. Lock 클릭 후에도 Not checked
+계속 확인 가능해야 함.                                          표시 유지됨. 해당 항목 다른 기능
+                                                       이 없는 경우 삭제 필요
+                                                       3.Audit Trail 도 비활성화되어 확
+                                                       인 불가상태로 변함. Audit Trail은
+                                                       계속 확인 가능해야 함.
+                                                                                      시, 분, 초 등 C.1.2 항목의
+                                                                                      정보가 표시되어야 함
+                                                        1.C.1.1 가 import 되지 않음
+                                                        2.저장 후 새로고침 시 값이
+                                                        없어짐
+
+
+           ?, i 삭제                              1.’Audit Trail’, ‘Erase’ 선택 창 뜨도록 수정
+                            상단으로 위치 수정
+           (모든 페이지 공                            2.1.‘Audit Trail’ 클릭 시 아래의 Audit Trail 창 생성
+           통)
+
+                                                2.2.수정 후 저장 시 입력한 사유가 Reason에 표시 (Slide#23의 Audit trail
+                                                설명 참조)
+                                                3. ‘Erase’ 클릭 시 해당 칸에 입력된 정보 삭제
+
+             삭제                                 Nullflavor 재확인
+                                                ICH 기준 C.1 이하에서 NF 항목은 다음과 같음
+                                                C.1.7, C.1.9.1
+                                                                             1.삭제 시 취소선 표시
+Case 저장에 대한 필                                                                2.삭제 후 복구 버튼으로 변경되며,
+수값들 기능 작동 여                                                                  복구 가능해야 함.
+                    1.Table header에 기재
+부 재확인 필요                                                                     첨부 기능 구현 필요
+                    2.명칭 조정에 따른 칸 크기 조정
+Case의 필수값(C.1.1,
+                    3.이하 항목에는 입력칸 및 첨부파일 업로드 기능만 유지
+C.1.2)에서 C.1.1 화면                                             1.페이지의 제일 마지막으로 위치 이동
+에 표시되지 않으며,                                                   2.아래와 같이 항목 적용
+C.1.2 삭제 후 저장해                                                Source Document(SRC_DOC): 해당 파일의 정보
+도 저장 성공 표시됨                                                   Document(SRC_FILE): 파일 업로드 항목
+                                     입력 값 정의 재확인              3.여러 파일 업로드 가능하도록 해당 행(Source
+                                                              Document(SRC_DOC), Document(SRC_FILE)) 반복 생
+                                     (True 혹은 NF으로 확인됨)
+                                                              성 가능하게 수정
+삭제
+                          삭제
+
+
+
+                          1.삭제 시 취소선 표시
+                          2.삭제 후 복구 버튼으로 변경되며,
+                          복구 가능해야 함.
+
+
+
+
+     1.Table header에 기재
+     2.이하 항목에는 입력칸 및
+     첨부파일 업로드 기능만 유지
+                                                        1.삭제 시 취소선 표시         1.’Audit Trail’, ‘Erase’, ‘Notation’ 선
+                                                        2.삭제 후 복구 버튼으로 변경     택 창 뜨도록 수정 (’Audit Trail’,
+               Template 삭제(이하 모든 페이지 동일)                되며, 복구 가능해야 함.        ‘Erase’ 기능은 Slide#42 참조)
+                                                                              2.1.’Notation’은 클릭 시 해당 항목
+                                                                              아래 동일할 칸이 생성되고, 해당 칸
+                                                                              에 입력 가능(영문 혹은 국문 번역
+                                                                              입력)
+                                                                              2.2.출력 시 Notation 클릭하여 출력
+                                                                              하면 Notation 항목이 출력되도록
+                                                                              설정
+                     Nullfavor 반영 필요
+                     (항목 별 적용 Nullflavor 값은 Slide#31~32 참조)                       1.Import 시 Primary 정보
+                                                                                  가 있어도 입력되지 않음.
+                                                                                  2.정보 중 Primary가 모두
+                                                                                  없으나 Warning 문구가
+                                                                                  생성되지 않음
+
+
+
+                                                                        C.2.r.2 이하 항목 Import
+                                                                        시 정보가 있어도 입력되
+                                                                        지 않음
+
+
+
+
+재확인 필요
+국가 코드 현재
+KR, US 만 표시됨
+     모든 항목 Import 시 정보
+     가 있어도 입력되지 않음
+
+
+     ’Audit Trail’, ‘Erase’, ‘Notation’ 선택
+     창 뜨도록 수정 (’Audit Trail’, ‘Erase’
+     기능은 Slide#42, ‘Notation’은 Slide
+     #44 참조)
+
+
+
+
+삭제
+         Nullflavor 설정 필요
+         (NF: ASKU, NASK)
+                              ’Audit Trail’, ‘Erase’, ‘Notation’ 선택
+                              창 뜨도록 수정 (’Audit Trail’, ‘Erase’
+                              기능은 Slide#42, ‘Notation’은 Slide
+                              #44 참조)
+
+
+
+
+                                             1.화면을 벗어난 UI 수정
+                                             2. ’Audit Trail’, ‘Erase’ 선
+                                             택 창 뜨도록 수정 (’Audit
+                                             Trail’, ‘Erase’ 기능
+                                             Slide#42참조)
+
+
+                                           삭제
+
+
+
+UI 정리(오른쪽 항목이 우
+측으로 밀려 있으며 칸 조              1.삭제 시 취소선 표시
+정)                          2.삭제 후 복구 버튼으로 변경
+                            되며, 복구 가능해야 함.
+                            재확인 필요
+                            국가 코드 현재
+                            KR, US 만 표시됨                        1.삭제 시 취소선 표시
+                                                                2.삭제 후 복구 버튼으로
+                                                                변경되며, 복구 가능해야
+                                                                함.
+
+
+
+
+                                                              ’Audit Trail’, ‘Erase’, ‘Notation’ 선택
+                                                              창 뜨도록 수정 (’Audit Trail’, ‘Erase’
+                                                              기능은 Slide#42, ‘Notation’은 Slide
+                                                              #44 참조)
+1.각 항목 명칭 Table header
+에 기재                                                          상기 외의 모든 항목 ‘…’는 ’Audit
+2.이하 항목에는 입력칸 및                                               Trail’, ‘Erase’ 선택 창 뜨도록 수정
+첨부파일 업로드 칸만 유지                                                (’Audit Trail’, ‘Erase’ 기능 Slide#42
+3.명칭 조정에 따른 칸 크기                                              참조)
+조정
+                         C.5.1.r.1, C.5.1.r.2, C.5.2, C.5.3
+                         Nullflavor 설정 필요
+                         (NF: ASKU, NASK)
+                                         ’Audit Trail’, ‘Erase’, ‘Notation’ 선택
+Nullflavor 재확인 및 작동하지 않음                 창 뜨도록 수정 (’Audit Trail’, ‘Erase’
+(nullFlavor: MSK, UNK, ASKU, NASK, NA)   기능은 Slide#42, ‘Notation’은 Slide
+                                         #44 참조)
+
+Nullflavor 작동하지 않음
+(nullFlavor: MSK)
+                                         ’Audit Trail’, ‘Erase’ (’Audit Trail’,
+Nullflavor 반영 필요                         ‘Erase’ 기능은 Slide#42 참조)
+nullFlavor: MSK)
+
+
+작동하지 않음
+
+Nullflavor 작동하지 않음
+(nullFlavor: MSK)
+
+해당되는 값 재확인
+(Decade 없음)
+
+
+해당되는 값 재확인
+(trimester 없음)
+Nullflavor 작동하지 않음                                                ’Audit Trail’, ‘Erase’ (’Audit Trail’,
+(nullFlavor: MSK, UNK,                                            ‘Erase’ 기능은 Slide#42 참조)
+ASKU, NASK)
+                                                                                                           Nullflavor 작동하지 않음
+작동하지 않음                                                                                                    (nullFlavor: MSK, UNK,
+                                                           ’Audit Trail’, ‘Erase’ (’Audit Trail’,
+                                                                                                           ASKU, NASK)
+                                                           ‘Erase’ 기능은 Slide#42 참조)
+Nullflavor 작동하지 않음
+(nullFlavor: MSK)
+
+
+
+
+Dropdown에서 버전 선택
+하는 방식으로 수정 필요
+                                                                                             Nullflavor 작동하지 않음
+              Nullflavor 작동하지 않음                                                             (nullFlavor: MSK, ASKU,
+              (nullFlavor: MSK, UNK,                                                         NASK)
+              ASKU, NASK)
+
+1.실제 MedDRA검색 가능한 아래와 같은 창 생성
+                                       ’Audit Trail’, ‘Erase’ (’Audit Trail’,                 1.삭제 시 취소선 표시
+                                       ‘Erase’ 기능은 Slide#42 참조)                               2.삭제 후 복구 버튼으로 변경
+                                                                                              되며, 복구 가능해야 함.
+                                        작동하지 않음
+
+2.선택 후 용어의 8자리 코드와 LLT가 함께 출력되어야 함                                 ’Audit Trail’, ‘Erase’, ‘Notation’ 선택
+3.정렬방식 재확인. 가장 일치하는 용어가 먼저 출력되게                                    창 뜨도록 수정 (’Audit Trail’, ‘Erase’
+정렬                                                                 기능은 Slide#42, ‘Notation’은 Slide
+                                                                   #44 참조)
+                                       ’Audit Trail’, ‘Erase’ (’Audit
+                                       Trail’, ‘Erase’ 기능은 Slide#42
+                                       참조)
+                                                                 ’Audit Trail’, ‘Erase’, ‘Notation’ 선택
+                                                                 창 뜨도록 수정 (’Audit Trail’, ‘Erase’
+                                                                 기능은 Slide#42, ‘Notation’은 Slide
+                                                                 #44 참조)
+
+
+
+
+                                              Nullflavor 작동하지 않음
+                                              (nullFlavor: ASKU, NASK,
+                                              UNK)
+Dropdown에서 버전 선택
+하는 방식으로 수정 필요
+
+MedDRA 검색창 생성(Slide#49 참조)
+
+
+
+
+                             ’Audit Trail’, ‘Erase’ (’Audit      1.삭제 시 취소선 표시
+                             Trail’, ‘Erase’ 기능은 Slide#42        2.삭제 후 복구 버튼으로 변경
+                             참조)                                 되며, 복구 가능해야 함.
+   작동하지 않음                                                     ’Audit Trail’, ‘Erase’ (’Audit Trail’,
+                                                               ‘Erase’ 기능은 Slide#42 참조)
+
+
+Nullflavor 작동하지 않음
+(nullFlavor: MSK)                                                                     ’Audit Trail’, ‘Erase’, ‘Notation’ 선택
+                                                                                      창 뜨도록 수정 (’Audit Trail’, ‘Erase’
+  해당되는 값 재확인                                                                          기능은 Slide#42, ‘Notation’은 Slide
+  (UCUM codes for Year (a)                                                            #44 참조)
+  and Decade (10.a) )
+ 작동하지 않음                                           ’Audit Trail’, ‘Erase’ (’Audit Trail’,
+                                                   ‘Erase’ 기능은 Slide#42 참조)
+
+
+
+
+ Dropdown에서 버전 선택
+ 하는 방식으로 수정 필요                                               Nullflavor 작동하지 않음
+                                                             (nullFlavor: MSK, UNK,
+                                                             ASKU, NASK)
+MedDRA 검색창 생성(Slide#49 참조)
+
+
+                                             Nullflavor 작동하지 않음                      1.삭제 시 취소선 표시
+                             1.값 재확인 필요
+                                             (nullFlavor: MSK, ASKU,                 2.삭제 후 복구 버튼으로 변경
+                             2.달력 기능 추가 필요
+                                             NASK)                                   되며, 복구 가능해야 함.
+                                                 ’Audit Trail’, ‘Erase’, ‘Notation’ 선택
+                                                 창 뜨도록 수정 (’Audit Trail’, ‘Erase’
+                                                 기능은 Slide#42, ‘Notation’은 Slide            ’Audit Trail’, ‘Erase’ (’Audit Trail’,
+                          Nullflavor 삭제          #44 참조)                                    ‘Erase’ 기능은 Slide#42 참조)
+
+      값 재확인
+      (현재 검색창으
+      로 뜸)
+
+
+
+
+                    Dropdown에서 버전 선택
+                    하는 방식으로 수정 필요
+
+
+
+
+작동하지 않음
+
+          Nullflavor 작동하지 않음
+          (nullFlavor: MSK, ASKU, NASK)
+
+                               MedDRA 검색창 생성(Slide#49 참조)
+
+
+
+                                                                                         1.삭제 시 취소선 표시
+                                                                                         2.삭제 후 복구 버튼으로 변경
+                                                                                         되며, 복구 가능해야 함.
+                                           1.삭제 시 취소선 표시
+                                           2.삭제 후 복구 버튼으로 변경
+               Nullflavor 재확인              되며, 복구 가능해야 함.
+               (nullFlavor: UNK, NA)
+
+
+
+                 값 재확인                     ’Audit Trail’, ‘Erase’, ‘Notation’ 선택
+                 (현재 검색창으                  창 뜨도록 수정 (’Audit Trail’, ‘Erase’
+                 로 뜸)                      기능은 Slide#42, ‘Notation’은 Slide
+                                           #44 참조)
+
+
+              작동하지 않음
+
+           Nullflavor 작동하지 않음
+           (nullFlavor: MSK, ASKU, NASK)
+
+
+
+                                             ’Audit Trail’, ‘Erase’, 선택 창 뜨도록
+                                             수정 (’Audit Trail’, ‘Erase’ 기능은
+Dropdown에서 버전 선택                             Slide#42)
+하는 방식으로 수정 필요
+
+
+
+  MedDRA 검색창 생성(Slide#49 참조)
+                  Import 시 정보가 있어도 입력되지 않거                       ’Audit Trail’, ‘Erase’, ‘Notation’ 선택
+                  나 다르게 입력됨(Seriousness 정보 등)                    창 뜨도록 수정 (’Audit Trail’, ‘Erase’
+                                                                 기능은 Slide#42, ‘Notation’은 Slide
+                                                                 #44 참조)
+
+             삭제                                                                        ’Audit Trail’,
+                                                1.삭제 시 취소선 표시
+                                                                                       ‘Erase’, 선택 창 뜨
+                                                2.삭제 후 복구 버튼으로 변경
+                                                                                       도록 수정 (’Audit
+                                                되며, 복구 가능해야 함.
+                                                                                       Trail’, ‘Erase’ 기능
+                                                                                       은 Slide#42)
+
+
+
+
+값 재확인
+(ISO 639-2/RA, alpha-3
+선택 필요)
+
+
+
+Dropdown에서 버전 선택
+하는 방식으로 수정 필요
+
+
+
+
+MedDRA 검색창 생성(Slide#49 참조)                      ’Audit Trail’,
+                                                ‘Erase’, 선택 창 뜨
+                                                도록 수정 (’Audit
+                                                Trail’, ‘Erase’ 기능               Nullflavor 다른 항목과 일관
+                                                은 Slide#42)                      되도록 입력 방식 수정
+                삭제
+
+                                           ’Audit Trail’,
+                                           ‘Erase’, 선택 창 뜨
+                                           도록 수정 (’Audit
+           Critical 삭제                     Trail’, ‘Erase’ 기능
+                                           은 Slide#42)
+           (Mild, Moderate, Severe)
+
+
+           Nullflavor 작동하지 않음
+           (nullFlavor: MSK, ASKU, NASK)
+
+                작동하지 않음
+
+                  값 재확인
+                  (Constrained UCUM
+                  codes 맞는지 확인)
+
+
+                  입력 칸 없음
+
+
+
+
+재확인 필요
+국가 코드 현재 KR,
+US 만 표시됨
+          일부 항목(Test Date, Test
+          Name) 외 항목 Import 시 정보
+          가 있어도 입력되지 않음
+
+
+                                   1.삭제 시 취소선 표시
+                                   2.삭제 후 복구 버튼으로 변경
+                                   되며, 복구 가능해야 함.
+
+
+
+
+                 UI 위치 수정
+
+                                           ’Audit Trail’,
+                                           ‘Erase’, 선택 창 뜨
+                 작동하지 않음                   도록 수정 (’Audit
+                                           Trail’, ‘Erase’ 기능
+                                           은 Slide#42)
+Dropdown에서 버전 선택
+하는 방식으로 수정 필요
+
+
+
+                                      ’Audit Trail’, ‘Erase’,
+MedDRA 검색창 생성(Slide#49 참조)            ‘Notation’ 선택 창
+                                      뜨도록 수정 (’Audit
+                                      Trail’, ‘Erase’ 기능은
+                                      Slide#42, ‘Notation’
+                                      은 Slide #44 참조)
+                   ’Audit Trail’,
+                   ‘Erase’, 선택 창 뜨
+                   도록 수정 (’Audit
+                   Trail’, ‘Erase’ 기능
+                   은 Slide#42)
+값 재확인
+(UCUM codes 모두 반
+영된 것 맞는지 재확
+인)                      ’Audit Trail’, ‘Erase’,
+                        ‘Notation’ 선택 창
+                        뜨도록 수정 (’Audit
+                        Trail’, ‘Erase’ 기능은
+                        Slide#42, ‘Notation’
+                        은 Slide #44 참조)
+     일부 항목(Medicinal Product
+     Name as Reported by the Primary
+     Source (G.k.2.2)) 외 항목 Import
+     시 정보가 있어도 입력되지 않음
+                                       1.삭제 시 취소선 표시
+                                       2.삭제 후 복구 버튼으로 변경
+                                       되며, 복구 가능해야 함.
+           Product ID 로 수정
+
+
+순서에 맞게 위치 이동
+(G.k.2.3.r 위)                            ’Audit Trail’,
+                                         ‘Erase’, 선택 창 뜨
+                                         도록 수정 (’Audit
+                                         Trail’, ‘Erase’ 기능
+1.순서에 맞게 위치 이동                           은 Slide#42)
+(G.k.2.4 아래)
+2.값 재확인
+(true만 체크)
+                                            ’Audit Trail’, ‘Erase’,
+1.Product ID 로 수정                           ‘Notation’ 선택 창
+2.INFO 페이지의 Product 와                       뜨도록 수정 (’Audit
+정보가 연결되어 있어야 함                              Trail’, ‘Erase’ 기능은
+                                            Slide#42, ‘Notation’
+                                            은 Slide #44 참조)
+               ’Audit Trail’, ‘Erase’,
+                                               값 재확인
+               선택 창 뜨도록 수정
+               (’Audit Trail’, ‘Erase’         (Constrained UCUM
+         삭제                                    codes 맞는지 확인)
+               기능은 Slide#42)
+재확인 필요
+                                         1.삭제 시 취소선 표시
+국가 코드 현재
+KR, US 만 표시됨                             2.삭제 후 복구 버튼으로 변경
+                                         되며, 복구 가능해야 함.
+1.위치 이동
+(G.k.3.1 아래)
+2.재확인 필요
+국가 코드 현재             ’Audit Trail’, ‘Erase’,
+KR, US 만 표시됨         ‘Notation’ 선택 창
+                     뜨도록 수정 (’Audit
+                     Trail’, ‘Erase’ 기능은
+                     Slide#42, ‘Notation’
+                     은 Slide #44 참조)
+       삭제
+        Dosage#1은 기본 출
+        력되어 있도록 수정            ‘…’ 기능
+                              1.G.k.4.r.8, G.k.4.r.9.1,
+   값 재확인                      G.k.4.r.10.1, G.k.4.r.11.1
+   (Constrained UCUM codes:   ’Audit Trail’, ‘Erase’,
+   {DF} 맞는지 확인)               ‘Notation’ 선택 창 뜨도록
+                              수정 (’Audit Trail’, ‘Erase’ 기
+             삭제               능은 Slide#42, ‘Notation’은
+                              Slide #44 참조)
+값 재확인                         2.1번 외의 항목
+(Constrained UCUM codes:      ’Audit Trail’, ‘Erase’, 선택 창
+{DF} 맞는지 확인)                  뜨도록 수정 (’Audit Trail’,
+                              ‘Erase’ 기능은 Slide#42)
+ 1.값 재확인(날짜 입력)
+ 2.달력 추가
+
+
+ 값 재확인
+ (per ISO IDMP)                  Nullflavor 작동하지 않음
+                                 (nullFlavor: MSK, ASKU, NASK)
+
+
+                                 Nullflavor 추가
+                                 (nullFlavor: ASKU, NASK, UNK)
+   항목 순서대로 정렬
+                                                                                                   1.삭제 시 취소선 표시
+                                                                                                   2.삭제 후 복구 버튼으로 변경
+                        Nullflavor 작동하지 않음
+                                                        Dropdown에서 버전 선택                           되며, 복구 가능해야 함.
+                        (nullFlavor: ASKU, NASK, UNK)
+                                                        하는 방식으로 수정 필요
+                                                                                       MedDRA 검색창 생성(Slide#49 참조)
+
+
+
+
+                                                        ’Audit Trail’, ‘Erase’,
+                                                        ‘Notation’ 선택 창 뜨도록
+                                                        수정 (’Audit Trail’, ‘Erase’ 기
+                                                        능은 Slide#42, ‘Notation’은
+                                                        Slide #44 참조)
+
+       값 재확인
+       (1=Drug withdrawn; 2=Dose
+       reduced; 3=Dose increased;                                                                      ’Audit Trail’,
+       4=Dose not changed;                                                                             ‘Erase’, 선택 창 뜨
+       0=Unknown; 9=Not applicable)                                                                    도록 수정 (’Audit
+                                                                                                       Trail’, ‘Erase’ 기능
+     E2B R3 element number 재확인                                                                         은 Slide#42)
+     (모두 잘못됨)
+
+
+
+Did Reaction Recur on Re-administration?
+(G.k.9.i.4) 관련하여 추가 설정 항목으로 보
+이며 삭제 필요
+    AE(E.i)에 입력된 AE 정보를                              1.삭제 시 취소선 표시
+    출력하여 선택하는 방식으로                                   2.삭제 후 복구 버튼으로 변경되며, 복구 가
+    수정                                               능해야 함.
+    (중복 선택 되지 않게 조건
+    설정 필요)                                       ‘…’기능 1.Result of Assessment (G.k.9.i.2.r.3)
+                                                 항목 ’Audit Trail’, ‘Erase’, ‘Notation’ 선택 창
+    값 재확인                                        뜨도록 수정 (’Audit Trail’, ‘Erase’ 기능은
+    (Constrained UCUM codes)                     Slide#42, ‘Notation’은 Slide #44 참조)
+                                                 2.나머지 항목 ’Audit Trail’, ‘Erase’, 선택 창
+      항목 순서대로 정렬                                 뜨도록 수정 (’Audit Trail’, ‘Erase’ 기능은
+                                                 Slide#42)
+  반복 설정 항목으로 수정 필요
+                                                 값 재확인
+  1.표 형식으로 변경
+                                                 (1=yes – yes (rechallenge was done,
+  2.Add Assessment 와 같은 번호
+                                                 reaction reccurred)
+  로 반복버튼 추가
+                                                 2=yes - no (rechallenge was done, reaction
+  3.삭제버튼 필요하며 다른 삭제
+                                                 did not recur) 3=yes - unk (rechallenge
+  버튼과 동일하게 작동 필요
+                                                 was done, outcome unknown)
+  (삭제 시 취소선 표시, 삭제 후
+                                                 4=no - n/a (no rechallenge was done,
+  복구 버튼으로 변경되며, 복구
+                                                 recurrance is not applicable))
+  가능해야 함)
+                                                             1.삭제 시 취소선 표시
+Expectedness 항목(Non-E2B R3 항목) 추가                            2.삭제 후 복구 버튼으로 변경
+                                                             되며, 복구 가능해야 함.
+값 재확인
+(1=Counterfeit; 2=Overdose; 3=Drug taken by            1.G.k.11 Additional Information on
+the father; 4=Drug taken beyon expiry                  Drug (free text) 항목(E2B R3 항목) 추
+date; 5=Batch and lot tested and found                 가
+within specifications; 6=Batch and lot tested          2.’…’은 ’Audit Trail’, ‘Erase’, ‘Notation’
+and found not within specifications;                   선택 창 뜨도록 추가 (’Audit Trail’,
+7=Medication error; 8=Misuse; 9=Abuse;                 ‘Erase’ 기능은 Slide#42, ‘Notation’은
+10=Occupational exposure; 11=Off label use)     삭제     Slide #44 참조)
+        ’Audit Trail’, ‘Erase’, 선택 창
+        뜨도록 ‘…’ 추가(’Audit Trail’,
+        ‘Erase’ 기능은 Slide#42)
+
+
+                                         1.삭제 시 취소선
+                                         표시
+MedDRA 검색창 생성(Slide#49 참조)               2.삭제 후 복구 버
+                                         튼으로 변경되며,
+    Dropdown에서 버전 선택
+                                         복구 가능해야 함.
+    하는 방식으로 수정 필요
+
+
+                                              ’Audit Trail’, ‘Erase’,
+                                              ‘Notation’ 선택 창
+                                              뜨도록 수정 (’Audit
+                                              Trail’, ‘Erase’ 기능은
+                                              Slide#42, ‘Notation’
+                                              은 Slide #44 참조)
+
+
+                                       ’Audit Trail’, ‘Erase’, 선택 창
+                                       뜨도록 수정 (’Audit Trail’,
+                                       ‘Erase’ 기능은 Slide#42)
+ICH에서 중복된 항목             1.항목별 “…” 기능 모두 적용
+은 제외하고 의견 기재             ’Audit Trail’, ‘Erase’, 선택 창 뜨도
+                         록 수정 (’Audit Trail’, ‘Erase’ 기능
+                         Slide#42)
+                         2.삭제 기능 모두 적용
+                         삭제 시 취소선 표시 및 삭제 후
+                         복구 버튼으로 변경되며, 복구 가
+                         능해야 함
+               상단으로 이동
+순서에 맞게 정렬
+(C.1.7.1. 뒤)
+
+
+
+
+1.순서에 맞게 정렬
+(C.1.11.2 뒤)
+2. Nullfavor 반영 필요
+(nullFlavor: NI)
+Nullfavor 반영 필요
+(nullFlavor: MSK, ASKU,
+NASK)
+1.항목 명칭 Table header에
+기재
+2.“1번” 명칭 조정에 따른 칸
+크기 조정
+3. Nullfavor 반영 필요
+(nullFlavor: NA)
+Nullfavor 반영 필요
+(nullFlavor: UNK, MSK, OTH,
+NA)
+
+
+
+
+Nullfavor 반영 필요
+(nullFlavor: UNK, MSK, NI,
+NA)
+1.값 재확인
+(true만 체크)
+2.Nullfavor 반영 필요
+(nullFlavor: NI)
+1.값 재확인
+(true만 체크)
+2.Nullfavor 반영 필요
+(nullFlavor: NI)
+항목 추가
+(FDA.G.k.1.a FDA Other
+Characterisation of Drug Role,
+값 1=Similar Device)
+                                                                      1.항목 명칭 Table header에
+                                                                      기재
+                                                                      2.“1번” 명칭 조정에 따른 칸
+                                1.항목 명칭 Table header에 기재              크기 조정
+                                2.“1번” 명칭 조정에 따른 칸 크기 조정              3.값 재확인
+                                3.값 재확인                               (1=Correction
+                                (https://www.fda.gov/media/146825/d   2=Additional Informaton
+                                ownload)                              3=Response to FDA
+1.값 재확인                                                               Request
+(1=Test                         4.클릭 시 아래 검색창 뜨고 검색 및 선
+                                택하도록 수정                               4= Device Evaluation)
+2=Reference
+3=Bulk ingredient
+4=Bulk Ingredient For Human                                               Nullfavor 반영 필요
+Prescription Compounding                                                  (nullFlavor: NI)
+5=Unapproved Drug Product
+Manufactured Exclusively for
+Private Label Distributer)
+2. Nullfavor 반영 필요
+(nullFlavor: NA)
+
+
+값 재확인
+(C102834=Type 1: Convenience
+Kit of Co-Package,              1.값 재확인
+…,                              (https://www.fda.gov/media/146826/
+C102842=Type 9: Other Type      download)                                 재확인 필요
+of Part 3 Combination Product   2.클릭 시 아래 검색창 뜨고 검색 및                     국가 코드 현재 KR, US
+(e.g., Drug/Device/Biological   선택하도록 수정                                  만 표시됨
+Product)
+1.항목 명칭 Table header에 기재
+2.“1번” 명칭 조정에 따른 칸 크기 조정
+3.값 재확인
+(1-Recall
+2-Repair
+3-Replacement
+4-Relabeling
+5-Notification
+6-Inspection
+7-Patient Monitoring
+8-Modification or Adjustment
+9-Other)
+
+
+
+
+삭제
+상단으로 이동
+Business rule에 따른 조건 및
+국내품목기준코드 값 확인
+(Slide#28 참조)
+Business rule에 따른 조건 및
+국내품목기준코드 값 확인
+(Slide#28 참조)
+의료기기 관련 의견은
+추후 전달
+Business rule에 따른 조건 및
+국내품목기준코드 값 확인
+(Slide#28 참조)
+
+
+
+
+                         1.항목 순서대로 수정
+                         2.Business rule에 따른 조건 및
+                         국내 성분기준코드 값 확인
+                         (Slide#28 참조)
+G.k.9.i.2.r.2.KR.1 평가 방법 항
+목 추가
+값
+(1=WHO-UMC
+2=KRCT)
+
+G.k.9.i.2.r.3.KR.1 WHO-UMC 평
+가 결과
+1. 값
+(1=확실함(Certain)
+2=상당히확실함(Probable)
+3=가능함(Possible)
+4=가능성적음(Unlikely)
+5=평가곤란
+(Conditional/unclassified)
+6=평가불가
+(Unassessable/unclassifiable)
+2. Nullflavor 추가
+(nullFlavor:NA)
+
+
+G.k.9.i.2.r.3.KR.2 KRCT 평가 결
+과 항목 추가
+값
+(1=관련성 있음
+2=관령성 없음)
+1.반복대상 재확인
+현재 영혁의 모든 항목
+반복 대상
+2.항목 순서 재확인
+cubeSAFETY와 동일하
+게 수정              달력 기능 추가
+
+
+
+
+                  1.항목 명칭 Table
+                  header에 기재
+                  2.“1번” 명칭 조정에 따
+                  른 칸 크기 조정
+                  3. 달력 기능 추가
+
+
+
+                  1.항목 명칭 Table
+                  header에 기재
+                  2.“1번” 명칭 조정에 따
+                  른 칸 크기 조정
+                  3. 값 재확인 필요하며
+                  추후 전달
+1.항목 명칭 Table
+header에 기재
+2.“1번” 명칭 조정에 따
+                  삭제
+른 칸 크기 조정
+3. 값 재확인 필요하며
+추후 전달
+동일한 파일 import 가능(중복 import)하며 중복
+조건 확인 필요
+
+1.C.1.1, C.1.2 모두 일치하면 import 되지 않음
+2.C.1.1 만 일치하는 경우 C.1.2 의 값을 비교하여
+FU 사례로 생성
+3.모두 일치하지 않는 경우 신규 Case 생성
+
+
+1.파일 선택 후 import 되지 않도록 수정 필요
+2.아래 선택 항목 추가. 입력 및 import 클릭 후 실행되게 수정
+  Product ID
+                                      Import
+3.Product ID 는 INFO 에서 해당 User에게 권한이 부여된
+Product ID를 출력하여 선택할 수 있도록 함
+4.ADMIN > SETTINGS 의 아래 항목의 설정에 따라 Product
+ID에서 등록된 Sender 정보가 입력되도록 설정
+
+
+
+
+    삭제
+기능 재확인 필요.
+기능이 없다면 삭제
+                                                  삭제              PDF 출력 후 출력 가능 대상에
+                                                                  서 사라짐.
+                                                                  출력 이력이 있는 사례들도 출
+                                                                  력 가능하게 수정
+
+                                                                        삭제
+                                                                  1.초기 화면에서 아래와 같이 표시
+                                                                        Check
+                                                                  2.필터기능 조건 설정, Check 클릭
+                                                                  후 아래 버튼으로 변경
+                                                                      Export XML
+                                                                     Export CIOMS
+                                                                     Excel Line List
+         삭제
+                                                                     Submit Cases
+
+
+1.필터기능 아래와 같이 수정
+
+
+1.1.Select Page: CASE에서 입력하는 상세 페이지.
+1.2.Select Item: Select Page 선택한 페이지내 입력 항목
+1.3.Condition: 조건 설정(Equal, Not Equal, Range, Like, Not Like, Null, Not Null, In)
+1.4.Direct Input: 조건 값 설정. 범위라면 Input 칸을 2개로 표시되게 설정
+1.5.+ 클릭 시 행 추가로 추가 조건(And 조건)
+2.필터기능 아래에 체크 항목 추가. 아래 항목 클릭 시 최종 FU 보고서만 출력하고, 클릭하지 않으면 모든 보고서 출력
+
+
+3.하단의 ‘Check’ 버튼 클릭 시 DB에서 조건에 해당되는 Case의 리스트가 표시됨
+                                                  삭제
+                                                               PDF 출력 후 출력 가
+                                                               능 대상에서 사라지
+                                                               는 것 확인 필요
+
+                                                                        삭제
+                                                                  1.초기 화면에서 아래와 같이 표시
+                                                                        Check
+                                                                  2.필터기능 조건 설정, Check 클릭
+                                                                  후 아래 버튼으로 변경
+                                                                      Export XML
+                                                                     Export CIOMS
+                                                                     Excel Line List
+         삭제
+                                                                     Submit Cases
+
+
+1.필터기능 아래와 같이 수정
+
+
+1.1.Select Page: CASE에서 입력하는 상세 페이지.
+1.2.Select Item: Select Page 선택한 페이지내 입력 항목
+1.3.Condition: 조건 설정(Equal, Not Equal, Range, Like, Not Like, Null, Not Null, In)
+1.4.Direct Input: 조건 값 설정. 범위라면 Input 칸을 2개로 표시되게 설정
+1.5.+ 클릭 시 행 추가로 추가 조건(And 조건)
+2.필터기능 아래에 체크 항목 추가. 아래 항목 클릭 시 최종 FU 보고서만 출력하고, 클릭하지 않으면 모든 보고서 출력
+
+
+3.하단의 ‘Check’ 버튼 클릭 시 DB에서 조건에 해당되는 Case의 리스트가 표시됨
+Check
+    Check
+
+ Export XML
+
+Export CIOMS
+
+Excel Line List
+Submit Cases
+1.기능 재확인 필요.
+Error Text 다운로드
+는 Error 컬럼으로
+이동
+2.다른 기능이 없다
+면 삭제
+                                    가로, 세로 모두 동일한
+                                    양식으로 출력되게 수정
+
+
+
+
+항목별로 정보 출력이
+안되는 항목들 재확인
+
+
+
+                                  전달한 양식과 다르게 출력되는 부
+                                  분들 수정(이하 양식 참조)
+
+
+
+
+              내용이 많은 경우 문서 뒤쪽에
+              기술 필요(공유한 예시 파일 및
+              캡쳐 예시 참조)
+이 외 추가 전달 의견
+
+1.메일 알림 기능(계정 설정 시, WF 단계에 따른 알림)
+2.자동 번역 기능(Notation 기능 사용 시 입력된 정보들의 번역)
+로그인 페이지
+
+
+          해당 User에게 권한이 부여된
+          Database 출력 필요
+          (예 1개만 부여된 경우 해당
+          Database만 출력,
+          여러 개 부여된 경우 Dropdown으로
+          여러 개 출력)
+
+             `All,
+          해당 User에게 배정된
+          Sender's Organisation (C.3.2)`
+          출력 필요
+                  일부만 반영
+               ‘No sender organization’ 이 아
+               닌 All 출력 필요
+               (등록된 Sender 출력되는 것은
+               확인됨)
+Admin > User > Add User                                     1.Blind 항목 추가 필요
+                                                            2.Label에서 Access 삭제
+                                                            3. 항목별로 아래와 같이 팝
+                                      `Start date`,
+                                                            업 검색창이 뜨도록 업데이트
+                                      `End date`로
+                                                            -Sender
+                                      수정
+
+
+
+
+                          3. 일부만 반영
+                          -Product 검색창 체크 비활성화되
+                          어있음
+                          -표시 항목이 다르게 반영되거나,                -Product
+                          요청하지 않은 항목 추가됨
+                          (Status 항목)
+
+                          [요청 표시 항목]
+                          Sender: Sender’s Organisation,
+                          Sender’s Given Name
+
+                          Product: Product ID, IP Name,     -Study
+                          Sender, Original Manufacturer
+
+                          Study: Sponsor Study No., Study
+                          Name, Product ID
+
+
+
+                                                            4.선택 대상이 본 페이지에 뜨
+                                                            도록 업데이트
+Admin > User > User 클릭
+                                                              1. 항목별로 아래와 같이 팝
+                                                              업 검색창이 뜨도록 업데이트
+                                                              -Sender
+
+
+                             1. 일부만 반영
+                             -Product 검색창 체크 비활성화
+                미반영          -표시 항목이 다르게 반영되거
+              Comments로 수정   나, 요청하지 않은 항목 추가됨
+           Comments          (Status 항목)
+                                                              -Product
+                             [요청 표시 항목]
+                             Sender: Sender’s Organisation,
+                             Sender’s Given Name
+
+                             Product: Product ID, IP Name,
+                             Sender, Original Manufacturer
+
+                             Study: Sponsor Study No.,
+                             Study Name, Product ID           -Study
+
+
+
+
+                                                              2.선택 대상이 본 페이지에 뜨
+                                                              도록 업데이트
+Admin > Role
+                                                     1.   수정 및 삭제 버튼 추가
+                                       명칭 수정
+                                   일부만 반영             2.  삭제하는 경우 취소선 형태
+                                                      로 표시하고 내용 유지
+                                 본 페이지에서만 반영되
+                                                     1. 일부만 반영
+                                 었고, 우측 Add Role 버
+                                                     삭제버튼만 추가되어있음
+                                 튼 클릭 시 표시되는 창
+                                 에서는 반영되지 않음
+                                                     2. 미반영
+                                                     삭제시 취소선 없이 바로 삭제됨.
+                                                     추가로 삭제 시 확인 문구가 ID 값으
+                                                     로 출력되는 것 같은데 확인 필요
+
+
+
+   System
+Administrator가 부여
+한 권 제외하고 기본                                               Audit Trail 작동하지 않아 재확인
+Role에서 삭제
+(본 계정의 페이지에서
+는 Sponsor
+Administrator (CRO)
+만 보여야 함)
+       미반영
+
+                      Role 20개 제한 필요
+Admin > Role & Priviliege       추가의견
+                               아래 버튼 추가하고, 1.
+                                           클릭 Role
+                                                 시별로 설정된 권한과 실제 보이는 화면이 다름. 아래 예시는 아무 권
+ 전달한 의견 반영 필요                  저장되도록 수정    한 부여되지 않은 test role에서 보이는 화면
+
+   일부만 반영
+1.Home 에서 Notice 추가
+필요
+2.E-mail 항목 추가 필요
+(Settings의 Read 항목 삭
+제 의견이었으며 Send 항
+목은 유지)
+
+
+                    일부만 반영
+                2.Type 별로 설정에 따라 앞서 요
+                청한 권한이 설정되지 않는 항목
+                있음. 전반적으로 재확인 필요
+                (Slide#7 참조)
+                (예를 들어 Import, Import Files:
+                Edit 권한 부여된 사용자에게
+                Import 메뉴가 보이지 않음,
+                Import, Import History: Read 권
+                한 부여된 사용자가 Import 가능)
+
+ 삭제 필요
+
+
+
+
+                                                 2. 메뉴별로 권한 부여가 되는 항목(Info의 Edit권한)이 있기도 하지만
+                                                 대부분의 권한 부여 항목 작동하지 않음
+1.IMPORT 시 각 해당 항목의 입력 방법 설정 항, 실제 적
+용 여부 CASE 페이지 검토 시 재확인 예정
+2. E2B R3 Business rule에 따르면 c.1.4는 c.1.2,c.1.5                            1.  작동하는 것이 맞는지 확인 필요
+                                                                     미반영
+보다 미래일 수 없으며 c.1.5 는 c.1.2보다 미래일 수 없                                       2.  MedDRA Version은 입력 시 User가
+음. 해당 규칙 반영하여 업데이트 필요                                                      CASE 입력 시 선택하는 MedDRA 버전을
+                 설정 가능                                                     해당 버전으로 제한할 수 있음
+                 한 경우
+                                                         일부만 반영            CIOMS 출력 시 설정 항목으로 PDF print 방
+                                                      1~2)전달한 서식과 다르게      향 및 print 순서 표시 사항.
+                                                      출력되는 부분 수정           CASE 페이지 검토 시 재확인 예정
+   2.미반영                                              (내용이 많은 경우 양식 뒷      *1) 현재 CIOMS 출력 기능 반영필요
+                                                      부분에 이어서 기술되도록        예시, mapping 파일 위치(Sharepoint):
+                                                      수정) (Slide#90 참조)    Documents > References>ICH>CIOMS
+                                                      3)확인 불가
+                                                      현재 CIOMS 출력물에 데이
+                                                      터가 ???? 기재 출력됨          Fillable-Form_CIO
+                                                      4)저장 기능 작동하나, 일부             MS-to-E2B
+                                                      페이지 및 항목들은 Import    2) Orientation Landscape는 가로 출력,
+                                                      한 xml 파일의 정보가 입력     Orientation Portrait는 세로 출력
+                                                      되지 않음                3) Data Ordering은 다음 슬라이드
+                                                                           (Slide#10) 참조
+                                                미반영                        4) 현재 Case 페이지에서 수정 시 저장 버
+                                              결과 출력 시 Notation 체크하면        튼 활성화 되지 않음, 확인 필요
+                                              항목별로 Notation에 기재된 내용
+                                              으로 출력하는 기능.                 CIOMS 출력 시 Notation을 기본 출력 페이지로 활
+                                              Notation 기능 반영 후 재확인.     용할지 선택 하는 기능으로, CASE 페이지 검토 시 재확
+                                                                        인 예정
+                              미반영                                       Notation에 자동 번역 기능 아직 포함되어 있지 않으며,
+                           Import 시 Product ID 선택하여, 해당                 Case 페이지 검토 전까지 반영 예정
+                           Product ID에 설정된 Sender의 정보가
+                           Import 한 xml 파일의 Sender 정보 대         IMPORT 페이지에서 CASE IMPORT 시
+                           신 입력되는 기능.                        Sender 정보 일괄 반영하는 기능
+                           Import 페이지의 의견 반영 후 재확인           IMPORT 페이지 검토 시 재확인 예정
+                                                       미반영
+                                              C.1.1, C.1.8.1 값 자동 부여 기능으로,
+   1.일부만 반영
+                                           CASE 페이지 검토 시 재확인 예정
+기본 Status는                                 *https://manual.crscube.io/emsafety/k_
+Saved만 설정
+                                           10-4-admin_settings 매뉴얼 참고
+   2.미반영
+1. 추가되는 항목                                           공란(지정하지 않
+들 삭제 가능하게 수                                        음)도 가능하게 설정
+정                                                  변경 미반영
+2. 삭제 시 취소선
+으로 정보 유지된 상
+태로 삭제되고, 추후              1.   검색 팝업창이 뜨고 검색 및 선택하는 방식으로 UI수정
+다시 복구 및 수정 가
+능하도록 변경
+
+               1,2.미반영   2. 여러 Role 선택 가능해야 함.
+                         3. 추가된 Role 적절히 반영되는지 재확인 필요
+          Case 페이지와 동일하게 적
+미반영     용 Appendix 표시
+
+
+
+
+                       권한을 가진 User*가 공지     WF 관련 정보가 표
+                    를 작성/수정/삭제 할 수 있도     시되어야 함.
+                    록 수정                  WF에 따라 해당 User
+             미반영    * Admin 페이지의 Role &   에 할당된 Case가 표시
+                    Privilege와 연동         되어야 함.
+                                             미반영
+
+
+
+
+               미반영
+        manual, Release history 등 User의
+      Database 관리 문서 확인을 위한 페이지 필요
+                              1. 일부만 반영
+                              ACTIONS 항목 미반영
+                              Sender Type 항목 Label 출력 필요
+                              2. 미반영
+                              전달받은 계정(demo.cro.admin@example.com, demo.company.admin@example.com) 모두 여러 개
+                              생성 가능하며, CRO 계정만 여러 개 생성 가능하도록 수정
+                              3. 일부만 반영
+                              ACTIONS 항목으로 삭제 필요
+                              Sender 페이지의 Delete 항목 삭제 필요
+                              4. 미반영
+                              현재 Sender 정보를 Product에 연결해도 삭제 가능하며, 조건에 따라 삭제 불가능하도록 수정 필요
+1)   Admin 메뉴에서 User 등록하는 형식(Slide#2 참조)과 유사하게 수정. 포함 항목은 아래 예시 그림 참조
+
+        Sender Type (C.3.1)      Sender's Organisation (C.3.2)   Sender's Given Name (C.3.3.3)   Delete
+
+
+
+
+2) System Administrator가 Sponsor Administrator(CRO) 권한을 부여한 User/회사는 여러 Sender 등록 가능.
+System Administrator가 Sponsor Administrator (Pharmaceutical Company) 을 부여한 User/회사는 1개의 Sender만 등록 가능
+3) Actions의 Delete는 Slide#2의 Delete와 동일한 방식으로 작동(삭제 시 취소선 표시 및 정보 유지, Delete에 삭제 Yes 표시)
+4) 해당 항목의 값이 사용되고 있는 경우(Info > Product에서 해당 Sender가 연결되어 있는 경우, Admin > User에서 해당 Sender가
+활용된 경우) 삭제 불가하게 적용 필요
+ 삭제
+미반영
+
+
+
+
+      모든 필드 공통 적용
+      1. 설명용 기술 문구 삭제
+      (본 메뉴 외에도 모든 항목 대상)
+      2. 칸의 위치 개선. 항목의 오른쪽 위치
+
+
+
+             2.미반영
+                  미반영
+                  삭제
+
+                  삭제
+                  미반영
+
+
+
+
+  최초 저장 후 수정을 위
+해 삭제 시 기존의 정보 유
+지된 상태로 취소선 표시
+   추가의견
+1.현재 1개만 입력된 경우 삭제 가
+능(No2 부터 삭제 버튼 추가)
+2.삭제 후 복구 버튼 추가
+최초 입력 후 수정 페이지에서 모든 항목에 반영
+1) Audit trail 추가. 내용은 아래와 같이 기재
+
+
+No: 순서, Date/Time: 아래 창 입력 시점, User: 수정한 사용자 ID, Item: 수정 항목명, Value 및 Notation:
+수정된 값, Reason: 아래 창 입력값
+
+2) 수정 후 저장 시 아래 팝업창 뜨고 입력 필요 변경. Audit Trail에서 Reason은
+값 해당 팝업창에서 입력 값 표시
+     Ch an ge Con firmati on
+
+
+
+
+데이터 표시 예시(Regulator's info. for Electronic Submission Gateway 수정)
+
+
+ 1           2026-03-25 07:21:58+09:00   Suh.Jinuk   Sender ID   1234   Typo
+
+
+
+  2)일부만 반영
+값 수정 시 Audit trail에서 이전에 입
+력한 값 부분도 모두 최근 수정한 값
+으로 표시됨.
+                                                Appendix (Slide#20 참조)
+
+
+
+
+                                                  1. 일부만 반영
+                                                  ACTIONS 항목 미반영
+                                                  3. 일부만 반영
+                                                  ACTIONS 항목으로 Delete 필요
+                                                  4. 미반영
+                                                  Product 페이지에서 본 항목 연결되지 않음
+1)   Admin 메뉴에서 User 등록하는 형식(Slide#2 참조)과 유사하게 수정. 포함 항목은 아래 예시 그림 참조
+
+         Receiver Name                        Receiver Type                         Timeline
+                                                               Sender's Given Name (C.3.3.3)          Delete
+
+
+
+
+2) Timeline의 내용은 Non-SAE Spontaneous, SAE Spontaneous, Non-SAE Solicited, SAE Solicited 를 구분하여 출력(Slide#25참조)
+3) Actions의 Delete는 Slide#2의 Delete와 동일한 방식으로 작동(삭제 시 취소선 표시 및 정보 유지, Delete에 삭제 Yes 표시)
+4) 해당 항목의 값이 사용되고 있는 경우(Info > Product에서 해당 Receiver가 연결되어 있는 경우) 삭제 불가하게 적용 필요
+저장 불가 조건
+
+1.필수 입력 항목 누락
+2.`Receiver Name`이 이미 등록된 정보와 중복되는 경우
+
+
+1)   현재 설정된 전체 항목 삭제하고 아래의 항목 포함
+                                                                               위치: CASE 페이지 > CASE 사례 별 페이지> RE 페이지
+                           1~2) 일부만 반영
+                           Record Name, Comments 항목 삭제 필요                      Receiver Name, Report due, Report due date가 있음
+                           Receiver type은 E2B R3 항목으로 사용하지 않음                  해당 Case의 담당 User(User 권한에서 Sender, Product,
+             Non-SAE       Delete 항목 삭제                                        Study 설정)에게 Report due date가 다가옴에 따른 알림
+          Spontaneous
+                           Consignee 항목 삭제                                     메일 전달
+       SAE Spontaneous     3) 일부만 반영
+                           1.아이콘 1개로 수정                                        Receiver 설정 적용 예시
+      Non-SAE Solicited
+                           2.값 수정 시 Audit trail의 이전 값도 모두 수정됨.                 -Receiver Name 항목: INFO 페이지에서 등록된 Receiver
+           SAE Solicited                                                       선택
+                                                                               -Report due: 아래 조건에 따라서 설정된 값이 자동으로
+                                                                               1차 입력되고 필요시 직접 수정.
+                                                                               1)C.1.3가 `2:Report form study` 외의 값 & E.i.3.2a~f가
+                                                                               모두 nullflavor NI: Non-SAE Spontaneous
+2) 항목별 아래 사항 반영
+                                                                               2)C.1.3가 `2:Report form study` 외의 값 & E.i.3.2a~f 중
+Receiver Type: Dropdown으로 Regulatory Authority, Original Manufacturer 중 선택
+                                                                               하나가 True: SAE Spontaneous
+Receiver Name: Receiver 명칭 설정
+                                                                               3)C.1.3가 `2:Report form study` & E.i.3.2a~f가 모두
+Non-SAE Spontaneous, SAE Spontaneous, Non-SAE Solicited, SAE Solicited: 기준 일
+                                                                               nullflavor NI: Non-SAE Solicited
+정. 이하 ~ 번 사항 참고
+                                                                               4)C.1.3가 `2:Report form study` & E.i.3.2a~f 중 하나가
+일정 관리가 대상 Receiver 별로 사례의 처리 Timeline 설정 항목
+                                                                               True: SAE Solicited
+항목별 필요한 일정 설정(Calendar Day 기준)
+                                                                               - Report due date: C.1.5 + Report due 값 출력
+해당사항 없는 경우(활용하지 않는 경우) Not Applicable 체크
+입력된 사항은 Timeline에서 항목별로 구분하여 출력
+
+3)   수정 저장 시 Audit Trail 및 팝업창은 Silde#23과 동일하게 적용
+                                          Appendix (Slide#20 참조)
+
+
+
+
+                            1. 일부만 반영
+                            ACTIONS 항목 미반영
+                            Sender의 표시 정보 확인. 현재 User가 알 수 없는 값이 표시됨
+                            2. 일부만 반영
+                            ACTIONS 항목으로 Delete 필요
+                            3. 미반영
+                            Case랑 Product ID가 연결되어 있지 않음
+1)   Admin 메뉴에서 User 등록하는 형식(Slide#2 참조)과 유사하게 수정. 포함 항목은 아래 예시 그림 참조
+
+           Product ID     IP Name       Sender               Original Manfacturer      Delete
+
+
+
+
+2)   Actions의 Delete는 Slide#2의 Delete와 동일한 방식으로 작동(삭제 시 취소선 표시 및 정보 유지, Delete에 삭제 Yes 표시)
+
+3) 해당 항목의 값이 사용되고 있는 경우(Case 페이지에서 해당 품목 정보를 활용한 사례, Info > Study에서 해당 품목이 연결되어 있
+는 경우, Admin > User에서 해당 품목이 활용된 경우) 삭제 불가하게 적용 필요
+                               본 페이지의 항목 Appendix에 따라 차이가 있으며, Slide#20의 Appendix 설정에
+                                                                 일부만 반영
+                               따라 일부 필드 포함 여부 수정되어야 함.
+                                                              Sender 정보도 중복 여부 확인 기
+    삭제                                                        준 포함된 것으로 보임. 아래 조건
+                    일부만 반영         수정 저장 시 Audit Trail 및 팝업창은 기준으로 저장되도록 수정 필요
+                값 수정 시 Audit   Silde#23과 동일하게 적용              (Product id 같아도 Sender 정보
+ 일부만 반영                                                       다르면 저장 가능)
+                trail의 이전 값도
+해당 항목 모두 삭제
+필요              모두 수정됨.        Sender 관련 항목 내용                         저장 조건 확인 필요
+
+                               1.System Administrator가 Sponsor      1. `IP Name`, `Product ID`
+                               Administrator(CRO)로 권한을 부여한 회사는      중 1개 필수 입력 값으로
+                               `Sender` 항목 추가 필요                    설정
+                               2.`Sender`는 Sender 페이지에서 입력된 정보를 가   2.두 값이 모두 중복 혹은
+                               져와서 선택. 아래와 같은 창이 뜨고 검색 및 선택         1개의 항목만 존재하는 경
+                                 Sender
+                                                                    우 해당 항목이 중복되는
+                                                                    경우 저장 불가
+
+
+
+  미반영
+                                                                           `IP Name`으로
+1. Receiver 페                                                              label 수정
+이지에서 입력된
+정보를 가져와서                       4.필수 입력값으로 설정
+선택
+2. Sender와 같
+은 방식으로 검색
+및 선택                                                                        `Product ID`로
+                                                                            label 수정
+                                                                     1. Appendix MFDS에
+                                                                     따라 포함 항목에 차
+                                                                     이가 있는 점 반영 필
+                                                                     요
+                                                                     MFDS 인 경우
+                                                                     Medicinal Product
+                                                                     Version
+                                                                     (G.k.2.1.KR.1a),
+                                                                     Medicinal Product ID
+                                                                     (G.k.2.1.KR.1b) 항목
+                                                                     추가 필요
+                                    미반영                              2.    Medicinal
+                                                                     Product ID
+                                     UCUM codes                      (G.k.2.1.KR.1b) 항목은
+                                    출력 필요                            국내 품목기준코드로
+             1. Appendix MFDS에
+             따라 포함 항목에 차이                                            입력 필요
+             가 있는 점 반영 필요
+  일부만 반영                                                               2.미반영
+             Substance Version
+MFDS의 의료기기                                                           Business rule에 따
+             (G.k.2.3.r.1.KR.1a),
+항목으로 변경되었                                    삭제하는 경우 취               른 조건 확인
+             Substance ID
+는데 삭제 필요                                    소선 형태로 표시하고
+             (G.k.2.3.r.1.KR.1b)
+                                            기존 내용 유지
+      삭제     항목 추가 필요
+             2. Substance ID                   미반영
+             (G.k.2.3.r.1.KR.1b)           저장되지 않음
+             항목은 국내 성분기준                   (error message
+             코드 입력 필요                      “An error occurred” 출력)
+               2.미반영
+             Business rule에 따
+             른 조건 확인
+             삭제
+  일부만 반영
+MFDS의 의료기기
+항목으로 변경되었
+는데 삭제 필요
+
+
+
+
+   `ISO 3166-1 alpha-2,
+EU`에 따른 2자리 국가
+코드 출력 필요
+       미반영
+                                  1. 일부만 반영
+                                  ACTIONS 항목 미반영
+                                  Qualification 항목은 Label 출력 필요
+                                  2. 일부만 반영
+                                  ACTIONS 항목으로 Delete 필요
+1)   Admin 메뉴에서 User 등록하는 형식(Slide#2 참조)과 유사하게 수정. 포함 항목은 아래 예시 그림 참조
+
+        Reporter's Organisation       Reporter's Given Name (C.2.r.1.2)   Qualification (C.2.r.4)   Delete
+        (C.2.r.2.1)
+
+
+
+
+2)   Actions의 Delete는 Slide#2의 Delete와 동일한 방식으로 작동(삭제 시 취소선 표시 및 정보 유지, Delete에 삭제 Yes 표시)
+삭제
+미반영       일부만 반영
+      값 수정 시 Audit
+      trail의 이전 값도
+      모두 수정됨.
+          수정 저장 시 Audit Trail 및 팝업창은
+      Silde#23과 동일하게 적용
+
+         nullFlavor 값 추가 적용 필요
+      (nullFlavor: MSK, ASKU, NASK)
+        미반영
+
+      저장 가능 조건 확인 필요
+      필수 입력 항목이 모두 입력된 경우 저장 가능
+                                          미반영
+                                        nullFlavor 값 추가 적용 필요
+                                     (nullFlavor: MSK, ASKU, NASK)
+
+                                      일부만 반영
+                                     국가 3개만 선택 가능
+                                     2자리 국가 코드 선택하는 것으로 수정 필요
+                                  (ISO 3166-1 (alpha 2), EU)
+
+                                 FDA Appendix의 Regional 항목으로
+                              Appendix에 따라 출력되도록 수정 필요
+
+   MFDS Appendix                미반영
+설정 시 Other Health
+professional Type             추가의견: 현재 아래와 같이 항목 두개가 표시됨. 하나만
+(C.2.r.4.KR.1) 표시되            표시되게 수정 필요
+도록 업데이트 필요
+   미반영                    nullFlavor 값 추가 적용 필요
+                                                            미반영
+                       (nullFlavor: UNK)
+
+                         해당 항목의 값 재확인 필요
+                                                          미반영
+                     (Allowed Value `1`)
+                                                1. 일부만 반영
+                                                ACTIONS 항목 미반영
+                                                Study type 항목은 Label 출력 필요
+                                                EDC Sync 항목 삭제
+                                                2. 미반영
+                                                삭제 기능 없음
+                                                3. 미반영
+1)   Admin 메뉴에서 User 등록하는 형식(Slide#2 참조)과 유사하게 수정. 포함 항목은 아래 예시 그림 참조
+
+         Sponsor Study No. (C.5.3)   Study Name (C.5.2)                      Study Type Where Reaction(s) / Event(s) Were   Delete
+                                                           Product ID
+                                                                                          Observed (C.5.4)
+
+
+
+
+2)   Actions의 Delete는 Slide#2의 Delete와 동일한 방식으로 작동(삭제 시 취소선 표시 및 정보 유지, Delete에 삭제 Yes 표시)
+
+3)   해당 항목의 값이 사용되고 있는 경우(Admin > User에서 해당 Study가 활용된 경우) 삭제 불가하게 적용 필요
+                                       일부만 반영
+                                   값 수정 시 Audit
+     삭제                            trail의 이전 값도         수정 저장 시 Audit Trail 및 팝업창은
+      미반영                          모두 수정됨.          Silde#23과 동일하게 적용
+
+                                                    저장 가능 조건 확인 필요
+                                                    필수 입력 항목이 모두 입력된 경우 저장 가능
+
+
+
+
+1.Product ID과 연결되어야
+함.(현재 G.k.2.2와 연결되어                                 미반영
+있음)                                                입력 불가       2자리 국가 코드 선택하는 것으로
+2. 본 항목 버튼 클릭 시                                             수정 필요
+아래와 같은 검색 팝업창이                                              (ISO 3166-1 (alpha 2), EU)
+생성되며, 해당 대상들을 선
+택
+
+
+                                                   미반영
+                                                  입력 불가     최초 저장 후 수정을 위해 삭제 시 기
+                       일부만 반영                              존의 정보 유지된 상태로 취소선 표시
+                      여러 개 선택 가능
+                      해야 함
+
+3. 팝업창에서 선택된 대                                      본 항목 MFDS 일 경우만 뜨도록 수정
+상들이 본 페이지에 표시
+                                                                              삭제. C.5.3과 중복
+
+
+
+
+    MFDS Appendix일 경
+  우 표시되도록 수정
+   일부만 반영
+ICH 설정 시 해당 항목 표
+시되지 않는 것은 확인하였
+으나, MFDS Appendix 설정
+시에도 해당 항목 생성되지
+않음                     1. FDA Appendix일 경                              최초 저장 후 수정을 위해 삭제 시 기존의
+                       우 표시되도록 수정                                      정보 유지된 상태로 취소선 표시
+                       2. 항목 기재 방식 동일
+                       하게 수정 (IND Number                                        미반영
+                       where AE Occurred    일부만 반영                            FDA Appendix 항목 생성되
+                       (FDA.C.5.5a))     ICH 설정 시 해당 항목 표시되지 않는 것             지 않음
+                                         은 확인하였으나, FDA Appendix 설정 시
+                                         에도 해당 항목 생성되지 않음
+                              1. 일부만 반영
+                              ACTIONS 항목 미반영
+                              2. 일부만 반영
+                              ACTIONS 항목으로 삭제 필요
+1)   Admin 메뉴에서 User 등록하는 형식(Slide#2 참조)과 유사하게 수정. 포함 항목은 아래 예시 그림 참조
+
+         Template Title                                                                 Delete
+
+
+
+
+2)   Actions의 Delete는 Slide#2의 Delete와 동일한 방식으로 작동(삭제 시 취소선 표시 및 정보 유지, Delete에 삭제 Yes 표시)
+  Template Title로 수정
+  미반영                      입력될 내용을 입력해두고
+해당 항목 삭제되지 않고           E2B R3 항목을 이용하여 자동으
+별도의 항목으로 추가됨.           로 입력되게 설정 필요
+현재 Recore Name 삭제하
+고, Template title로 수정   예시)
+                        30세의 여성 환자
+                        ”{D.2.2a}세의 “{D.5} 환자
+
+   삭제                    추가 수정 필요
+   미반영                  해당 값을 참조하여 기술하게
+                        하는 의미였으며 잘못 적용됨
+ 미반영
+삭제 기능 제외 논의되었
+으나 반영되지 않음.
+

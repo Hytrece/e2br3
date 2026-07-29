@@ -1,7 +1,7 @@
+mod allowed_value;
 mod c_reporter_policy;
 mod c_safety_report_policy;
 pub mod case;
-mod catalog;
 mod context;
 mod d_patient_policy;
 mod e_reaction_policy;
@@ -10,9 +10,10 @@ mod fda_context;
 mod g_drug_policy;
 mod h_narrative_policy;
 mod mfds_context;
-pub mod xml;
-
-pub use self::xml::shared_specs::*;
+mod portable_bindings;
+mod portable_constraints;
+#[cfg(test)]
+mod rule_source_coverage_tests;
 pub use c_reporter_policy::has_any_primary_source_content;
 pub use c_safety_report_policy::{
 	has_report_type, should_clear_combination_product_null_flavor_on_value,
@@ -21,7 +22,6 @@ pub use c_safety_report_policy::{
 	should_warn_fda_combination_product_indicator_missing,
 };
 pub use case::{validate_case_for_authorities, validate_case_for_authority};
-pub use catalog::*;
 pub use context::{load_base_validation_context, ValidationContext};
 pub use d_patient_policy::{
 	has_fda_ethnicity, has_fda_race, has_patient_initials, has_patient_payload,
@@ -54,8 +54,11 @@ pub use mfds_context::{
 	load_mfds_validation_context, MfdsValidationContext, ParentPastDrugByCase,
 	PastDrugByCase, RelatednessWithDrug,
 };
+pub use portable_bindings::*;
+pub use portable_constraints::*;
 use sqlx::types::Uuid;
 use std::collections::BTreeMap;
+pub use xml::rules::*;
 
 pub fn has_text(value: Option<&str>) -> bool {
 	value.map(|v| !v.trim().is_empty()).unwrap_or(false)
@@ -70,8 +73,7 @@ pub fn push_issue_by_code(
 	if let Some(rule) =
 		find_canonical_rule_for_phase(code, ValidationPhase::CaseValidate)
 	{
-		let field_path =
-			case::sections::resolve_validation_field_path(code, Some(&path));
+		let field_path = case::sections::resolve_validation_field_path(Some(&path));
 		let subsection =
 			case::sections::resolve_validation_subsection(code, Some(&path));
 		issues.push(ValidationIssue {
@@ -84,8 +86,7 @@ pub fn push_issue_by_code(
 			blocking: rule.blocking,
 		});
 	} else {
-		let field_path =
-			case::sections::resolve_validation_field_path(code, Some(&path));
+		let field_path = case::sections::resolve_validation_field_path(Some(&path));
 		let subsection =
 			case::sections::resolve_validation_subsection(code, Some(&path));
 		issues.push(ValidationIssue {
@@ -210,5 +211,97 @@ pub fn build_report(
 		section_summaries,
 		subsection_summaries,
 		issues,
+	}
+}
+
+#[cfg(test)]
+mod portable_constraint_api_tests {
+	use super::{
+		portable_constraints, validate_portable_value, PortableConstraintKind,
+		PortableInputValue,
+	};
+	use std::collections::{BTreeSet, HashMap};
+
+	#[test]
+	fn portable_projection_spans_catalog_authorities_without_business_rules() {
+		let codes = portable_constraints()
+			.into_iter()
+			.map(|rule| rule.code)
+			.collect::<BTreeSet<_>>();
+
+		assert!(codes.contains("ICH.C.1.1.LENGTH.MAX"));
+		assert!(codes
+			.iter()
+			.any(|code| code.starts_with("FDA.") && code.ends_with(".LENGTH.MAX")));
+		assert!(codes
+			.iter()
+			.any(|code| code.starts_with("MFDS.") && code.ends_with(".LENGTH.MAX")));
+		assert!(codes.iter().all(|code| !code.ends_with(".REQUIRED")));
+		assert!(codes.iter().all(|code| !code.ends_with(".VOCABULARY")));
+	}
+
+	#[test]
+	fn portable_string_binding_rejects_boolean_input() {
+		let result = validate_portable_value(
+			"ICH.C.1.3.ALLOWED.VALUE",
+			PortableInputValue::Boolean(true),
+			None,
+		);
+
+		assert!(result.is_err());
+	}
+
+	#[test]
+	fn projects_only_portable_constraint_kinds() {
+		let rules = portable_constraints();
+		let by_code = rules
+			.iter()
+			.map(|rule| (rule.code.as_str(), rule))
+			.collect::<HashMap<_, _>>();
+
+		assert_eq!(
+			by_code["ICH.C.1.1.LENGTH.MAX"].kind,
+			PortableConstraintKind::MaxLength
+		);
+		assert_eq!(
+			by_code["ICH.C.1.3.ALLOWED.VALUE"].kind,
+			PortableConstraintKind::InlineAllowedValues
+		);
+		assert_eq!(
+			by_code["ICH.C.1.2.ALLOWED.VALUE"].kind,
+			PortableConstraintKind::Format
+		);
+		assert!(by_code.contains_key("ICH.C.1.7.NULLFLAVOR.ALLOWED"));
+		assert!(!by_code.contains_key("ICH.C.1.8.1.ALLOWED.VALUE"));
+		assert!(!rules.iter().any(|rule| rule.code.ends_with(".VOCABULARY")));
+		assert!(!rules.iter().any(|rule| rule.code.ends_with(".REQUIRED")));
+	}
+
+	#[test]
+	fn portable_evaluator_matches_ci_catalog_values() {
+		assert!(validate_portable_value(
+			"ICH.C.1.3.ALLOWED.VALUE",
+			PortableInputValue::String("1"),
+			None,
+		)
+		.is_ok());
+		assert!(validate_portable_value(
+			"ICH.C.1.3.ALLOWED.VALUE",
+			PortableInputValue::String("9"),
+			None,
+		)
+		.is_err());
+		assert!(validate_portable_value(
+			"ICH.C.1.1.LENGTH.MAX",
+			PortableInputValue::String(&"X".repeat(100)),
+			None,
+		)
+		.is_ok());
+		assert!(validate_portable_value(
+			"ICH.C.1.1.LENGTH.MAX",
+			PortableInputValue::String(&"X".repeat(101)),
+			None,
+		)
+		.is_err());
 	}
 }

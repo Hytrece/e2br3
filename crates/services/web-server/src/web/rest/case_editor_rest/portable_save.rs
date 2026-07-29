@@ -1,0 +1,1426 @@
+use super::common::*;
+use lib_rest_core::ConstraintViolation;
+use std::collections::BTreeSet;
+use validator::{
+	bindings_for_section, portable_constraints, validate_portable_value,
+	PortableConstraintKind, PortableFieldBinding, PortableInputValue,
+	PortableValueType,
+};
+
+struct RequestMatch<'a> {
+	value: &'a Value,
+	indexes: Vec<usize>,
+}
+
+enum JsonNode<'a> {
+	Object(&'a Map<String, Value>),
+	Value(&'a Value),
+}
+
+fn request_matches<'a>(
+	row: &'a Map<String, Value>,
+	template: &str,
+) -> Vec<RequestMatch<'a>> {
+	fn visit<'a>(
+		current: JsonNode<'a>,
+		segments: &[&str],
+		indexes: &[usize],
+		matches: &mut Vec<RequestMatch<'a>>,
+	) {
+		if segments.is_empty() {
+			if let JsonNode::Value(value) = current {
+				matches.push(RequestMatch {
+					value,
+					indexes: indexes.to_vec(),
+				});
+			}
+			return;
+		}
+		let object = match current {
+			JsonNode::Object(object) => object,
+			JsonNode::Value(value) => match value.as_object() {
+				Some(object) => object,
+				None => return,
+			},
+		};
+		let segment = segments[0];
+		let repeated = segment.ends_with("[]");
+		let key = segment.strip_suffix("[]").unwrap_or(segment);
+		let Some(value) = object.get(key) else {
+			return;
+		};
+		if !repeated {
+			visit(JsonNode::Value(value), &segments[1..], indexes, matches);
+			return;
+		}
+		let Some(values) = value.as_array() else {
+			return;
+		};
+		for (index, value) in values.iter().enumerate() {
+			let mut concrete_indexes = indexes.to_vec();
+			concrete_indexes.push(index);
+			visit(
+				JsonNode::Value(value),
+				&segments[1..],
+				&concrete_indexes,
+				matches,
+			);
+		}
+	}
+
+	let segments = template.split('.').collect::<Vec<_>>();
+	let mut matches = Vec::new();
+	visit(JsonNode::Object(row), &segments, &[], &mut matches);
+	matches
+}
+
+fn value_at_request_path<'a>(
+	row: &'a Map<String, Value>,
+	template: &str,
+	indexes: &[usize],
+) -> Option<&'a Value> {
+	request_matches(row, template)
+		.into_iter()
+		.find(|matched| matched.indexes == indexes)
+		.map(|matched| matched.value)
+}
+
+fn input_value<'a>(
+	value: &'a Value,
+	value_type: PortableValueType,
+) -> PortableInputValue<'a> {
+	if value.is_null() {
+		return PortableInputValue::Missing;
+	}
+	match (value_type, value) {
+		(PortableValueType::String, Value::String(value)) => {
+			PortableInputValue::String(value)
+		}
+		(PortableValueType::Boolean, Value::Bool(value)) => {
+			PortableInputValue::Boolean(*value)
+		}
+		(PortableValueType::Number, Value::Number(value)) => {
+			PortableInputValue::Number(value)
+		}
+		_ => PortableInputValue::InvalidType,
+	}
+}
+
+fn concrete_frontend_path(template: &str, request_indexes: &[usize]) -> String {
+	let repeated_count = template
+		.split('.')
+		.filter(|part| part.ends_with("[]"))
+		.count();
+	let mut indexes = vec![0; repeated_count.saturating_sub(request_indexes.len())];
+	indexes.extend_from_slice(request_indexes);
+	let mut index = indexes.into_iter();
+	template
+		.split('.')
+		.map(|part| {
+			part.strip_suffix("[]")
+				.map(|part| format!("{part}.{}", index.next().unwrap_or(0)))
+				.unwrap_or_else(|| part.to_string())
+		})
+		.collect::<Vec<_>>()
+		.join(".")
+}
+
+fn companion_binding(
+	section: &str,
+	binding: &PortableFieldBinding,
+) -> Option<&'static PortableFieldBinding> {
+	let path = binding.null_flavor_path?;
+	bindings_for_section(section).find(|candidate| candidate.frontend_path == path)
+}
+
+fn in_band_null_flavor<'a>(
+	binding: &PortableFieldBinding,
+	value: &'a Value,
+) -> Option<&'a str> {
+	let same_path = binding.null_flavor_path == Some(binding.frontend_path);
+	if binding.null_flavor_path.is_some() && !same_path {
+		return None;
+	}
+	let constraints = portable_constraints();
+	let has_value_rule = binding.rule_codes.iter().any(|code| {
+		constraints.iter().any(|rule| {
+			rule.code == *code && rule.kind != PortableConstraintKind::NullFlavor
+		})
+	});
+	if !has_value_rule && !same_path {
+		return None;
+	}
+	let candidate = value.as_str()?.trim();
+	constraints
+		.iter()
+		.filter(|rule| rule.kind == PortableConstraintKind::NullFlavor)
+		.any(|rule| rule.values.iter().any(|known| known == candidate))
+		.then_some(candidate)
+}
+
+pub(super) fn request_in_band_null_flavor<'a>(
+	section: &str,
+	request_path: &str,
+	value: &'a Value,
+) -> Option<&'a str> {
+	bindings_for_section(section)
+		.find(|binding| binding.request_path == request_path)
+		.and_then(|binding| in_band_null_flavor(binding, value))
+}
+
+fn binding_has_value_rule(binding: &PortableFieldBinding) -> bool {
+	let constraints = portable_constraints();
+	binding.rule_codes.iter().any(|code| {
+		constraints.iter().any(|rule| {
+			rule.code == *code && rule.kind != PortableConstraintKind::NullFlavor
+		})
+	})
+}
+
+fn validate_binding_value(
+	binding: &PortableFieldBinding,
+	value: &Value,
+	null_flavor: Option<&str>,
+	path: &str,
+) -> Result<()> {
+	let constraints = portable_constraints();
+	let in_band = in_band_null_flavor(binding, value);
+	let has_value_rule = binding_has_value_rule(binding);
+	let same_path = binding.null_flavor_path == Some(binding.frontend_path);
+	for rule_code in binding.rule_codes {
+		let kind = constraints
+			.iter()
+			.find(|rule| rule.code == *rule_code)
+			.map(|rule| rule.kind);
+		if in_band.is_some() && kind != Some(PortableConstraintKind::NullFlavor) {
+			continue;
+		}
+		if in_band.is_none()
+			&& (has_value_rule || same_path)
+			&& kind == Some(PortableConstraintKind::NullFlavor)
+		{
+			continue;
+		}
+		let input = in_band
+			.map(PortableInputValue::String)
+			.unwrap_or_else(|| input_value(value, binding.value_type));
+		if let Err(error) =
+			validate_portable_value(rule_code, input, in_band.or(null_flavor))
+		{
+			return Err(violation(&error.code, path, &error.message));
+		}
+	}
+	Ok(())
+}
+
+fn violation(rule_code: &str, path: &str, message: &str) -> Error {
+	Error::ConstraintViolation(ConstraintViolation {
+		rule_code: rule_code.to_owned(),
+		path: path.to_owned(),
+		message: message.to_owned(),
+	})
+}
+
+fn normalized_direct_object(
+	source: &Map<String, Value>,
+	aliases: &[(&str, &[&str])],
+) -> Map<String, Value> {
+	fn source_value<'a>(
+		source: &'a Map<String, Value>,
+		path: &str,
+	) -> Option<&'a Value> {
+		let mut segments = path.split('.');
+		let first = segments.next()?;
+		let mut value = source.get(first)?;
+		for segment in segments {
+			value = value.as_object()?.get(segment)?;
+		}
+		Some(value)
+	}
+
+	fn insert_path(target: &mut Map<String, Value>, path: &str, value: Value) {
+		let mut current = target;
+		let mut segments = path.split('.').peekable();
+		while let Some(segment) = segments.next() {
+			if segments.peek().is_none() {
+				current.insert(segment.to_string(), value);
+				return;
+			}
+			current = current
+				.entry(segment.to_string())
+				.or_insert_with(|| Value::Object(Map::new()))
+				.as_object_mut()
+				.expect("direct normalization path must remain an object");
+		}
+	}
+
+	let mut normalized = Map::new();
+	for (target, candidates) in aliases {
+		if let Some(value) = candidates.iter().find_map(|key| {
+			source_value(source, key).filter(|value| !value.is_null())
+		}) {
+			insert_path(&mut normalized, target, value.clone());
+		}
+	}
+	normalized
+}
+
+pub(super) fn validate_direct_rows(
+	section: &str,
+	rows: &BTreeMap<String, Value>,
+) -> Result<()> {
+	let normalized = match section {
+		"CI" => optional_row_object(section, rows, "safetyReportIdentification")?
+			.map(|row| {
+				normalized_direct_object(
+					row,
+					&[
+						("safetyReportId", &["safetyReportId", "safety_report_id"]),
+						(
+							"transmissionDate",
+							&["transmissionDate", "transmission_date"],
+						),
+						("reportType", &["reportType", "report_type"]),
+						(
+							"dateFirstReceivedFromSource",
+							&[
+								"dateFirstReceivedFromSource",
+								"date_first_received_from_source",
+							],
+						),
+						(
+							"dateOfMostRecentInformation",
+							&[
+								"dateOfMostRecentInformation",
+								"date_of_most_recent_information",
+							],
+						),
+						(
+							"fulfilExpeditedCriteria",
+							&[
+								"fulfilExpeditedCriteria",
+								"fulfil_expedited_criteria",
+							],
+						),
+						(
+							"fulfilExpeditedCriteriaNullFlavor",
+							&[
+								"fulfilExpeditedCriteriaNullFlavor",
+								"fulfil_expedited_criteria_null_flavor",
+							],
+						),
+						(
+							"localCriteriaReportType",
+							&[
+								"localCriteriaReportType",
+								"local_criteria_report_type",
+							],
+						),
+						(
+							"combinationProductReportIndicator",
+							&[
+								"combinationProductReportIndicator",
+								"combination_product_report_indicator",
+							],
+						),
+						(
+							"combinationProductReportIndicatorNullFlavor",
+							&[
+								"combinationProductReportIndicatorNullFlavor",
+								"combination_product_report_indicator_null_flavor",
+							],
+						),
+						(
+							"worldwideUniqueId",
+							&["worldwideUniqueId", "worldwide_unique_id"],
+						),
+						(
+							"firstSenderType",
+							&["firstSenderType", "first_sender_type"],
+						),
+						(
+							"additionalDocumentsAvailable",
+							&[
+								"additionalDocumentsAvailable",
+								"additional_documents_available",
+							],
+						),
+						(
+							"otherCaseIdentifiersExist",
+							&[
+								"otherCaseIdentifiersExist",
+								"other_case_identifiers_exist",
+							],
+						),
+						(
+							"otherCaseIdentifiersExistNullFlavor",
+							&[
+								"otherCaseIdentifiersExistNullFlavor",
+								"other_case_identifiers_exist_null_flavor",
+							],
+						),
+						(
+							"nullificationAmendmentCode",
+							&[
+								"nullificationAmendmentCode",
+								"nullificationCode",
+								"nullification_code",
+							],
+						),
+						(
+							"nullificationReason",
+							&["nullificationReason", "nullification_reason"],
+						),
+					],
+				)
+			}),
+		"RP" => {
+			let Some(value) = rows.get("primarySources") else {
+				return Ok(());
+			};
+			let Some(items) = value.as_array() else {
+				return Err(Error::BadRequest {
+					message: format!("{section}.primarySources must be an array"),
+				});
+			};
+			for (row_index, value) in items.iter().enumerate() {
+				let row = as_object(section, "primarySources", value)?;
+				let normalized = normalized_direct_object(
+					row,
+					&[
+						("reporterTitle", &["reporterTitle", "reporter_title"]),
+						(
+							"reporterTitleNullFlavor",
+							&[
+								"reporterTitleNullFlavor",
+								"reporter_title_null_flavor",
+							],
+						),
+						(
+							"reporterGivenName",
+							&["reporterGivenName", "reporter_given_name"],
+						),
+						(
+							"reporterGivenNameNullFlavor",
+							&[
+								"reporterGivenNameNullFlavor",
+								"reporter_given_name_null_flavor",
+							],
+						),
+						(
+							"reporterMiddleName",
+							&["reporterMiddleName", "reporter_middle_name"],
+						),
+						(
+							"reporterMiddleNameNullFlavor",
+							&[
+								"reporterMiddleNameNullFlavor",
+								"reporter_middle_name_null_flavor",
+							],
+						),
+						(
+							"reporterFamilyName",
+							&["reporterFamilyName", "reporter_family_name"],
+						),
+						(
+							"reporterFamilyNameNullFlavor",
+							&[
+								"reporterFamilyNameNullFlavor",
+								"reporter_family_name_null_flavor",
+							],
+						),
+						(
+							"reporterOrganization",
+							&["reporterOrganization", "organization"],
+						),
+						(
+							"reporterOrganizationNullFlavor",
+							&[
+								"reporterOrganizationNullFlavor",
+								"organization_null_flavor",
+							],
+						),
+						(
+							"reporterDepartment",
+							&["reporterDepartment", "department"],
+						),
+						(
+							"reporterDepartmentNullFlavor",
+							&[
+								"reporterDepartmentNullFlavor",
+								"department_null_flavor",
+							],
+						),
+						("reporterStreet", &["reporterStreet", "street"]),
+						(
+							"reporterStreetNullFlavor",
+							&["reporterStreetNullFlavor", "street_null_flavor"],
+						),
+						("reporterCity", &["reporterCity", "city"]),
+						(
+							"reporterCityNullFlavor",
+							&["reporterCityNullFlavor", "city_null_flavor"],
+						),
+						("reporterState", &["reporterState", "state"]),
+						(
+							"reporterStateNullFlavor",
+							&["reporterStateNullFlavor", "state_null_flavor"],
+						),
+						("reporterPostcode", &["reporterPostcode", "postcode"]),
+						(
+							"reporterPostcodeNullFlavor",
+							&["reporterPostcodeNullFlavor", "postcode_null_flavor"],
+						),
+						("reporterTelephone", &["reporterTelephone", "telephone"]),
+						(
+							"reporterTelephoneNullFlavor",
+							&[
+								"reporterTelephoneNullFlavor",
+								"telephone_null_flavor",
+							],
+						),
+						("reporterCountry", &["reporterCountry", "country_code"]),
+						(
+							"reporterCountryNullFlavor",
+							&[
+								"reporterCountryNullFlavor",
+								"country_code_null_flavor",
+							],
+						),
+						("reporterEmail", &["reporterEmail", "email"]),
+						("qualification", &["qualification"]),
+						(
+							"qualificationNullFlavor",
+							&[
+								"qualificationNullFlavor",
+								"qualification_null_flavor",
+							],
+						),
+						(
+							"qualificationKr1",
+							&["qualificationKr1", "qualification_kr1"],
+						),
+						(
+							"primarySourceForRegulatoryPurposes",
+							&[
+								"primarySourceForRegulatoryPurposes",
+								"primary_source_regulatory",
+							],
+						),
+					],
+				);
+				validate_row_payload_with_indexes(
+					section,
+					section,
+					&normalized,
+					None,
+					&[row_index],
+				)?;
+			}
+			return Ok(());
+		}
+		"SD" => optional_row_object(section, rows, "senderInformation")?.cloned(),
+		"LR" => {
+			let Some(value) = rows.get("literatureReferences") else {
+				return Ok(());
+			};
+			let Some(items) = value.as_array() else {
+				return Err(Error::BadRequest {
+					message: format!(
+						"{section}.literatureReferences must be an array"
+					),
+				});
+			};
+			for (row_index, value) in items.iter().enumerate() {
+				let row = as_object(section, "literatureReferences", value)?;
+				if bool_field(row, &["deleted", "_delete"]) == Some(true) {
+					continue;
+				}
+				let normalized = normalized_direct_object(
+					row,
+					&[
+						(
+							"literatureReference",
+							&["referenceText", "reference_text"],
+						),
+						(
+							"referenceTextNullFlavor",
+							&[
+								"referenceTextNullFlavor",
+								"reference_text_null_flavor",
+							],
+						),
+						("documentBase64", &["documentBase64", "document_base64"]),
+					],
+				);
+				validate_row_payload_with_indexes(
+					section,
+					section,
+					&normalized,
+					None,
+					&[row_index],
+				)?;
+			}
+			return Ok(());
+		}
+		"SI" => {
+			let study = optional_row_object(section, rows, "studyInformation")?;
+			let mut normalized = study
+				.map(|row| {
+					normalized_direct_object(
+						row,
+						&[
+							("studyName", &["studyName", "study_name"]),
+							(
+								"studyNameNullFlavor",
+								&["studyNameNullFlavor", "study_name_null_flavor"],
+							),
+							(
+								"sponsorStudyNumber",
+								&["sponsorStudyNumber", "sponsor_study_number"],
+							),
+							(
+								"sponsorStudyNumberNullFlavor",
+								&[
+									"sponsorStudyNumberNullFlavor",
+									"sponsor_study_number_null_flavor",
+								],
+							),
+							(
+								"studyTypeReaction",
+								&["studyTypeReaction", "study_type_reaction"],
+							),
+							(
+								"studyTypeReactionKr1",
+								&["studyTypeReactionKr1", "study_type_reaction_kr1"],
+							),
+							(
+								"fdaIndNumberOccurred",
+								&["fdaIndNumberOccurred", "fda_ind_number_occurred"],
+							),
+							(
+								"fdaPreAndaNumberOccurred",
+								&[
+									"fdaPreAndaNumberOccurred",
+									"fda_pre_anda_number_occurred",
+								],
+							),
+						],
+					)
+				})
+				.unwrap_or_default();
+
+			if let Some(study) = study {
+				if let Some(value) = study
+					.get("fdaCrossReportedIndNumbers")
+					.or_else(|| study.get("fda_cross_reported_ind_numbers"))
+				{
+					let Some(items) = value.as_array() else {
+						return Err(Error::BadRequest {
+							message: format!(
+								"{section}.studyInformation.fdaCrossReportedIndNumbers must be an array"
+							),
+						});
+					};
+					let mut normalized_items = Vec::with_capacity(items.len());
+					for value in items {
+						let row =
+							as_object(section, "fdaCrossReportedIndNumbers", value)?;
+						normalized_items.push(Value::Object(
+							normalized_direct_object(
+								row,
+								&[
+									("indNumber", &["indNumber", "ind_number"]),
+									(
+										"indNumberNullFlavor",
+										&[
+											"indNumberNullFlavor",
+											"ind_number_null_flavor",
+										],
+									),
+								],
+							),
+						));
+					}
+					normalized.insert(
+						"fdaCrossReportedIndNumbers".to_string(),
+						Value::Array(normalized_items),
+					);
+				}
+			}
+
+			if let Some(value) = rows.get("studyRegistrationNumbers") {
+				let Some(items) = value.as_array() else {
+					return Err(Error::BadRequest {
+						message: format!(
+							"{section}.studyRegistrationNumbers must be an array"
+						),
+					});
+				};
+				let mut normalized_items = Vec::with_capacity(items.len());
+				for value in items {
+					let row = as_object(section, "studyRegistrationNumbers", value)?;
+					normalized_items.push(Value::Object(normalized_direct_object(
+						row,
+						&[
+							(
+								"registrationNumber",
+								&["registrationNumber", "registration_number"],
+							),
+							(
+								"registrationNumberNullFlavor",
+								&[
+									"registrationNumberNullFlavor",
+									"registration_number_null_flavor",
+								],
+							),
+							("countryCode", &["countryCode", "country_code"]),
+							(
+								"countryCodeNullFlavor",
+								&[
+									"countryCodeNullFlavor",
+									"country_code_null_flavor",
+								],
+							),
+						],
+					)));
+				}
+				normalized.insert(
+					"studyRegistrationNumbers".to_string(),
+					Value::Array(normalized_items),
+				);
+			}
+
+			(!normalized.is_empty()).then_some(normalized)
+		}
+		"DM" => {
+			let mut normalized =
+				optional_row_object(section, rows, "patientInformation")?
+					.map(|row| {
+						normalized_direct_object(
+							row,
+							&[
+								(
+									"patientInitials",
+									&["patientInitials", "patient_initials"],
+								),
+								(
+									"patientBirthDate",
+									&[
+										"patientBirthDate",
+										"birth_date",
+										"birthDateNullFlavor",
+										"birth_date_null_flavor",
+									],
+								),
+								(
+									"patientAge.value",
+									&[
+										"patientAge.value",
+										"ageAtTimeOfOnset",
+										"age_at_time_of_onset",
+									],
+								),
+								(
+									"patientAge.unit",
+									&["patientAge.unit", "ageUnit", "age_unit"],
+								),
+								(
+									"gestationPeriod.value",
+									&["gestationPeriod.value", "gestation_period"],
+								),
+								(
+									"gestationPeriod.unit",
+									&[
+										"gestationPeriod.unit",
+										"gestationPeriodUnit",
+										"gestation_period_unit",
+									],
+								),
+								(
+									"patientAgeGroup",
+									&["patientAgeGroup", "ageGroup", "age_group"],
+								),
+								(
+									"patientWeight.value",
+									&[
+										"patientWeight.value",
+										"weightKg",
+										"weight_kg",
+									],
+								),
+								(
+									"patientHeight.value",
+									&[
+										"patientHeight.value",
+										"heightCm",
+										"height_cm",
+									],
+								),
+								(
+									"patientSex",
+									&[
+										"patientSex",
+										"sex",
+										"sexNullFlavor",
+										"sex_null_flavor",
+									],
+								),
+								("raceCode", &["raceCode", "race_code"]),
+								(
+									"ethnicityCode",
+									&["ethnicityCode", "ethnicity_code"],
+								),
+								(
+									"lastMenstrualPeriodDate",
+									&[
+										"lastMenstrualPeriodDate",
+										"last_menstrual_period_date",
+										"lastMenstrualPeriodDateNullFlavor",
+										"last_menstrual_period_date_null_flavor",
+									],
+								),
+								(
+									"medicalHistoryText",
+									&[
+										"medicalHistoryText",
+										"medical_history_text",
+										"medicalHistoryTextNullFlavor",
+										"medical_history_text_null_flavor",
+									],
+								),
+								(
+									"concomitantTherapies",
+									&["concomitantTherapies", "concomitant_therapy"],
+								),
+							],
+						)
+					})
+					.unwrap_or_default();
+			if let Some(value) = rows.get("medicalHistoryEpisodes") {
+				let Some(episodes) = value.as_array() else {
+					return Err(Error::BadRequest {
+						message: format!(
+							"{section}.medicalHistoryEpisodes must be an array"
+						),
+					});
+				};
+				let mut normalized_episodes = Vec::new();
+				for value in episodes {
+					let row = as_object(section, "medicalHistoryEpisodes", value)?;
+					if bool_field(row, &["deleted", "_delete"]) == Some(true) {
+						continue;
+					}
+					normalized_episodes.push(Value::Object(
+						normalized_direct_object(
+							row,
+							&[
+								(
+									"meddraVersion",
+									&["meddraVersion", "meddra_version"],
+								),
+								("meddraCode", &["meddraCode", "meddra_code"]),
+								("startDate", &["startDate", "start_date"]),
+								(
+									"continuing",
+									&[
+										"continuing",
+										"continuingNullFlavor",
+										"continuing_null_flavor",
+									],
+								),
+								("endDate", &["endDate", "end_date"]),
+								("comments", &["comments"]),
+								(
+									"familyHistory",
+									&["familyHistory", "family_history"],
+								),
+							],
+						),
+					));
+				}
+				normalized.insert(
+					"medicalHistoryEpisodes".to_string(),
+					Value::Array(normalized_episodes),
+				);
+			}
+			let mut patient_death = optional_row_object(section, rows, "deathInfo")?
+				.map(|row| {
+					normalized_direct_object(
+						row,
+						&[
+							(
+								"dateOfDeath",
+								&[
+									"dateOfDeath",
+									"date_of_death",
+									"dateOfDeathNullFlavor",
+									"date_of_death_null_flavor",
+								],
+							),
+							(
+								"autopsyPerformed",
+								&[
+									"autopsyPerformed",
+									"autopsy_performed",
+									"autopsyPerformedNullFlavor",
+									"autopsy_performed_null_flavor",
+								],
+							),
+						],
+					)
+				})
+				.unwrap_or_default();
+			for (row_key, target) in [
+				("reportedCauses", "reportedCausesOfDeath"),
+				("autopsyCauses", "autopsyCausesOfDeath"),
+			] {
+				if let Some(value) = rows.get(row_key) {
+					let Some(causes) = value.as_array() else {
+						return Err(Error::BadRequest {
+							message: format!("{section}.{row_key} must be an array"),
+						});
+					};
+					let mut normalized_causes = Vec::new();
+					for value in causes {
+						let row = as_object(section, row_key, value)?;
+						if bool_field(row, &["deleted", "_delete"]) == Some(true) {
+							continue;
+						}
+						normalized_causes.push(Value::Object(
+							normalized_direct_object(
+								row,
+								&[
+									(
+										"meddraVersion",
+										&["meddraVersion", "meddra_version"],
+									),
+									("meddraCode", &["meddraCode", "meddra_code"]),
+									("causeText", &["causeText", "comments"]),
+								],
+							),
+						));
+					}
+					patient_death
+						.insert(target.to_string(), Value::Array(normalized_causes));
+				}
+			}
+			if !patient_death.is_empty() {
+				normalized.insert(
+					"patientDeath".to_string(),
+					Value::Object(patient_death),
+				);
+			}
+			let mut parent_information =
+				optional_row_object(section, rows, "parentInfo")?
+					.map(|parent| {
+						normalized_direct_object(
+							parent,
+							&[
+								(
+									"parentIdentification",
+									&[
+										"parentIdentification",
+										"parent_identification",
+									],
+								),
+								(
+									"parentBirthDate",
+									&[
+										"parentBirthDate",
+										"parent_birth_date",
+										"parentBirthDateNullFlavor",
+										"parent_birth_date_null_flavor",
+									],
+								),
+								(
+									"parentAge.value",
+									&["parentAge.value", "parent_age"],
+								),
+								(
+									"parentAge.unit",
+									&[
+										"parentAge.unit",
+										"parentAgeUnit",
+										"parent_age_unit",
+									],
+								),
+								(
+									"parentLastMenstrualPeriodDate",
+									&[
+										"parentLastMenstrualPeriodDate",
+										"last_menstrual_period_date",
+										"parentLastMenstrualPeriodDateNullFlavor",
+										"last_menstrual_period_date_null_flavor",
+									],
+								),
+								(
+									"parentWeight.value",
+									&["parentWeight.value", "weight_kg"],
+								),
+								(
+									"parentHeight.value",
+									&["parentHeight.value", "height_cm"],
+								),
+								("parentSex", &["parentSex", "sex"]),
+								(
+									"medicalHistoryText",
+									&["medicalHistoryText", "medical_history_text"],
+								),
+							],
+						)
+					})
+					.unwrap_or_default();
+			if let Some(value) = rows.get("parentMedicalHistory") {
+				let Some(history_rows) = value.as_array() else {
+					return Err(Error::BadRequest {
+						message: format!(
+							"{section}.parentMedicalHistory must be an array"
+						),
+					});
+				};
+				let mut normalized_history = Vec::new();
+				for value in history_rows {
+					let row = as_object(section, "parentMedicalHistory", value)?;
+					if bool_field(row, &["deleted", "_delete"]) == Some(true) {
+						continue;
+					}
+					normalized_history.push(Value::Object(
+						normalized_direct_object(
+							row,
+							&[
+								(
+									"meddraVersion",
+									&["meddraVersion", "meddra_version"],
+								),
+								("meddraCode", &["meddraCode", "meddra_code"]),
+								("startDate", &["startDate", "start_date"]),
+								("continuing", &["continuing"]),
+								("endDate", &["endDate", "end_date"]),
+								("comments", &["comments"]),
+							],
+						),
+					));
+				}
+				parent_information.insert(
+					"medicalHistoryEpisodes".to_string(),
+					Value::Array(normalized_history),
+				);
+			}
+			if let Some(value) = rows.get("parentPastDrugs") {
+				let Some(drug_rows) = value.as_array() else {
+					return Err(Error::BadRequest {
+						message: format!(
+							"{section}.parentPastDrugs must be an array"
+						),
+					});
+				};
+				let mut normalized_drugs = Vec::new();
+				for value in drug_rows {
+					let row = as_object(section, "parentPastDrugs", value)?;
+					if bool_field(row, &["deleted", "_delete"]) == Some(true) {
+						continue;
+					}
+					normalized_drugs.push(Value::Object(normalized_direct_object(
+						row,
+						&[
+							("drugName", &["drugName", "drug_name"]),
+							(
+								"mfdsMedicinalProductVersion",
+								&[
+									"mfdsMedicinalProductVersion",
+									"mfds_medicinal_product_version",
+								],
+							),
+							(
+								"mfdsMedicinalProductId",
+								&[
+									"mfdsMedicinalProductId",
+									"mfds_medicinal_product_id",
+								],
+							),
+							("mpidVersion", &["mpidVersion", "mpid_version"]),
+							("mpid", &["mpid"]),
+							("phpidVersion", &["phpidVersion", "phpid_version"]),
+							("phpid", &["phpid"]),
+							("startDate", &["startDate", "start_date"]),
+							("endDate", &["endDate", "end_date"]),
+							(
+								"indicationMeddraVersion",
+								&[
+									"indicationMeddraVersion",
+									"indication_meddra_version",
+								],
+							),
+							(
+								"indicationMeddraCode",
+								&["indicationMeddraCode", "indication_meddra_code"],
+							),
+							(
+								"reactionMeddraVersion",
+								&[
+									"reactionMeddraVersion",
+									"reaction_meddra_version",
+								],
+							),
+							(
+								"reactionMeddraCode",
+								&["reactionMeddraCode", "reaction_meddra_code"],
+							),
+						],
+					)));
+				}
+				parent_information.insert(
+					"pastDrugHistory".to_string(),
+					Value::Array(normalized_drugs),
+				);
+			}
+			if !parent_information.is_empty() {
+				normalized.insert(
+					"parentInformation".to_string(),
+					Value::Object(parent_information),
+				);
+			}
+			Some(normalized)
+		}
+		"NR" => {
+			let narrative = optional_row_object(section, rows, "narrative")?;
+			let mut normalized = narrative
+				.map(|row| {
+					normalized_direct_object(
+						row,
+						&[
+							("caseNarrative", &["caseNarrative", "case_narrative"]),
+							(
+								"reporterComments",
+								&["reporterComments", "reporter_comments"],
+							),
+							(
+								"senderComments",
+								&["senderComments", "sender_comments"],
+							),
+						],
+					)
+				})
+				.unwrap_or_default();
+
+			let sender_diagnoses = rows
+				.get("senderDiagnoses")
+				.or_else(|| narrative.and_then(|row| row.get("senderDiagnoses")));
+			if let Some(value) = sender_diagnoses {
+				let Some(items) = value.as_array() else {
+					return Err(Error::BadRequest {
+						message: format!(
+							"{section}.senderDiagnoses must be an array"
+						),
+					});
+				};
+				let mut normalized_items = Vec::with_capacity(items.len());
+				for value in items {
+					let row = as_object(section, "senderDiagnoses", value)?;
+					normalized_items.push(Value::Object(normalized_direct_object(
+						row,
+						&[
+							(
+								"diagnosisMeddraVersion",
+								&[
+									"diagnosisMeddraVersion",
+									"diagnosis_meddra_version",
+								],
+							),
+							(
+								"diagnosisMeddraCode",
+								&["diagnosisMeddraCode", "diagnosis_meddra_code"],
+							),
+						],
+					)));
+				}
+				normalized.insert(
+					"senderDiagnoses".to_string(),
+					Value::Array(normalized_items),
+				);
+			}
+
+			if let Some(value) = rows.get("caseSummaryInformation") {
+				let Some(items) = value.as_array() else {
+					return Err(Error::BadRequest {
+						message: format!(
+							"{section}.caseSummaryInformation must be an array"
+						),
+					});
+				};
+				let mut normalized_items = Vec::with_capacity(items.len());
+				for value in items {
+					let row = as_object(section, "caseSummaryInformation", value)?;
+					normalized_items.push(Value::Object(normalized_direct_object(
+						row,
+						&[
+							("summaryText", &["summaryText", "summary_text"]),
+							("languageCode", &["languageCode", "language_code"]),
+						],
+					)));
+				}
+				normalized.insert(
+					"caseSummaryInformation".to_string(),
+					Value::Array(normalized_items),
+				);
+			}
+
+			(!normalized.is_empty()).then_some(normalized)
+		}
+		_ => None,
+	};
+
+	if let Some(row) = normalized {
+		validate_row_payload(section, section, &row, None)?;
+	}
+	Ok(())
+}
+
+fn normalized_changed_path(path: &str) -> String {
+	path.split('.')
+		.map(|part| {
+			if part.parse::<usize>().is_ok() {
+				"[]"
+			} else {
+				part
+			}
+		})
+		.collect::<Vec<_>>()
+		.join(".")
+		.replace(".[]", "[]")
+}
+
+fn binding_was_changed(
+	binding: &PortableFieldBinding,
+	changed_paths: Option<&BTreeSet<String>>,
+) -> bool {
+	changed_paths.is_none_or(|paths| {
+		paths.iter().any(|path| {
+			path == binding.request_path
+				|| normalized_changed_path(path) == binding.request_path
+		})
+	})
+}
+
+pub(crate) fn validate_row_payload(
+	section: &str,
+	row_key: &str,
+	row: &Map<String, Value>,
+	changed_paths: Option<&BTreeSet<String>>,
+) -> Result<()> {
+	validate_row_payload_with_indexes(section, row_key, row, changed_paths, &[])
+}
+
+fn validate_row_payload_with_indexes(
+	section: &str,
+	_row_key: &str,
+	row: &Map<String, Value>,
+	changed_paths: Option<&BTreeSet<String>>,
+	outer_indexes: &[usize],
+) -> Result<()> {
+	for binding in bindings_for_section(section) {
+		if !binding_was_changed(binding, changed_paths) {
+			continue;
+		}
+		for matched in request_matches(row, binding.request_path) {
+			let null_flavor = companion_binding(section, binding)
+				.and_then(|companion| {
+					value_at_request_path(
+						row,
+						companion.request_path,
+						&matched.indexes,
+					)
+				})
+				.and_then(Value::as_str);
+			let mut concrete_indexes = outer_indexes.to_vec();
+			concrete_indexes.extend_from_slice(&matched.indexes);
+			let path =
+				concrete_frontend_path(binding.frontend_path, &concrete_indexes);
+			validate_binding_value(binding, matched.value, null_flavor, &path)?;
+		}
+	}
+	Ok(())
+}
+
+#[cfg(test)]
+mod portable_save_tests {
+	use super::*;
+
+	fn error_message(error: Error) -> String {
+		match error {
+			Error::ConstraintViolation(detail) => format!(
+				"{} at {}: {}",
+				detail.rule_code, detail.path, detail.message
+			),
+			other => panic!("expected constraint violation, got {other:?}"),
+		}
+	}
+
+	fn constraint_violation(error: Error) -> ConstraintViolation {
+		match error {
+			Error::ConstraintViolation(detail) => detail,
+			other => panic!("expected constraint violation, got {other:?}"),
+		}
+	}
+
+	fn portable_constraint_message(code: &str) -> String {
+		portable_constraints()
+			.into_iter()
+			.find(|constraint| constraint.code == code)
+			.expect("portable Catalog constraint exists")
+			.message
+	}
+
+	#[test]
+	fn portable_save_rejects_repeatable_row_values() {
+		let reaction = Map::from_iter([(
+			"primarySourceReaction".to_string(),
+			json!("X".repeat(251)),
+		)]);
+		let error =
+			validate_row_payload("AE", "reaction", &reaction, None).unwrap_err();
+		let detail = constraint_violation(error);
+		assert_eq!(detail.rule_code, "ICH.E.i.1.1a.LENGTH.MAX");
+		assert_eq!(detail.path, "reactions.0.primarySourceReaction");
+		assert_eq!(
+			detail.message,
+			portable_constraint_message("ICH.E.i.1.1a.LENGTH.MAX")
+		);
+
+		let test_result =
+			Map::from_iter([("testResult".to_string(), json!("not-a-number"))]);
+		let error = validate_row_payload("LB", "testResult", &test_result, None)
+			.unwrap_err();
+		assert!(error_message(error)
+			.contains("ICH.F.r.3.2.ALLOWED.VALUE at testResults.0.testResult"));
+	}
+
+	#[test]
+	fn portable_save_preserves_nested_concrete_indexes() {
+		let drug = Map::from_iter([(
+			"dosageInformation".to_string(),
+			json!([
+				{ "doseValue": 1 },
+				{ "doseValue": "not-a-number" }
+			]),
+		)]);
+		let error = validate_row_payload("DG", "drug", &drug, None).unwrap_err();
+		assert!(error_message(error)
+			.contains("at drugs.0.dosageInformation.1.doseValue"));
+	}
+
+	#[test]
+	fn portable_save_accepts_in_band_null_flavor_and_rejects_bad_date() {
+		let allowed =
+			Map::from_iter([("reactionStartDate".to_string(), json!("MSK"))]);
+		validate_row_payload("AE", "reaction", &allowed, None).unwrap();
+
+		let invalid =
+			Map::from_iter([("reactionStartDate".to_string(), json!("2026-07-15"))]);
+		let error =
+			validate_row_payload("AE", "reaction", &invalid, None).unwrap_err();
+		assert!(error_message(error)
+			.contains("ICH.E.i.4.ALLOWED.VALUE at reactions.0.reactionStartDate"));
+	}
+
+	#[test]
+	fn portable_save_accepts_normal_or_in_band_null_flavor_only_values() {
+		let drug = Map::from_iter([(
+			"dosageInformation".to_string(),
+			json!([{
+				"firstAdministrationDate": "20260715",
+				"lastAdministrationDate": "MSK"
+			}]),
+		)]);
+		validate_row_payload("DG", "drug", &drug, None).unwrap();
+	}
+
+	#[test]
+	fn portable_save_rejects_disallowed_known_in_band_null_flavor() {
+		let drug = Map::from_iter([(
+			"dosageInformation".to_string(),
+			json!([{
+				"firstAdministrationDate": "NI"
+			}]),
+		)]);
+
+		let error = validate_row_payload("DG", "drug", &drug, None).unwrap_err();
+
+		assert!(error_message(error).contains(
+			"ICH.G.k.4.r.4.NULLFLAVOR.ALLOWED at drugs.0.dosageInformation.0.firstAdministrationDate"
+		));
+	}
+
+	#[test]
+	fn portable_save_rejects_invalid_batch_transmission_date() {
+		let message_header = Map::from_iter([(
+			"batchTransmissionDate".to_string(),
+			json!("not-a-date"),
+		)]);
+		let error =
+			validate_row_payload("N", "messageHeader", &message_header, None)
+				.unwrap_err();
+		let detail = constraint_violation(error);
+		assert_eq!(detail.rule_code, "ICH.N.1.5.ALLOWED.VALUE");
+		assert_eq!(detail.path, "messageHeader.batchTransmissionDate");
+	}
+
+	#[test]
+	fn portable_save_rejects_direct_page_rows_before_mutation() {
+		let narrative_rows = BTreeMap::from([(
+			"narrative".to_string(),
+			json!({ "caseNarrative": "X".repeat(100_001) }),
+		)]);
+		let error = validate_direct_rows("NR", &narrative_rows).unwrap_err();
+		assert!(error_message(error)
+			.contains("ICH.H.1.LENGTH.MAX at narrative.caseNarrative"));
+		let snake_case_rows = BTreeMap::from([(
+			"narrative".to_string(),
+			json!({ "case_narrative": "X".repeat(100_001) }),
+		)]);
+		validate_direct_rows("NR", &snake_case_rows).unwrap_err();
+
+		let sender_rows = BTreeMap::from([(
+			"senderInformation".to_string(),
+			json!({ "organizationName": "X".repeat(101) }),
+		)]);
+		let error = validate_direct_rows("SD", &sender_rows).unwrap_err();
+		assert!(error_message(error)
+			.contains("ICH.C.3.2.LENGTH.MAX at senderInformation.organizationName"));
+	}
+
+	#[test]
+	fn portable_save_rejects_si_nested_values_before_mutation() {
+		let registrations = BTreeMap::from([
+			("studyInformation".to_string(), json!({})),
+			(
+				"studyRegistrationNumbers".to_string(),
+				json!([{"registrationNumber": "X".repeat(51)}]),
+			),
+		]);
+		let detail = constraint_violation(
+			validate_direct_rows("SI", &registrations).unwrap_err(),
+		);
+		assert_eq!(detail.rule_code, "ICH.C.5.1.r.1.LENGTH.MAX");
+		assert_eq!(
+			detail.path,
+			"studyInformation.studyRegistrationNumbers.0.registrationNumber"
+		);
+
+		let cross_report = BTreeMap::from([(
+			"studyInformation".to_string(),
+			json!({
+				"fdaCrossReportedIndNumbers": [{"indNumberNullFlavor": "BAD"}]
+			}),
+		)]);
+		let detail = constraint_violation(
+			validate_direct_rows("SI", &cross_report).unwrap_err(),
+		);
+		assert_eq!(detail.rule_code, "FDA.C.5.6.r.NULLFLAVOR.ALLOWED");
+		assert_eq!(
+			detail.path,
+			"studyInformation.fdaCrossReportedIndNumbers.0.indNumberNullFlavor"
+		);
+	}
+}

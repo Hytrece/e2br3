@@ -177,6 +177,78 @@ async fn insert_validated_raw_case_with_xml(
 	Ok(case_id)
 }
 
+async fn insert_validated_case_without_raw_xml(
+	mm: &lib_core::model::ModelManager,
+	org_id: Uuid,
+	user_id: Uuid,
+	safety_report_id: &str,
+) -> Result<Uuid> {
+	let case_id = Uuid::new_v4();
+	let mut tx = mm.dbx().db().begin().await?;
+	set_user_context(&mut tx, user_id).await?;
+	set_org_context(&mut tx, org_id, ROLE_SYSTEM_ADMIN).await?;
+	sqlx::query(
+		"INSERT INTO cases (
+			id,
+				organization_id,
+				status,
+				raw_xml,
+				created_by,
+				updated_by
+			) VALUES ($1, $2, 'validated', NULL, $3, $3)",
+	)
+	.bind(case_id)
+	.bind(org_id)
+	.bind(user_id)
+	.execute(&mut *tx)
+	.await?;
+	sqlx::query(
+		"INSERT INTO safety_report_identification (
+			case_id,
+			safety_report_id,
+			version,
+			created_by,
+			updated_by
+		) VALUES ($1, $2, 1, $3, $3)",
+	)
+	.bind(case_id)
+	.bind(safety_report_id)
+	.bind(user_id)
+	.execute(&mut *tx)
+	.await?;
+	sqlx::query(
+		"INSERT INTO message_headers (
+			case_id,
+			message_type,
+			message_format_version,
+			message_format_release,
+			message_date_format,
+			message_number,
+			message_sender_identifier,
+			message_receiver_identifier,
+			message_date,
+			batch_number,
+			batch_sender_identifier,
+			batch_receiver_identifier,
+			batch_transmission_date,
+			created_by,
+			updated_by
+		) VALUES (
+			$1, 'ichicsr', '2.1', '2.0', '204',
+			$2, 'SENDER01', 'KR', '20240201010101',
+			$3, 'BATCH-SENDER', NULL, now(), $4, $4
+		)",
+	)
+	.bind(case_id)
+	.bind(format!("MSG-{case_id}"))
+	.bind(format!("BATCH-{case_id}"))
+	.bind(user_id)
+	.execute(&mut *tx)
+	.await?;
+	tx.commit().await?;
+	Ok(case_id)
+}
+
 async fn seed_cioms_case_data(
 	mm: &lib_core::model::ModelManager,
 	org_id: Uuid,
@@ -215,6 +287,7 @@ async fn seed_cioms_case_data(
 			additional_documents_available: Some(false),
 			other_case_identifiers_exist: Some(false),
 			other_case_identifiers_exist_null_flavor: None,
+			combination_product_report_indicator_null_flavor: None,
 			worldwide_unique_id: Some("WW-CASE-9001".to_string()),
 			nullification_code: None,
 			nullification_reason: None,
@@ -228,8 +301,6 @@ async fn seed_cioms_case_data(
 		PatientInformationForCreate {
 			case_id,
 			patient_initials: Some("AB".to_string()),
-			patient_given_name: None,
-			patient_family_name: None,
 			patient_initials_null_flavor: None,
 			birth_date: Some(Date::from_calendar_date(1980, Month::March, 14)?),
 			birth_date_null_flavor: None,
@@ -270,7 +341,7 @@ async fn seed_cioms_case_data(
 			reaction_language: Some("en".to_string()),
 			reaction_meddra_code: Some("10002198".to_string()),
 			reaction_meddra_version: Some("27.0".to_string()),
-			term_highlighted: Some(true),
+			term_highlighted: Some("3".to_string()),
 			serious: Some(true),
 			criteria_death: Some(false),
 			criteria_death_null_flavor: None,
@@ -286,7 +357,6 @@ async fn seed_cioms_case_data(
 			criteria_other_medically_important_null_flavor: None,
 			required_intervention: None,
 			required_intervention_null_flavor: None,
-			included_in_ema_ime_list: None,
 			expectedness: None,
 			severity: None,
 			mfds_device_ae_classification: None,
@@ -327,11 +397,7 @@ async fn seed_cioms_case_data(
 			sequence_number: 1,
 			drug_characterization: "1".to_string(),
 			medicinal_product: "Amoxicillin capsule".to_string(),
-			drug_generic_name: Some("Amoxicillin".to_string()),
-			brand_name: Some("Amoxil".to_string()),
-			dosage_text: Some("500 mg twice daily".to_string()),
 			action_taken: Some("1".to_string()),
-			rechallenge: Some("3".to_string()),
 			manufacturer_name: Some("Acme Pharma".to_string()),
 			..Default::default()
 		},
@@ -346,20 +412,17 @@ async fn seed_cioms_case_data(
 			dose_value: None,
 			dose_unit: None,
 			number_of_units: None,
-			frequency_value: None,
 			frequency_unit: None,
 			first_administration_date: Some(Date::from_calendar_date(
 				2026,
 				Month::May,
 				1,
 			)?),
-			first_administration_time: None,
 			last_administration_date: Some(Date::from_calendar_date(
 				2026,
 				Month::May,
 				10,
 			)?),
-			last_administration_time: None,
 			duration_value: Some(Decimal::new(10, 0)),
 			duration_unit: Some("d".to_string()),
 			continuing: Some(false),
@@ -404,7 +467,6 @@ async fn seed_cioms_case_data(
 			reporter_given_name: Some("Mina".to_string()),
 			reporter_middle_name: None,
 			reporter_family_name: Some("Kim".to_string()),
-			reporter_name_null_flavor: None,
 			organization: Some("Seoul General Hospital".to_string()),
 			department: None,
 			street: None,
@@ -412,13 +474,15 @@ async fn seed_cioms_case_data(
 			state: None,
 			postcode: None,
 			telephone: None,
-			reporter_address_null_flavor: None,
+			country_code_null_flavor: None,
+			email_null_flavor: None,
 			country_code: Some("KR".to_string()),
 			email: None,
 			qualification: Some("1".to_string()),
 			qualification_null_flavor: None,
 			qualification_kr1: None,
 			primary_source_regulatory: Some("1".to_string()),
+			..Default::default()
 		},
 	)
 	.await?;
@@ -796,6 +860,39 @@ async fn test_xml_export_comments_setting_controls_comments() -> Result<()> {
 	let bytes = to_bytes(response.into_body(), usize::MAX).await?;
 	let xml = String::from_utf8(bytes.to_vec())?;
 	assert!(!xml.contains("<!-- element label -->"), "{xml}");
+
+	Ok(())
+}
+
+#[serial]
+#[tokio::test]
+async fn test_xml_export_rejects_missing_batch_receiver_without_fallback(
+) -> Result<()> {
+	std::env::set_var("E2BR3_EXPORT_VALIDATE_FDA", "0");
+	let mm = init_test_mm().await?;
+	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
+	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
+	let cookie = cookie_header(&token.to_string());
+	let app = web_server::app(mm.clone());
+	let safety_report_id = format!("SR-NO-BATCH-RECEIVER-{}", Uuid::new_v4());
+	let case_id = insert_validated_case_without_raw_xml(
+		&mm,
+		seed.org_id,
+		seed.admin.id,
+		&safety_report_id,
+	)
+	.await?;
+
+	let response = get_response(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/export/xml?authority=mfds"),
+	)
+	.await?;
+	assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+	let body = to_bytes(response.into_body(), usize::MAX).await?;
+	let text = std::str::from_utf8(&body)?;
+	assert!(text.contains("batch_receiver_identifier"), "{text}");
 
 	Ok(())
 }

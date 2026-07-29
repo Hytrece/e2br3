@@ -32,6 +32,7 @@ CREATE TABLE safety_report_identification (
 
     -- FDA.C.1.12 - Combination Product Report Indicator (FDA)
     combination_product_report_indicator VARCHAR(10),
+    combination_product_report_indicator_null_flavor VARCHAR(4) CHECK (combination_product_report_indicator_null_flavor IN ('NI')),
 
     -- C.1.8.1 - Worldwide Unique Case Identification
     worldwide_unique_id VARCHAR(100),
@@ -126,7 +127,7 @@ CREATE INDEX idx_sender_info_source_presave ON sender_information(source_sender_
 CREATE TABLE literature_references (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     case_id UUID NOT NULL REFERENCES cases(id) ON DELETE CASCADE,
-    reference_text TEXT NOT NULL,  -- C.4.r
+    reference_text TEXT,  -- C.4.r concrete value; NULL when nullFlavor is used
     reference_text_null_flavor VARCHAR(4) CHECK (reference_text_null_flavor IN ('ASKU', 'NASK')),
     sequence_number INTEGER NOT NULL,  -- For ordering
     document_base64 TEXT, -- C.4.r.2 Included Documents (base64)
@@ -209,6 +210,9 @@ CREATE TABLE study_information (
     CONSTRAINT unique_study_per_case UNIQUE (case_id)
 );
 
+ALTER TABLE safety_report_identification
+    ADD COLUMN IF NOT EXISTS combination_product_report_indicator_null_flavor VARCHAR(4) CHECK (combination_product_report_indicator_null_flavor IN ('NI'));
+
 -- C.5.1.r - Study Registration Numbers (Repeating)
 CREATE TABLE study_registration_numbers (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -227,6 +231,9 @@ CREATE TABLE study_registration_numbers (
     updated_by UUID REFERENCES users(id) ON DELETE RESTRICT
 
 );
+
+ALTER TABLE study_registration_numbers
+    ADD COLUMN IF NOT EXISTS country_code_null_flavor VARCHAR(4) CHECK (country_code_null_flavor IN ('ASKU', 'NASK'));
 
 CREATE UNIQUE INDEX idx_study_registration_numbers_active_sequence_unique
     ON study_registration_numbers(study_information_id, sequence_number)
@@ -269,26 +276,37 @@ CREATE TABLE primary_sources (
 
     -- C.2.r.1 - Reporter's Name
     reporter_title VARCHAR(50),
+    reporter_title_null_flavor VARCHAR(4) CHECK (reporter_title_null_flavor IN ('MSK', 'UNK', 'ASKU', 'NASK')),
     reporter_given_name VARCHAR(60),
+    reporter_given_name_null_flavor VARCHAR(4) CHECK (reporter_given_name_null_flavor IN ('MSK', 'ASKU', 'NASK')),
     reporter_middle_name VARCHAR(60),
+    reporter_middle_name_null_flavor VARCHAR(4) CHECK (reporter_middle_name_null_flavor IN ('MSK', 'ASKU', 'NASK')),
     reporter_family_name VARCHAR(60),
-    reporter_name_null_flavor VARCHAR(4),
+    reporter_family_name_null_flavor VARCHAR(4) CHECK (reporter_family_name_null_flavor IN ('MSK', 'ASKU', 'NASK')),
 
     -- C.2.r.2 - Reporter's Address and Contact
     organization VARCHAR(60),
+    organization_null_flavor VARCHAR(4) CHECK (organization_null_flavor IN ('MSK', 'ASKU', 'NASK')),
     department VARCHAR(60),
+    department_null_flavor VARCHAR(4) CHECK (department_null_flavor IN ('MSK', 'ASKU', 'NASK')),
     street VARCHAR(100),
+    street_null_flavor VARCHAR(4) CHECK (street_null_flavor IN ('MSK', 'ASKU', 'NASK')),
     city VARCHAR(35),
+    city_null_flavor VARCHAR(4) CHECK (city_null_flavor IN ('MSK', 'ASKU', 'NASK')),
     state VARCHAR(40),
+    state_null_flavor VARCHAR(4) CHECK (state_null_flavor IN ('MSK', 'ASKU', 'NASK')),
     postcode VARCHAR(15),
+    postcode_null_flavor VARCHAR(4) CHECK (postcode_null_flavor IN ('MSK', 'ASKU', 'NASK')),
     telephone VARCHAR(33),
-    reporter_address_null_flavor VARCHAR(4),
+    telephone_null_flavor VARCHAR(4) CHECK (telephone_null_flavor IN ('MSK', 'ASKU', 'NASK')),
 
     -- C.2.r.3 - Country Code
     country_code VARCHAR(2),  -- ISO 3166-1 alpha-2
+    country_code_null_flavor VARCHAR(4),
 
     -- Email (not in spec but commonly used)
     email VARCHAR(100),
+    email_null_flavor VARCHAR(4),
 
     -- C.2.r.4 - Qualification (MANDATORY within primary source - E2B(R3) codes)
     qualification VARCHAR(1) CHECK (qualification IN ('1', '2', '3', '4', '5')),
@@ -309,6 +327,10 @@ CREATE TABLE primary_sources (
     updated_by UUID REFERENCES users(id) ON DELETE RESTRICT
 
 );
+
+ALTER TABLE primary_sources
+    ADD COLUMN IF NOT EXISTS country_code_null_flavor VARCHAR(4),
+    ADD COLUMN IF NOT EXISTS email_null_flavor VARCHAR(4);
 
 CREATE INDEX idx_primary_sources_case ON primary_sources(case_id);
 CREATE INDEX idx_primary_sources_source_presave ON primary_sources(source_reporter_presave_id);

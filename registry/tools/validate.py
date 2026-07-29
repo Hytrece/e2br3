@@ -8,6 +8,8 @@ from pathlib import Path
 from typing import Any
 
 import extract_frontend_fields
+import editor_contract
+import rule_source_coverage
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -16,12 +18,14 @@ AUTHORITIES = {"ICH", "FDA", "MFDS"}
 SECTIONS = {"N", "C", "D", "E", "F", "G", "H"}
 ROW_STATUSES = {
     "complete",
+    "incomplete",
     "backend_missing",
     "frontend_missing",
     "intentionally_unmapped",
     "not_applicable",
     "conflict",
 }
+EDITOR_STATUSES = {"complete", "incomplete"}
 MAPPING_STATUSES = {"mapped", "missing", "not_applicable", "conflict"}
 ALLOWED_ROW_FIELDS = {
     "id",
@@ -36,9 +40,44 @@ ALLOWED_ROW_FIELDS = {
     "action",
     "notes",
     "local_only",
+    "editor_page",
+    "editor_status",
 }
 DICTIONARY_KINDS = {"element", "group"}
 DICTIONARY_CONFORMANCES = {"mandatory", "conditional_mandatory", "optional", "required"}
+ALLOWED_VALUE_CONSTRAINT_KINDS = {
+    "code_set",
+    "boolean",
+    "true_marker",
+    "numeric",
+    "format",
+    "vocabulary",
+    "descriptive",
+}
+ALLOWED_VALUE_CONSTRAINT_FIELDS = {
+    "kind",
+    "values",
+    "numeric_shape",
+    "format_name",
+    "vocabulary_scope",
+    "identifier_profile",
+    "enforcement",
+}
+NUMERIC_SHAPES = {"decimal", "integer", "dotted_version"}
+FORMAT_NAMES = {"e2b_datetime", "base64", "ich_identifier"}
+VOCABULARY_SCOPES = {
+    "all",
+    "time",
+    "gestation",
+    "dose",
+    "frequency",
+    "dose_form",
+    "route",
+    "item_seq",
+}
+VOCABULARY_RECEIVERS = {"KR", "FR"}
+IDENTIFIER_PROFILES = {"mpid", "phpid", "substance_id"}
+CONSTRAINT_ENFORCEMENTS = {"case_validate", "representation_enforced"}
 DICTIONARY_VOCABULARIES = {
     "MedDRA",
     "WHODrug",
@@ -47,6 +86,7 @@ DICTIONARY_VOCABULARIES = {
     "sex",
     "UCUM",
     "EDQM",
+    "MFDS_PRODUCT",
 }
 ALLOWED_DICTIONARY_ENTRY_FIELDS = {
     "code",
@@ -58,6 +98,7 @@ ALLOWED_DICTIONARY_ENTRY_FIELDS = {
     "data_type",
     "max_length",
     "allowed_values",
+    "allowed_value_constraint",
     "null_flavors",
     "oid",
     "profiles",
@@ -65,8 +106,10 @@ ALLOWED_DICTIONARY_ENTRY_FIELDS = {
     "hl7_data_type",
     "hl7_component",
     "vocabulary",
+    "vocabulary_variants",
     "fda_severity",
     "fda_error_id",
+    "condition_text",
     "notes",
 }
 FDA_SEVERITIES = {"rejection", "warning"}
@@ -79,6 +122,8 @@ BACKEND_MODELS = {
     "StudyInformation": "crates/libs/lib-core/src/model/safety_report.rs",
     "StudyRegistrationNumber": "crates/libs/lib-core/src/model/safety_report.rs",
     "StudyFdaCrossReportedInd": "crates/libs/lib-core/src/model/safety_report.rs",
+    "Case": "crates/libs/lib-core/src/model/case.rs",
+    "SourceDocument": "crates/libs/lib-core/src/model/case.rs",
     "OtherCaseIdentifier": "crates/libs/lib-core/src/model/case_identifiers.rs",
     "LinkedReportNumber": "crates/libs/lib-core/src/model/case_identifiers.rs",
     "ReceiverInformation": "crates/libs/lib-core/src/model/receiver.rs",
@@ -99,7 +144,6 @@ BACKEND_MODELS = {
     "DosageInformation": "crates/libs/lib-core/src/model/drug.rs",
     "DrugIndication": "crates/libs/lib-core/src/model/drug.rs",
     "DrugDeviceCharacteristic": "crates/libs/lib-core/src/model/drug.rs",
-    "DrugRecurrenceInformation": "crates/libs/lib-core/src/model/drug_recurrence.rs",
     "DrugReactionAssessment": "crates/libs/lib-core/src/model/drug_reaction_assessment.rs",
     "RelatednessAssessment": "crates/libs/lib-core/src/model/drug_reaction_assessment.rs",
     "NarrativeInformation": "crates/libs/lib-core/src/model/narrative.rs",
@@ -135,6 +179,32 @@ IGNORED_BACKEND_FIELDS = {
     "source_narrative_presave_id",
     "source_patient_presave_id",
     "version",
+}
+# Plumbing that is only plumbing on one model. Kept out of IGNORED_BACKEND_FIELDS so
+# generic names like `status` stay tracked everywhere else.
+IGNORED_BACKEND_FIELDS_BY_MODEL = {
+    "Case": {
+        "organization_id",
+        "dg_prd_key",
+        "status",
+        "review_receivers_json",
+        "workflow_routes_json",
+        "workflow_status",
+        "workflow_assigned_role",
+        "workflow_assigned_user_id",
+        "workflow_due_at",
+        "workflow_description",
+        "workflow_updated_at",
+        "submitted_by",
+        "submitted_at",
+        "raw_xml",
+        "dirty_c",
+        "dirty_d",
+        "dirty_e",
+        "dirty_f",
+        "dirty_g",
+        "dirty_h",
+    },
 }
 
 
@@ -195,12 +265,13 @@ def backend_key(model: str, field_name: str) -> str:
     return f"{model}.{field_name}"
 
 
-def should_ignore_backend_field(field_name: str) -> bool:
-    return field_name in IGNORED_BACKEND_FIELDS or field_name.endswith("_null_flavor")
+def should_ignore_backend_field(model: str, field_name: str) -> bool:
+    if field_name in IGNORED_BACKEND_FIELDS or field_name.endswith("_null_flavor"):
+        return True
+    return field_name in IGNORED_BACKEND_FIELDS_BY_MODEL.get(model, frozenset())
 
 
-def extract_backend_inventory(root: Path, backend_models: dict[str, str]) -> set[str]:
-    keys: set[str] = set()
+def iter_backend_model_fields(root: Path, backend_models: dict[str, str]):
     source_root = root if (root / "crates").exists() else root.parent
     for model_name, relative_path in sorted(backend_models.items()):
         source_path = source_root / relative_path
@@ -209,12 +280,31 @@ def extract_backend_inventory(root: Path, backend_models: dict[str, str]) -> set
         except FileNotFoundError as exc:
             raise InventoryError(f"{source_path}: configured backend source file does not exist") from exc
 
-        fields = extract_rust_struct_fields(source, model_name)
-        for field_name in fields:
-            if should_ignore_backend_field(field_name):
-                continue
-            keys.add(backend_key(model_name, field_name))
-    return keys
+        for field_name in extract_rust_struct_fields(source, model_name):
+            yield model_name, field_name
+
+
+def extract_backend_inventory(root: Path, backend_models: dict[str, str]) -> set[str]:
+    return {
+        backend_key(model_name, field_name)
+        for model_name, field_name in iter_backend_model_fields(root, backend_models)
+        if not should_ignore_backend_field(model_name, field_name)
+    }
+
+
+def extract_backend_null_flavor_columns(root: Path, backend_models: dict[str, str]) -> set[str]:
+    """Real `*_null_flavor` columns, which rows may map but are never required to.
+
+    Most nullFlavors are in-band: the base field carries either a value or the flavor
+    token, and the frontend API layer splits them apart at save time, so the base
+    field's row already accounts for the column. A few fields instead have their own
+    dedicated nullFlavor input and column; those rows map here so joins resolve.
+    """
+    return {
+        backend_key(model_name, field_name)
+        for model_name, field_name in iter_backend_model_fields(root, backend_models)
+        if field_name.endswith("_null_flavor")
+    }
 
 
 def load_json(path: Path, result: ValidationResult) -> Any:
@@ -269,6 +359,153 @@ def validate_dictionary_entry(entry: Any, source: Path, result: ValidationResult
             f"{source}: entry {code}: invalid vocabulary {vocabulary!r};"
             f" expected one of {sorted(DICTIONARY_VOCABULARIES)}"
         )
+
+    vocabulary_variants = entry.get("vocabulary_variants")
+    if vocabulary is not None and vocabulary_variants is not None:
+        result.add(
+            f"{source}: entry {code}: cannot combine vocabulary with vocabulary_variants"
+        )
+    if vocabulary_variants is not None:
+        if not isinstance(vocabulary_variants, list) or not vocabulary_variants:
+            result.add(
+                f"{source}: entry {code}: vocabulary_variants must be a non-empty array"
+            )
+        else:
+            seen_receivers: set[str] = set()
+            for index, variant in enumerate(vocabulary_variants):
+                if not isinstance(variant, dict):
+                    result.add(
+                        f"{source}: entry {code}: vocabulary variant {index} must be an object"
+                    )
+                    continue
+                unsupported = set(variant) - {"receiver", "vocabulary", "vocabulary_scope"}
+                for key in sorted(unsupported):
+                    result.add(
+                        f"{source}: entry {code}: unsupported vocabulary variant field {key}"
+                    )
+                receiver = variant.get("receiver")
+                if receiver not in VOCABULARY_RECEIVERS:
+                    result.add(
+                        f"{source}: entry {code}: invalid vocabulary receiver {receiver!r};"
+                        f" expected one of {sorted(VOCABULARY_RECEIVERS)}"
+                    )
+                elif receiver in seen_receivers:
+                    result.add(
+                        f"{source}: entry {code}: duplicate vocabulary receiver {receiver!r}"
+                    )
+                else:
+                    seen_receivers.add(receiver)
+                variant_vocabulary = variant.get("vocabulary")
+                if variant_vocabulary not in DICTIONARY_VOCABULARIES:
+                    result.add(
+                        f"{source}: entry {code}: invalid vocabulary {variant_vocabulary!r};"
+                        f" expected one of {sorted(DICTIONARY_VOCABULARIES)}"
+                    )
+                vocabulary_scope = variant.get("vocabulary_scope")
+                if vocabulary_scope not in VOCABULARY_SCOPES:
+                    result.add(
+                        f"{source}: entry {code}: invalid vocabulary_scope {vocabulary_scope!r};"
+                        f" expected one of {sorted(VOCABULARY_SCOPES)}"
+                    )
+
+    allowed_value_constraint = entry.get("allowed_value_constraint")
+    if allowed_value_constraint is not None:
+        if not entry.get("allowed_values"):
+            result.add(
+                f"{source}: entry {code}: allowed_value_constraint requires"
+                " allowed_values source text"
+            )
+        if not isinstance(allowed_value_constraint, dict):
+            result.add(
+                f"{source}: entry {code}: allowed_value_constraint must be an object"
+            )
+        else:
+            for key in allowed_value_constraint:
+                if key not in ALLOWED_VALUE_CONSTRAINT_FIELDS:
+                    result.add(
+                        f"{source}: entry {code}: unsupported allowed_value_constraint field {key}"
+                    )
+
+            constraint_kind = allowed_value_constraint.get("kind")
+            if constraint_kind not in ALLOWED_VALUE_CONSTRAINT_KINDS:
+                result.add(
+                    f"{source}: entry {code}: invalid allowed_value_constraint kind"
+                    f" {constraint_kind!r}; expected one of"
+                    f" {sorted(ALLOWED_VALUE_CONSTRAINT_KINDS)}"
+                )
+
+            values = allowed_value_constraint.get("values")
+            values_valid = (
+                isinstance(values, list)
+                and bool(values)
+                and all(isinstance(value, str) and bool(value) for value in values)
+                and len(values) == len(set(values))
+            )
+            if values is not None and not values_valid:
+                result.add(
+                    f"{source}: entry {code}: allowed_value_constraint values must be"
+                    " a non-empty array of unique, non-empty strings"
+                )
+            if constraint_kind == "code_set" and not values_valid:
+                result.add(
+                    f"{source}: entry {code}: code_set allowed_value_constraint"
+                    " requires values"
+                )
+
+            enforcement = allowed_value_constraint.get("enforcement")
+            if constraint_kind == "descriptive":
+                if enforcement is not None:
+                    result.add(
+                        f"{source}: entry {code}: descriptive allowed_value_constraint"
+                        " cannot declare enforcement"
+                    )
+            elif enforcement not in CONSTRAINT_ENFORCEMENTS:
+                result.add(
+                    f"{source}: entry {code}: non-descriptive allowed_value_constraint"
+                    " requires enforcement"
+                )
+
+            numeric_shape = allowed_value_constraint.get("numeric_shape")
+            if constraint_kind == "numeric":
+                if numeric_shape not in NUMERIC_SHAPES:
+                    result.add(
+                        f"{source}: entry {code}: numeric allowed_value_constraint"
+                        " requires numeric_shape"
+                    )
+            elif numeric_shape is not None:
+                result.add(
+                    f"{source}: entry {code}: numeric_shape requires numeric kind"
+                )
+
+            format_name = allowed_value_constraint.get("format_name")
+            if constraint_kind == "format":
+                if format_name not in FORMAT_NAMES:
+                    result.add(
+                        f"{source}: entry {code}: format allowed_value_constraint"
+                        " requires format_name"
+                    )
+            elif format_name is not None:
+                result.add(
+                    f"{source}: entry {code}: format_name requires format kind"
+                )
+
+            vocabulary_scope = allowed_value_constraint.get("vocabulary_scope")
+            identifier_profile = allowed_value_constraint.get("identifier_profile")
+            if constraint_kind == "vocabulary":
+                if vocabulary_scope is not None and identifier_profile is not None:
+                    result.add(
+                        f"{source}: entry {code}: identifier_profile cannot be"
+                        " combined with vocabulary_scope"
+                    )
+                elif vocabulary_scope not in VOCABULARY_SCOPES and identifier_profile not in IDENTIFIER_PROFILES:
+                    result.add(
+                        f"{source}: entry {code}: vocabulary allowed_value_constraint"
+                        " requires vocabulary_scope or identifier_profile"
+                    )
+            elif vocabulary_scope is not None or identifier_profile is not None:
+                result.add(
+                    f"{source}: entry {code}: vocabulary metadata requires vocabulary kind"
+                )
 
     profiles = entry.get("profiles")
     if profiles is not None:
@@ -408,14 +645,25 @@ def validate_row(row: Any, source: Path, result: ValidationResult) -> None:
     if status not in ROW_STATUSES:
         result.add(f"{row_id}: invalid status {status!r}; expected one of {sorted(ROW_STATUSES)}")
 
+    editor_status = row.get("editor_status")
+    if editor_status is not None and editor_status not in EDITOR_STATUSES:
+        result.add(
+            f"{row_id}: invalid editor_status {editor_status!r}; "
+            f"expected one of {sorted(EDITOR_STATUSES)}"
+        )
+    if editor_status is not None and not row.get("editor_page"):
+        result.add(f"{row_id}: editor_status requires editor_page")
+
     for name in ("backend", "frontend"):
         validate_mapping(row_id, name, row.get(name), result)
 
-    if status == "complete":
+    if status == "complete" or editor_status == "complete":
         for name in ("backend", "frontend"):
             value = row.get(name)
             if isinstance(value, dict) and value.get("status") != "mapped":
-                result.add(f"{row_id}: complete rows require {name}.status to be mapped")
+                result.add(
+                    f"{row_id}: complete rows require {name}.status to be mapped"
+                )
 
     backend_status = row.get("backend", {}).get("status") if isinstance(row.get("backend"), dict) else None
     frontend_status = row.get("frontend", {}).get("status") if isinstance(row.get("frontend"), dict) else None
@@ -445,6 +693,9 @@ def validate_registry(
     validate_frontend_inventory: bool = False,
     validate_dictionary_membership: bool = False,
     frontend_source_globs: list[str] | None = None,
+    validate_presave_registry_rows: bool = False,
+    validate_presave_inventory: bool = False,
+    editor_page_id: str | None = None,
 ) -> ValidationResult:
     result = ValidationResult()
     if backend_models is None:
@@ -466,7 +717,9 @@ def validate_registry(
     seen_codes: dict[str, Path] = {}
     seen_backend: dict[str, str] = {}
     seen_frontend: dict[str, str] = {}
+    case_rows_by_code: dict[str, dict[str, Any]] = {}
     row_authorities: list[tuple[str, str, str, bool]] = []
+    registry_rows: list[dict[str, Any]] = []
     for section_file in sections:
         if not isinstance(section_file, str):
             result.add(f"{index_path}: section entries must be strings")
@@ -483,6 +736,7 @@ def validate_registry(
             validate_row(row, source, result)
             if not isinstance(row, dict):
                 continue
+            registry_rows.append(row)
             row_id = row.get("id")
             if isinstance(row_id, str):
                 if row_id in seen_ids:
@@ -493,6 +747,7 @@ def validate_registry(
                 if code in seen_codes:
                     result.add(f"{row_id}: duplicate e2br3_code {code} in {source}; first seen in {seen_codes[code]}")
                 seen_codes[code] = source
+                case_rows_by_code.setdefault(code, row)
                 authority = row.get("authority")
                 if isinstance(row_id, str) and isinstance(authority, str):
                     row_authorities.append((row_id, code, authority, row.get("local_only") is True))
@@ -510,6 +765,23 @@ def validate_registry(
                 if key in seen_frontend:
                     result.add(f"{row_id}: duplicate frontend mapping {key}; first seen in {seen_frontend[key]}")
                 seen_frontend[key] = row_id
+
+    if editor_page_id is not None:
+        try:
+            contract = editor_contract.load_editor_contract(root, editor_page_id)
+        except ValueError as error:
+            result.add(str(error))
+        else:
+            editor_contract.validate_editor_contract(registry_rows, contract, result)
+
+    if (root / "rule-source-coverage.json").is_file():
+        coverage = rule_source_coverage.validate_coverage_structure(root, result)
+        rule_source_coverage.validate_editor_coverage(
+            root,
+            registry_rows,
+            coverage,
+            result,
+        )
 
     if validate_dictionary_membership:
         if not dictionaries:
@@ -538,6 +810,7 @@ def validate_registry(
     if validate_backend_inventory:
         try:
             source_backend = extract_backend_inventory(root, backend_models)
+            support_columns = extract_backend_null_flavor_columns(root, backend_models)
         except InventoryError as exc:
             result.add(str(exc))
             return result
@@ -548,17 +821,20 @@ def validate_registry(
         }
         for key in sorted(source_backend - registry_backend):
             result.add(f"missing backend mapping: {key}")
-        for key in sorted(registry_backend - source_backend):
+        for key in sorted(registry_backend - source_backend - support_columns):
             result.add(f"unknown backend mapping: {key}")
 
     if validate_frontend_inventory:
         try:
             source_frontend = {
                 field.key
-                for field in extract_frontend_fields.extract_frontend_fields(
-                    root=root,
-                    source_globs=frontend_source_globs
-                    or extract_frontend_fields.DEFAULT_SOURCE_GLOBS,
+                for field in (
+                    extract_frontend_fields.extract_frontend_fields(
+                        root=root,
+                        source_globs=frontend_source_globs,
+                    )
+                    if frontend_source_globs is not None
+                    else extract_frontend_fields.extract_frontend_fields_ast(root=root)
                 )
             }
         except extract_frontend_fields.FrontendInventoryError as exc:
@@ -574,17 +850,135 @@ def validate_registry(
         for key in sorted(registry_frontend - source_frontend):
             result.add(f"unknown frontend mapping: {key}")
 
+    if validate_presave_registry_rows or validate_presave_inventory:
+        import extract_presave_fields
+        import presave_registry
+
+        presaves = presave_registry.load_presave_registry(root, result)
+        expected_transfers_by_section: dict[str, set[tuple[str, str]]] = {}
+        for row in presaves.rows:
+            if row.get("status") == "not_applicable" and row.get("local_only") is True:
+                continue
+            code = row["e2br3_code"]
+            presave_section = presaves.section_by_code.get(code, "unknown")
+            case_row = case_rows_by_code.get(code)
+            if case_row is None:
+                result.add(f"{presave_section}: missing case registry join: {code}")
+                continue
+            backend = row.get("backend", {})
+            case_backend = case_row.get("backend", {})
+            if backend.get("status") == "mapped" and case_backend.get("status") == "mapped":
+                expected_transfers_by_section.setdefault(presave_section, set()).add(
+                    (
+                        f"{backend['model']}.{backend['field']}",
+                        f"{case_backend['model']}.{case_backend['field']}",
+                    )
+                )
+
+        if validate_presave_inventory:
+            for presave_section in sorted(presaves.codes_by_section):
+                if presave_section not in extract_presave_fields.PRESAVE_SECTIONS:
+                    result.add(f"{presave_section}: missing presave inventory configuration")
+                    continue
+                try:
+                    source_frontend = extract_presave_fields.extract_presave_frontend(
+                        root, presave_section
+                    )
+                    source_backend = extract_presave_fields.extract_section_backend(
+                        root, presave_section
+                    )
+                    source_transfers = extract_presave_fields.extract_presave_transfers(
+                        root, presave_section
+                    )
+                except (InventoryError, extract_frontend_fields.FrontendInventoryError) as exc:
+                    result.add(f"{presave_section}: {exc}")
+                    continue
+
+                section_codes = set(presaves.codes_by_section[presave_section])
+                registry_frontend = {
+                    value
+                    for code, value in presaves.frontend_keys.items()
+                    if code in section_codes
+                }
+                registry_backend = {
+                    value
+                    for code, value in presaves.backend_keys.items()
+                    if code in section_codes
+                }
+                expected_transfers = expected_transfers_by_section.get(
+                    presave_section, set()
+                )
+                for key in sorted(source_frontend - registry_frontend):
+                    result.add(f"{presave_section}: missing presave frontend mapping: {key}")
+                for key in sorted(registry_frontend - source_frontend):
+                    result.add(f"{presave_section}: unknown presave frontend mapping: {key}")
+                for key in sorted(source_backend - registry_backend):
+                    result.add(f"{presave_section}: missing presave backend mapping: {key}")
+                for key in sorted(registry_backend - source_backend):
+                    result.add(f"{presave_section}: unknown presave backend mapping: {key}")
+                for pair in sorted(expected_transfers - source_transfers):
+                    result.add(
+                        f"{presave_section}: missing presave-to-case assignment: "
+                        f"{pair[0]} -> {pair[1]}"
+                    )
+                for source, actual in sorted(source_transfers):
+                    expected = {
+                        target
+                        for candidate, target in expected_transfers
+                        if candidate == source
+                    }
+                    if expected and actual not in expected:
+                        result.add(
+                            f"{presave_section}: wrong presave-to-case target: "
+                            f"{source} -> {actual}; expected {sorted(expected)[0]}"
+                        )
+
     return result
 
 
 def main() -> int:
+    args = sys.argv[1:]
+    if "--report-rule-source-coverage" in args:
+        index = args.index("--report-rule-source-coverage")
+        if index + 1 >= len(args):
+            print(
+                "--report-rule-source-coverage requires a page id",
+                file=sys.stderr,
+            )
+            return 2
+        try:
+            report = rule_source_coverage.audit_contract_sources(
+                ROOT,
+                args[index + 1].upper(),
+            )
+        except (OSError, json.JSONDecodeError, KeyError) as error:
+            print(f"could not build rule source coverage report: {error}", file=sys.stderr)
+            return 2
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+        return 0
+
     strict_backend_inventory = "--strict-backend-inventory" in sys.argv[1:]
     strict_frontend_inventory = "--strict-frontend-inventory" in sys.argv[1:]
     strict_dictionary = "--strict-dictionary" in sys.argv[1:]
+    strict_presave_registry = "--strict-presave-registry" in sys.argv[1:]
+    strict_presave_inventory = "--strict-presave-inventory" in sys.argv[1:]
+    editor_page_id = None
+    if "--strict-editor-contract" in sys.argv[1:]:
+        index = sys.argv[1:].index("--strict-editor-contract")
+        args = sys.argv[1:]
+        if index + 1 >= len(args):
+            print("--strict-editor-contract requires a page id", file=sys.stderr)
+            return 2
+        editor_page_id = args[index + 1].upper()
     result = validate_registry(
         validate_backend_inventory=strict_backend_inventory,
         validate_frontend_inventory=strict_frontend_inventory,
         validate_dictionary_membership=strict_dictionary,
+        validate_presave_registry_rows=(
+            strict_presave_registry or strict_presave_inventory
+        ),
+        validate_presave_inventory=strict_presave_inventory,
+        editor_page_id=editor_page_id,
     )
     if result.ok:
         print("registry validation passed")

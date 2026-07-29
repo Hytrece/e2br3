@@ -5,14 +5,17 @@ use axum::http::StatusCode;
 use axum::http::{HeaderMap, HeaderValue};
 use axum::response::{IntoResponse, Response};
 use axum::Json;
-use lib_core::model::acs::{XML_EXPORT, XML_EXPORT_READ};
-use lib_core::model::store::set_full_context_dbx;
+use lib_core::model::authorization::CaseMutationKind;
+use lib_core::model::message_header::{
+	MessageHeader, MessageHeaderBmc, MessageHeaderForUpdate,
+};
 use lib_core::model::submission_receiver_option::{
 	SubmissionReceiverOption, SubmissionReceiverOptionBmc,
 };
 use lib_core::model::ModelManager;
+use lib_rest_core::rest_params::ParamsForUpdate;
 use lib_rest_core::rest_result::DataRestResult;
-use lib_rest_core::{require_permission, Error, Result};
+use lib_rest_core::{Error, Result};
 use lib_web::middleware::mw_auth::CtxW;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -47,6 +50,14 @@ pub struct SubmissionReceiverOptionList {
 	pub items: Vec<SubmissionReceiverOption>,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct SubmissionReceiverSelectionInput {
+	pub authority: String,
+	pub receiver_label: String,
+	pub batch_receiver_identifier: String,
+	pub message_receiver_identifier: String,
+}
+
 #[derive(Debug, Serialize)]
 pub struct SubmissionDispatchStateData {
 	pub state: SubmissionDispatchStateRecord,
@@ -76,68 +87,81 @@ pub struct ReceiverOptionsQuery {
 pub async fn submit_case_to_fda(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 	Path(case_id): Path<Uuid>,
 	headers: HeaderMap,
 	payload: Option<Json<ComplianceActionInput>>,
 ) -> Result<(StatusCode, Json<DataRestResult<SubmissionRecord>>)> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, XML_EXPORT)?;
-	let payload = payload.ok_or(Error::BadRequest {
-		message: "reason_for_change and e_signature are required for submission"
-			.to_string(),
-	})?;
-	let compliance = payload.0;
-	compliance.validate()?;
-	let authority = SubmissionAuthority::Fda;
-	let signature_id = capture_e_signature(
+	lib_rest_core::with_authorized_case_mutation(
 		&ctx,
-		&mm,
-		Some(case_id),
-		"CASE_SUBMISSION",
-		&compliance,
-	)
-	.await?;
-	let ctx_with_compliance = ctx.with_compliance(
-		Some(compliance.reason_for_change.trim().to_string()),
-		Some(signature_id),
-	);
-	let idempotency_key = headers.get("x-idempotency-key").and_then(header_to_str);
-	let record = create_submission_idempotent(
-		&ctx_with_compliance,
+		&snapshot,
 		&mm,
 		case_id,
-		authority,
-		idempotency_key,
+		"submission.execute",
+		CaseMutationKind::Submission,
+		move |ctx, mm| {
+			Box::pin(submit_case_authorized(
+				ctx,
+				mm,
+				case_id,
+				SubmissionAuthority::Fda,
+				headers,
+				payload,
+			))
+		},
 	)
-	.await?;
-	Ok((StatusCode::CREATED, Json(DataRestResult { data: record })))
+	.await
 }
 
 /// POST /api/cases/{id}/submissions/mfds
 pub async fn submit_case_to_mfds(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 	Path(case_id): Path<Uuid>,
 	headers: HeaderMap,
 	payload: Option<Json<ComplianceActionInput>>,
 ) -> Result<(StatusCode, Json<DataRestResult<SubmissionRecord>>)> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, XML_EXPORT)?;
+	lib_rest_core::with_authorized_case_mutation(
+		&ctx,
+		&snapshot,
+		&mm,
+		case_id,
+		"submission.execute",
+		CaseMutationKind::Submission,
+		move |ctx, mm| {
+			Box::pin(submit_case_authorized(
+				ctx,
+				mm,
+				case_id,
+				SubmissionAuthority::Mfds,
+				headers,
+				payload,
+			))
+		},
+	)
+	.await
+}
+
+async fn submit_case_authorized(
+	ctx: &lib_core::ctx::Ctx,
+	mm: &ModelManager,
+	case_id: Uuid,
+	authority: SubmissionAuthority,
+	headers: HeaderMap,
+	payload: Option<Json<ComplianceActionInput>>,
+) -> Result<(StatusCode, Json<DataRestResult<SubmissionRecord>>)> {
 	let payload = payload.ok_or(Error::BadRequest {
 		message: "reason_for_change and e_signature are required for submission"
 			.to_string(),
 	})?;
 	let compliance = payload.0;
 	compliance.validate()?;
-	let authority = SubmissionAuthority::Mfds;
-	let signature_id = capture_e_signature(
-		&ctx,
-		&mm,
-		Some(case_id),
-		"CASE_SUBMISSION",
-		&compliance,
-	)
-	.await?;
+	let signature_id =
+		capture_e_signature(ctx, mm, Some(case_id), "CASE_SUBMISSION", &compliance)
+			.await?;
 	let ctx_with_compliance = ctx.with_compliance(
 		Some(compliance.reason_for_change.trim().to_string()),
 		Some(signature_id),
@@ -145,7 +169,7 @@ pub async fn submit_case_to_mfds(
 	let idempotency_key = headers.get("x-idempotency-key").and_then(header_to_str);
 	let record = create_submission_idempotent(
 		&ctx_with_compliance,
-		&mm,
+		mm,
 		case_id,
 		authority,
 		idempotency_key,
@@ -158,227 +182,368 @@ pub async fn submit_case_to_mfds(
 pub async fn list_case_submissions(
 	State(_mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 	Path(case_id): Path<Uuid>,
 ) -> Result<(StatusCode, Json<DataRestResult<CaseSubmissionList>>)> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, XML_EXPORT_READ)?;
-	lib_rest_core::require_case_read_allowed(&ctx, &_mm, case_id).await?;
-	let rows = list_by_case(&ctx, &_mm, case_id).await?;
-	Ok((
-		StatusCode::OK,
-		Json(DataRestResult {
-			data: CaseSubmissionList { items: rows },
-		}),
-	))
+	lib_rest_core::with_authorized_submission_collection(
+		&ctx,
+		&snapshot,
+		&_mm,
+		move |ctx, mm| {
+			Box::pin(async move {
+				if !lib_rest_core::case_matches_user_scope(ctx, mm, case_id).await? {
+					return Err(Error::PermissionDenied {
+						required_permission: "submission.history.list".to_string(),
+					});
+				}
+				let rows = list_by_case(ctx, mm, case_id).await?;
+				Ok((
+					StatusCode::OK,
+					Json(DataRestResult {
+						data: CaseSubmissionList { items: rows },
+					}),
+				))
+			})
+		},
+	)
+	.await
 }
 
 /// GET /api/submissions/receiver-options
 pub async fn list_receiver_options(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 	Query(query): Query<ReceiverOptionsQuery>,
 ) -> Result<(
 	StatusCode,
 	Json<DataRestResult<SubmissionReceiverOptionList>>,
 )> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, XML_EXPORT_READ)?;
-	let authority = query.authority.trim().to_ascii_lowercase();
+	lib_rest_core::with_authorized_submission_collection(
+		&ctx,
+		&snapshot,
+		&mm,
+		move |ctx, mm| {
+			Box::pin(async move {
+				let authority = query.authority.trim().to_ascii_lowercase();
+				if !matches!(authority.as_str(), "fda" | "mfds") {
+					return Err(Error::BadRequest {
+						message: format!(
+							"unsupported receiver option authority: {}",
+							query.authority
+						),
+					});
+				}
+				let rows = SubmissionReceiverOptionBmc::list_by_authority(
+					ctx, mm, &authority,
+				)
+				.await?;
+				Ok((
+					StatusCode::OK,
+					Json(DataRestResult {
+						data: SubmissionReceiverOptionList { items: rows },
+					}),
+				))
+			})
+		},
+	)
+	.await
+}
+
+/// PUT /api/cases/{id}/submission-receiver
+pub async fn apply_submission_receiver_selection(
+	State(mm): State<ModelManager>,
+	ctx_w: CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
+	Path(case_id): Path<Uuid>,
+	Json(params): Json<ParamsForUpdate<SubmissionReceiverSelectionInput>>,
+) -> Result<(StatusCode, Json<DataRestResult<MessageHeader>>)> {
+	let ctx = ctx_w.0;
+	lib_rest_core::with_authorized_case_mutation(
+		&ctx, &snapshot, &mm, case_id, "submission.execute",
+		CaseMutationKind::Edit,
+		move |ctx, mm| Box::pin(async move {
+	let ParamsForUpdate { data } = params;
+
+	let authority = data.authority.trim().to_ascii_lowercase();
 	if !matches!(authority.as_str(), "fda" | "mfds") {
 		return Err(Error::BadRequest {
-			message: format!(
-				"unsupported receiver option authority: {}",
-				query.authority
-			),
+			message: format!("unsupported receiver authority: {}", data.authority),
 		});
 	}
-	let rows = SubmissionReceiverOptionBmc::list_by_authority(&ctx, &mm, &authority)
-		.await?;
-	Ok((
-		StatusCode::OK,
-		Json(DataRestResult {
-			data: SubmissionReceiverOptionList { items: rows },
+	let receiver_label =
+		require_non_empty("receiver_label", data.receiver_label.as_str())?;
+	let batch_receiver_identifier = require_non_empty(
+		"batch_receiver_identifier",
+		data.batch_receiver_identifier.as_str(),
+	)?;
+	let message_receiver_identifier = require_non_empty(
+		"message_receiver_identifier",
+		data.message_receiver_identifier.as_str(),
+	)?;
+
+	let options =
+		SubmissionReceiverOptionBmc::list_by_authority(ctx, mm, &authority)
+			.await?;
+	let matched = options.iter().any(|option| {
+		option.receiver_label == receiver_label
+			&& option.batch_receiver_identifier == batch_receiver_identifier
+			&& option.message_receiver_identifier == message_receiver_identifier
+	});
+	if !matched {
+		return Err(Error::BadRequest {
+			message: "selected receiver identifiers do not match a configured submission receiver option".to_string(),
+		});
+	}
+
+	MessageHeaderBmc::update_by_case(
+		ctx,
+		mm,
+		case_id,
+		MessageHeaderForUpdate {
+			batch_number: None,
+			batch_sender_identifier: None,
+			batch_receiver_identifier: Some(batch_receiver_identifier.to_string()),
+			batch_transmission_date: None,
+			message_number: None,
+			message_sender_identifier: None,
+			message_receiver_identifier: Some(
+				message_receiver_identifier.to_string(),
+			),
+			message_date: None,
+		},
+	)
+	.await?;
+	let entity = MessageHeaderBmc::get_by_case(ctx, mm, case_id).await?;
+	Ok((StatusCode::OK, Json(DataRestResult { data: entity })))
 		}),
-	))
+	).await
 }
 
 /// GET /api/submissions/{id}
 pub async fn get_case_submission(
 	State(_mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 	Path(submission_id): Path<Uuid>,
 ) -> Result<(StatusCode, Json<DataRestResult<SubmissionRecord>>)> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, XML_EXPORT_READ)?;
-	let record = get_submission(&ctx, &_mm, submission_id).await?.ok_or(
-		Error::BadRequest {
-			message: format!("submission not found: {submission_id}"),
+	lib_rest_core::with_authorized_submission_read(
+		&ctx,
+		&snapshot,
+		&_mm,
+		submission_id,
+		move |ctx, mm| {
+			Box::pin(async move {
+				let record = get_submission(ctx, mm, submission_id).await?.ok_or(
+					Error::BadRequest {
+						message: format!("submission not found: {submission_id}"),
+					},
+				)?;
+				Ok((StatusCode::OK, Json(DataRestResult { data: record })))
+			})
 		},
-	)?;
-	lib_rest_core::require_case_read_allowed(&ctx, &_mm, record.case_id).await?;
-	Ok((StatusCode::OK, Json(DataRestResult { data: record })))
+	)
+	.await
+}
+
+fn require_non_empty<'a>(field: &str, value: &'a str) -> Result<&'a str> {
+	let trimmed = value.trim();
+	if trimmed.is_empty() {
+		return Err(Error::BadRequest {
+			message: format!("{field} is required"),
+		});
+	}
+	Ok(trimmed)
 }
 
 /// GET /api/submissions/{id}/events
 pub async fn list_submission_event_history(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 	Path(submission_id): Path<Uuid>,
 ) -> Result<(StatusCode, Json<DataRestResult<SubmissionEventList>>)> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, XML_EXPORT_READ)?;
-	let record = get_submission(&ctx, &mm, submission_id).await?.ok_or(
-		Error::BadRequest {
-			message: format!("submission not found: {submission_id}"),
+	lib_rest_core::with_authorized_submission_read(
+		&ctx,
+		&snapshot,
+		&mm,
+		submission_id,
+		move |ctx, mm| {
+			Box::pin(async move {
+				let rows = list_submission_events(ctx, mm, submission_id).await?;
+				Ok((
+					StatusCode::OK,
+					Json(DataRestResult {
+						data: SubmissionEventList { items: rows },
+					}),
+				))
+			})
 		},
-	)?;
-	lib_rest_core::require_case_read_allowed(&ctx, &mm, record.case_id).await?;
-	let rows = list_submission_events(&ctx, &mm, submission_id).await?;
-	Ok((
-		StatusCode::OK,
-		Json(DataRestResult {
-			data: SubmissionEventList { items: rows },
-		}),
-	))
+	)
+	.await
 }
 
 /// GET /api/submissions/{id}/acks/{level}/download
 pub async fn download_submission_ack_text(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 	Path((submission_id, level)): Path<(Uuid, u8)>,
 ) -> Result<Response> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, XML_EXPORT_READ)?;
-	let ack = get_ack_download(&ctx, &mm, submission_id, level)
-		.await?
-		.ok_or(Error::BadRequest {
-			message: format!(
+	lib_rest_core::with_authorized_submission_read(
+		&ctx,
+		&snapshot,
+		&mm,
+		submission_id,
+		move |ctx, mm| {
+			Box::pin(async move {
+				let ack = get_ack_download(ctx, mm, submission_id, level)
+					.await?
+					.ok_or(Error::BadRequest {
+						message: format!(
 				"submission ACK level {level} not found for submission {submission_id}"
 			),
-		})?;
-	lib_rest_core::require_case_read_allowed(&ctx, &mm, ack.case_id).await?;
-
-	let mut text = format!(
+					})?;
+				let mut text = format!(
 		"Submission ID: {}\nCase ID: {}\nACK Level: {}\nSuccess: {}\nReceived At: {}\n",
 		ack.submission_id, ack.case_id, ack.level, ack.success, ack.received_at
 	);
-	if let Some(code) = ack.code.as_deref() {
-		text.push_str(&format!("ACK Code: {code}\n"));
-	}
-	if let Some(message) = ack.message.as_deref() {
-		text.push_str(&format!("ACK Message: {message}\n"));
-	}
-	if let Some(raw_payload) = ack.raw_payload.as_ref() {
-		let pretty = serde_json::to_string_pretty(raw_payload)
-			.unwrap_or_else(|_| raw_payload.to_string());
-		text.push_str("\nRaw Payload:\n");
-		text.push_str(&pretty);
-		text.push('\n');
-	}
+				if let Some(code) = ack.code.as_deref() {
+					text.push_str(&format!("ACK Code: {code}\n"));
+				}
+				if let Some(message) = ack.message.as_deref() {
+					text.push_str(&format!("ACK Message: {message}\n"));
+				}
+				if let Some(raw_payload) = ack.raw_payload.as_ref() {
+					let pretty = serde_json::to_string_pretty(raw_payload)
+						.unwrap_or_else(|_| raw_payload.to_string());
+					text.push_str("\nRaw Payload:\n");
+					text.push_str(&pretty);
+					text.push('\n');
+				}
 
-	let file_name = format!("submission-{submission_id}-ack{level}.txt");
-	let mut response = (StatusCode::OK, text).into_response();
-	response.headers_mut().insert(
-		header::CONTENT_TYPE,
-		HeaderValue::from_static("text/plain; charset=utf-8"),
-	);
-	response.headers_mut().insert(
-		header::CONTENT_DISPOSITION,
-		HeaderValue::from_str(&format!("attachment; filename=\"{file_name}\""))
-			.map_err(|err| Error::BadRequest {
-				message: format!("invalid ACK download filename header: {err}"),
-			})?,
-	);
-	Ok(response)
+				let file_name = format!("submission-{submission_id}-ack{level}.txt");
+				let mut response = (StatusCode::OK, text).into_response();
+				response.headers_mut().insert(
+					header::CONTENT_TYPE,
+					HeaderValue::from_static("text/plain; charset=utf-8"),
+				);
+				response.headers_mut().insert(
+					header::CONTENT_DISPOSITION,
+					HeaderValue::from_str(&format!(
+						"attachment; filename=\"{file_name}\""
+					))
+					.map_err(|err| Error::BadRequest {
+						message: format!(
+							"invalid ACK download filename header: {err}"
+						),
+					})?,
+				);
+				Ok(response)
+			})
+		},
+	)
+	.await
 }
 
 /// GET /api/submissions/history
 pub async fn list_all_submission_history(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 ) -> Result<(StatusCode, Json<DataRestResult<SubmissionHistoryList>>)> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, XML_EXPORT_READ)?;
-	let dbx = mm.dbx();
-	dbx.begin_txn()
-		.await
-		.map_err(lib_core::model::Error::from)?;
-	if let Err(err) =
-		set_full_context_dbx(dbx, ctx.user_id(), ctx.organization_id(), ctx.role())
-			.await
-			.map_err(Error::from)
-	{
-		let _ = dbx.rollback_txn().await;
-		return Err(err);
-	}
-	let history = match list_submission_history(&ctx, &mm).await {
-		Ok(history) => {
-			dbx.commit_txn()
-				.await
-				.map_err(lib_core::model::Error::from)?;
-			history
-		}
-		Err(err) => {
-			let _ = dbx.rollback_txn().await;
-			return Err(err);
-		}
-	};
-	let mut rows = Vec::with_capacity(history.len());
-	for row in history {
-		if lib_rest_core::case_matches_user_scope(&ctx, &mm, row.case_id).await? {
-			rows.push(row);
-		}
-	}
-	Ok((
-		StatusCode::OK,
-		Json(DataRestResult {
-			data: SubmissionHistoryList { items: rows },
-		}),
-	))
+	lib_rest_core::with_authorized_submission_collection(
+		&ctx,
+		&snapshot,
+		&mm,
+		move |ctx, mm| {
+			Box::pin(async move {
+				let history = list_submission_history(ctx, mm).await?;
+				let mut rows = Vec::with_capacity(history.len());
+				for row in history {
+					if lib_rest_core::case_matches_user_scope(ctx, mm, row.case_id)
+						.await?
+					{
+						rows.push(row);
+					}
+				}
+				Ok((
+					StatusCode::OK,
+					Json(DataRestResult {
+						data: SubmissionHistoryList { items: rows },
+					}),
+				))
+			})
+		},
+	)
+	.await
 }
 
 /// GET /api/submissions/{id}/dispatch-state
 pub async fn get_submission_dispatch_state_view(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 	Path(submission_id): Path<Uuid>,
 ) -> Result<(
 	StatusCode,
 	Json<DataRestResult<SubmissionDispatchStateData>>,
 )> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, XML_EXPORT_READ)?;
-	let record = get_submission(&ctx, &mm, submission_id).await?.ok_or(
-		Error::BadRequest {
-			message: format!("submission not found: {submission_id}"),
+	lib_rest_core::with_authorized_submission_read(
+		&ctx,
+		&snapshot,
+		&mm,
+		submission_id,
+		move |ctx, mm| {
+			Box::pin(async move {
+				let state = get_submission_dispatch_state(ctx, mm, submission_id)
+					.await?
+					.ok_or(Error::BadRequest {
+						message: format!(
+							"submission dispatch state not found: {submission_id}"
+						),
+					})?;
+				Ok((
+					StatusCode::OK,
+					Json(DataRestResult {
+						data: SubmissionDispatchStateData { state },
+					}),
+				))
+			})
 		},
-	)?;
-	lib_rest_core::require_case_read_allowed(&ctx, &mm, record.case_id).await?;
-	let state = get_submission_dispatch_state(&ctx, &mm, submission_id)
-		.await?
-		.ok_or(Error::BadRequest {
-			message: format!("submission dispatch state not found: {submission_id}"),
-		})?;
-	Ok((
-		StatusCode::OK,
-		Json(DataRestResult {
-			data: SubmissionDispatchStateData { state },
-		}),
-	))
+	)
+	.await
 }
 
 /// POST /api/submissions/{id}/acks/mock
 pub async fn post_mock_ack(
 	State(_mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 	Path(submission_id): Path<Uuid>,
 	Json(input): Json<MockAckInput>,
 ) -> Result<(StatusCode, Json<DataRestResult<SubmissionRecord>>)> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, XML_EXPORT)?;
-	let record = apply_mock_ack(&ctx, &_mm, submission_id, input).await?;
-	Ok((StatusCode::OK, Json(DataRestResult { data: record })))
+	lib_rest_core::with_authorized_submission_mutation(
+		&ctx,
+		&snapshot,
+		&_mm,
+		submission_id,
+		move |ctx, mm| {
+			Box::pin(async move {
+				let record = apply_mock_ack(ctx, mm, submission_id, input).await?;
+				Ok((StatusCode::OK, Json(DataRestResult { data: record })))
+			})
+		},
+	)
+	.await
 }
 
 /// POST /internal/submissions/callbacks/ack

@@ -3,7 +3,6 @@
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::Json;
-use lib_core::model::acs::{has_permission, AUDIT_LIST};
 use lib_core::model::audit::{
 	AuditChainVerificationReport, AuditLog, AuditLogBmc, AuditLogFilter,
 	CaseVersion, CaseVersionBmc,
@@ -11,23 +10,16 @@ use lib_core::model::audit::{
 use lib_core::model::ModelManager;
 use lib_rest_core::rest_params::ParamsList;
 use lib_rest_core::rest_result::DataRestResult;
+use lib_rest_core::{
+	with_authorized_audit_log_collection, with_authorized_case_audit_read, Error,
+	Result,
+};
 use lib_web::middleware::mw_auth::CtxW;
-use lib_web::{Error as WebError, Result};
+use lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW;
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 use sqlx::types::time::OffsetDateTime;
 use uuid::Uuid;
-
-fn require_audit_permission(ctx: &lib_core::ctx::Ctx) -> Result<()> {
-	if !ctx.is_system_admin()
-		&& !has_permission(ctx.permission_subject(), AUDIT_LIST)
-	{
-		return Err(WebError::PermissionDenied {
-			required_permission: "AuditLog.List".to_string(),
-		});
-	}
-	Ok(())
-}
 
 #[derive(Debug, Deserialize)]
 pub struct AuditRecordQuery {
@@ -163,24 +155,25 @@ fn audit_reason_value(action: &str, reason: Option<String>) -> String {
 pub async fn list_audit_logs(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: AuthorizationSnapshotW,
 	axum::extract::RawQuery(raw_query): axum::extract::RawQuery,
 ) -> Result<(StatusCode, Json<DataRestResult<Vec<AuditLog>>>)> {
 	let ctx = ctx_w.0;
 	tracing::debug!("{:<12} - rest list_audit_logs", "HANDLER");
 
-	// Verify audit permission
-	require_audit_permission(&ctx)?;
-
-	let params = ParamsList::<AuditLogFilter>::from_raw_query(raw_query.as_deref())
-		.map_err(|message| {
-			WebError::from(lib_rest_core::Error::BadRequest { message })
-		})?;
-
-	let logs = AuditLogBmc::list(&ctx, &mm, params.filters, params.list_options)
-		.await
-		.map_err(WebError::Model)?;
-
-	Ok((StatusCode::OK, Json(DataRestResult { data: logs })))
+	with_authorized_audit_log_collection(&ctx, &snapshot, &mm, move |ctx, mm| {
+		Box::pin(async move {
+			let params =
+				ParamsList::<AuditLogFilter>::from_raw_query(raw_query.as_deref())
+					.map_err(|message| Error::BadRequest { message })?;
+			let logs =
+				AuditLogBmc::list(ctx, mm, params.filters, params.list_options)
+					.await
+					.map_err(Error::Model)?;
+			Ok((StatusCode::OK, Json(DataRestResult { data: logs })))
+		})
+	})
+	.await
 }
 
 /// GET /api/audit-logs/by-record/{table_name}/{record_id}
@@ -189,6 +182,7 @@ pub async fn list_audit_logs(
 pub async fn list_audit_logs_by_record(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: AuthorizationSnapshotW,
 	Path((table_name, record_id)): Path<(String, Uuid)>,
 	Query(query): Query<AuditRecordQuery>,
 ) -> Result<(StatusCode, Json<DataRestResult<Vec<AuditLog>>>)> {
@@ -200,22 +194,24 @@ pub async fn list_audit_logs_by_record(
 		record_id
 	);
 
-	// Verify audit permission
-	require_audit_permission(&ctx)?;
-
-	let mut logs = AuditLogBmc::list_by_record(&ctx, &mm, &table_name, record_id)
-		.await
-		.map_err(WebError::Model)?;
-	if let Some(field) = query
-		.field
-		.as_deref()
-		.map(str::trim)
-		.filter(|field| !field.is_empty())
-	{
-		logs.retain(|log| audit_log_touches_field(log, field));
-	}
-
-	Ok((StatusCode::OK, Json(DataRestResult { data: logs })))
+	with_authorized_audit_log_collection(&ctx, &snapshot, &mm, move |ctx, mm| {
+		Box::pin(async move {
+			let mut logs =
+				AuditLogBmc::list_by_record(ctx, mm, &table_name, record_id)
+					.await
+					.map_err(Error::Model)?;
+			if let Some(field) = query
+				.field
+				.as_deref()
+				.map(str::trim)
+				.filter(|field| !field.is_empty())
+			{
+				logs.retain(|log| audit_log_touches_field(log, field));
+			}
+			Ok((StatusCode::OK, Json(DataRestResult { data: logs })))
+		})
+	})
+	.await
 }
 
 /// GET /api/cases/{case_id}/audit-trail
@@ -224,6 +220,7 @@ pub async fn list_audit_logs_by_record(
 pub async fn list_case_audit_trail(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: AuthorizationSnapshotW,
 	Path(case_id): Path<Uuid>,
 ) -> Result<(StatusCode, Json<DataRestResult<Vec<CaseAuditTrailRow>>>)> {
 	let ctx = ctx_w.0;
@@ -233,38 +230,40 @@ pub async fn list_case_audit_trail(
 		case_id
 	);
 
-	require_audit_permission(&ctx)?;
-
-	let logs = AuditLogBmc::list_by_record(&ctx, &mm, "cases", case_id)
-		.await
-		.map_err(WebError::Model)?;
-	let mut rows = Vec::new();
-	for log in logs {
-		for (field, diff) in changed_field_entries(&log) {
-			let (page, item) = audit_field_label(&log.table_name, &field);
-			rows.push(CaseAuditTrailRow {
-				no: log.id,
-				audit_log_id: log.id,
-				date_time: log.created_at,
-				user_display: log.user_display.clone(),
-				page: page.to_string(),
-				item,
-				row_no1: "0".to_string(),
-				row_no2: "0".to_string(),
-				row_no3: "0".to_string(),
-				value: audit_display_value(&log.action, &diff),
-				notation: audit_notation_value(&field, &diff),
-				null_flavor: audit_null_flavor_value(&field, &diff),
-				reason: audit_reason_value(
-					&log.action,
-					log.reason_for_change.clone(),
-				),
-				e_signature_id: log.e_signature_id,
-			});
-		}
-	}
-
-	Ok((StatusCode::OK, Json(DataRestResult { data: rows })))
+	with_authorized_case_audit_read(&ctx, &snapshot, &mm, case_id, move |ctx, mm| {
+		Box::pin(async move {
+			let logs = AuditLogBmc::list_by_record(ctx, mm, "cases", case_id)
+				.await
+				.map_err(Error::Model)?;
+			let mut rows = Vec::new();
+			for log in logs {
+				for (field, diff) in changed_field_entries(&log) {
+					let (page, item) = audit_field_label(&log.table_name, &field);
+					rows.push(CaseAuditTrailRow {
+						no: log.id,
+						audit_log_id: log.id,
+						date_time: log.created_at,
+						user_display: log.user_display.clone(),
+						page: page.to_string(),
+						item,
+						row_no1: "0".to_string(),
+						row_no2: "0".to_string(),
+						row_no3: "0".to_string(),
+						value: audit_display_value(&log.action, &diff),
+						notation: audit_notation_value(&field, &diff),
+						null_flavor: audit_null_flavor_value(&field, &diff),
+						reason: audit_reason_value(
+							&log.action,
+							log.reason_for_change.clone(),
+						),
+						e_signature_id: log.e_signature_id,
+					});
+				}
+			}
+			Ok((StatusCode::OK, Json(DataRestResult { data: rows })))
+		})
+	})
+	.await
 }
 
 /// GET /api/cases/{case_id}/versions
@@ -273,6 +272,7 @@ pub async fn list_case_audit_trail(
 pub async fn list_case_versions(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: AuthorizationSnapshotW,
 	Path(case_id): Path<Uuid>,
 ) -> Result<(StatusCode, Json<DataRestResult<Vec<CaseVersion>>>)> {
 	let ctx = ctx_w.0;
@@ -282,14 +282,15 @@ pub async fn list_case_versions(
 		case_id
 	);
 
-	// Verify audit permission
-	require_audit_permission(&ctx)?;
-
-	let versions = CaseVersionBmc::list_by_case(&ctx, &mm, case_id)
-		.await
-		.map_err(WebError::Model)?;
-
-	Ok((StatusCode::OK, Json(DataRestResult { data: versions })))
+	with_authorized_case_audit_read(&ctx, &snapshot, &mm, case_id, move |ctx, mm| {
+		Box::pin(async move {
+			let versions = CaseVersionBmc::list_by_case(ctx, mm, case_id)
+				.await
+				.map_err(Error::Model)?;
+			Ok((StatusCode::OK, Json(DataRestResult { data: versions })))
+		})
+	})
+	.await
 }
 
 /// GET /api/audit-logs/verify-integrity
@@ -298,6 +299,7 @@ pub async fn list_case_versions(
 pub async fn verify_audit_log_integrity(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: AuthorizationSnapshotW,
 ) -> Result<(
 	StatusCode,
 	Json<DataRestResult<AuditChainVerificationReport>>,
@@ -305,13 +307,15 @@ pub async fn verify_audit_log_integrity(
 	let ctx = ctx_w.0;
 	tracing::debug!("{:<12} - rest verify_audit_log_integrity", "HANDLER");
 
-	require_audit_permission(&ctx)?;
-
-	let report = AuditLogBmc::verify_hash_chain(&ctx, &mm)
-		.await
-		.map_err(WebError::Model)?;
-
-	Ok((StatusCode::OK, Json(DataRestResult { data: report })))
+	with_authorized_audit_log_collection(&ctx, &snapshot, &mm, |ctx, mm| {
+		Box::pin(async move {
+			let report = AuditLogBmc::verify_hash_chain(ctx, mm)
+				.await
+				.map_err(Error::Model)?;
+			Ok((StatusCode::OK, Json(DataRestResult { data: report })))
+		})
+	})
+	.await
 }
 
 #[cfg(test)]

@@ -32,8 +32,8 @@ async fn load_editor_dh_list_rows(
 		sequence_number: history.sequence_number,
 		drug_name: history.drug_name,
 		indication: history.indication_meddra_code,
-		start_date: history.start_date.map(|date| date.to_string()),
-		end_date: history.end_date.map(|date| date.to_string()),
+		start_date: ci_date(history.start_date),
+		end_date: ci_date(history.end_date),
 	})
 	.collect())
 }
@@ -41,13 +41,13 @@ async fn load_editor_dh_list_rows(
 repeatable_list_handler!(
 	list_editor_dh,
 	CaseEditorDhListRowDto,
-	PAST_DRUG_LIST,
 	load_editor_dh_list_rows,
 );
 
 pub async fn get_editor_dh_page_projection(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 	Path(case_id): Path<Uuid>,
 	Query(query): Query<CaseEditorPageProjectionQuery>,
 ) -> Result<(
@@ -55,74 +55,100 @@ pub async fn get_editor_dh_page_projection(
 	Json<CaseEditorPageProjectionResponse>,
 )> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, CASE_READ)?;
-	require_permission(&ctx, PAST_DRUG_LIST)?;
-	lib_rest_core::require_case_read_allowed(&ctx, &mm, case_id).await?;
-
-	let rows = load_editor_dh_list_rows(&ctx, &mm, case_id).await?;
-	let projection = repeatable_page_projection_response(
+	lib_rest_core::with_authorized_case_child_read(
+		&ctx,
+		&snapshot,
+		&mm,
 		case_id,
-		"DH",
-		query_authorities_csv(&query)?,
-		json!({ "rows": rows }),
-	)?;
-	Ok((axum::http::StatusCode::OK, Json(projection)))
+		"editor/DH",
+		move |ctx, mm| {
+			Box::pin(async move {
+				let rows = load_editor_dh_list_rows(ctx, mm, case_id).await?;
+				let projection = repeatable_page_projection_response(
+					case_id,
+					"DH",
+					query_authorities_csv(&query)?,
+					json!({ "rows": rows }),
+				)?;
+				Ok((axum::http::StatusCode::OK, Json(projection)))
+			})
+		},
+	)
+	.await
 }
 
 pub async fn get_editor_dh(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 	Path((case_id, past_drug_id)): Path<(Uuid, Uuid)>,
 ) -> Result<(axum::http::StatusCode, Json<CaseEditorRowDetailResponse>)> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, CASE_READ)?;
-	require_permission(&ctx, PAST_DRUG_READ)?;
-	lib_rest_core::require_case_read_allowed(&ctx, &mm, case_id).await?;
-
-	let patient = PatientInformationBmc::get_by_case(&ctx, &mm, case_id).await?;
-	let history = PastDrugHistoryBmc::get(&ctx, &mm, past_drug_id).await?;
-	if history.patient_id != patient.id {
-		return Err(lib_core::model::Error::EntityUuidNotFound {
-			entity: "past_drug_history",
-			id: past_drug_id,
-		}
-		.into());
-	}
-
-	Ok((
-		axum::http::StatusCode::OK,
-		Json(CaseEditorRowDetailResponse {
-			case_id,
-			row_id: past_drug_id,
-			data: json!({
-				"patientInformation": {
-					"pastDrugHistory": [history]
+	lib_rest_core::with_authorized_case_child_read(
+		&ctx,
+		&snapshot,
+		&mm,
+		case_id,
+		format!("editor/DH/{past_drug_id}"),
+		move |ctx, mm| {
+			Box::pin(async move {
+				let patient =
+					PatientInformationBmc::get_by_case(ctx, mm, case_id).await?;
+				let history = PastDrugHistoryBmc::get(ctx, mm, past_drug_id).await?;
+				if history.patient_id != patient.id {
+					return Err(lib_core::model::Error::EntityUuidNotFound {
+						entity: "past_drug_history",
+						id: past_drug_id,
+					}
+					.into());
 				}
-			}),
-		}),
-	))
+				Ok((
+					axum::http::StatusCode::OK,
+					Json(CaseEditorRowDetailResponse {
+						case_id,
+						row_id: past_drug_id,
+						data: json!({
+							"patientInformation": {
+								"pastDrugHistory": [history]
+							}
+						}),
+					}),
+				))
+			})
+		},
+	)
+	.await
 }
 
 pub async fn get_editor_dh_page_row(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 	Path((case_id, row_id)): Path<(Uuid, Uuid)>,
 	Query(query): Query<CaseEditorPageProjectionQuery>,
 ) -> Result<(axum::http::StatusCode, Json<Value>)> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, CASE_READ)?;
-	require_permission(&ctx, PAST_DRUG_READ)?;
-	lib_rest_core::require_case_read_allowed(&ctx, &mm, case_id).await?;
-
-	let response = build_editor_dh_page_row_response(
+	lib_rest_core::with_authorized_case_child_read(
 		&ctx,
+		&snapshot,
 		&mm,
 		case_id,
-		row_id,
-		query_authorities_csv(&query)?,
+		format!("editor/DH/{row_id}"),
+		move |ctx, mm| {
+			Box::pin(async move {
+				let response = build_editor_dh_page_row_response(
+					ctx,
+					mm,
+					case_id,
+					row_id,
+					query_authorities_csv(&query)?,
+				)
+				.await?;
+				Ok((axum::http::StatusCode::OK, Json(response)))
+			})
+		},
 	)
-	.await?;
-	Ok((axum::http::StatusCode::OK, Json(response)))
+	.await
 }
 
 async fn load_editor_dh_row_detail(
@@ -140,7 +166,12 @@ async fn load_editor_dh_row_detail(
 		}
 		.into());
 	}
-	Ok(json!(history))
+	let mut value = json!(history);
+	if let Value::Object(ref mut map) = value {
+		map.insert("start_date".to_string(), json!(ci_date(history.start_date)));
+		map.insert("end_date".to_string(), json!(ci_date(history.end_date)));
+	}
+	Ok(value)
 }
 
 async fn build_editor_dh_page_row_response(
@@ -192,12 +223,23 @@ repeatable_page_row_create_handler!(
 	create_editor_dh_page_row,
 	section: "DH",
 	row_key: "pastDrugHistory",
-	permission: PAST_DRUG_CREATE,
 	bmc: PastDrugHistoryBmc,
 	model: PastDrugHistoryForCreate,
 	aliases: &[
 		("drug_name", &["drugName"][..]),
-		("indication_meddra_code", &["indication"][..]),
+		("drug_name_null_flavor", &["drugNameNullFlavor"][..]),
+		("mfds_medicinal_product_version", &["mfdsMedicinalProductVersion"][..]),
+		("mfds_medicinal_product_id", &["mfdsMedicinalProductId"][..]),
+		("mpid_version", &["mpidVersion"][..]),
+		("phpid_version", &["phpidVersion"][..]),
+		("start_date", &["startDate"][..]),
+		("start_date_null_flavor", &["startDateNullFlavor"][..]),
+		("end_date", &["endDate"][..]),
+		("end_date_null_flavor", &["endDateNullFlavor"][..]),
+		("indication_meddra_version", &["indicationMeddraVersion"][..]),
+		("indication_meddra_code", &["indicationMeddraCode", "indication"][..]),
+		("reaction_meddra_version", &["reactionMeddraVersion"][..]),
+		("reaction_meddra_code", &["reactionMeddraCode"][..]),
 		("sequence_number", &["sequenceNumber"][..]),
 	],
 	extras_fn: editor_dh_create_extras,
@@ -208,21 +250,30 @@ repeatable_page_row_patch_handler!(
 	patch_editor_dh_page_row,
 	section: "DH",
 	row_key: "pastDrugHistory",
-	permission: PAST_DRUG_UPDATE,
 	bmc: PastDrugHistoryBmc,
 	model: PastDrugHistoryForUpdate,
 	verify: verify_editor_dh_page_row,
-	changes: &[("drugName", "drugName"), ("indication", "indication")],
 	aliases: &[
 		("drug_name", &["drugName"][..]),
-		("indication_meddra_code", &["indication"][..]),
+		("drug_name_null_flavor", &["drugNameNullFlavor"][..]),
+		("mfds_medicinal_product_version", &["mfdsMedicinalProductVersion"][..]),
+		("mfds_medicinal_product_id", &["mfdsMedicinalProductId"][..]),
+		("mpid_version", &["mpidVersion"][..]),
+		("phpid_version", &["phpidVersion"][..]),
+		("start_date", &["startDate"][..]),
+		("start_date_null_flavor", &["startDateNullFlavor"][..]),
+		("end_date", &["endDate"][..]),
+		("end_date_null_flavor", &["endDateNullFlavor"][..]),
+		("indication_meddra_version", &["indicationMeddraVersion"][..]),
+		("indication_meddra_code", &["indicationMeddraCode", "indication"][..]),
+		("reaction_meddra_version", &["reactionMeddraVersion"][..]),
+		("reaction_meddra_code", &["reactionMeddraCode"][..]),
 	],
 	build_response: build_editor_dh_page_row_response,
 );
 
 repeatable_page_row_delete_handler!(
 	delete_editor_dh_page_row,
-	permission: PAST_DRUG_DELETE,
 	bmc: PastDrugHistoryBmc,
 	verify: verify_editor_dh_page_row,
 );

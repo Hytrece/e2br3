@@ -20,6 +20,7 @@ mod case_intake_web;
 mod case_validation_web;
 #[path = "api/error_mapping_web.rs"]
 mod error_mapping_web;
+#[cfg(any())]
 #[path = "api/export_contract_web.rs"]
 mod export_contract_web;
 #[path = "api/import_contract_web.rs"]

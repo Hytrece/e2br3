@@ -20,7 +20,7 @@
 
 // region:    --- Modules
 
-pub mod acs;
+pub mod authorization;
 mod base;
 mod error;
 pub mod store;
@@ -30,7 +30,6 @@ pub mod case;
 pub mod case_numbering;
 pub mod case_query;
 pub mod case_query_catalog;
-pub mod case_validation_report_cache;
 pub mod case_validation_summary;
 pub mod organization;
 pub mod user; // E2B users table (UUID-based) // Organizations table // Core cases table
@@ -62,9 +61,6 @@ pub mod receiver; // Receiver details for routing to regulatory authorities
 // E2B(R3) G.k.9.i - Drug-Reaction Assessment
 pub mod drug_reaction_assessment; // Causality assessment linking drugs to reactions
 
-// E2B(R3) G.k.8.r - Drug Recurrence Information
-pub mod drug_recurrence; // Structured rechallenge/recurrence data
-
 // E2B(R3) C.1.9.r / C.1.10.r - Case Identifiers
 pub mod case_identifiers; // Other case identifiers and linked report numbers
 
@@ -81,6 +77,7 @@ pub mod e_signature; // Electronic signatures for Part 11 critical actions
 
 // Presave Templates
 pub mod presave; // Section-specific INFO presave master data
+pub mod presave_lifecycle;
 pub mod submission_receiver_option; // Submission workflow receiver routing options
 
 // Admin

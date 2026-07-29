@@ -3,10 +3,11 @@ use axum::extract::{Multipart, Path, State};
 use axum::http::{header, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::Json;
+use lib_core::authorization::BuiltInIdentityKind;
 use lib_core::ctx::Ctx;
-use lib_core::model::acs::{XML_IMPORT, XML_IMPORT_READ};
 use lib_core::model::admin_settings::AdminSettingsBmc;
 use lib_core::model::case_duplicate::{CaseDuplicateBmc, CaseDuplicateKey};
+use lib_core::model::presave::ProductPresaveBmc;
 use lib_core::model::store::set_full_context_dbx;
 use lib_core::model::xml_import_decision::{
 	decide_xml_import, XmlImportDecision, XmlImportDecisionAction,
@@ -14,28 +15,29 @@ use lib_core::model::xml_import_decision::{
 };
 use lib_core::model::xml_import_history::XmlImportHistoryBmc;
 use lib_core::model::ModelManager;
-use lib_core::xml::import_sections::{
-	c_safety_report::parse_c_safety_report, d_patient::parse_d_patient,
-	e_reaction::parse_e_reactions, g_drug::parse_g_drugs,
-};
-use lib_core::xml::{
-	extract_safety_report_id_from_xml, import_e2b_xml_unvalidated, CImportSettings,
-	XmlImportRequest, XmlValidationReport,
-};
 use lib_rest_core::rest_result::DataRestResult;
-use lib_rest_core::{require_permission, Error, Result};
-use lib_web::middleware::mw_auth::CtxW;
-use lib_web::middleware::mw_permission::{
-	RequirePermission, XmlImport as XmlImportPerm,
+use lib_rest_core::{
+	with_authorized_import_history_collection, with_authorized_import_history_read,
+	with_authorized_xml_import, Error, Result,
 };
+use lib_web::middleware::mw_auth::CtxW;
+use lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW;
 use serde::Serialize;
 use sqlx::FromRow;
 use std::io::{Cursor, Read};
 use time::format_description::well_known::Rfc3339;
 use tracing::warn;
 use uuid::Uuid;
-use validator::xml::{
+use xml::import_sections::{
+	c_safety_report::parse_c_safety_report, d_patient::parse_d_patient,
+	e_reaction::parse_e_reactions, g_drug::parse_g_drugs,
+};
+use xml::validation::{
 	should_skip_xml_validation, validate_e2b_xml, validate_e2b_xml_basic,
+};
+use xml::{
+	extract_safety_report_id_from_xml, import_e2b_xml_unvalidated, CImportSettings,
+	XmlImportRequest, XmlValidationReport,
 };
 use zip::ZipArchive;
 
@@ -47,6 +49,7 @@ struct UploadedImportPayload {
 	bytes: Vec<u8>,
 	filename: Option<String>,
 	product_id: Option<String>,
+	product_presave_id: Option<Uuid>,
 }
 
 #[derive(Debug, Serialize)]
@@ -109,6 +112,7 @@ async fn read_xml_multipart(
 	let mut file_bytes: Option<Vec<u8>> = None;
 	let mut filename: Option<String> = None;
 	let mut product_id: Option<String> = None;
+	let mut product_presave_id: Option<Uuid> = None;
 
 	while let Some(field) =
 		multipart
@@ -134,6 +138,24 @@ async fn read_xml_multipart(
 			if !trimmed.is_empty() {
 				product_id = Some(trimmed.to_string());
 			}
+			continue;
+		}
+		if matches!(
+			name.as_deref(),
+			Some("productPresaveId") | Some("product_presave_id")
+		) {
+			let text = field.text().await.map_err(|err| Error::BadRequest {
+				message: format!("multipart productPresaveId read error: {err}"),
+			})?;
+			let trimmed = text.trim();
+			if !trimmed.is_empty() {
+				product_presave_id =
+					Some(Uuid::parse_str(trimmed).map_err(|_| {
+						Error::BadRequest {
+							message: "productPresaveId must be a UUID".to_string(),
+						}
+					})?);
+			}
 		}
 	}
 
@@ -145,6 +167,7 @@ async fn read_xml_multipart(
 		bytes,
 		filename,
 		product_id,
+		product_presave_id,
 	})
 }
 
@@ -281,6 +304,8 @@ async fn import_single_xml(
 	filename: String,
 	c_settings: CImportSettings,
 	decision: XmlImportDecision,
+	product_presave_id: Option<Uuid>,
+	product_id: Option<String>,
 ) -> ImportedCaseSummary {
 	let validation_report = if should_skip_xml_validation() {
 		validate_e2b_xml_basic(&xml, None)
@@ -361,6 +386,8 @@ async fn import_single_xml(
 			filename: Some(filename.clone()),
 			skip_validation: false,
 			c_settings,
+			product_presave_id,
+			product_id,
 		},
 	)
 	.await;
@@ -653,132 +680,145 @@ async fn load_import_settings(
 			.get("apply_default_values_to_imported_r2_cases")
 			.and_then(|v| v.as_bool())
 			.unwrap_or(false),
+		selected_sender_presave_id: None,
 	})
 }
 
 pub async fn list_import_history(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: AuthorizationSnapshotW,
 ) -> Result<(StatusCode, Json<DataRestResult<XmlImportHistoryList>>)> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, XML_IMPORT_READ)?;
-
-	let rows = XmlImportHistoryBmc::list_all(&mm, &ctx)
-		.await
-		.map_err(Error::Model)?;
-	let mut items = Vec::with_capacity(rows.len());
-	for row in rows {
-		let allowed = match row.case_id {
-			Some(case_id) => {
-				lib_rest_core::case_matches_user_scope(&ctx, &mm, case_id).await?
-			}
-			None => lib_rest_core::is_admin(&ctx, &mm).await?,
-		};
-		if !allowed {
-			continue;
-		}
-		items.push(XmlImportHistoryRecord {
-			id: row.id,
-			uploaded_file_name: row.uploaded_file_name,
-			source_file_name: row.source_file_name,
-			case_id: row.case_id,
-			case_number: row.case_number,
-			status: row.status,
-			error_message: row.error_message,
-			uploaded_by: row.uploaded_by,
-			uploader_email: row.uploader_email,
-			uploaded_at: row
-				.uploaded_at
-				.format(&Rfc3339)
-				.unwrap_or_else(|_| row.uploaded_at.to_string()),
-		});
-	}
-
-	Ok((
-		StatusCode::OK,
-		Json(DataRestResult {
-			data: XmlImportHistoryList { items },
-		}),
-	))
+	let include_unscoped = matches!(
+		snapshot.identity().built_in_kind(),
+		Some(
+			BuiltInIdentityKind::PlatformAdministrator
+				| BuiltInIdentityKind::SponsorCroAdministrator
+				| BuiltInIdentityKind::SponsorCompanyAdministrator
+		)
+	);
+	with_authorized_import_history_collection(
+		&ctx,
+		&snapshot,
+		&mm,
+		move |ctx, mm, scope| {
+			Box::pin(async move {
+				let rows = XmlImportHistoryBmc::list_all_scoped(
+					mm,
+					ctx,
+					scope,
+					include_unscoped,
+				)
+				.await
+				.map_err(Error::Model)?;
+				let items = rows
+					.into_iter()
+					.map(|row| XmlImportHistoryRecord {
+						id: row.id,
+						uploaded_file_name: row.uploaded_file_name,
+						source_file_name: row.source_file_name,
+						case_id: row.case_id,
+						case_number: row.case_number,
+						status: row.status,
+						error_message: row.error_message,
+						uploaded_by: row.uploaded_by,
+						uploader_email: row.uploader_email,
+						uploaded_at: row
+							.uploaded_at
+							.format(&Rfc3339)
+							.unwrap_or_else(|_| row.uploaded_at.to_string()),
+					})
+					.collect();
+				Ok((
+					StatusCode::OK,
+					Json(DataRestResult {
+						data: XmlImportHistoryList { items },
+					}),
+				))
+			})
+		},
+	)
+	.await
 }
 
 pub async fn download_import_history_error(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: AuthorizationSnapshotW,
 	Path(id): Path<Uuid>,
 ) -> Result<Response> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, XML_IMPORT_READ)?;
-
-	let row = XmlImportHistoryBmc::get_error_row(&mm, &ctx, id)
-		.await
-		.map_err(Error::Model)?;
-
-	let row = row.ok_or_else(|| Error::BadRequest {
-		message: format!("xml import history record {id} not found"),
-	})?;
-	match row.case_id {
-		Some(case_id) => {
-			lib_rest_core::require_case_read_allowed(&ctx, &mm, case_id).await?;
-		}
-		None if lib_rest_core::is_admin(&ctx, &mm).await? => {}
-		None => {
-			return Err(Error::PermissionDenied {
-				required_permission: XML_IMPORT_READ.to_string(),
-			});
-		}
-	}
-	let text = row.error_message.ok_or_else(|| Error::BadRequest {
-		message: format!("xml import history record {id} has no error details"),
-	})?;
-
-	let safe_source_name = row
-		.source_file_name
-		.chars()
-		.map(|ch| match ch {
-			'a'..='z' | 'A'..='Z' | '0'..='9' | '.' | '_' | '-' => ch,
-			_ => '_',
+	with_authorized_import_history_read(&ctx, &snapshot, &mm, id, move |ctx, mm| {
+		Box::pin(async move {
+			let row = XmlImportHistoryBmc::get_error_row(mm, ctx, id)
+				.await
+				.map_err(Error::Model)?
+				.ok_or_else(|| Error::BadRequest {
+					message: format!("xml import history record {id} not found"),
+				})?;
+			let text = row.error_message.ok_or_else(|| Error::BadRequest {
+				message: format!(
+					"xml import history record {id} has no error details"
+				),
+			})?;
+			let safe_source_name = row
+				.source_file_name
+				.chars()
+				.map(|ch| match ch {
+					'a'..='z' | 'A'..='Z' | '0'..='9' | '.' | '_' | '-' => ch,
+					_ => '_',
+				})
+				.collect::<String>();
+			let file_name = format!("import-error-{id}-{safe_source_name}.txt");
+			let mut response = (StatusCode::OK, text).into_response();
+			response.headers_mut().insert(
+				header::CONTENT_TYPE,
+				header::HeaderValue::from_static("text/plain; charset=utf-8"),
+			);
+			response.headers_mut().insert(
+				header::CONTENT_DISPOSITION,
+				header::HeaderValue::from_str(&format!(
+					"attachment; filename=\"{file_name}\""
+				))
+				.map_err(|err| Error::BadRequest {
+					message: format!("invalid import error filename header: {err}"),
+				})?,
+			);
+			Ok(response)
 		})
-		.collect::<String>();
-	let file_name = format!("import-error-{id}-{safe_source_name}.txt");
-
-	let mut response = (StatusCode::OK, text).into_response();
-	response.headers_mut().insert(
-		header::CONTENT_TYPE,
-		header::HeaderValue::from_static("text/plain; charset=utf-8"),
-	);
-	response.headers_mut().insert(
-		header::CONTENT_DISPOSITION,
-		header::HeaderValue::from_str(&format!(
-			"attachment; filename=\"{file_name}\""
-		))
-		.map_err(|err| Error::BadRequest {
-			message: format!("invalid import error filename header: {err}"),
-		})?,
-	);
-	Ok(response)
+	})
+	.await
 }
 
 /// POST /api/import/xml/validate
 /// Validates E2B(R3) XML payload (XSD-only for now)
 pub async fn validate_xml(
-	State(_mm): State<ModelManager>,
+	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
-	_perm: RequirePermission<XmlImportPerm>,
+	snapshot: AuthorizationSnapshotW,
 	multipart: Multipart,
 ) -> Result<(StatusCode, Json<DataRestResult<XmlValidationReport>>)> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, XML_IMPORT)?;
-
-	let payload = read_xml_multipart(multipart).await?;
-	let report = if should_skip_xml_validation() {
-		// Keep local dev usable even when XSD files are not mounted/available.
-		validate_e2b_xml_basic(&payload.bytes, None)?
-	} else {
-		validate_e2b_xml(&payload.bytes, None)?
-	};
-
-	Ok((StatusCode::OK, Json(DataRestResult { data: report })))
+	with_authorized_xml_import(
+		&ctx,
+		&snapshot,
+		&mm,
+		"import.xml.validate",
+		"validate",
+		move |_ctx, _mm, _scope| {
+			Box::pin(async move {
+				let payload = read_xml_multipart(multipart).await?;
+				let report = if should_skip_xml_validation() {
+					validate_e2b_xml_basic(&payload.bytes, None)?
+				} else {
+					validate_e2b_xml(&payload.bytes, None)?
+				};
+				Ok((StatusCode::OK, Json(DataRestResult { data: report })))
+			})
+		},
+	)
+	.await
 }
 
 /// POST /api/import/xml
@@ -786,59 +826,101 @@ pub async fn validate_xml(
 pub async fn import_xml(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
-	_perm: RequirePermission<XmlImportPerm>,
+	snapshot: AuthorizationSnapshotW,
 	multipart: Multipart,
 ) -> Result<(StatusCode, Json<DataRestResult<XmlImportBatchResult>>)> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, XML_IMPORT)?;
+	with_authorized_xml_import(
+		&ctx,
+		&snapshot,
+		&mm,
+		"import.xml.execute",
+		"execute",
+		move |ctx, mm, scope| {
+			Box::pin(async move {
+				import_xml_authorized(ctx, mm, scope, multipart).await
+			})
+		},
+	)
+	.await
+}
 
+async fn import_xml_authorized(
+	ctx: &Ctx,
+	mm: &ModelManager,
+	scope: &lib_core::authorization::EnforcedScopeFilter,
+	multipart: Multipart,
+) -> Result<(StatusCode, Json<DataRestResult<XmlImportBatchResult>>)> {
 	let payload = read_xml_multipart(multipart).await?;
+	let selected_product = match payload.product_presave_id {
+		Some(id) => {
+			let product = ProductPresaveBmc::get(ctx, mm, id)
+				.await
+				.map_err(Error::Model)?;
+			if product.deleted {
+				return Err(Error::BadRequest {
+					message: "selected Product is deleted".to_string(),
+				});
+			}
+			if !super::section_presave_rest::product_presave_allowed(scope, &product)
+			{
+				return Err(Error::PermissionDenied {
+					required_permission: "info.read product scope".to_string(),
+				});
+			}
+			Some((id, product.product_id, product.sender_presave_id))
+		}
+		None => None,
+	};
 	let entries = extract_xml_entries(&payload.bytes, payload.filename.as_deref())?;
 	let mut imported_cases = Vec::with_capacity(entries.len());
-	let c_settings = load_import_settings(&ctx, &mm).await?;
+	let mut c_settings = load_import_settings(ctx, mm).await?;
+	if c_settings.apply_sender_info_to_imported_cases {
+		c_settings.selected_sender_presave_id = selected_product
+			.as_ref()
+			.and_then(|(_, _, sender_presave_id)| *sender_presave_id);
+	}
 	let uploaded_file_name = payload
 		.filename
 		.clone()
 		.unwrap_or_else(|| "import.xml".to_string());
+	let effective_product_id = selected_product
+		.as_ref()
+		.and_then(|(_, product_id, _)| product_id.as_deref())
+		.or(payload.product_id.as_deref());
 
 	for (entry_name, xml) in entries {
-		let decision = match decide_import_entry(
-			&ctx,
-			&mm,
-			&xml,
-			payload.product_id.as_deref(),
-		)
-		.await
-		{
-			Ok(decision) => decision,
-			Err(err) => {
-				let message = err.to_string();
-				if let Err(history_err) = record_import_history(
-					&ctx,
-					&mm,
-					&uploaded_file_name,
-					&entry_name,
-					None,
-					None,
-					"error",
-					Some(&message),
-				)
-				.await
-				{
-					warn!(
+		let decision =
+			match decide_import_entry(ctx, mm, &xml, effective_product_id).await {
+				Ok(decision) => decision,
+				Err(err) => {
+					let message = err.to_string();
+					if let Err(history_err) = record_import_history(
+						ctx,
+						mm,
+						&uploaded_file_name,
+						&entry_name,
+						None,
+						None,
+						"error",
+						Some(&message),
+					)
+					.await
+					{
+						warn!(
 						"failed to record xml import decision error: {history_err}"
 					);
+					}
+					imported_cases
+						.push(summary_for_decision_error(&entry_name, message));
+					continue;
 				}
-				imported_cases
-					.push(summary_for_decision_error(&entry_name, message));
-				continue;
-			}
-		};
+			};
 
 		if decision.action == XmlImportDecisionAction::Skip {
 			if let Err(history_err) = record_import_history(
-				&ctx,
-				&mm,
+				ctx,
+				mm,
 				&uploaded_file_name,
 				&entry_name,
 				decision.matched_case_id,
@@ -860,13 +942,17 @@ pub async fn import_xml(
 
 		imported_cases.push(
 			import_single_xml(
-				&ctx,
-				&mm,
+				ctx,
+				mm,
 				xml,
 				&uploaded_file_name,
 				entry_name,
 				c_settings,
 				decision,
+				selected_product.as_ref().map(|(id, _, _)| *id),
+				selected_product
+					.as_ref()
+					.and_then(|(_, product_id, _)| product_id.clone()),
 			)
 			.await,
 		);

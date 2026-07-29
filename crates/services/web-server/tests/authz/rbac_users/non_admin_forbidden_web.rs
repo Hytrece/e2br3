@@ -43,9 +43,10 @@ async fn test_viewer_cannot_create_user() -> Result<()> {
 	assert_eq!(res.status(), StatusCode::FORBIDDEN);
 	let body = axum::body::to_bytes(res.into_body(), usize::MAX).await?;
 	let json: serde_json::Value = serde_json::from_slice(&body)?;
-	json["error"]["data"]["detail"]
-		.as_str()
-		.ok_or("expected string detail for PERMISSION_DENIED")?;
+	let detail = &json["error"]["data"]["detail"];
+	if detail.is_null() {
+		return Err("expected detail for PERMISSION_DENIED".into());
+	}
 	Ok(())
 }
 
@@ -122,6 +123,45 @@ async fn test_non_admin_cannot_list_users() -> Result<()> {
 			"{role} should be forbidden from listing users"
 		);
 	}
+
+	Ok(())
+}
+
+#[serial]
+#[tokio::test]
+async fn test_user_without_case_read_cannot_list_workflow_user_options() -> Result<()>
+{
+	let mm = init_test_mm().await?;
+	let seed = seed_org_with_all_roles(&mm).await?;
+	let app = web_server::app(mm);
+	let token = generate_web_token(&seed.user.email, seed.user.token_salt)?;
+
+	let req = Request::builder()
+		.method("GET")
+		.uri("/api/users/workflow-options?limit=25")
+		.header("cookie", cookie_header(&token.to_string()))
+		.body(Body::empty())?;
+	let res = app.oneshot(req).await?;
+	assert_eq!(res.status(), StatusCode::FORBIDDEN);
+	Ok(())
+}
+
+#[serial]
+#[tokio::test]
+async fn test_case_reader_without_workflow_grant_cannot_list_workflow_user_options(
+) -> Result<()> {
+	let mm = init_test_mm().await?;
+	let seed = seed_two_orgs_users_cases(&mm).await?;
+	let app = web_server::app(mm);
+	let token = generate_web_token(&seed.user1.email, seed.user1.token_salt)?;
+
+	let req = Request::builder()
+		.method("GET")
+		.uri("/api/users/workflow-options?limit=25")
+		.header("cookie", cookie_header(&token.to_string()))
+		.body(Body::empty())?;
+	let res = app.oneshot(req).await?;
+	assert_eq!(res.status(), StatusCode::FORBIDDEN);
 
 	Ok(())
 }

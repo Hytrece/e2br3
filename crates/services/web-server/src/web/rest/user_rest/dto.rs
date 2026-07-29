@@ -19,7 +19,6 @@ pub struct UserRoleMetadata {
 	pub is_editable: bool,
 	pub is_sponsor_admin: bool,
 	pub is_operational: bool,
-	pub can_admin: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -62,6 +61,14 @@ pub struct UserView {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct WorkflowUserOptionView {
+	pub id: Uuid,
+	pub email: String,
+	pub display_name: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct OrganizationOptionView {
 	pub id: Uuid,
 	pub name: String,
@@ -76,7 +83,9 @@ pub struct CurrentUserProfileView {
 	pub active_organization: OrganizationOptionView,
 	pub available_organizations: Vec<OrganizationOptionView>,
 	pub routing: lib_rest_core::RoutingProfile,
-	pub capabilities: UserCapabilities,
+	pub privileges: Vec<AdminMenuPrivilege>,
+	pub eligible_actions: Vec<lib_core::authorization::ActionId>,
+	pub policy_version: i64,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -84,70 +93,6 @@ pub struct CurrentUserProfileView {
 pub struct CurrentUserOrganizationSelectionView {
 	pub active_organization: OrganizationOptionView,
 	pub available_organizations: Vec<OrganizationOptionView>,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ModuleCrudCapabilities {
-	pub read: bool,
-	pub create: bool,
-	pub update: bool,
-	pub delete: bool,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct CaseCapabilities {
-	pub read: bool,
-	pub create: bool,
-	pub update: bool,
-	pub delete: bool,
-	pub review: bool,
-	pub lock: bool,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ExecuteCapabilities {
-	pub read: bool,
-	pub execute: bool,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct DataCapabilities {
-	pub read: bool,
-	pub import: bool,
-	pub approve: bool,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct AdminCapabilities {
-	pub read: bool,
-	pub update: bool,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct HomeNoticeCapabilities {
-	pub read: bool,
-	pub update: bool,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct UserCapabilities {
-	pub case: CaseCapabilities,
-	pub info: ModuleCrudCapabilities,
-	pub import: ExecuteCapabilities,
-	pub export_submission: ExecuteCapabilities,
-	pub data: DataCapabilities,
-	pub admin: AdminCapabilities,
-	pub users: ModuleCrudCapabilities,
-	pub roles: ModuleCrudCapabilities,
-	pub settings: AdminCapabilities,
-	pub home_notice: HomeNoticeCapabilities,
 }
 
 #[derive(Debug, Deserialize)]

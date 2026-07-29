@@ -1,10 +1,134 @@
-use crate::common::{demo_ctx, demo_user_id, init_test_mm, unique_suffix, Result};
+use crate::common::{demo_ctx, init_test_mm, system_user_id, unique_suffix, Result};
 use lib_core::model::store::set_full_context_dbx_or_rollback;
 use lib_core::model::terminology::{
-	E2bCodeListBmc, FdaHierarchicalCodeListBmc, IsoCountryBmc, MeddraTermBmc,
-	UcumUnitBmc, WhodrugProductBmc,
+	ControlledTermBmc, E2bCodeListBmc, FdaHierarchicalCodeListBmc, IsoCountryBmc,
+	MeddraTermBmc, MfdsProductBmc, UcumUnitBmc, WhodrugProductBmc,
 };
 use serial_test::serial;
+
+#[serial]
+#[tokio::test]
+async fn bootstrap_provides_active_iso_country_reference_data() -> Result<()> {
+	let mm = init_test_mm().await;
+	let ctx = demo_ctx();
+	let dbx = mm.dbx();
+
+	dbx.begin_txn().await?;
+	set_full_context_dbx_or_rollback(
+		dbx,
+		system_user_id(),
+		ctx.organization_id(),
+		"system_admin",
+	)
+	.await?;
+	dbx.execute(sqlx::query("DELETE FROM iso_countries"))
+		.await?;
+	dbx.execute(sqlx::query(include_str!(
+		"../../../../../db/bootstrap/09a-iso-countries.sql"
+	)))
+	.await?;
+
+	let countries = IsoCountryBmc::list_all(&ctx, &mm).await?;
+	assert!(
+		countries.len() >= 200,
+		"fresh database must provide a usable ISO country catalog"
+	);
+	assert!(countries.iter().any(|country| country.code == "KR"));
+	assert!(countries.iter().any(|country| country.code == "US"));
+
+	dbx.rollback_txn().await?;
+	Ok(())
+}
+
+#[serial]
+#[tokio::test]
+async fn active_controlled_terms_and_mfds_products_support_membership() -> Result<()>
+{
+	let mm = init_test_mm().await;
+	let ctx = demo_ctx();
+	let dbx = mm.dbx();
+	let suffix = unique_suffix();
+	let version = format!("test-{}", &suffix[..16]);
+	let whodrug_version = format!("T{}", &suffix[..8]);
+	let item_seq = format!("P{}", &suffix[..8]);
+	let whodrug_code = format!("W{}", &suffix[..8]);
+
+	dbx.begin_txn().await?;
+	set_full_context_dbx_or_rollback(
+		dbx,
+		system_user_id(),
+		ctx.organization_id(),
+		"system_admin",
+	)
+	.await?;
+
+	dbx.execute(
+		sqlx::query(
+			"INSERT INTO controlled_terminology_terms
+			 (dictionary, version, language, scope, code, display_name, active)
+			 VALUES ('iso3166', $1, 'en', 'country', 'KR', 'Korea', true)",
+		)
+		.bind(&version),
+	)
+	.await?;
+	dbx.execute(
+		sqlx::query(
+			"INSERT INTO whodrug_products
+			 (code, drug_name, version, language, active)
+			 VALUES ($1, 'Test WHODrug product', $2, 'en', true)",
+		)
+		.bind(&whodrug_code)
+		.bind(&whodrug_version),
+	)
+	.await?;
+	dbx.execute(
+		sqlx::query(
+			"INSERT INTO terminology_releases
+			 (dictionary, version, language, status, loaded_rows)
+			 VALUES ('edqm', $1, 'en', 'active', 1)",
+		)
+		.bind(&version),
+	)
+	.await?;
+	dbx.execute(
+		sqlx::query(
+			"INSERT INTO mfds_products
+			 (item_seq, product_name_kr, version, active)
+			 VALUES ($1, 'Test product', $2, true)",
+		)
+		.bind(&item_seq)
+		.bind(&version),
+	)
+	.await?;
+
+	let country_codes = vec!["KR".to_string(), "ZZ".to_string()];
+	let existing_countries = ControlledTermBmc::existing_active_codes(
+		&mm,
+		"iso3166",
+		"country",
+		&country_codes,
+	)
+	.await?;
+	assert!(existing_countries.contains("KR"));
+	assert!(!existing_countries.contains("ZZ"));
+	let edqm_versions =
+		ControlledTermBmc::active_release_versions(&mm, "edqm", "en").await?;
+	assert!(edqm_versions.contains(&version));
+
+	let product_codes = vec![item_seq.clone(), "missing".to_string()];
+	let existing_products =
+		MfdsProductBmc::existing_active_item_seqs(&mm, &product_codes).await?;
+	assert!(existing_products.contains(&item_seq));
+	assert!(!existing_products.contains("missing"));
+	let whodrug_codes = vec![whodrug_code.clone(), "missing".to_string()];
+	let existing_whodrug =
+		WhodrugProductBmc::existing_active_codes(&mm, &whodrug_codes).await?;
+	assert!(existing_whodrug.contains(&whodrug_code));
+	assert!(!existing_whodrug.contains("missing"));
+
+	dbx.rollback_txn().await?;
+	Ok(())
+}
 
 #[serial]
 #[tokio::test]
@@ -23,7 +147,7 @@ async fn test_terminology_queries() -> Result<()> {
 	dbx.begin_txn().await?;
 	set_full_context_dbx_or_rollback(
 		dbx,
-		demo_user_id(),
+		system_user_id(),
 		ctx.organization_id(),
 		"system_admin",
 	)

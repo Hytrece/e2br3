@@ -1,6 +1,7 @@
 use crate::common::{
 	cookie_header, init_test_mm, seed_org_with_users, system_org_id, Result,
 };
+use crate::rbac_users::helpers::create_empty_permission_profile;
 use axum::body::{to_bytes, Body};
 use axum::http::{Request, StatusCode};
 use hmac::{Hmac, Mac};
@@ -111,6 +112,13 @@ async fn test_auth_login_wrong_password() -> Result<()> {
 		.body(Body::from(login_body.to_string()))?;
 	let res = app.oneshot(req).await?;
 	assert_eq!(res.status(), StatusCode::FORBIDDEN);
+	let body: Value =
+		serde_json::from_slice(&to_bytes(res.into_body(), usize::MAX).await?)?;
+	assert_eq!(
+		body.pointer("/error/message"),
+		Some(&json!("LOGIN_INVALID_CREDENTIALS")),
+	);
+	assert_eq!(body.pointer("/error/data/detail"), Some(&Value::Null));
 	Ok(())
 }
 
@@ -129,6 +137,13 @@ async fn test_auth_login_unknown_email() -> Result<()> {
 		.body(Body::from(login_body.to_string()))?;
 	let res = app.oneshot(req).await?;
 	assert_eq!(res.status(), StatusCode::FORBIDDEN);
+	let body: Value =
+		serde_json::from_slice(&to_bytes(res.into_body(), usize::MAX).await?)?;
+	assert_eq!(
+		body.pointer("/error/message"),
+		Some(&json!("LOGIN_INVALID_CREDENTIALS")),
+	);
+	assert_eq!(body.pointer("/error/data/detail"), Some(&Value::Null));
 	Ok(())
 }
 
@@ -141,27 +156,40 @@ async fn test_auth_login_user_with_nil_org_fails() -> Result<()> {
 	let app = web_server::app(mm.clone());
 	let suffix = Uuid::new_v4();
 	let email = format!("nil-org-login-{suffix}@example.com");
+	let admin_cookie = cookie_header(&admin_token.to_string());
+	let role_id = create_empty_permission_profile(
+		&app,
+		&admin_cookie,
+		format!("nil-org-login-{suffix}"),
+	)
+	.await?;
 
 	let create_body = json!({
 		"data": {
-			"organization_id": system_org_id(),
+			"organization_id": seed.org_id,
 			"email": email,
 			"username": format!("nil_org_login_{suffix}"),
 			"pwd_clear": "NilOrgPwd123!",
-			"role": "case_reviewer"
+			"role": role_id
 		}
 	});
 	let create_req = Request::builder()
 		.method("POST")
 		.uri("/api/users")
-		.header("cookie", cookie_header(&admin_token.to_string()))
+		.header("cookie", admin_cookie)
 		.header("content-type", "application/json")
 		.body(Body::from(create_body.to_string()))?;
 	let create_res = app.clone().oneshot(create_req).await?;
-	assert_eq!(create_res.status(), StatusCode::CREATED);
+	let create_status = create_res.status();
+	let create_body = to_bytes(create_res.into_body(), usize::MAX).await?;
+	assert_eq!(
+		create_status,
+		StatusCode::CREATED,
+		"{}",
+		String::from_utf8_lossy(&create_body)
+	);
 
 	// Simulate a legacy malformed row where organization_id is nil UUID.
-	let create_body = to_bytes(create_res.into_body(), usize::MAX).await?;
 	let created: Value = serde_json::from_slice(&create_body)?;
 	let created_user_id = Uuid::parse_str(
 		created["data"]["id"]
@@ -207,19 +235,26 @@ async fn test_auth_login_created_user_email_case_insensitive() -> Result<()> {
 	let suffix = Uuid::new_v4();
 	let mixed_case_email = format!("CaseMix-{suffix}@Example.COM");
 	let login_email = mixed_case_email.to_lowercase();
+	let admin_cookie = cookie_header(&admin_token.to_string());
+	let role_id = create_empty_permission_profile(
+		&app,
+		&admin_cookie,
+		format!("case-mix-{suffix}"),
+	)
+	.await?;
 
 	let create_body = json!({
 		"data": {
 			"organization_id": seed.org_id,
 			"email": mixed_case_email,
 			"username": format!("case_mix_{suffix}"),
-			"role": "case_reviewer"
+			"role": role_id
 		}
 	});
 	let create_req = Request::builder()
 		.method("POST")
 		.uri("/api/users")
-		.header("cookie", cookie_header(&admin_token.to_string()))
+		.header("cookie", admin_cookie)
 		.header("content-type", "application/json")
 		.body(Body::from(create_body.to_string()))?;
 	let create_res = app.clone().oneshot(create_req).await?;
@@ -247,6 +282,13 @@ async fn test_auth_login_created_user_uses_requested_initial_password() -> Resul
 	let suffix = Uuid::new_v4();
 	let email = format!("initial-password-{suffix}@example.com");
 	let password = "InitialPwd123!";
+	let admin_cookie = cookie_header(&admin_token.to_string());
+	let role_id = create_empty_permission_profile(
+		&app,
+		&admin_cookie,
+		format!("initial-password-{suffix}"),
+	)
+	.await?;
 
 	let create_body = json!({
 		"data": {
@@ -254,13 +296,13 @@ async fn test_auth_login_created_user_uses_requested_initial_password() -> Resul
 			"email": email,
 			"username": format!("initial_password_{suffix}"),
 			"pwd_clear": password,
-			"role": "case_reviewer"
+			"role": role_id
 		}
 	});
 	let create_req = Request::builder()
 		.method("POST")
 		.uri("/api/users")
-		.header("cookie", cookie_header(&admin_token.to_string()))
+		.header("cookie", admin_cookie)
 		.header("content-type", "application/json")
 		.body(Body::from(create_body.to_string()))?;
 	let create_res = app.clone().oneshot(create_req).await?;
@@ -279,7 +321,8 @@ async fn test_auth_login_created_user_uses_requested_initial_password() -> Resul
 
 #[serial]
 #[tokio::test]
-async fn test_auth_login_created_user_without_role_is_rejected() -> Result<()> {
+async fn test_auth_login_created_user_without_role_defaults_to_operational_user(
+) -> Result<()> {
 	let mm = init_test_mm().await?;
 	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
 	let admin_token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
@@ -301,7 +344,7 @@ async fn test_auth_login_created_user_without_role_is_rejected() -> Result<()> {
 		.header("content-type", "application/json")
 		.body(Body::from(create_body.to_string()))?;
 	let create_res = app.clone().oneshot(create_req).await?;
-	assert_eq!(create_res.status(), StatusCode::BAD_REQUEST);
+	assert_eq!(create_res.status(), StatusCode::CREATED);
 	Ok(())
 }
 
@@ -315,6 +358,13 @@ async fn test_auth_login_upgrades_legacy_hash_for_non_admin_user() -> Result<()>
 	let suffix = Uuid::new_v4();
 	let email = format!("legacy-user-{suffix}@example.com");
 	let password = "hello world";
+	let admin_cookie = cookie_header(&admin_token.to_string());
+	let role_id = create_empty_permission_profile(
+		&app,
+		&admin_cookie,
+		format!("legacy-user-{suffix}"),
+	)
+	.await?;
 
 	let create_body = json!({
 		"data": {
@@ -322,13 +372,13 @@ async fn test_auth_login_upgrades_legacy_hash_for_non_admin_user() -> Result<()>
 			"email": email,
 			"username": format!("legacy_user_{suffix}"),
 			"pwd_clear": password,
-			"role": "case_reviewer"
+			"role": role_id
 		}
 	});
 	let create_req = Request::builder()
 		.method("POST")
 		.uri("/api/users")
-		.header("cookie", cookie_header(&admin_token.to_string()))
+		.header("cookie", admin_cookie)
 		.header("content-type", "application/json")
 		.body(Body::from(create_body.to_string()))?;
 	let create_res = app.clone().oneshot(create_req).await?;
@@ -457,8 +507,9 @@ async fn test_audit_trail_case_crud() -> Result<()> {
 	let app = web_server::app(mm.clone());
 	let case_body = json!({
 		"data": {
-			"organization_id": system_org_id(),
-			"safety_report_id": format!("SR-{}", Uuid::new_v4()),
+			"safetyReportIdentification": {
+				"safetyReportId": format!("SR-{}", Uuid::new_v4())
+			},
 			"status": "draft"
 		}
 	});

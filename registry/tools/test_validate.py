@@ -1,13 +1,230 @@
+import contextlib
+import io
+import json
 import tempfile
 import unittest
 from pathlib import Path
 import sys
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import validate
+import editor_contract
 
 
 class RegistryValidatorTests(unittest.TestCase):
+    def test_active_editor_contract_fields_are_explicit_rows_payloads(self):
+        repo = Path(__file__).resolve().parents[2]
+        active_pages = {"CI", "RP", "SD", "LR", "SI", "DM", "NR", "AE", "LB", "DG", "DH"}
+
+        violations = []
+        for page_id in sorted(active_pages):
+            contract = editor_contract.load_editor_contract(
+                repo / "registry", page_id
+            )
+            for field in contract["fields"]:
+                patch = field.get("patch", {})
+                if not field.get("payloadPath"):
+                    violations.append(f"{page_id}/{field.get('code')}: missing payloadPath")
+                if patch.get("kind") not in {"row", "rows"}:
+                    violations.append(
+                        f"{page_id}/{field.get('code')}: invalid patch kind {patch.get('kind')}"
+                    )
+                if not patch.get("owner"):
+                    violations.append(f"{page_id}/{field.get('code')}: missing patch owner")
+
+        self.assertEqual([], violations)
+
+    def test_verified_constraints_declare_explicit_invalid_values(self):
+        repo = Path(__file__).resolve().parents[2]
+        violations = []
+        for path in sorted((repo / "registry/editor-contracts").glob("*.json")):
+            if path.name == "schema.json":
+                continue
+            contract = json.loads(path.read_text(encoding="utf-8"))
+            for field in contract["fields"]:
+                constraint = field.get("constraint", {})
+                if constraint.get("status") != "verified":
+                    continue
+                if "invalidValue" not in constraint:
+                    violations.append(
+                        f"{contract['pageId']}/{field['code']}: missing constraint.invalidValue"
+                    )
+
+        self.assertEqual([], violations)
+
+    def test_separate_null_flavor_fields_declare_symmetric_partners(self):
+        repo = Path(__file__).resolve().parents[2]
+        violations = []
+        for path in sorted((repo / "registry/editor-contracts").glob("*.json")):
+            if path.name == "schema.json":
+                continue
+            contract = json.loads(path.read_text(encoding="utf-8"))
+            fields = {field["code"]: field for field in contract["fields"]}
+            for field in fields.values():
+                if not field["frontendPath"].endswith("NullFlavor"):
+                    continue
+                partner_code = field.get("nullFlavorPartnerCode")
+                partner = fields.get(partner_code)
+                if partner is None:
+                    violations.append(f"{field['code']}: missing NullFlavor partner")
+                elif partner.get("nullFlavorPartnerCode") != field["code"]:
+                    violations.append(f"{field['code']}: partner is not symmetric")
+
+        self.assertEqual([], violations)
+
+    def test_rule_source_coverage_report_cli_outputs_json(self):
+        stdout = io.StringIO()
+        with (
+            mock.patch.object(
+                sys,
+                "argv",
+                [
+                    "validate.py",
+                    "--report-rule-source-coverage",
+                    "LR",
+                ],
+            ),
+            contextlib.redirect_stdout(stdout),
+        ):
+            exit_code = validate.main()
+
+        report = json.loads(stdout.getvalue())
+        self.assertEqual(0, exit_code)
+        self.assertTrue(report)
+        self.assertEqual("LR", report[0]["page"])
+        self.assertEqual(
+            {
+                "page",
+                "fieldId",
+                "element",
+                "authority",
+                "coverage",
+                "disposition",
+            },
+            set(report[0]),
+        )
+
+    def test_sd_editor_contract_excludes_export_owned_message_header(self):
+        repo = Path(__file__).resolve().parents[2]
+        contract = json.loads(
+            (repo / "registry/editor-contracts/sd.json").read_text(encoding="utf-8")
+        )
+        registry = json.loads(
+            (repo / "registry/sections/n-message-header.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        export_codes = {"N.1.5", "N.2.r.1", "N.2.r.2", "N.2.r.3"}
+
+        self.assertTrue(
+            {field["code"] for field in contract["fields"]}.isdisjoint(
+                export_codes
+            )
+        )
+        for row in registry:
+            if row["id"] not in export_codes:
+                continue
+            self.assertNotIn("editor_page", row)
+            self.assertIn(
+                "app/(protected)/submission/message-header.ts",
+                row["frontend"]["file"],
+            )
+
+    def test_lr_editor_contract_tracks_regional_business_validation_gap(self):
+        repo = Path(__file__).resolve().parents[2]
+        contract = json.loads(
+            (repo / "registry/editor-contracts/lr.json").read_text(encoding="utf-8")
+        )
+        registry = json.loads(
+            (repo / "registry/sections/c-safety-report.json").read_text(encoding="utf-8")
+        )
+
+        self.assertEqual(
+            {
+                field["code"]: field["businessValidation"]["status"]
+                for field in contract["fields"]
+            },
+            {
+                "C.4.r.1": "not_applicable",
+                "C.4.r.local.referenceTextNullFlavor": "not_applicable",
+                "C.4.r.2": "not_applicable",
+            },
+        )
+        literature_attachment = next(
+            row for row in registry if row["id"] == "C.4.r.2"
+        )
+        self.assertEqual("incomplete", literature_attachment["status"])
+        self.assertIn("FDA", literature_attachment["action"])
+        self.assertIn("file name", literature_attachment["action"])
+        self.assertIn("mediaType", literature_attachment["action"])
+
+    def test_certified_editor_sections_track_regional_business_rule_gaps(self):
+        repo = Path(__file__).resolve().parents[2]
+        registry_rows = []
+        for path in (repo / "registry/sections").glob("*.json"):
+            registry_rows.extend(json.loads(path.read_text(encoding="utf-8")))
+        status_by_code = {
+            row["id"]: row["status"]
+            for row in registry_rows
+            if row.get("editor_page") in {"RP", "SD", "LR"}
+        }
+
+        regional_gaps = {
+            # RP: FDA VAERS primary-reporter requirements/MSK restrictions and
+            # MFDS study/therapeutic-use conditional requirements.
+            "C.2.r.1.2",
+            "C.2.r.1.4",
+            "C.2.r.2.1",
+            "C.2.r.2.3",
+            "C.2.r.2.4",
+            "C.2.r.2.5",
+            "C.2.r.2.6",
+            "C.2.r.2.7",
+            "C.2.r.3",
+            "FDA.C.2.r.2.8",
+            "C.2.r.4",
+            "C.2.r.4.KR.1",
+            "C.2.r.5",
+            # SD: FDA sender/identifier rules and MFDS conditional/format rules.
+            "C.3.1.KR.1",
+            "C.3.3.1",
+            "C.3.3.2",
+            "C.3.3.3",
+            "C.3.3.5",
+            "C.3.4.1",
+            "C.3.4.2",
+            "C.3.4.3",
+            "C.3.4.4",
+            "C.3.4.5",
+            "C.3.4.6",
+            "C.3.4.7",
+            "C.3.4.8",
+            "N.1.5",
+            "N.2.r.2",
+            "N.2.r.3",
+            # LR: FDA attachment file-name/mediaType consistency.
+            "C.4.r.2",
+        }
+
+        self.assertEqual(
+            {},
+            {
+                code: status_by_code.get(code)
+                for code in sorted(regional_gaps)
+                if status_by_code.get(code) != "incomplete"
+            },
+        )
+
+    def test_drug_registry_has_no_local_frequency_value(self):
+        repo = Path(__file__).resolve().parents[2]
+        rows = json.loads(
+            (repo / "registry/sections/g-drug.json").read_text(encoding="utf-8")
+        )
+        ids = {row["id"] for row in rows}
+
+        self.assertNotIn("G.k.local.dosage.frequencyValue", ids)
+
     def write_registry(self, root: Path, row: str) -> None:
         (root / "index.json").write_text(
             '{"sections":["sections/c-safety-report.json"]}',
@@ -16,6 +233,204 @@ class RegistryValidatorTests(unittest.TestCase):
         sections = root / "sections"
         sections.mkdir()
         (sections / "c-safety-report.json").write_text(row, encoding="utf-8")
+
+    def editor_row(self, *, code: str = "C.1.3", status: str = "complete") -> dict:
+        return {
+            "id": code,
+            "e2br3_code": code,
+            "label": "Type of Report",
+            "section": "C",
+            "authority": "ICH",
+            "status": status,
+            "editor_page": "CI",
+            "backend": {
+                "status": "mapped",
+                "model": "SafetyReportIdentification",
+                "field": "report_type",
+                "evidence": "model field",
+            },
+            "frontend": {
+                "status": "mapped",
+                "section": "safetyReportIdentification",
+                "field": "reportType",
+                "evidence": "mounted input",
+            },
+        }
+
+    def editor_field(self, *, code: str = "C.1.3") -> dict:
+        return {
+            "code": code,
+            "authority": "ICH",
+            "frontendPath": "safetyReportIdentification.reportType",
+            "payloadPath": "reportType",
+            "projectionPath": "safetyReportIdentification.reportType",
+            "patch": {"kind": "row", "owner": "safetyReportIdentification"},
+            "roundTripValue": "2",
+            "constraint": {
+                "status": "verified",
+                "ruleCode": "ICH.C.1.3.ALLOWED.VALUE",
+                "invalidValue": "__INVALID__",
+            },
+            "businessValidation": {
+                "status": "verified",
+                "issuePath": "safetyReportIdentification.reportType",
+            },
+        }
+
+    def test_complete_editor_field_does_not_require_business_validation_stage(self):
+        field = self.editor_field()
+        del field["businessValidation"]
+        result = validate.ValidationResult()
+
+        editor_contract.validate_editor_contract(
+            [self.editor_row()], {"pageId": "CI", "fields": [field]}, result
+        )
+
+        self.assertEqual([], result.errors)
+
+    def test_complete_editor_field_requires_manifest_entry(self):
+        result = validate.ValidationResult()
+
+        editor_contract.validate_editor_contract(
+            [self.editor_row()], {"pageId": "CI", "fields": []}, result
+        )
+
+        self.assertIn("C.1.3 complete but missing from CI editor contract", result.errors)
+
+    def test_editor_completion_is_independent_from_business_rule_status(self):
+        row = self.editor_row(status="incomplete")
+        row["editor_status"] = "complete"
+        result = validate.ValidationResult()
+
+        editor_contract.validate_editor_contract(
+            [row], {"pageId": "CI", "fields": []}, result
+        )
+
+        self.assertIn("C.1.3 complete but missing from CI editor contract", result.errors)
+
+    def test_registry_accepts_complete_editor_with_incomplete_business_status(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            row = self.editor_row(status="incomplete")
+            row["editor_status"] = "complete"
+            self.write_registry(root, json.dumps([row]))
+
+            result = validate.validate_registry(
+                root,
+                validate_backend_inventory=False,
+            )
+
+        self.assertEqual([], result.errors)
+
+    def test_complete_rp_row_requires_field_contract(self) -> None:
+        row = self.editor_row(code="C.2.r.1.1")
+        row["editor_page"] = "RP"
+        row["frontend"]["section"] = "primarySources"
+        row["frontend"]["field"] = "reporterTitle"
+        result = validate.ValidationResult()
+
+        editor_contract.validate_editor_contract(
+            [row], {"pageId": "RP", "fields": []}, result
+        )
+
+        self.assertIn(
+            "C.2.r.1.1 complete but missing from RP editor contract",
+            result.errors,
+        )
+
+    def test_editor_contract_requires_registry_frontend_path_match(self):
+        field = self.editor_field()
+        field["frontendPath"] = "case.reportType"
+        result = validate.ValidationResult()
+
+        editor_contract.validate_editor_contract(
+            [self.editor_row()], {"pageId": "CI", "fields": [field]}, result
+        )
+
+        self.assertIn(
+            "C.1.3 frontend path case.reportType does not match registry safetyReportIdentification.reportType",
+            result.errors,
+        )
+
+    def test_editor_contract_accepts_explicit_not_applicable_stage(self):
+        field = self.editor_field()
+        field["businessValidation"] = {
+            "status": "not_applicable",
+            "reason": "No business validation rule exists for this local field.",
+        }
+        result = validate.ValidationResult()
+
+        editor_contract.validate_editor_contract(
+            [self.editor_row()], {"pageId": "CI", "fields": [field]}, result
+        )
+
+        self.assertEqual([], result.errors)
+
+    def test_incomplete_is_a_valid_registry_status(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self.write_registry(
+                root,
+                json.dumps([self.editor_row(status="incomplete")]),
+            )
+
+            result = validate.validate_registry(root, validate_backend_inventory=False)
+
+        self.assertEqual([], result.errors)
+
+    def test_default_validation_enforces_audited_source_coverage(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self.write_registry(
+                root,
+                json.dumps([self.editor_row(status="incomplete")]),
+            )
+            rules = root / "dictionary" / "rules"
+            rules.mkdir(parents=True)
+            (rules / "ich.json").write_text(
+                json.dumps(
+                    {
+                        "authority": "ICH",
+                        "source": "fixture",
+                        "rules": {"C.1.3": "report type requirement"},
+                    }
+                ),
+                encoding="utf-8",
+            )
+            contracts = root / "editor-contracts"
+            contracts.mkdir()
+            (contracts / "ci.json").write_text(
+                json.dumps(
+                    {
+                        "pageId": "CI",
+                        "registryFile": "sections/c-safety-report.json",
+                        "fields": [
+                            {"code": "C.1.3", "authority": "ICH"}
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (root / "rule-source-coverage.json").write_text(
+                json.dumps(
+                    {
+                        "version": 1,
+                        "auditedPages": ["CI"],
+                        "sources": [],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            result = validate.validate_registry(
+                root,
+                validate_backend_inventory=False,
+            )
+
+        self.assertIn(
+            "missing ICH/C.1.3 source coverage",
+            result.errors,
+        )
 
     def valid_row(self, overrides: dict[str, str] | None = None) -> str:
         values = {
@@ -257,6 +672,74 @@ pub struct PatientInformation {
             "\n".join(result.errors),
         )
 
+    def null_flavor_source(self) -> str:
+        return """
+pub struct PatientInformation {
+    pub id: Uuid,
+    pub case_id: Uuid,
+    pub patient_initial: Option<String>,
+    pub patient_initial_null_flavor: Option<String>,
+}
+"""
+
+    def null_flavor_row(self, field: str) -> str:
+        row = self.valid_row().replace('"model": "SenderInformation"', '"model": "PatientInformation"')
+        row = row.replace('"field": "organization_name"', f'"field": "{field}"')
+        return row.replace('"field": "organizationName"', '"field": "patientInitialNullFlavor"')
+
+    def test_accepts_backend_mapping_to_an_existing_null_flavor_column(self):
+        # A dedicated nullFlavor field (its own frontend input and its own column)
+        # must be mappable, so end-to-end joins resolve to a real column.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source_dir = root / "crates/libs/lib-core/src/model"
+            source_dir.mkdir(parents=True)
+            (source_dir / "patient.rs").write_text(self.null_flavor_source(), encoding="utf-8")
+            self.write_registry(root, self.null_flavor_row("patient_initial_null_flavor"))
+
+            result = validate.validate_registry(
+                root,
+                backend_models={"PatientInformation": "crates/libs/lib-core/src/model/patient.rs"},
+            )
+
+        # patient_initial stays unmapped-but-ignored; only the null_flavor mapping matters here.
+        self.assertNotIn("unknown backend mapping", "\n".join(result.errors))
+
+    def test_rejects_backend_mapping_to_a_null_flavor_column_that_does_not_exist(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source_dir = root / "crates/libs/lib-core/src/model"
+            source_dir.mkdir(parents=True)
+            (source_dir / "patient.rs").write_text(self.null_flavor_source(), encoding="utf-8")
+            self.write_registry(root, self.null_flavor_row("patient_sex_null_flavor"))
+
+            result = validate.validate_registry(
+                root,
+                backend_models={"PatientInformation": "crates/libs/lib-core/src/model/patient.rs"},
+            )
+
+        self.assertIn(
+            "unknown backend mapping: PatientInformation.patient_sex_null_flavor",
+            "\n".join(result.errors),
+        )
+
+    def test_unmapped_null_flavor_columns_are_not_reported_as_missing(self):
+        # The in-band pattern derives the flavor from the base field at the API layer,
+        # so an unmapped support column must stay opt-in rather than demand a row.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source_dir = root / "crates/libs/lib-core/src/model"
+            source_dir.mkdir(parents=True)
+            (source_dir / "patient.rs").write_text(self.null_flavor_source(), encoding="utf-8")
+            self.write_registry(root, "[]")
+
+            result = validate.validate_registry(
+                root,
+                backend_models={"PatientInformation": "crates/libs/lib-core/src/model/patient.rs"},
+            )
+
+        self.assertNotIn("patient_initial_null_flavor", "\n".join(result.errors))
+
     def test_rejects_frontend_field_present_in_source_but_missing_from_registry(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -382,6 +865,39 @@ pub struct SafetyReportIdentification {
             )
 
         self.assertEqual({"SafetyReportIdentification.transmission_date"}, keys)
+
+    def test_backend_inventory_ignores_plumbing_only_on_the_owning_model(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source_dir = root / "crates/libs/lib-core/src/model"
+            source_dir.mkdir(parents=True)
+            (source_dir / "case.rs").write_text(
+                """
+pub struct Case {
+    pub id: Uuid,
+    pub report_year: Option<String>,
+    pub workflow_status: String,
+}
+
+pub struct Reaction {
+    pub id: Uuid,
+    pub workflow_status: Option<String>,
+}
+""",
+                encoding="utf-8",
+            )
+
+            keys = validate.extract_backend_inventory(
+                root,
+                {
+                    "Case": "crates/libs/lib-core/src/model/case.rs",
+                    "Reaction": "crates/libs/lib-core/src/model/case.rs",
+                },
+            )
+
+        # Case.workflow_status is app plumbing, but the same name on another
+        # model must stay tracked -- the ignore is scoped, not global.
+        self.assertEqual({"Case.report_year", "Reaction.workflow_status"}, keys)
 
     def test_repository_section_n_has_complete_backend_inventory(self):
         registry_root = Path(__file__).resolve().parents[1]
@@ -681,7 +1197,6 @@ pub struct SafetyReportIdentification {
         result = validate.validate_registry(
             registry_root,
             backend_models={
-                "DrugRecurrenceInformation": "crates/libs/lib-core/src/model/drug_recurrence.rs",
                 "DrugReactionAssessment": "crates/libs/lib-core/src/model/drug_reaction_assessment.rs",
                 "RelatednessAssessment": "crates/libs/lib-core/src/model/drug_reaction_assessment.rs",
             },
@@ -724,6 +1239,9 @@ class DictionaryValidatorTests(unittest.TestCase):
     def ich_dictionary(self, entries: str) -> str:
         return '{"authority": "ICH", "source": "test", "entries": [%s]}' % entries
 
+    def mfds_dictionary(self, entries: str) -> str:
+        return '{"authority": "MFDS", "source": "test", "entries": [%s]}' % entries
+
     def sender_row(self, authority: str = "ICH", code: str = "C.3.2") -> str:
         return """[
   {
@@ -738,7 +1256,52 @@ class DictionaryValidatorTests(unittest.TestCase):
   }
 ]""" % (code, code, authority)
 
+    def validate_allowed_constraint(self, constraint: dict[str, object]):
+        entry = {
+            "code": "C.3.1",
+            "name": "Sender Type",
+            "section": "C",
+            "kind": "element",
+            "conformance": "mandatory",
+            "allowed_values": "Numeric",
+            "allowed_value_constraint": constraint,
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self.write_registry(root, self.sender_row(code="C.3.1"))
+            self.write_dictionary(
+                root,
+                "ich-e2br3.json",
+                self.ich_dictionary(json.dumps(entry)),
+            )
+            return validate.validate_registry(root, validate_backend_inventory=False)
+
     SENDER_ENTRY = '{"code": "C.3.2", "name": "Sender\'s Organisation", "section": "C", "kind": "element", "conformance": "mandatory"}'
+
+    def test_dictionary_numeric_constraint_requires_shape(self):
+        result = self.validate_allowed_constraint(
+            {"kind": "numeric", "enforcement": "case_validate"}
+        )
+
+        self.assertIn(
+            "numeric allowed_value_constraint requires numeric_shape",
+            "\n".join(result.errors),
+        )
+
+    def test_dictionary_identifier_rejects_vocabulary_scope(self):
+        result = self.validate_allowed_constraint(
+            {
+                "kind": "vocabulary",
+                "identifier_profile": "mpid",
+                "vocabulary_scope": "all",
+                "enforcement": "case_validate",
+            }
+        )
+
+        self.assertIn(
+            "identifier_profile cannot be combined with vocabulary_scope",
+            "\n".join(result.errors),
+        )
 
     def test_dictionary_element_entries_require_conformance(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -944,6 +1507,150 @@ class DictionaryValidatorTests(unittest.TestCase):
 
         self.assertEqual([], result.errors)
 
+    def test_dictionary_entries_accept_receiver_specific_vocabularies(self):
+        entry = (
+            '{"code": "D.8.r.1.KR.1b", "name": "Medicinal Product ID",'
+            ' "section": "D", "kind": "element", "conformance": "conditional_mandatory",'
+            ' "vocabulary_variants": ['
+            ' {"receiver": "KR", "vocabulary": "MFDS_PRODUCT", "vocabulary_scope": "item_seq"},'
+            ' {"receiver": "FR", "vocabulary": "WHODrug", "vocabulary_scope": "all"}]}'
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self.write_registry(root, self.sender_row(authority="MFDS", code="D.8.r.1.KR.1b"))
+            self.write_dictionary(root, "mfds-regional.json", self.mfds_dictionary(entry))
+
+            result = validate.validate_registry(root, validate_backend_inventory=False)
+
+        self.assertEqual([], result.errors)
+
+    def test_dictionary_receiver_specific_vocabularies_reject_duplicate_receiver(self):
+        entry = (
+            '{"code": "D.8.r.1.KR.1b", "name": "Medicinal Product ID",'
+            ' "section": "D", "kind": "element", "conformance": "conditional_mandatory",'
+            ' "vocabulary_variants": ['
+            ' {"receiver": "KR", "vocabulary": "MFDS_PRODUCT", "vocabulary_scope": "item_seq"},'
+            ' {"receiver": "KR", "vocabulary": "WHODrug", "vocabulary_scope": "all"}]}'
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self.write_registry(root, self.sender_row(authority="MFDS", code="D.8.r.1.KR.1b"))
+            self.write_dictionary(root, "mfds-regional.json", self.mfds_dictionary(entry))
+
+            result = validate.validate_registry(root, validate_backend_inventory=False)
+
+        self.assertIn("duplicate vocabulary receiver 'KR'", "\n".join(result.errors))
+
+    def test_dictionary_receiver_specific_vocabularies_reject_unconditional_vocabulary(self):
+        entry = (
+            '{"code": "D.8.r.1.KR.1b", "name": "Medicinal Product ID",'
+            ' "section": "D", "kind": "element", "conformance": "conditional_mandatory",'
+            ' "vocabulary": "WHODrug", "vocabulary_variants": ['
+            ' {"receiver": "KR", "vocabulary": "MFDS_PRODUCT", "vocabulary_scope": "item_seq"}]}'
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self.write_registry(root, self.sender_row(authority="MFDS", code="D.8.r.1.KR.1b"))
+            self.write_dictionary(root, "mfds-regional.json", self.mfds_dictionary(entry))
+
+            result = validate.validate_registry(root, validate_backend_inventory=False)
+
+        self.assertIn("cannot combine vocabulary with vocabulary_variants", "\n".join(result.errors))
+
+    def test_dictionary_receiver_specific_vocabularies_reject_unknown_metadata(self):
+        entry = (
+            '{"code": "D.8.r.1.KR.1b", "name": "Medicinal Product ID",'
+            ' "section": "D", "kind": "element", "conformance": "conditional_mandatory",'
+            ' "vocabulary_variants": ['
+            ' {"receiver": "US", "vocabulary": "MagicCodes", "vocabulary_scope": "products"}]}'
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self.write_registry(root, self.sender_row(authority="MFDS", code="D.8.r.1.KR.1b"))
+            self.write_dictionary(root, "mfds-regional.json", self.mfds_dictionary(entry))
+
+            result = validate.validate_registry(root, validate_backend_inventory=False)
+
+        errors = "\n".join(result.errors)
+        self.assertIn("invalid vocabulary receiver 'US'", errors)
+        self.assertIn("invalid vocabulary 'MagicCodes'", errors)
+        self.assertIn("invalid vocabulary_scope 'products'", errors)
+
+    def test_dictionary_entries_accept_allowed_value_code_set(self):
+        entry = (
+            '{"code": "C.3.1", "name": "Sender Type", "section": "C",'
+            ' "kind": "element", "conformance": "mandatory",'
+            ' "allowed_values": "1=Company 2=Authority",'
+            ' "allowed_value_constraint":'
+            ' {"kind": "code_set", "values": ["1", "2"],'
+            ' "enforcement": "case_validate"}}'
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self.write_registry(root, self.sender_row(code="C.3.1"))
+            self.write_dictionary(root, "ich-e2br3.json", self.ich_dictionary(entry))
+
+            result = validate.validate_registry(root, validate_backend_inventory=False)
+
+        self.assertEqual([], result.errors)
+
+    def test_dictionary_code_set_constraint_requires_values(self):
+        entry = (
+            '{"code": "C.3.1", "name": "Sender Type", "section": "C",'
+            ' "kind": "element", "conformance": "mandatory",'
+            ' "allowed_values": "1=Company 2=Authority",'
+            ' "allowed_value_constraint": {"kind": "code_set"}}'
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self.write_registry(root, self.sender_row(code="C.3.1"))
+            self.write_dictionary(root, "ich-e2br3.json", self.ich_dictionary(entry))
+
+            result = validate.validate_registry(root, validate_backend_inventory=False)
+
+        self.assertIn(
+            "code_set allowed_value_constraint requires values",
+            "\n".join(result.errors),
+        )
+
+    def test_dictionary_allowed_value_constraint_requires_source_text(self):
+        entry = (
+            '{"code": "C.3.1", "name": "Sender Type", "section": "C",'
+            ' "kind": "element", "conformance": "mandatory",'
+            ' "allowed_value_constraint":'
+            ' {"kind": "code_set", "values": ["1", "2"]}}'
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self.write_registry(root, self.sender_row(code="C.3.1"))
+            self.write_dictionary(root, "ich-e2br3.json", self.ich_dictionary(entry))
+
+            result = validate.validate_registry(root, validate_backend_inventory=False)
+
+        self.assertIn(
+            "allowed_value_constraint requires allowed_values source text",
+            "\n".join(result.errors),
+        )
+
+    def test_dictionary_allowed_value_constraint_kind_must_be_known(self):
+        entry = (
+            '{"code": "C.3.1", "name": "Sender Type", "section": "C",'
+            ' "kind": "element", "conformance": "mandatory",'
+            ' "allowed_values": "1=Company 2=Authority",'
+            ' "allowed_value_constraint": {"kind": "enum", "values": ["1"]}}'
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self.write_registry(root, self.sender_row(code="C.3.1"))
+            self.write_dictionary(root, "ich-e2br3.json", self.ich_dictionary(entry))
+
+            result = validate.validate_registry(root, validate_backend_inventory=False)
+
+        self.assertIn(
+            "invalid allowed_value_constraint kind 'enum'",
+            "\n".join(result.errors),
+        )
+
     def test_dictionary_vocabulary_must_be_a_known_value(self):
         entry = (
             '{"code": "C.3.2", "name": "Sender", "section": "C", "kind": "element",'
@@ -971,6 +1678,55 @@ class DictionaryValidatorTests(unittest.TestCase):
             result = validate.validate_registry(root, validate_backend_inventory=False)
 
         self.assertEqual([], result.errors)
+
+    def test_dictionary_entries_accept_condition_text(self):
+        entry = (
+            '{"code": "C.5.4", "name": "Study Type", "section": "C", "kind": "element",'
+            ' "conformance": "conditional_mandatory",'
+            ' "condition_text": "Optional, but required if C.1.3=2 (Report from study)."}'
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self.write_registry(root, self.sender_row())
+            self.write_dictionary(root, "ich-e2br3.json", self.ich_dictionary(entry))
+
+            result = validate.validate_registry(root, validate_backend_inventory=False)
+
+        self.assertEqual([], result.errors)
+
+    def test_ich_pdf_optional_conformance_corrections_are_applied(self):
+        dictionary_path = (
+            Path(__file__).resolve().parents[1]
+            / "dictionary"
+            / "ich-e2br3.json"
+        )
+        entries = {
+            entry["code"]: entry
+            for entry in json.loads(dictionary_path.read_text(encoding="utf-8"))[
+                "entries"
+            ]
+        }
+        optional_in_ich_pdf = {
+            "C.2.r.2.5",
+            "D.8.r.2a",
+            "D.8.r.2b",
+            "D.8.r.3a",
+            "D.8.r.3b",
+            "G.k.2.1.1a",
+            "G.k.2.1.1b",
+            "G.k.2.1.2a",
+            "G.k.2.1.2b",
+            "G.k.4.r.2",
+        }
+
+        self.assertEqual(
+            {},
+            {
+                code: entries[code]["conformance"]
+                for code in sorted(optional_in_ich_pdf)
+                if entries[code]["conformance"] != "optional"
+            },
+        )
 
     def test_dictionary_fda_severity_must_be_valid(self):
         entry = (
@@ -1077,6 +1833,137 @@ class DictionaryValidatorTests(unittest.TestCase):
             )
 
         self.assertEqual([], result.errors)
+
+    def test_repository_all_presave_inventories_are_complete(self):
+        result = validate.validate_registry(
+            validate_backend_inventory=False,
+            validate_presave_registry_rows=True,
+            validate_presave_inventory=True,
+        )
+
+        self.assertEqual([], result.errors)
+
+    def test_repository_presave_index_covers_every_supported_section(self):
+        index_path = validate.ROOT / "presaves/index.json"
+        index = json.loads(index_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(
+            [
+                "sections/c-sender.json",
+                "sections/c-receiver.json",
+                "sections/g-product.json",
+                "sections/c-reporter.json",
+                "sections/c-study.json",
+                "sections/h-narrative.json",
+            ],
+            index["sections"],
+        )
+
+    def test_ci_runs_strict_presave_inventory(self):
+        workflow = (validate.ROOT.parent / ".github/workflows/ci.yml").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn(
+            "python3 registry/tools/validate.py --strict-presave-inventory",
+            workflow,
+        )
+
+    def test_ci_checks_out_frontend_branch_matching_backend_release_line(self):
+        workflow = (validate.ROOT.parent / ".github/workflows/ci.yml").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn(
+            "ref: ${{ github.event_name == 'push' && github.ref_name == 'dev' && 'dev' || 'main' }}",
+            workflow,
+        )
+
+    def test_ci_restores_xml_validation_assets_before_workspace_tests(self):
+        workflow = (validate.ROOT.parent / ".github/workflows/ci.yml").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("name: Checkout XML validation assets", workflow)
+        self.assertIn("ref: 698f907f3abe6a555594931ace82e9fbcb9c204d", workflow)
+        self.assertIn("deploy/ec2/schemas", workflow)
+        self.assertIn("docs/refs/instances", workflow)
+        self.assertIn("name: Prepare XML validation assets", workflow)
+        self.assertLess(
+            workflow.index("name: Prepare XML validation assets"),
+            workflow.index("name: Run remaining workspace tests"),
+        )
+
+    def test_ci_serializes_workspace_tests_that_share_the_database(self):
+        workflow = (validate.ROOT.parent / ".github/workflows/ci.yml").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn(
+            "cargo test --workspace --exclude lib-core -- --test-threads=1",
+            workflow,
+        )
+
+
+class RemovedOrphanLocalFieldsTests(unittest.TestCase):
+    def test_removed_orphan_rows_and_backend_storage_are_absent(self):
+        repo = Path(__file__).resolve().parents[2]
+        removed_rows = {
+            "E.local.includedInEmaImeList",
+            "D.local.patientGivenName",
+            "D.local.patientFamilyName",
+            "G.k.local.supplemental.brandName",
+            "G.k.local.supplemental.genericName",
+            "G.k.local.supplemental.dosageText",
+            "G.k.local.parentDosageText",
+            "G.k.local.dosage.firstAdministrationTime",
+            "G.k.local.dosage.lastAdministrationTime",
+            "G.k.local.recurrence.reactionRecurred",
+            "G.k.local.recurrence.rechallengeAction",
+            "G.k.local.rechallenge",
+            "G.k.local.recurrence.meddraVersion",
+            "G.k.local.recurrence.meddraCode",
+            "G.k.local.assessmentRecurrence.meddraVersion",
+            "G.k.local.assessmentRecurrence.meddraCode",
+        }
+        registry_ids = set()
+        for section in (repo / "registry" / "sections").glob("*.json"):
+            registry_ids.update(row["id"] for row in json.loads(section.read_text()))
+        self.assertTrue(removed_rows.isdisjoint(registry_ids))
+
+        model_sources = "\n".join(
+            path.read_text()
+            for path in [
+                repo / "crates/libs/lib-core/src/model/patient.rs",
+                repo / "crates/libs/lib-core/src/model/drug.rs",
+                repo / "crates/libs/lib-core/src/model/drug_reaction_assessment.rs",
+                repo / "crates/libs/lib-core/src/model/reaction.rs",
+                repo / "db/bootstrap/04-patient-information.sql",
+                repo / "db/bootstrap/05-reactions.sql",
+                repo / "db/bootstrap/07-drug-information.sql",
+            ]
+        )
+        for field in (
+            "patient_given_name",
+            "patient_family_name",
+            "drug_generic_name",
+            "parent_dosage_text",
+            "first_administration_time",
+            "last_administration_time",
+            "recurrence_meddra_version",
+            "recurrence_meddra_code",
+            "included_in_ema_ime_list",
+        ):
+            self.assertNotIn(field, model_sources)
+        self.assertNotIn("pub brand_name: Option<String>", model_sources)
+        self.assertNotIn("\n    brand_name VARCHAR", model_sources)
+        self.assertFalse((repo / "crates/libs/lib-core/src/model/drug_recurrence.rs").exists())
+        drug_source = (repo / "crates/libs/lib-core/src/model/drug.rs").read_text()
+        drug_information_source = drug_source.split("// -- DosageInformation", 1)[0]
+        self.assertNotIn("pub dosage_text: Option<String>", drug_information_source)
+        bootstrap = (repo / "db/bootstrap/07-drug-information.sql").read_text()
+        drug_table = bootstrap.split("CREATE TABLE dosage_information", 1)[0]
+        self.assertNotIn("dosage_text", drug_table)
 
 
 if __name__ == "__main__":

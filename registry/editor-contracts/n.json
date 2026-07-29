@@ -1,0 +1,142 @@
+{
+  "pageId": "N",
+  "registryFile": "sections/n-message-header.json",
+  "fields": [
+    {
+      "code": "N.1.2",
+      "authority": "ICH",
+      "frontendPath": "messageHeader.batchNumber",
+      "projectionPath": "messageHeader.batch_number",
+      "patch": {
+        "kind": "rows",
+        "owner": "messageHeader"
+      },
+      "roundTripValue": "BATCH-001",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.N.1.2.LENGTH.MAX",
+        "invalidValue": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+      },
+      "payloadPath": "batchNumber"
+    },
+    {
+      "code": "N.1.3",
+      "authority": "ICH",
+      "frontendPath": "messageHeader.batchSenderIdentifier",
+      "projectionPath": "messageHeader.batch_sender_identifier",
+      "patch": {
+        "kind": "rows",
+        "owner": "messageHeader"
+      },
+      "roundTripValue": "BATCH-SENDER",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.N.1.3.LENGTH.MAX",
+        "invalidValue": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+      },
+      "payloadPath": "batchSenderIdentifier"
+    },
+    {
+      "code": "N.1.4",
+      "authority": "ICH",
+      "frontendPath": "messageHeader.batchReceiverIdentifier",
+      "projectionPath": "messageHeader.batch_receiver_identifier",
+      "patch": {
+        "kind": "rows",
+        "owner": "messageHeader"
+      },
+      "roundTripValue": "BATCH-RECEIVER",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.N.1.4.LENGTH.MAX",
+        "invalidValue": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+      },
+      "payloadPath": "batchReceiverIdentifier"
+    },
+    {
+      "code": "N.2.r.1",
+      "authority": "ICH",
+      "frontendPath": "messageHeader.messageNumber",
+      "projectionPath": "messageHeader.message_number",
+      "patch": {
+        "kind": "rows",
+        "owner": "messageHeader"
+      },
+      "roundTripValue": "MSG-001",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.N.2.r.1.LENGTH.MAX",
+        "invalidValue": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+      },
+      "payloadPath": "messageNumber"
+    },
+    {
+      "code": "N.2.r.2",
+      "authority": "ICH",
+      "frontendPath": "messageHeader.messageSenderIdentifier",
+      "projectionPath": "messageHeader.message_sender_identifier",
+      "patch": {
+        "kind": "rows",
+        "owner": "messageHeader"
+      },
+      "roundTripValue": "SENDER",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.N.2.r.2.LENGTH.MAX",
+        "invalidValue": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+      },
+      "payloadPath": "messageSenderIdentifier"
+    },
+    {
+      "code": "N.2.r.3",
+      "authority": "ICH",
+      "frontendPath": "messageHeader.messageReceiverIdentifier",
+      "projectionPath": "messageHeader.message_receiver_identifier",
+      "patch": {
+        "kind": "rows",
+        "owner": "messageHeader"
+      },
+      "roundTripValue": "RECEIVER",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.N.2.r.3.LENGTH.MAX",
+        "invalidValue": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+      },
+      "payloadPath": "messageReceiverIdentifier"
+    },
+    {
+      "code": "N.2.r.4",
+      "authority": "ICH",
+      "frontendPath": "messageHeader.messageDate",
+      "projectionPath": "messageHeader.message_date",
+      "patch": {
+        "kind": "rows",
+        "owner": "messageHeader"
+      },
+      "roundTripValue": "20260725120000",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.N.2.r.4.ALLOWED.VALUE",
+        "invalidValue": "not-a-date"
+      },
+      "payloadPath": "messageDate"
+    },
+    {
+      "code": "N.1.5",
+      "authority": "ICH",
+      "frontendPath": "messageHeader.batchTransmissionDate",
+      "projectionPath": "messageHeader.batch_transmission_date",
+      "patch": {
+        "kind": "rows",
+        "owner": "messageHeader"
+      },
+      "roundTripValue": "20260725123045",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.N.1.5.ALLOWED.VALUE",
+        "invalidValue": "not-a-date"
+      },
+      "payloadPath": "batchTransmissionDate"
+    }
+  ]
+}

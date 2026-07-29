@@ -1,0 +1,238 @@
+{
+  "pageId": "SI",
+  "registryFile": "sections/c-safety-report.json",
+  "fields": [
+    {
+      "code": "C.5.1.r.1",
+      "authority": "ICH",
+      "frontendPath": "studyInformation.studyRegistrationNumbers[].registrationNumber",
+      "projectionPath": "studyRegistrationNumbers[].registration_number",
+      "patch": {
+        "kind": "rows",
+        "owner": "studyRegistrationNumbers"
+      },
+      "roundTripValue": "NCT-2026-001",
+      "fixture": [
+        {
+          "countryCode": "KR"
+        }
+      ],
+      "rowsFixture": {
+        "studyInformation": {
+          "studyName": "Study fixture"
+        }
+      },
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.C.5.1.r.1.LENGTH.MAX",
+        "invalidValue": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+      },
+      "businessValidation": {
+        "status": "not_applicable",
+        "reason": "No semantic business rule targets the registration identifier value."
+      },
+      "payloadPath": "[].registrationNumber"
+    },
+    {
+      "code": "C.5.1.r.2",
+      "authority": "ICH",
+      "frontendPath": "studyInformation.studyRegistrationNumbers[].countryCode",
+      "projectionPath": "studyRegistrationNumbers[].country_code",
+      "patch": {
+        "kind": "rows",
+        "owner": "studyRegistrationNumbers"
+      },
+      "roundTripValue": "KR",
+      "fixture": [
+        {
+          "registrationNumber": "NCT-FIXTURE"
+        }
+      ],
+      "rowsFixture": {
+        "studyInformation": {
+          "studyName": "Study fixture"
+        }
+      },
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.C.5.1.r.2.LENGTH.MAX",
+        "invalidValue": "XXX"
+      },
+      "businessValidation": {
+        "status": "verified",
+        "issuePath": "studyInformation.0.studyRegistrationNumbers.0.countryCode"
+      },
+      "payloadPath": "[].countryCode"
+    },
+    {
+      "code": "C.5.2",
+      "authority": "ICH",
+      "frontendPath": "studyInformation.studyName",
+      "projectionPath": "studyInformation.study_name",
+      "patch": {
+        "kind": "rows",
+        "owner": "studyInformation"
+      },
+      "roundTripValue": "Study 001",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.C.5.2.LENGTH.MAX",
+        "invalidValue": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+      },
+      "businessValidation": {
+        "status": "not_applicable",
+        "reason": "No semantic business rule targets optional study name."
+      },
+      "payloadPath": "studyName"
+    },
+    {
+      "code": "C.5.3",
+      "authority": "ICH",
+      "frontendPath": "studyInformation.sponsorStudyNumber",
+      "projectionPath": "studyInformation.sponsor_study_number",
+      "patch": {
+        "kind": "rows",
+        "owner": "studyInformation"
+      },
+      "roundTripValue": "SP-2026-001",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.C.5.3.LENGTH.MAX",
+        "invalidValue": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+      },
+      "businessValidation": {
+        "status": "verified",
+        "issuePath": "studyInformation.0.sponsorStudyNumber"
+      },
+      "payloadPath": "sponsorStudyNumber"
+    },
+    {
+      "code": "C.5.4",
+      "authority": "ICH",
+      "frontendPath": "studyInformation.studyTypeReaction",
+      "projectionPath": "studyInformation.study_type_reaction",
+      "patch": {
+        "kind": "rows",
+        "owner": "studyInformation"
+      },
+      "roundTripValue": "2",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "ICH.C.5.4.ALLOWED.VALUE",
+        "invalidValue": "0"
+      },
+      "businessValidation": {
+        "status": "verified",
+        "issuePath": "studyInformation.0.studyTypeReaction"
+      },
+      "payloadPath": "studyTypeReaction"
+    },
+    {
+      "code": "C.5.4.KR.1",
+      "authority": "MFDS",
+      "frontendPath": "studyInformation.studyTypeReactionKr1",
+      "projectionPath": "studyInformation.study_type_reaction_kr1",
+      "patch": {
+        "kind": "rows",
+        "owner": "studyInformation"
+      },
+      "roundTripValue": "1",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "MFDS.C.5.4.KR.1.LENGTH.MAX",
+        "invalidValue": "XX"
+      },
+      "businessValidation": {
+        "status": "verified",
+        "issuePath": "studyInformation.0.studyTypeReactionKr1"
+      },
+      "payloadPath": "studyTypeReactionKr1"
+    },
+    {
+      "code": "FDA.C.5.5a",
+      "authority": "FDA",
+      "frontendPath": "studyInformation.fdaIndNumberOccurred",
+      "projectionPath": "studyInformation.fda_ind_number_occurred",
+      "patch": {
+        "kind": "rows",
+        "owner": "studyInformation"
+      },
+      "roundTripValue": "IND123456",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "FDA.C.5.5a.LENGTH.MAX",
+        "invalidValue": "XXXXXXXXXXX"
+      },
+      "businessValidation": {
+        "status": "verified",
+        "issuePath": "studyInformation.0.fdaIndNumberOccurred"
+      },
+      "payloadPath": "fdaIndNumberOccurred"
+    },
+    {
+      "code": "FDA.C.5.5b",
+      "authority": "FDA",
+      "frontendPath": "studyInformation.fdaPreAndaNumberOccurred",
+      "projectionPath": "studyInformation.fda_pre_anda_number_occurred",
+      "patch": {
+        "kind": "rows",
+        "owner": "studyInformation"
+      },
+      "roundTripValue": "ANDA123456",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "FDA.C.5.5b.LENGTH.MAX",
+        "invalidValue": "XXXXXXXXXXX"
+      },
+      "businessValidation": {
+        "status": "verified",
+        "issuePath": "studyInformation.0.fdaPreAndaNumberOccurred"
+      },
+      "payloadPath": "fdaPreAndaNumberOccurred"
+    },
+    {
+      "code": "FDA.C.5.6.r",
+      "authority": "FDA",
+      "frontendPath": "studyInformation.fdaCrossReportedIndNumbers[].indNumber",
+      "projectionPath": "studyInformation.fdaCrossReportedIndNumbers[].ind_number",
+      "patch": {
+        "kind": "rows",
+        "owner": "studyInformation"
+      },
+      "roundTripValue": "IND654321",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "FDA.C.5.6.r.LENGTH.MAX",
+        "invalidValue": "XXXXXXXXXXX"
+      },
+      "businessValidation": {
+        "status": "verified",
+        "issuePath": "studyInformation.0.fdaCrossReportedIndNumbers.0.indNumber"
+      },
+      "payloadPath": "fdaCrossReportedIndNumbers[].indNumber",
+      "nullFlavorPartnerCode": "FDA.C.5.6.r.local.indNumberNullFlavor"
+    },
+    {
+      "code": "FDA.C.5.6.r.local.indNumberNullFlavor",
+      "authority": "FDA",
+      "frontendPath": "studyInformation.fdaCrossReportedIndNumbers[].indNumberNullFlavor",
+      "projectionPath": "studyInformation.fdaCrossReportedIndNumbers[].ind_number_null_flavor",
+      "patch": {
+        "kind": "rows",
+        "owner": "studyInformation"
+      },
+      "roundTripValue": "NA",
+      "constraint": {
+        "status": "verified",
+        "ruleCode": "FDA.C.5.6.r.NULLFLAVOR.ALLOWED",
+        "invalidValue": "NI"
+      },
+      "businessValidation": {
+        "status": "not_applicable",
+        "reason": "Business validation consumes the nullFlavor as the companion value and reports on indNumber."
+      },
+      "payloadPath": "fdaCrossReportedIndNumbers[].indNumberNullFlavor",
+      "nullFlavorPartnerCode": "FDA.C.5.6.r"
+    }
+  ]
+}

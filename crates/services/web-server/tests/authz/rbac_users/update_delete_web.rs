@@ -110,6 +110,44 @@ async fn test_admin_can_update_user() -> Result<()> {
 
 #[serial]
 #[tokio::test]
+async fn test_user_role_update_changes_the_normalized_assignment_atomically(
+) -> Result<()> {
+	let mm = init_test_mm().await?;
+	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
+	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
+	let admin_cookie = cookie_header(&token.to_string());
+	let app = web_server::app(mm.clone());
+	let role_id = create_empty_permission_profile(
+		&app,
+		&admin_cookie,
+		format!("Assignment update {}", Uuid::new_v4()),
+	)
+	.await?;
+
+	let req = Request::builder()
+		.method("PUT")
+		.uri(format!("/api/users/{}", seed.viewer.id))
+		.header("cookie", admin_cookie)
+		.header("content-type", "application/json")
+		.body(Body::from(
+			json!({ "data": { "role": role_id } }).to_string(),
+		))?;
+	let res = app.oneshot(req).await?;
+	assert_eq!(res.status(), StatusCode::OK);
+
+	let assigned_role = sqlx::query_scalar::<_, Uuid>(
+		"SELECT role_id FROM user_role_assignments WHERE user_id = $1 AND organization_id = $2",
+	)
+	.bind(seed.viewer.id)
+	.bind(seed.org_id)
+	.fetch_one(mm.dbx().db())
+	.await?;
+	assert_eq!(assigned_role.to_string(), role_id);
+	Ok(())
+}
+
+#[serial]
+#[tokio::test]
 async fn test_sponsor_admin_cannot_assign_sponsor_admin_role() -> Result<()> {
 	let mm = init_test_mm().await?;
 	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
@@ -128,7 +166,7 @@ async fn test_sponsor_admin_cannot_assign_sponsor_admin_role() -> Result<()> {
 		.header("content-type", "application/json")
 		.body(Body::from(body.to_string()))?;
 	let res = app.oneshot(req).await?;
-	assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+	assert_eq!(res.status(), StatusCode::FORBIDDEN);
 	Ok(())
 }
 
@@ -157,12 +195,8 @@ async fn test_sponsor_admin_cannot_update_existing_sponsor_admin_user() -> Resul
 	let body = axum::body::to_bytes(res.into_body(), usize::MAX).await?;
 	let json: serde_json::Value = serde_json::from_slice(&body)?;
 
-	assert_eq!(status, StatusCode::BAD_REQUEST, "{json:?}");
-	assert!(
-		json.to_string()
-			.contains("can only be changed by a System Administrator"),
-		"{json:?}"
-	);
+	assert_eq!(status, StatusCode::FORBIDDEN, "{json:?}");
+	assert!(json.to_string().contains("PERMISSION_DENIED"), "{json:?}");
 	Ok(())
 }
 
@@ -187,7 +221,7 @@ async fn test_update_user_rejects_sponsor_admin_role_for_wrong_org_type(
 		.header("content-type", "application/json")
 		.body(Body::from(body.to_string()))?;
 	let res = app.oneshot(req).await?;
-	assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+	assert_eq!(res.status(), StatusCode::FORBIDDEN);
 	Ok(())
 }
 
@@ -290,6 +324,6 @@ async fn test_admin_cannot_delete_self() -> Result<()> {
 		.header("cookie", cookie_header(&token.to_string()))
 		.body(Body::empty())?;
 	let res = app.oneshot(req).await?;
-	assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+	assert_eq!(res.status(), StatusCode::FORBIDDEN);
 	Ok(())
 }

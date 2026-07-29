@@ -1,4 +1,5 @@
 use crate::ctx::{canonical_role, Ctx, ROLE_USER};
+use crate::model::authorization::RoleAssignmentRepository;
 use crate::model::base::base_uuid;
 use crate::model::base::{prep_fields_for_update, DbBmc};
 use crate::model::organization::Organization;
@@ -120,6 +121,13 @@ pub struct UserForAuth {
 
 	// -- token info
 	pub token_salt: Uuid,
+}
+
+#[derive(Debug, Clone, FromRow, Serialize)]
+pub struct WorkflowUserOption {
+	pub id: Uuid,
+	pub email: String,
+	pub username: String,
 }
 
 #[derive(Clone, Fields, Deserialize)]
@@ -261,6 +269,7 @@ impl UserBmc {
 			let active_sender_identifier =
 				Self::normalize_optional_text(active_sender_identifier);
 			let role = Self::normalize_role(role);
+			let assignment_role = role.clone();
 
 			let user_fi = UserForInsert {
 				organization_id,
@@ -279,35 +288,42 @@ impl UserBmc {
 			};
 
 			mm.dbx().begin_txn().await?;
+			if let Err(err) = set_full_context_from_ctx_dbx(mm.dbx(), ctx).await {
+				let _ = mm.dbx().rollback_txn().await;
+				return Err(err);
+			}
 
-			let user_id = match base_uuid::create::<Self, _>(ctx, mm, user_fi)
-				.await
-				.map_err(|model_error| {
-					Error::resolve_unique_violation(
-						model_error,
-						Some(|table: &str, constraint: &str| {
-							if table == "users" && constraint.contains("email") {
-								Some(Error::UserAlreadyExists { email })
-							} else {
-								None
-							}
-						}),
-					)
-				}) {
-				Ok(user_id) => user_id,
-				Err(err) => {
-					let _ = mm.dbx().rollback_txn().await;
-					if Self::is_retryable_write_error(&err)
-						&& attempt < USER_WRITE_MAX_ATTEMPTS
-					{
-						Self::backoff_after_retryable_error(attempt).await;
-						continue;
+			let user_id =
+				match base_uuid::create_in_transaction::<Self, _>(ctx, mm, user_fi)
+					.await
+					.map_err(|model_error| {
+						Error::resolve_unique_violation(
+							model_error,
+							Some(|table: &str, constraint: &str| {
+								if table == "users" && constraint.contains("email") {
+									Some(Error::UserAlreadyExists { email })
+								} else {
+									None
+								}
+							}),
+						)
+					}) {
+					Ok(user_id) => user_id,
+					Err(err) => {
+						let _ = mm.dbx().rollback_txn().await;
+						if Self::is_retryable_write_error(&err)
+							&& attempt < USER_WRITE_MAX_ATTEMPTS
+						{
+							Self::backoff_after_retryable_error(attempt).await;
+							continue;
+						}
+						return Err(err);
 					}
-					return Err(err);
-				}
-			};
+				};
 
-			if let Err(err) = Self::update_pwd(ctx, mm, user_id, &pwd_clear).await {
+			if let Err(err) =
+				Self::update_pwd_in_transaction(ctx, mm, user_id, &pwd_clear).await
+			{
 				let _ = mm.dbx().rollback_txn().await;
 				if Self::is_retryable_write_error(&err)
 					&& attempt < USER_WRITE_MAX_ATTEMPTS
@@ -326,6 +342,32 @@ impl UserBmc {
 			)
 			.await
 			{
+				let _ = mm.dbx().rollback_txn().await;
+				if Self::is_retryable_write_error(&err)
+					&& attempt < USER_WRITE_MAX_ATTEMPTS
+				{
+					Self::backoff_after_retryable_error(attempt).await;
+					continue;
+				}
+				return Err(err);
+			}
+			let assignment_result = if assignment_role == ROLE_USER {
+				RoleAssignmentRepository::assign_baseline_user_role(
+					mm.dbx(),
+					user_id,
+					organization_id,
+				)
+				.await
+			} else {
+				RoleAssignmentRepository::assign_legacy_role(
+					mm.dbx(),
+					user_id,
+					organization_id,
+					&assignment_role,
+				)
+				.await
+			};
+			if let Err(err) = assignment_result {
 				let _ = mm.dbx().rollback_txn().await;
 				if Self::is_retryable_write_error(&err)
 					&& attempt < USER_WRITE_MAX_ATTEMPTS
@@ -360,9 +402,6 @@ impl UserBmc {
 		user_id: Uuid,
 		organization_id: Uuid,
 	) -> Result<()> {
-		if organization_id.is_nil() {
-			return Ok(());
-		}
 		mm.dbx()
 			.execute(
 				sqlx::query(
@@ -406,6 +445,44 @@ impl UserBmc {
 		base_uuid::list::<Self, _, _>(ctx, mm, filters, list_options).await
 	}
 
+	pub async fn list_workflow_options(
+		ctx: &Ctx,
+		mm: &ModelManager,
+		limit: i64,
+	) -> Result<Vec<WorkflowUserOption>> {
+		let limit = limit.clamp(1, 500);
+		let scoped_mm = mm.new_with_txn()?;
+		let dbx = scoped_mm.dbx();
+		dbx.begin_txn().await.map_err(Error::Dbx)?;
+		if let Err(err) = set_full_context_from_ctx_dbx(dbx, ctx).await {
+			let _ = dbx.rollback_txn().await;
+			return Err(err);
+		}
+		let users = match dbx
+			.fetch_all(
+				sqlx::query_as::<_, WorkflowUserOption>(
+					"SELECT id, email, username
+					   FROM users
+					  WHERE organization_id = $1
+					    AND active = TRUE
+					  ORDER BY lower(email), id
+					  LIMIT $2",
+				)
+				.bind(ctx.organization_id())
+				.bind(limit),
+			)
+			.await
+		{
+			Ok(users) => users,
+			Err(err) => {
+				let _ = dbx.rollback_txn().await;
+				return Err(err.into());
+			}
+		};
+		dbx.commit_txn().await.map_err(Error::Dbx)?;
+		Ok(users)
+	}
+
 	pub async fn update(
 		ctx: &Ctx,
 		mm: &ModelManager,
@@ -414,6 +491,10 @@ impl UserBmc {
 	) -> Result<()> {
 		for attempt in 1..=USER_WRITE_MAX_ATTEMPTS {
 			let mut user_u = user_u.clone();
+			// A membership owns its role assignment. Selecting another active
+			// organization must use that membership's existing assignment instead
+			// of copying the previous organization's role across the boundary.
+			let sync_assignment = user_u.role.is_some();
 			if let Some(email) = user_u.email.take() {
 				user_u.email = Some(Self::normalize_email(&email));
 			}
@@ -429,15 +510,58 @@ impl UserBmc {
 				user_u.active_sender_identifier =
 					Self::normalize_optional_text(Some(active_sender_identifier));
 			}
-			match base_uuid::update::<Self, _>(ctx, mm, id, user_u).await {
-				Ok(()) => return Ok(()),
-				Err(err)
-					if Self::is_retryable_write_error(&err)
-						&& attempt < USER_WRITE_MAX_ATTEMPTS =>
-				{
-					Self::backoff_after_retryable_error(attempt).await;
+			let dbx = mm.dbx();
+			dbx.begin_txn().await.map_err(Error::Dbx)?;
+			if let Err(err) = set_full_context_from_ctx_dbx(dbx, ctx).await {
+				let _ = dbx.rollback_txn().await;
+				return Err(err);
+			}
+			let result = async {
+				base_uuid::update_in_transaction::<Self, _>(ctx, mm, id, user_u)
+					.await?;
+				if sync_assignment {
+					let (organization_id, role) = dbx
+						.fetch_one(sqlx::query_as::<_, (Uuid, String)>(
+							"SELECT organization_id, role FROM users WHERE id = $1",
+						)
+						.bind(id))
+						.await?;
+					RoleAssignmentRepository::assign_legacy_role(
+						dbx,
+						id,
+						organization_id,
+						&role,
+					)
+					.await?;
 				}
-				Err(err) => return Err(err),
+				Ok::<(), Error>(())
+			}
+			.await;
+			match result {
+				Ok(()) => match dbx.commit_txn().await {
+					Ok(()) => return Ok(()),
+					Err(error) => {
+						let err = Error::Dbx(error);
+						let _ = dbx.rollback_txn().await;
+						if Self::is_retryable_write_error(&err)
+							&& attempt < USER_WRITE_MAX_ATTEMPTS
+						{
+							Self::backoff_after_retryable_error(attempt).await;
+							continue;
+						}
+						return Err(err);
+					}
+				},
+				Err(err) => {
+					let _ = dbx.rollback_txn().await;
+					if Self::is_retryable_write_error(&err)
+						&& attempt < USER_WRITE_MAX_ATTEMPTS
+					{
+						Self::backoff_after_retryable_error(attempt).await;
+						continue;
+					}
+					return Err(err);
+				}
 			}
 		}
 		unreachable!("user update retry loop exhausted without returning")
@@ -517,6 +641,36 @@ impl UserBmc {
 			.await?;
 		scoped_mm.dbx().commit_txn().await.map_err(Error::Dbx)?;
 		Ok(membership.is_some())
+	}
+
+	pub async fn select_current_user_organization(
+		ctx: &Ctx,
+		mm: &ModelManager,
+		organization_id: Uuid,
+	) -> Result<bool> {
+		let dbx = mm.dbx();
+		dbx.begin_txn().await.map_err(Error::Dbx)?;
+		if let Err(err) = set_full_context_from_ctx_dbx(dbx, ctx).await {
+			let _ = dbx.rollback_txn().await;
+			return Err(err);
+		}
+		let selected = match dbx
+			.fetch_one(
+				sqlx::query_as::<_, (bool,)>(
+					"SELECT select_current_user_organization($1)",
+				)
+				.bind(organization_id),
+			)
+			.await
+		{
+			Ok((selected,)) => selected,
+			Err(err) => {
+				let _ = dbx.rollback_txn().await;
+				return Err(err.into());
+			}
+		};
+		dbx.commit_txn().await.map_err(Error::Dbx)?;
+		Ok(selected)
 	}
 
 	pub async fn delete(ctx: &Ctx, mm: &ModelManager, id: Uuid) -> Result<()> {
@@ -668,6 +822,44 @@ impl UserBmc {
 			}
 		}
 		unreachable!("user password update retry loop exhausted without returning")
+	}
+
+	async fn update_pwd_in_transaction(
+		ctx: &Ctx,
+		mm: &ModelManager,
+		id: Uuid,
+		pwd_clear: &str,
+	) -> Result<()> {
+		let dbx = mm.dbx();
+		let (pwd_salt,) = dbx
+			.fetch_one(
+				sqlx::query_as::<_, (Uuid,)>(
+					"SELECT pwd_salt FROM users WHERE id = $1",
+				)
+				.bind(id),
+			)
+			.await?;
+		let pwd = pwd::hash_pwd(ContentToHash {
+			content: pwd_clear.to_string(),
+			salt: pwd_salt,
+		})
+		.await?;
+		let mut fields = SeaFields::new(vec![SeaField::new(UserIden::Pwd, pwd)]);
+		prep_fields_for_update::<Self>(&mut fields, ctx.user_id());
+		let mut query = Query::update();
+		query
+			.table(Self::table_ref())
+			.values(fields.for_sea_update())
+			.and_where(Expr::col(UserIden::Id).eq(id));
+		let (sql, values) = query.build_sqlx(PostgresQueryBuilder);
+		let count = dbx.execute(sqlx::query_with(&sql, values)).await?;
+		if count != 1 {
+			return Err(Error::EntityUuidNotFound {
+				entity: Self::TABLE,
+				id,
+			});
+		}
+		Ok(())
 	}
 
 	pub async fn update_pwd_and_clear_must_change(

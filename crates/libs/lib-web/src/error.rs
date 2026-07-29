@@ -103,11 +103,18 @@ impl Error {
 			// -- Login
 			LoginFailUsernameNotFound
 			| LoginFailEmailNotFound
-			| LoginFailUserHasNoPwd { .. }
-			| LoginFailPwdNotMatching { .. }
-			| LoginFailUserCtxCreate { .. } => {
-				(StatusCode::FORBIDDEN, ClientError::LOGIN_FAIL)
-			}
+			| LoginFailPwdNotMatching { .. } => (
+				StatusCode::FORBIDDEN,
+				ClientError::LOGIN_INVALID_CREDENTIALS,
+			),
+			LoginFailUserHasNoPwd { .. } => (
+				StatusCode::FORBIDDEN,
+				ClientError::LOGIN_PASSWORD_NOT_CONFIGURED,
+			),
+			LoginFailUserCtxCreate { .. } => (
+				StatusCode::FORBIDDEN,
+				ClientError::LOGIN_ACCOUNT_UNAVAILABLE,
+			),
 
 			// -- Auth
 			CtxExt(_) => (StatusCode::FORBIDDEN, ClientError::NO_AUTH),
@@ -158,13 +165,74 @@ impl Error {
 #[serde(tag = "message", content = "detail")]
 #[allow(non_camel_case_types)]
 pub enum ClientError {
-	LOGIN_FAIL,
+	LOGIN_INVALID_CREDENTIALS,
+	LOGIN_PASSWORD_NOT_CONFIGURED,
+	LOGIN_ACCOUNT_UNAVAILABLE,
 	NO_AUTH,
 	ACCESS_DENIED { required_role: String },
 	PERMISSION_DENIED { required_permission: String },
 	ORGANIZATION_ACCESS_DENIED,
 	ENTITY_NOT_FOUND { entity: &'static str, id: i64 },
 	ENTITY_UUID_NOT_FOUND { entity: &'static str, id: String },
+	CONSTRAINT_VIOLATION,
 	SERVICE_ERROR,
 }
 // endregion: --- Client Error
+
+#[cfg(test)]
+mod tests {
+	use super::{Error, StatusCode};
+	use serde_json::Value;
+	use uuid::Uuid;
+
+	fn assert_login_error_mapping(error: Error, expected_message: &str) {
+		let (status, client_error) = error.client_status_and_error();
+		let serialized = serde_json::to_value(client_error)
+			.expect("client error should serialize");
+
+		assert_eq!(status, StatusCode::FORBIDDEN);
+		assert_eq!(
+			serialized.get("message"),
+			Some(&Value::String(expected_message.to_string()))
+		);
+		assert!(serialized.get("detail").is_none());
+	}
+
+	#[test]
+	fn login_error_classifies_unknown_identity_as_invalid_credentials() {
+		assert_login_error_mapping(
+			Error::LoginFailEmailNotFound,
+			"LOGIN_INVALID_CREDENTIALS",
+		);
+	}
+
+	#[test]
+	fn login_error_classifies_wrong_password_as_invalid_credentials() {
+		assert_login_error_mapping(
+			Error::LoginFailPwdNotMatching {
+				user_id: Uuid::nil(),
+			},
+			"LOGIN_INVALID_CREDENTIALS",
+		);
+	}
+
+	#[test]
+	fn login_error_classifies_missing_password_as_not_configured() {
+		assert_login_error_mapping(
+			Error::LoginFailUserHasNoPwd {
+				user_id: Uuid::nil(),
+			},
+			"LOGIN_PASSWORD_NOT_CONFIGURED",
+		);
+	}
+
+	#[test]
+	fn login_error_classifies_invalid_context_as_account_unavailable() {
+		assert_login_error_mapping(
+			Error::LoginFailUserCtxCreate {
+				user_id: Uuid::nil(),
+			},
+			"LOGIN_ACCOUNT_UNAVAILABLE",
+		);
+	}
+}

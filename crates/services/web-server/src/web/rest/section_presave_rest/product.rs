@@ -1,154 +1,209 @@
+use super::rows::camelize_value;
 use super::shared::*;
+use serde_json::{json, Value};
 
 pub async fn create_product_presave(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
-	Json(params): Json<ParamsForCreate<ProductPresaveForCreate>>,
-) -> Result<(StatusCode, Json<DataRestResult<ProductPresave>>)> {
+	snapshot: AuthorizationSnapshotW,
+	Json(params): Json<ParamsForCreate<ProductPresaveRowsForCreate>>,
+) -> Result<(StatusCode, Json<DataRestResult<ProductPresaveDetails>>)> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, PRESAVE_TEMPLATE_CREATE)?;
-	let ParamsForCreate { data } = params;
-	let id = ProductPresaveBmc::create(&ctx, &mm, data).await?;
-	let entity = ProductPresaveBmc::get(&ctx, &mm, id).await?;
-	if let Err(err) = ensure_product_presave_scope(&ctx, &mm, &entity).await {
-		ProductPresaveBmc::delete(&ctx, &mm, id).await?;
-		return Err(err);
-	}
-	Ok(rest_created(entity))
+	with_authorized_presave_atomic_create(
+		&ctx,
+		&snapshot,
+		&mm,
+		"product",
+		move |ctx, mm| {
+			Box::pin(async move {
+				let ParamsForCreate { data } = params;
+				for substance in &data.rows.active_substances {
+					validate_product_active_substance_detail_create(substance)?;
+					if substance.deleted {
+						return Err(Error::BadRequest {
+							message:
+								"new product active substance cannot be deleted"
+									.into(),
+						});
+					}
+				}
+				let id =
+					ProductPresaveBmc::create(ctx, mm, data.rows.product).await?;
+				for substance in data.rows.active_substances {
+					ProductPresaveActiveSubstanceBmc::create(
+						ctx,
+						mm,
+						substance.into_create(id)?,
+					)
+					.await?;
+				}
+				Ok(rest_created(
+					load_product_presave_details(ctx, mm, id).await?,
+				))
+			})
+		},
+	)
+	.await
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ProductPresaveRowsForCreate {
+	pub rows: ProductPresaveCreateRows,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ProductPresaveCreateRows {
+	pub product: ProductPresaveForCreate,
+	#[serde(default)]
+	pub active_substances: Vec<ProductActiveSubstanceDetailsForUpdate>,
 }
 
 pub async fn list_product_presaves(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: AuthorizationSnapshotW,
 ) -> Result<(StatusCode, Json<DataRestResult<Vec<ProductPresave>>>)> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, PRESAVE_TEMPLATE_LIST)?;
-	let entities = ProductPresaveBmc::list(&ctx, &mm, None).await?;
-	let entities = filter_product_presaves_for_scope(&ctx, &mm, entities).await?;
-	Ok(rest_ok(entities))
+	with_authorized_presave_collection(&ctx, &snapshot, &mm, |ctx, mm, scope| {
+		Box::pin(async move {
+			let entities = ProductPresaveBmc::list(ctx, mm, None).await?;
+			Ok(rest_ok(filter_product_presaves_for_scope(scope, entities)))
+		})
+	})
+	.await
 }
 
 pub async fn get_product_presave(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: AuthorizationSnapshotW,
 	Path(id): Path<Uuid>,
 ) -> Result<(StatusCode, Json<DataRestResult<ProductPresave>>)> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, PRESAVE_TEMPLATE_READ)?;
-	let entity = ProductPresaveBmc::get(&ctx, &mm, id).await?;
-	ensure_product_presave_scope(&ctx, &mm, &entity).await?;
-	Ok(rest_ok(entity))
+	with_authorized_presave_read(
+		&ctx,
+		&snapshot,
+		&mm,
+		PresaveAuthorizationKind::Product,
+		id,
+		|ctx, mm| {
+			Box::pin(async move {
+				Ok(rest_ok(ProductPresaveBmc::get(ctx, mm, id).await?))
+			})
+		},
+	)
+	.await
 }
 
 pub async fn update_product_presave(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: AuthorizationSnapshotW,
 	Path(id): Path<Uuid>,
 	Json(params): Json<ParamsForUpdate<ProductPresaveForUpdate>>,
 ) -> Result<(StatusCode, Json<DataRestResult<ProductPresave>>)> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, PRESAVE_TEMPLATE_UPDATE)?;
-	let ParamsForUpdate { data } = params;
-	if data.deleted == Some(true) {
-		require_permission(&ctx, PRESAVE_TEMPLATE_DELETE)?;
-	}
-	let current = ProductPresaveBmc::get(&ctx, &mm, id).await?;
-	ensure_product_presave_scope(&ctx, &mm, &current).await?;
-	if data.deleted == Some(true)
-		&& product_presave_used_by_cases(&mm, ctx.organization_id(), id).await?
-	{
-		return Err(presave_case_link_conflict(
-			"product presave is used by cases",
-		));
-	}
-	if data.deleted == Some(true)
-		&& presave_scope_assigned_to_users(
-			&mm,
-			ctx.organization_id(),
-			"access_product_ids",
-			product_scope_identifiers(&current),
-		)
-		.await?
-	{
-		return Err(presave_case_link_conflict(
-			"product presave is assigned to users",
-		));
-	}
-	ProductPresaveBmc::update(&ctx, &mm, id, data).await?;
-	let entity = ProductPresaveBmc::get(&ctx, &mm, id).await?;
-	ensure_product_presave_scope(&ctx, &mm, &entity).await?;
-	Ok(rest_ok(entity))
+	with_authorized_presave_update(
+		&ctx,
+		&snapshot,
+		&mm,
+		PresaveAuthorizationKind::Product,
+		id,
+		move |ctx, mm| {
+			Box::pin(async move {
+				let ParamsForUpdate { data } = params;
+				if data.deleted == Some(true) {
+					PresaveLifecycleService::archive(
+						ctx,
+						mm,
+						PresaveKind::Product,
+						id,
+					)
+					.await?;
+				} else {
+					ProductPresaveBmc::update(ctx, mm, id, data).await?;
+				}
+				Ok(rest_ok(ProductPresaveBmc::get(ctx, mm, id).await?))
+			})
+		},
+	)
+	.await
 }
 
 pub async fn delete_product_presave(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: AuthorizationSnapshotW,
 	Path(id): Path<Uuid>,
 ) -> Result<StatusCode> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, PRESAVE_TEMPLATE_DELETE)?;
-	let entity = ProductPresaveBmc::get(&ctx, &mm, id).await?;
-	ensure_product_presave_scope(&ctx, &mm, &entity).await?;
-	if product_presave_used_by_cases(&mm, ctx.organization_id(), id).await? {
-		return Err(presave_case_link_conflict(
-			"product presave is used by cases",
-		));
-	}
-	if presave_scope_assigned_to_users(
-		&mm,
-		ctx.organization_id(),
-		"access_product_ids",
-		product_scope_identifiers(&entity),
-	)
-	.await?
-	{
-		return Err(presave_case_link_conflict(
-			"product presave is assigned to users",
-		));
-	}
-	ProductPresaveBmc::update(
+	with_authorized_presave_update(
 		&ctx,
+		&snapshot,
 		&mm,
+		PresaveAuthorizationKind::Product,
 		id,
-		ProductPresaveForUpdate {
-			deleted: Some(true),
-			..Default::default()
+		|ctx, mm| {
+			Box::pin(async move {
+				PresaveLifecycleService::archive(ctx, mm, PresaveKind::Product, id)
+					.await?;
+				Ok(StatusCode::NO_CONTENT)
+			})
 		},
 	)
-	.await?;
-	Ok(StatusCode::NO_CONTENT)
+	.await
 }
 
 #[derive(Debug, Serialize)]
 pub struct ProductPresaveDetails {
-	pub parent: ProductPresave,
-	pub substances: Vec<ProductPresaveSubstance>,
+	pub rows: ProductPresaveRows,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProductPresaveRows {
+	pub product: Value,
+	pub active_substances: Vec<Value>,
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ProductPresaveDetailsForUpdate {
-	pub parent: Option<ProductPresaveForUpdate>,
-	pub substances: Option<Vec<ProductSubstanceDetailsForUpdate>>,
+	pub rows: ProductPresaveRowsForUpdate,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ProductPresaveRowsForUpdate {
+	pub product: Option<ProductPresaveForUpdate>,
+	pub active_substances: Option<Vec<ProductActiveSubstanceDetailsForUpdate>>,
 }
 
 #[derive(Debug, Deserialize)]
-pub struct ProductSubstanceDetailsForUpdate {
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ProductActiveSubstanceDetailsForUpdate {
 	pub id: Option<Uuid>,
-	#[serde(default, rename = "_delete")]
-	pub delete: bool,
+	#[serde(default)]
+	pub deleted: bool,
 	pub sequence_number: Option<i32>,
 	pub substance_name: Option<String>,
+	#[serde(rename = "substanceTermIdVersion")]
 	pub substance_termid_version: Option<String>,
+	#[serde(rename = "substanceTermId")]
 	pub substance_termid: Option<String>,
 	pub mfds_version: Option<String>,
 	pub mfds_id: Option<String>,
+	#[serde(rename = "substanceStrengthValue")]
 	pub strength_value: Option<rust_decimal::Decimal>,
+	#[serde(rename = "substanceStrengthUnit")]
 	pub strength_unit: Option<String>,
 }
 
-impl ProductSubstanceDetailsForUpdate {
-	fn into_update(self) -> ProductPresaveSubstanceForUpdate {
-		ProductPresaveSubstanceForUpdate {
+impl ProductActiveSubstanceDetailsForUpdate {
+	fn into_update(self) -> ProductPresaveActiveSubstanceForUpdate {
+		ProductPresaveActiveSubstanceForUpdate {
 			sequence_number: self.sequence_number,
 			substance_name: self.substance_name,
 			substance_termid_version: self.substance_termid_version,
@@ -163,13 +218,13 @@ impl ProductSubstanceDetailsForUpdate {
 	fn into_create(
 		self,
 		product_presave_id: Uuid,
-	) -> Result<ProductPresaveSubstanceForCreate> {
-		Ok(ProductPresaveSubstanceForCreate {
+	) -> Result<ProductPresaveActiveSubstanceForCreate> {
+		Ok(ProductPresaveActiveSubstanceForCreate {
 			product_presave_id,
 			sequence_number: self.sequence_number.ok_or_else(|| {
 				Error::BadRequest {
 					message:
-						"product substance details create requires sequence_number"
+						"product active substance details create requires sequence_number"
 							.to_string(),
 				}
 			})?,
@@ -187,99 +242,86 @@ impl ProductSubstanceDetailsForUpdate {
 pub async fn get_product_presave_details(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: AuthorizationSnapshotW,
 	Path(id): Path<Uuid>,
 ) -> Result<(StatusCode, Json<DataRestResult<ProductPresaveDetails>>)> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, PRESAVE_TEMPLATE_READ)?;
-	let details = load_product_presave_details(&ctx, &mm, id).await?;
-	ensure_product_presave_scope(&ctx, &mm, &details.parent).await?;
-	Ok(rest_ok(details))
+	with_authorized_presave_read(
+		&ctx,
+		&snapshot,
+		&mm,
+		PresaveAuthorizationKind::Product,
+		id,
+		|ctx, mm| {
+			Box::pin(async move {
+				Ok(rest_ok(load_product_presave_details(ctx, mm, id).await?))
+			})
+		},
+	)
+	.await
 }
 
 pub async fn update_product_presave_details(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: AuthorizationSnapshotW,
 	Path(id): Path<Uuid>,
 	Json(params): Json<ParamsForUpdate<ProductPresaveDetailsForUpdate>>,
 ) -> Result<(StatusCode, Json<DataRestResult<ProductPresaveDetails>>)> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, PRESAVE_TEMPLATE_UPDATE)?;
-	let current = ProductPresaveBmc::get(&ctx, &mm, id).await?;
-	ensure_product_presave_scope(&ctx, &mm, &current).await?;
-
-	let ParamsForUpdate { data } = params;
-	require_product_detail_operation_permissions(&ctx, &data)?;
-	if data
-		.parent
-		.as_ref()
-		.is_some_and(|parent| parent.deleted == Some(true))
-		&& product_presave_used_by_cases(&mm, ctx.organization_id(), id).await?
-	{
-		return Err(presave_case_link_conflict(
-			"product presave is used by cases",
-		));
-	}
-	if data
-		.parent
-		.as_ref()
-		.is_some_and(|parent| parent.deleted == Some(true))
-		&& presave_scope_assigned_to_users(
-			&mm,
-			ctx.organization_id(),
-			"access_product_ids",
-			product_scope_identifiers(&current),
-		)
-		.await?
-	{
-		return Err(presave_case_link_conflict(
-			"product presave is assigned to users",
-		));
-	}
-	preflight_product_presave_details(&ctx, &mm, id, &data).await?;
-	apply_product_presave_details(&ctx, &mm, id, data).await?;
-
-	let details = load_product_presave_details(&ctx, &mm, id).await?;
-	ensure_product_presave_scope(&ctx, &mm, &details.parent).await?;
-	Ok(rest_ok(details))
-}
-
-async fn apply_product_presave_details(
-	ctx: &lib_core::ctx::Ctx,
-	mm: &ModelManager,
-	id: Uuid,
-	data: ProductPresaveDetailsForUpdate,
-) -> Result<()> {
-	let dbx = mm.dbx();
-	dbx.begin_txn().await.map_err(model::Error::from)?;
-	if let Err(err) =
-		lib_core::model::store::set_full_context_from_ctx_dbx(dbx, ctx).await
-	{
-		let _ = dbx.rollback_txn().await;
-		return Err(err.into());
-	}
-
-	let apply_result = apply_product_presave_details_inner(ctx, mm, id, data).await;
-	if let Err(err) = apply_result {
-		let _ = dbx.rollback_txn().await;
-		return Err(err);
-	}
-
-	dbx.commit_txn().await.map_err(model::Error::from)?;
-	Ok(())
+	with_authorized_presave_atomic_update(
+		&ctx,
+		&snapshot,
+		&mm,
+		PresaveAuthorizationKind::Product,
+		id,
+		move |ctx, mm| {
+			Box::pin(async move {
+				let ParamsForUpdate { data } = params;
+				let rows = data.rows;
+				if rows
+					.product
+					.as_ref()
+					.is_some_and(|parent| parent.deleted == Some(true))
+				{
+					if rows.active_substances.is_some() {
+						return Err(Error::BadRequest {
+							message: "presave deletion cannot include child changes"
+								.into(),
+						});
+					}
+					PresaveLifecycleService::archive_in_current_txn(
+						ctx,
+						mm,
+						PresaveKind::Product,
+						id,
+					)
+					.await?;
+					return Ok(rest_ok(
+						load_product_presave_details(ctx, mm, id).await?,
+					));
+				}
+				preflight_product_presave_details(ctx, mm, id, &rows).await?;
+				apply_product_presave_details_inner(ctx, mm, id, rows).await?;
+				Ok(rest_ok(load_product_presave_details(ctx, mm, id).await?))
+			})
+		},
+	)
+	.await
 }
 
 async fn apply_product_presave_details_inner(
 	ctx: &lib_core::ctx::Ctx,
 	mm: &ModelManager,
 	id: Uuid,
-	data: ProductPresaveDetailsForUpdate,
+	rows: ProductPresaveRowsForUpdate,
 ) -> Result<()> {
-	if let Some(parent) = data.parent {
+	if let Some(parent) = rows.product {
 		ProductPresaveBmc::update(ctx, mm, id, parent).await?;
 	}
-	if let Some(substances) = data.substances {
-		for substance in substances {
-			upsert_product_substance_detail(ctx, mm, id, substance).await?;
+	if let Some(active_substances) = rows.active_substances {
+		for substance in active_substances {
+			upsert_product_active_substance_detail(ctx, mm, id, substance).await?;
 		}
 	}
 	Ok(())
@@ -291,121 +333,135 @@ async fn load_product_presave_details(
 	id: Uuid,
 ) -> Result<ProductPresaveDetails> {
 	let parent = ProductPresaveBmc::get(ctx, mm, id).await?;
-	let substances = ProductPresaveSubstanceBmc::list_by_parent(ctx, mm, id).await?;
-	Ok(ProductPresaveDetails { parent, substances })
-}
-
-fn require_product_detail_operation_permissions(
-	ctx: &lib_core::ctx::Ctx,
-	data: &ProductPresaveDetailsForUpdate,
-) -> Result<()> {
-	let creates_child = data
-		.substances
-		.as_deref()
-		.unwrap_or_default()
-		.iter()
-		.any(|item| item.id.is_none() && !item.delete);
-	let deletes_child = data
-		.substances
-		.as_deref()
-		.unwrap_or_default()
-		.iter()
-		.any(|item| item.delete);
-	let deletes_parent = data
-		.parent
-		.as_ref()
-		.is_some_and(|parent| parent.deleted == Some(true));
-
-	if creates_child {
-		require_permission(ctx, PRESAVE_TEMPLATE_CREATE)?;
-	}
-	if deletes_child || deletes_parent {
-		require_permission(ctx, PRESAVE_TEMPLATE_DELETE)?;
-	}
-	Ok(())
+	let active_substances =
+		ProductPresaveActiveSubstanceBmc::list_by_parent(ctx, mm, id).await?;
+	let product = camelize_value(serde_json::to_value(parent).map_err(|err| {
+		Error::BadRequest {
+			message: format!("product presave serialization failed: {err}"),
+		}
+	})?);
+	let canonical_active_substances = active_substances
+		.into_iter()
+		.map(|substance| {
+			let mut value = camelize_value(
+				serde_json::to_value(substance)
+					.expect("serializable product substance"),
+			);
+			if let Some(row) = value.as_object_mut() {
+				if let Some(term_id_version) = row.remove("substanceTermidVersion") {
+					row.insert("substanceTermIdVersion".into(), term_id_version);
+				}
+				if let Some(term_id) = row.remove("substanceTermid") {
+					row.insert("substanceTermId".into(), term_id);
+				}
+				if let Some(strength) = row.remove("strengthValue") {
+					row.insert("substanceStrengthValue".into(), strength);
+				}
+				if let Some(unit) = row.remove("strengthUnit") {
+					row.insert("substanceStrengthUnit".into(), unit);
+				}
+				row.insert("deleted".into(), json!(false));
+			}
+			value
+		})
+		.collect();
+	Ok(ProductPresaveDetails {
+		rows: ProductPresaveRows {
+			product,
+			active_substances: canonical_active_substances,
+		},
+	})
 }
 
 async fn preflight_product_presave_details(
 	ctx: &lib_core::ctx::Ctx,
 	mm: &ModelManager,
 	product_id: Uuid,
-	data: &ProductPresaveDetailsForUpdate,
+	rows: &ProductPresaveRowsForUpdate,
 ) -> Result<()> {
-	if let Some(substances) = &data.substances {
-		for substance in substances {
-			preflight_product_substance_detail(ctx, mm, product_id, substance)
-				.await?;
+	if let Some(active_substances) = &rows.active_substances {
+		for substance in active_substances {
+			preflight_product_active_substance_detail(
+				ctx, mm, product_id, substance,
+			)
+			.await?;
 		}
 	}
 	Ok(())
 }
 
-async fn preflight_product_substance_detail(
+async fn preflight_product_active_substance_detail(
 	ctx: &lib_core::ctx::Ctx,
 	mm: &ModelManager,
 	product_id: Uuid,
-	substance: &ProductSubstanceDetailsForUpdate,
+	substance: &ProductActiveSubstanceDetailsForUpdate,
 ) -> Result<()> {
-	if substance.delete && substance.id.is_none() {
+	if substance.deleted && substance.id.is_none() {
 		return Err(Error::BadRequest {
-			message: "product substance delete requires id".to_string(),
+			message: "product active substance delete requires id".to_string(),
 		});
 	}
 	if let Some(id) = substance.id {
-		let entity = ProductPresaveSubstanceBmc::get(ctx, mm, id).await?;
+		let entity = ProductPresaveActiveSubstanceBmc::get(ctx, mm, id).await?;
 		ensure_detail_parent_scope(
 			product_id,
 			entity.product_presave_id,
 			id,
 			"product",
-			"product_presave_substances",
+			"product_presave_active_substances",
 		)?;
-	} else if !substance.delete {
-		validate_product_substance_detail_create(substance)?;
+	} else if !substance.deleted {
+		validate_product_active_substance_detail_create(substance)?;
 	}
 	Ok(())
 }
 
-fn validate_product_substance_detail_create(
-	substance: &ProductSubstanceDetailsForUpdate,
+fn validate_product_active_substance_detail_create(
+	substance: &ProductActiveSubstanceDetailsForUpdate,
 ) -> Result<()> {
 	if substance.sequence_number.is_none() {
 		return Err(Error::BadRequest {
-			message: "product substance details create requires sequence_number"
-				.to_string(),
+			message:
+				"product active substance details create requires sequence_number"
+					.to_string(),
 		});
 	}
 	Ok(())
 }
 
-async fn upsert_product_substance_detail(
+async fn upsert_product_active_substance_detail(
 	ctx: &lib_core::ctx::Ctx,
 	mm: &ModelManager,
 	product_id: Uuid,
-	substance: ProductSubstanceDetailsForUpdate,
+	substance: ProductActiveSubstanceDetailsForUpdate,
 ) -> Result<()> {
-	if substance.delete && substance.id.is_none() {
+	if substance.deleted && substance.id.is_none() {
 		return Err(Error::BadRequest {
-			message: "product substance delete requires id".to_string(),
+			message: "product active substance delete requires id".to_string(),
 		});
 	}
 	if let Some(id) = substance.id {
-		let entity = ProductPresaveSubstanceBmc::get(ctx, mm, id).await?;
+		let entity = ProductPresaveActiveSubstanceBmc::get(ctx, mm, id).await?;
 		ensure_detail_parent_scope(
 			product_id,
 			entity.product_presave_id,
 			id,
 			"product",
-			"product_presave_substances",
+			"product_presave_active_substances",
 		)?;
-		if substance.delete {
-			ProductPresaveSubstanceBmc::delete(ctx, mm, id).await?;
+		if substance.deleted {
+			ProductPresaveActiveSubstanceBmc::delete(ctx, mm, id).await?;
 		} else {
-			ProductPresaveSubstanceBmc::update(ctx, mm, id, substance.into_update())
-				.await?;
+			ProductPresaveActiveSubstanceBmc::update(
+				ctx,
+				mm,
+				id,
+				substance.into_update(),
+			)
+			.await?;
 		}
 	} else {
-		ProductPresaveSubstanceBmc::create(
+		ProductPresaveActiveSubstanceBmc::create(
 			ctx,
 			mm,
 			substance.into_create(product_id)?,
@@ -416,7 +472,8 @@ async fn upsert_product_substance_detail(
 }
 
 #[derive(Debug, Deserialize)]
-pub struct ProductSubstanceForRestCreate {
+#[serde(deny_unknown_fields)]
+pub struct ProductActiveSubstanceForRestCreate {
 	pub sequence_number: i32,
 	pub substance_name: Option<String>,
 	pub substance_termid_version: Option<String>,
@@ -427,12 +484,12 @@ pub struct ProductSubstanceForRestCreate {
 	pub strength_unit: Option<String>,
 }
 
-impl ProductSubstanceForRestCreate {
+impl ProductActiveSubstanceForRestCreate {
 	fn into_core(
 		self,
 		product_presave_id: Uuid,
-	) -> ProductPresaveSubstanceForCreate {
-		ProductPresaveSubstanceForCreate {
+	) -> ProductPresaveActiveSubstanceForCreate {
+		ProductPresaveActiveSubstanceForCreate {
 			product_presave_id,
 			sequence_number: self.sequence_number,
 			substance_name: self.substance_name,
@@ -446,94 +503,18 @@ impl ProductSubstanceForRestCreate {
 	}
 }
 
-pub async fn create_product_substance(
-	State(mm): State<ModelManager>,
-	ctx_w: CtxW,
-	Path(product_id): Path<Uuid>,
-	Json(params): Json<ParamsForCreate<ProductSubstanceForRestCreate>>,
-) -> Result<(StatusCode, Json<DataRestResult<ProductPresaveSubstance>>)> {
-	let ctx = ctx_w.0;
-	require_permission(&ctx, PRESAVE_TEMPLATE_CREATE)?;
-	ensure_product_presave_id_scope(&ctx, &mm, product_id).await?;
-	let ParamsForCreate { data } = params;
-	let id =
-		ProductPresaveSubstanceBmc::create(&ctx, &mm, data.into_core(product_id))
-			.await?;
-	let entity = ProductPresaveSubstanceBmc::get(&ctx, &mm, id).await?;
-	Ok(rest_created(entity))
-}
-
-pub async fn list_product_substances(
-	State(mm): State<ModelManager>,
-	ctx_w: CtxW,
-	Path(product_id): Path<Uuid>,
-) -> Result<(
-	StatusCode,
-	Json<DataRestResult<Vec<ProductPresaveSubstance>>>,
-)> {
-	let ctx = ctx_w.0;
-	require_permission(&ctx, PRESAVE_TEMPLATE_LIST)?;
-	ensure_product_presave_id_scope(&ctx, &mm, product_id).await?;
-	let entities =
-		ProductPresaveSubstanceBmc::list_by_parent(&ctx, &mm, product_id).await?;
-	Ok(rest_ok(entities))
-}
-
-pub async fn get_product_substance(
-	State(mm): State<ModelManager>,
-	ctx_w: CtxW,
-	Path((product_id, id)): Path<(Uuid, Uuid)>,
-) -> Result<(StatusCode, Json<DataRestResult<ProductPresaveSubstance>>)> {
-	let ctx = ctx_w.0;
-	require_permission(&ctx, PRESAVE_TEMPLATE_READ)?;
-	let entity = ProductPresaveSubstanceBmc::get(&ctx, &mm, id).await?;
-	ensure_parent_scope(
-		product_id,
-		entity.product_presave_id,
-		id,
-		"product_presave_substances",
-	)?;
-	ensure_product_presave_id_scope(&ctx, &mm, product_id).await?;
-	Ok(rest_ok(entity))
-}
-
-pub async fn update_product_substance(
-	State(mm): State<ModelManager>,
-	ctx_w: CtxW,
-	Path((product_id, id)): Path<(Uuid, Uuid)>,
-	Json(params): Json<ParamsForUpdate<ProductPresaveSubstanceForUpdate>>,
-) -> Result<(StatusCode, Json<DataRestResult<ProductPresaveSubstance>>)> {
-	let ctx = ctx_w.0;
-	require_permission(&ctx, PRESAVE_TEMPLATE_UPDATE)?;
-	let entity = ProductPresaveSubstanceBmc::get(&ctx, &mm, id).await?;
-	ensure_parent_scope(
-		product_id,
-		entity.product_presave_id,
-		id,
-		"product_presave_substances",
-	)?;
-	ensure_product_presave_id_scope(&ctx, &mm, product_id).await?;
-	let ParamsForUpdate { data } = params;
-	ProductPresaveSubstanceBmc::update(&ctx, &mm, id, data).await?;
-	let entity = ProductPresaveSubstanceBmc::get(&ctx, &mm, id).await?;
-	Ok(rest_ok(entity))
-}
-
-pub async fn delete_product_substance(
-	State(mm): State<ModelManager>,
-	ctx_w: CtxW,
-	Path((product_id, id)): Path<(Uuid, Uuid)>,
-) -> Result<StatusCode> {
-	let ctx = ctx_w.0;
-	require_permission(&ctx, PRESAVE_TEMPLATE_DELETE)?;
-	let entity = ProductPresaveSubstanceBmc::get(&ctx, &mm, id).await?;
-	ensure_parent_scope(
-		product_id,
-		entity.product_presave_id,
-		id,
-		"product_presave_substances",
-	)?;
-	ensure_product_presave_id_scope(&ctx, &mm, product_id).await?;
-	ProductPresaveSubstanceBmc::delete(&ctx, &mm, id).await?;
-	Ok(StatusCode::NO_CONTENT)
+generate_presave_child_rest_fns! {
+	Bmc: ProductPresaveActiveSubstanceBmc,
+	Entity: ProductPresaveActiveSubstance,
+	RestCreate: ProductActiveSubstanceForRestCreate,
+	ForUpdate: ProductPresaveActiveSubstanceForUpdate,
+	CreateFn: create_product_active_substance,
+	ListFn: list_product_active_substances,
+	GetFn: get_product_active_substance,
+	UpdateFn: update_product_active_substance,
+	DeleteFn: delete_product_active_substance,
+	ParentField: product_presave_id,
+	ParentKind: Product,
+	EntityName: "product_presave_active_substances",
+	DeleteMode: hard
 }

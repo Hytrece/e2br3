@@ -38,6 +38,44 @@ MFDS_CONFORMANCE_MAP = {
     "비필수": "optional",
 }
 
+ICH_IDENTIFIER_PROFILES = {
+    "D.8.r.2b": "mpid",
+    "D.10.8.r.2b": "mpid",
+    "G.k.2.1.1b": "mpid",
+    "D.8.r.3b": "phpid",
+    "D.10.8.r.3b": "phpid",
+    "G.k.2.1.2b": "phpid",
+    "G.k.2.3.r.2b": "substance_id",
+}
+
+ICH_VOCABULARY_SCOPES = {
+    "C.2.r.3": "all",
+    "C.3.4.5": "all",
+    "C.5.1.r.2": "all",
+    "D.2.2b": "time",
+    "D.2.2.1b": "gestation",
+    "D.10.2.2b": "time",
+    "E.i.1.1b": "all",
+    "E.i.6b": "time",
+    "E.i.9": "all",
+    "F.r.3.3": "all",
+    "G.k.2.3.r.3b": "all",
+    "G.k.2.4": "all",
+    "G.k.3.2": "all",
+    "G.k.4.r.1b": "dose",
+    "G.k.4.r.3": "frequency",
+    "G.k.4.r.6b": "time",
+    "G.k.4.r.9.2a": "dose_form",
+    "G.k.4.r.9.2b": "dose_form",
+    "G.k.4.r.10.2b": "route",
+    "G.k.4.r.11.2b": "route",
+    "G.k.5b": "dose",
+    "G.k.6b": "gestation",
+    "G.k.9.i.3.1b": "time",
+    "G.k.9.i.3.2b": "time",
+    "H.5.r.1b": "all",
+}
+
 
 def clean(value: Any) -> str:
     if value is None:
@@ -56,6 +94,163 @@ def set_optional(entry: dict[str, Any], key: str, value: Any) -> None:
         entry[key] = text
 
 
+def classify_allowed_value_kind(value: str) -> dict[str, Any]:
+    """Normalize the official VALUE ALLOWED prose without replacing it.
+
+    The raw source text remains in ``allowed_values``. This classification only
+    identifies the validator shape and extracts values when the source contains
+    an explicit numeric code set.
+    """
+    before_null_flavor = re.split(
+        r"nullflavor\s*[:=]", value, maxsplit=1, flags=re.IGNORECASE
+    )[0]
+    boolean_tokens = {
+        token.lower()
+        for token in re.findall(r"\b(?:true|false)\b", before_null_flavor, re.IGNORECASE)
+    }
+    boolean_residue = re.sub(
+        r"\b(?:true|false)\b|[,/\s]",
+        "",
+        before_null_flavor,
+        flags=re.IGNORECASE,
+    )
+    if not boolean_residue and boolean_tokens == {"true", "false"}:
+        return {"kind": "boolean"}
+    if not boolean_residue and boolean_tokens == {"true"}:
+        return {"kind": "true_marker"}
+
+    codes: list[str] = []
+    for match in re.finditer(r"(?<![\w.])(\d+)\s*=", value):
+        code = match.group(1)
+        if code not in codes:
+            codes.append(code)
+    if codes:
+        return {"kind": "code_set", "values": codes}
+
+    normalized = " ".join(value.lower().split())
+    if normalized == "n.n" or normalized.startswith("numeric"):
+        return {"kind": "numeric"}
+    if any(
+        marker in normalized
+        for marker in (
+            "ucum",
+            "iso 3166",
+            "iso 639",
+            "mpid",
+            "phpid",
+            "substanceid",
+            "iso idmp",
+            "roaid",
+        )
+    ):
+        return {"kind": "vocabulary"}
+    if any(
+        marker in normalized
+        for marker in (
+            "see appendix ii",
+            "ccyy",
+            "media type:",
+            "guidance for format",
+        )
+    ):
+        return {"kind": "format"}
+    return {"kind": "descriptive"}
+
+
+def numeric_shape_for(value: str) -> str:
+    return "dotted_version" if " ".join(value.upper().split()) == "N.N" else "decimal"
+
+
+def format_name_for(value: str) -> str:
+    normalized = " ".join(value.lower().split())
+    if "media type:" in normalized:
+        return "base64"
+    if "guidance for format" in normalized:
+        return "ich_identifier"
+    return "e2b_datetime"
+
+
+REPRESENTATION_ENFORCED_CODES = {
+    # Boolean-backed DTO fields.
+    "C.1.6.1",
+    "C.1.7",
+    "D.7.1.r.3",
+    "D.9.3",
+    "D.10.7.1.r.3",
+    "E.i.8",
+    "F.r.7",
+    # The four E.i.3.1 source codes are the complete boolean serious/highlighted
+    # cross-product stored by the API.
+    "E.i.3.1",
+    # Decimal/integer-backed DTO fields.
+    "D.2.2a",
+    "D.2.2.1a",
+    "D.3",
+    "D.4",
+    "D.10.2.2a",
+    "D.10.4",
+    "D.10.5",
+    "E.i.6a",
+    "G.k.2.3.r.3a",
+    "G.k.4.r.1a",
+    "G.k.4.r.2",
+    "G.k.4.r.6a",
+    "G.k.5a",
+    "G.k.6a",
+    "G.k.9.i.3.1a",
+    "G.k.9.i.3.2a",
+    # Date/OffsetDateTime-backed DTO fields.
+    "N.1.5",
+    "C.1.4",
+    "C.1.5",
+    "D.2.1",
+    "D.6",
+    "D.7.1.r.2",
+    "D.7.1.r.4",
+    "D.8.r.4",
+    "D.8.r.5",
+    "D.9.1",
+    "D.10.2.1",
+    "D.10.3",
+    "D.10.7.1.r.2",
+    "D.10.7.1.r.4",
+    "D.10.8.r.4",
+    "D.10.8.r.5",
+    "E.i.4",
+    "E.i.5",
+    "F.r.1",
+}
+
+
+def enforcement_for(code: str) -> str:
+    if code in REPRESENTATION_ENFORCED_CODES:
+        return "representation_enforced"
+    return "case_validate"
+
+
+def allowed_value_constraint(
+    value: str, code: str = "", data_type: str | None = None
+) -> dict[str, Any]:
+    """Add executable parameters while preserving the official source prose."""
+    del data_type
+    result = classify_allowed_value_kind(value)
+    kind = result["kind"]
+    if kind == "descriptive":
+        return result
+
+    result["enforcement"] = enforcement_for(code)
+    if kind == "numeric":
+        result["numeric_shape"] = numeric_shape_for(value)
+    elif kind == "format":
+        result["format_name"] = format_name_for(value)
+    elif kind == "vocabulary":
+        if code in ICH_IDENTIFIER_PROFILES:
+            result["identifier_profile"] = ICH_IDENTIFIER_PROFILES[code]
+        else:
+            result["vocabulary_scope"] = ICH_VOCABULARY_SCOPES.get(code, "all")
+    return result
+
+
 def parse_ich_csv(text: str) -> list[dict[str, Any]]:
     rows = list(csv.reader(io.StringIO(text.lstrip("﻿"))))
     header_index = next(
@@ -72,15 +267,14 @@ def parse_ich_csv(text: str) -> list[dict[str, Any]]:
         return clean(row[index]) if index < len(row) else ""
 
     entries: list[dict[str, Any]] = []
-    seen: set[str] = set()
+    entry_index_by_code: dict[str, int] = {}
     for row in rows[header_index + 1 :]:
         code = cell(row, "DATA ELEMENT NUMBER")
         name = cell(row, "DATA ELEMENT NAME")
         if code in ("", "-"):
             code = cell(row, "HEADER ELEMENT")
-        if not CODE_PATTERN.match(code) or not name or code in seen:
+        if not CODE_PATTERN.match(code) or not name:
             continue
-        seen.add(code)
 
         conformance_raw = cell(row, "CONFORMANCE")
         normalized = ICH_CONFORMANCE_MAP.get(conformance_raw.lower().replace("–", "-"))
@@ -92,9 +286,16 @@ def parse_ich_csv(text: str) -> list[dict[str, Any]]:
         }
         if normalized:
             entry["conformance"] = normalized
-        set_optional(entry, "data_type", cell(row, "DATA TYPE"))
+        data_type = optional_value(cell(row, "DATA TYPE"))
+        if data_type is not None:
+            entry["data_type"] = data_type
         set_optional(entry, "max_length", cell(row, "MAX LENGTH"))
-        set_optional(entry, "allowed_values", cell(row, "VALUE ALLOWED"))
+        allowed_values = optional_value(cell(row, "VALUE ALLOWED"))
+        if allowed_values is not None:
+            entry["allowed_values"] = allowed_values
+            entry["allowed_value_constraint"] = allowed_value_constraint(
+                allowed_values, code, data_type
+            )
         set_optional(entry, "oid", cell(row, "Code system OID"))
         null_flavors = [
             label
@@ -103,7 +304,14 @@ def parse_ich_csv(text: str) -> list[dict[str, Any]]:
         ]
         if null_flavors:
             entry["null_flavors"] = null_flavors
-        entries.append(entry)
+        existing_index = entry_index_by_code.get(code)
+        if existing_index is None:
+            entry_index_by_code[code] = len(entries)
+            entries.append(entry)
+        elif entries[existing_index]["kind"] == "group" and entry["kind"] == "element":
+            # C.1.10.r is emitted once as a header and again as the actual
+            # element. The element row owns the dictionary definition.
+            entries[existing_index] = entry
     return entries
 
 
@@ -269,9 +477,16 @@ def parse_fda_csv(text: str) -> list[dict[str, Any]]:
         }
         if profiles:
             entry["conformance"] = min(profiles.values(), key=CONFORMANCE_STRICTNESS.index)
-        set_optional(entry, "data_type", cell(row, header.index("DATA TYPE")))
+        data_type = optional_value(cell(row, header.index("DATA TYPE")))
+        if data_type is not None:
+            entry["data_type"] = data_type
         set_optional(entry, "max_length", cell(row, header.index("MAX LENGTH")))
-        set_optional(entry, "allowed_values", cell(row, header.index("VALUES ALLOWED")))
+        allowed_values = optional_value(cell(row, header.index("VALUES ALLOWED")))
+        if allowed_values is not None:
+            entry["allowed_values"] = allowed_values
+            entry["allowed_value_constraint"] = allowed_value_constraint(
+                allowed_values, code, data_type
+            )
         set_optional(entry, "oid", cell(row, header.index("Code system OID")))
         set_optional(entry, "hl7_data_type", cell(row, header.index("HL7 Data Type")))
         set_optional(entry, "hl7_component", cell(row, header.index("HL7 Data Type (sub component)")))
@@ -454,6 +669,31 @@ def merge_vocabulary(entries: list[dict[str, Any]], mapping: dict[str, str]) -> 
     return annotated
 
 
+def move_allowed_value_constraints_to_end(entries: list[dict[str, Any]]) -> None:
+    """Keep generated object order stable after regional metadata merges."""
+    for entry in entries:
+        constraint = entry.pop("allowed_value_constraint", None)
+        if constraint is not None:
+            entry["allowed_value_constraint"] = constraint
+
+
+def refresh_allowed_value_constraints(
+    dictionary_entries: list[dict[str, Any]], source_entries: list[dict[str, Any]]
+) -> None:
+    """Refresh source-derived constraints without replacing enriched metadata."""
+    constraints = {
+        entry["code"]: entry["allowed_value_constraint"]
+        for entry in source_entries
+        if "allowed_value_constraint" in entry
+    }
+    for entry in dictionary_entries:
+        constraint = constraints.get(entry["code"])
+        if constraint is None:
+            continue
+        entry.pop("allowed_value_constraint", None)
+        entry["allowed_value_constraint"] = constraint
+
+
 def extract_mfds_rules(sheet1_rows: list[list[Any]]) -> dict[str, str]:
     """Pull the MFDS 항목검증룰 prose per element code (ICH and KR alike) from sheet 1."""
     rules: dict[str, str] = {}
@@ -552,6 +792,7 @@ def main() -> int:
     nf_annotated = merge_nullflavors(ich_entries, nullflavor_usage)
     vocab_annotated = merge_vocabulary(ich_entries, vocabulary_usage)
     sev_annotated = merge_fda_severity(ich_entries, fda_severity)
+    move_allowed_value_constraints_to_end(ich_entries)
     path = write_dictionary("ich-e2br3.json", "ICH", ICH_SOURCE, ich_entries)
     elements = sum(1 for entry in ich_entries if entry["kind"] == "element")
     print(

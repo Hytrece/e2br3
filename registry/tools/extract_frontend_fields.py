@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 import json
+import os
 import re
+import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -17,6 +19,13 @@ class FrontendInventoryError(Exception):
     pass
 
 
+def resolve_frontend_root(repo_root: Path = REPO_ROOT) -> Path:
+    configured = os.environ.get("E2BR3_FRONTEND_ROOT")
+    if configured:
+        return Path(configured).expanduser().resolve()
+    return repo_root.parent / "frontend" / "E2BR3-frontend"
+
+
 @dataclass(frozen=True)
 class FrontendField:
     key: str
@@ -27,13 +36,7 @@ class FrontendField:
 
 
 DEFAULT_SOURCE_GLOBS = [
-    "../frontend/E2BR3-frontend/components/case-form/sections/SectionC*.tsx",
-    "../frontend/E2BR3-frontend/components/case-form/sections/SectionD.tsx",
-    "../frontend/E2BR3-frontend/components/case-form/sections/SectionDH.tsx",
-    "../frontend/E2BR3-frontend/components/case-form/sections/SectionE.tsx",
-    "../frontend/E2BR3-frontend/components/case-form/sections/SectionF.tsx",
-    "../frontend/E2BR3-frontend/components/case-form/sections/SectionG.tsx",
-    "../frontend/E2BR3-frontend/components/case-form/sections/SectionH.tsx",
+    "../frontend/E2BR3-frontend/app/(protected)/*/case/*/detail/**/*.tsx",
 ]
 
 ALLOWED_FIELD_ROOTS = {
@@ -41,6 +44,7 @@ ALLOWED_FIELD_ROOTS = {
     "drugReactionAssessments",
     "drugs",
     "literatureReferences",
+    "messageHeader",
     "narrative",
     "patientInformation",
     "primarySources",
@@ -97,6 +101,29 @@ FIELD_PATTERNS = [
     re.compile(r"register\(\s*`([^`]+)`"),
 ]
 
+# Field names composed from an object-array `.map` callback, e.g. a
+# `SERIOUSNESS_CRITERIA = [{ name: "criteria..." }] as const` list rendered via
+# `name={`reactions.${i}.seriousness.${criterion.name}`}`. The concrete field
+# name lives on the array element and never appears literally at the `name=`
+# call site, so it is resolved here from the `as const` source array.
+OBJECT_NAME_TEMPLATE = re.compile(r"`([^`]*?)\$\{[A-Za-z_]\w*\.name\}`")
+OBJECT_ARRAY_AS_CONST = re.compile(r"=\s*\[(.*?)\]\s*as const", re.DOTALL)
+OBJECT_ARRAY_NAME_ENTRY = re.compile(r"\bname:\s*[\"']([A-Za-z][A-Za-z0-9_]*)[\"']")
+
+
+def expand_object_name_map_paths(source: str) -> set[str]:
+    prefixes = {prefix.rstrip(".") for prefix in OBJECT_NAME_TEMPLATE.findall(source)}
+    if not prefixes:
+        return set()
+
+    names: set[str] = set()
+    for array_body in OBJECT_ARRAY_AS_CONST.findall(source):
+        names.update(OBJECT_ARRAY_NAME_ENTRY.findall(array_body))
+    if not names:
+        return set()
+
+    return {f"{prefix}.{name}" for prefix in prefixes if prefix for name in names}
+
 
 def extract_raw_field_paths_from_source(source: str) -> list[str]:
     fields: set[str] = set()
@@ -106,7 +133,33 @@ def extract_raw_field_paths_from_source(source: str) -> list[str]:
             if raw:
                 fields.add(raw.strip())
     fields.update(expand_name_placeholder_paths(source, fields))
+    fields.update(expand_object_name_map_paths(source))
     return sorted(fields)
+
+
+def extract_frontend_fields_ast(root: Path = REPO_ROOT) -> list[FrontendField]:
+    repo_root = root if (root / "registry").exists() else root.parent
+    frontend_root = resolve_frontend_root(repo_root)
+    script = Path(__file__).with_suffix(".mjs")
+    completed = subprocess.run(
+        ["node", str(script), str(frontend_root)],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if completed.returncode:
+        raise FrontendInventoryError(completed.stderr.strip() or "AST frontend extraction failed")
+    payload = json.loads(completed.stdout)
+    return [
+        FrontendField(
+            key=item["key"],
+            section=split_key(item["key"])[0],
+            field=split_key(item["key"])[1],
+            file=item["file"],
+            raw=item["key"],
+        )
+        for item in payload
+    ]
 
 
 def expand_name_placeholder_paths(source: str, raw_fields: Iterable[str]) -> set[str]:

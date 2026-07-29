@@ -138,7 +138,9 @@ pub(super) fn render_landscape_cioms(
 		536,
 		template.reaction_information.y + 137,
 		"PATIENT DIED",
-		first_reaction.map(|r| r.criteria_death).unwrap_or(false),
+		first_reaction
+			.and_then(|r| r.criteria_death)
+			.unwrap_or(false),
 	);
 	render_checkbox(
 		canvas,
@@ -146,7 +148,7 @@ pub(super) fn render_landscape_cioms(
 		template.reaction_information.y + 137,
 		"HOSPITALIZATION",
 		first_reaction
-			.map(|r| r.criteria_hospitalization)
+			.and_then(|r| r.criteria_hospitalization)
 			.unwrap_or(false),
 	);
 	render_checkbox(
@@ -155,7 +157,7 @@ pub(super) fn render_landscape_cioms(
 		template.reaction_information.y + 137,
 		"LIFE THREATENING",
 		first_reaction
-			.map(|r| r.criteria_life_threatening)
+			.and_then(|r| r.criteria_life_threatening)
 			.unwrap_or(false),
 	);
 	render_box(
@@ -229,7 +231,7 @@ pub(super) fn render_landscape_cioms(
 		118,
 		42,
 		"21. DID REACTION REAPPEAR AFTER REINTRODUCTION?",
-		yes_no_na(suspect_drug.and_then(|drug| drug.rechallenge.as_deref())),
+		yes_no_na(None),
 		20,
 		1,
 	);
@@ -654,7 +656,7 @@ pub(super) fn render_portrait_cioms(
 		100,
 		42,
 		"21. REAPPEAR AFTER REINTRODUCTION?",
-		yes_no_na(suspect_drug.and_then(|drug| drug.rechallenge.as_deref())),
+		yes_no_na(None),
 		14,
 		1,
 	);

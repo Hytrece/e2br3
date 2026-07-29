@@ -1,37 +1,29 @@
 //! Shared imports and helpers for case editor REST modules.
 
+pub(super) use super::portable_save::{
+	request_in_band_null_flavor, validate_direct_rows, validate_row_payload,
+};
 pub(super) use crate::web::rest::case_editor_dto::{
-	CaseEditorAeListRowDto, CaseEditorDgListRowDto, CaseEditorDhListRowDto,
-	CaseEditorDirectSectionResponse, CaseEditorFieldPatch, CaseEditorLbListRowDto,
-	CaseEditorListResponse, CaseEditorPagePatchRequest,
+	CaseEditorAeListRowDto, CaseEditorCiCaseDto, CaseEditorCiDocumentDto,
+	CaseEditorCiLinkedReportDto, CaseEditorCiOtherIdentifierDto,
+	CaseEditorCiRowsDto, CaseEditorCiSafetyReportDto, CaseEditorCiSourceDocumentDto,
+	CaseEditorDgListRowDto, CaseEditorDhListRowDto, CaseEditorDirectSectionResponse,
+	CaseEditorLbListRowDto, CaseEditorListResponse, CaseEditorPagePatchRequest,
 	CaseEditorPageProjectionResponse, CaseEditorRowDetailResponse,
 	CaseEditorShellDto,
 };
-pub(super) use crate::web::rest::case_rest::{case_to_read_result, PublicCaseView};
+pub(super) use crate::web::rest::case_rest::case_to_read_result;
 pub(super) use axum::extract::{Path, Query, State};
 pub(super) use axum::Json;
-pub(super) use lib_core::model::acs::{
-	CASE_IDENTIFIER_LIST, CASE_READ, CASE_SUMMARY_LIST, CASE_UPDATE,
-	DEATH_CAUSE_LIST, DRUG_CREATE, DRUG_DELETE, DRUG_DOSAGE_LIST,
-	DRUG_INDICATION_LIST, DRUG_LIST, DRUG_REACTION_ASSESSMENT_LIST, DRUG_READ,
-	DRUG_RECURRENCE_LIST, DRUG_SUBSTANCE_LIST, DRUG_UPDATE,
-	LITERATURE_REFERENCE_LIST, MEDICAL_HISTORY_LIST, MESSAGE_HEADER_READ,
-	NARRATIVE_READ, PARENT_INFORMATION_LIST, PARENT_MEDICAL_HISTORY_LIST,
-	PARENT_PAST_DRUG_LIST, PAST_DRUG_CREATE, PAST_DRUG_DELETE, PAST_DRUG_LIST,
-	PAST_DRUG_READ, PAST_DRUG_UPDATE, PATIENT_DEATH_LIST, PATIENT_IDENTIFIER_LIST,
-	PATIENT_READ, PRIMARY_SOURCE_LIST, REACTION_CREATE, REACTION_DELETE,
-	REACTION_LIST, REACTION_READ, REACTION_UPDATE, RECEIVER_READ,
-	SAFETY_REPORT_READ, SAFETY_REPORT_UPDATE, SENDER_DIAGNOSIS_LIST,
-	SENDER_INFORMATION_LIST, STUDY_INFORMATION_LIST, STUDY_REGISTRATION_LIST,
-	TEST_RESULT_CREATE, TEST_RESULT_DELETE, TEST_RESULT_LIST, TEST_RESULT_READ,
-	TEST_RESULT_UPDATE,
+pub(super) use lib_core::model::case::{
+	CaseBmc, CaseForUpdate, SourceDocumentBmc, SourceDocumentFilter,
+	SourceDocumentForCreate, SourceDocumentForUpdate,
 };
-pub(super) use lib_core::model::case::CaseBmc;
 pub(super) use lib_core::model::case_identifiers::{
-	LinkedReportNumberBmc, LinkedReportNumberFilter, OtherCaseIdentifierBmc,
-	OtherCaseIdentifierFilter,
+	LinkedReportNumberBmc, LinkedReportNumberFilter, LinkedReportNumberForCreate,
+	LinkedReportNumberForUpdate, OtherCaseIdentifierBmc, OtherCaseIdentifierFilter,
+	OtherCaseIdentifierForCreate, OtherCaseIdentifierForUpdate,
 };
-pub(super) use lib_core::model::case_validation_report_cache::CaseValidationReportCacheBmc;
 pub(super) use lib_core::model::case_validation_summary::CaseValidationSummaryBmc;
 pub(super) use lib_core::model::drug::{
 	DosageInformationBmc, DosageInformationFilter, DrugActiveSubstanceBmc,
@@ -39,42 +31,55 @@ pub(super) use lib_core::model::drug::{
 	DrugInformationBmc, DrugInformationForCreate, DrugInformationForUpdate,
 };
 pub(super) use lib_core::model::drug_reaction_assessment::DrugReactionAssessmentBmc;
-pub(super) use lib_core::model::drug_recurrence::DrugRecurrenceInformationBmc;
-pub(super) use lib_core::model::message_header::{
-	MessageHeaderBmc, MessageHeaderForUpdate,
-};
 pub(super) use lib_core::model::narrative::{
 	CaseSummaryInformationBmc, CaseSummaryInformationFilter,
+	CaseSummaryInformationForCreate, CaseSummaryInformationForUpdate,
 	NarrativeInformationBmc, NarrativeInformationForCreate,
 	NarrativeInformationForUpdate, SenderDiagnosisBmc, SenderDiagnosisFilter,
+	SenderDiagnosisForCreate, SenderDiagnosisForUpdate,
 };
 pub(super) use lib_core::model::parent_history::{
-	ParentMedicalHistoryBmc, ParentMedicalHistoryFilter, ParentPastDrugHistoryBmc,
-	ParentPastDrugHistoryFilter,
+	ParentMedicalHistoryBmc, ParentMedicalHistoryFilter,
+	ParentMedicalHistoryForCreate, ParentMedicalHistoryForUpdate,
+	ParentPastDrugHistoryBmc, ParentPastDrugHistoryFilter,
+	ParentPastDrugHistoryForCreate, ParentPastDrugHistoryForUpdate,
 };
 pub(super) use lib_core::model::patient::{
-	AutopsyCauseOfDeathBmc, AutopsyCauseOfDeathFilter, MedicalHistoryEpisodeBmc,
-	MedicalHistoryEpisodeFilter, ParentInformationBmc, ParentInformationFilter,
-	PastDrugHistoryBmc, PastDrugHistoryFilter, PastDrugHistoryForCreate,
-	PastDrugHistoryForUpdate, PatientDeathInformationBmc,
-	PatientDeathInformationFilter, PatientIdentifierBmc, PatientIdentifierFilter,
-	PatientInformationBmc, PatientInformationForCreate, PatientInformationForUpdate,
-	ReportedCauseOfDeathBmc, ReportedCauseOfDeathFilter,
+	AutopsyCauseOfDeathBmc, AutopsyCauseOfDeathFilter, AutopsyCauseOfDeathForCreate,
+	AutopsyCauseOfDeathForUpdate, MedicalHistoryEpisodeBmc,
+	MedicalHistoryEpisodeFilter, MedicalHistoryEpisodeForCreate,
+	MedicalHistoryEpisodeForUpdate, ParentInformationBmc, ParentInformationFilter,
+	ParentInformationForCreate, ParentInformationForUpdate, PastDrugHistoryBmc,
+	PastDrugHistoryFilter, PastDrugHistoryForCreate, PastDrugHistoryForUpdate,
+	PatientDeathInformationBmc, PatientDeathInformationFilter,
+	PatientDeathInformationForCreate, PatientDeathInformationForUpdate,
+	PatientIdentifierBmc, PatientIdentifierFilter, PatientIdentifierForCreate,
+	PatientIdentifierForUpdate, PatientInformationBmc, PatientInformationForCreate,
+	PatientInformationForUpdate, ReportedCauseOfDeathBmc,
+	ReportedCauseOfDeathFilter, ReportedCauseOfDeathForCreate,
+	ReportedCauseOfDeathForUpdate,
 };
 pub(super) use lib_core::model::reaction::{
 	ReactionBmc, ReactionForCreate, ReactionForUpdate,
 };
-pub(super) use lib_core::model::receiver::ReceiverInformationBmc;
+pub(super) use lib_core::model::receiver::{
+	ReceiverInformationBmc, ReceiverInformationForCreate,
+	ReceiverInformationForUpdate,
+};
 pub(super) use lib_core::model::safety_report::{
-	DocumentsHeldBySenderBmc, DocumentsHeldBySenderFilter, LiteratureReferenceBmc,
-	LiteratureReferenceFilter, LiteratureReferenceForCreate,
+	DocumentsHeldBySenderBmc, DocumentsHeldBySenderFilter,
+	DocumentsHeldBySenderForCreate, DocumentsHeldBySenderForUpdate,
+	LiteratureReferenceBmc, LiteratureReferenceFilter, LiteratureReferenceForCreate,
 	LiteratureReferenceForUpdate, PatchValue, PrimarySourceBmc, PrimarySourceFilter,
 	PrimarySourceForCreate, PrimarySourceForUpdate, SafetyReportIdentificationBmc,
 	SafetyReportIdentificationForUpdate, SenderInformationBmc,
 	SenderInformationFilter, SenderInformationForCreate, SenderInformationForUpdate,
+	StudyFdaCrossReportedIndBmc, StudyFdaCrossReportedIndFilter,
+	StudyFdaCrossReportedIndForCreate, StudyFdaCrossReportedIndForUpdate,
 	StudyInformationBmc, StudyInformationFilter, StudyInformationForCreate,
 	StudyInformationForUpdate, StudyRegistrationNumberBmc,
-	StudyRegistrationNumberFilter,
+	StudyRegistrationNumberFilter, StudyRegistrationNumberForCreate,
+	StudyRegistrationNumberForUpdate,
 };
 pub(super) use lib_core::model::test_result::{
 	TestResultBmc, TestResultForCreate, TestResultForUpdate,
@@ -179,29 +184,9 @@ pub(super) fn insert_editor_json_context(
 	Ok(())
 }
 
-/// After an editor save, invalidate the case's cached validation for every
-/// authority and immediately recompute the ones the editor is working with, so
-/// the read-only `/validation/cache` endpoint reflects the edit right away.
-pub(super) async fn refresh_editor_validation_cache(
-	ctx: &lib_core::ctx::Ctx,
-	mm: &ModelManager,
-	case_id: Uuid,
-	requested_authorities: Option<String>,
-) -> Result<()> {
-	let authorities = editor_projection_context(requested_authorities)?;
-	CaseValidationSummaryBmc::mark_stale_for_case(ctx, mm, case_id).await?;
-	CaseValidationReportCacheBmc::mark_stale_for_case(ctx, mm, case_id).await?;
-	crate::web::rest::case_validation_rest::refresh_case_validation_cache(
-		ctx, mm, case_id, &authorities,
-	)
-	.await?;
-	Ok(())
-}
-
-/// Invalidate the case's cached validation for every authority without
-/// recomputing. Used by structural row create/delete/restore, where the
-/// caller is not fetching a fresh report immediately.
-pub(super) async fn mark_editor_validation_cache_stale(
+/// Invalidate list-view validation summaries after any persisted editor change.
+/// Full field-level validation is requested by the editor after the save.
+pub(super) async fn mark_editor_validation_summary_stale(
 	ctx: &lib_core::ctx::Ctx,
 	mm: &ModelManager,
 	case_id: Uuid,
@@ -209,80 +194,7 @@ pub(super) async fn mark_editor_validation_cache_stale(
 ) -> Result<()> {
 	editor_projection_context(requested_authorities)?;
 	CaseValidationSummaryBmc::mark_stale_for_case(ctx, mm, case_id).await?;
-	CaseValidationReportCacheBmc::mark_stale_for_case(ctx, mm, case_id).await?;
 	Ok(())
-}
-
-pub(super) fn patch_string_value(
-	field_name: &str,
-	patch: &CaseEditorFieldPatch,
-) -> Result<PatchValue<String>> {
-	let Some(value) = patch.value.as_ref() else {
-		return Ok(PatchValue::Missing);
-	};
-	if value.is_null() {
-		return Ok(PatchValue::Null);
-	}
-	let Some(value) = value.as_str() else {
-		return Err(Error::BadRequest {
-			message: format!("{field_name} must be a string or null"),
-		});
-	};
-	Ok(PatchValue::Value(value.trim().to_string()))
-}
-
-pub(super) fn patch_bool_value(
-	field_name: &str,
-	patch: &CaseEditorFieldPatch,
-) -> Result<PatchValue<bool>> {
-	let Some(value) = patch.value.as_ref() else {
-		return Ok(PatchValue::Missing);
-	};
-	if value.is_null() {
-		return Ok(PatchValue::Null);
-	}
-	let Some(value) = value.as_bool() else {
-		return Err(Error::BadRequest {
-			message: format!("{field_name} must be a boolean or null"),
-		});
-	};
-	Ok(PatchValue::Value(value))
-}
-
-pub(super) fn patch_optional_string_value(
-	field_name: &str,
-	patch: &CaseEditorFieldPatch,
-) -> Result<Option<String>> {
-	let Some(value) = patch.value.as_ref() else {
-		return Ok(None);
-	};
-	if value.is_null() {
-		return Ok(None);
-	}
-	let Some(value) = value.as_str() else {
-		return Err(Error::BadRequest {
-			message: format!("{field_name} must be a string or null"),
-		});
-	};
-	Ok(Some(value.trim().to_string()))
-}
-
-pub(super) fn patch_optional_bool_value(
-	field_name: &str,
-	patch: &CaseEditorFieldPatch,
-) -> Result<Option<bool>> {
-	let Some(value) = patch.value.as_ref() else {
-		return Ok(None);
-	};
-	if value.is_null() {
-		return Ok(None);
-	}
-	let Some(value) = value.as_bool() else {
-		return Err(Error::BadRequest {
-			message: format!("{field_name} must be a boolean or null"),
-		});
-	};
-	Ok(Some(value))
 }
 
 /// PATCH /api/cases/{case_id}/editor/pages/CI
@@ -346,54 +258,6 @@ pub(super) fn required_row_object<'a>(
 	optional_row_object(page_id, rows, key)?.ok_or_else(|| Error::BadRequest {
 		message: format!("{page_id}.{key} row payload is required"),
 	})
-}
-
-pub(super) fn patch_json_value(patch: &CaseEditorFieldPatch) -> Value {
-	patch.value.clone().unwrap_or(Value::Null)
-}
-
-pub(super) fn changes_to_object(
-	page_id: &str,
-	changes: &BTreeMap<String, CaseEditorFieldPatch>,
-	aliases: &[(&str, &str)],
-) -> Result<serde_json::Map<String, Value>> {
-	let mut row = serde_json::Map::new();
-	for (field, patch) in changes {
-		let Some((_, target)) = aliases.iter().find(|(source, _)| source == field)
-		else {
-			return Err(Error::BadRequest {
-				message: format!("unknown {page_id} field '{field}'"),
-			});
-		};
-		row.insert((*target).to_string(), patch_json_value(patch));
-	}
-	Ok(row)
-}
-
-pub(super) fn row_payload_from_changes(
-	page_id: &str,
-	row_key: &str,
-	changes: &BTreeMap<String, CaseEditorFieldPatch>,
-	aliases: &[(&str, &str)],
-) -> Result<BTreeMap<String, Value>> {
-	Ok(BTreeMap::from([(
-		row_key.to_string(),
-		Value::Object(changes_to_object(page_id, changes, aliases)?),
-	)]))
-}
-
-pub(super) fn row_array_payload_from_changes(
-	page_id: &str,
-	row_key: &str,
-	changes: &BTreeMap<String, CaseEditorFieldPatch>,
-	aliases: &[(&str, &str)],
-) -> Result<BTreeMap<String, Value>> {
-	Ok(BTreeMap::from([(
-		row_key.to_string(),
-		Value::Array(vec![Value::Object(changes_to_object(
-			page_id, changes, aliases,
-		)?)]),
-	)]))
 }
 
 pub(super) fn optional_first_row_object<'a>(
@@ -460,7 +324,17 @@ pub(super) fn insert_alias(
 		return;
 	}
 	for alias in aliases {
-		if let Some(value) = map.get(*alias) {
+		let mut segments = alias.split('.');
+		let Some(first) = segments.next() else {
+			continue;
+		};
+		let mut value = map.get(first);
+		for segment in segments {
+			value = value
+				.and_then(Value::as_object)
+				.and_then(|object| object.get(segment));
+		}
+		if let Some(value) = value {
 			map.insert(target.to_string(), value.clone());
 			return;
 		}
@@ -468,6 +342,8 @@ pub(super) fn insert_alias(
 }
 
 pub(super) fn row_model_value(
+	section: &str,
+	request_prefix: &str,
 	row: &serde_json::Map<String, Value>,
 	aliases: &[(&str, &[&str])],
 	extra: &[(&str, Value)],
@@ -475,11 +351,80 @@ pub(super) fn row_model_value(
 	let mut map = row.clone();
 	for (target, aliases) in aliases {
 		insert_alias(&mut map, target, aliases);
+		if let Some((request_path, value)) =
+			aliases.iter().find_map(|request_path| {
+				value_at_nested_path(row, request_path)
+					.map(|value| (*request_path, value))
+			}) {
+			let binding_path = format!("{request_prefix}{request_path}");
+			if let Some(null_flavor) =
+				request_in_band_null_flavor(section, &binding_path, value)
+			{
+				map.remove(*target);
+				map.insert(
+					format!("{target}_null_flavor"),
+					Value::String(null_flavor.to_owned()),
+				);
+			} else if let Some(encoded) =
+				storage_encoded_value(section, &binding_path, target, value)
+			{
+				map.insert((*target).to_owned(), encoded);
+			}
+		}
 	}
 	for (key, value) in extra {
 		map.insert((*key).to_string(), value.clone());
 	}
 	Value::Object(map)
+}
+
+#[derive(Clone, Copy)]
+enum RowStorageEncoding {
+	BooleanString,
+}
+
+struct RowStorageBinding {
+	section: &'static str,
+	request_path: &'static str,
+	target: &'static str,
+	encoding: RowStorageEncoding,
+}
+
+const ROW_STORAGE_BINDINGS: &[RowStorageBinding] = &[RowStorageBinding {
+	section: "AE",
+	request_path: "requiredIntervention",
+	target: "required_intervention",
+	encoding: RowStorageEncoding::BooleanString,
+}];
+
+fn storage_encoded_value(
+	section: &str,
+	request_path: &str,
+	target: &str,
+	value: &Value,
+) -> Option<Value> {
+	let binding = ROW_STORAGE_BINDINGS.iter().find(|binding| {
+		binding.section == section
+			&& binding.request_path == request_path
+			&& binding.target == target
+	})?;
+	match binding.encoding {
+		RowStorageEncoding::BooleanString => value
+			.as_bool()
+			.map(|value| Value::String(value.to_string())),
+	}
+}
+
+fn value_at_nested_path<'a>(
+	map: &'a serde_json::Map<String, Value>,
+	path: &str,
+) -> Option<&'a Value> {
+	let mut segments = path.split('.');
+	let mut value = map.get(segments.next()?)?;
+	for segment in segments {
+		value = value.as_object()?.get(segment)?;
+	}
+	Some(value)
 }
 
 pub(super) fn parse_row_model<T: serde::de::DeserializeOwned>(
@@ -497,6 +442,17 @@ pub(super) fn uuid_field(
 	aliases: &[&str],
 ) -> Option<Uuid> {
 	string_field(map, aliases).and_then(|value| Uuid::parse_str(&value).ok())
+}
+
+pub(super) fn ci_date(value: Option<sqlx::types::time::Date>) -> Option<String> {
+	value.map(|date| {
+		format!(
+			"{:04}{:02}{:02}",
+			date.year(),
+			u8::from(date.month()),
+			date.day()
+		)
+	})
 }
 
 pub(super) fn rows_from_direct_section(data: Value) -> BTreeMap<String, Value> {
@@ -610,26 +566,34 @@ pub(super) fn editor_page_row_response(
 }
 
 macro_rules! repeatable_page_row_read_handler {
-	($fn_name:ident, [$($permission:expr),+ $(,)?], $build_response:ident $(,)?) => {
+	($fn_name:ident, $build_response:ident $(,)?) => {
 		pub async fn $fn_name(
 			State(mm): State<ModelManager>,
 			ctx_w: CtxW,
+			snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 			Path((case_id, row_id)): Path<(Uuid, Uuid)>,
 			Query(query): Query<CaseEditorPageProjectionQuery>,
 		) -> Result<(axum::http::StatusCode, Json<Value>)> {
 			let ctx = ctx_w.0;
-			$(require_permission(&ctx, $permission)?;)+
-			lib_rest_core::require_case_read_allowed(&ctx, &mm, case_id).await?;
-
-			let response = $build_response(
+			lib_rest_core::with_authorized_case_child_read(
 				&ctx,
+				&snapshot,
 				&mm,
 				case_id,
-				row_id,
-				query_authorities_csv(&query)?,
+				format!("editor/{}/{}", stringify!($fn_name), row_id),
+				move |ctx, mm| Box::pin(async move {
+					let response = $build_response(
+						ctx,
+						mm,
+						case_id,
+						row_id,
+						query_authorities_csv(&query)?,
+					)
+					.await?;
+					Ok((axum::http::StatusCode::OK, Json(response)))
+				}),
 			)
-			.await?;
-			Ok((axum::http::StatusCode::OK, Json(response)))
+			.await
 		}
 	};
 }
@@ -639,7 +603,6 @@ macro_rules! repeatable_page_row_create_handler {
 		$fn_name:ident,
 		section: $section:expr,
 		row_key: $row_key:expr,
-		permission: $permission:expr,
 		bmc: $bmc:ident,
 		model: $model:ty,
 		aliases: $aliases:expr,
@@ -649,38 +612,46 @@ macro_rules! repeatable_page_row_create_handler {
 		pub async fn $fn_name(
 			State(mm): State<ModelManager>,
 			ctx_w: CtxW,
+			snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 			Path(case_id): Path<Uuid>,
 			Json(request): Json<CaseEditorPagePatchRequest>,
 		) -> Result<(axum::http::StatusCode, Json<Value>)> {
 			let ctx = ctx_w.0;
-			require_permission(&ctx, $permission)?;
-			lib_rest_core::require_case_write_allowed(&ctx, &mm, case_id).await?;
-			let requested_authorities =
-				validate_request_projection_context(request.authorities.as_deref())?;
-
-			let row = required_row_object($section, &request.rows, $row_key)?;
-			let extras = $extras_fn(&ctx, &mm, case_id, row).await?;
-			let value = row_model_value(row, $aliases, &extras);
-			let create = parse_row_model::<$model>($section, $row_key, value)?;
-			let row_id = $bmc::create(&ctx, &mm, create).await?;
-			mark_editor_validation_cache_stale(
+			lib_rest_core::with_authorized_case_child_mutation(
 				&ctx,
+				&snapshot,
 				&mm,
 				case_id,
-				requested_authorities.clone(),
-			)
-			.await?;
-			let response =
-				$build_response(&ctx, &mm, case_id, row_id, requested_authorities)
+				concat!("editor/", $section, "/", $row_key),
+				move |ctx, mm| Box::pin(async move {
+					let requested_authorities =
+						validate_request_projection_context(request.authorities.as_deref())?;
+					let row = required_row_object($section, &request.rows, $row_key)?;
+					validate_row_payload($section, $row_key, row, None)?;
+					let extras = $extras_fn(ctx, mm, case_id, row).await?;
+					let value = row_model_value($section, "", row, $aliases, &extras);
+					let create = parse_row_model::<$model>($section, $row_key, value)?;
+					let row_id = $bmc::create(ctx, mm, create).await?;
+					mark_editor_validation_summary_stale(
+						ctx,
+						mm,
+						case_id,
+						requested_authorities.clone(),
+					)
 					.await?;
-			Ok((axum::http::StatusCode::CREATED, Json(response)))
+					let response =
+						$build_response(ctx, mm, case_id, row_id, requested_authorities)
+							.await?;
+					Ok((axum::http::StatusCode::CREATED, Json(response)))
+				}),
+			)
+			.await
 		}
 	};
 	(
 		$fn_name:ident,
 		section: $section:expr,
 		row_key: $row_key:expr,
-		permission: $permission:expr,
 		bmc: $bmc:ident,
 		model: $model:ty,
 		aliases: $aliases:expr,
@@ -690,35 +661,44 @@ macro_rules! repeatable_page_row_create_handler {
 		pub async fn $fn_name(
 			State(mm): State<ModelManager>,
 			ctx_w: CtxW,
+			snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 			Path(case_id): Path<Uuid>,
 			Json(request): Json<CaseEditorPagePatchRequest>,
 		) -> Result<(axum::http::StatusCode, Json<Value>)> {
 			let ctx = ctx_w.0;
-			require_permission(&ctx, $permission)?;
-			lib_rest_core::require_case_write_allowed(&ctx, &mm, case_id).await?;
-			let requested_authorities =
-				validate_request_projection_context(request.authorities.as_deref())?;
-
-			let row = required_row_object($section, &request.rows, $row_key)?;
-			let extras = {
-				let $case_id = case_id;
-				let $row = row;
-				$extras
-			};
-			let value = row_model_value(row, $aliases, &extras);
-			let create = parse_row_model::<$model>($section, $row_key, value)?;
-			let row_id = $bmc::create(&ctx, &mm, create).await?;
-			mark_editor_validation_cache_stale(
+			lib_rest_core::with_authorized_case_child_mutation(
 				&ctx,
+				&snapshot,
 				&mm,
 				case_id,
-				requested_authorities.clone(),
-			)
-			.await?;
-			let response =
-				$build_response(&ctx, &mm, case_id, row_id, requested_authorities)
+				concat!("editor/", $section, "/", $row_key),
+				move |ctx, mm| Box::pin(async move {
+					let requested_authorities =
+						validate_request_projection_context(request.authorities.as_deref())?;
+					let row = required_row_object($section, &request.rows, $row_key)?;
+					validate_row_payload($section, $row_key, row, None)?;
+					let extras = {
+						let $case_id = case_id;
+						let $row = row;
+						$extras
+					};
+					let value = row_model_value($section, "", row, $aliases, &extras);
+					let create = parse_row_model::<$model>($section, $row_key, value)?;
+					let row_id = $bmc::create(ctx, mm, create).await?;
+					mark_editor_validation_summary_stale(
+						ctx,
+						mm,
+						case_id,
+						requested_authorities.clone(),
+					)
 					.await?;
-			Ok((axum::http::StatusCode::CREATED, Json(response)))
+					let response =
+						$build_response(ctx, mm, case_id, row_id, requested_authorities)
+							.await?;
+					Ok((axum::http::StatusCode::CREATED, Json(response)))
+				}),
+			)
+			.await
 		}
 	};
 }
@@ -728,107 +708,91 @@ macro_rules! repeatable_page_row_patch_handler {
 		$fn_name:ident,
 		section: $section:expr,
 		row_key: $row_key:expr,
-		permission: $permission:expr,
 		bmc: $bmc:ident,
 		model: $model:ty,
 		verify: $verify_fn:ident,
-		changes: $changes:expr,
 		aliases: $aliases:expr,
 		build_response: $build_response:ident $(,)?
 	) => {
 		pub async fn $fn_name(
 			State(mm): State<ModelManager>,
 			ctx_w: CtxW,
+			snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 			Path((case_id, row_id)): Path<(Uuid, Uuid)>,
 			Json(request): Json<CaseEditorPagePatchRequest>,
 		) -> Result<(axum::http::StatusCode, Json<Value>)> {
 			let ctx = ctx_w.0;
-			require_permission(&ctx, $permission)?;
-			lib_rest_core::require_case_write_allowed(&ctx, &mm, case_id).await?;
-			let requested_authorities =
-				validate_request_projection_context(request.authorities.as_deref())?;
-
-			$verify_fn(&ctx, &mm, case_id, row_id).await?;
-			let synthesized_rows;
-			let rows = if !request.changes.is_empty() {
-				synthesized_rows = row_payload_from_changes(
-					$section,
-					$row_key,
-					&request.changes,
-					$changes,
-				)?;
-				&synthesized_rows
-			} else {
-				&request.rows
-			};
-			let row = required_row_object($section, rows, $row_key)?;
-			let value = row_model_value(row, $aliases, &[]);
-			let update = parse_row_model::<$model>($section, $row_key, value)?;
-			$bmc::update(&ctx, &mm, row_id, update).await?;
-			refresh_editor_validation_cache(
+			lib_rest_core::with_authorized_case_child_mutation(
 				&ctx,
+				&snapshot,
 				&mm,
 				case_id,
-				requested_authorities.clone(),
-			)
-			.await?;
-			let response =
-				$build_response(&ctx, &mm, case_id, row_id, requested_authorities)
+				format!("editor/{}/{}/{}", $section, $row_key, row_id),
+				move |ctx, mm| Box::pin(async move {
+					let requested_authorities =
+						validate_request_projection_context(request.authorities.as_deref())?;
+					$verify_fn(ctx, mm, case_id, row_id).await?;
+					let row = required_row_object($section, &request.rows, $row_key)?;
+					validate_row_payload($section, $row_key, row, None)?;
+					let value = row_model_value($section, "", row, $aliases, &[]);
+					let update = parse_row_model::<$model>($section, $row_key, value)?;
+					$bmc::update(ctx, mm, row_id, update).await?;
+					mark_editor_validation_summary_stale(
+						ctx, mm, case_id, requested_authorities.clone(),
+					)
 					.await?;
-			Ok((axum::http::StatusCode::OK, Json(response)))
+					let response =
+						$build_response(ctx, mm, case_id, row_id, requested_authorities)
+							.await?;
+					Ok((axum::http::StatusCode::OK, Json(response)))
+				}),
+			)
+			.await
 		}
 	};
 	(
 		$fn_name:ident,
 		section: $section:expr,
 		row_key: $row_key:expr,
-		permission: $permission:expr,
 		bmc: $bmc:ident,
 		model: $model:ty,
-		changes: $changes:expr,
 		aliases: $aliases:expr,
 		build_response: $build_response:ident $(,)?
 	) => {
 		pub async fn $fn_name(
 			State(mm): State<ModelManager>,
 			ctx_w: CtxW,
+			snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 			Path((case_id, row_id)): Path<(Uuid, Uuid)>,
 			Json(request): Json<CaseEditorPagePatchRequest>,
 		) -> Result<(axum::http::StatusCode, Json<Value>)> {
 			let ctx = ctx_w.0;
-			require_permission(&ctx, $permission)?;
-			lib_rest_core::require_case_write_allowed(&ctx, &mm, case_id).await?;
-			let requested_authorities =
-				validate_request_projection_context(request.authorities.as_deref())?;
-
-			$bmc::get_in_case(&ctx, &mm, case_id, row_id).await?;
-			let synthesized_rows;
-			let rows = if !request.changes.is_empty() {
-				synthesized_rows = row_payload_from_changes(
-					$section,
-					$row_key,
-					&request.changes,
-					$changes,
-				)?;
-				&synthesized_rows
-			} else {
-				&request.rows
-			};
-			let row = required_row_object($section, rows, $row_key)?;
-			let value = row_model_value(row, $aliases, &[]);
-			let update = parse_row_model::<$model>($section, $row_key, value)?;
-			$bmc::update(&ctx, &mm, row_id, update).await?;
-			refresh_editor_validation_cache(
+			lib_rest_core::with_authorized_case_child_mutation(
 				&ctx,
+				&snapshot,
 				&mm,
 				case_id,
-				requested_authorities.clone(),
-			)
-			.await?;
-			let response =
-				$build_response(&ctx, &mm, case_id, row_id, requested_authorities)
+				format!("editor/{}/{}/{}", $section, $row_key, row_id),
+				move |ctx, mm| Box::pin(async move {
+					let requested_authorities =
+						validate_request_projection_context(request.authorities.as_deref())?;
+					$bmc::get_in_case(ctx, mm, case_id, row_id).await?;
+					let row = required_row_object($section, &request.rows, $row_key)?;
+					validate_row_payload($section, $row_key, row, None)?;
+					let value = row_model_value($section, "", row, $aliases, &[]);
+					let update = parse_row_model::<$model>($section, $row_key, value)?;
+					$bmc::update(ctx, mm, row_id, update).await?;
+					mark_editor_validation_summary_stale(
+						ctx, mm, case_id, requested_authorities.clone(),
+					)
 					.await?;
-			Ok((axum::http::StatusCode::OK, Json(response)))
+					let response =
+						$build_response(ctx, mm, case_id, row_id, requested_authorities)
+							.await?;
+					Ok((axum::http::StatusCode::OK, Json(response)))
+				}),
+			)
+			.await
 		}
 	};
 }
@@ -836,23 +800,30 @@ macro_rules! repeatable_page_row_patch_handler {
 macro_rules! repeatable_page_row_delete_handler {
 	(
 		$fn_name:ident,
-		permission: $permission:expr,
 		bmc: $bmc:ident,
 		verify: $verify_fn:ident $(,)?
 	) => {
 		pub async fn $fn_name(
 			State(mm): State<ModelManager>,
 			ctx_w: CtxW,
+			snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 			Path((case_id, row_id)): Path<(Uuid, Uuid)>,
 		) -> Result<axum::http::StatusCode> {
 			let ctx = ctx_w.0;
-			require_permission(&ctx, $permission)?;
-			lib_rest_core::require_case_write_allowed(&ctx, &mm, case_id).await?;
-
-			$verify_fn(&ctx, &mm, case_id, row_id).await?;
-			$bmc::delete(&ctx, &mm, row_id).await?;
-			mark_editor_validation_cache_stale(&ctx, &mm, case_id, None).await?;
-			Ok(axum::http::StatusCode::NO_CONTENT)
+			lib_rest_core::with_authorized_case_child_mutation(
+				&ctx,
+				&snapshot,
+				&mm,
+				case_id,
+				format!("editor/{}/{}", stringify!($fn_name), row_id),
+				move |ctx, mm| Box::pin(async move {
+					$verify_fn(ctx, mm, case_id, row_id).await?;
+					$bmc::delete(ctx, mm, row_id).await?;
+					mark_editor_validation_summary_stale(ctx, mm, case_id, None).await?;
+					Ok(axum::http::StatusCode::NO_CONTENT)
+				}),
+			)
+			.await
 		}
 	};
 }
@@ -861,7 +832,6 @@ macro_rules! repeatable_list_handler {
 	(
 		$fn_name:ident,
 		$row_dto:ty,
-		$list_permission:expr,
 		$load_rows:ident,
 		include_deleted
 		$(,)?
@@ -869,50 +839,61 @@ macro_rules! repeatable_list_handler {
 		pub async fn $fn_name(
 			State(mm): State<ModelManager>,
 			ctx_w: CtxW,
+			snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 			Path(case_id): Path<Uuid>,
 		) -> Result<(
 			axum::http::StatusCode,
 			Json<CaseEditorListResponse<$row_dto>>,
 		)> {
 			let ctx = ctx_w.0;
-			require_permission(&ctx, CASE_READ)?;
-			require_permission(&ctx, $list_permission)?;
-			lib_rest_core::require_case_read_allowed(&ctx, &mm, case_id).await?;
-
-			let rows = $load_rows(&ctx, &mm, case_id, false).await?;
-
-			Ok((
-				axum::http::StatusCode::OK,
-				Json(CaseEditorListResponse { case_id, rows }),
-			))
+			lib_rest_core::with_authorized_case_child_read(
+				&ctx,
+				&snapshot,
+				&mm,
+				case_id,
+				concat!("editor/", stringify!($fn_name)),
+				move |ctx, mm| Box::pin(async move {
+					let rows = $load_rows(ctx, mm, case_id, false).await?;
+					Ok((
+						axum::http::StatusCode::OK,
+						Json(CaseEditorListResponse { case_id, rows }),
+					))
+				}),
+			)
+			.await
 		}
 	};
 	(
 		$fn_name:ident,
 		$row_dto:ty,
-		$list_permission:expr,
 		$load_rows:ident
 		$(,)?
 	) => {
 		pub async fn $fn_name(
 			State(mm): State<ModelManager>,
 			ctx_w: CtxW,
+			snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 			Path(case_id): Path<Uuid>,
 		) -> Result<(
 			axum::http::StatusCode,
 			Json<CaseEditorListResponse<$row_dto>>,
 		)> {
 			let ctx = ctx_w.0;
-			require_permission(&ctx, CASE_READ)?;
-			require_permission(&ctx, $list_permission)?;
-			lib_rest_core::require_case_read_allowed(&ctx, &mm, case_id).await?;
-
-			let rows = $load_rows(&ctx, &mm, case_id).await?;
-
-			Ok((
-				axum::http::StatusCode::OK,
-				Json(CaseEditorListResponse { case_id, rows }),
-			))
+			lib_rest_core::with_authorized_case_child_read(
+				&ctx,
+				&snapshot,
+				&mm,
+				case_id,
+				concat!("editor/", stringify!($fn_name)),
+				move |ctx, mm| Box::pin(async move {
+					let rows = $load_rows(ctx, mm, case_id).await?;
+					Ok((
+						axum::http::StatusCode::OK,
+						Json(CaseEditorListResponse { case_id, rows }),
+					))
+				}),
+			)
+			.await
 		}
 	};
 }
@@ -922,39 +903,54 @@ macro_rules! repeatable_page_row_delete_restore_handlers {
 		delete: $delete_fn:ident,
 		restore: $restore_fn:ident,
 		bmc: $bmc:ident,
-		delete_permission: $delete_permission:expr,
-		update_permission: $update_permission:expr,
 		build_response: $build_response:ident $(,)?
 	) => {
 		pub async fn $delete_fn(
 			State(mm): State<ModelManager>,
 			ctx_w: CtxW,
+			snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 			Path((case_id, row_id)): Path<(Uuid, Uuid)>,
 		) -> Result<axum::http::StatusCode> {
 			let ctx = ctx_w.0;
-			require_permission(&ctx, $delete_permission)?;
-			lib_rest_core::require_case_write_allowed(&ctx, &mm, case_id).await?;
-
-			$bmc::get_in_case(&ctx, &mm, case_id, row_id).await?;
-			$bmc::delete(&ctx, &mm, row_id).await?;
-			mark_editor_validation_cache_stale(&ctx, &mm, case_id, None).await?;
-			Ok(axum::http::StatusCode::NO_CONTENT)
+			lib_rest_core::with_authorized_case_child_mutation(
+				&ctx,
+				&snapshot,
+				&mm,
+				case_id,
+				format!("editor/{}/{}", stringify!($delete_fn), row_id),
+				move |ctx, mm| Box::pin(async move {
+					$bmc::get_in_case(ctx, mm, case_id, row_id).await?;
+					$bmc::delete(ctx, mm, row_id).await?;
+					mark_editor_validation_summary_stale(ctx, mm, case_id, None).await?;
+					Ok(axum::http::StatusCode::NO_CONTENT)
+				}),
+			)
+			.await
 		}
 
 		pub async fn $restore_fn(
 			State(mm): State<ModelManager>,
 			ctx_w: CtxW,
+			snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 			Path((case_id, row_id)): Path<(Uuid, Uuid)>,
 		) -> Result<(axum::http::StatusCode, Json<Value>)> {
 			let ctx = ctx_w.0;
-			require_permission(&ctx, $update_permission)?;
-			lib_rest_core::require_case_write_allowed(&ctx, &mm, case_id).await?;
-
-			$bmc::get_in_case_with_deleted(&ctx, &mm, case_id, row_id, true).await?;
-			$bmc::restore_in_case(&ctx, &mm, case_id, row_id).await?;
-			mark_editor_validation_cache_stale(&ctx, &mm, case_id, None).await?;
-			let response = $build_response(&ctx, &mm, case_id, row_id, None).await?;
-			Ok((axum::http::StatusCode::OK, Json(response)))
+			lib_rest_core::with_authorized_case_child_mutation(
+				&ctx,
+				&snapshot,
+				&mm,
+				case_id,
+				format!("editor/{}/{}", stringify!($restore_fn), row_id),
+				move |ctx, mm| Box::pin(async move {
+					$bmc::get_in_case_with_deleted(ctx, mm, case_id, row_id, true)
+						.await?;
+					$bmc::restore_in_case(ctx, mm, case_id, row_id).await?;
+					mark_editor_validation_summary_stale(ctx, mm, case_id, None).await?;
+					let response = $build_response(ctx, mm, case_id, row_id, None).await?;
+					Ok((axum::http::StatusCode::OK, Json(response)))
+				}),
+			)
+			.await
 		}
 	};
 }
@@ -963,13 +959,13 @@ macro_rules! direct_page_projection_handler {
 	(
 		$fn_name:ident,
 		$section:literal,
-		$loader:ident,
-		[$($perm:path),* $(,)?]
+		$loader:ident
 		$(,)?
 	) => {
 		pub async fn $fn_name(
 			State(mm): State<ModelManager>,
 			ctx_w: CtxW,
+			snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 			Path(case_id): Path<Uuid>,
 			Query(query): Query<CaseEditorPageProjectionQuery>,
 		) -> Result<(
@@ -977,20 +973,26 @@ macro_rules! direct_page_projection_handler {
 			Json<CaseEditorPageProjectionResponse>,
 		)> {
 			let ctx = ctx_w.0;
-			require_permission(&ctx, CASE_READ)?;
-			$( require_permission(&ctx, $perm)?; )*
-			lib_rest_core::require_case_read_allowed(&ctx, &mm, case_id).await?;
-
-			let projection = direct_page_projection_response(
+			lib_rest_core::with_authorized_case_child_read(
 				&ctx,
+				&snapshot,
 				&mm,
 				case_id,
-				$section,
-				query_authorities_csv(&query)?,
-				$loader(&ctx, &mm, case_id).await?,
+				concat!("editor/", $section),
+				move |ctx, mm| Box::pin(async move {
+					let projection = direct_page_projection_response(
+						ctx,
+						mm,
+						case_id,
+						$section,
+						query_authorities_csv(&query)?,
+						$loader(ctx, mm, case_id).await?,
+					)
+					.await?;
+					Ok((axum::http::StatusCode::OK, Json(projection)))
+				}),
 			)
-			.await?;
-			Ok((axum::http::StatusCode::OK, Json(projection)))
+			.await
 		}
 	};
 }
@@ -1002,3 +1004,92 @@ pub(super) use repeatable_page_row_delete_handler;
 pub(super) use repeatable_page_row_delete_restore_handlers;
 pub(super) use repeatable_page_row_patch_handler;
 pub(super) use repeatable_page_row_read_handler;
+
+#[cfg(test)]
+mod canonical_row_persistence_tests {
+	use super::*;
+
+	#[test]
+	fn lb_in_band_null_flavor_is_split_before_model_deserialization() {
+		let row = json!({ "testDate": "UNK" })
+			.as_object()
+			.expect("row object")
+			.clone();
+		let value =
+			row_model_value("LB", "", &row, &[("test_date", &["testDate"])], &[]);
+		let model = value.as_object().expect("model object");
+
+		assert!(!model.contains_key("test_date"));
+		assert_eq!(model.get("test_date_null_flavor"), Some(&json!("UNK")));
+	}
+
+	#[test]
+	fn dh_in_band_null_flavor_is_split_before_model_deserialization() {
+		let row = json!({ "drugName": "UNK" })
+			.as_object()
+			.expect("row object")
+			.clone();
+		let value =
+			row_model_value("DH", "", &row, &[("drug_name", &["drugName"])], &[]);
+		let model = value.as_object().expect("model object");
+
+		assert!(!model.contains_key("drug_name"));
+		assert_eq!(model.get("drug_name_null_flavor"), Some(&json!("UNK")));
+	}
+
+	#[test]
+	fn ae_boolean_is_encoded_for_its_string_backed_storage_column() {
+		let row = json!({ "requiredIntervention": true })
+			.as_object()
+			.expect("row object")
+			.clone();
+		let value = row_model_value(
+			"AE",
+			"",
+			&row,
+			&[("required_intervention", &["requiredIntervention"])],
+			&[],
+		);
+
+		assert_eq!(
+			value["required_intervention"],
+			Value::String("true".to_owned())
+		);
+	}
+
+	#[test]
+	fn ae_in_band_null_flavor_uses_the_same_binding_as_constraint_checks() {
+		let row = json!({ "requiredIntervention": "NI" })
+			.as_object()
+			.expect("row object")
+			.clone();
+		let value = row_model_value(
+			"AE",
+			"",
+			&row,
+			&[("required_intervention", &["requiredIntervention"])],
+			&[],
+		);
+
+		assert!(value.get("required_intervention").is_none());
+		assert_eq!(value["required_intervention_null_flavor"], "NI");
+	}
+
+	#[test]
+	fn dg_nested_in_band_null_flavor_uses_its_binding_prefix() {
+		let row = json!({ "firstAdministrationDate": "MSK" })
+			.as_object()
+			.expect("row object")
+			.clone();
+		let value = row_model_value(
+			"DG",
+			"dosageInformation[].",
+			&row,
+			&[("first_administration_date", &["firstAdministrationDate"])],
+			&[],
+		);
+
+		assert!(value.get("first_administration_date").is_none());
+		assert_eq!(value["first_administration_date_null_flavor"], "MSK");
+	}
+}

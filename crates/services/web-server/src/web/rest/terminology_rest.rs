@@ -4,24 +4,21 @@ use axum::extract::multipart::Field;
 use axum::extract::{Multipart, Path, Query, State};
 use axum::http::StatusCode;
 use axum::Json;
-use lib_core::model::acs::{
-	TERMINOLOGY_APPROVE, TERMINOLOGY_IMPORT, TERMINOLOGY_READ,
-};
 use lib_core::model::terminology::{
 	E2bCodeList, E2bCodeListBmc, FdaHierarchicalCodeList,
 	FdaHierarchicalCodeListBmc, IsoCountry, IsoCountryBmc, MeddraTerm,
-	MeddraTermBmc, UcumUnit, UcumUnitBmc, WhodrugProduct, WhodrugProductBmc,
+	MeddraTermBmc, MfdsProduct, MfdsProductBmc, UcumUnit, UcumUnitBmc,
+	WhodrugProduct, WhodrugProductBmc,
 };
 use lib_core::model::terminology_import::{self, TerminologyReleaseRow};
 use lib_core::model::ModelManager;
 use lib_rest_core::rest_result::DataRestResult;
-use lib_rest_core::{require_permission, Error, Result};
-use lib_web::middleware::mw_auth::CtxW;
-use lib_web::middleware::mw_permission::{
-	RequirePermission, TerminologyApprove as TerminologyApprovePerm,
-	TerminologyImport as TerminologyImportPerm,
-	TerminologyRead as TerminologyReadPerm,
+use lib_rest_core::{
+	with_authorized_terminology_mutation, with_authorized_terminology_read, Error,
+	Result,
 };
+use lib_web::middleware::mw_auth::CtxW;
+use lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW;
 use serde::{Deserialize, Serialize};
 
 // -- Params
@@ -153,128 +150,172 @@ async fn read_field_limited(
 pub async fn search_meddra(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
-	_perm: RequirePermission<TerminologyReadPerm>,
+	snapshot: AuthorizationSnapshotW,
 	Query(params): Query<TerminologySearchParams>,
 ) -> Result<(StatusCode, Json<DataRestResult<Vec<MeddraTerm>>>)> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, TERMINOLOGY_READ)?;
-	tracing::debug!(
-		"{:<12} - rest search_meddra q={} limit={}",
-		"HANDLER",
-		params.q,
-		params.limit
-	);
-
-	let terms = MeddraTermBmc::search(
-		&ctx,
-		&mm,
-		&params.q,
-		params.version.as_deref(),
-		params.language.as_deref(),
-		params.limit,
-	)
-	.await?;
-
-	Ok((StatusCode::OK, Json(DataRestResult { data: terms })))
+	with_authorized_terminology_read(&ctx, &snapshot, &mm, move |ctx, mm| {
+		Box::pin(async move {
+			let terms = MeddraTermBmc::search(
+				ctx,
+				mm,
+				&params.q,
+				params.version.as_deref(),
+				params.language.as_deref(),
+				params.limit,
+			)
+			.await?;
+			Ok((StatusCode::OK, Json(DataRestResult { data: terms })))
+		})
+	})
+	.await
 }
 
 /// GET /api/terminology/whodrug?q={term}&limit={count}
 pub async fn search_whodrug(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
-	_perm: RequirePermission<TerminologyReadPerm>,
+	snapshot: AuthorizationSnapshotW,
 	Query(params): Query<TerminologySearchParams>,
 ) -> Result<(StatusCode, Json<DataRestResult<Vec<WhodrugProduct>>>)> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, TERMINOLOGY_READ)?;
-	tracing::debug!(
-		"{:<12} - rest search_whodrug q={} limit={}",
-		"HANDLER",
-		params.q,
-		params.limit
-	);
+	with_authorized_terminology_read(&ctx, &snapshot, &mm, move |ctx, mm| {
+		Box::pin(async move {
+			let products =
+				WhodrugProductBmc::search(ctx, mm, &params.q, params.limit).await?;
+			Ok((StatusCode::OK, Json(DataRestResult { data: products })))
+		})
+	})
+	.await
+}
 
-	let products =
-		WhodrugProductBmc::search(&ctx, &mm, &params.q, params.limit).await?;
-
-	Ok((StatusCode::OK, Json(DataRestResult { data: products })))
+/// GET /api/terminology/mfds-products?q={term}&limit={count}
+pub async fn search_mfds_products(
+	State(mm): State<ModelManager>,
+	ctx_w: CtxW,
+	snapshot: AuthorizationSnapshotW,
+	Query(params): Query<TerminologySearchParams>,
+) -> Result<(StatusCode, Json<DataRestResult<Vec<MfdsProduct>>>)> {
+	let ctx = ctx_w.0;
+	with_authorized_terminology_read(&ctx, &snapshot, &mm, move |ctx, mm| {
+		Box::pin(async move {
+			let products =
+				MfdsProductBmc::search(ctx, mm, &params.q, params.limit).await?;
+			Ok((StatusCode::OK, Json(DataRestResult { data: products })))
+		})
+	})
+	.await
 }
 
 /// GET /api/terminology/countries
 pub async fn list_countries(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: AuthorizationSnapshotW,
 ) -> Result<(StatusCode, Json<DataRestResult<Vec<IsoCountry>>>)> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, TERMINOLOGY_READ)?;
-	let countries = IsoCountryBmc::list_all(&ctx, &mm).await?;
-	Ok((StatusCode::OK, Json(DataRestResult { data: countries })))
+	with_authorized_terminology_read(&ctx, &snapshot, &mm, |ctx, mm| {
+		Box::pin(async move {
+			let countries = IsoCountryBmc::list_all(ctx, mm).await?;
+			Ok((StatusCode::OK, Json(DataRestResult { data: countries })))
+		})
+	})
+	.await
 }
 
 /// GET /api/terminology/code-lists?list_name={name}
 pub async fn get_code_list(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
-	_perm: RequirePermission<TerminologyReadPerm>,
+	snapshot: AuthorizationSnapshotW,
 	Query(params): Query<CodeListParams>,
 ) -> Result<(StatusCode, Json<DataRestResult<Vec<E2bCodeList>>>)> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, TERMINOLOGY_READ)?;
-	let codes =
-		E2bCodeListBmc::get_by_list_name(&ctx, &mm, &params.list_name).await?;
-	Ok((StatusCode::OK, Json(DataRestResult { data: codes })))
+	with_authorized_terminology_read(&ctx, &snapshot, &mm, move |ctx, mm| {
+		Box::pin(async move {
+			let codes =
+				E2bCodeListBmc::get_by_list_name(ctx, mm, &params.list_name).await?;
+			Ok((StatusCode::OK, Json(DataRestResult { data: codes })))
+		})
+	})
+	.await
 }
 
 /// GET /api/terminology/fda-code-search?list_name={name}&q={term}&limit={count}
 pub async fn search_fda_hierarchical_code(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
-	_perm: RequirePermission<TerminologyReadPerm>,
+	snapshot: AuthorizationSnapshotW,
 	Query(params): Query<FdaHierarchicalCodeSearchParams>,
 ) -> Result<(
 	StatusCode,
 	Json<DataRestResult<Vec<FdaHierarchicalCodeList>>>,
 )> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, TERMINOLOGY_READ)?;
-
-	if params.q.trim().chars().count() < 2 {
-		return Ok((StatusCode::OK, Json(DataRestResult { data: vec![] })));
-	}
-
-	let rows = FdaHierarchicalCodeListBmc::search(
-		&ctx,
-		&mm,
-		&params.list_name,
-		params.q.trim(),
-		params.limit,
-	)
-	.await?;
-
-	Ok((StatusCode::OK, Json(DataRestResult { data: rows })))
+	with_authorized_terminology_read(&ctx, &snapshot, &mm, move |ctx, mm| {
+		Box::pin(async move {
+			if params.q.trim().chars().count() < 2 {
+				return Ok((StatusCode::OK, Json(DataRestResult { data: vec![] })));
+			}
+			let rows = FdaHierarchicalCodeListBmc::search(
+				ctx,
+				mm,
+				&params.list_name,
+				params.q.trim(),
+				params.limit,
+			)
+			.await?;
+			Ok((StatusCode::OK, Json(DataRestResult { data: rows })))
+		})
+	})
+	.await
 }
 
 /// GET /api/terminology/ucum-units
 pub async fn list_ucum_units(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: AuthorizationSnapshotW,
 ) -> Result<(StatusCode, Json<DataRestResult<Vec<UcumUnit>>>)> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, TERMINOLOGY_READ)?;
-	let units = UcumUnitBmc::list_all(&ctx, &mm).await?;
-	Ok((StatusCode::OK, Json(DataRestResult { data: units })))
+	with_authorized_terminology_read(&ctx, &snapshot, &mm, |ctx, mm| {
+		Box::pin(async move {
+			let units = UcumUnitBmc::list_all(ctx, mm).await?;
+			Ok((StatusCode::OK, Json(DataRestResult { data: units })))
+		})
+	})
+	.await
 }
 
 /// POST /api/terminology/import/meddra
 pub async fn import_meddra(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
-	_perm: RequirePermission<TerminologyImportPerm>,
+	snapshot: AuthorizationSnapshotW,
 	Query(params): Query<TerminologyImportParams>,
 	multipart: Multipart,
 ) -> Result<(StatusCode, Json<DataRestResult<TerminologyImportResult>>)> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, TERMINOLOGY_IMPORT)?;
+	with_authorized_terminology_mutation(
+		&ctx,
+		&snapshot,
+		&mm,
+		"import:meddra",
+		move |ctx, mm| {
+			Box::pin(async move {
+				import_meddra_authorized(ctx, mm, params, multipart).await
+			})
+		},
+	)
+	.await
+}
+
+async fn import_meddra_authorized(
+	ctx: &lib_core::ctx::Ctx,
+	mm: &ModelManager,
+	params: TerminologyImportParams,
+	multipart: Multipart,
+) -> Result<(StatusCode, Json<DataRestResult<TerminologyImportResult>>)> {
 	let language = params.language.unwrap_or_else(|| "en".to_string());
 
 	let bytes = read_upload_bytes(multipart).await?;
@@ -284,10 +325,8 @@ pub async fn import_meddra(
 	if !params.dry_run {
 		let checksum = terminology_import::sha256_hex(&bytes);
 		terminology_import::stage_meddra_rows(
-			&mm,
+			mm,
 			ctx.user_id(),
-			ctx.organization_id(),
-			ctx.role(),
 			&rows,
 			&params.version,
 			&language,
@@ -320,12 +359,31 @@ pub async fn import_meddra(
 pub async fn import_whodrug(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
-	_perm: RequirePermission<TerminologyImportPerm>,
+	snapshot: AuthorizationSnapshotW,
 	Query(params): Query<TerminologyImportParams>,
 	multipart: Multipart,
 ) -> Result<(StatusCode, Json<DataRestResult<TerminologyImportResult>>)> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, TERMINOLOGY_IMPORT)?;
+	with_authorized_terminology_mutation(
+		&ctx,
+		&snapshot,
+		&mm,
+		"import:whodrug",
+		move |ctx, mm| {
+			Box::pin(async move {
+				import_whodrug_authorized(ctx, mm, params, multipart).await
+			})
+		},
+	)
+	.await
+}
+
+async fn import_whodrug_authorized(
+	ctx: &lib_core::ctx::Ctx,
+	mm: &ModelManager,
+	params: TerminologyImportParams,
+	multipart: Multipart,
+) -> Result<(StatusCode, Json<DataRestResult<TerminologyImportResult>>)> {
 	let language = params.language.unwrap_or_else(|| "en".to_string());
 
 	let bytes = read_upload_bytes(multipart).await?;
@@ -335,10 +393,8 @@ pub async fn import_whodrug(
 	if !params.dry_run {
 		let checksum = terminology_import::sha256_hex(&bytes);
 		terminology_import::stage_whodrug_rows(
-			&mm,
+			mm,
 			ctx.user_id(),
-			ctx.organization_id(),
-			ctx.role(),
 			&rows,
 			&params.version,
 			&language,
@@ -371,108 +427,134 @@ pub async fn import_whodrug(
 pub async fn list_releases(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
-	_perm: RequirePermission<TerminologyReadPerm>,
+	snapshot: AuthorizationSnapshotW,
 	Query(params): Query<TerminologyReleaseListParams>,
 ) -> Result<(StatusCode, Json<DataRestResult<Vec<TerminologyReleaseRow>>>)> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, TERMINOLOGY_READ)?;
-
-	let releases = terminology_import::fetch_releases(
-		&mm,
-		params.dictionary.as_deref(),
-		params.language.as_deref(),
-	)
+	with_authorized_terminology_read(&ctx, &snapshot, &mm, move |_ctx, mm| {
+		Box::pin(async move {
+			let releases = terminology_import::fetch_releases(
+				mm,
+				params.dictionary.as_deref(),
+				params.language.as_deref(),
+			)
+			.await
+			.map_err(map_import_err)?;
+			Ok((StatusCode::OK, Json(DataRestResult { data: releases })))
+		})
+	})
 	.await
-	.map_err(map_import_err)?;
-
-	Ok((StatusCode::OK, Json(DataRestResult { data: releases })))
 }
 
 /// POST /api/terminology/releases/{dictionary}/{version}/approve
 pub async fn approve_release(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: AuthorizationSnapshotW,
 	Path(path): Path<ReleasePath>,
-	_perm: RequirePermission<TerminologyApprovePerm>,
 	Query(params): Query<TerminologyApproveParams>,
 ) -> Result<(StatusCode, Json<DataRestResult<TerminologyReleaseRow>>)> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, TERMINOLOGY_APPROVE)?;
-	let language = params.language.unwrap_or_else(|| "en".to_string());
-	terminology_import::validate_dictionary(&path.dictionary)
-		.map_err(map_import_err)?;
-
-	let data = terminology_import::approve_release(
+	let fingerprint = format!("approve:{}:{}", path.dictionary, path.version);
+	with_authorized_terminology_mutation(
+		&ctx,
+		&snapshot,
 		&mm,
-		&path.dictionary,
-		&path.version,
-		&language,
-		ctx.user_id(),
-		params.note.as_deref(),
+		fingerprint,
+		move |ctx, mm| {
+			Box::pin(async move {
+				let language = params.language.unwrap_or_else(|| "en".to_string());
+				terminology_import::validate_dictionary(&path.dictionary)
+					.map_err(map_import_err)?;
+				let data = terminology_import::approve_release(
+					mm,
+					ctx.user_id(),
+					&path.dictionary,
+					&path.version,
+					&language,
+					params.note.as_deref(),
+				)
+				.await
+				.map_err(|e| Error::BadRequest {
+					message: e.to_string(),
+				})?
+				.ok_or_else(|| Error::BadRequest {
+					message: "release not found or not in approvable status"
+						.to_string(),
+				})?;
+				Ok((StatusCode::OK, Json(DataRestResult { data })))
+			})
+		},
 	)
 	.await
-	.map_err(|e| Error::BadRequest {
-		message: e.to_string(),
-	})?
-	.ok_or_else(|| Error::BadRequest {
-		message: "release not found or not in approvable status".to_string(),
-	})?;
-
-	Ok((StatusCode::OK, Json(DataRestResult { data })))
 }
 
 /// POST /api/terminology/releases/{dictionary}/{version}/activate
 pub async fn activate_release(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: AuthorizationSnapshotW,
 	Path(path): Path<ReleasePath>,
-	_perm: RequirePermission<TerminologyApprovePerm>,
 	Query(params): Query<TerminologyActivateParams>,
 ) -> Result<(StatusCode, Json<DataRestResult<TerminologyReleaseRow>>)> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, TERMINOLOGY_APPROVE)?;
-	let language = params.language.unwrap_or_else(|| "en".to_string());
-
-	let data = terminology_import::activate_release_tx(
+	let fingerprint = format!("activate:{}:{}", path.dictionary, path.version);
+	with_authorized_terminology_mutation(
+		&ctx,
+		&snapshot,
 		&mm,
-		ctx.user_id(),
-		ctx.organization_id(),
-		ctx.role(),
-		&path.dictionary,
-		&path.version,
-		&language,
-		false,
+		fingerprint,
+		move |ctx, mm| {
+			Box::pin(async move {
+				let language = params.language.unwrap_or_else(|| "en".to_string());
+				let data = terminology_import::activate_release_tx(
+					mm,
+					ctx.user_id(),
+					&path.dictionary,
+					&path.version,
+					&language,
+					false,
+				)
+				.await
+				.map_err(map_import_err)?;
+				Ok((StatusCode::OK, Json(DataRestResult { data })))
+			})
+		},
 	)
 	.await
-	.map_err(map_import_err)?;
-
-	Ok((StatusCode::OK, Json(DataRestResult { data })))
 }
 
 /// POST /api/terminology/releases/{dictionary}/{version}/rollback
 pub async fn rollback_release(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	snapshot: AuthorizationSnapshotW,
 	Path(path): Path<ReleasePath>,
-	_perm: RequirePermission<TerminologyApprovePerm>,
 	Query(params): Query<TerminologyActivateParams>,
 ) -> Result<(StatusCode, Json<DataRestResult<TerminologyReleaseRow>>)> {
 	let ctx = ctx_w.0;
-	require_permission(&ctx, TERMINOLOGY_APPROVE)?;
-	let language = params.language.unwrap_or_else(|| "en".to_string());
-
-	let data = terminology_import::activate_release_tx(
+	let fingerprint = format!("rollback:{}:{}", path.dictionary, path.version);
+	with_authorized_terminology_mutation(
+		&ctx,
+		&snapshot,
 		&mm,
-		ctx.user_id(),
-		ctx.organization_id(),
-		ctx.role(),
-		&path.dictionary,
-		&path.version,
-		&language,
-		true,
+		fingerprint,
+		move |ctx, mm| {
+			Box::pin(async move {
+				let language = params.language.unwrap_or_else(|| "en".to_string());
+				let data = terminology_import::activate_release_tx(
+					mm,
+					ctx.user_id(),
+					&path.dictionary,
+					&path.version,
+					&language,
+					true,
+				)
+				.await
+				.map_err(map_import_err)?;
+				Ok((StatusCode::OK, Json(DataRestResult { data })))
+			})
+		},
 	)
 	.await
-	.map_err(map_import_err)?;
-
-	Ok((StatusCode::OK, Json(DataRestResult { data })))
 }

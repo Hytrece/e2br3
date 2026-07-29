@@ -11,22 +11,19 @@ use lib_auth::token::generate_web_token;
 use lib_core::ctx::{
 	ROLE_SPONSOR_ADMIN_COMPANY, ROLE_SPONSOR_ADMIN_CRO, ROLE_SYSTEM_ADMIN,
 };
-use lib_core::model::acs::{
-	has_permission, CASE_APPROVE, CASE_CREATE, CASE_UPDATE, PRESAVE_TEMPLATE_CREATE,
-	PRESAVE_TEMPLATE_DELETE, PRESAVE_TEMPLATE_LIST, PRESAVE_TEMPLATE_READ,
-	PRESAVE_TEMPLATE_UPDATE, SETTINGS_READ, SETTINGS_UPDATE, TERMINOLOGY_APPROVE,
-	TERMINOLOGY_IMPORT, USER_CREATE, USER_DELETE, USER_LIST, USER_READ, USER_UPDATE,
-	XML_EXPORT, XML_EXPORT_READ, XML_IMPORT, XML_IMPORT_READ,
-};
 use lib_core::model::store::set_full_context_dbx;
 use lib_core::model::ModelManager;
 use serde_json::{json, Value};
 use serial_test::serial;
+use std::collections::HashSet;
 use tower::ServiceExt;
 use uuid::Uuid;
 
 pub(super) fn extract_id(value: &Value) -> Result<Uuid> {
-	let id = value["data"]["id"].as_str().ok_or("missing data.id")?;
+	let id = value["data"]["id"]
+		.as_str()
+		.or_else(|| value["data"]["rows"]["sender"]["id"].as_str())
+		.ok_or("missing data id")?;
 	Ok(Uuid::parse_str(id)?)
 }
 
@@ -163,7 +160,7 @@ pub(super) async fn assert_get_not_status(
 	Ok(value)
 }
 
-pub(super) async fn assert_profile_capabilities(
+pub(super) async fn assert_profile_access(
 	app: &Router,
 	cookie: &str,
 	expected: &[(&str, &str, bool)],
@@ -177,12 +174,93 @@ pub(super) async fn assert_profile_capabilities(
 	)
 	.await?;
 	assert_eq!(status, StatusCode::OK, "{profile:?}");
+	assert!(profile["data"].get("capabilities").is_none(), "{profile:?}");
+	let actions = profile["data"]["eligibleActions"]
+		.as_array()
+		.ok_or("missing eligibleActions")?
+		.iter()
+		.filter_map(Value::as_str)
+		.collect::<HashSet<_>>();
 	for (module, action, expected) in expected {
+		let required: &[&str] = match (*module, *action) {
+			("case", "read") => &["case.read", "case.list"],
+			("case", "create") => &["case.create"],
+			("case", "update") => &["case.update"],
+			("case", "delete") => &["case.delete"],
+			("case", "review") => &["case.review.toggle"],
+			("case", "lock") => &["case.lock.toggle"],
+			("import", "read") => &["import.history.read"],
+			("import", "execute") => &["import.xml.execute"],
+			("exportSubmission", "read") => &["submission.history.list"],
+			("exportSubmission", "execute") => &["submission.execute"],
+			("data", "read") => &["terminology.list"],
+			("data", "import") | ("data", "approve") => &["terminology.import"],
+			("users", "read") => &["user.read", "user.list"],
+			("users", "create") => &["user.create"],
+			("users", "update") => &["user.update"],
+			("users", "delete") => &["user.delete"],
+			("settings", "read") => &["settings.read"],
+			("settings", "update") => &["settings.update"],
+			("homeNotice", "read") => &["notice.read"],
+			("homeNotice", "update") => &["notice.update"],
+			("admin", "read") => &[
+				"user.list",
+				"user.read",
+				"user.create",
+				"user.update",
+				"user.delete",
+				"settings.read",
+				"settings.update",
+			],
+			("admin", "update") => &[
+				"user.create",
+				"user.update",
+				"user.delete",
+				"settings.update",
+			],
+			("roles", _) => &[],
+			_ => {
+				return Err(
+					format!("unknown access assertion {module}.{action}").into()
+				)
+			}
+		};
+		let actual = required.iter().any(|action| actions.contains(action));
 		assert_eq!(
-			profile["data"]["capabilities"][*module][*action].as_bool(),
-			Some(*expected),
-			"{module}.{action} capability mismatch: {profile:?}"
+			actual, *expected,
+			"{module}.{action} action mismatch: {profile:?}"
 		);
+	}
+	Ok(profile)
+}
+
+pub(super) async fn assert_profile_actions(
+	app: &Router,
+	cookie: &str,
+	present: &[&str],
+	absent: &[&str],
+) -> Result<Value> {
+	let (status, profile) = request_json(
+		app,
+		"GET",
+		cookie,
+		"/api/users/me/profile".to_string(),
+		None,
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK, "{profile:?}");
+	assert!(profile["data"].get("capabilities").is_none(), "{profile:?}");
+	let actions = profile["data"]["eligibleActions"]
+		.as_array()
+		.ok_or("missing eligibleActions")?
+		.iter()
+		.filter_map(Value::as_str)
+		.collect::<HashSet<_>>();
+	for action in present {
+		assert!(actions.contains(action), "missing {action}");
+	}
+	for action in absent {
+		assert!(!actions.contains(action), "unexpected {action}");
 	}
 	Ok(profile)
 }
@@ -313,13 +391,11 @@ pub(super) async fn create_sender_presave(
 		cookie,
 		"/api/presaves/senders".to_string(),
 		Some(json!({
-			"data": {
-				"authority": "fda",
-				"sender_type": "2",
-				"organization_name": name,
-				"person_given_name": "Safety",
-				"email": format!("{sender_identifier}@example.test")
-			}
+			"data": { "rows": {
+				"sender": { "senderType": "2", "organizationName": name, "email": format!("{sender_identifier}@example.test") },
+				"gateways": [{ "sequenceNumber": 1, "gatewayAuthority": "fda", "senderIdentifier": sender_identifier, "isDefaultForAuthority": true }],
+				"responsiblePersons": [{ "sequenceNumber": 1, "personGivenName": "Safety" }]
+			} }
 		})),
 	)
 	.await?;
@@ -330,27 +406,6 @@ pub(super) async fn create_sender_presave(
 		.into());
 	}
 	let id = extract_id(&value)?;
-	let (status, value) = request_json(
-		app,
-		"POST",
-		cookie,
-		format!("/api/presaves/senders/{id}/gateways"),
-		Some(json!({
-			"data": {
-				"sequence_number": 1,
-				"gateway_authority": "fda",
-				"sender_identifier": sender_identifier,
-				"is_default_for_authority": true
-			}
-		})),
-	)
-	.await?;
-	if status != StatusCode::CREATED {
-		return Err(format!(
-			"create sender presave gateway failed: status={status} body={value}"
-		)
-		.into());
-	}
 	Ok(id)
 }
 
@@ -436,7 +491,7 @@ pub(super) async fn create_drug_with_brand(
 	app: &Router,
 	cookie: &str,
 	case_id: Uuid,
-	brand_name: &str,
+	_brand_name: &str,
 ) -> Result<()> {
 	let (status, value) = request_json(
 		app,
@@ -448,8 +503,7 @@ pub(super) async fn create_drug_with_brand(
 				"case_id": case_id,
 				"sequence_number": 1,
 				"drug_characterization": "1",
-				"medicinal_product": "Demo Product",
-				"brand_name": brand_name
+				"medicinal_product": "Demo Product"
 			}
 		})),
 	)

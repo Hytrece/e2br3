@@ -29,6 +29,7 @@
       "type": "string",
       "enum": [
         "complete",
+        "incomplete",
         "backend_missing",
         "frontend_missing",
         "intentionally_unmapped",
@@ -41,7 +42,15 @@
     "evidence": { "type": "string" },
     "action": { "type": "string" },
     "notes": { "type": "string" },
-    "local_only": { "type": "boolean" }
+    "local_only": { "type": "boolean" },
+    "editor_page": {
+      "type": "string",
+      "enum": ["CI", "RP", "SD", "LR", "SI", "DM", "NR", "AE", "LB", "DG", "DH"]
+    },
+    "editor_status": {
+      "type": "string",
+      "enum": ["complete", "incomplete"]
+    }
   },
   "$defs": {
     "mappingStatus": {

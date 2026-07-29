@@ -1,9 +1,10 @@
 use crate::error::{ClientError, Error, Result};
 use crate::log::log_request;
-use crate::middleware::mw_auth::CtxW;
+use crate::middleware::mw_auth::{CtxW, RbacPolicyVersion};
 use crate::middleware::mw_req_stamp::ReqStamp;
 
-use axum::http::{Method, Uri};
+use axum::extract::Extension;
+use axum::http::{HeaderValue, Method, Uri};
 use axum::response::{IntoResponse, Response};
 use axum::Json;
 use lib_core::model;
@@ -19,14 +20,23 @@ fn normalize_detail_for_client(detail: serde_json::Value) -> serde_json::Value {
 			if let Some(required_permission) =
 				map.get("required_permission").and_then(|v| v.as_str())
 			{
-				return serde_json::Value::String(format!(
-					"Missing permission: {required_permission}"
-				));
+				return json!({ "requiredPermission": required_permission });
 			}
 			serde_json::Value::Object(map)
 		}
 		other => other,
 	}
+}
+
+fn is_login_error(error: &Error) -> bool {
+	matches!(
+		error,
+		Error::LoginFailUsernameNotFound
+			| Error::LoginFailEmailNotFound
+			| Error::LoginFailUserHasNoPwd { .. }
+			| Error::LoginFailPwdNotMatching { .. }
+			| Error::LoginFailUserCtxCreate { .. }
+	)
 }
 
 fn map_pg_constraint(code: &str) -> Option<(StatusCode, String)> {
@@ -162,6 +172,7 @@ pub async fn mw_response_map(
 	uri: Uri,
 	req_method: Method,
 	req_stamp: ReqStamp,
+	policy_version: Option<Extension<RbacPolicyVersion>>,
 	res: Response,
 ) -> Response {
 	let ctx = ctx.map(|ctx| ctx.0).ok();
@@ -207,6 +218,15 @@ pub async fn mw_response_map(
 						},
 						None,
 					),
+					lib_rest_core::Error::ConstraintViolation(detail) => {
+						(
+							StatusCode::UNPROCESSABLE_ENTITY,
+							ClientError::CONSTRAINT_VIOLATION,
+							Some(to_value(detail).expect(
+								"constraint violation detail must serialize",
+							)),
+						)
+					}
 					lib_rest_core::Error::BadRequest { message } => (
 						StatusCode::BAD_REQUEST,
 						ClientError::SERVICE_ERROR,
@@ -234,7 +254,7 @@ pub async fn mw_response_map(
 			_ => {
 				// Keep existing behavior for auth/permission/etc.
 				let (status, client) = err.client_status_and_error();
-				let detail = if debug_errors {
+				let detail = if debug_errors && !is_login_error(err) {
 					Some(serde_json::Value::String(format!("{err:?}")))
 				} else {
 					None
@@ -269,6 +289,16 @@ pub async fn mw_response_map(
 			lib_rest_core::Error::BadRequest { message } => {
 				debug_detail = Some(serde_json::Value::String(message.clone()));
 				(StatusCode::BAD_REQUEST, ClientError::SERVICE_ERROR)
+			}
+			lib_rest_core::Error::ConstraintViolation(detail) => {
+				debug_detail = Some(
+					to_value(detail)
+						.expect("constraint violation detail must serialize"),
+				);
+				(
+					StatusCode::UNPROCESSABLE_ENTITY,
+					ClientError::CONSTRAINT_VIOLATION,
+				)
 			}
 			lib_rest_core::Error::Xml(err) => {
 				debug_detail = Some(serde_json::Value::String(format!("{err:?}")));
@@ -310,18 +340,32 @@ pub async fn mw_response_map(
 	};
 
 	// -- If client error, build the new reponse.
+	let policy_version_value = policy_version.map(|Extension(value)| value.0);
 	let error_response =
 		client_status_error
 			.as_ref()
 			.map(|(status_code, client_error)| {
 				let client_error = to_value(client_error).ok();
 				let message = client_error.as_ref().and_then(|v| v.get("message"));
-				let detail = debug_detail
+				let mut detail = debug_detail
 					.clone()
 					.or_else(|| {
 						client_error.as_ref().and_then(|v| v.get("detail")).cloned()
 					})
 					.map(normalize_detail_for_client);
+				if message.and_then(|value| value.as_str())
+					== Some("PERMISSION_DENIED")
+				{
+					let mut permission_detail = detail
+						.take()
+						.and_then(|value| value.as_object().cloned())
+						.unwrap_or_default();
+					if let Some(version) = policy_version_value {
+						permission_detail
+							.insert("policyVersion".to_string(), json!(version));
+					}
+					detail = Some(serde_json::Value::Object(permission_detail));
+				}
 
 				let client_error_body = json!({
 						"error": {
@@ -350,5 +394,13 @@ pub async fn mw_response_map(
 
 	debug!("\n");
 
-	error_response.unwrap_or(res)
+	let mut response = error_response.unwrap_or(res);
+	if let Some(version) = policy_version_value {
+		if let Ok(value) = HeaderValue::from_str(&version.to_string()) {
+			response
+				.headers_mut()
+				.insert("x-rbac-policy-version", value);
+		}
+	}
+	response
 }

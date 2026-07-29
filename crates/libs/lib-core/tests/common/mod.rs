@@ -12,7 +12,7 @@ pub type Result<T> = core::result::Result<T, Box<dyn std::error::Error>>;
 #[allow(dead_code)]
 pub const DEMO_ROLE: &str = "sponsor_admin_cro";
 
-fn system_user_id() -> Uuid {
+pub fn system_user_id() -> Uuid {
 	uuid::uuid!("00000000-0000-0000-0000-000000000001")
 }
 

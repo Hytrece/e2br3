@@ -1,0 +1,1186 @@
+use crate::import::CImportSettings;
+use crate::import_runtime::{helpers::c as c_helpers, shared};
+use crate::import_sections::c_safety_report::CSafetyReportImport;
+use crate::{error::Error, Result};
+use lib_core::ctx::Ctx;
+use lib_core::model::case_identifiers::{
+	LinkedReportNumberBmc, LinkedReportNumberForCreate, LinkedReportNumberForUpdate,
+	OtherCaseIdentifierBmc, OtherCaseIdentifierForCreate,
+	OtherCaseIdentifierForUpdate,
+};
+use lib_core::model::presave::{
+	ProductPresaveBmc, SenderPresave, SenderPresaveBmc,
+	SenderPresaveResponsiblePersonBmc,
+};
+use lib_core::model::receiver::{
+	ReceiverInformationBmc, ReceiverInformationForCreate,
+	ReceiverInformationForUpdate,
+};
+use lib_core::model::safety_report::{
+	DocumentsHeldBySenderBmc, DocumentsHeldBySenderForCreate,
+	DocumentsHeldBySenderForUpdate, LiteratureReferenceBmc,
+	LiteratureReferenceForCreate, LiteratureReferenceForUpdate, PrimarySourceBmc,
+	PrimarySourceForCreate, PrimarySourceForUpdate, SenderInformationBmc,
+	SenderInformationForCreate, SenderInformationForUpdate,
+};
+use lib_core::model::store::set_full_context_from_ctx_dbx;
+use lib_core::model::{self, ModelManager};
+use lib_core::regulatory::{
+	infer_regulatory_authority_from_receivers, RegulatoryAuthority,
+};
+use sqlx::types::time::Date;
+use sqlx::types::Uuid;
+
+pub fn apply_c_safety_report_import_settings(
+	report: &mut CSafetyReportImport,
+	settings: &CImportSettings,
+	import_date: Date,
+) {
+	if settings.update_date_of_creation {
+		report.transmission_date = format_e2b_datetime(import_date);
+	}
+	if settings.update_most_recent_info_date {
+		report.date_of_most_recent_information = import_date;
+	}
+	if settings.update_report_first_received_date {
+		report.date_first_received_from_source = import_date;
+	}
+	enforce_c1_date_order(report);
+}
+
+pub fn apply_default_values_to_imported_r2_case(
+	report: &mut CSafetyReportImport,
+	enabled: bool,
+) {
+	if !enabled {
+		return;
+	}
+	if report.additional_documents_available.is_none() {
+		report.additional_documents_available = Some(false);
+	}
+	if report.first_sender_type.is_none() {
+		report.first_sender_type = Some("1".to_string());
+	}
+}
+
+fn enforce_c1_date_order(report: &mut CSafetyReportImport) {
+	if report.date_first_received_from_source
+		> report.date_of_most_recent_information
+	{
+		report.date_of_most_recent_information =
+			report.date_first_received_from_source;
+	}
+	if report.date_of_most_recent_information > transmission_date_as_date(report) {
+		report.transmission_date =
+			format_e2b_datetime(report.date_of_most_recent_information);
+	}
+}
+
+fn transmission_date_as_date(report: &CSafetyReportImport) -> Date {
+	lib_core::serde::flex_date::e2b_datetime_date(&report.transmission_date)
+		.unwrap_or(report.date_of_most_recent_information)
+}
+
+fn format_e2b_datetime(date: Date) -> String {
+	format!(
+		"{:04}{:02}{:02}000000",
+		date.year(),
+		u8::from(date.month()),
+		date.day()
+	)
+}
+
+pub(crate) async fn import_section_c(
+	ctx: &Ctx,
+	mm: &ModelManager,
+	xml: &[u8],
+	case_id: Uuid,
+	safety_report_id: &str,
+	version: i32,
+	header: Option<&shared::MessageHeaderExtract>,
+	settings: &CImportSettings,
+) -> Result<()> {
+	import_c_1_safety_report(
+		ctx,
+		mm,
+		xml,
+		case_id,
+		safety_report_id,
+		version,
+		header,
+		settings,
+	)
+	.await?;
+	import_c_2_sender_information(ctx, mm, xml, case_id, header, settings).await?;
+	import_c_3_primary_sources(ctx, mm, xml, case_id).await?;
+	import_c_4_case_identifiers(ctx, mm, xml, case_id).await?;
+	import_c_4_documents_held_by_sender(ctx, mm, xml, case_id).await?;
+	import_c_4_literature_references(ctx, mm, xml, case_id).await?;
+	import_c_5_study_information(ctx, mm, xml, case_id).await?;
+	import_c_6_receiver_information(ctx, mm, xml, case_id).await?;
+	Ok(())
+}
+
+async fn import_c_1_safety_report(
+	ctx: &Ctx,
+	mm: &ModelManager,
+	xml: &[u8],
+	case_id: Uuid,
+	safety_report_id: &str,
+	version: i32,
+	header: Option<&shared::MessageHeaderExtract>,
+	settings: &CImportSettings,
+) -> Result<()> {
+	let Some(mut report) =
+		crate::import_sections::c_safety_report::parse_c_safety_report(xml)?
+	else {
+		return Ok(());
+	};
+	apply_c_safety_report_import_settings(
+		&mut report,
+		settings,
+		time::OffsetDateTime::now_utc().date(),
+	);
+	apply_default_values_to_imported_r2_case(
+		&mut report,
+		settings.apply_default_values_to_imported_r2_cases,
+	);
+
+	mm.dbx().begin_txn().await.map_err(model::Error::from)?;
+	if let Err(err) = set_full_context_from_ctx_dbx(mm.dbx(), ctx).await {
+		let _ = mm.dbx().rollback_txn().await;
+		return Err(Error::Model(err));
+	}
+
+	let receiver_organization = header.and_then(|h| h.message_receiver.clone());
+
+	mm.dbx()
+		.execute(
+			sqlx::query(
+				"INSERT INTO safety_report_identification (
+					case_id,
+					safety_report_id,
+					version,
+					transmission_date,
+					report_type,
+					date_first_received_from_source,
+					date_of_most_recent_information,
+					fulfil_expedited_criteria,
+					local_criteria_report_type,
+					combination_product_report_indicator,
+					worldwide_unique_id,
+					first_sender_type,
+					additional_documents_available,
+					nullification_code,
+					nullification_reason,
+					receiver_organization,
+					created_at,
+					updated_at,
+					created_by
+				) VALUES (
+					$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,NOW(),NOW(),$17
+				)
+				ON CONFLICT (case_id) DO UPDATE SET
+					safety_report_id = EXCLUDED.safety_report_id,
+					version = EXCLUDED.version,
+					transmission_date = EXCLUDED.transmission_date,
+					report_type = EXCLUDED.report_type,
+					date_first_received_from_source = EXCLUDED.date_first_received_from_source,
+					date_of_most_recent_information = EXCLUDED.date_of_most_recent_information,
+					fulfil_expedited_criteria = EXCLUDED.fulfil_expedited_criteria,
+					local_criteria_report_type = EXCLUDED.local_criteria_report_type,
+					combination_product_report_indicator = EXCLUDED.combination_product_report_indicator,
+					worldwide_unique_id = EXCLUDED.worldwide_unique_id,
+					first_sender_type = EXCLUDED.first_sender_type,
+					additional_documents_available = EXCLUDED.additional_documents_available,
+					nullification_code = EXCLUDED.nullification_code,
+					nullification_reason = EXCLUDED.nullification_reason,
+					receiver_organization = EXCLUDED.receiver_organization,
+					updated_at = NOW(),
+					updated_by = $17",
+			)
+			.bind(case_id)
+			.bind(safety_report_id)
+			.bind(version)
+			.bind(report.transmission_date)
+			.bind(report.report_type)
+			.bind(report.date_first_received_from_source)
+			.bind(report.date_of_most_recent_information)
+			.bind(report.fulfil_expedited_criteria)
+			.bind(report.local_criteria_report_type)
+			.bind(report.combination_product_report_indicator)
+			.bind(report.worldwide_unique_id)
+			.bind(report.first_sender_type)
+			.bind(report.additional_documents_available)
+			.bind(report.nullification_code)
+			.bind(report.nullification_reason)
+			.bind(receiver_organization)
+			.bind(ctx.user_id()),
+		)
+		.await
+		.map_err(model::Error::from)?;
+	let (visible_count,) = mm
+		.dbx()
+		.fetch_one(
+			sqlx::query_as::<_, (i64,)>(
+				"SELECT COUNT(*) FROM safety_report_identification WHERE case_id = $1",
+			)
+			.bind(case_id),
+		)
+		.await
+		.map_err(model::Error::from)?;
+	if visible_count != 1 {
+		let _ = mm.dbx().rollback_txn().await;
+		return Err(Error::Model(model::Error::Store(format!(
+			"section C safety report write invariant failed for case {case_id}: visible_count={visible_count}"
+		))));
+	}
+	mm.dbx().commit_txn().await.map_err(model::Error::from)?;
+
+	Ok(())
+}
+
+async fn import_c_2_sender_information(
+	ctx: &Ctx,
+	mm: &ModelManager,
+	xml: &[u8],
+	case_id: Uuid,
+	header: Option<&shared::MessageHeaderExtract>,
+	settings: &CImportSettings,
+) -> Result<()> {
+	let authority = header.map(|header| {
+		infer_regulatory_authority_from_receivers(
+			header.batch_receiver.as_deref(),
+			header.message_receiver.as_deref(),
+		)
+	});
+	let (sender, source_sender_presave_id) = if settings
+		.apply_sender_info_to_imported_cases
+	{
+		let xml_sender = c_helpers::parse_sender_information(xml, header)
+			.ok()
+			.flatten();
+		if let Some(sender_id) = settings.selected_sender_presave_id {
+			let sender_presave = SenderPresaveBmc::get(ctx, mm, sender_id)
+				.await
+				.map_err(Error::Model)?;
+			if sender_presave.deleted {
+				return Err(Error::InvalidXml {
+					message: "selected Product Sender is deleted".to_string(),
+					line: None,
+					column: None,
+				});
+			}
+			let sender = sender_import_from_presave(ctx, mm, sender_presave).await?;
+			(
+				Some(merge_sender_import(sender, xml_sender)),
+				Some(sender_id),
+			)
+		} else {
+			match sender_from_product_linked_presave(ctx, mm, xml).await? {
+				Some(sender) => {
+					(Some(merge_sender_import(sender, xml_sender)), None)
+				}
+				None => match default_sender_from_presave(ctx, mm, authority).await?
+				{
+					Some(sender) => {
+						(Some(merge_sender_import(sender, xml_sender)), None)
+					}
+					None => {
+						(c_helpers::parse_sender_information(xml, header)?, None)
+					}
+				},
+			}
+		}
+	} else {
+		(c_helpers::parse_sender_information(xml, header)?, None)
+	};
+	let Some(sender) = sender else {
+		return Ok(());
+	};
+
+	let sender_id = if let Some((id,)) = mm
+		.dbx()
+		.fetch_optional(
+			sqlx::query_as::<_, (Uuid,)>(
+				"SELECT id FROM sender_information WHERE case_id = $1 LIMIT 1",
+			)
+			.bind(case_id),
+		)
+		.await
+		.map_err(model::Error::from)?
+	{
+		id
+	} else {
+		SenderInformationBmc::create(
+			ctx,
+			mm,
+			SenderInformationForCreate {
+				case_id,
+				source_sender_presave_id,
+				sender_type: Some(sender.sender_type.clone()),
+				health_professional_type_kr1: sender
+					.health_professional_type_kr1
+					.clone(),
+				organization_name: Some(sender.organization_name.clone()),
+				department: sender.department.clone(),
+				street_address: sender.street_address.clone(),
+				city: sender.city.clone(),
+				state: sender.state.clone(),
+				postcode: sender.postcode.clone(),
+				country_code: sender.country_code.clone(),
+				person_title: sender.person_title.clone(),
+				person_given_name: sender.person_given_name.clone(),
+				person_middle_name: sender.person_middle_name.clone(),
+				person_family_name: sender.person_family_name.clone(),
+				telephone: sender.telephone.clone(),
+				fax: sender.fax.clone(),
+				email: sender.email.clone(),
+			},
+		)
+		.await?
+	};
+
+	let _ = SenderInformationBmc::update(
+		ctx,
+		mm,
+		sender_id,
+		SenderInformationForUpdate {
+			source_sender_presave_id,
+			sender_type: Some(sender.sender_type),
+			health_professional_type_kr1: sender.health_professional_type_kr1,
+			organization_name: Some(sender.organization_name),
+			department: sender.department,
+			street_address: sender.street_address,
+			city: sender.city,
+			state: sender.state,
+			postcode: sender.postcode,
+			country_code: sender.country_code,
+			person_title: sender.person_title,
+			person_given_name: sender.person_given_name,
+			person_middle_name: sender.person_middle_name,
+			person_family_name: sender.person_family_name,
+			telephone: sender.telephone,
+			fax: sender.fax,
+			email: sender.email,
+		},
+	)
+	.await;
+
+	Ok(())
+}
+
+fn merge_sender_import(
+	presave: c_helpers::SenderImport,
+	xml: Option<c_helpers::SenderImport>,
+) -> c_helpers::SenderImport {
+	let Some(xml) = xml else {
+		return presave;
+	};
+
+	c_helpers::SenderImport {
+		sender_type: prefer_required_presave_value(
+			presave.sender_type,
+			xml.sender_type,
+		),
+		health_professional_type_kr1: prefer_optional_presave_value(
+			presave.health_professional_type_kr1,
+			xml.health_professional_type_kr1,
+		),
+		organization_name: prefer_required_presave_value(
+			presave.organization_name,
+			xml.organization_name,
+		),
+		department: prefer_optional_presave_value(
+			presave.department,
+			xml.department,
+		),
+		street_address: prefer_optional_presave_value(
+			presave.street_address,
+			xml.street_address,
+		),
+		city: prefer_optional_presave_value(presave.city, xml.city),
+		state: prefer_optional_presave_value(presave.state, xml.state),
+		postcode: prefer_optional_presave_value(presave.postcode, xml.postcode),
+		country_code: prefer_optional_presave_value(
+			presave.country_code,
+			xml.country_code,
+		),
+		person_title: prefer_optional_presave_value(
+			presave.person_title,
+			xml.person_title,
+		),
+		person_given_name: prefer_optional_presave_value(
+			presave.person_given_name,
+			xml.person_given_name,
+		),
+		person_middle_name: prefer_optional_presave_value(
+			presave.person_middle_name,
+			xml.person_middle_name,
+		),
+		person_family_name: prefer_optional_presave_value(
+			presave.person_family_name,
+			xml.person_family_name,
+		),
+		telephone: prefer_optional_presave_value(presave.telephone, xml.telephone),
+		fax: prefer_optional_presave_value(presave.fax, xml.fax),
+		email: prefer_optional_presave_value(presave.email, xml.email),
+	}
+}
+
+fn prefer_required_presave_value(presave: String, xml: String) -> String {
+	if presave.trim().is_empty() {
+		xml
+	} else {
+		presave
+	}
+}
+
+fn prefer_optional_presave_value(
+	presave: Option<String>,
+	xml: Option<String>,
+) -> Option<String> {
+	match presave {
+		Some(value) if value.trim().is_empty() => xml,
+		Some(value) => Some(value),
+		None => xml,
+	}
+}
+
+async fn default_sender_from_presave(
+	ctx: &Ctx,
+	mm: &ModelManager,
+	_authority: Option<RegulatoryAuthority>,
+) -> Result<Option<c_helpers::SenderImport>> {
+	let mut senders = SenderPresaveBmc::list(ctx, mm, None)
+		.await
+		.map_err(Error::Model)?;
+	senders.retain(|sender| !sender.deleted && sender.is_default);
+	let Some(sender) = senders.into_iter().next() else {
+		return Ok(None);
+	};
+
+	sender_import_from_presave(ctx, mm, sender).await.map(Some)
+}
+
+async fn sender_from_product_linked_presave(
+	ctx: &Ctx,
+	mm: &ModelManager,
+	xml: &[u8],
+) -> Result<Option<c_helpers::SenderImport>> {
+	let imported_product_keys = imported_product_sender_keys(xml)?;
+	if imported_product_keys.is_empty() {
+		return Ok(None);
+	}
+
+	let products = ProductPresaveBmc::list(ctx, mm, None)
+		.await
+		.map_err(Error::Model)?;
+	let Some(product) = products.into_iter().find(|product| {
+		!product.deleted
+			&& product.sender_presave_id.is_some()
+			&& [
+				product.product_id.as_deref(),
+				product.medicinal_product.as_deref(),
+				product.drug_authorization_number.as_deref(),
+				product.preapproval_ip_name.as_deref(),
+			]
+			.into_iter()
+			.flatten()
+			.any(|value| {
+				imported_product_keys.contains(&normalize_import_key(value))
+			})
+	}) else {
+		return Ok(None);
+	};
+	let Some(sender_id) = product.sender_presave_id else {
+		return Ok(None);
+	};
+	let sender = SenderPresaveBmc::get(ctx, mm, sender_id)
+		.await
+		.map_err(Error::Model)?;
+	if sender.deleted {
+		return Ok(None);
+	}
+	sender_import_from_presave(ctx, mm, sender).await.map(Some)
+}
+
+fn imported_product_sender_keys(xml: &[u8]) -> Result<Vec<String>> {
+	let mut keys = Vec::new();
+	for drug in crate::import_sections::g_drug::parse_g_drugs(xml)? {
+		for value in [
+			Some(drug.medicinal_product.as_str()),
+			drug.drug_authorization_number.as_deref(),
+			drug.mpid.as_deref(),
+			drug.phpid.as_deref(),
+		]
+		.into_iter()
+		.flatten()
+		{
+			let key = normalize_import_key(value);
+			if !key.is_empty() && !keys.contains(&key) {
+				keys.push(key);
+			}
+		}
+	}
+	Ok(keys)
+}
+
+fn normalize_import_key(value: &str) -> String {
+	value.trim().to_lowercase()
+}
+
+async fn sender_import_from_presave(
+	ctx: &Ctx,
+	mm: &ModelManager,
+	sender: SenderPresave,
+) -> Result<c_helpers::SenderImport> {
+	let responsible_people =
+		SenderPresaveResponsiblePersonBmc::list_by_parent(ctx, mm, sender.id)
+			.await
+			.map_err(Error::Model)?;
+	let responsible = responsible_people
+		.iter()
+		.filter(|person| !person.deleted)
+		.find(|person| person.is_default)
+		.or_else(|| responsible_people.iter().find(|person| !person.deleted));
+
+	let organization_name = sender.organization_name.unwrap_or_default();
+	let sender_type = sender.sender_type.unwrap_or_else(|| "1".to_string());
+
+	Ok(c_helpers::SenderImport {
+		sender_type,
+		health_professional_type_kr1: None,
+		organization_name,
+		department: responsible
+			.as_ref()
+			.and_then(|person| person.department.clone()),
+		street_address: sender.street_address,
+		city: sender.city,
+		state: sender.state,
+		postcode: sender.postcode,
+		country_code: sender.country_code,
+		person_title: responsible
+			.as_ref()
+			.and_then(|person| person.person_title.clone()),
+		person_given_name: responsible
+			.as_ref()
+			.and_then(|person| person.person_given_name.clone()),
+		person_middle_name: responsible
+			.as_ref()
+			.and_then(|person| person.person_middle_name.clone()),
+		person_family_name: responsible
+			.as_ref()
+			.and_then(|person| person.person_family_name.clone()),
+		telephone: sender.telephone,
+		fax: sender.fax,
+		email: sender.email,
+	})
+}
+
+async fn import_c_3_primary_sources(
+	ctx: &Ctx,
+	mm: &ModelManager,
+	xml: &[u8],
+	case_id: Uuid,
+) -> Result<()> {
+	let primary_sources = c_helpers::parse_primary_sources(xml)?;
+	if primary_sources.is_empty() {
+		return Ok(());
+	}
+
+	for (idx, primary) in primary_sources.into_iter().enumerate() {
+		let seq = (idx + 1) as i32;
+		let primary_id = if let Some((id,)) = mm
+			.dbx()
+			.fetch_optional(
+				sqlx::query_as::<_, (Uuid,)>(
+					"SELECT id FROM primary_sources WHERE case_id = $1 AND sequence_number = $2 LIMIT 1",
+				)
+				.bind(case_id)
+				.bind(seq),
+			)
+			.await
+			.map_err(model::Error::from)?
+		{
+			id
+		} else {
+			PrimarySourceBmc::create(
+				ctx,
+				mm,
+					PrimarySourceForCreate {
+						case_id,
+						source_reporter_presave_id: None,
+						sequence_number: seq,
+					reporter_title: primary.reporter_title.clone(),
+					reporter_title_null_flavor: primary.reporter_title_null_flavor.clone(),
+					reporter_given_name: primary.reporter_given_name.clone(),
+					reporter_given_name_null_flavor: primary.reporter_given_name_null_flavor.clone(),
+					reporter_middle_name: primary.reporter_middle_name.clone(),
+					reporter_middle_name_null_flavor: primary.reporter_middle_name_null_flavor.clone(),
+					reporter_family_name: primary.reporter_family_name.clone(),
+					reporter_family_name_null_flavor: primary.reporter_family_name_null_flavor.clone(),
+					organization: primary.organization.clone(),
+					organization_null_flavor: primary.organization_null_flavor.clone(),
+					department: primary.department.clone(),
+					department_null_flavor: primary.department_null_flavor.clone(),
+					street: primary.street.clone(),
+					street_null_flavor: primary.street_null_flavor.clone(),
+					city: primary.city.clone(),
+					city_null_flavor: primary.city_null_flavor.clone(),
+					state: primary.state.clone(),
+					state_null_flavor: primary.state_null_flavor.clone(),
+					postcode: primary.postcode.clone(),
+					postcode_null_flavor: primary.postcode_null_flavor.clone(),
+					telephone: primary.telephone.clone(),
+					telephone_null_flavor: primary.telephone_null_flavor.clone(),
+					country_code: primary.country_code.clone(),
+					country_code_null_flavor: None,
+					email: primary.email.clone(),
+					email_null_flavor: None,
+					qualification: primary.qualification.clone(),
+					qualification_null_flavor: None,
+					qualification_kr1: None,
+					primary_source_regulatory: primary.primary_source_regulatory.clone(),
+				},
+			)
+			.await?
+		};
+
+		let _ = PrimarySourceBmc::update(
+			ctx,
+			mm,
+			primary_id,
+			PrimarySourceForUpdate {
+				source_reporter_presave_id: None,
+				reporter_title: primary.reporter_title,
+				reporter_title_null_flavor: primary.reporter_title_null_flavor,
+				reporter_given_name: primary.reporter_given_name,
+				reporter_given_name_null_flavor: primary
+					.reporter_given_name_null_flavor,
+				reporter_middle_name: primary.reporter_middle_name,
+				reporter_middle_name_null_flavor: primary
+					.reporter_middle_name_null_flavor,
+				reporter_family_name: primary.reporter_family_name,
+				reporter_family_name_null_flavor: primary
+					.reporter_family_name_null_flavor,
+				organization: primary.organization,
+				organization_null_flavor: primary.organization_null_flavor,
+				department: primary.department,
+				department_null_flavor: primary.department_null_flavor,
+				street: primary.street,
+				street_null_flavor: primary.street_null_flavor,
+				city: primary.city,
+				city_null_flavor: primary.city_null_flavor,
+				state: primary.state,
+				state_null_flavor: primary.state_null_flavor,
+				postcode: primary.postcode,
+				postcode_null_flavor: primary.postcode_null_flavor,
+				telephone: primary.telephone,
+				telephone_null_flavor: primary.telephone_null_flavor,
+				country_code: primary.country_code,
+				country_code_null_flavor: None,
+				email: primary.email,
+				email_null_flavor: None,
+				qualification: primary.qualification,
+				qualification_null_flavor: None,
+				qualification_kr1: None,
+				primary_source_regulatory: primary.primary_source_regulatory,
+			},
+		)
+		.await;
+	}
+
+	Ok(())
+}
+
+async fn import_c_4_case_identifiers(
+	ctx: &Ctx,
+	mm: &ModelManager,
+	xml: &[u8],
+	case_id: Uuid,
+) -> Result<()> {
+	let other_ids = c_helpers::parse_other_case_identifiers(xml)?;
+	for (idx, entry) in other_ids.into_iter().enumerate() {
+		let seq = (idx + 1) as i32;
+		let existing: Option<Uuid> = mm
+			.dbx()
+			.fetch_optional(
+				sqlx::query_as::<_, (Uuid,)>(
+					"SELECT id FROM other_case_identifiers WHERE case_id = $1 AND sequence_number = $2 LIMIT 1",
+				)
+				.bind(case_id)
+				.bind(seq),
+			)
+			.await
+			.map_err(model::Error::from)?
+			.map(|v| v.0);
+		if let Some(id) = existing {
+			let _ = OtherCaseIdentifierBmc::update(
+				ctx,
+				mm,
+				id,
+				OtherCaseIdentifierForUpdate {
+					source_of_identifier: Some(entry.source_of_identifier),
+					case_identifier: Some(entry.case_identifier),
+				},
+			)
+			.await;
+		} else {
+			let _ = OtherCaseIdentifierBmc::create(
+				ctx,
+				mm,
+				OtherCaseIdentifierForCreate {
+					case_id,
+					sequence_number: seq,
+					source_of_identifier: entry.source_of_identifier,
+					case_identifier: entry.case_identifier,
+				},
+			)
+			.await?;
+		}
+	}
+
+	let linked = c_helpers::parse_linked_reports(xml)?;
+	for (idx, entry) in linked.into_iter().enumerate() {
+		let seq = (idx + 1) as i32;
+		let existing: Option<Uuid> = mm
+			.dbx()
+			.fetch_optional(
+				sqlx::query_as::<_, (Uuid,)>(
+					"SELECT id FROM linked_report_numbers WHERE case_id = $1 AND sequence_number = $2 LIMIT 1",
+				)
+				.bind(case_id)
+				.bind(seq),
+			)
+			.await
+			.map_err(model::Error::from)?
+			.map(|v| v.0);
+		if let Some(id) = existing {
+			let _ = LinkedReportNumberBmc::update(
+				ctx,
+				mm,
+				id,
+				LinkedReportNumberForUpdate {
+					linked_report_number: Some(entry.linked_report_number),
+				},
+			)
+			.await;
+		} else {
+			let _ = LinkedReportNumberBmc::create(
+				ctx,
+				mm,
+				LinkedReportNumberForCreate {
+					case_id,
+					sequence_number: seq,
+					linked_report_number: entry.linked_report_number,
+				},
+			)
+			.await?;
+		}
+	}
+
+	Ok(())
+}
+
+async fn import_c_4_documents_held_by_sender(
+	ctx: &Ctx,
+	mm: &ModelManager,
+	xml: &[u8],
+	case_id: Uuid,
+) -> Result<()> {
+	let documents = c_helpers::parse_documents_held_by_sender(xml)?;
+	for (idx, doc) in documents.into_iter().enumerate() {
+		let seq = (idx + 1) as i32;
+		let existing: Option<Uuid> = mm
+			.dbx()
+			.fetch_optional(
+				sqlx::query_as::<_, (Uuid,)>(
+					"SELECT id FROM documents_held_by_sender WHERE case_id = $1 AND sequence_number = $2 LIMIT 1",
+				)
+				.bind(case_id)
+				.bind(seq),
+			)
+			.await
+			.map_err(model::Error::from)?
+			.map(|v| v.0);
+		if let Some(id) = existing {
+			let _ = DocumentsHeldBySenderBmc::update(
+				ctx,
+				mm,
+				id,
+				DocumentsHeldBySenderForUpdate {
+					title: doc.title,
+					document_base64: doc.document_base64,
+					media_type: doc.media_type,
+					representation: doc.representation,
+					compression: doc.compression,
+					sequence_number: Some(seq),
+				},
+			)
+			.await;
+		} else {
+			let _ = DocumentsHeldBySenderBmc::create(
+				ctx,
+				mm,
+				DocumentsHeldBySenderForCreate {
+					case_id,
+					title: doc.title,
+					document_base64: doc.document_base64,
+					media_type: doc.media_type,
+					representation: doc.representation,
+					compression: doc.compression,
+					sequence_number: seq,
+				},
+			)
+			.await?;
+		}
+	}
+	Ok(())
+}
+
+async fn import_c_4_literature_references(
+	ctx: &Ctx,
+	mm: &ModelManager,
+	xml: &[u8],
+	case_id: Uuid,
+) -> Result<()> {
+	let references = c_helpers::parse_literature_references(xml)?;
+	for (idx, entry) in references.into_iter().enumerate() {
+		let seq = (idx + 1) as i32;
+		let reference_text = (!entry.reference_text.trim().is_empty())
+			.then(|| entry.reference_text.clone());
+		let existing: Option<Uuid> = mm
+			.dbx()
+			.fetch_optional(
+				sqlx::query_as::<_, (Uuid,)>(
+					"SELECT id FROM literature_references WHERE case_id = $1 AND sequence_number = $2 LIMIT 1",
+				)
+				.bind(case_id)
+				.bind(seq),
+			)
+			.await
+			.map_err(model::Error::from)?
+			.map(|v| v.0);
+		if let Some(id) = existing {
+			let _ = LiteratureReferenceBmc::update(
+				ctx,
+				mm,
+				id,
+				LiteratureReferenceForUpdate {
+					reference_text: reference_text.clone(),
+					reference_text_null_flavor: entry.reference_text_null_flavor,
+					sequence_number: Some(seq),
+					document_base64: entry.document_base64,
+					media_type: entry.media_type,
+					representation: entry.representation,
+					compression: entry.compression,
+				},
+			)
+			.await;
+		} else {
+			let _ = LiteratureReferenceBmc::create(
+				ctx,
+				mm,
+				LiteratureReferenceForCreate {
+					case_id,
+					reference_text,
+					reference_text_null_flavor: entry.reference_text_null_flavor,
+					sequence_number: seq,
+					document_base64: entry.document_base64,
+					media_type: entry.media_type,
+					representation: entry.representation,
+					compression: entry.compression,
+				},
+			)
+			.await?;
+		}
+	}
+	Ok(())
+}
+
+async fn import_c_5_study_information(
+	ctx: &Ctx,
+	mm: &ModelManager,
+	xml: &[u8],
+	case_id: Uuid,
+) -> Result<()> {
+	let Some(study) = c_helpers::parse_study_information(xml)? else {
+		return Ok(());
+	};
+
+	mm.dbx().begin_txn().await.map_err(model::Error::from)?;
+	if let Err(err) = set_full_context_from_ctx_dbx(mm.dbx(), ctx).await {
+		let _ = mm.dbx().rollback_txn().await;
+		return Err(Error::Model(err));
+	}
+
+	let (study_id,) = mm
+		.dbx()
+		.fetch_one(
+			sqlx::query_as::<_, (Uuid,)>(
+				"INSERT INTO study_information (
+						case_id,
+						study_name,
+						study_name_null_flavor,
+						sponsor_study_number,
+						sponsor_study_number_null_flavor,
+						study_type_reaction,
+						study_type_reaction_kr1,
+						created_at,
+						updated_at,
+						created_by
+					) VALUES ($1,$2,$3,$4,$5,$6,NULL,NOW(),NOW(),$7)
+					ON CONFLICT (case_id) DO UPDATE SET
+						study_name = EXCLUDED.study_name,
+						study_name_null_flavor = EXCLUDED.study_name_null_flavor,
+						sponsor_study_number = EXCLUDED.sponsor_study_number,
+						sponsor_study_number_null_flavor = EXCLUDED.sponsor_study_number_null_flavor,
+						study_type_reaction = EXCLUDED.study_type_reaction,
+						study_type_reaction_kr1 = EXCLUDED.study_type_reaction_kr1,
+						updated_at = NOW(),
+						updated_by = $7
+					RETURNING id",
+			)
+			.bind(case_id)
+			.bind(study.study_name)
+			.bind(study.study_name_null_flavor)
+			.bind(study.sponsor_study_number)
+			.bind(study.sponsor_study_number_null_flavor)
+			.bind(study.study_type_reaction)
+			.bind(ctx.user_id()),
+		)
+		.await
+		.map_err(model::Error::from)?;
+	let (study_visible_count,) = mm
+		.dbx()
+		.fetch_one(
+			sqlx::query_as::<_, (i64,)>(
+				"SELECT COUNT(*) FROM study_information WHERE case_id = $1",
+			)
+			.bind(case_id),
+		)
+		.await
+		.map_err(model::Error::from)?;
+	if study_visible_count != 1 {
+		let _ = mm.dbx().rollback_txn().await;
+		return Err(Error::Model(model::Error::Store(format!(
+			"section C study write invariant failed for case {case_id}: visible_count={study_visible_count}"
+		))));
+	}
+
+	mm.dbx()
+		.execute(
+			sqlx::query(
+				"DELETE FROM study_registration_numbers WHERE study_information_id = $1",
+			)
+			.bind(study_id),
+		)
+		.await
+		.map_err(model::Error::from)?;
+
+	for (idx, reg) in study.registrations.into_iter().enumerate() {
+		mm.dbx()
+			.execute(
+				sqlx::query(
+					"INSERT INTO study_registration_numbers (
+							study_information_id,
+							registration_number,
+							registration_number_null_flavor,
+							country_code,
+							country_code_null_flavor,
+							sequence_number,
+							created_at,
+							updated_at,
+							created_by
+						) VALUES ($1,$2,$3,$4,$5,$6,NOW(),NOW(),$7)",
+				)
+				.bind(study_id)
+				.bind(reg.registration_number)
+				.bind(reg.registration_number_null_flavor)
+				.bind(reg.country_code)
+				.bind(reg.country_code_null_flavor)
+				.bind((idx + 1) as i32)
+				.bind(ctx.user_id()),
+			)
+			.await
+			.map_err(model::Error::from)?;
+	}
+	let (reg_visible_count,) = mm
+		.dbx()
+		.fetch_one(
+			sqlx::query_as::<_, (i64,)>(
+				"SELECT COUNT(*) FROM study_registration_numbers WHERE study_information_id = $1",
+			)
+			.bind(study_id),
+		)
+		.await
+		.map_err(model::Error::from)?;
+	if reg_visible_count < 0 {
+		let _ = mm.dbx().rollback_txn().await;
+		return Err(Error::Model(model::Error::Store(
+			"section C study registration invariant failed".to_string(),
+		)));
+	}
+	mm.dbx().commit_txn().await.map_err(model::Error::from)?;
+
+	Ok(())
+}
+
+async fn import_c_6_receiver_information(
+	ctx: &Ctx,
+	mm: &ModelManager,
+	xml: &[u8],
+	case_id: Uuid,
+) -> Result<()> {
+	let Some(receiver) = c_helpers::parse_receiver_information(xml)? else {
+		return Ok(());
+	};
+	let receiver_type = receiver.receiver_type;
+	let organization_name = receiver.organization_name;
+	let department = receiver.department;
+	let street_address = receiver.street_address;
+	let city = receiver.city;
+	let state_province = receiver.state_province;
+	let postcode = receiver.postcode;
+	let country_code = receiver.country_code;
+	let telephone = receiver.telephone;
+	let fax = receiver.fax;
+	let email = receiver.email;
+
+	if ReceiverInformationBmc::get_by_case_optional(ctx, mm, case_id)
+		.await?
+		.is_some()
+	{
+		let _ = ReceiverInformationBmc::update_by_case(
+			ctx,
+			mm,
+			case_id,
+			ReceiverInformationForUpdate {
+				receiver_type,
+				organization_name,
+				department,
+				street_address,
+				city,
+				state_province,
+				postcode,
+				country_code,
+				telephone,
+				fax,
+				email,
+			},
+		)
+		.await;
+	} else {
+		let _ = ReceiverInformationBmc::create(
+			ctx,
+			mm,
+			ReceiverInformationForCreate {
+				case_id,
+				receiver_type,
+				organization_name,
+				department,
+				street_address,
+				city,
+				state_province,
+				postcode,
+				country_code,
+				telephone,
+				fax,
+				email,
+			},
+		)
+		.await?;
+	}
+
+	Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use time::Month;
+
+	fn date(year: i32, month: Month, day: u8) -> Date {
+		Date::from_calendar_date(year, month, day).expect("valid test date")
+	}
+
+	fn report() -> CSafetyReportImport {
+		CSafetyReportImport {
+			transmission_date: "20240110000000".to_string(),
+			report_type: "1".to_string(),
+			date_first_received_from_source: date(2024, Month::January, 5),
+			date_of_most_recent_information: date(2024, Month::January, 8),
+			fulfil_expedited_criteria: false,
+			additional_documents_available: None,
+			local_criteria_report_type: None,
+			combination_product_report_indicator: None,
+			worldwide_unique_id: None,
+			first_sender_type: None,
+			nullification_code: None,
+			nullification_reason: None,
+		}
+	}
+
+	#[test]
+	fn import_date_settings_keep_c1_dates_in_required_order() {
+		let import_date = date(2024, Month::February, 1);
+		let mut report = report();
+
+		apply_c_safety_report_import_settings(
+			&mut report,
+			&CImportSettings {
+				update_date_of_creation: false,
+				update_most_recent_info_date: false,
+				update_report_first_received_date: true,
+				apply_sender_info_to_imported_cases: false,
+				apply_default_values_to_imported_r2_cases: false,
+				selected_sender_presave_id: None,
+			},
+			import_date,
+		);
+
+		assert!(
+			report.date_first_received_from_source
+				<= report.date_of_most_recent_information,
+			"C.1.4 must not be after C.1.5"
+		);
+		assert!(
+			report.date_first_received_from_source
+				<= transmission_date_as_date(&report),
+			"C.1.4 must not be after C.1.2"
+		);
+		assert!(
+			report.date_of_most_recent_information
+				<= transmission_date_as_date(&report),
+			"C.1.5 must not be after C.1.2"
+		);
+		assert_eq!(report.date_first_received_from_source, import_date);
+	}
+
+	#[test]
+	fn import_most_recent_date_setting_keeps_transmission_date_after_it() {
+		let import_date = date(2024, Month::February, 1);
+		let mut report = report();
+
+		apply_c_safety_report_import_settings(
+			&mut report,
+			&CImportSettings {
+				update_date_of_creation: false,
+				update_most_recent_info_date: true,
+				update_report_first_received_date: false,
+				apply_sender_info_to_imported_cases: false,
+				apply_default_values_to_imported_r2_cases: false,
+				selected_sender_presave_id: None,
+			},
+			import_date,
+		);
+
+		assert_eq!(report.date_of_most_recent_information, import_date);
+		assert!(
+			report.date_of_most_recent_information
+				<= transmission_date_as_date(&report),
+			"C.1.5 must not be after C.1.2"
+		);
+	}
+}

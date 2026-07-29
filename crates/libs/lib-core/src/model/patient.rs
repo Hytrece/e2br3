@@ -4,7 +4,9 @@ use crate::ctx::Ctx;
 use crate::model::base::base_uuid;
 use crate::model::base::DbBmc;
 use crate::model::modql_utils::uuid_to_sea_value;
-use crate::model::store::set_full_context_dbx_or_rollback;
+use crate::model::store::{
+	set_full_context_dbx_or_rollback, set_full_context_from_ctx_dbx,
+};
 use crate::model::ModelManager;
 use crate::model::Result;
 use modql::field::Fields;
@@ -26,8 +28,6 @@ pub struct PatientInformation {
 
 	// D.1 - Patient identification
 	pub patient_initials: Option<String>,
-	pub patient_given_name: Option<String>,
-	pub patient_family_name: Option<String>,
 
 	// D.2 - Age
 	pub birth_date: Option<Date>,
@@ -75,8 +75,6 @@ pub struct PatientInformation {
 pub struct PatientInformationForCreate {
 	pub case_id: Uuid,
 	pub patient_initials: Option<String>,
-	pub patient_given_name: Option<String>,
-	pub patient_family_name: Option<String>,
 	pub patient_initials_null_flavor: Option<String>,
 	#[serde(
 		default,
@@ -114,8 +112,6 @@ pub struct PatientInformationForCreate {
 #[derive(Fields, Deserialize)]
 pub struct PatientInformationForUpdate {
 	pub patient_initials: Option<String>,
-	pub patient_given_name: Option<String>,
-	pub patient_family_name: Option<String>,
 	pub patient_initials_null_flavor: Option<String>,
 	#[serde(
 		default,
@@ -153,8 +149,6 @@ pub struct PatientInformationForUpdate {
 #[derive(FilterNodes, Deserialize, Default)]
 pub struct PatientInformationFilter {
 	pub patient_initials: Option<OpValsString>,
-	pub patient_given_name: Option<OpValsString>,
-	pub patient_family_name: Option<OpValsString>,
 	pub sex: Option<OpValsString>,
 }
 
@@ -519,6 +513,7 @@ pub struct ParentInformation {
 	pub patient_id: Uuid,
 
 	pub parent_identification: Option<String>,
+	pub parent_identification_null_flavor: Option<String>,
 	pub parent_birth_date: Option<Date>,
 	pub parent_birth_date_null_flavor: Option<String>,
 	pub parent_age: Option<Decimal>,
@@ -529,6 +524,7 @@ pub struct ParentInformation {
 	pub weight_kg: Option<Decimal>,
 	pub height_cm: Option<Decimal>,
 	pub sex: Option<String>,
+	pub sex_null_flavor: Option<String>,
 	pub medical_history_text: Option<String>,
 	pub deleted: bool,
 
@@ -542,6 +538,7 @@ pub struct ParentInformation {
 pub struct ParentInformationForCreate {
 	pub patient_id: Uuid,
 	pub parent_identification: Option<String>,
+	pub parent_identification_null_flavor: Option<String>,
 	#[serde(
 		default,
 		deserialize_with = "crate::serde::flex_date::deserialize_option_date"
@@ -560,12 +557,14 @@ pub struct ParentInformationForCreate {
 	pub weight_kg: Option<Decimal>,
 	pub height_cm: Option<Decimal>,
 	pub sex: Option<String>,
+	pub sex_null_flavor: Option<String>,
 	pub medical_history_text: Option<String>,
 }
 
 #[derive(Fields, Deserialize)]
 pub struct ParentInformationForUpdate {
 	pub parent_identification: Option<String>,
+	pub parent_identification_null_flavor: Option<String>,
 	#[serde(
 		default,
 		deserialize_with = "crate::serde::flex_date::deserialize_option_date"
@@ -584,6 +583,7 @@ pub struct ParentInformationForUpdate {
 	pub weight_kg: Option<Decimal>,
 	pub height_cm: Option<Decimal>,
 	pub sex: Option<String>,
+	pub sex_null_flavor: Option<String>,
 	pub medical_history_text: Option<String>,
 }
 
@@ -620,8 +620,6 @@ impl PatientInformationBmc {
 			"INSERT INTO {} (
 				case_id,
 				patient_initials,
-				patient_given_name,
-				patient_family_name,
 				patient_initials_null_flavor,
 				birth_date,
 				birth_date_null_flavor,
@@ -651,7 +649,7 @@ impl PatientInformationBmc {
 				created_by
 			)
 			 VALUES (
-			 	$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15,
+			  $1, $2, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15,
 			  $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, now(), now(), $29
 			 )
 			 RETURNING id",
@@ -663,8 +661,8 @@ impl PatientInformationBmc {
 				sqlx::query_as::<_, (Uuid,)>(&sql)
 					.bind(data.case_id)
 					.bind(data.patient_initials)
-					.bind(data.patient_given_name)
-					.bind(data.patient_family_name)
+					.bind(Option::<String>::None)
+					.bind(Option::<String>::None)
 					.bind(data.patient_initials_null_flavor)
 					.bind(data.birth_date)
 					.bind(data.birth_date_null_flavor)
@@ -749,19 +747,14 @@ impl PatientInformationBmc {
 		data: PatientInformationForUpdate,
 	) -> Result<()> {
 		mm.dbx().begin_txn().await?;
-		set_full_context_dbx_or_rollback(
-			mm.dbx(),
-			ctx.user_id(),
-			ctx.organization_id(),
-			ctx.role(),
-		)
-		.await?;
+		if let Err(err) = set_full_context_from_ctx_dbx(mm.dbx(), ctx).await {
+			mm.dbx().rollback_txn().await?;
+			return Err(err);
+		}
 
 		let sql = format!(
 			"UPDATE {}
 			 SET patient_initials = CASE WHEN $5 IS NOT NULL THEN NULL ELSE COALESCE($2, patient_initials) END,
-			     patient_given_name = COALESCE($3, patient_given_name),
-			     patient_family_name = COALESCE($4, patient_family_name),
 			     patient_initials_null_flavor = CASE WHEN $2 IS NOT NULL THEN NULL ELSE COALESCE($5, patient_initials_null_flavor) END,
 			     birth_date = CASE WHEN $7 IS NOT NULL THEN NULL ELSE COALESCE($6, birth_date) END,
 			     birth_date_null_flavor = CASE WHEN $6 IS NOT NULL THEN NULL ELSE COALESCE($7, birth_date_null_flavor) END,
@@ -797,8 +790,8 @@ impl PatientInformationBmc {
 				sqlx::query(&sql)
 					.bind(id)
 					.bind(data.patient_initials)
-					.bind(data.patient_given_name)
-					.bind(data.patient_family_name)
+					.bind(Option::<String>::None)
+					.bind(Option::<String>::None)
 					.bind(data.patient_initials_null_flavor)
 					.bind(data.birth_date)
 					.bind(data.birth_date_null_flavor)
@@ -908,19 +901,14 @@ impl PatientInformationBmc {
 		data: PatientInformationForUpdate,
 	) -> Result<()> {
 		mm.dbx().begin_txn().await?;
-		set_full_context_dbx_or_rollback(
-			mm.dbx(),
-			ctx.user_id(),
-			ctx.organization_id(),
-			ctx.role(),
-		)
-		.await?;
+		if let Err(err) = set_full_context_from_ctx_dbx(mm.dbx(), ctx).await {
+			mm.dbx().rollback_txn().await?;
+			return Err(err);
+		}
 
 		let sql = format!(
 			"UPDATE {}
 			 SET patient_initials = CASE WHEN $5 IS NOT NULL THEN NULL ELSE COALESCE($2, patient_initials) END,
-			     patient_given_name = COALESCE($3, patient_given_name),
-			     patient_family_name = COALESCE($4, patient_family_name),
 			     patient_initials_null_flavor = CASE WHEN $2 IS NOT NULL THEN NULL ELSE COALESCE($5, patient_initials_null_flavor) END,
 			     birth_date = CASE WHEN $7 IS NOT NULL THEN NULL ELSE COALESCE($6, birth_date) END,
 			     birth_date_null_flavor = CASE WHEN $6 IS NOT NULL THEN NULL ELSE COALESCE($7, birth_date_null_flavor) END,
@@ -956,8 +944,8 @@ impl PatientInformationBmc {
 				sqlx::query(&sql)
 					.bind(case_id)
 					.bind(data.patient_initials)
-					.bind(data.patient_given_name)
-					.bind(data.patient_family_name)
+					.bind(Option::<String>::None)
+					.bind(Option::<String>::None)
 					.bind(data.patient_initials_null_flavor)
 					.bind(data.birth_date)
 					.bind(data.birth_date_null_flavor)
@@ -1053,10 +1041,12 @@ impl PatientIdentifierBmc {
 		list_options: Option<ListOptions>,
 	) -> Result<Vec<PatientIdentifier>> {
 		let mut filters = filters.unwrap_or_default();
-		filters.push(PatientIdentifierFilter {
-			deleted: Some(OpValBool::Eq(false).into()),
-			..Default::default()
-		});
+		if filters.is_empty() {
+			filters.push(PatientIdentifierFilter::default());
+		}
+		for filter in &mut filters {
+			filter.deleted = Some(OpValBool::Eq(false).into());
+		}
 		base_uuid::list::<Self, _, _>(ctx, mm, Some(filters), list_options).await
 	}
 
@@ -1152,10 +1142,12 @@ impl MedicalHistoryEpisodeBmc {
 		list_options: Option<ListOptions>,
 	) -> Result<Vec<MedicalHistoryEpisode>> {
 		let mut filters = filters.unwrap_or_default();
-		filters.push(MedicalHistoryEpisodeFilter {
-			deleted: Some(OpValBool::Eq(false).into()),
-			..Default::default()
-		});
+		if filters.is_empty() {
+			filters.push(MedicalHistoryEpisodeFilter::default());
+		}
+		for filter in &mut filters {
+			filter.deleted = Some(OpValBool::Eq(false).into());
+		}
 		base_uuid::list::<Self, _, _>(ctx, mm, Some(filters), list_options).await
 	}
 
@@ -1206,10 +1198,12 @@ impl PastDrugHistoryBmc {
 		list_options: Option<ListOptions>,
 	) -> Result<Vec<PastDrugHistory>> {
 		let mut filters = filters.unwrap_or_default();
-		filters.push(PastDrugHistoryFilter {
-			deleted: Some(OpValBool::Eq(false).into()),
-			..Default::default()
-		});
+		if filters.is_empty() {
+			filters.push(PastDrugHistoryFilter::default());
+		}
+		for filter in &mut filters {
+			filter.deleted = Some(OpValBool::Eq(false).into());
+		}
 		base_uuid::list::<Self, _, _>(ctx, mm, Some(filters), list_options).await
 	}
 
@@ -1425,10 +1419,12 @@ impl ReportedCauseOfDeathBmc {
 		list_options: Option<ListOptions>,
 	) -> Result<Vec<ReportedCauseOfDeath>> {
 		let mut filters = filters.unwrap_or_default();
-		filters.push(ReportedCauseOfDeathFilter {
-			deleted: Some(OpValBool::Eq(false).into()),
-			..Default::default()
-		});
+		if filters.is_empty() {
+			filters.push(ReportedCauseOfDeathFilter::default());
+		}
+		for filter in &mut filters {
+			filter.deleted = Some(OpValBool::Eq(false).into());
+		}
 		base_uuid::list::<Self, _, _>(ctx, mm, Some(filters), list_options).await
 	}
 
@@ -1479,10 +1475,12 @@ impl AutopsyCauseOfDeathBmc {
 		list_options: Option<ListOptions>,
 	) -> Result<Vec<AutopsyCauseOfDeath>> {
 		let mut filters = filters.unwrap_or_default();
-		filters.push(AutopsyCauseOfDeathFilter {
-			deleted: Some(OpValBool::Eq(false).into()),
-			..Default::default()
-		});
+		if filters.is_empty() {
+			filters.push(AutopsyCauseOfDeathFilter::default());
+		}
+		for filter in &mut filters {
+			filter.deleted = Some(OpValBool::Eq(false).into());
+		}
 		base_uuid::list::<Self, _, _>(ctx, mm, Some(filters), list_options).await
 	}
 
@@ -1533,10 +1531,12 @@ impl ParentInformationBmc {
 		list_options: Option<ListOptions>,
 	) -> Result<Vec<ParentInformation>> {
 		let mut filters = filters.unwrap_or_default();
-		filters.push(ParentInformationFilter {
-			deleted: Some(OpValBool::Eq(false).into()),
-			..Default::default()
-		});
+		if filters.is_empty() {
+			filters.push(ParentInformationFilter::default());
+		}
+		for filter in &mut filters {
+			filter.deleted = Some(OpValBool::Eq(false).into());
+		}
 		base_uuid::list::<Self, _, _>(ctx, mm, Some(filters), list_options).await
 	}
 
@@ -1557,45 +1557,61 @@ impl ParentInformationBmc {
 
 		let sql = format!(
 			"UPDATE {} SET
-			 parent_identification = COALESCE($1, parent_identification),
+			 parent_identification = CASE
+			   WHEN $1::varchar IS NOT NULL THEN NULL
+			   ELSE COALESCE($2, parent_identification)
+			 END,
+			 parent_identification_null_flavor = CASE
+			   WHEN $1::varchar IS NOT NULL THEN $1
+			   WHEN $2::varchar IS NOT NULL THEN NULL
+			   ELSE parent_identification_null_flavor
+			 END,
 			 parent_birth_date = CASE
-			 	WHEN $2::varchar IS NOT NULL THEN NULL
-			 	ELSE COALESCE($3, parent_birth_date)
+			   WHEN $3::varchar IS NOT NULL THEN NULL
+			   ELSE COALESCE($4, parent_birth_date)
 			 END,
 			 parent_birth_date_null_flavor = CASE
-			 	WHEN $2::varchar IS NOT NULL THEN $2
-			 	WHEN $3::date IS NOT NULL THEN NULL
-			 	ELSE parent_birth_date_null_flavor
+			   WHEN $3::varchar IS NOT NULL THEN $3
+			   WHEN $4::date IS NOT NULL THEN NULL
+			   ELSE parent_birth_date_null_flavor
 			 END,
 			 parent_age = CASE
-			 	WHEN $4::varchar IS NOT NULL THEN NULL
-			 	ELSE COALESCE($5, parent_age)
+			   WHEN $5::varchar IS NOT NULL THEN NULL
+			   ELSE COALESCE($6, parent_age)
 			 END,
 			 parent_age_null_flavor = CASE
-			 	WHEN $4::varchar IS NOT NULL THEN $4
-			 	WHEN $5::numeric IS NOT NULL THEN NULL
-			 	ELSE parent_age_null_flavor
+			   WHEN $5::varchar IS NOT NULL THEN $5
+			   WHEN $6::numeric IS NOT NULL THEN NULL
+			   ELSE parent_age_null_flavor
 			 END,
 			 parent_age_unit = CASE
-			 	WHEN $4::varchar IS NOT NULL THEN NULL
-			 	ELSE COALESCE($6, parent_age_unit)
+			   WHEN $5::varchar IS NOT NULL THEN NULL
+			   ELSE COALESCE($7, parent_age_unit)
 			 END,
 			 last_menstrual_period_date = CASE
-			 	WHEN $7::varchar IS NOT NULL THEN NULL
-			 	ELSE COALESCE($8, last_menstrual_period_date)
+			   WHEN $8::varchar IS NOT NULL THEN NULL
+			   ELSE COALESCE($9, last_menstrual_period_date)
 			 END,
 			 last_menstrual_period_date_null_flavor = CASE
-			 	WHEN $7::varchar IS NOT NULL THEN $7
-			 	WHEN $8::date IS NOT NULL THEN NULL
-			 	ELSE last_menstrual_period_date_null_flavor
+			   WHEN $8::varchar IS NOT NULL THEN $8
+			   WHEN $9::date IS NOT NULL THEN NULL
+			   ELSE last_menstrual_period_date_null_flavor
 			 END,
-			 weight_kg = COALESCE($9, weight_kg),
-			 height_cm = COALESCE($10, height_cm),
-			 sex = COALESCE($11, sex),
-			 medical_history_text = COALESCE($12, medical_history_text),
+			 weight_kg = COALESCE($10, weight_kg),
+			 height_cm = COALESCE($11, height_cm),
+			 sex = CASE
+			   WHEN $12::varchar IS NOT NULL THEN NULL
+			   ELSE COALESCE($13, sex)
+			 END,
+			 sex_null_flavor = CASE
+			   WHEN $12::varchar IS NOT NULL THEN $12
+			   WHEN $13::varchar IS NOT NULL THEN NULL
+			   ELSE sex_null_flavor
+			 END,
+			 medical_history_text = COALESCE($14, medical_history_text),
 			 updated_at = now(),
-			 updated_by = $13
-			 WHERE id = $14",
+			 updated_by = $15
+			 WHERE id = $16",
 			Self::TABLE
 		);
 
@@ -1603,6 +1619,7 @@ impl ParentInformationBmc {
 			.dbx()
 			.execute(
 				sqlx::query(&sql)
+					.bind(data.parent_identification_null_flavor)
 					.bind(data.parent_identification)
 					.bind(data.parent_birth_date_null_flavor)
 					.bind(data.parent_birth_date)
@@ -1613,6 +1630,7 @@ impl ParentInformationBmc {
 					.bind(data.last_menstrual_period_date)
 					.bind(data.weight_kg)
 					.bind(data.height_cm)
+					.bind(data.sex_null_flavor)
 					.bind(data.sex)
 					.bind(data.medical_history_text)
 					.bind(ctx.user_id())

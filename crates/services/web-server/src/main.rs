@@ -16,7 +16,6 @@ use tokio::time::{interval, Duration};
 use tracing::info;
 use tracing::warn;
 use tracing_subscriber::EnvFilter;
-use web::rest::permission_profile_rest;
 
 // endregion: --- Modules
 
@@ -33,10 +32,16 @@ async fn main() -> Result<()> {
 	config::validate_submission_runtime_config().map_err(Error::Config)?;
 
 	let mm = ModelManager::new().await?;
-	bootstrap::bootstrap_admin_user(&mm).await?;
-	permission_profile_rest::refresh_dynamic_roles(&mm)
+	let authorization_status = web_server::initialize_authorization_storage()
 		.await
 		.map_err(|err| Error::Config(err.to_string()))?;
+	let web_server::AuthorizationStartupStatus::Reconciled(report) =
+		authorization_status;
+	info!(
+		"authorization storage reconciled: {} assignments, {} custom roles",
+		report.assignments, report.custom_roles
+	);
+	bootstrap::bootstrap_admin_user(&mm).await?;
 	start_reconcile_worker(mm.clone());
 
 	// -- Define Routes

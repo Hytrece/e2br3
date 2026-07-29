@@ -1,5 +1,6 @@
 import unittest
 import json
+import os
 import tempfile
 from pathlib import Path
 import sys
@@ -10,6 +11,45 @@ import extract_frontend_fields as extractor
 
 
 class FrontendFieldExtractorTests(unittest.TestCase):
+    def test_ast_inventory_uses_explicit_frontend_root(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            configured = Path(tmp) / "frontend-worktree"
+            previous = os.environ.get("E2BR3_FRONTEND_ROOT")
+            os.environ["E2BR3_FRONTEND_ROOT"] = str(configured)
+            try:
+                self.assertEqual(configured.resolve(), extractor.resolve_frontend_root())
+            finally:
+                if previous is None:
+                    os.environ.pop("E2BR3_FRONTEND_ROOT", None)
+                else:
+                    os.environ["E2BR3_FRONTEND_ROOT"] = previous
+
+    def test_ast_inventory_resolves_current_dynamic_bindings(self):
+        keys = {
+            field.key for field in extractor.extract_frontend_fields_ast()
+        }
+        self.assertIn("patientInformation.gpMedicalRecordNumber", keys)
+        self.assertIn("reactions.seriousness.criteriaResultsInDeath", keys)
+        self.assertIn("reactions.mfdsDeviceAe.actionRecall", keys)
+        self.assertIn(
+            "patientInformation.parentInformation.pastDrugHistory.drugName", keys
+        )
+        self.assertNotIn("patientInformation.gpMedicalRecordNumberId", keys)
+        self.assertNotIn("reactions.id", keys)
+
+    def test_regex_extractor_remains_available_for_explicit_source_fixtures(self):
+        source = '<Input name={`drugs.${drugIndex}.cumulativeDoseValue`} />'
+        self.assertEqual(
+            ["drugs.cumulativeDoseValue"],
+            extractor.extract_field_paths_from_source(source),
+        )
+
+    def test_default_glob_targets_current_case_detail_tree(self):
+        self.assertEqual(
+            ["../frontend/E2BR3-frontend/app/(protected)/*/case/*/detail/**/*.tsx"],
+            extractor.DEFAULT_SOURCE_GLOBS,
+        )
+
     def test_normalizes_template_repeatable_indexes(self):
         self.assertEqual(
             "reactions.reactionCountry",
@@ -111,6 +151,40 @@ class FrontendFieldExtractorTests(unittest.TestCase):
             ],
             fields,
         )
+
+    def test_expands_object_array_name_map_field_names(self):
+        source = '''
+const SERIOUSNESS_CRITERIA = [
+  { name: "criteriaResultsInDeath", label: "Death", fieldNumber: "E.i.3.2a" },
+  { name: "criteriaLifeThreatening", label: "Life Threatening", fieldNumber: "E.i.3.2b" },
+] as const;
+
+const renderSeriousnessCriterion = (
+  criterion: (typeof SERIOUSNESS_CRITERIA)[number]
+) => {
+  const fieldName = `reactions.${activeIndex}.seriousness.${criterion.name}`;
+  return <Controller name={fieldName} />;
+};
+'''
+
+        fields = extractor.extract_field_paths_from_source(source)
+
+        self.assertEqual(
+            [
+                "reactions.seriousness.criteriaLifeThreatening",
+                "reactions.seriousness.criteriaResultsInDeath",
+            ],
+            fields,
+        )
+
+    def test_object_array_name_map_ignores_arrays_that_are_not_as_const(self):
+        # A bare object-property placeholder with no `as const` name source stays unresolved.
+        source = '''
+const fieldName = `reactions.${activeIndex}.seriousness.${criterion.name}`;
+<Controller name={fieldName} />
+'''
+
+        self.assertEqual([], extractor.extract_field_paths_from_source(source))
 
     def test_extracts_inventory_from_configured_files(self):
         with tempfile.TemporaryDirectory() as tmp:

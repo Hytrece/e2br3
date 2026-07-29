@@ -19,12 +19,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Checkout frontend registry source
+        uses: actions/checkout@v4
+        with:
+          repository: QVIS-safety/e2br3-frontend
+          ref: ${{ github.event_name == 'push' && github.ref_name == 'dev' && 'dev' || 'main' }}
+          path: frontend/E2BR3-frontend
+          token: ${{ secrets.FRONTEND_REPOSITORY_TOKEN || github.token }}
+
       - name: Validate registry
         run: |
           python3 -m unittest registry/tools/test_validate.py
           python3 -m unittest registry/tools/test_build_dictionary.py
           python3 registry/tools/validate.py
           python3 registry/tools/validate.py --strict-dictionary
+          python3 registry/tools/validate.py --strict-presave-inventory
 
   # ============================================
   # Job 1: Check code formatting
@@ -93,6 +102,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # XML fixtures and schemas were intentionally removed from the release
+      # tree, but the validation suites still exercise those canonical assets.
+      - name: Checkout XML validation assets
+        uses: actions/checkout@v4
+        with:
+          ref: 698f907f3abe6a555594931ace82e9fbcb9c204d
+          path: .ci/xml-assets
+          sparse-checkout: |
+            deploy/ec2/schemas
+            docs/refs/instances
+
+      - name: Prepare XML validation assets
+        run: |
+          mkdir -p docs/exporter
+          cp -R .ci/xml-assets/deploy/ec2/schemas docs/exporter/schema
+          cp -R .ci/xml-assets/docs/refs/instances docs/exporter/fda
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@1.88
 
@@ -124,7 +150,7 @@ jobs:
           SERVICE_TOKEN_KEY: 9FoHBmkyxbgu_xFoQK7e0jz3RMNVJWgfvbVn712FBNH9LLaAWS3CS6Zpcg6RveiObvCUb6a2z-uAiLjhLh2igw
           SERVICE_TOKEN_DURATION_SEC: "1800"
           SERVICE_WEB_FOLDER: "web-folder/"
-        run: cargo test -p lib-core -j1 -- --test-threads=1
+        run: scripts/test-isolated-db.sh -p lib-core -j1 -- --test-threads=1
 
       - name: Run remaining workspace tests
         env:
@@ -134,7 +160,7 @@ jobs:
           SERVICE_TOKEN_KEY: 9FoHBmkyxbgu_xFoQK7e0jz3RMNVJWgfvbVn712FBNH9LLaAWS3CS6Zpcg6RveiObvCUb6a2z-uAiLjhLh2igw
           SERVICE_TOKEN_DURATION_SEC: "1800"
           SERVICE_WEB_FOLDER: "web-folder/"
-        run: cargo test --workspace --exclude lib-core
+        run: scripts/test-isolated-db.sh --workspace --exclude lib-core -- --test-threads=1
 
       - name: Release Validation Gates
         env:
