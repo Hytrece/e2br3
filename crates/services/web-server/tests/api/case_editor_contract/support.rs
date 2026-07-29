@@ -11,7 +11,7 @@ use std::path::PathBuf;
 use tower::ServiceExt;
 use uuid::Uuid;
 
-async fn post_json(
+pub(super) async fn post_json(
 	app: &axum::Router,
 	cookie: &str,
 	uri: &str,
@@ -29,7 +29,7 @@ async fn post_json(
 	Ok((status, serde_json::from_slice(&body)?))
 }
 
-async fn patch_json(
+pub(super) async fn patch_json(
 	app: &axum::Router,
 	cookie: &str,
 	uri: &str,
@@ -63,7 +63,7 @@ async fn get_json(
 	Ok((status, serde_json::from_slice(&body)?))
 }
 
-async fn create_case_for_editor(
+pub(super) async fn create_case_for_editor(
 	app: &axum::Router,
 	cookie: &str,
 	safety_report_prefix: &str,
