@@ -769,7 +769,7 @@ async fn test_roundtrip_ae_remaining_fields() -> Result<()> {
 	};
 
 	let sentinel_text = format!("RTAE1-{}", Uuid::new_v4().simple());
-	let sentinel_required_intervention = "false";
+	let sentinel_required_intervention = false;
 	let (status, body) = request_json(
 		&app,
 		&cookie,
@@ -1559,7 +1559,7 @@ async fn test_api_persistence_ae_sd_all_fields() -> Result<()> {
 				"criteria_disabling": true,
 				"criteria_congenital_anomaly": false,
 				"criteria_other_medically_important": true,
-				"required_intervention": "false",
+				"required_intervention": false,
 				"start_date": "2024-04-06",
 				"end_date": "2024-04-07",
 				"duration_value": 5.5,
@@ -1733,10 +1733,10 @@ async fn test_api_persistence_ae_sd_all_fields() -> Result<()> {
 		true,
 		&mut ae_mismatches,
 	);
-	check_str(
+	check_bool(
 		"required_intervention",
-		reaction_str("required_intervention"),
-		"false",
+		reaction_bool("required_intervention"),
+		false,
 		&mut ae_mismatches,
 	);
 	check_date(
