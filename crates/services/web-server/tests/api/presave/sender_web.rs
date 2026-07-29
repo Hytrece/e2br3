@@ -65,6 +65,53 @@ async fn sender_details_accept_canonical_camel_case_rows() -> Result<()> {
 	Ok(())
 }
 
+#[serial]
+#[tokio::test]
+async fn sender_list_includes_responsible_person_rows() -> Result<()> {
+	let mm = init_test_mm().await?;
+	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
+	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
+	let cookie = cookie_header(&token.to_string());
+	let app = web_server::app(mm);
+
+	let created = post_json_created(
+		&app,
+		&cookie,
+		"/api/presaves/senders".to_string(),
+		json!({ "data": { "rows": {
+			"sender": {
+				"senderType": "1",
+				"organizationName": format!("List Sender {}", Uuid::new_v4())
+			},
+			"gateways": [],
+			"responsiblePersons": [{
+				"sequenceNumber": 1,
+				"personGivenName": "Mina",
+				"deleted": false
+			}]
+		} } }),
+	)
+	.await?;
+	let sender_id = created["data"]["rows"]["sender"]["id"]
+		.as_str()
+		.expect("created sender id");
+
+	let listed =
+		get_json_ok(&app, &cookie, "/api/presaves/senders".to_string()).await?;
+	let sender = listed["data"]
+		.as_array()
+		.expect("sender list")
+		.iter()
+		.find(|row| row["rows"]["sender"]["id"] == sender_id)
+		.expect("created sender in list");
+	assert_eq!(
+		sender["rows"]["responsiblePersons"][0]["personGivenName"],
+		"Mina"
+	);
+
+	Ok(())
+}
+
 #[tokio::test]
 async fn test_sender_presave_parent_does_not_store_person_or_department_fields(
 ) -> Result<()> {

@@ -81,12 +81,17 @@ pub async fn list_sender_presaves(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
 	snapshot: AuthorizationSnapshotW,
-) -> Result<(StatusCode, Json<DataRestResult<Vec<SenderPresave>>>)> {
+) -> Result<(StatusCode, Json<DataRestResult<Vec<SenderPresaveDetails>>>)> {
 	let ctx = ctx_w.0;
 	with_authorized_presave_collection(&ctx, &snapshot, &mm, |ctx, mm, scope| {
 		Box::pin(async move {
 			let entities = SenderPresaveBmc::list(ctx, mm, None).await?;
-			Ok(rest_ok(filter_sender_presaves_for_scope(scope, entities)))
+			let visible = filter_sender_presaves_for_scope(scope, entities);
+			let mut details = Vec::with_capacity(visible.len());
+			for sender in visible {
+				details.push(load_sender_presave_details(ctx, mm, sender.id).await?);
+			}
+			Ok(rest_ok(details))
 		})
 	})
 	.await
