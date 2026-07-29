@@ -1041,7 +1041,10 @@ public final class Cms {
         generator.addSignerInfoGenerator(
                 new JcaSignerInfoGeneratorBuilder(
                         new JcaDigestCalculatorProviderBuilder().setProvider("BC").build())
-                        .setSignedAttributeGenerator(new AttributeTable(signedAttrs))
+                        // setSignedAttributeGenerator takes a CMSAttributeTableGenerator,
+                        // not a bare AttributeTable.
+                        .setSignedAttributeGenerator(
+                                new DefaultSignedAttributeTableGenerator(new AttributeTable(signedAttrs)))
                         .build(new JcaContentSignerBuilder(signatureAlgorithm(micalg)).setProvider("BC").build(key), cert));
 
         List<X509Certificate> chain = new ArrayList<>();
