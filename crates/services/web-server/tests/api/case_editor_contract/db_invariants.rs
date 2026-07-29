@@ -273,7 +273,7 @@ async fn newly_added_pairs_persist_either_member_and_reject_both() -> Result<()>
 		&cookie,
 		&lb_uri,
 		json!({"authorities": ["ich"], "rows": {"testResult": {
-			"testResult": "Positive", "testResultNullFlavor": null
+			"testResult": "1", "testResultNullFlavor": null
 		}}}),
 	)
 	.await?;
@@ -291,7 +291,7 @@ async fn newly_added_pairs_persist_either_member_and_reject_both() -> Result<()>
 		sqlx::query_as("SELECT test_result_value, test_result_null_flavor FROM test_results WHERE id = $1")
 			.bind(Uuid::parse_str(test_result_id)?),
 	).await?;
-	assert_eq!(value_only, (Some("Positive".into()), None));
+	assert_eq!(value_only, (Some("1".into()), None));
 	let both = mm.dbx().execute(
 		sqlx::query("UPDATE test_results SET test_result_value = 'Positive', test_result_null_flavor = 'NINF' WHERE id = $1")
 			.bind(Uuid::parse_str(test_result_id)?),
