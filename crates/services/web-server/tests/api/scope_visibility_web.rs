@@ -19,7 +19,13 @@ use tower::ServiceExt;
 use uuid::Uuid;
 
 fn extract_id(value: &Value) -> Result<Uuid> {
-	let id = value["data"]["id"].as_str().ok_or("missing data.id")?;
+	let data = &value["data"];
+	let id = data["id"]
+		.as_str()
+		.or_else(|| data["rows"]["sender"]["id"].as_str())
+		.or_else(|| data["rows"]["product"]["id"].as_str())
+		.or_else(|| data["rows"]["study"]["id"].as_str())
+		.ok_or("missing presave id")?;
 	Ok(Uuid::parse_str(id)?)
 }
 
@@ -306,15 +312,23 @@ async fn create_sender_presave(
 		cookie,
 		"/api/presaves/senders".to_string(),
 		Some(json!({
-			"data": {
-				"authority": "fda",
-				"name": name,
-				"comments": "Routing source-of-truth test sender",
-				"sender_type": "2",
-				"organization_name": name,
-				"person_given_name": "Safety",
-				"email": format!("{sender_identifier}@example.test")
-			}
+			"data": { "rows": {
+				"sender": {
+					"senderType": "2",
+					"organizationName": name,
+					"email": format!("{sender_identifier}@example.test")
+				},
+				"gateways": [{
+					"sequenceNumber": 1,
+					"gatewayAuthority": "fda",
+					"senderIdentifier": sender_identifier,
+					"isDefaultForAuthority": true
+				}],
+				"responsiblePersons": [{
+					"sequenceNumber": 1,
+					"personGivenName": "Safety"
+				}]
+			} }
 		})),
 	)
 	.await?;
@@ -325,27 +339,6 @@ async fn create_sender_presave(
 		.into());
 	}
 	let id = extract_id(&value)?;
-	let (status, value) = request_json(
-		app,
-		"POST",
-		cookie,
-		format!("/api/presaves/senders/{id}/gateways"),
-		Some(json!({
-			"data": {
-				"sequence_number": 1,
-				"gateway_authority": "fda",
-				"sender_identifier": sender_identifier,
-				"is_default_for_authority": true
-			}
-		})),
-	)
-	.await?;
-	if status != StatusCode::CREATED {
-		return Err(format!(
-			"create sender presave gateway failed: status={status} body={value}"
-		)
-		.into());
-	}
 	Ok(id)
 }
 
@@ -361,11 +354,14 @@ async fn create_product_presave(
 		cookie,
 		"/api/presaves/products".to_string(),
 		Some(json!({
-			"data": {
-				"sender_presave_id": sender_presave_id,
-				"product_id": format!("SCOPE-PRODUCT-{}", Uuid::new_v4()),
-				"medicinal_product": medicinal_product
-			}
+			"data": { "rows": {
+				"product": {
+					"senderPresaveId": sender_presave_id,
+					"productId": format!("SCOPE-PRODUCT-{}", Uuid::new_v4()),
+					"medicinalProduct": medicinal_product
+				},
+				"activeSubstances": []
+			} }
 		})),
 	)
 	.await?;
@@ -385,12 +381,18 @@ async fn create_study_presave(
 		cookie,
 		"/api/presaves/studies".to_string(),
 		Some(json!({
-			"data": {
-				"product_presave_id": product_presave_id,
-				"study_name": study_name,
-				"sponsor_study_number": format!("SCOPE-STUDY-{}", Uuid::new_v4()),
-				"study_type_reaction": "1"
-			}
+			"data": { "rows": {
+				"study": {
+					"productPresaveId": product_presave_id,
+					"studyName": study_name,
+					"sponsorStudyNumber": format!("SCOPE-STUDY-{}", Uuid::new_v4()),
+					"studyTypeReaction": "1"
+				},
+				"products": [],
+				"reporters": [],
+				"registrationNumbers": [],
+				"fdaCrossReportedInds": []
+			} }
 		})),
 	)
 	.await?;

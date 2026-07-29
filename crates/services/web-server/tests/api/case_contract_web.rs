@@ -591,16 +591,19 @@ async fn update_case_review_receiver_defaults_report_due_from_receiver_timeline(
 		&cookie,
 		"/api/presaves/receivers",
 		json!({
-			"data": {
-				"receiver_type": "Regulatory Authority",
-				"organization_name": receiver_name,
-				"receiver_identifier": format!("RE-TL-{}", Uuid::new_v4()),
-				"day_count_rule": "calendar",
-				"nsae_non_solicited_day_count": 30,
-				"sae_non_solicited_day_count": 3,
-				"nsae_solicited_day_count": 10,
-				"sae_solicited_day_count": 5
-			}
+			"data": { "rows": {
+				"receiver": {
+					"receiverType": "Regulatory Authority",
+					"organizationName": receiver_name,
+					"receiverIdentifier": format!("RE-TL-{}", Uuid::new_v4()),
+					"dayCountRule": "calendar",
+					"nsaeNonSolicitedDayCount": 30,
+					"saeNonSolicitedDayCount": 3,
+					"nsaeSolicitedDayCount": 10,
+					"saeSolicitedDayCount": 5
+				},
+				"consignees": [], "routes": []
+			} }
 		}),
 	)
 	.await?;
