@@ -81,11 +81,9 @@ mod portable_bindings_tests {
 		}
 	}
 
-	#[test]
-	fn null_flavor_rules_use_explicit_companion_bindings() {
+	fn assert_explicit_null_flavor_companions(bindings: &[&PortableFieldBinding]) {
 		let constraints = portable_constraints();
-		let bindings = portable_field_bindings();
-		for binding in &bindings {
+		for binding in bindings {
 			let rule_kinds = binding
 				.rule_codes
 				.iter()
@@ -97,15 +95,24 @@ mod portable_bindings_tests {
 						.kind
 				})
 				.collect::<Vec<_>>();
-			if !rule_kinds.contains(&crate::PortableConstraintKind::NullFlavor) {
+			let has_null_flavor_rule =
+				rule_kinds.contains(&crate::PortableConstraintKind::NullFlavor);
+			assert!(
+				!has_null_flavor_rule
+					|| binding.frontend_path.ends_with("NullFlavor"),
+				"NullFlavor rule must use explicit companion path: {}",
+				binding.frontend_path,
+			);
+
+			if !binding.frontend_path.ends_with("NullFlavor") {
 				continue;
 			}
-			assert!(
-				binding.frontend_path.ends_with("NullFlavor"),
-				"NullFlavor rule must use explicit companion path: {}",
-				binding.frontend_path
-			);
 			assert!(binding.request_path.ends_with("NullFlavor"));
+			assert!(
+				!rule_kinds.is_empty(),
+				"companion binding must own at least one NullFlavor rule: {}",
+				binding.frontend_path,
+			);
 			assert!(
 				rule_kinds
 					.iter()
@@ -154,6 +161,36 @@ mod portable_bindings_tests {
 				binding.frontend_path,
 			);
 		}
+	}
+
+	#[test]
+	fn null_flavor_rules_use_explicit_companion_bindings() {
+		assert_explicit_null_flavor_companions(&portable_field_bindings());
+	}
+
+	#[test]
+	#[should_panic(
+		expected = "companion binding must own at least one NullFlavor rule"
+	)]
+	fn empty_null_flavor_companion_is_rejected() {
+		let value = PortableFieldBinding {
+			section: "TEST",
+			frontend_path: "field",
+			request_path: "field",
+			value_type: PortableValueType::String,
+			rule_codes: &[],
+			null_flavor_path: Some("fieldNullFlavor"),
+		};
+		let companion = PortableFieldBinding {
+			section: "TEST",
+			frontend_path: "fieldNullFlavor",
+			request_path: "fieldNullFlavor",
+			value_type: PortableValueType::String,
+			rule_codes: &[],
+			null_flavor_path: None,
+		};
+
+		assert_explicit_null_flavor_companions(&[&value, &companion]);
 	}
 
 	#[test]
