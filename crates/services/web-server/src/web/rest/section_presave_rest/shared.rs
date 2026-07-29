@@ -14,7 +14,7 @@ pub(super) use lib_core::model::presave::{
 	ProductPresaveForCreate, ProductPresaveForUpdate, ReceiverPresave,
 	ReceiverPresaveBmc, ReceiverPresaveConsignee, ReceiverPresaveConsigneeBmc,
 	ReceiverPresaveConsigneeForCreate, ReceiverPresaveConsigneeForUpdate,
-	ReceiverPresaveForCreate, ReceiverPresaveForUpdate, ReceiverPresaveRoute,
+	ReceiverPresaveForCreate, ReceiverPresaveForUpdate,
 	ReceiverPresaveRouteBmc, ReceiverPresaveRouteForCreate,
 	ReceiverPresaveRouteForUpdate, ReporterPresave, ReporterPresaveBmc,
 	ReporterPresaveForCreate, ReporterPresaveForUpdate, SenderPresave,

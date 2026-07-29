@@ -249,6 +249,7 @@ trait IntoOrgScopedCreate {
 }
 
 #[derive(Debug, Clone, Fields, FromRow, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SenderPresave {
 	pub id: Uuid,
 	pub organization_id: Uuid,
@@ -272,6 +273,7 @@ pub struct SenderPresave {
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SenderPresaveForCreate {
 	pub is_default: Option<bool>,
 	pub sender_type: Option<String>,
@@ -327,6 +329,7 @@ impl IntoOrgScopedCreate for SenderPresaveForCreate {
 }
 
 #[derive(Default, Fields, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SenderPresaveForUpdate {
 	pub deleted: Option<bool>,
 	pub is_default: Option<bool>,
@@ -596,6 +599,7 @@ impl_child_bmc!(
 );
 
 #[derive(Debug, Clone, Fields, FromRow, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ReceiverPresave {
 	pub id: Uuid,
 	pub organization_id: Uuid,
@@ -620,6 +624,7 @@ pub struct ReceiverPresave {
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ReceiverPresaveForCreate {
 	pub receiver_type: Option<String>,
 	pub organization_name: Option<String>,
@@ -679,6 +684,7 @@ impl IntoOrgScopedCreate for ReceiverPresaveForCreate {
 }
 
 #[derive(Default, Fields, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ReceiverPresaveForUpdate {
 	pub deleted: Option<bool>,
 	pub receiver_type: Option<String>,

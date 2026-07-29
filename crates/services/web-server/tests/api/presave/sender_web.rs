@@ -6,6 +6,65 @@ use serde_json::json;
 use serial_test::serial;
 use uuid::Uuid;
 
+#[serial]
+#[tokio::test]
+async fn sender_details_accept_canonical_camel_case_rows() -> Result<()> {
+	let mm = init_test_mm().await?;
+	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
+	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
+	let cookie = cookie_header(&token.to_string());
+	let app = web_server::app(mm);
+	let sender_id = create_sender_presave_via_api(&app, &cookie, "fda").await?;
+
+	let saved = put_json_ok(
+		&app,
+		&cookie,
+		format!("/api/presaves/senders/{sender_id}/details"),
+		json!({ "data": { "rows": {
+			"sender": { "organizationNameNotation": "ROWS-SENDER" },
+			"gateways": [{
+				"sequenceNumber": 1,
+				"gatewayAuthority": "fda",
+				"senderIdentifier": "ROWS-ID",
+				"deleted": false
+			}],
+			"responsiblePersons": [{
+				"sequenceNumber": 1,
+				"personGivenName": "Mina",
+				"deleted": false
+			}]
+		} } }),
+	)
+	.await?;
+
+	assert_eq!(saved["data"]["rows"]["sender"]["id"], sender_id.to_string());
+	assert_eq!(
+		saved["data"]["rows"]["gateways"][0]["senderIdentifier"],
+		"ROWS-ID"
+	);
+	assert_eq!(
+		saved["data"]["rows"]["responsiblePersons"][0]["personGivenName"],
+		"Mina"
+	);
+	assert!(saved["data"].get("parent").is_none());
+	for legacy_data in [
+		json!({ "parent": {} }),
+		json!({ "responsible_persons": [] }),
+		json!({ "rows": { "gateways": [{ "_delete": true }] } }),
+	] {
+		let (status, value) = request_json(
+			&app,
+			&cookie,
+			Method::PUT,
+			format!("/api/presaves/senders/{sender_id}/details"),
+			Some(json!({ "data": legacy_data })),
+		)
+		.await?;
+		assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{value:?}");
+	}
+	Ok(())
+}
+
 #[tokio::test]
 async fn test_sender_presave_parent_does_not_store_person_or_department_fields(
 ) -> Result<()> {
@@ -16,10 +75,12 @@ async fn test_sender_presave_parent_does_not_store_person_or_department_fields(
 	let app = web_server::app(mm);
 
 	let parent_without_given_name = json!({
-		"data": {
-			"sender_type": "1",
-			"organization_name": format!("Sender Without Parent Given Org {}", Uuid::new_v4())
-		}
+		"data": { "rows": {
+			"sender": {
+				"senderType": "1",
+				"organizationName": format!("Sender Without Parent Given Org {}", Uuid::new_v4())
+			}, "gateways": [], "responsiblePersons": []
+		} }
 	});
 	let (status, value) = request_json(
 		&app,
@@ -31,11 +92,13 @@ async fn test_sender_presave_parent_does_not_store_person_or_department_fields(
 	.await?;
 	assert_eq!(status, StatusCode::CREATED, "{value:?}");
 	assert!(
-		value["data"].get("person_given_name").is_none(),
+		value["data"]["rows"]["sender"]
+			.get("personGivenName")
+			.is_none(),
 		"sender parent response must not expose person_given_name: {value:?}",
 	);
 	assert!(
-		value["data"].get("department").is_none(),
+		value["data"]["rows"]["sender"].get("department").is_none(),
 		"sender parent response must not expose department: {value:?}",
 	);
 
@@ -47,35 +110,35 @@ async fn test_sender_presave_parent_does_not_store_person_or_department_fields(
 		Method::PUT,
 		format!("/api/presaves/senders/{sender_id}/details"),
 		Some(json!({
-			"data": {
-				"parent": {
-					"sender_type": "1",
-					"organization_name": format!("Updated Sender Org {}", Uuid::new_v4())
+			"data": { "rows": {
+				"sender": {
+					"senderType": "1",
+					"organizationName": format!("Updated Sender Org {}", Uuid::new_v4())
 				},
-				"responsible_persons": [{
-					"sequence_number": 1,
+				"responsiblePersons": [{
+					"sequenceNumber": 1,
 					"department": "Safety Ops",
-					"person_given_name": "Ada"
+					"personGivenName": "Ada"
 				}]
-			}
+			} }
 		})),
 	)
 	.await?;
 	assert_eq!(status, StatusCode::OK, "{value:?}");
 	assert!(
-		value["data"]["parent"].get("person_given_name").is_none(),
+		value["data"]["rows"]["sender"].get("personGivenName").is_none(),
 		"sender details parent response must not expose person_given_name: {value:?}",
 	);
 	assert!(
-		value["data"]["parent"].get("department").is_none(),
+		value["data"]["rows"]["sender"].get("department").is_none(),
 		"sender details parent response must not expose department: {value:?}",
 	);
 	assert_eq!(
-		value["data"]["responsible_persons"][0]["department"].as_str(),
+		value["data"]["rows"]["responsiblePersons"][0]["department"].as_str(),
 		Some("Safety Ops"),
 	);
 	assert_eq!(
-		value["data"]["responsible_persons"][0]["person_given_name"].as_str(),
+		value["data"]["rows"]["responsiblePersons"][0]["personGivenName"].as_str(),
 		Some("Ada"),
 	);
 
@@ -106,12 +169,10 @@ async fn test_sender_presave_rejects_duplicate_active_identity() -> Result<()> {
 		&admin_cookie,
 		Method::POST,
 		"/api/presaves/senders".to_string(),
-		Some(json!({
-			"data": {
-				"sender_type": "1",
-				"organization_name": organization_name
-			}
-		})),
+		Some(json!({ "data": { "rows": {
+			"sender": { "senderType": "1", "organizationName": organization_name },
+			"gateways": [], "responsiblePersons": []
+		} } })),
 	)
 	.await?;
 	assert_eq!(status, StatusCode::CONFLICT, "{value:?}");
@@ -175,13 +236,9 @@ async fn info_update_audit_reason_records_sender_presave_reason() -> Result<()> 
 		&admin_cookie,
 		Method::PUT,
 		format!("/api/presaves/senders/{sender_id}/details"),
-		json!({
-			"data": {
-				"parent": {
-					"organization_name": organization_name
-				}
-			}
-		}),
+		json!({ "data": { "rows": {
+			"sender": { "organizationName": organization_name }
+		} } }),
 		reason,
 		Some(category),
 	)
@@ -239,50 +296,59 @@ async fn test_sender_presave_details_graph_load_and_save() -> Result<()> {
 		format!("/api/presaves/senders/{sender_id}/details"),
 	)
 	.await?;
-	assert_eq!(details["data"]["parent"]["id"], sender_id.to_string());
-	assert_eq!(details["data"]["gateways"][0]["id"], gateway_id.to_string());
+	assert_eq!(
+		details["data"]["rows"]["sender"]["id"],
+		sender_id.to_string()
+	);
+	assert_eq!(
+		details["data"]["rows"]["gateways"][0]["id"],
+		gateway_id.to_string()
+	);
 
 	let saved = put_json_ok(
 		&app,
 		&admin_cookie,
 		format!("/api/presaves/senders/{sender_id}/details"),
 		json!({
-			"data": {
-				"parent": {
-					"organization_name_notation": "REST notation"
+			"data": { "rows": {
+				"sender": {
+					"organizationNameNotation": "REST notation"
 				},
 				"gateways": [
 					{
 						"id": gateway_id,
-						"sequence_number": 2,
-						"gateway_authority": "mfds",
-						"sender_identifier": "SENDER-2"
+						"sequenceNumber": 2,
+						"gatewayAuthority": "mfds",
+						"senderIdentifier": "SENDER-2"
 					},
 					{
-						"sequence_number": 3,
-						"gateway_authority": "fda",
-						"sender_identifier": "SENDER-3"
+						"sequenceNumber": 3,
+						"gatewayAuthority": "fda",
+						"senderIdentifier": "SENDER-3"
 					}
 				],
-				"responsible_persons": [
+				"responsiblePersons": [
 					{
-						"sequence_number": 1,
+						"sequenceNumber": 1,
 						"department": "Safety",
-						"person_given_name": "Ari",
-						"person_family_name": "Kim"
+						"personGivenName": "Ari",
+						"personFamilyName": "Kim"
 					}
 				]
-			}
+			} }
 		}),
 	)
 	.await?;
 	assert!(
-		saved["data"]["parent"].get("comments").is_none(),
+		saved["data"]["rows"]["sender"].get("comments").is_none(),
 		"{saved:?}"
 	);
-	assert_eq!(saved["data"]["gateways"].as_array().unwrap().len(), 2);
 	assert_eq!(
-		saved["data"]["responsible_persons"]
+		saved["data"]["rows"]["gateways"].as_array().unwrap().len(),
+		2
+	);
+	assert_eq!(
+		saved["data"]["rows"]["responsiblePersons"]
 			.as_array()
 			.unwrap()
 			.len(),
@@ -296,43 +362,43 @@ async fn test_sender_presave_details_graph_load_and_save() -> Result<()> {
 	)
 	.await?;
 	assert!(
-		persisted["data"]["parent"].get("comments").is_none(),
+		persisted["data"]["rows"]["sender"]
+			.get("comments")
+			.is_none(),
 		"{persisted:?}"
 	);
 	assert_eq!(
-		persisted["data"]["parent"]["organization_name_notation"].as_str(),
+		persisted["data"]["rows"]["sender"]["organizationNameNotation"].as_str(),
 		Some("REST notation"),
 		"{persisted:?}"
 	);
-	let gateways = persisted["data"]["gateways"].as_array().unwrap();
+	let gateways = persisted["data"]["rows"]["gateways"].as_array().unwrap();
 	assert_eq!(gateways.len(), 2, "{persisted:?}");
 	let updated_gateway = gateways
 		.iter()
 		.find(|row| row["id"].as_str() == Some(&gateway_id.to_string()))
 		.ok_or("missing updated gateway")?;
 	assert_eq!(
-		updated_gateway["sender_identifier"].as_str(),
+		updated_gateway["senderIdentifier"].as_str(),
 		Some("SENDER-2")
 	);
-	assert_eq!(updated_gateway["gateway_authority"].as_str(), Some("mfds"));
-	assert_eq!(updated_gateway["sequence_number"].as_i64(), Some(2));
+	assert_eq!(updated_gateway["gatewayAuthority"].as_str(), Some("mfds"));
+	assert_eq!(updated_gateway["sequenceNumber"].as_i64(), Some(2));
 	let created_gateway = gateways
 		.iter()
-		.find(|row| row["sender_identifier"].as_str() == Some("SENDER-3"))
+		.find(|row| row["senderIdentifier"].as_str() == Some("SENDER-3"))
 		.ok_or("missing created gateway")?;
-	assert_eq!(created_gateway["gateway_authority"].as_str(), Some("fda"));
+	assert_eq!(created_gateway["gatewayAuthority"].as_str(), Some("fda"));
 
-	let responsible_persons =
-		persisted["data"]["responsible_persons"].as_array().unwrap();
+	let responsible_persons = persisted["data"]["rows"]["responsiblePersons"]
+		.as_array()
+		.unwrap();
 	let responsible_person = responsible_persons
 		.iter()
-		.find(|row| row["person_given_name"].as_str() == Some("Ari"))
+		.find(|row| row["personGivenName"].as_str() == Some("Ari"))
 		.ok_or("missing responsible person")?;
 	assert_eq!(responsible_person["department"].as_str(), Some("Safety"));
-	assert_eq!(
-		responsible_person["person_family_name"].as_str(),
-		Some("Kim")
-	);
+	assert_eq!(responsible_person["personFamilyName"].as_str(), Some("Kim"));
 
 	Ok(())
 }
@@ -355,14 +421,14 @@ async fn test_sender_presave_details_rolls_back_parent_on_child_constraint_failu
 		Method::PUT,
 		format!("/api/presaves/senders/{sender_id}/details"),
 		Some(json!({
-			"data": {
-				"parent": { "organization_name": "must roll back" },
+			"data": { "rows": {
+				"sender": { "organizationName": "must roll back" },
 				"gateways": [{
-					"sequence_number": 1,
-					"gateway_authority": "ich",
-					"sender_identifier": "INVALID-GATEWAY"
+					"sequenceNumber": 1,
+					"gatewayAuthority": "ich",
+					"senderIdentifier": "INVALID-GATEWAY"
 				}]
-			}
+			} }
 		})),
 	)
 	.await?;
@@ -375,15 +441,15 @@ async fn test_sender_presave_details_rolls_back_parent_on_child_constraint_failu
 	)
 	.await?;
 	assert_ne!(
-		persisted["data"]["parent"]["organization_name"].as_str(),
+		persisted["data"]["rows"]["sender"]["organizationName"].as_str(),
 		Some("must roll back"),
 		"{persisted:?}"
 	);
-	let gateways = persisted["data"]["gateways"].as_array().unwrap();
+	let gateways = persisted["data"]["rows"]["gateways"].as_array().unwrap();
 	assert!(
 		!gateways
 			.iter()
-			.any(|row| row["sender_identifier"].as_str() == Some("INVALID-GATEWAY")),
+			.any(|row| row["senderIdentifier"].as_str() == Some("INVALID-GATEWAY")),
 		"{persisted:?}"
 	);
 
@@ -430,8 +496,8 @@ async fn test_sender_presave_direct_child_delete_soft_deletes_details_rows(
 		format!("/api/presaves/senders/{sender_id}/details"),
 	)
 	.await?;
-	let gateways = after_delete["data"]["gateways"].as_array().unwrap();
-	let responsible_persons = after_delete["data"]["responsible_persons"]
+	let gateways = after_delete["data"]["rows"]["gateways"].as_array().unwrap();
+	let responsible_persons = after_delete["data"]["rows"]["responsiblePersons"]
 		.as_array()
 		.unwrap();
 	let deleted_gateway = gateways
@@ -439,12 +505,9 @@ async fn test_sender_presave_direct_child_delete_soft_deletes_details_rows(
 		.find(|row| row["id"].as_str() == Some(&gateway_id.to_string()))
 		.ok_or("missing direct-deleted gateway")?;
 	assert_eq!(deleted_gateway["deleted"].as_bool(), Some(true));
+	assert_eq!(deleted_gateway["senderIdentifier"].as_str(), Some("DELETE"));
 	assert_eq!(
-		deleted_gateway["sender_identifier"].as_str(),
-		Some("DELETE")
-	);
-	assert_eq!(
-		deleted_gateway["routing_identifier"].as_str(),
+		deleted_gateway["routingIdentifier"].as_str(),
 		Some("ROUTE-DELETE")
 	);
 	let deleted_responsible_person = responsible_persons
@@ -453,11 +516,11 @@ async fn test_sender_presave_direct_child_delete_soft_deletes_details_rows(
 		.ok_or("missing direct-deleted responsible person")?;
 	assert_eq!(deleted_responsible_person["deleted"].as_bool(), Some(true));
 	assert_eq!(
-		deleted_responsible_person["person_given_name"].as_str(),
+		deleted_responsible_person["personGivenName"].as_str(),
 		Some("Ari")
 	);
 	assert_eq!(
-		deleted_responsible_person["person_family_name"].as_str(),
+		deleted_responsible_person["personFamilyName"].as_str(),
 		Some("Kim")
 	);
 
@@ -493,7 +556,7 @@ async fn test_sender_presave_details_requires_explicit_child_delete() -> Result<
 		&app,
 		&admin_cookie,
 		format!("/api/presaves/senders/{sender_id}/details"),
-		json!({ "data": { "parent": { "organization_name": "omit children" } } }),
+		json!({ "data": { "rows": { "sender": { "organizationName": "omit children" } } } }),
 	)
 	.await?;
 	let after_omit = get_json_ok(
@@ -502,8 +565,8 @@ async fn test_sender_presave_details_requires_explicit_child_delete() -> Result<
 		format!("/api/presaves/senders/{sender_id}/details"),
 	)
 	.await?;
-	let gateways = after_omit["data"]["gateways"].as_array().unwrap();
-	let responsible_persons = after_omit["data"]["responsible_persons"]
+	let gateways = after_omit["data"]["rows"]["gateways"].as_array().unwrap();
+	let responsible_persons = after_omit["data"]["rows"]["responsiblePersons"]
 		.as_array()
 		.unwrap();
 	assert_eq!(gateways.len(), 2);
@@ -531,7 +594,7 @@ async fn test_sender_presave_details_requires_explicit_child_delete() -> Result<
 		&app,
 		&admin_cookie,
 		format!("/api/presaves/senders/{sender_id}/details"),
-		json!({ "data": { "gateways": [], "responsible_persons": [] } }),
+		json!({ "data": { "rows": { "gateways": [], "responsiblePersons": [] } } }),
 	)
 	.await?;
 	let after_empty = get_json_ok(
@@ -540,8 +603,8 @@ async fn test_sender_presave_details_requires_explicit_child_delete() -> Result<
 		format!("/api/presaves/senders/{sender_id}/details"),
 	)
 	.await?;
-	let gateways = after_empty["data"]["gateways"].as_array().unwrap();
-	let responsible_persons = after_empty["data"]["responsible_persons"]
+	let gateways = after_empty["data"]["rows"]["gateways"].as_array().unwrap();
+	let responsible_persons = after_empty["data"]["rows"]["responsiblePersons"]
 		.as_array()
 		.unwrap();
 	assert_eq!(gateways.len(), 2);
@@ -570,10 +633,10 @@ async fn test_sender_presave_details_requires_explicit_child_delete() -> Result<
 		&admin_cookie,
 		format!("/api/presaves/senders/{sender_id}/details"),
 		json!({
-			"data": {
-				"gateways": [{ "id": gateway_delete_id, "_delete": true }],
-				"responsible_persons": [{ "id": responsible_id, "_delete": true }]
-			}
+			"data": { "rows": {
+				"gateways": [{ "id": gateway_delete_id, "deleted": true }],
+				"responsiblePersons": [{ "id": responsible_id, "deleted": true }]
+			} }
 		}),
 	)
 	.await?;
@@ -583,8 +646,8 @@ async fn test_sender_presave_details_requires_explicit_child_delete() -> Result<
 		format!("/api/presaves/senders/{sender_id}/details"),
 	)
 	.await?;
-	let gateways = after_delete["data"]["gateways"].as_array().unwrap();
-	let responsible_persons = after_delete["data"]["responsible_persons"]
+	let gateways = after_delete["data"]["rows"]["gateways"].as_array().unwrap();
+	let responsible_persons = after_delete["data"]["rows"]["responsiblePersons"]
 		.as_array()
 		.unwrap();
 	assert_eq!(gateways.len(), 2);
@@ -594,12 +657,9 @@ async fn test_sender_presave_details_requires_explicit_child_delete() -> Result<
 		.find(|row| row["id"].as_str() == Some(&gateway_delete_id.to_string()))
 		.ok_or("missing deleted gateway")?;
 	assert_eq!(deleted_gateway["deleted"].as_bool(), Some(true));
+	assert_eq!(deleted_gateway["senderIdentifier"].as_str(), Some("DELETE"));
 	assert_eq!(
-		deleted_gateway["sender_identifier"].as_str(),
-		Some("DELETE")
-	);
-	assert_eq!(
-		deleted_gateway["routing_identifier"].as_str(),
+		deleted_gateway["routingIdentifier"].as_str(),
 		Some("ROUTE-DELETE")
 	);
 	assert!(
@@ -619,11 +679,11 @@ async fn test_sender_presave_details_requires_explicit_child_delete() -> Result<
 		.ok_or("missing deleted responsible person")?;
 	assert_eq!(deleted_responsible_person["deleted"].as_bool(), Some(true));
 	assert_eq!(
-		deleted_responsible_person["person_given_name"].as_str(),
+		deleted_responsible_person["personGivenName"].as_str(),
 		Some("Ari")
 	);
 	assert_eq!(
-		deleted_responsible_person["person_family_name"].as_str(),
+		deleted_responsible_person["personFamilyName"].as_str(),
 		Some("Kim")
 	);
 
@@ -658,17 +718,7 @@ async fn test_sender_presave_details_rejects_invalid_child_operations() -> Resul
 		&admin_cookie,
 		Method::PUT,
 		format!("/api/presaves/senders/{sender_a}/details"),
-		Some(json!({ "data": { "gateways": [{ "_delete": true }] } })),
-	)
-	.await?;
-	assert_eq!(status, StatusCode::BAD_REQUEST, "{value:?}");
-
-	let (status, value) = request_json(
-		&app,
-		&admin_cookie,
-		Method::PUT,
-		format!("/api/presaves/senders/{sender_a}/details"),
-		Some(json!({ "data": { "responsible_persons": [{ "_delete": true }] } })),
+		Some(json!({ "data": { "rows": { "gateways": [{ "deleted": true }] } } })),
 	)
 	.await?;
 	assert_eq!(status, StatusCode::BAD_REQUEST, "{value:?}");
@@ -679,7 +729,7 @@ async fn test_sender_presave_details_rejects_invalid_child_operations() -> Resul
 		Method::PUT,
 		format!("/api/presaves/senders/{sender_a}/details"),
 		Some(
-			json!({ "data": { "gateways": [{ "id": gateway_b, "_delete": true }] } }),
+			json!({ "data": { "rows": { "responsiblePersons": [{ "deleted": true }] } } }),
 		),
 	)
 	.await?;
@@ -690,10 +740,20 @@ async fn test_sender_presave_details_rejects_invalid_child_operations() -> Resul
 		&admin_cookie,
 		Method::PUT,
 		format!("/api/presaves/senders/{sender_a}/details"),
+		Some(json!({ "data": { "rows": { "gateways": [{ "id": gateway_b, "deleted": true }] } } })),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::BAD_REQUEST, "{value:?}");
+
+	let (status, value) = request_json(
+		&app,
+		&admin_cookie,
+		Method::PUT,
+		format!("/api/presaves/senders/{sender_a}/details"),
 		Some(json!({
-			"data": {
-				"responsible_persons": [{ "id": responsible_b, "_delete": true }]
-			}
+			"data": { "rows": {
+				"responsiblePersons": [{ "id": responsible_b, "deleted": true }]
+			} }
 		})),
 	)
 	.await?;
@@ -705,14 +765,14 @@ async fn test_sender_presave_details_rejects_invalid_child_operations() -> Resul
 		Method::PUT,
 		format!("/api/presaves/senders/{sender_a}/details"),
 		Some(json!({
-			"data": {
+			"data": { "rows": {
 				"gateways": [{
 					"id": gateway_b,
-					"sequence_number": 2,
-					"gateway_authority": "fda",
-					"sender_identifier": "WRONG-PARENT-UPDATE"
+					"sequenceNumber": 2,
+					"gatewayAuthority": "fda",
+					"senderIdentifier": "WRONG-PARENT-UPDATE"
 				}]
-			}
+			} }
 		})),
 	)
 	.await?;
@@ -724,15 +784,15 @@ async fn test_sender_presave_details_rejects_invalid_child_operations() -> Resul
 		Method::PUT,
 		format!("/api/presaves/senders/{sender_a}/details"),
 		Some(json!({
-			"data": {
-				"responsible_persons": [{
+			"data": { "rows": {
+				"responsiblePersons": [{
 					"id": responsible_b,
-					"sequence_number": 2,
+					"sequenceNumber": 2,
 					"department": "Wrong Parent",
-					"person_given_name": "Wrong",
-					"person_family_name": "Parent"
+					"personGivenName": "Wrong",
+					"personFamilyName": "Parent"
 				}]
-			}
+			} }
 		})),
 	)
 	.await?;

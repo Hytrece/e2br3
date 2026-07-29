@@ -208,16 +208,20 @@ pub(super) async fn create_named_sender_presave_via_api(
 		cookie,
 		"/api/presaves/senders".to_string(),
 		json!({
-			"data": {
-				"sender_type": "1",
-				"organization_name": organization_name,
-				"country_code": "US",
-				"email": "sender-details@example.com"
-			}
+			"data": { "rows": {
+				"sender": {
+					"senderType": "1",
+					"organizationName": organization_name,
+					"countryCode": "US",
+					"email": "sender-details@example.com"
+				},
+				"gateways": [],
+				"responsiblePersons": []
+			} }
 		}),
 	)
 	.await?;
-	data_id(&value)
+	data_rows_id(&value, "sender")
 }
 
 pub(super) async fn create_sender_presave_with_type_via_api(
@@ -232,14 +236,18 @@ pub(super) async fn create_sender_presave_with_type_via_api(
 		cookie,
 		"/api/presaves/senders".to_string(),
 		json!({
-			"data": {
-				"sender_type": sender_type,
-				"organization_name": organization_name
-			}
+			"data": { "rows": {
+				"sender": {
+					"senderType": sender_type,
+					"organizationName": organization_name
+				},
+				"gateways": [],
+				"responsiblePersons": []
+			} }
 		}),
 	)
 	.await?;
-	data_id(&value)
+	data_rows_id(&value, "sender")
 }
 
 pub(super) async fn create_sender_gateway_via_api(
@@ -301,15 +309,19 @@ pub(super) async fn create_receiver_presave_via_api(
 		cookie,
 		"/api/presaves/receivers".to_string(),
 		json!({
-			"data": {
-				"receiver_type": "Regulatory Authority",
-				"organization_name": format!("REST Receiver Details Org {}", Uuid::new_v4()),
-				"receiver_identifier": format!("REC-{}", Uuid::new_v4())
-			}
+			"data": { "rows": {
+				"receiver": {
+					"receiverType": "Regulatory Authority",
+					"organizationName": format!("REST Receiver Details Org {}", Uuid::new_v4()),
+					"receiverIdentifier": format!("REC-{}", Uuid::new_v4())
+				},
+				"consignees": [],
+				"routes": []
+			} }
 		}),
 	)
 	.await?;
-	data_id(&value)
+	data_rows_id(&value, "receiver")
 }
 
 pub(super) async fn create_receiver_consignee_via_api(
