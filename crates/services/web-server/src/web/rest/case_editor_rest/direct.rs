@@ -1656,16 +1656,13 @@ async fn apply_dm_page_rows_patch(
 	fn decimal_field(
 		page_id: &str,
 		row: &Map<String, Value>,
-		request_path: &str,
+		_request_path: &str,
 		paths: &[&str],
 	) -> Result<Option<Decimal>> {
 		let Some(value) = value_at_path(row, paths) else {
 			return Ok(None);
 		};
 		if value.is_null() {
-			return Ok(None);
-		}
-		if request_in_band_null_flavor(page_id, request_path, value).is_some() {
 			return Ok(None);
 		}
 		Decimal::from_str(&value.to_string())
@@ -1680,15 +1677,12 @@ async fn apply_dm_page_rows_patch(
 	fn date_field(
 		page_id: &str,
 		row: &Map<String, Value>,
-		request_path: &str,
+		_request_path: &str,
 		paths: &[&str],
 	) -> Result<Option<sqlx::types::time::Date>> {
 		let Some(value) = value_at_path(row, paths) else {
 			return Ok(None);
 		};
-		if request_in_band_null_flavor(page_id, request_path, value).is_some() {
-			return Ok(None);
-		}
 		serde_json::from_value::<CiDatePatchValue>(json!({"value": value}))
 			.map(|parsed| parsed.value)
 			.map_err(|err| Error::BadRequest {
@@ -1715,60 +1709,50 @@ async fn apply_dm_page_rows_patch(
 			})
 	}
 	fn canonical_string_field(
-		page_id: &str,
 		row: &Map<String, Value>,
-		request_path: &str,
-		paths: &[&str],
+		value_paths: &[&str],
+		null_flavor_paths: &[&str],
 	) -> (Option<String>, Option<String>) {
-		let raw = value_at_path(row, paths);
-		match raw.and_then(|value| {
-			request_in_band_null_flavor(page_id, request_path, value)
-		}) {
-			Some(null_flavor) => (None, Some(null_flavor.to_owned())),
-			None => (nested_string_field(row, paths), None),
-		}
+		(
+			nested_string_field(row, value_paths),
+			nested_string_field(row, null_flavor_paths),
+		)
 	}
-	fn canonical_null_flavor(
-		page_id: &str,
+	fn null_flavor_field(
 		row: &Map<String, Value>,
-		request_path: &str,
 		paths: &[&str],
 	) -> Option<String> {
-		value_at_path(row, paths)
-			.and_then(|value| {
-				request_in_band_null_flavor(page_id, request_path, value)
-			})
-			.map(ToOwned::to_owned)
+		nested_string_field(row, paths)
 	}
 	let patient_id = if let Some(patient) = patient {
 		let (patient_initials, patient_initials_null_flavor) =
 			canonical_string_field(
-				page_id,
 				patient,
-				"patientInitials",
 				&["patientInitials"],
+				&["patientInitialsNullFlavor"],
 			);
 		let birth_date_paths = &["patientBirthDate"];
 		let age_paths = &["patientAge.value"];
 		let weight_paths = &["patientWeight.value"];
 		let height_paths = &["patientHeight.value"];
-		let (sex, sex_null_flavor) =
-			canonical_string_field(page_id, patient, "patientSex", &["patientSex"]);
-		let (race_code, race_code_null_flavor) =
-			canonical_string_field(page_id, patient, "raceCode", &["raceCode"]);
-		let (ethnicity_code, ethnicity_code_null_flavor) = canonical_string_field(
-			page_id,
+		let (sex, sex_null_flavor) = canonical_string_field(
 			patient,
-			"ethnicityCode",
+			&["patientSex"],
+			&["patientSexNullFlavor"],
+		);
+		let (race_code, race_code_null_flavor) =
+			canonical_string_field(patient, &["raceCode"], &["raceCodeNullFlavor"]);
+		let (ethnicity_code, ethnicity_code_null_flavor) = canonical_string_field(
+			patient,
 			&["ethnicityCode"],
+			&["ethnicityCodeNullFlavor"],
 		);
 		let lmp_paths = &["lastMenstrualPeriodDate"];
 		let (medical_history_text, medical_history_text_null_flavor) =
 			canonical_string_field(
-				page_id,
 				patient,
-				"medicalHistoryText",
 				&["medicalHistoryText"],
+				&["medicalHistoryTextNullFlavor"],
 			);
 		let update = PatientInformationForUpdate {
 			patient_initials,
@@ -1779,11 +1763,9 @@ async fn apply_dm_page_rows_patch(
 				"patientBirthDate",
 				birth_date_paths,
 			)?,
-			birth_date_null_flavor: canonical_null_flavor(
-				page_id,
+			birth_date_null_flavor: null_flavor_field(
 				patient,
-				"patientBirthDate",
-				birth_date_paths,
+				&["patientBirthDateNullFlavor"],
 			),
 			age_at_time_of_onset: decimal_field(
 				page_id,
@@ -1791,11 +1773,9 @@ async fn apply_dm_page_rows_patch(
 				"patientAge.value",
 				age_paths,
 			)?,
-			age_at_time_of_onset_null_flavor: canonical_null_flavor(
-				page_id,
+			age_at_time_of_onset_null_flavor: null_flavor_field(
 				patient,
-				"patientAge.value",
-				age_paths,
+				&["patientAge.valueNullFlavor"],
 			),
 			age_unit: nested_string_field(patient, &["patientAge.unit"]),
 			gestation_period: decimal_field(
@@ -1815,11 +1795,9 @@ async fn apply_dm_page_rows_patch(
 				"patientWeight.value",
 				weight_paths,
 			)?,
-			weight_kg_null_flavor: canonical_null_flavor(
-				page_id,
+			weight_kg_null_flavor: null_flavor_field(
 				patient,
-				"patientWeight.value",
-				weight_paths,
+				&["patientWeight.valueNullFlavor"],
 			),
 			height_cm: decimal_field(
 				page_id,
@@ -1827,11 +1805,9 @@ async fn apply_dm_page_rows_patch(
 				"patientHeight.value",
 				height_paths,
 			)?,
-			height_cm_null_flavor: canonical_null_flavor(
-				page_id,
+			height_cm_null_flavor: null_flavor_field(
 				patient,
-				"patientHeight.value",
-				height_paths,
+				&["patientHeight.valueNullFlavor"],
 			),
 			sex,
 			sex_null_flavor,
@@ -1845,11 +1821,9 @@ async fn apply_dm_page_rows_patch(
 				"lastMenstrualPeriodDate",
 				lmp_paths,
 			)?,
-			last_menstrual_period_date_null_flavor: canonical_null_flavor(
-				page_id,
+			last_menstrual_period_date_null_flavor: null_flavor_field(
 				patient,
-				"lastMenstrualPeriodDate",
-				lmp_paths,
+				&["lastMenstrualPeriodDateNullFlavor"],
 			),
 			medical_history_text,
 			medical_history_text_null_flavor,
@@ -1943,31 +1917,19 @@ async fn apply_dm_page_rows_patch(
 				"medicalHistoryEpisodes[].startDate",
 				&["startDate"],
 			)?;
-			let start_date_null_flavor = canonical_null_flavor(
-				page_id,
-				episode,
-				"medicalHistoryEpisodes[].startDate",
-				&["startDate"],
-			);
+			let start_date_null_flavor =
+				null_flavor_field(episode, &["startDateNullFlavor"]);
 			let continuing = bool_field(episode, &["continuing"]);
-			let continuing_null_flavor = canonical_null_flavor(
-				page_id,
-				episode,
-				"medicalHistoryEpisodes[].continuing",
-				&["continuing"],
-			);
+			let continuing_null_flavor =
+				null_flavor_field(episode, &["continuingNullFlavor"]);
 			let end_date = date_field(
 				page_id,
 				episode,
 				"medicalHistoryEpisodes[].endDate",
 				&["endDate"],
 			)?;
-			let end_date_null_flavor = canonical_null_flavor(
-				page_id,
-				episode,
-				"medicalHistoryEpisodes[].endDate",
-				&["endDate"],
-			);
+			let end_date_null_flavor =
+				null_flavor_field(episode, &["endDateNullFlavor"]);
 			let comments = string_field(episode, &["comments"]);
 			let family_history = bool_field(episode, &["familyHistory"]);
 			let update = MedicalHistoryEpisodeForUpdate {
@@ -2082,18 +2044,14 @@ async fn apply_dm_page_rows_patch(
 				"patientDeath.dateOfDeath",
 				&["dateOfDeath"],
 			)?,
-			date_of_death_null_flavor: canonical_null_flavor(
-				page_id,
+			date_of_death_null_flavor: null_flavor_field(
 				death_info,
-				"patientDeath.dateOfDeath",
-				&["dateOfDeath"],
+				&["dateOfDeathNullFlavor"],
 			),
 			autopsy_performed: bool_field(death_info, &["autopsyPerformed"]),
-			autopsy_performed_null_flavor: canonical_null_flavor(
-				page_id,
+			autopsy_performed_null_flavor: null_flavor_field(
 				death_info,
-				"patientDeath.autopsyPerformed",
-				&["autopsyPerformed"],
+				&["autopsyPerformedNullFlavor"],
 			),
 		};
 		if let Some(existing) = existing_death_info {
@@ -2235,16 +2193,14 @@ async fn apply_dm_page_rows_patch(
 		} else {
 			let (parent_identification, parent_identification_null_flavor) =
 				canonical_string_field(
-					page_id,
 					parent,
-					"parentInformation.parentIdentification",
 					&["parentIdentification"],
+					&["parentIdentificationNullFlavor"],
 				);
 			let (sex, sex_null_flavor) = canonical_string_field(
-				page_id,
 				parent,
-				"parentInformation.parentSex",
 				&["parentSex"],
+				&["parentSexNullFlavor"],
 			);
 			let update = ParentInformationForUpdate {
 				parent_identification,
@@ -2255,11 +2211,9 @@ async fn apply_dm_page_rows_patch(
 					"parentInformation.parentBirthDate",
 					&["parentBirthDate"],
 				)?,
-				parent_birth_date_null_flavor: canonical_null_flavor(
-					page_id,
+				parent_birth_date_null_flavor: null_flavor_field(
 					parent,
-					"parentInformation.parentBirthDate",
-					&["parentBirthDate"],
+					&["parentBirthDateNullFlavor"],
 				),
 				parent_age: decimal_field(
 					page_id,
@@ -2275,11 +2229,9 @@ async fn apply_dm_page_rows_patch(
 					"parentInformation.parentLastMenstrualPeriodDate",
 					&["parentLastMenstrualPeriodDate"],
 				)?,
-				last_menstrual_period_date_null_flavor: canonical_null_flavor(
-					page_id,
+				last_menstrual_period_date_null_flavor: null_flavor_field(
 					parent,
-					"parentInformation.parentLastMenstrualPeriodDate",
-					&["parentLastMenstrualPeriodDate"],
+					&["parentLastMenstrualPeriodDateNullFlavor"],
 				),
 				weight_kg: decimal_field(
 					page_id,
@@ -2364,18 +2316,10 @@ async fn apply_dm_page_rows_patch(
 				continue;
 			}
 			let meddra_code = string_field(history, &["meddraCode"]);
-			let start_date_null_flavor = canonical_null_flavor(
-				page_id,
-				history,
-				"parentInformation.medicalHistoryEpisodes[].startDate",
-				&["startDate"],
-			);
-			let end_date_null_flavor = canonical_null_flavor(
-				page_id,
-				history,
-				"parentInformation.medicalHistoryEpisodes[].endDate",
-				&["endDate"],
-			);
+			let start_date_null_flavor =
+				null_flavor_field(history, &["startDateNullFlavor"]);
+			let end_date_null_flavor =
+				null_flavor_field(history, &["endDateNullFlavor"]);
 			let update = ParentMedicalHistoryForUpdate {
 				meddra_version: string_field(history, &["meddraVersion"]),
 				meddra_code: meddra_code.clone(),
@@ -2473,11 +2417,9 @@ async fn apply_dm_page_rows_patch(
 					"parentInformation.pastDrugHistory[].startDate",
 					&["startDate"],
 				)?,
-				start_date_null_flavor: canonical_null_flavor(
-					page_id,
+				start_date_null_flavor: null_flavor_field(
 					drug,
-					"parentInformation.pastDrugHistory[].startDate",
-					&["startDate"],
+					&["startDateNullFlavor"],
 				),
 				end_date: date_field(
 					page_id,
@@ -2485,11 +2427,9 @@ async fn apply_dm_page_rows_patch(
 					"parentInformation.pastDrugHistory[].endDate",
 					&["endDate"],
 				)?,
-				end_date_null_flavor: canonical_null_flavor(
-					page_id,
+				end_date_null_flavor: null_flavor_field(
 					drug,
-					"parentInformation.pastDrugHistory[].endDate",
-					&["endDate"],
+					&["endDateNullFlavor"],
 				),
 				indication_meddra_version: string_field(
 					drug,
@@ -3222,14 +3162,6 @@ async fn load_editor_dm_data(
 		let mut value = json!(parent);
 		if let Value::Object(ref mut map) = value {
 			map.insert(
-				"parent_identification".to_string(),
-				json!(parent
-					.parent_identification
-					.clone()
-					.or(parent.parent_identification_null_flavor.clone())),
-			);
-			map.remove("parent_identification_null_flavor");
-			map.insert(
 				"parent_birth_date".to_string(),
 				json!(ci_date(parent.parent_birth_date)),
 			);
@@ -3237,11 +3169,6 @@ async fn load_editor_dm_data(
 				"last_menstrual_period_date".to_string(),
 				json!(ci_date(parent.last_menstrual_period_date)),
 			);
-			map.insert(
-				"sex".to_string(),
-				json!(parent.sex.clone().or(parent.sex_null_flavor.clone())),
-			);
-			map.remove("sex_null_flavor");
 		}
 		value
 	});

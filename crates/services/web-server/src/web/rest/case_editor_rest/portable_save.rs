@@ -2,9 +2,8 @@ use super::common::*;
 use lib_rest_core::ConstraintViolation;
 use std::collections::BTreeSet;
 use validator::{
-	bindings_for_section, portable_constraints, validate_portable_value,
-	PortableConstraintKind, PortableFieldBinding, PortableInputValue,
-	PortableValueType,
+	bindings_for_section, validate_portable_value, PortableFieldBinding,
+	PortableInputValue, PortableValueType,
 };
 
 struct RequestMatch<'a> {
@@ -133,80 +132,17 @@ fn companion_binding(
 	bindings_for_section(section).find(|candidate| candidate.frontend_path == path)
 }
 
-fn in_band_null_flavor<'a>(
-	binding: &PortableFieldBinding,
-	value: &'a Value,
-) -> Option<&'a str> {
-	let same_path = binding.null_flavor_path == Some(binding.frontend_path);
-	if binding.null_flavor_path.is_some() && !same_path {
-		return None;
-	}
-	let constraints = portable_constraints();
-	let has_value_rule = binding.rule_codes.iter().any(|code| {
-		constraints.iter().any(|rule| {
-			rule.code == *code && rule.kind != PortableConstraintKind::NullFlavor
-		})
-	});
-	if !has_value_rule && !same_path {
-		return None;
-	}
-	let candidate = value.as_str()?.trim();
-	constraints
-		.iter()
-		.filter(|rule| rule.kind == PortableConstraintKind::NullFlavor)
-		.any(|rule| rule.values.iter().any(|known| known == candidate))
-		.then_some(candidate)
-}
-
-pub(super) fn request_in_band_null_flavor<'a>(
-	section: &str,
-	request_path: &str,
-	value: &'a Value,
-) -> Option<&'a str> {
-	bindings_for_section(section)
-		.find(|binding| binding.request_path == request_path)
-		.and_then(|binding| in_band_null_flavor(binding, value))
-}
-
-fn binding_has_value_rule(binding: &PortableFieldBinding) -> bool {
-	let constraints = portable_constraints();
-	binding.rule_codes.iter().any(|code| {
-		constraints.iter().any(|rule| {
-			rule.code == *code && rule.kind != PortableConstraintKind::NullFlavor
-		})
-	})
-}
-
 fn validate_binding_value(
 	binding: &PortableFieldBinding,
 	value: &Value,
-	null_flavor: Option<&str>,
 	path: &str,
 ) -> Result<()> {
-	let constraints = portable_constraints();
-	let in_band = in_band_null_flavor(binding, value);
-	let has_value_rule = binding_has_value_rule(binding);
-	let same_path = binding.null_flavor_path == Some(binding.frontend_path);
 	for rule_code in binding.rule_codes {
-		let kind = constraints
-			.iter()
-			.find(|rule| rule.code == *rule_code)
-			.map(|rule| rule.kind);
-		if in_band.is_some() && kind != Some(PortableConstraintKind::NullFlavor) {
-			continue;
-		}
-		if in_band.is_none()
-			&& (has_value_rule || same_path)
-			&& kind == Some(PortableConstraintKind::NullFlavor)
-		{
-			continue;
-		}
-		let input = in_band
-			.map(PortableInputValue::String)
-			.unwrap_or_else(|| input_value(value, binding.value_type));
-		if let Err(error) =
-			validate_portable_value(rule_code, input, in_band.or(null_flavor))
-		{
+		if let Err(error) = validate_portable_value(
+			rule_code,
+			input_value(value, binding.value_type),
+			None,
+		) {
 			return Err(violation(&error.code, path, &error.message));
 		}
 	}
@@ -705,11 +641,20 @@ pub(super) fn validate_direct_rows(
 									&["patientInitials", "patient_initials"],
 								),
 								(
-									"patientBirthDate",
+									"patientInitialsNullFlavor",
 									&[
-										"patientBirthDate",
-										"birth_date",
-										"birthDateNullFlavor",
+										"patientInitialsNullFlavor",
+										"patient_initials_null_flavor",
+									],
+								),
+								(
+									"patientBirthDate",
+									&["patientBirthDate", "birth_date"],
+								),
+								(
+									"patientBirthDateNullFlavor",
+									&[
+										"patientBirthDateNullFlavor",
 										"birth_date_null_flavor",
 									],
 								),
@@ -757,34 +702,48 @@ pub(super) fn validate_direct_rows(
 										"height_cm",
 									],
 								),
+								("patientSex", &["patientSex", "sex"]),
 								(
-									"patientSex",
-									&[
-										"patientSex",
-										"sex",
-										"sexNullFlavor",
-										"sex_null_flavor",
-									],
+									"patientSexNullFlavor",
+									&["patientSexNullFlavor", "sex_null_flavor"],
 								),
 								("raceCode", &["raceCode", "race_code"]),
 								(
+									"raceCodeNullFlavor",
+									&["raceCodeNullFlavor", "race_code_null_flavor"],
+								),
+								(
 									"ethnicityCode",
 									&["ethnicityCode", "ethnicity_code"],
+								),
+								(
+									"ethnicityCodeNullFlavor",
+									&[
+										"ethnicityCodeNullFlavor",
+										"ethnicity_code_null_flavor",
+									],
 								),
 								(
 									"lastMenstrualPeriodDate",
 									&[
 										"lastMenstrualPeriodDate",
 										"last_menstrual_period_date",
+									],
+								),
+								(
+									"lastMenstrualPeriodDateNullFlavor",
+									&[
 										"lastMenstrualPeriodDateNullFlavor",
 										"last_menstrual_period_date_null_flavor",
 									],
 								),
 								(
 									"medicalHistoryText",
+									&["medicalHistoryText", "medical_history_text"],
+								),
+								(
+									"medicalHistoryTextNullFlavor",
 									&[
-										"medicalHistoryText",
-										"medical_history_text",
 										"medicalHistoryTextNullFlavor",
 										"medical_history_text_null_flavor",
 									],
@@ -822,14 +781,25 @@ pub(super) fn validate_direct_rows(
 								("meddraCode", &["meddraCode", "meddra_code"]),
 								("startDate", &["startDate", "start_date"]),
 								(
-									"continuing",
+									"startDateNullFlavor",
 									&[
-										"continuing",
+										"startDateNullFlavor",
+										"start_date_null_flavor",
+									],
+								),
+								("continuing", &["continuing"]),
+								(
+									"continuingNullFlavor",
+									&[
 										"continuingNullFlavor",
 										"continuing_null_flavor",
 									],
 								),
 								("endDate", &["endDate", "end_date"]),
+								(
+									"endDateNullFlavor",
+									&["endDateNullFlavor", "end_date_null_flavor"],
+								),
 								("comments", &["comments"]),
 								(
 									"familyHistory",
@@ -849,20 +819,21 @@ pub(super) fn validate_direct_rows(
 					normalized_direct_object(
 						row,
 						&[
+							("dateOfDeath", &["dateOfDeath", "date_of_death"]),
 							(
-								"dateOfDeath",
+								"dateOfDeathNullFlavor",
 								&[
-									"dateOfDeath",
-									"date_of_death",
 									"dateOfDeathNullFlavor",
 									"date_of_death_null_flavor",
 								],
 							),
 							(
 								"autopsyPerformed",
+								&["autopsyPerformed", "autopsy_performed"],
+							),
+							(
+								"autopsyPerformedNullFlavor",
 								&[
-									"autopsyPerformed",
-									"autopsy_performed",
 									"autopsyPerformedNullFlavor",
 									"autopsy_performed_null_flavor",
 								],
@@ -925,10 +896,19 @@ pub(super) fn validate_direct_rows(
 									],
 								),
 								(
-									"parentBirthDate",
+									"parentIdentificationNullFlavor",
 									&[
-										"parentBirthDate",
-										"parent_birth_date",
+										"parentIdentificationNullFlavor",
+										"parent_identification_null_flavor",
+									],
+								),
+								(
+									"parentBirthDate",
+									&["parentBirthDate", "parent_birth_date"],
+								),
+								(
+									"parentBirthDateNullFlavor",
+									&[
 										"parentBirthDateNullFlavor",
 										"parent_birth_date_null_flavor",
 									],
@@ -950,6 +930,11 @@ pub(super) fn validate_direct_rows(
 									&[
 										"parentLastMenstrualPeriodDate",
 										"last_menstrual_period_date",
+									],
+								),
+								(
+									"parentLastMenstrualPeriodDateNullFlavor",
+									&[
 										"parentLastMenstrualPeriodDateNullFlavor",
 										"last_menstrual_period_date_null_flavor",
 									],
@@ -963,6 +948,10 @@ pub(super) fn validate_direct_rows(
 									&["parentHeight.value", "height_cm"],
 								),
 								("parentSex", &["parentSex", "sex"]),
+								(
+									"parentSexNullFlavor",
+									&["parentSexNullFlavor", "sex_null_flavor"],
+								),
 								(
 									"medicalHistoryText",
 									&["medicalHistoryText", "medical_history_text"],
@@ -995,8 +984,26 @@ pub(super) fn validate_direct_rows(
 								),
 								("meddraCode", &["meddraCode", "meddra_code"]),
 								("startDate", &["startDate", "start_date"]),
+								(
+									"startDateNullFlavor",
+									&[
+										"startDateNullFlavor",
+										"start_date_null_flavor",
+									],
+								),
 								("continuing", &["continuing"]),
+								(
+									"continuingNullFlavor",
+									&[
+										"continuingNullFlavor",
+										"continuing_null_flavor",
+									],
+								),
 								("endDate", &["endDate", "end_date"]),
+								(
+									"endDateNullFlavor",
+									&["endDateNullFlavor", "end_date_null_flavor"],
+								),
 								("comments", &["comments"]),
 							],
 						),
@@ -1044,7 +1051,15 @@ pub(super) fn validate_direct_rows(
 							("phpidVersion", &["phpidVersion", "phpid_version"]),
 							("phpid", &["phpid"]),
 							("startDate", &["startDate", "start_date"]),
+							(
+								"startDateNullFlavor",
+								&["startDateNullFlavor", "start_date_null_flavor"],
+							),
 							("endDate", &["endDate", "end_date"]),
+							(
+								"endDateNullFlavor",
+								&["endDateNullFlavor", "end_date_null_flavor"],
+							),
 							(
 								"indicationMeddraVersion",
 								&[
@@ -1224,20 +1239,42 @@ fn validate_row_payload_with_indexes(
 			continue;
 		}
 		for matched in request_matches(row, binding.request_path) {
-			let null_flavor = companion_binding(section, binding)
-				.and_then(|companion| {
-					value_at_request_path(
-						row,
-						companion.request_path,
-						&matched.indexes,
-					)
-				})
-				.and_then(Value::as_str);
 			let mut concrete_indexes = outer_indexes.to_vec();
 			concrete_indexes.extend_from_slice(&matched.indexes);
+			if input_value(matched.value, binding.value_type)
+				!= PortableInputValue::Missing
+			{
+				if let Some((companion, _)) = companion_binding(section, binding)
+					.and_then(|companion| {
+						value_at_request_path(
+							row,
+							companion.request_path,
+							&matched.indexes,
+						)
+						.map(|value| (companion, value))
+					})
+					.filter(|(companion, value)| {
+						input_value(value, companion.value_type)
+							!= PortableInputValue::Missing
+					}) {
+					let path = concrete_frontend_path(
+						companion.frontend_path,
+						&concrete_indexes,
+					);
+					return Err(violation(
+						companion
+							.rule_codes
+							.first()
+							.copied()
+							.unwrap_or("NULL_FLAVOR_PAIR"),
+						&path,
+						"value and NullFlavor cannot both be set",
+					));
+				}
+			}
 			let path =
 				concrete_frontend_path(binding.frontend_path, &concrete_indexes);
-			validate_binding_value(binding, matched.value, null_flavor, &path)?;
+			validate_binding_value(binding, matched.value, &path)?;
 		}
 	}
 	Ok(())
@@ -1265,7 +1302,7 @@ mod portable_save_tests {
 	}
 
 	fn portable_constraint_message(code: &str) -> String {
-		portable_constraints()
+		validator::portable_constraints()
 			.into_iter()
 			.find(|constraint| constraint.code == code)
 			.expect("portable Catalog constraint exists")
@@ -1311,45 +1348,48 @@ mod portable_save_tests {
 	}
 
 	#[test]
-	fn portable_save_accepts_in_band_null_flavor_and_rejects_bad_date() {
-		let allowed =
-			Map::from_iter([("reactionStartDate".to_string(), json!("MSK"))]);
+	fn portable_save_accepts_split_null_flavor_and_rejects_in_band_token() {
+		let allowed = Map::from_iter([
+			("reactionStartDate".to_string(), Value::Null),
+			("reactionStartDateNullFlavor".to_string(), json!("MSK")),
+		]);
 		validate_row_payload("AE", "reaction", &allowed, None).unwrap();
 
 		let invalid =
-			Map::from_iter([("reactionStartDate".to_string(), json!("2026-07-15"))]);
+			Map::from_iter([("reactionStartDate".to_string(), json!("MSK"))]);
 		let error =
 			validate_row_payload("AE", "reaction", &invalid, None).unwrap_err();
-		assert!(error_message(error)
-			.contains("ICH.E.i.4.ALLOWED.VALUE at reactions.0.reactionStartDate"));
+		let detail = constraint_violation(error);
+		assert_eq!(detail.rule_code, "ICH.E.i.4.ALLOWED.VALUE");
+		assert_eq!(detail.path, "reactions.0.reactionStartDate");
 	}
 
 	#[test]
-	fn portable_save_accepts_normal_or_in_band_null_flavor_only_values() {
+	fn portable_save_accepts_split_value_and_null_flavor_only_values() {
 		let drug = Map::from_iter([(
 			"dosageInformation".to_string(),
 			json!([{
 				"firstAdministrationDate": "20260715",
-				"lastAdministrationDate": "MSK"
+				"lastAdministrationDate": null,
+				"lastAdministrationDateNullFlavor": "MSK"
 			}]),
 		)]);
 		validate_row_payload("DG", "drug", &drug, None).unwrap();
 	}
 
 	#[test]
-	fn portable_save_rejects_disallowed_known_in_band_null_flavor() {
-		let drug = Map::from_iter([(
-			"dosageInformation".to_string(),
-			json!([{
-				"firstAdministrationDate": "NI"
-			}]),
-		)]);
+	fn portable_save_rejects_value_and_null_flavor_together() {
+		let reaction = Map::from_iter([
+			("reactionStartDate".to_string(), json!("20260715")),
+			("reactionStartDateNullFlavor".to_string(), json!("MSK")),
+		]);
 
-		let error = validate_row_payload("DG", "drug", &drug, None).unwrap_err();
-
-		assert!(error_message(error).contains(
-			"ICH.G.k.4.r.4.NULLFLAVOR.ALLOWED at drugs.0.dosageInformation.0.firstAdministrationDate"
-		));
+		let detail = constraint_violation(
+			validate_row_payload("AE", "reaction", &reaction, None).unwrap_err(),
+		);
+		assert_eq!(detail.rule_code, "ICH.E.i.4.NULLFLAVOR.ALLOWED");
+		assert_eq!(detail.path, "reactions.0.reactionStartDateNullFlavor");
+		assert_eq!(detail.message, "value and NullFlavor cannot both be set");
 	}
 
 	#[test]

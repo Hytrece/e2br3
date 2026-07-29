@@ -14,6 +14,16 @@ use sqlx::types::time::{Date, OffsetDateTime};
 use sqlx::types::Uuid;
 use sqlx::FromRow;
 
+fn deserialize_optional_bool_string<'de, D>(
+	deserializer: D,
+) -> std::result::Result<Option<String>, D::Error>
+where
+	D: serde::Deserializer<'de>,
+{
+	Option::<bool>::deserialize(deserializer)
+		.map(|value| value.map(|value| value.to_string()))
+}
+
 // -- Reaction
 
 #[derive(Debug, Clone, Fields, FromRow, Serialize)]
@@ -124,6 +134,7 @@ pub struct ReactionForCreate {
 	pub criteria_congenital_anomaly_null_flavor: Option<String>,
 	pub criteria_other_medically_important: Option<bool>,
 	pub criteria_other_medically_important_null_flavor: Option<String>,
+	#[serde(default, deserialize_with = "deserialize_optional_bool_string")]
 	pub required_intervention: Option<String>,
 	pub required_intervention_null_flavor: Option<String>,
 	pub expectedness: Option<String>,
@@ -186,6 +197,7 @@ pub struct ReactionForUpdate {
 	pub criteria_congenital_anomaly_null_flavor: Option<String>,
 	pub criteria_other_medically_important: Option<bool>,
 	pub criteria_other_medically_important_null_flavor: Option<String>,
+	#[serde(default, deserialize_with = "deserialize_optional_bool_string")]
 	pub required_intervention: Option<String>,
 	pub required_intervention_null_flavor: Option<String>,
 	pub expectedness: Option<String>,

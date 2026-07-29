@@ -2,11 +2,13 @@ use super::common::*;
 
 const TEST_RESULT_ROW_ALIASES: &[(&str, &[&str])] = &[
 	("test_date", &["testDate"]),
+	("test_date_null_flavor", &["testDateNullFlavor"]),
 	("test_name", &["testName"]),
 	("test_meddra_version", &["testMeddraVersion"]),
 	("test_meddra_code", &["testMeddraCode"]),
 	("test_result_code", &["testResultCode"]),
 	("test_result_value", &["testResult"]),
+	("test_result_null_flavor", &["testResultNullFlavor"]),
 	("test_result_unit", &["testUnit"]),
 	("result_unstructured", &["testResultUnstructured"]),
 	("normal_low_value", &["lowRange"]),

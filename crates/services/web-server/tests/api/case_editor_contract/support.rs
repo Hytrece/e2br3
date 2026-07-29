@@ -538,20 +538,41 @@ pub async fn verify_dm_parent_transition(field: DmParentField) -> Result<()> {
 		&["ich"],
 	)
 	.await?;
-	let (payload_key, projection_key, values, invalid) = match field {
+	let (
+		payload_key,
+		null_flavor_key,
+		projection_key,
+		projection_null_flavor_key,
+		values,
+		invalid,
+	) = match field {
 		DmParentField::Identification => (
 			"parentIdentification",
+			"parentIdentificationNullFlavor",
 			"parent_identification",
-			["MOTHER-01", "UNK", "MOTHER-02"],
+			"parent_identification_null_flavor",
+			[
+				(Some("MOTHER-01"), None),
+				(None, Some("UNK")),
+				(Some("MOTHER-02"), None),
+			],
 			None,
 		),
-		DmParentField::Sex => ("parentSex", "sex", ["2", "NASK", "1"], Some("NI")),
+		DmParentField::Sex => (
+			"parentSex",
+			"parentSexNullFlavor",
+			"sex",
+			"sex_null_flavor",
+			[(Some("2"), None), (None, Some("NASK")), (Some("1"), None)],
+			Some("NI"),
+		),
 	};
 	let uri = format!("/api/cases/{case_id}/editor/pages/DM");
 
-	for value in values {
+	for (value, null_flavor) in values {
 		let mut parent = Map::new();
 		parent.insert(payload_key.to_string(), json!(value));
+		parent.insert(null_flavor_key.to_string(), json!(null_flavor));
 		let (status, body) = patch_json(
 			&app,
 			&cookie,
@@ -602,15 +623,18 @@ pub async fn verify_dm_parent_transition(field: DmParentField) -> Result<()> {
 				.await?,
 		};
 		mm.dbx().commit_txn().await?;
-		if matches!(value, "UNK" | "NASK") {
-			assert_eq!(pair, (None, Some(value.to_string())));
-		} else {
-			assert_eq!(pair, (Some(value.to_string()), None));
-		}
+		assert_eq!(
+			pair,
+			(value.map(str::to_string), null_flavor.map(str::to_string))
+		);
 
 		let (status, body) = get_json(&app, &cookie, &uri).await?;
 		assert_eq!(status, StatusCode::OK, "{body}");
-		assert_eq!(body["rows"]["parentInfo"][projection_key], value);
+		assert_eq!(body["rows"]["parentInfo"][projection_key], json!(value));
+		assert_eq!(
+			body["rows"]["parentInfo"][projection_null_flavor_key],
+			json!(null_flavor)
+		);
 	}
 
 	if let Some(invalid) = invalid {
@@ -629,6 +653,82 @@ pub async fn verify_dm_parent_transition(field: DmParentField) -> Result<()> {
 		assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
 		assert_eq!(body["error"]["message"], "CONSTRAINT_VIOLATION");
 	}
+	Ok(())
+}
+
+pub async fn verify_split_null_flavor_http_contract() -> Result<()> {
+	let mm = init_test_mm().await?;
+	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
+	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
+	let cookie = cookie_header(&token.to_string());
+	let app = web_server::app(mm.clone());
+	let case_id = create_case_for_editor(
+		&app,
+		&cookie,
+		&format!("EDITOR-AE-SPLIT-{}", Uuid::new_v4()),
+		&["ich"],
+	)
+	.await?;
+	let reaction_id =
+		create_reaction_contract_fixture(&app, &cookie, &case_id).await?;
+	let uri = format!("/api/cases/{case_id}/editor/pages/AE/rows/{reaction_id}");
+
+	let request = |start_date: Value, null_flavor: Value| {
+		json!({
+			"authorities": ["ich"],
+			"rows": {
+				"reaction": {
+					"reactionStartDate": start_date,
+					"reactionStartDateNullFlavor": null_flavor
+				}
+			}
+		})
+	};
+	let (status, body) =
+		patch_json(&app, &cookie, &uri, request(Value::Null, json!("MSK"))).await?;
+	assert_eq!(status, StatusCode::OK, "{body}");
+
+	let (status, body) =
+		patch_json(&app, &cookie, &uri, request(json!("MSK"), Value::Null)).await?;
+	assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
+	assert_eq!(
+		body["error"]["data"]["detail"]["path"],
+		"reactions.0.reactionStartDate"
+	);
+
+	let (status, body) = patch_json(
+		&app,
+		&cookie,
+		&uri,
+		request(json!("20260715"), json!("MSK")),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
+	assert_eq!(body["error"]["message"], "CONSTRAINT_VIOLATION");
+	assert_eq!(
+		body["error"]["data"]["detail"]["path"],
+		"reactions.0.reactionStartDateNullFlavor"
+	);
+
+	mm.dbx().begin_txn().await?;
+	set_full_context_dbx(
+		mm.dbx(),
+		seed.admin.id,
+		seed.org_id,
+		ROLE_SPONSOR_ADMIN_CRO,
+	)
+	.await?;
+	let pair = mm
+		.dbx()
+		.fetch_one(
+			sqlx::query_as::<_, (Option<sqlx::types::time::Date>, Option<String>)>(
+				"SELECT start_date, start_date_null_flavor FROM reactions WHERE id = $1",
+			)
+			.bind(Uuid::parse_str(&reaction_id)?),
+		)
+		.await?;
+	mm.dbx().commit_txn().await?;
+	assert_eq!(pair, (None, Some("MSK".to_string())));
 	Ok(())
 }
 
