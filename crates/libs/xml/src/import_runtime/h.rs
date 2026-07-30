@@ -160,7 +160,6 @@ async fn import_case_summaries(
 				mm,
 				id,
 				CaseSummaryInformationForUpdate {
-					summary_type: None,
 					language_code: item.language_code,
 					summary_text: item.summary_text,
 				},
@@ -173,7 +172,6 @@ async fn import_case_summaries(
 				CaseSummaryInformationForCreate {
 					narrative_id,
 					sequence_number: item.sequence_number,
-					summary_type: None,
 					language_code: item.language_code.clone(),
 					summary_text: item.summary_text.clone(),
 				},
@@ -184,7 +182,6 @@ async fn import_case_summaries(
 				mm,
 				id,
 				CaseSummaryInformationForUpdate {
-					summary_type: None,
 					language_code: item.language_code,
 					summary_text: item.summary_text,
 				},

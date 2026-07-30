@@ -174,10 +174,12 @@ pub(crate) fn reaction_fragment_for_authority(
 			.criteria_other_medically_important_null_flavor
 			.as_deref(),
 	));
-	out.push_str(&observation_rel_required_intervention(
-		reaction.required_intervention,
-		reaction.required_intervention_null_flavor.as_deref(),
-	));
+	if matches!(authority, lib_core::regulatory::RegulatoryAuthority::Fda) {
+		out.push_str(&observation_rel_required_intervention(
+			reaction.required_intervention,
+			reaction.required_intervention_null_flavor.as_deref(),
+		));
+	}
 	append_extension_code(
 		&mut out,
 		"AE_EXPECTEDNESS",
