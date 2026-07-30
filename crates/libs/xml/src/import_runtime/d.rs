@@ -489,6 +489,7 @@ async fn import_parent_information(
 					start_date: entry.start_date,
 					start_date_null_flavor: None,
 					continuing: entry.continuing,
+					continuing_null_flavor: entry.continuing_null_flavor,
 					end_date: entry.end_date,
 					end_date_null_flavor: None,
 					comments: entry.comments,
@@ -505,6 +506,7 @@ async fn import_parent_information(
 					sequence_number: seq,
 					meddra_code,
 					start_date_null_flavor: None,
+					continuing_null_flavor: entry.continuing_null_flavor.clone(),
 					end_date_null_flavor: None,
 				},
 			)
@@ -519,6 +521,7 @@ async fn import_parent_information(
 					start_date: entry.start_date,
 					start_date_null_flavor: None,
 					continuing: entry.continuing,
+					continuing_null_flavor: entry.continuing_null_flavor,
 					end_date: entry.end_date,
 					end_date_null_flavor: None,
 					comments: entry.comments,

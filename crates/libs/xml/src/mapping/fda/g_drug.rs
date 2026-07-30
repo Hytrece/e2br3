@@ -94,10 +94,13 @@ impl GDrugPaths {
 	pub const DOSE_VALUE: &'static str = "hl7:doseQuantity/@value";
 	pub const DOSE_UNIT: &'static str = "hl7:doseQuantity/@unit";
 	pub const ROUTE_CODE: &'static str = "hl7:routeCode/@code";
+	pub const ROUTE_NULL_FLAVOR: &'static str = "hl7:routeCode/@nullFlavor";
 	pub const ROUTE_CODE_SYSTEM_VERSION: &'static str =
 		"hl7:routeCode/@codeSystemVersion";
 	pub const DOSE_FORM_TEXT: &'static str =
 		"hl7:consumable/hl7:instanceOfKind/hl7:kindOfProduct/hl7:formCode/hl7:originalText";
+	pub const DOSE_FORM_NULL_FLAVOR: &'static str =
+		"hl7:consumable/hl7:instanceOfKind/hl7:kindOfProduct/hl7:formCode/@nullFlavor";
 	pub const DOSE_FORM_TERMID: &'static str =
 		"hl7:consumable/hl7:instanceOfKind/hl7:kindOfProduct/hl7:formCode/@code";
 	pub const DOSE_FORM_TERMID_VERSION: &'static str =
@@ -110,6 +113,8 @@ impl GDrugPaths {
 		"hl7:outboundRelationship2/hl7:observation[hl7:code[@code='G.k.4.r.11']]/hl7:value/@codeSystemVersion";
 	pub const DOSAGE_PARENT_ROUTE_TEXT: &'static str =
 		"hl7:outboundRelationship2/hl7:observation[hl7:code[@code='G.k.4.r.11']]/hl7:value/hl7:originalText";
+	pub const DOSAGE_PARENT_ROUTE_NULL_FLAVOR: &'static str =
+		"hl7:outboundRelationship2/hl7:observation[hl7:code[@code='G.k.4.r.11']]/hl7:value/@nullFlavor";
 
 	// Indications
 	pub const INDICATION_NODE: &'static str =

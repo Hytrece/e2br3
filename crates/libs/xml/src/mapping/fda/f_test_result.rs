@@ -15,6 +15,7 @@ impl FTestResultPaths {
 	pub const RESULT_CODE: &'static str = "hl7:interpretationCode/@code";
 	pub const RESULT_VALUE: &'static str = "hl7:value/hl7:center/@value";
 	pub const RESULT_VALUE_FALLBACK: &'static str = "hl7:value/@value";
+	pub const RESULT_NULL_FLAVOR: &'static str = "hl7:value/@nullFlavor";
 	pub const RESULT_UNIT: &'static str = "hl7:value/hl7:center/@unit";
 	pub const RESULT_UNIT_FALLBACK: &'static str = "hl7:value/@unit";
 	pub const RESULT_UNSTRUCTURED: &'static str = "hl7:value";

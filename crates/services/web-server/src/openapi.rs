@@ -1157,16 +1157,22 @@ struct CaseIntakeCheckInputDoc {
 	date_of_most_recent_information: Option<Vec<i32>>,
 	report_type: Option<String>,
 	reporter_organization: Option<String>,
+	reporter_organization_null_flavor: Option<String>,
 	sponsor_study_number: Option<String>,
+	sponsor_study_number_null_flavor: Option<String>,
 	patient_initials: Option<String>,
+	patient_initials_null_flavor: Option<String>,
 	investigation_number: Option<String>,
+	investigation_number_null_flavor: Option<String>,
 	age_d2_2a: Option<String>,
 	sex_d5: Option<String>,
+	sex_d5_null_flavor: Option<String>,
 	dg_prd_key: Option<String>,
 	reaction_meddra_version: Option<String>,
 	reaction_meddra_code: Option<String>,
 	#[schema(value_type = Vec<i32>)]
 	ae_start_date: Option<Vec<i32>>,
+	ae_start_date_null_flavor: Option<String>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, ToSchema)]
@@ -1222,16 +1228,22 @@ struct CaseFromIntakeInputDoc {
 	fda_report_type: Option<String>,
 	report_year: Option<String>,
 	reporter_organization: Option<String>,
+	reporter_organization_null_flavor: Option<String>,
 	sponsor_study_number: Option<String>,
+	sponsor_study_number_null_flavor: Option<String>,
 	patient_initials: Option<String>,
+	patient_initials_null_flavor: Option<String>,
 	investigation_number: Option<String>,
+	investigation_number_null_flavor: Option<String>,
 	age_d2_2a: Option<String>,
 	sex_d5: Option<String>,
+	sex_d5_null_flavor: Option<String>,
 	dg_prd_key: Option<String>,
 	reaction_meddra_version: Option<String>,
 	reaction_meddra_code: Option<String>,
 	#[schema(value_type = Vec<i32>)]
 	ae_start_date: Option<Vec<i32>>,
+	ae_start_date_null_flavor: Option<String>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, ToSchema)]
@@ -1331,7 +1343,7 @@ struct ReactionDoc {
 	criteria_congenital_anomaly_null_flavor: Option<String>,
 	criteria_other_medically_important: bool,
 	criteria_other_medically_important_null_flavor: Option<String>,
-	required_intervention: Option<String>,
+	required_intervention: Option<bool>,
 	expectedness: Option<String>,
 	severity: Option<String>,
 	mfds_device_ae_classification: Option<String>,
@@ -1413,7 +1425,7 @@ struct ReactionForUpdateDoc {
 	criteria_congenital_anomaly_null_flavor: Option<String>,
 	criteria_other_medically_important: Option<bool>,
 	criteria_other_medically_important_null_flavor: Option<String>,
-	required_intervention: Option<String>,
+	required_intervention: Option<bool>,
 	expectedness: Option<String>,
 	severity: Option<String>,
 	mfds_device_ae_classification: Option<String>,

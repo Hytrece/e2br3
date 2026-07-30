@@ -86,18 +86,12 @@ struct DuplicateScanRow {
 
 // -- Pure matching helpers
 
-/// Returns false when `value` is absent, blank, or a known nil-flavor code.
+/// Returns false when `value` is absent or blank.
 pub fn has_meaningful_text(value: Option<&str>) -> bool {
-	let Some(value) = value.map(str::trim).filter(|v| !v.is_empty()) else {
-		return false;
-	};
-	!matches!(
-		value.to_ascii_uppercase().as_str(),
-		"NI" | "UNK" | "ASKU" | "NASK" | "MSK"
-	)
+	value.map(str::trim).is_some_and(|value| !value.is_empty())
 }
 
-/// Returns true when `expected` is absent/nil, or when it matches `actual`
+/// Returns true when `expected` is absent, or when it matches `actual`
 /// case-insensitively.
 pub fn matches_optional_text(expected: Option<&str>, actual: Option<&str>) -> bool {
 	let Some(expected) = expected.filter(|v| has_meaningful_text(Some(*v))) else {

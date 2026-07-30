@@ -26,7 +26,7 @@ fn bool_text(value: Option<bool>) -> Option<&'static str> {
 
 struct FdaReactionRuleView {
 	index: usize,
-	required_intervention: Option<String>,
+	required_intervention: Option<bool>,
 	facts: RuleFacts,
 }
 
@@ -54,7 +54,7 @@ const E_FDA_CATALOG_VALUE_RULES: &[CatalogValueRule<FdaReactionRuleView>] =
 		code: "FDA.E.i.3.2h.REQUIRED",
 		path: |item| format!("reactions.{}.requiredIntervention", item.index),
 		value: |item| {
-			RuleValue::borrowed(item.required_intervention.as_deref(), None)
+			RuleValue::borrowed(bool_text(item.required_intervention), None)
 		},
 		facts: |item| item.facts,
 	}];

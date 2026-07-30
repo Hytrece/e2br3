@@ -34,6 +34,7 @@ pub struct EReactionImport {
 	pub criteria_other_medically_important: Option<bool>,
 	pub criteria_other_medically_important_null_flavor: Option<String>,
 	pub required_intervention: Option<String>,
+	pub required_intervention_null_flavor: Option<String>,
 	pub expectedness: Option<String>,
 	pub severity: Option<String>,
 	pub mfds_device_ae_classification: Option<String>,
@@ -220,6 +221,11 @@ pub fn parse_e_reactions(xml: &[u8]) -> Result<Vec<EReactionImport>> {
 			first_attr(&mut xpath, &node, EReactionPaths::REQUIRED_INTERVENTION),
 			10,
 		);
+		let required_intervention_null_flavor = first_attr(
+			&mut xpath,
+			&node,
+			EReactionPaths::REQUIRED_INTERVENTION_NULL_FLAVOR,
+		);
 		let expectedness =
 			clamp_str(extension_code(&mut xpath, &node, "AE_EXPECTEDNESS"), 1);
 		let severity =
@@ -326,6 +332,7 @@ pub fn parse_e_reactions(xml: &[u8]) -> Result<Vec<EReactionImport>> {
 			criteria_other_medically_important,
 			criteria_other_medically_important_null_flavor,
 			required_intervention,
+			required_intervention_null_flavor,
 			expectedness,
 			severity,
 			mfds_device_ae_classification,
@@ -422,6 +429,22 @@ fn parse_bool_with_null_flavor(
 	null_flavor: Option<String>,
 ) -> (Option<bool>, Option<String>) {
 	(parse_bool_value(value), null_flavor)
+}
+
+#[cfg(test)]
+mod split_null_flavor_tests {
+	use super::parse_e_reactions;
+
+	#[test]
+	fn imports_required_intervention_boolean_null_flavor_into_companion() {
+		let xml = br#"<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><subjectOf2><observation><code code="29" codeSystem="2.16.840.1.113883.3.989.2.1.1.19"/><value xsi:type="CE"><originalText>Reaction</originalText></value><outboundRelationship2><observation><code code="7"/><value xsi:type="BL" nullFlavor="NI"/></observation></outboundRelationship2></observation></subjectOf2></MCCI_IN200100UV01>"#;
+		let reactions = parse_e_reactions(xml).expect("parse");
+		assert_eq!(reactions[0].required_intervention, None);
+		assert_eq!(
+			reactions[0].required_intervention_null_flavor.as_deref(),
+			Some("NI")
+		);
+	}
 }
 
 fn clamp_str(value: Option<String>, max: usize) -> Option<String> {

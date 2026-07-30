@@ -11,6 +11,16 @@ macro_rules! binding {
 			null_flavor_path: None,
 		}
 	};
+	($path:literal, $request:literal, $type:ident, [$($code:literal),+ $(,)?], null: $null:literal) => {
+		PortableFieldBinding {
+			section: "LB",
+			frontend_path: $path,
+			request_path: $request,
+			value_type: PortableValueType::$type,
+			rule_codes: &[$($code),+],
+			null_flavor_path: Some($null),
+		}
+	};
 }
 
 pub(super) const BINDINGS: &[PortableFieldBinding] = &[
@@ -18,7 +28,14 @@ pub(super) const BINDINGS: &[PortableFieldBinding] = &[
 		"testResults[].testDate",
 		"testDate",
 		String,
-		["ICH.F.r.1.ALLOWED.VALUE", "ICH.F.r.1.NULLFLAVOR.ALLOWED"]
+		["ICH.F.r.1.ALLOWED.VALUE"],
+		null: "testResults[].testDateNullFlavor"
+	),
+	binding!(
+		"testResults[].testDateNullFlavor",
+		"testDateNullFlavor",
+		String,
+		["ICH.F.r.1.NULLFLAVOR.ALLOWED"]
 	),
 	binding!(
 		"testResults[].testName",
@@ -48,11 +65,14 @@ pub(super) const BINDINGS: &[PortableFieldBinding] = &[
 		"testResults[].testResult",
 		"testResult",
 		String,
-		[
-			"ICH.F.r.3.2.ALLOWED.VALUE",
-			"ICH.F.r.3.2.LENGTH.MAX",
-			"ICH.F.r.3.2.NULLFLAVOR.ALLOWED"
-		]
+		["ICH.F.r.3.2.ALLOWED.VALUE", "ICH.F.r.3.2.LENGTH.MAX"],
+		null: "testResults[].testResultNullFlavor"
+	),
+	binding!(
+		"testResults[].testResultNullFlavor",
+		"testResultNullFlavor",
+		String,
+		["ICH.F.r.3.2.NULLFLAVOR.ALLOWED"]
 	),
 	binding!(
 		"testResults[].testUnit",

@@ -42,7 +42,7 @@ CREATE TABLE reactions (
     criteria_other_medically_important_null_flavor VARCHAR(4) CHECK (criteria_other_medically_important_null_flavor IN ('NI', 'UNK', 'ASKU', 'NASK', 'MSK')),
 
     -- FDA.E.i.3.2h - Required Intervention (FDA)
-    required_intervention VARCHAR(10),
+    required_intervention BOOLEAN,
     required_intervention_null_flavor VARCHAR(4) CHECK (required_intervention_null_flavor IN ('NI', 'UNK', 'ASKU', 'NASK', 'MSK')),
 
     -- Reference AE common metadata

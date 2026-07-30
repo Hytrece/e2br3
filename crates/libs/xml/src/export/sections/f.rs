@@ -79,9 +79,16 @@ pub(crate) fn test_result_fragment(result: &TestResult) -> Result<String> {
 		out.push_str(&xml_escape(code));
 		out.push_str("\"/>");
 	}
-	if result.test_result_value.is_some() || result.result_unstructured.is_some() {
+	if result.test_result_value.is_some()
+		|| result.test_result_null_flavor.is_some()
+		|| result.result_unstructured.is_some()
+	{
 		out.push_str("<value");
-		if let Some(val) = result.test_result_value.as_deref() {
+		if let Some(null_flavor) = result.test_result_null_flavor.as_deref() {
+			out.push_str(" nullFlavor=\"");
+			out.push_str(&xml_escape(null_flavor));
+			out.push_str("\"");
+		} else if let Some(val) = result.test_result_value.as_deref() {
 			out.push_str(" value=\"");
 			out.push_str(&xml_escape(val));
 			out.push_str("\"");
@@ -194,4 +201,48 @@ fn base_f_test_result_skeleton() -> &'static str {
 \t\t</controlActProcess>\
 \t</PORR_IN049016UV>\
 </MCCI_IN200100UV01>"
+}
+
+#[cfg(test)]
+mod tests {
+	use super::test_result_fragment;
+	use lib_core::model::test_result::TestResult;
+	use sqlx::types::time::OffsetDateTime;
+	use sqlx::types::Uuid;
+
+	#[test]
+	fn exports_test_result_companion_as_xml_null_flavor_attribute() {
+		let now = OffsetDateTime::now_utc();
+		let mut result = TestResult {
+			id: Uuid::new_v4(),
+			case_id: Uuid::new_v4(),
+			sequence_number: 1,
+			test_date: None,
+			test_date_null_flavor: None,
+			test_name: "Result".to_string(),
+			test_meddra_version: None,
+			test_meddra_code: None,
+			test_result_code: None,
+			test_result_value: None,
+			test_result_null_flavor: Some("NINF".to_string()),
+			test_result_unit: None,
+			result_unstructured: None,
+			normal_low_value: None,
+			normal_high_value: None,
+			comments: None,
+			more_info_available: None,
+			deleted: false,
+			created_at: now,
+			updated_at: now,
+			created_by: Uuid::new_v4(),
+			updated_by: None,
+		};
+		let xml = test_result_fragment(&result).expect("export");
+		assert!(xml.contains("<value nullFlavor=\"NINF\"></value>"));
+
+		result.test_result_null_flavor = None;
+		result.test_date_null_flavor = Some("ASKU".to_string());
+		let xml = test_result_fragment(&result).expect("export date NullFlavor");
+		assert!(xml.contains("<effectiveTime nullFlavor=\"ASKU\"/>"));
+	}
 }

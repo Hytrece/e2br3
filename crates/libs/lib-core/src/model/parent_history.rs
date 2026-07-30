@@ -36,6 +36,7 @@ pub struct ParentMedicalHistory {
 
 	// D.10.7.1.r.3 - Continuing
 	pub continuing: Option<bool>,
+	pub continuing_null_flavor: Option<String>,
 
 	// D.10.7.1.r.4 - End Date
 	pub end_date: Option<Date>,
@@ -59,6 +60,7 @@ pub struct ParentMedicalHistoryForCreate {
 	pub sequence_number: i32,
 	pub meddra_code: Option<String>,
 	pub start_date_null_flavor: Option<String>,
+	pub continuing_null_flavor: Option<String>,
 	pub end_date_null_flavor: Option<String>,
 }
 
@@ -73,6 +75,7 @@ pub struct ParentMedicalHistoryForUpdate {
 	pub start_date: Option<Date>,
 	pub start_date_null_flavor: Option<String>,
 	pub continuing: Option<bool>,
+	pub continuing_null_flavor: Option<String>,
 	#[serde(
 		default,
 		deserialize_with = "crate::serde::flex_date::deserialize_option_date"

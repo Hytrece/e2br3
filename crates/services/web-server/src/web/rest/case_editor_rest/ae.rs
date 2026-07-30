@@ -13,23 +13,51 @@ const REACTION_ROW_ALIASES: &[(&str, &[&str])] = &[
 	("serious", &["seriousness.serious"]),
 	("criteria_death", &["seriousness.criteriaResultsInDeath"]),
 	(
+		"criteria_death_null_flavor",
+		&["seriousness.criteriaResultsInDeathNullFlavor"],
+	),
+	(
 		"criteria_life_threatening",
 		&["seriousness.criteriaLifeThreatening"],
+	),
+	(
+		"criteria_life_threatening_null_flavor",
+		&["seriousness.criteriaLifeThreateningNullFlavor"],
 	),
 	(
 		"criteria_hospitalization",
 		&["seriousness.criteriaHospitalization"],
 	),
+	(
+		"criteria_hospitalization_null_flavor",
+		&["seriousness.criteriaHospitalizationNullFlavor"],
+	),
 	("criteria_disabling", &["seriousness.criteriaDisabling"]),
+	(
+		"criteria_disabling_null_flavor",
+		&["seriousness.criteriaDisablingNullFlavor"],
+	),
 	(
 		"criteria_congenital_anomaly",
 		&["seriousness.criteriaCongenitalAnomaly"],
 	),
 	(
+		"criteria_congenital_anomaly_null_flavor",
+		&["seriousness.criteriaCongenitalAnomalyNullFlavor"],
+	),
+	(
 		"criteria_other_medically_important",
 		&["seriousness.criteriaOtherMedicallyImportant"],
 	),
+	(
+		"criteria_other_medically_important_null_flavor",
+		&["seriousness.criteriaOtherMedicallyImportantNullFlavor"],
+	),
 	("required_intervention", &["requiredIntervention"]),
+	(
+		"required_intervention_null_flavor",
+		&["requiredInterventionNullFlavor"],
+	),
 	("expectedness", &["expectedness"]),
 	("severity", &["severity"]),
 	(
@@ -83,7 +111,9 @@ const REACTION_ROW_ALIASES: &[(&str, &[&str])] = &[
 	),
 	("mfds_device_action_other", &["mfdsDeviceAe.actionOther"]),
 	("start_date", &["reactionStartDate"]),
+	("start_date_null_flavor", &["reactionStartDateNullFlavor"]),
 	("end_date", &["reactionEndDate"]),
+	("end_date_null_flavor", &["reactionEndDateNullFlavor"]),
 	("duration_value", &["reactionDuration.value"]),
 	("duration_unit", &["reactionDuration.unit"]),
 	("outcome", &["reactionOutcome"]),

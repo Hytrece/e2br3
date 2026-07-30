@@ -90,12 +90,21 @@ const DOSAGE_ALIASES: &[(&str, &[&str])] = &[
 	("batch_lot_number_null_flavor", &["batchNumberNullFlavor"]),
 	("dosage_text", &["dosageText"]),
 	("dose_form", &["doseForm"]),
+	("dose_form_null_flavor", &["doseFormNullFlavor"]),
 	("dose_form_termid_version", &["doseFormTermIdVersion"]),
 	("dose_form_termid", &["doseFormTermId"]),
 	("route_of_administration", &["routeOfAdministration"]),
+	(
+		"route_of_administration_null_flavor",
+		&["routeOfAdministrationNullFlavor"],
+	),
 	("route_termid_version", &["routeTermIdVersion"]),
 	("route_termid", &["routeTermId"]),
 	("parent_route", &["parentRouteOfAdministration"]),
+	(
+		"parent_route_null_flavor",
+		&["parentRouteOfAdministrationNullFlavor"],
+	),
 	("parent_route_termid_version", &["parentRouteTermIdVersion"]),
 	("parent_route_termid", &["parentRouteTermId"]),
 	(

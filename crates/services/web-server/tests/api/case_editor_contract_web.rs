@@ -2,6 +2,8 @@
 mod ae;
 #[path = "case_editor_contract/ci.rs"]
 mod ci;
+#[path = "case_editor_contract/db_invariants.rs"]
+mod db_invariants;
 #[path = "case_editor_contract/dg.rs"]
 mod dg;
 #[path = "case_editor_contract/dh.rs"]

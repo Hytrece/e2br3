@@ -52,7 +52,7 @@ pub struct Reaction {
 	pub criteria_other_medically_important: Option<bool>,
 	pub criteria_other_medically_important_null_flavor: Option<String>,
 	// FDA.E.i.3.2h - Required Intervention (FDA)
-	pub required_intervention: Option<String>,
+	pub required_intervention: Option<bool>,
 	pub required_intervention_null_flavor: Option<String>,
 
 	pub expectedness: Option<String>,
@@ -124,7 +124,7 @@ pub struct ReactionForCreate {
 	pub criteria_congenital_anomaly_null_flavor: Option<String>,
 	pub criteria_other_medically_important: Option<bool>,
 	pub criteria_other_medically_important_null_flavor: Option<String>,
-	pub required_intervention: Option<String>,
+	pub required_intervention: Option<bool>,
 	pub required_intervention_null_flavor: Option<String>,
 	pub expectedness: Option<String>,
 	pub severity: Option<String>,
@@ -186,7 +186,7 @@ pub struct ReactionForUpdate {
 	pub criteria_congenital_anomaly_null_flavor: Option<String>,
 	pub criteria_other_medically_important: Option<bool>,
 	pub criteria_other_medically_important_null_flavor: Option<String>,
-	pub required_intervention: Option<String>,
+	pub required_intervention: Option<bool>,
 	pub required_intervention_null_flavor: Option<String>,
 	pub expectedness: Option<String>,
 	pub severity: Option<String>,

@@ -170,7 +170,8 @@ pub(crate) fn reaction_fragment(reaction: &Reaction) -> Result<String> {
 			.as_deref(),
 	));
 	out.push_str(&observation_rel_required_intervention(
-		reaction.required_intervention.as_deref(),
+		reaction.required_intervention,
+		reaction.required_intervention_null_flavor.as_deref(),
 	));
 	append_extension_code(
 		&mut out,
@@ -408,24 +409,38 @@ fn observation_rel_outcome(
 	))
 }
 
-fn normalize_bl(value: &str) -> Option<&'static str> {
-	match value.trim().to_ascii_lowercase().as_str() {
-		"true" | "1" | "yes" | "y" => Some("true"),
-		"false" | "2" | "no" | "n" => Some("false"),
-		_ => None,
-	}
-}
-
-fn observation_rel_required_intervention(value: Option<&str>) -> String {
-	if let Some(v) = value.and_then(normalize_bl) {
+fn observation_rel_required_intervention(
+	value: Option<bool>,
+	null_flavor: Option<&str>,
+) -> String {
+	if let Some(value) = value {
+		let v = if value { "true" } else { "false" };
 		return format!(
 			"<outboundRelationship2 typeCode=\"PERT\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code code=\"7\" codeSystem=\"2.16.840.1.113883.3.989.5.1.2.2.1.3\"/><value xsi:type=\"BL\" value=\"{v}\"/></observation></outboundRelationship2>"
+		);
+	}
+	if let Some(null_flavor) = null_flavor {
+		return format!(
+			"<outboundRelationship2 typeCode=\"PERT\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code code=\"7\" codeSystem=\"2.16.840.1.113883.3.989.5.1.2.2.1.3\"/><value xsi:type=\"BL\" nullFlavor=\"{}\"/></observation></outboundRelationship2>",
+			xml_escape(null_flavor)
 		);
 	}
 	if should_emit_required_intervention_null_flavor_ni() {
 		"<outboundRelationship2 typeCode=\"PERT\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code code=\"7\" codeSystem=\"2.16.840.1.113883.3.989.5.1.2.2.1.3\"/><value xsi:type=\"BL\" nullFlavor=\"NI\"/></observation></outboundRelationship2>".to_string()
 	} else {
 		"<outboundRelationship2 typeCode=\"PERT\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code code=\"7\" codeSystem=\"2.16.840.1.113883.3.989.5.1.2.2.1.3\"/><value xsi:type=\"BL\" value=\"true\"/></observation></outboundRelationship2>".to_string()
+	}
+}
+
+#[cfg(test)]
+mod split_null_flavor_tests {
+	use super::observation_rel_required_intervention;
+
+	#[test]
+	fn exports_required_intervention_companion_as_boolean_null_flavor() {
+		let xml = observation_rel_required_intervention(None, Some("NI"));
+		assert!(xml.contains("xsi:type=\"BL\" nullFlavor=\"NI\""));
+		assert!(!xml.contains(" value=\""));
 	}
 }
 

@@ -5,6 +5,14 @@ use lib_core::model::reaction::{ReactionBmc, ReactionForCreate};
 use lib_core::model::ModelManager;
 use sqlx::types::Uuid;
 
+fn normalize_xml_bool(value: &str) -> Option<bool> {
+	match value.trim().to_ascii_lowercase().as_str() {
+		"true" | "1" => Some(true),
+		"false" | "0" | "2" => Some(false),
+		_ => None,
+	}
+}
+
 pub(crate) async fn import_section_e(
 	ctx: &Ctx,
 	mm: &ModelManager,
@@ -55,8 +63,13 @@ pub(crate) async fn import_section_e(
 				criteria_other_medically_important_null_flavor: reaction
 					.criteria_other_medically_important_null_flavor
 					.clone(),
-				required_intervention: reaction.required_intervention.clone(),
-				required_intervention_null_flavor: None,
+				required_intervention: reaction
+					.required_intervention
+					.as_deref()
+					.and_then(normalize_xml_bool),
+				required_intervention_null_flavor: reaction
+					.required_intervention_null_flavor
+					.clone(),
 				expectedness: reaction.expectedness.clone(),
 				severity: reaction.severity.clone(),
 				mfds_device_ae_classification: reaction

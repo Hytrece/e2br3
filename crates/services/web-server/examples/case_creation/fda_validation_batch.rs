@@ -17,7 +17,7 @@ struct Scenario {
 	disabling: bool,
 	congenital: bool,
 	other_medically_important: bool,
-	required_intervention: Option<&'static str>,
+	required_intervention: Option<bool>,
 	drug_characterization: &'static str,
 }
 
@@ -49,7 +49,7 @@ async fn main() -> Result<()> {
 			disabling: false,
 			congenital: false,
 			other_medically_important: false,
-			required_intervention: Some("true"),
+			required_intervention: Some(true),
 			drug_characterization: "1",
 		},
 		Scenario {
@@ -62,7 +62,7 @@ async fn main() -> Result<()> {
 			disabling: false,
 			congenital: false,
 			other_medically_important: false,
-			required_intervention: Some("false"),
+			required_intervention: Some(false),
 			drug_characterization: "2",
 		},
 		Scenario {
@@ -88,7 +88,7 @@ async fn main() -> Result<()> {
 			disabling: false,
 			congenital: false,
 			other_medically_important: true,
-			required_intervention: Some("true"),
+			required_intervention: Some(true),
 			drug_characterization: "1",
 		},
 	];

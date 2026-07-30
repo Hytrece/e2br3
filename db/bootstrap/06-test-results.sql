@@ -21,8 +21,9 @@ CREATE TABLE test_results (
     -- F.r.3.1 - Test Result (coded)
     test_result_code VARCHAR(2),  -- E2B(R3) code list
 
-    -- F.r.3.2 - Test Result (value/finding)
-    test_result_value VARCHAR(20000),  -- Can be numeric or text
+	-- F.r.3.2 - Test Result (value/finding)
+	test_result_value VARCHAR(20000),  -- Can be numeric or text
+	test_result_null_flavor VARCHAR(4),
 
     -- F.r.3.3 - Test Result Unit
     test_result_unit VARCHAR(50),
@@ -40,7 +41,10 @@ CREATE TABLE test_results (
     comments TEXT,
 
     -- F.r.7 - More Information Available
-    more_info_available BOOLEAN,
+	more_info_available BOOLEAN,
+
+	CONSTRAINT ck_nfv_test_results_3f503f260cf6
+		CHECK (test_result_value IS NULL OR test_result_null_flavor IS NULL),
 
     deleted BOOLEAN NOT NULL DEFAULT false,
 

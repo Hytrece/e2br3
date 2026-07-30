@@ -81,6 +81,118 @@ mod portable_bindings_tests {
 		}
 	}
 
+	fn assert_explicit_null_flavor_companions(bindings: &[&PortableFieldBinding]) {
+		let constraints = portable_constraints();
+		for binding in bindings {
+			let rule_kinds = binding
+				.rule_codes
+				.iter()
+				.map(|code| {
+					constraints
+						.iter()
+						.find(|constraint| constraint.code == *code)
+						.unwrap_or_else(|| panic!("unknown portable rule {code}"))
+						.kind
+				})
+				.collect::<Vec<_>>();
+			let has_null_flavor_rule =
+				rule_kinds.contains(&crate::PortableConstraintKind::NullFlavor);
+			assert!(
+				!has_null_flavor_rule
+					|| binding.frontend_path.ends_with("NullFlavor"),
+				"NullFlavor rule must use explicit companion path: {}",
+				binding.frontend_path,
+			);
+
+			if !binding.frontend_path.ends_with("NullFlavor") {
+				continue;
+			}
+			assert!(binding.request_path.ends_with("NullFlavor"));
+			assert!(
+				!rule_kinds.is_empty(),
+				"companion binding must own at least one NullFlavor rule: {}",
+				binding.frontend_path,
+			);
+			assert!(
+				rule_kinds
+					.iter()
+					.all(|kind| *kind == crate::PortableConstraintKind::NullFlavor),
+				"companion binding may only own NullFlavor rules: {}",
+				binding.frontend_path,
+			);
+			assert_eq!(binding.null_flavor_path, None);
+
+			let value_path = binding
+				.frontend_path
+				.strip_suffix("NullFlavor")
+				.expect("checked suffix");
+			let value_bindings = bindings
+				.iter()
+				.filter(|value_binding| {
+					value_binding.section == binding.section
+						&& value_binding.frontend_path == value_path
+						&& value_binding.null_flavor_path
+							== Some(binding.frontend_path)
+				})
+				.count();
+			assert_eq!(
+				value_bindings, 1,
+				"NullFlavor path must have exactly one value sibling: {}",
+				binding.frontend_path,
+			);
+		}
+
+		for binding in bindings
+			.iter()
+			.filter(|binding| binding.null_flavor_path.is_some())
+		{
+			let null_flavor_path = binding.null_flavor_path.unwrap();
+			assert_ne!(binding.frontend_path, null_flavor_path);
+			assert_eq!(
+				bindings
+					.iter()
+					.filter(|companion| {
+						companion.section == binding.section
+							&& companion.frontend_path == null_flavor_path
+					})
+					.count(),
+				1,
+				"value binding must point to exactly one companion: {}",
+				binding.frontend_path,
+			);
+		}
+	}
+
+	#[test]
+	fn null_flavor_rules_use_explicit_companion_bindings() {
+		assert_explicit_null_flavor_companions(&portable_field_bindings());
+	}
+
+	#[test]
+	#[should_panic(
+		expected = "companion binding must own at least one NullFlavor rule"
+	)]
+	fn empty_null_flavor_companion_is_rejected() {
+		let value = PortableFieldBinding {
+			section: "TEST",
+			frontend_path: "field",
+			request_path: "field",
+			value_type: PortableValueType::String,
+			rule_codes: &[],
+			null_flavor_path: Some("fieldNullFlavor"),
+		};
+		let companion = PortableFieldBinding {
+			section: "TEST",
+			frontend_path: "fieldNullFlavor",
+			request_path: "fieldNullFlavor",
+			value_type: PortableValueType::String,
+			rule_codes: &[],
+			null_flavor_path: None,
+		};
+
+		assert_explicit_null_flavor_companions(&[&value, &companion]);
+	}
+
 	#[test]
 	fn binding_paths_are_explicit_and_fallback_free() {
 		for binding in portable_field_bindings() {
@@ -265,7 +377,7 @@ mod portable_bindings_tests {
 		);
 		assert_binding(
 			"AE",
-			"reactions[].seriousness.criteriaResultsInDeath",
+			"reactions[].seriousness.criteriaResultsInDeathNullFlavor",
 			"ICH.E.i.3.2a.NULLFLAVOR.ALLOWED",
 		);
 		let required_intervention = bindings_for_section("AE")
@@ -275,7 +387,7 @@ mod portable_bindings_tests {
 			.expect("FDA required intervention binding");
 		assert_eq!(
 			required_intervention.null_flavor_path,
-			Some("reactions[].requiredIntervention")
+			Some("reactions[].requiredInterventionNullFlavor")
 		);
 		assert_binding(
 			"AE",
