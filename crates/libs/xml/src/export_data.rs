@@ -2,8 +2,9 @@ use crate::error::Error;
 use crate::Result;
 use lib_core::model;
 use lib_core::model::drug::{
-	derive_fda_device_characteristics, DosageInformation, DrugActiveSubstance,
-	DrugDeviceCharacteristic, DrugIndication, DrugInformation,
+	derive_drug_characteristics, DosageInformation, DrugActiveSubstance,
+	DrugDeviceCharacteristic, DrugIndication, DrugInformation, FdaDeviceCode,
+	FdaDeviceInformation,
 };
 use lib_core::model::drug_reaction_assessment::{
 	DrugReactionAssessment, RelatednessAssessment,
@@ -16,6 +17,8 @@ pub(crate) struct DrugExportBundle {
 	pub(crate) dosages: Vec<DosageInformation>,
 	pub(crate) indications: Vec<DrugIndication>,
 	pub(crate) characteristics: Vec<DrugDeviceCharacteristic>,
+	pub(crate) devices: Vec<FdaDeviceInformation>,
+	pub(crate) device_codes: Vec<FdaDeviceCode>,
 	pub(crate) assessments: Vec<DrugReactionAssessment>,
 	pub(crate) relatedness: Vec<RelatednessAssessment>,
 }
@@ -112,7 +115,7 @@ pub(crate) async fn load_drug_export_bundle(
 			.collect();
 		raw_rows.sort_by_key(|row| row.sequence_number);
 		if raw_rows.is_empty() {
-			characteristics.extend(derive_fda_device_characteristics(drug));
+			characteristics.extend(derive_drug_characteristics(drug));
 		} else {
 			let seen_codes: std::collections::HashSet<_> = raw_rows
 				.iter()
@@ -122,19 +125,47 @@ pub(crate) async fn load_drug_export_bundle(
 				.collect();
 			characteristics.extend(raw_rows);
 			characteristics.extend(
-				derive_fda_device_characteristics(drug)
-					.into_iter()
-					.filter(|row| {
-						row.code
-							.as_deref()
-							.map(str::trim)
-							.filter(|value| !value.is_empty())
-							.map(|code| !seen_codes.contains(code))
-							.unwrap_or(true)
-					}),
+				derive_drug_characteristics(drug).into_iter().filter(|row| {
+					row.code
+						.as_deref()
+						.map(str::trim)
+						.filter(|value| !value.is_empty())
+						.map(|code| !seen_codes.contains(code))
+						.unwrap_or(true)
+				}),
 			);
 		}
 	}
+
+	let devices = if drug_ids.is_empty() {
+		Vec::new()
+	} else {
+		mm.dbx()
+			.fetch_all(
+				sqlx::query_as::<_, FdaDeviceInformation>(
+					"SELECT * FROM fda_device_information WHERE drug_id = ANY($1) AND deleted = false ORDER BY drug_id, sequence_number",
+				)
+				.bind(&drug_ids),
+			)
+			.await
+			.map_err(model::Error::from)
+			.map_err(Error::from)?
+	};
+	let device_ids: Vec<_> = devices.iter().map(|device| device.id).collect();
+	let device_codes = if device_ids.is_empty() {
+		Vec::new()
+	} else {
+		mm.dbx()
+			.fetch_all(
+				sqlx::query_as::<_, FdaDeviceCode>(
+					"SELECT * FROM fda_device_codes WHERE device_id = ANY($1) AND deleted = false ORDER BY device_id, element, sequence_number",
+				)
+				.bind(&device_ids),
+			)
+			.await
+			.map_err(model::Error::from)
+			.map_err(Error::from)?
+	};
 
 	let assessments = if drug_ids.is_empty() {
 		Vec::new()
@@ -172,6 +203,8 @@ pub(crate) async fn load_drug_export_bundle(
 		dosages,
 		indications,
 		characteristics,
+		devices,
+		device_codes,
 		assessments,
 		relatedness,
 	})

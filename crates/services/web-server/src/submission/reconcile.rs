@@ -136,6 +136,10 @@ pub(super) async fn reconcile_one_submission(
 			} else {
 				SubmissionAuthority::Fda
 			};
+			let export_authority = match authority {
+				SubmissionAuthority::Fda => RegulatoryAuthority::Fda,
+				SubmissionAuthority::Mfds => RegulatoryAuthority::Mfds,
+			};
 
 			let ctx_clone = system_ctx.with_compliance(
 				Some(SYSTEM_REASON_RECONCILE_EXPORT.to_string()),
@@ -144,8 +148,15 @@ pub(super) async fn reconcile_one_submission(
 			let mm_clone = mm.clone();
 			let case_id = row.case_id;
 			let xml = task::spawn_blocking(move || {
-				Handle::current()
-					.block_on(export_case_xml(&ctx_clone, &mm_clone, case_id))
+				Handle::current().block_on(export_case_xml_with_options(
+					&ctx_clone,
+					&mm_clone,
+					case_id,
+					ExportXmlOptions {
+						authority: export_authority,
+						..ExportXmlOptions::default()
+					},
+				))
 			})
 			.await
 			.map_err(|err| Error::BadRequest {

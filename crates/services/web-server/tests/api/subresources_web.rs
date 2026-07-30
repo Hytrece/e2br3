@@ -610,6 +610,58 @@ async fn create_drug(app: &Router, cookie: &str, case_id: Uuid) -> Result<Uuid> 
 	extract_id(&body)
 }
 
+#[serial]
+#[tokio::test]
+async fn fda_device_replace_rolls_back_on_constraint_violation() -> Result<()> {
+	let mm = init_test_mm().await?;
+	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
+	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
+	let cookie = cookie_header(&token.to_string());
+	let app = web_server::app(mm);
+	let case_id = create_case(&app, &cookie, seed.org_id).await?;
+	let drug_id = create_drug(&app, &cookie, case_id).await?;
+	let uri = format!("/api/cases/{case_id}/drugs/{drug_id}/devices/replace");
+
+	let (status, body) = put_json_with_audit_reason(
+		&app,
+		&cookie,
+		uri.clone(),
+		json!({ "data": { "devices": [{ "device_brand_name": "Original" }] } }),
+		"New Data",
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK, "{}", String::from_utf8_lossy(&body));
+
+	let (status, _) = put_json_with_audit_reason(
+		&app,
+		&cookie,
+		uri,
+		json!({
+			"data": {
+				"devices": [{
+					"device_brand_name": "Replacement",
+					"follow_up_types": [{ "value_code": "9" }]
+				}]
+			}
+		}),
+		"Edited Data",
+	)
+	.await?;
+	assert_eq!(status, StatusCode::BAD_REQUEST);
+
+	let (status, body) = get_json(
+		&app,
+		&cookie,
+		format!("/api/cases/{case_id}/drugs/{drug_id}/devices"),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK);
+	let payload: Value = serde_json::from_slice(&body)?;
+	assert_eq!(payload["data"].as_array().map(Vec::len), Some(1));
+	assert_eq!(payload["data"][0]["device_brand_name"], "Original");
+	Ok(())
+}
+
 async fn create_reaction(app: &Router, cookie: &str, case_id: Uuid) -> Result<Uuid> {
 	let body = json!({
 		"data": {

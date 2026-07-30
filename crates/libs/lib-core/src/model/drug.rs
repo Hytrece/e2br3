@@ -69,7 +69,6 @@ pub struct DrugInformation {
 	pub drug_additional_info_codes_json: Option<JsonValue>,
 	pub drug_additional_information: Option<String>,
 	pub fda_specialized_product_category: Option<String>,
-	pub fda_device_info_json: Option<JsonValue>,
 
 	// FDA.G.k.1.a - FDA Other Characterisation of Drug Role (1 = Similar Device)
 	pub fda_other_characterization: Option<String>,
@@ -111,7 +110,6 @@ pub struct DrugInformationForCreate {
 	pub drug_additional_info_codes_json: Option<JsonValue>,
 	pub drug_additional_information: Option<String>,
 	pub fda_specialized_product_category: Option<String>,
-	pub fda_device_info_json: Option<JsonValue>,
 	pub fda_other_characterization: Option<String>,
 }
 
@@ -141,143 +139,12 @@ pub struct DrugInformationForUpdate {
 	pub drug_additional_info_codes_json: Option<JsonValue>,
 	pub drug_additional_information: Option<String>,
 	pub fda_specialized_product_category: Option<String>,
-	pub fda_device_info_json: Option<JsonValue>,
 	pub fda_other_characterization: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct FdaDeviceCodeEntry {
-	pub value_code: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct DrugAdditionalInfoCodeEntry {
 	pub value_code: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct FdaDeviceInfoData {
-	pub malfunction: Option<bool>,
-	#[serde(default)]
-	pub follow_up_types: Vec<FdaDeviceCodeEntry>,
-	#[serde(default)]
-	pub device_problem_codes: Vec<FdaDeviceCodeEntry>,
-	pub device_brand_name: Option<String>,
-	pub common_device_name: Option<String>,
-	pub device_product_code: Option<String>,
-	pub manufacturer_name: Option<String>,
-	pub manufacturer_address: Option<String>,
-	pub manufacturer_city: Option<String>,
-	pub manufacturer_state: Option<String>,
-	pub manufacturer_country: Option<String>,
-	pub device_usage: Option<String>,
-	pub device_lot_number: Option<String>,
-	pub operator_of_device: Option<String>,
-	#[serde(default)]
-	pub remedial_actions: Vec<FdaDeviceCodeEntry>,
-}
-
-impl FdaDeviceInfoData {
-	pub fn is_empty(&self) -> bool {
-		self.malfunction.is_none()
-			&& self.follow_up_types.iter().all(|entry| {
-				entry
-					.value_code
-					.as_deref()
-					.map(str::trim)
-					.unwrap_or("")
-					.is_empty()
-			}) && self.device_problem_codes.iter().all(|entry| {
-			entry
-				.value_code
-				.as_deref()
-				.map(str::trim)
-				.unwrap_or("")
-				.is_empty()
-		}) && self
-			.device_brand_name
-			.as_deref()
-			.map(str::trim)
-			.unwrap_or("")
-			.is_empty()
-			&& self
-				.common_device_name
-				.as_deref()
-				.map(str::trim)
-				.unwrap_or("")
-				.is_empty()
-			&& self
-				.device_product_code
-				.as_deref()
-				.map(str::trim)
-				.unwrap_or("")
-				.is_empty()
-			&& self
-				.manufacturer_name
-				.as_deref()
-				.map(str::trim)
-				.unwrap_or("")
-				.is_empty()
-			&& self
-				.manufacturer_address
-				.as_deref()
-				.map(str::trim)
-				.unwrap_or("")
-				.is_empty()
-			&& self
-				.manufacturer_city
-				.as_deref()
-				.map(str::trim)
-				.unwrap_or("")
-				.is_empty()
-			&& self
-				.manufacturer_state
-				.as_deref()
-				.map(str::trim)
-				.unwrap_or("")
-				.is_empty()
-			&& self
-				.manufacturer_country
-				.as_deref()
-				.map(str::trim)
-				.unwrap_or("")
-				.is_empty()
-			&& self
-				.device_usage
-				.as_deref()
-				.map(str::trim)
-				.unwrap_or("")
-				.is_empty()
-			&& self
-				.device_lot_number
-				.as_deref()
-				.map(str::trim)
-				.unwrap_or("")
-				.is_empty()
-			&& self
-				.operator_of_device
-				.as_deref()
-				.map(str::trim)
-				.unwrap_or("")
-				.is_empty()
-			&& self.remedial_actions.iter().all(|entry| {
-				entry
-					.value_code
-					.as_deref()
-					.map(str::trim)
-					.unwrap_or("")
-					.is_empty()
-			})
-	}
-}
-
-pub fn parse_fda_device_info_json(
-	value: Option<&JsonValue>,
-) -> Option<FdaDeviceInfoData> {
-	value
-		.cloned()
-		.and_then(|raw| serde_json::from_value::<FdaDeviceInfoData>(raw).ok())
-		.filter(|parsed| !parsed.is_empty())
 }
 
 pub fn parse_drug_additional_info_codes_json(
@@ -299,32 +166,6 @@ pub fn parse_drug_additional_info_codes_json(
 				.is_empty() == false
 		})
 		.collect()
-}
-
-fn characteristic_text_entry(
-	drug_id: Uuid,
-	sequence_number: i32,
-	code: &str,
-	value: String,
-) -> DrugDeviceCharacteristic {
-	DrugDeviceCharacteristic {
-		id: Uuid::nil(),
-		drug_id,
-		sequence_number,
-		code: Some(code.to_string()),
-		code_system: Some("2.16.840.1.113883.3.989.2.1.1.19".to_string()),
-		code_display_name: None,
-		value_type: Some("ST".to_string()),
-		value_value: Some(value),
-		value_code: None,
-		value_code_system: None,
-		value_display_name: None,
-		deleted: false,
-		created_at: OffsetDateTime::UNIX_EPOCH,
-		updated_at: OffsetDateTime::UNIX_EPOCH,
-		created_by: Uuid::nil(),
-		updated_by: None,
-	}
 }
 
 fn characteristic_code_entry(
@@ -353,52 +194,9 @@ fn characteristic_code_entry(
 	}
 }
 
-fn characteristic_boolean_entry(
-	drug_id: Uuid,
-	sequence_number: i32,
-	code: &str,
-	value: bool,
-) -> DrugDeviceCharacteristic {
-	DrugDeviceCharacteristic {
-		id: Uuid::nil(),
-		drug_id,
-		sequence_number,
-		code: Some(code.to_string()),
-		code_system: Some("2.16.840.1.113883.3.989.2.1.1.19".to_string()),
-		code_display_name: None,
-		value_type: Some("BL".to_string()),
-		value_value: Some(if value { "true" } else { "false" }.to_string()),
-		value_code: None,
-		value_code_system: None,
-		value_display_name: None,
-		deleted: false,
-		created_at: OffsetDateTime::UNIX_EPOCH,
-		updated_at: OffsetDateTime::UNIX_EPOCH,
-		created_by: Uuid::nil(),
-		updated_by: None,
-	}
-}
-
-pub fn derive_fda_device_characteristics(
+pub fn derive_drug_characteristics(
 	drug: &DrugInformation,
 ) -> Vec<DrugDeviceCharacteristic> {
-	fn push_text_row(
-		rows: &mut Vec<DrugDeviceCharacteristic>,
-		sequence_number: &mut i32,
-		drug_id: Uuid,
-		code: &str,
-		value: Option<&str>,
-	) {
-		if let Some(value) = value.map(str::trim).filter(|value| !value.is_empty()) {
-			rows.push(characteristic_text_entry(
-				drug_id,
-				*sequence_number,
-				code,
-				value.to_string(),
-			));
-			*sequence_number += 1;
-		}
-	}
 	fn push_code_row(
 		rows: &mut Vec<DrugDeviceCharacteristic>,
 		sequence_number: &mut i32,
@@ -416,24 +214,6 @@ pub fn derive_fda_device_characteristics(
 			*sequence_number += 1;
 		}
 	}
-	fn push_bool_row(
-		rows: &mut Vec<DrugDeviceCharacteristic>,
-		sequence_number: &mut i32,
-		drug_id: Uuid,
-		code: &str,
-		value: Option<bool>,
-	) {
-		if let Some(value) = value {
-			rows.push(characteristic_boolean_entry(
-				drug_id,
-				*sequence_number,
-				code,
-				value,
-			));
-			*sequence_number += 1;
-		}
-	}
-
 	let mut rows = Vec::new();
 	let mut sequence_number = 1_i32;
 	push_code_row(
@@ -455,130 +235,7 @@ pub fn derive_fda_device_characteristics(
 		);
 	}
 
-	if let Some(info) =
-		parse_fda_device_info_json(drug.fda_device_info_json.as_ref())
-	{
-		push_bool_row(
-			&mut rows,
-			&mut sequence_number,
-			drug.id,
-			"FDA.G.k.12.r.1",
-			info.malfunction,
-		);
-		for entry in info.follow_up_types {
-			push_code_row(
-				&mut rows,
-				&mut sequence_number,
-				drug.id,
-				"FDA.G.k.12.r.2.r",
-				entry.value_code.as_deref(),
-			);
-		}
-		for entry in info.device_problem_codes {
-			push_code_row(
-				&mut rows,
-				&mut sequence_number,
-				drug.id,
-				"FDA.G.k.12.r.3.r",
-				entry.value_code.as_deref(),
-			);
-		}
-		push_text_row(
-			&mut rows,
-			&mut sequence_number,
-			drug.id,
-			"FDAGK12R4",
-			info.device_brand_name.as_deref(),
-		);
-		push_text_row(
-			&mut rows,
-			&mut sequence_number,
-			drug.id,
-			"FDAGK12R5",
-			info.common_device_name.as_deref(),
-		);
-		push_code_row(
-			&mut rows,
-			&mut sequence_number,
-			drug.id,
-			"FDAGK12R6",
-			info.device_product_code.as_deref(),
-		);
-		push_text_row(
-			&mut rows,
-			&mut sequence_number,
-			drug.id,
-			"FDAGK12R71A",
-			info.manufacturer_name.as_deref(),
-		);
-		push_text_row(
-			&mut rows,
-			&mut sequence_number,
-			drug.id,
-			"FDAGK12R71B",
-			info.manufacturer_address.as_deref(),
-		);
-		push_text_row(
-			&mut rows,
-			&mut sequence_number,
-			drug.id,
-			"FDAGK12R71C",
-			info.manufacturer_city.as_deref(),
-		);
-		push_text_row(
-			&mut rows,
-			&mut sequence_number,
-			drug.id,
-			"FDAGK12R71D",
-			info.manufacturer_state.as_deref(),
-		);
-		push_code_row(
-			&mut rows,
-			&mut sequence_number,
-			drug.id,
-			"FDAGK12R71E",
-			info.manufacturer_country.as_deref(),
-		);
-		push_code_row(
-			&mut rows,
-			&mut sequence_number,
-			drug.id,
-			"FDA.G.k.12.r.8",
-			info.device_usage.as_deref(),
-		);
-		push_text_row(
-			&mut rows,
-			&mut sequence_number,
-			drug.id,
-			"FDAGK12R9",
-			info.device_lot_number.as_deref(),
-		);
-		push_code_row(
-			&mut rows,
-			&mut sequence_number,
-			drug.id,
-			"FDAGK12R10",
-			info.operator_of_device.as_deref(),
-		);
-		for entry in info.remedial_actions {
-			push_code_row(
-				&mut rows,
-				&mut sequence_number,
-				drug.id,
-				"FDA.G.k.12.r.11.r",
-				entry.value_code.as_deref(),
-			);
-		}
-	}
-
 	rows
-}
-
-pub fn structured_fda_device_info_to_json(
-	info: Option<FdaDeviceInfoData>,
-) -> Option<JsonValue> {
-	info.filter(|value| !value.is_empty())
-		.map(|value| json!(value))
 }
 
 pub fn structured_drug_additional_info_codes_to_json(
@@ -919,6 +576,117 @@ pub struct DrugDeviceCharacteristic {
 	pub updated_by: Option<Uuid>,
 }
 
+// -- FDA.G.k.12.r: Device Information (repeating)
+
+#[derive(Debug, Clone, Fields, FromRow, Serialize)]
+pub struct FdaDeviceInformation {
+	pub id: Uuid,
+	pub drug_id: Uuid,
+	pub sequence_number: i32,
+	pub malfunction: Option<bool>,
+	pub device_brand_name: Option<String>,
+	pub device_brand_name_null_flavor: Option<String>,
+	pub common_device_name: Option<String>,
+	pub common_device_name_null_flavor: Option<String>,
+	pub device_product_code: Option<String>,
+	pub manufacturer_name: Option<String>,
+	pub manufacturer_address: Option<String>,
+	pub manufacturer_city: Option<String>,
+	pub manufacturer_state: Option<String>,
+	pub manufacturer_country: Option<String>,
+	pub device_usage: Option<String>,
+	pub device_lot_number: Option<String>,
+	pub operator_of_device: Option<String>,
+	pub deleted: bool,
+	pub created_at: OffsetDateTime,
+	pub updated_at: OffsetDateTime,
+	pub created_by: Uuid,
+	pub updated_by: Option<Uuid>,
+}
+
+#[derive(Fields, Deserialize)]
+pub struct FdaDeviceInformationForCreate {
+	pub drug_id: Uuid,
+	pub sequence_number: i32,
+	pub malfunction: Option<bool>,
+	pub device_brand_name: Option<String>,
+	pub device_brand_name_null_flavor: Option<String>,
+	pub common_device_name: Option<String>,
+	pub common_device_name_null_flavor: Option<String>,
+	pub device_product_code: Option<String>,
+	pub manufacturer_name: Option<String>,
+	pub manufacturer_address: Option<String>,
+	pub manufacturer_city: Option<String>,
+	pub manufacturer_state: Option<String>,
+	pub manufacturer_country: Option<String>,
+	pub device_usage: Option<String>,
+	pub device_lot_number: Option<String>,
+	pub operator_of_device: Option<String>,
+}
+
+#[derive(Fields, Deserialize)]
+pub struct FdaDeviceInformationForUpdate {
+	pub malfunction: Option<bool>,
+	pub device_brand_name: Option<String>,
+	pub device_brand_name_null_flavor: Option<String>,
+	pub common_device_name: Option<String>,
+	pub common_device_name_null_flavor: Option<String>,
+	pub device_product_code: Option<String>,
+	pub manufacturer_name: Option<String>,
+	pub manufacturer_address: Option<String>,
+	pub manufacturer_city: Option<String>,
+	pub manufacturer_state: Option<String>,
+	pub manufacturer_country: Option<String>,
+	pub device_usage: Option<String>,
+	pub device_lot_number: Option<String>,
+	pub operator_of_device: Option<String>,
+}
+
+#[derive(FilterNodes, Deserialize, Default)]
+pub struct FdaDeviceInformationFilter {
+	#[modql(to_sea_value_fn = "uuid_to_sea_value")]
+	pub drug_id: Option<OpValsValue>,
+	pub sequence_number: Option<OpValsValue>,
+	pub deleted: Option<OpValsBool>,
+}
+
+#[derive(Debug, Clone, Fields, FromRow, Serialize)]
+pub struct FdaDeviceCode {
+	pub id: Uuid,
+	pub device_id: Uuid,
+	pub element: String,
+	pub sequence_number: i32,
+	pub value_code: String,
+	pub deleted: bool,
+	pub created_at: OffsetDateTime,
+	pub updated_at: OffsetDateTime,
+	pub created_by: Uuid,
+	pub updated_by: Option<Uuid>,
+}
+
+#[derive(Fields, Deserialize)]
+pub struct FdaDeviceCodeForCreate {
+	pub device_id: Uuid,
+	pub element: String,
+	pub sequence_number: i32,
+	pub value_code: String,
+}
+
+#[derive(Fields, Deserialize)]
+pub struct FdaDeviceCodeForUpdate {
+	pub element: Option<String>,
+	pub value_code: Option<String>,
+}
+
+#[derive(FilterNodes, Deserialize, Default)]
+pub struct FdaDeviceCodeFilter {
+	#[modql(to_sea_value_fn = "uuid_to_sea_value")]
+	pub device_id: Option<OpValsValue>,
+	pub element: Option<OpValsValue>,
+	pub sequence_number: Option<OpValsValue>,
+	pub deleted: Option<OpValsBool>,
+}
+
 // -- BMCs
 
 pub struct DrugInformationBmc;
@@ -950,7 +718,7 @@ impl DrugInformationBmc {
 			     action_taken, investigational_product_blinded, mpid, mpid_version,
 			     mfds_mpid_version, mfds_mpid, phpid, phpid_version, obtain_drug_country,
 			     fda_additional_info_coded,
-			     drug_additional_info_codes_json, drug_additional_information, fda_specialized_product_category, fda_device_info_json,
+			     drug_additional_info_codes_json, drug_additional_information, fda_specialized_product_category,
 			     fda_other_characterization,
 			     created_at, updated_at, created_by
 				 )
@@ -962,9 +730,9 @@ impl DrugInformationBmc {
 				     $19, $20, $21,
 				     $22, $23, $24, $25, $26,
 				     $28, $29,
-				     $30, $31, $32,
-				     $33,
-				     now(), now(), $34
+			     $30, $31,
+			     $32,
+			     now(), now(), $33
 				 )
 				 RETURNING id",
 			Self::TABLE
@@ -1004,7 +772,6 @@ impl DrugInformationBmc {
 					.bind(drug_c.drug_additional_info_codes_json)
 					.bind(drug_c.drug_additional_information)
 					.bind(drug_c.fda_specialized_product_category)
-					.bind(drug_c.fda_device_info_json)
 					.bind(drug_c.fda_other_characterization)
 					.bind(ctx.user_id()),
 			)
@@ -1094,11 +861,10 @@ impl DrugInformationBmc {
 			     drug_additional_info_codes_json = COALESCE($27, drug_additional_info_codes_json),
 			     drug_additional_information = COALESCE($28, drug_additional_information),
 			     fda_specialized_product_category = COALESCE($29, fda_specialized_product_category),
-				     fda_device_info_json = COALESCE($30, fda_device_info_json),
-				     source_product_presave_id = COALESCE($31, source_product_presave_id),
-				     fda_other_characterization = COALESCE($32, fda_other_characterization),
+				     source_product_presave_id = COALESCE($30, source_product_presave_id),
+				     fda_other_characterization = COALESCE($31, fda_other_characterization),
 				     updated_at = now(),
-				     updated_by = $33
+				     updated_by = $32
 				 WHERE id = $1",
 			Self::TABLE
 		);
@@ -1135,7 +901,6 @@ impl DrugInformationBmc {
 					.bind(drug_u.drug_additional_info_codes_json)
 					.bind(drug_u.drug_additional_information)
 					.bind(drug_u.fda_specialized_product_category)
-					.bind(drug_u.fda_device_info_json)
 					.bind(drug_u.source_product_presave_id)
 					.bind(drug_u.fda_other_characterization)
 					.bind(ctx.user_id()),
@@ -1302,10 +1067,9 @@ impl DrugInformationBmc {
 			     drug_additional_info_codes_json = COALESCE($28, drug_additional_info_codes_json),
 			     drug_additional_information = COALESCE($29, drug_additional_information),
 			     fda_specialized_product_category = COALESCE($30, fda_specialized_product_category),
-			     fda_device_info_json = COALESCE($31, fda_device_info_json),
-			     fda_other_characterization = COALESCE($32, fda_other_characterization),
+			     fda_other_characterization = COALESCE($31, fda_other_characterization),
 			     updated_at = now(),
-			     updated_by = $33
+			     updated_by = $32
 			 WHERE id = $1 AND case_id = $2",
 			Self::TABLE
 		);
@@ -1343,7 +1107,6 @@ impl DrugInformationBmc {
 					.bind(drug_u.drug_additional_info_codes_json)
 					.bind(drug_u.drug_additional_information)
 					.bind(drug_u.fda_specialized_product_category)
-					.bind(drug_u.fda_device_info_json)
 					.bind(drug_u.fda_other_characterization)
 					.bind(ctx.user_id()),
 			)
@@ -1621,6 +1384,112 @@ impl DrugIndicationBmc {
 }
 
 // -- DrugDeviceCharacteristic BMC
+
+pub struct FdaDeviceInformationBmc;
+impl DbBmc for FdaDeviceInformationBmc {
+	const TABLE: &'static str = "fda_device_information";
+}
+
+impl FdaDeviceInformationBmc {
+	pub async fn create(
+		ctx: &Ctx,
+		mm: &ModelManager,
+		data: FdaDeviceInformationForCreate,
+	) -> Result<Uuid> {
+		base_uuid::create::<Self, _>(ctx, mm, data).await
+	}
+
+	pub async fn get(
+		ctx: &Ctx,
+		mm: &ModelManager,
+		id: Uuid,
+	) -> Result<FdaDeviceInformation> {
+		base_uuid::get::<Self, _>(ctx, mm, id).await
+	}
+
+	pub async fn list(
+		ctx: &Ctx,
+		mm: &ModelManager,
+		filters: Option<Vec<FdaDeviceInformationFilter>>,
+		list_options: Option<ListOptions>,
+	) -> Result<Vec<FdaDeviceInformation>> {
+		let mut filters = filters.unwrap_or_else(|| vec![Default::default()]);
+		for filter in &mut filters {
+			filter.deleted = Some(OpValBool::Eq(false).into());
+		}
+		base_uuid::list::<Self, _, _>(ctx, mm, Some(filters), list_options).await
+	}
+
+	pub async fn update(
+		ctx: &Ctx,
+		mm: &ModelManager,
+		id: Uuid,
+		data: FdaDeviceInformationForUpdate,
+	) -> Result<()> {
+		base_uuid::update::<Self, _>(ctx, mm, id, data).await
+	}
+
+	pub async fn delete(ctx: &Ctx, mm: &ModelManager, id: Uuid) -> Result<()> {
+		base_uuid::soft_delete::<Self>(ctx, mm, id).await
+	}
+
+	pub async fn restore(ctx: &Ctx, mm: &ModelManager, id: Uuid) -> Result<()> {
+		base_uuid::restore::<Self>(ctx, mm, id).await
+	}
+}
+
+pub struct FdaDeviceCodeBmc;
+impl DbBmc for FdaDeviceCodeBmc {
+	const TABLE: &'static str = "fda_device_codes";
+}
+
+impl FdaDeviceCodeBmc {
+	pub async fn create(
+		ctx: &Ctx,
+		mm: &ModelManager,
+		data: FdaDeviceCodeForCreate,
+	) -> Result<Uuid> {
+		base_uuid::create::<Self, _>(ctx, mm, data).await
+	}
+
+	pub async fn get(
+		ctx: &Ctx,
+		mm: &ModelManager,
+		id: Uuid,
+	) -> Result<FdaDeviceCode> {
+		base_uuid::get::<Self, _>(ctx, mm, id).await
+	}
+
+	pub async fn list(
+		ctx: &Ctx,
+		mm: &ModelManager,
+		filters: Option<Vec<FdaDeviceCodeFilter>>,
+		list_options: Option<ListOptions>,
+	) -> Result<Vec<FdaDeviceCode>> {
+		let mut filters = filters.unwrap_or_else(|| vec![Default::default()]);
+		for filter in &mut filters {
+			filter.deleted = Some(OpValBool::Eq(false).into());
+		}
+		base_uuid::list::<Self, _, _>(ctx, mm, Some(filters), list_options).await
+	}
+
+	pub async fn update(
+		ctx: &Ctx,
+		mm: &ModelManager,
+		id: Uuid,
+		data: FdaDeviceCodeForUpdate,
+	) -> Result<()> {
+		base_uuid::update::<Self, _>(ctx, mm, id, data).await
+	}
+
+	pub async fn delete(ctx: &Ctx, mm: &ModelManager, id: Uuid) -> Result<()> {
+		base_uuid::soft_delete::<Self>(ctx, mm, id).await
+	}
+
+	pub async fn restore(ctx: &Ctx, mm: &ModelManager, id: Uuid) -> Result<()> {
+		base_uuid::restore::<Self>(ctx, mm, id).await
+	}
+}
 
 pub struct DrugDeviceCharacteristicBmc;
 impl DbBmc for DrugDeviceCharacteristicBmc {

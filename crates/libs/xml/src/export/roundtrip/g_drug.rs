@@ -1,4 +1,5 @@
 use super::*;
+use lib_core::model::drug::{FdaDeviceCode, FdaDeviceInformation};
 
 pub fn patch_g_drugs(
 	raw_xml: &[u8],
@@ -7,8 +8,38 @@ pub fn patch_g_drugs(
 	dosages: &[DosageInformation],
 	indications: &[DrugIndication],
 	characteristics: &[DrugDeviceCharacteristic],
+	devices: &[FdaDeviceInformation],
+	device_codes: &[FdaDeviceCode],
 	assessments: &[DrugReactionAssessment],
 	relatedness: &[RelatednessAssessment],
+) -> Result<String> {
+	patch_g_drugs_for_authority(
+		raw_xml,
+		drugs,
+		substances,
+		dosages,
+		indications,
+		characteristics,
+		devices,
+		device_codes,
+		assessments,
+		relatedness,
+		lib_core::regulatory::RegulatoryAuthority::Ich,
+	)
+}
+
+pub(crate) fn patch_g_drugs_for_authority(
+	raw_xml: &[u8],
+	drugs: &[DrugInformation],
+	substances: &[DrugActiveSubstance],
+	dosages: &[DosageInformation],
+	indications: &[DrugIndication],
+	characteristics: &[DrugDeviceCharacteristic],
+	devices: &[FdaDeviceInformation],
+	device_codes: &[FdaDeviceCode],
+	assessments: &[DrugReactionAssessment],
+	relatedness: &[RelatednessAssessment],
+	authority: lib_core::regulatory::RegulatoryAuthority,
 ) -> Result<String> {
 	let xml_str = std::str::from_utf8(raw_xml).map_err(|err| Error::InvalidXml {
 		message: format!("XML not valid UTF-8: {err}"),
@@ -89,8 +120,31 @@ pub fn patch_g_drugs(
 			rows.sort_by_key(|row| row.reaction_id);
 			rows
 		};
-		let fragment =
-			drug_fragment(drug, &subs, &doses, &inds, &chars, &drug_assessments)?;
+		let drug_devices: Vec<&FdaDeviceInformation> = {
+			let mut rows: Vec<_> = devices
+				.iter()
+				.filter(|row| row.drug_id == drug.id)
+				.collect();
+			rows.sort_by_key(|row| row.sequence_number);
+			rows
+		};
+		let drug_device_ids: std::collections::HashSet<_> =
+			drug_devices.iter().map(|device| device.id).collect();
+		let drug_device_codes: Vec<&FdaDeviceCode> = device_codes
+			.iter()
+			.filter(|code| drug_device_ids.contains(&code.device_id))
+			.collect();
+		let fragment = drug_fragment(
+			drug,
+			&subs,
+			&doses,
+			&inds,
+			&chars,
+			&drug_devices,
+			&drug_device_codes,
+			&drug_assessments,
+			authority,
+		)?;
 		append_fragment_child(
 			&mut doc,
 			&parser,
@@ -106,6 +160,18 @@ pub fn patch_g_drugs(
 			"//hl7:adverseEventAssessment",
 			&causality_fragment,
 		)?;
+		if matches!(authority, lib_core::regulatory::RegulatoryAuthority::Fda) {
+			let fragment = fda_other_causality_role_fragment(drug);
+			if !fragment.is_empty() {
+				append_fragment_child(
+					&mut doc,
+					&parser,
+					&mut xpath,
+					"//hl7:adverseEventAssessment",
+					&fragment,
+				)?;
+			}
+		}
 		for assessment in drug_assessments {
 			let mut rows: Vec<&RelatednessAssessment> = relatedness
 				.iter()
@@ -114,7 +180,7 @@ pub fn patch_g_drugs(
 			rows.sort_by_key(|row| row.sequence_number);
 			for row in rows {
 				let related_fragment =
-					relatedness_fragment(drug.id, assessment, row);
+					relatedness_fragment(drug.id, assessment, row, authority);
 				append_fragment_child(
 					&mut doc,
 					&parser,

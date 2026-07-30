@@ -15,54 +15,14 @@ pub(crate) async fn apply_section_n(
 	};
 	let report = fetch_safety_report_identification(mm, case_id).await?;
 
-	if let Some(batch_number) = header.batch_number.as_deref() {
-		set_attr_first(
-			xpath,
-			"/hl7:MCCI_IN200100UV01/hl7:id",
-			"extension",
-			batch_number,
-		);
-	}
-	if !header.message_type.trim().is_empty() {
-		set_attr_first(
-			xpath,
-			"/hl7:MCCI_IN200100UV01/hl7:name",
-			"displayName",
-			&header.message_type,
-		);
-	}
-	if let Some(batch_tx) = header.batch_transmission_date {
-		set_attr_first(
-			xpath,
-			"/hl7:MCCI_IN200100UV01/hl7:creationTime",
-			"value",
-			&fmt_datetime(batch_tx),
-		);
-	} else {
-		let safe_message_date =
-			crate::export_utils::clamp_14_digit_datetime_not_future(
-				&header.message_date,
-			);
-		set_attr_first(
-			xpath,
-			"/hl7:MCCI_IN200100UV01/hl7:creationTime",
-			"value",
-			&safe_message_date,
-		);
-	}
+	write_n_1_1(xpath, &header.message_type);
+	write_n_1_2(xpath, header.batch_number.as_deref());
 	let batch_sender = header
 		.batch_sender_identifier
 		.as_deref()
 		.filter(|val| !val.trim().is_empty())
 		.unwrap_or(&header.message_sender_identifier);
-	tracing::debug!(batch_sender, "XML export: applying batch sender identifier");
-	set_attr_first(
-		xpath,
-		"/hl7:MCCI_IN200100UV01/hl7:sender/hl7:device/hl7:id",
-		"extension",
-		batch_sender,
-	);
-
+	write_n_1_3(xpath, batch_sender);
 	let batch_receiver = header
 		.batch_receiver_identifier
 		.as_deref()
@@ -72,51 +32,13 @@ pub(crate) async fn apply_section_n(
 			line: None,
 			column: None,
 		})?;
-	tracing::debug!(
-		batch_receiver,
-		"XML export: applying batch receiver identifier"
-	);
-	ensure_batch_receiver_nodes(doc, parser, xpath, batch_receiver)?;
-	set_attr_first(
-		xpath,
-		"/hl7:MCCI_IN200100UV01/hl7:receiver/hl7:device/hl7:id",
-		"extension",
-		batch_receiver,
-	);
+	write_n_1_4(doc, parser, xpath, batch_receiver)?;
+	write_n_1_5(xpath, header.batch_transmission_date, &header.message_date);
+	write_n_2_r_1(xpath, &header.message_number);
+	write_n_2_r_2(xpath, &header.message_sender_identifier);
+	write_n_2_r_3(xpath, &header.message_receiver_identifier);
+	write_n_2_r_4(xpath, &header.message_date);
 
-	set_attr_first(
-		xpath,
-		"/hl7:MCCI_IN200100UV01/hl7:PORR_IN049016UV/hl7:id",
-		"extension",
-		&header.message_number,
-	);
-	let safe_message_date = crate::export_utils::clamp_14_digit_datetime_not_future(
-		&header.message_date,
-	);
-	set_attr_first(
-		xpath,
-		"/hl7:MCCI_IN200100UV01/hl7:PORR_IN049016UV/hl7:creationTime",
-		"value",
-		&safe_message_date,
-	);
-	set_attr_first(
-		xpath,
-		"/hl7:MCCI_IN200100UV01/hl7:PORR_IN049016UV/hl7:sender/hl7:device/hl7:id",
-		"extension",
-		&header.message_sender_identifier,
-	);
-	set_attr_first(
-		xpath,
-		"/hl7:MCCI_IN200100UV01/hl7:PORR_IN049016UV/hl7:receiver/hl7:device/hl7:id",
-		"extension",
-		&header.message_receiver_identifier,
-	);
-	set_attr_first(
-		xpath,
-		"/hl7:MCCI_IN200100UV01/hl7:PORR_IN049016UV/hl7:controlActProcess/hl7:effectiveTime",
-		"value",
-		&safe_message_date,
-	);
 	if let Some(receiver) = fetch_receiver_information(mm, case_id).await? {
 		ensure_top_level_receiver_agent_nodes(
 			doc,
@@ -150,6 +72,124 @@ pub(crate) async fn apply_section_n(
 		);
 	}
 	Ok(())
+}
+
+/// e2b:N.1.1
+fn write_n_1_1(xpath: &mut Context, message_type: &str) {
+	if !message_type.trim().is_empty() {
+		set_attr_first(
+			xpath,
+			"/hl7:MCCI_IN200100UV01/hl7:name",
+			"displayName",
+			message_type,
+		);
+	}
+}
+
+/// e2b:N.1.2
+fn write_n_1_2(xpath: &mut Context, batch_number: Option<&str>) {
+	if let Some(batch_number) = batch_number {
+		set_attr_first(
+			xpath,
+			"/hl7:MCCI_IN200100UV01/hl7:id",
+			"extension",
+			batch_number,
+		);
+	}
+}
+
+/// e2b:N.1.3
+fn write_n_1_3(xpath: &mut Context, batch_sender: &str) {
+	set_attr_first(
+		xpath,
+		"/hl7:MCCI_IN200100UV01/hl7:sender/hl7:device/hl7:id",
+		"extension",
+		batch_sender,
+	);
+}
+
+/// e2b:N.1.4
+fn write_n_1_4(
+	doc: &mut Document,
+	parser: &Parser,
+	xpath: &mut Context,
+	batch_receiver: &str,
+) -> Result<()> {
+	ensure_batch_receiver_nodes(doc, parser, xpath, batch_receiver)?;
+	set_attr_first(
+		xpath,
+		"/hl7:MCCI_IN200100UV01/hl7:receiver/hl7:device/hl7:id",
+		"extension",
+		batch_receiver,
+	);
+	Ok(())
+}
+
+/// e2b:N.1.5
+fn write_n_1_5(
+	xpath: &mut Context,
+	batch_transmission_date: Option<sqlx::types::time::OffsetDateTime>,
+	message_date: &str,
+) {
+	let value = batch_transmission_date
+		.map(fmt_datetime)
+		.unwrap_or_else(|| {
+			crate::export_utils::clamp_14_digit_datetime_not_future(message_date)
+		});
+	set_attr_first(
+		xpath,
+		"/hl7:MCCI_IN200100UV01/hl7:creationTime",
+		"value",
+		&value,
+	);
+}
+
+/// e2b:N.2.r.1
+fn write_n_2_r_1(xpath: &mut Context, message_number: &str) {
+	set_attr_first(
+		xpath,
+		"/hl7:MCCI_IN200100UV01/hl7:PORR_IN049016UV/hl7:id",
+		"extension",
+		message_number,
+	);
+}
+
+/// e2b:N.2.r.2
+fn write_n_2_r_2(xpath: &mut Context, message_sender: &str) {
+	set_attr_first(
+		xpath,
+		"/hl7:MCCI_IN200100UV01/hl7:PORR_IN049016UV/hl7:sender/hl7:device/hl7:id",
+		"extension",
+		message_sender,
+	);
+}
+
+/// e2b:N.2.r.3
+fn write_n_2_r_3(xpath: &mut Context, message_receiver: &str) {
+	set_attr_first(
+		xpath,
+		"/hl7:MCCI_IN200100UV01/hl7:PORR_IN049016UV/hl7:receiver/hl7:device/hl7:id",
+		"extension",
+		message_receiver,
+	);
+}
+
+/// e2b:N.2.r.4
+fn write_n_2_r_4(xpath: &mut Context, message_date: &str) {
+	let safe_message_date =
+		crate::export_utils::clamp_14_digit_datetime_not_future(message_date);
+	set_attr_first(
+		xpath,
+		"/hl7:MCCI_IN200100UV01/hl7:PORR_IN049016UV/hl7:creationTime",
+		"value",
+		&safe_message_date,
+	);
+	set_attr_first(
+		xpath,
+		"/hl7:MCCI_IN200100UV01/hl7:PORR_IN049016UV/hl7:controlActProcess/hl7:effectiveTime",
+		"value",
+		&safe_message_date,
+	);
 }
 
 pub(crate) async fn fetch_message_header(
@@ -363,4 +403,29 @@ async fn fetch_safety_report_identification(
 		)
 		.await
 		.map_err(|e| Error::Model(lib_core::model::Error::Store(format!("{e}"))))
+}
+
+#[cfg(test)]
+mod tests {
+	use std::collections::BTreeSet;
+
+	#[test]
+	fn section_n_writers_cover_registry_fields() {
+		let registry: serde_json::Value = serde_json::from_str(include_str!(
+			"../../../../../../registry/sections/n-message-header.json"
+		))
+		.expect("section N registry");
+		let expected = registry
+			.as_array()
+			.expect("registry array")
+			.iter()
+			.filter_map(|entry| entry["e2br3_code"].as_str())
+			.collect::<BTreeSet<_>>();
+		let implemented = include_str!("n.rs")
+			.lines()
+			.filter_map(|line| line.trim().strip_prefix("/// e2b:"))
+			.collect::<BTreeSet<_>>();
+
+		assert_eq!(implemented, expected);
+	}
 }

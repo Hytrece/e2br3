@@ -17,6 +17,8 @@ pub struct CSafetyReportPatch<'a> {
 	pub date_most_recent: Option<Date>,
 	pub fulfil_expedited: bool,
 	pub additional_documents_available: Option<bool>,
+	pub other_case_identifiers_exist: Option<bool>,
+	pub other_case_identifiers_exist_null_flavor: Option<&'a str>,
 	pub worldwide_unique_id: Option<&'a str>,
 	pub first_sender_type: Option<&'a str>,
 	pub local_criteria_report_type: Option<&'a str>,

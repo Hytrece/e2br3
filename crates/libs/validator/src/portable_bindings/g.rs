@@ -430,8 +430,8 @@ pub(super) const BINDINGS: &[PortableFieldBinding] = &[
 		["ICH.G.k.9.i.4.ALLOWED.VALUE", "ICH.G.k.9.i.4.LENGTH.MAX"]
 	),
 	binding!(
-		"drugs[].fdaDeviceInfo.followUpTypes[].valueCode",
-		"fdaDeviceInfo.followUpTypes[].valueCode",
+		"drugs[].fdaDevices[].followUpTypes[].valueCode",
+		"fdaDevices[].followUpTypes[].valueCode",
 		String,
 		[
 			"FDA.G.k.12.r.2.r.LENGTH.MAX",
@@ -439,74 +439,74 @@ pub(super) const BINDINGS: &[PortableFieldBinding] = &[
 		]
 	),
 	binding!(
-		"drugs[].fdaDeviceInfo.deviceProblemCodes[].valueCode",
-		"fdaDeviceInfo.deviceProblemCodes[].valueCode",
+		"drugs[].fdaDevices[].deviceProblemCodes[].valueCode",
+		"fdaDevices[].deviceProblemCodes[].valueCode",
 		String,
 		["FDA.G.k.12.r.3.r.LENGTH.MAX"]
 	),
 	binding!(
-		"drugs[].fdaDeviceInfo.deviceBrandName",
-		"fdaDeviceInfo.deviceBrandName",
+		"drugs[].fdaDevices[].deviceBrandName",
+		"fdaDevices[].deviceBrandName",
 		String,
 		["FDA.G.k.12.r.4.LENGTH.MAX"]
 	),
 	binding!(
-		"drugs[].fdaDeviceInfo.commonDeviceName",
-		"fdaDeviceInfo.commonDeviceName",
+		"drugs[].fdaDevices[].commonDeviceName",
+		"fdaDevices[].commonDeviceName",
 		String,
 		["FDA.G.k.12.r.5.LENGTH.MAX"]
 	),
 	binding!(
-		"drugs[].fdaDeviceInfo.deviceProductCode",
-		"fdaDeviceInfo.deviceProductCode",
+		"drugs[].fdaDevices[].deviceProductCode",
+		"fdaDevices[].deviceProductCode",
 		String,
 		["FDA.G.k.12.r.6.LENGTH.MAX"]
 	),
 	binding!(
-		"drugs[].fdaDeviceInfo.manufacturerName",
-		"fdaDeviceInfo.manufacturerName",
+		"drugs[].fdaDevices[].manufacturerName",
+		"fdaDevices[].manufacturerName",
 		String,
 		["FDA.G.k.12.r.7.1a.LENGTH.MAX"]
 	),
 	binding!(
-		"drugs[].fdaDeviceInfo.manufacturerAddress",
-		"fdaDeviceInfo.manufacturerAddress",
+		"drugs[].fdaDevices[].manufacturerAddress",
+		"fdaDevices[].manufacturerAddress",
 		String,
 		["FDA.G.k.12.r.7.1b.LENGTH.MAX"]
 	),
 	binding!(
-		"drugs[].fdaDeviceInfo.manufacturerCity",
-		"fdaDeviceInfo.manufacturerCity",
+		"drugs[].fdaDevices[].manufacturerCity",
+		"fdaDevices[].manufacturerCity",
 		String,
 		["FDA.G.k.12.r.7.1c.LENGTH.MAX"]
 	),
 	binding!(
-		"drugs[].fdaDeviceInfo.manufacturerState",
-		"fdaDeviceInfo.manufacturerState",
+		"drugs[].fdaDevices[].manufacturerState",
+		"fdaDevices[].manufacturerState",
 		String,
 		["FDA.G.k.12.r.7.1d.LENGTH.MAX"]
 	),
 	binding!(
-		"drugs[].fdaDeviceInfo.manufacturerCountry",
-		"fdaDeviceInfo.manufacturerCountry",
+		"drugs[].fdaDevices[].manufacturerCountry",
+		"fdaDevices[].manufacturerCountry",
 		String,
 		["FDA.G.k.12.r.7.1e.LENGTH.MAX"]
 	),
 	binding!(
-		"drugs[].fdaDeviceInfo.deviceUsage",
-		"fdaDeviceInfo.deviceUsage",
+		"drugs[].fdaDevices[].deviceUsage",
+		"fdaDevices[].deviceUsage",
 		String,
 		["FDA.G.k.12.r.8.LENGTH.MAX", "FDA.G.k.12.r.8.ALLOWED.VALUE"]
 	),
 	binding!(
-		"drugs[].fdaDeviceInfo.deviceLotNumber",
-		"fdaDeviceInfo.deviceLotNumber",
+		"drugs[].fdaDevices[].deviceLotNumber",
+		"fdaDevices[].deviceLotNumber",
 		String,
 		["FDA.G.k.12.r.9.LENGTH.MAX"]
 	),
 	binding!(
-		"drugs[].fdaDeviceInfo.operatorOfDevice",
-		"fdaDeviceInfo.operatorOfDevice",
+		"drugs[].fdaDevices[].operatorOfDevice",
+		"fdaDevices[].operatorOfDevice",
 		String,
 		[
 			"FDA.G.k.12.r.10.LENGTH.MAX",
@@ -514,8 +514,8 @@ pub(super) const BINDINGS: &[PortableFieldBinding] = &[
 		]
 	),
 	binding!(
-		"drugs[].fdaDeviceInfo.remedialActions[].valueCode",
-		"fdaDeviceInfo.remedialActions[].valueCode",
+		"drugs[].fdaDevices[].remedialActions[].valueCode",
+		"fdaDevices[].remedialActions[].valueCode",
 		String,
 		["FDA.G.k.12.r.11.r.LENGTH.MAX"]
 	),

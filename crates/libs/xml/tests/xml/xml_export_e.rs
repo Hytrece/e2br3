@@ -1,11 +1,14 @@
 use lib_core::model::reaction::Reaction;
+use lib_core::regulatory::RegulatoryAuthority;
 use libxml::parser::Parser;
 use libxml::xpath::Context;
 use sqlx::types::time::Date;
 use sqlx::types::Uuid;
 use time::Month;
 use time::OffsetDateTime;
-use xml::export::sections::e::export_e_reactions_xml;
+use xml::export::sections::e::{
+	export_e_reactions_xml, export_e_reactions_xml_for_authority,
+};
 
 #[test]
 fn export_e_reaction_basic() {
@@ -69,7 +72,9 @@ fn export_e_reaction_basic() {
 		updated_by: None,
 	};
 
-	let xml = export_e_reactions_xml(&[reaction]).expect("export xml");
+	let xml =
+		export_e_reactions_xml_for_authority(&[reaction], RegulatoryAuthority::Fda)
+			.expect("export xml");
 	let parser = Parser::default();
 	let doc = parser.parse_string(&xml).expect("parse");
 	let mut xpath = Context::new(&doc).expect("xpath");
@@ -105,7 +110,7 @@ fn export_e_reaction_basic() {
 }
 
 #[test]
-fn export_e_reaction_preserves_known_extension_fields() {
+fn export_e_reaction_omits_unverified_mfds_device_extensions() {
 	let reaction = Reaction {
 		id: Uuid::new_v4(),
 		case_id: Uuid::new_v4(),
@@ -166,7 +171,9 @@ fn export_e_reaction_preserves_known_extension_fields() {
 		updated_by: None,
 	};
 
-	let xml = export_e_reactions_xml(&[reaction]).expect("export xml");
+	let xml =
+		export_e_reactions_xml_for_authority(&[reaction], RegulatoryAuthority::Mfds)
+			.expect("export xml");
 	let parser = Parser::default();
 	let doc = parser.parse_string(&xml).expect("parse");
 	let mut xpath = Context::new(&doc).expect("xpath");
@@ -187,27 +194,7 @@ fn export_e_reaction_preserves_known_extension_fields() {
 		)
 		.unwrap();
 	assert_eq!(severity, "severe");
-	let classification = xpath
-		.findvalue(
-			"//hl7:observation[hl7:code[@code='KR_DVC_AECL']]/hl7:value/@code",
-			None,
-		)
-		.unwrap();
-	assert_eq!(classification, "0");
-	let cause_other = xpath
-		.findvalue(
-			"//hl7:observation[hl7:code[@code='KR_DVC_CC_OTH']]/hl7:value",
-			None,
-		)
-		.unwrap();
-	assert_eq!(cause_other, "Other cause <device>");
-	let action_label_change = xpath
-		.findvalue(
-			"//hl7:observation[hl7:code[@code='KR_DVC_ACT_CAS']]/hl7:value/@value",
-			None,
-		)
-		.unwrap();
-	assert_eq!(action_label_change, "false");
+	assert!(!xml.contains("KR_DVC_"));
 
 	let required_intervention = xpath
 		.findvalue(
@@ -215,7 +202,7 @@ fn export_e_reaction_preserves_known_extension_fields() {
 			None,
 		)
 		.unwrap();
-	assert_eq!(required_intervention, "true");
+	assert_eq!(required_intervention, "");
 }
 
 #[test]

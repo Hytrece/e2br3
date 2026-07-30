@@ -18,8 +18,20 @@ pub async fn create_submission(
 
 	let ctx_clone = ctx.clone();
 	let mm_clone = mm.clone();
+	let export_authority = match authority {
+		SubmissionAuthority::Fda => RegulatoryAuthority::Fda,
+		SubmissionAuthority::Mfds => RegulatoryAuthority::Mfds,
+	};
 	let xml = task::spawn_blocking(move || {
-		Handle::current().block_on(export_case_xml(&ctx_clone, &mm_clone, case_id))
+		Handle::current().block_on(export_case_xml_with_options(
+			&ctx_clone,
+			&mm_clone,
+			case_id,
+			ExportXmlOptions {
+				authority: export_authority,
+				..ExportXmlOptions::default()
+			},
+		))
 	})
 	.await
 	.map_err(|err| Error::BadRequest {

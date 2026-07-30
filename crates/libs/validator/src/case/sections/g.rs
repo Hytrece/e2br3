@@ -14,13 +14,12 @@ use crate::allowed_value::{true_marker_value, ConstraintValue};
 use crate::{
 	has_text, is_mfds_clinical_trial_receiver, is_mfds_compassionate_use_receiver,
 	is_mfds_domestic_receiver, is_mfds_foreign_postmarket_receiver,
-	list_drug_characteristics, FdaValidationContext, MfdsValidationContext,
+	list_fda_devices, FdaValidationContext, MfdsValidationContext,
 	RegulatoryAuthority, RuleFacts, ValidationContext, ValidationIssue,
 };
 use lib_core::ctx::Ctx;
 use lib_core::model::drug::{
-	derive_fda_device_characteristics, parse_drug_additional_info_codes_json,
-	DosageInformation, DrugActiveSubstance, DrugDeviceCharacteristic,
+	parse_drug_additional_info_codes_json, DosageInformation, DrugActiveSubstance,
 	DrugIndication, DrugInformation,
 };
 use lib_core::model::drug_reaction_assessment::{
@@ -38,54 +37,6 @@ const G_MFDS_PRODUCT_VOCABULARY_RULES: &[IndexedVocabularyVariantRule<
 	path: |idx| format!("drugs.{idx}.mfdsMpid"),
 	value: |item| item.mfds_mpid.as_deref(),
 }];
-
-fn normalize_code(raw: Option<&str>) -> String {
-	raw.unwrap_or("")
-		.trim()
-		.to_ascii_uppercase()
-		.replace(['.', '_', '-'], "")
-}
-
-fn characteristic_code_matches(raw: Option<&str>, target: &str) -> bool {
-	let raw = normalize_code(raw);
-	let target = normalize_code(Some(target));
-	if raw == target {
-		return true;
-	}
-	match target.as_str() {
-		"FDAGK12R1" => raw == "C54026",
-		"FDAGK12R2R" => raw == "C54592",
-		"FDAGK12R3" => raw == "C54451" || raw == "FDAGK12R3R",
-		"FDAGK12R8" => raw == "C54595",
-		"FDAGK12R11" => raw == "C54594" || raw == "FDAGK12R11R",
-		_ => false,
-	}
-}
-
-fn is_truthy_characteristic(ch: &DrugDeviceCharacteristic) -> bool {
-	let code = ch.value_code.as_deref().map(str::trim).unwrap_or("");
-	let value = ch.value_value.as_deref().map(str::trim).unwrap_or("");
-	matches!(code, "1" | "true" | "TRUE" | "True")
-		|| matches!(value, "1" | "true" | "TRUE" | "True")
-}
-
-fn is_code_one_characteristic(ch: &DrugDeviceCharacteristic) -> bool {
-	let code = ch.value_code.as_deref().map(str::trim).unwrap_or("");
-	let value = ch.value_value.as_deref().map(str::trim).unwrap_or("");
-	code == "1" || value == "1"
-}
-
-fn has_characteristic_value(
-	chars: &[DrugDeviceCharacteristic],
-	target: &str,
-) -> bool {
-	chars.iter().any(|ch| {
-		characteristic_code_matches(ch.code.as_deref(), target)
-			&& (has_text(ch.value_value.as_deref())
-				|| has_text(ch.value_code.as_deref())
-				|| has_text(ch.value_display_name.as_deref()))
-	})
-}
 
 fn decimal_text(value: Option<Decimal>) -> Option<String> {
 	value.map(|value| value.to_string())
@@ -137,25 +88,25 @@ const G_FDA_DRUG_CATALOG_VALUE_RULES: &[CatalogValueRule<FdaDrugRuleView>] = &[
 	},
 	CatalogValueRule {
 		code: "FDA.G.k.12.r.1.REQUIRED",
-		path: |item| format!("drugs.{}.fdaDeviceInfo.malfunction", item.index),
+		path: |item| format!("drugs.{}.fdaDevices.0.malfunction", item.index),
 		value: |item| RuleValue::borrowed(item.malfunction.as_deref(), None),
 		facts: |_| RuleFacts::default(),
 	},
 	CatalogValueRule {
 		code: "FDA.G.k.12.r.4.REQUIRED",
-		path: |item| format!("drugs.{}.fdaDeviceInfo.deviceBrandName", item.index),
+		path: |item| format!("drugs.{}.fdaDevices.0.deviceBrandName", item.index),
 		value: |item| RuleValue::borrowed(item.brand_name.as_deref(), None),
 		facts: |_| RuleFacts::default(),
 	},
 	CatalogValueRule {
 		code: "FDA.G.k.12.r.5.REQUIRED",
-		path: |item| format!("drugs.{}.fdaDeviceInfo.commonDeviceName", item.index),
+		path: |item| format!("drugs.{}.fdaDevices.0.commonDeviceName", item.index),
 		value: |item| RuleValue::borrowed(item.common_name.as_deref(), None),
 		facts: |_| RuleFacts::default(),
 	},
 	CatalogValueRule {
 		code: "FDA.G.k.12.r.6.REQUIRED",
-		path: |item| format!("drugs.{}.fdaDeviceInfo.deviceProductCode", item.index),
+		path: |item| format!("drugs.{}.fdaDevices.0.deviceProductCode", item.index),
 		value: |item| RuleValue::borrowed(item.product_code.as_deref(), None),
 		facts: |_| RuleFacts::default(),
 	},
@@ -172,7 +123,7 @@ const G_FDA_DRUG_SET_CATALOG_VALUE_RULES: &[CatalogValueRule<FdaDrugSetRuleView>
 	&[
 		CatalogValueRule {
 			code: "FDA.G.K.12.REQUIRED",
-			path: |_| "drugs.0.deviceCharacteristics.0.valueCode".to_string(),
+			path: |_| "drugs.0.fdaDevices.0.malfunction".to_string(),
 			value: |item| {
 				RuleValue::borrowed(item.malfunction_suspect.as_deref(), None)
 			},
@@ -180,25 +131,29 @@ const G_FDA_DRUG_SET_CATALOG_VALUE_RULES: &[CatalogValueRule<FdaDrugSetRuleView>
 		},
 		CatalogValueRule {
 			code: "FDA.G.k.12.r.3.r.REQUIRED",
-			path: |_| "drugs.0.fdaDeviceInfo.deviceProblemCodes".to_string(),
+			path: |_| {
+				"drugs.0.fdaDevices.0.deviceProblemCodes.0.valueCode".to_string()
+			},
 			value: |item| RuleValue::borrowed(item.problem_code.as_deref(), None),
 			facts: |_| RuleFacts::default(),
 		},
 		CatalogValueRule {
 			code: "FDA.G.K.12.R.3.REQUIRED",
-			path: |_| "drugs.0.deviceCharacteristics.0.valueCode".to_string(),
+			path: |_| {
+				"drugs.0.fdaDevices.0.deviceProblemCodes.0.valueCode".to_string()
+			},
 			value: |item| RuleValue::borrowed(item.problem_code.as_deref(), None),
 			facts: |_| RuleFacts::default(),
 		},
 		CatalogValueRule {
 			code: "FDA.G.k.12.r.11.r.REQUIRED",
-			path: |_| "drugs.0.fdaDeviceInfo.remedialActions".to_string(),
+			path: |_| "drugs.0.fdaDevices.0.remedialActions.0.valueCode".to_string(),
 			value: |item| RuleValue::borrowed(item.remedial_action.as_deref(), None),
 			facts: |_| RuleFacts::default(),
 		},
 		CatalogValueRule {
 			code: "FDA.G.K.12.R.11.REQUIRED",
-			path: |_| "drugs.0.deviceCharacteristics.0.valueCode".to_string(),
+			path: |_| "drugs.0.fdaDevices.0.remedialActions.0.valueCode".to_string(),
 			value: |item| RuleValue::borrowed(item.remedial_action.as_deref(), None),
 			facts: |_| RuleFacts::default(),
 		},
@@ -1329,12 +1284,10 @@ pub(crate) async fn collect_fda_issues(
 	let mut drug_views = Vec::with_capacity(validation_ctx.drugs.len());
 
 	for (drug_idx, drug) in validation_ctx.drugs.iter().enumerate() {
-		let mut chars = list_drug_characteristics(ctx, mm, drug.id).await?;
-		chars.extend(derive_fda_device_characteristics(drug));
-		let malfunction_this_drug = chars.iter().any(|ch| {
-			characteristic_code_matches(ch.code.as_deref(), "FDA.G.k.12.r.1")
-				&& is_truthy_characteristic(ch)
-		});
+		let (devices, device_codes) = list_fda_devices(ctx, mm, drug.id).await?;
+		let malfunction_this_drug = devices
+			.iter()
+			.any(|device| device.malfunction == Some(true));
 		let gk1a_required = combination_true
 			&& malfunction_this_drug
 			&& drug.drug_characterization == "4";
@@ -1351,19 +1304,33 @@ pub(crate) async fn collect_fda_issues(
 				Some("not-applicable".to_string())
 			},
 			brand_name: if malfunction_this_drug {
-				has_characteristic_value(&chars, "FDA.G.k.12.r.4")
+				devices
+					.iter()
+					.any(|device| {
+						has_text(device.device_brand_name.as_deref())
+							|| device.device_brand_name_null_flavor.as_deref()
+								== Some("NI")
+					})
 					.then(|| "present".to_string())
 			} else {
 				Some("not-applicable".to_string())
 			},
 			common_name: if malfunction_this_drug {
-				has_characteristic_value(&chars, "FDA.G.k.12.r.5")
+				devices
+					.iter()
+					.any(|device| {
+						has_text(device.common_device_name.as_deref())
+							|| device.common_device_name_null_flavor.as_deref()
+								== Some("NI")
+					})
 					.then(|| "present".to_string())
 			} else {
 				Some("not-applicable".to_string())
 			},
 			product_code: if malfunction_this_drug {
-				has_characteristic_value(&chars, "FDA.G.k.12.r.6")
+				devices
+					.iter()
+					.any(|device| has_text(device.device_product_code.as_deref()))
 					.then(|| "present".to_string())
 			} else {
 				Some("not-applicable".to_string())
@@ -1375,20 +1342,17 @@ pub(crate) async fn collect_fda_issues(
 				has_malfunction_suspect = true;
 			}
 		}
-		if chars.iter().any(|ch| {
-			characteristic_code_matches(ch.code.as_deref(), "FDA.G.k.12.r.3")
+		if device_codes.iter().any(|code| {
+			code.element == "device_problem" && has_text(Some(&code.value_code))
 		}) {
 			has_gk12r3 = true;
 		}
-		if chars.iter().any(|ch| {
-			characteristic_code_matches(ch.code.as_deref(), "FDA.G.k.12.r.11")
+		if device_codes.iter().any(|code| {
+			code.element == "remedial_action" && has_text(Some(&code.value_code))
 		}) {
 			has_gk12r11 = true;
 		}
-		let has_gk1a_one = chars.iter().any(|ch| {
-			characteristic_code_matches(ch.code.as_deref(), "FDA.G.k.1.a")
-				&& is_code_one_characteristic(ch)
-		});
+		let has_gk1a_one = drug.fda_other_characterization.as_deref() == Some("1");
 		if has_gk1a_one
 			&& !(combination_true
 				&& malfunction_this_drug
@@ -1993,7 +1957,6 @@ mod golden_g_required_tests {
 			drug_additional_info_codes_json: None,
 			drug_additional_information: None,
 			fda_specialized_product_category: None,
-			fda_device_info_json: None,
 			fda_other_characterization: None,
 			deleted: false,
 			created_at: OffsetDateTime::UNIX_EPOCH,

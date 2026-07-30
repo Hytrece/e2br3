@@ -2,7 +2,11 @@ use super::n::fetch_message_header;
 use super::n::fetch_primary_source;
 use super::*;
 use crate::export::roundtrip::{patch_c_safety_report, CSafetyReportPatch};
-use lib_core::model::safety_report::SafetyReportIdentification;
+use crate::mfds::codes::KR_C_5_4_1;
+use lib_core::model::case_identifiers::{LinkedReportNumber, OtherCaseIdentifier};
+use lib_core::model::safety_report::{
+	DocumentsHeldBySender, SafetyReportIdentification, StudyFdaCrossReportedInd,
+};
 
 pub(crate) async fn export_patch(
 	ctx: &Ctx,
@@ -10,6 +14,7 @@ pub(crate) async fn export_patch(
 	case_id: sqlx::types::Uuid,
 	case: &Case,
 	raw_xml: &[u8],
+	authority: lib_core::regulatory::RegulatoryAuthority,
 ) -> Result<String> {
 	let report = SafetyReportIdentificationBmc::get_by_case(ctx, mm, case_id)
 		.await
@@ -22,21 +27,8 @@ pub(crate) async fn export_patch(
 		&report,
 		header.as_ref(),
 		sender.as_ref(),
+		authority,
 	)
-}
-
-pub(crate) async fn export_build(
-	ctx: &Ctx,
-	mm: &ModelManager,
-	case_id: sqlx::types::Uuid,
-	case: &Case,
-) -> Result<String> {
-	let report = SafetyReportIdentificationBmc::get_by_case(ctx, mm, case_id)
-		.await
-		.map_err(Error::from)?;
-	let sender = fetch_sender_information(mm, case_id).await?;
-	let header = fetch_message_header(ctx, mm, case_id).await?;
-	export_c_safety_report_xml(case, &report, header.as_ref(), sender.as_ref())
 }
 
 async fn fetch_sender_information(
@@ -108,11 +100,12 @@ pub(crate) async fn apply_primary_source_section(
 	mm: &ModelManager,
 	case_id: sqlx::types::Uuid,
 	xpath: &mut Context,
+	authority: lib_core::regulatory::RegulatoryAuthority,
 ) -> Result<()> {
 	let Some(primary) = fetch_primary_source(mm, case_id).await? else {
 		return Ok(());
 	};
-	apply_primary_source_values(doc, parser, xpath, &primary)
+	apply_primary_source_values(doc, parser, xpath, &primary, authority)
 }
 
 fn apply_primary_source_values(
@@ -120,6 +113,7 @@ fn apply_primary_source_values(
 	parser: &Parser,
 	xpath: &mut Context,
 	primary: &PrimarySource,
+	authority: lib_core::regulatory::RegulatoryAuthority,
 ) -> Result<()> {
 	let base = "//hl7:investigationEvent/hl7:outboundRelationship[hl7:relatedInvestigation/hl7:code[@code='2']]/hl7:relatedInvestigation/hl7:subjectOf2/hl7:controlActEvent/hl7:author/hl7:assignedEntity";
 	ensure_primary_source_author_nodes(doc, parser, xpath)?;
@@ -137,18 +131,8 @@ fn apply_primary_source_values(
 		)?;
 	}
 
-	set_text_or_null_flavor(
-		xpath,
-		&format!("{base}/hl7:assignedPerson/hl7:name/hl7:prefix"),
-		primary.reporter_title.as_deref(),
-		primary.reporter_title_null_flavor.as_deref(),
-	);
-	set_text_or_null_flavor(
-		xpath,
-		&format!("{base}/hl7:assignedPerson/hl7:name/hl7:given[1]"),
-		primary.reporter_given_name.as_deref(),
-		primary.reporter_given_name_null_flavor.as_deref(),
-	);
+	write_c_2_r_1_1(xpath, base, primary);
+	write_c_2_r_1_2(xpath, base, primary);
 	if primary
 		.reporter_middle_name
 		.as_deref()
@@ -174,19 +158,9 @@ fn apply_primary_source_values(
 				"<given/>",
 			)?;
 		}
-		set_text_or_null_flavor(
-			xpath,
-			&format!("{base}/hl7:assignedPerson/hl7:name/hl7:given[2]"),
-			primary.reporter_middle_name.as_deref(),
-			primary.reporter_middle_name_null_flavor.as_deref(),
-		);
+		write_c_2_r_1_3(xpath, base, primary);
 	}
-	set_text_or_null_flavor(
-		xpath,
-		&format!("{base}/hl7:assignedPerson/hl7:name/hl7:family"),
-		primary.reporter_family_name.as_deref(),
-		primary.reporter_family_name_null_flavor.as_deref(),
-	);
+	write_c_2_r_1_4(xpath, base, primary);
 	let has_department = primary
 		.department
 		.as_deref()
@@ -214,96 +188,190 @@ fn apply_primary_source_values(
 	} else {
 		format!("{base}/hl7:representedOrganization/hl7:name")
 	};
+	write_c_2_r_2_1(xpath, &organization_path, primary);
+	if has_department {
+		write_c_2_r_2_2(xpath, base, primary);
+	}
+	write_c_2_r_2_3(xpath, base, primary);
+	write_c_2_r_2_4(xpath, base, primary);
+	write_c_2_r_2_5(xpath, base, primary);
+	write_c_2_r_2_6(xpath, base, primary);
+	write_c_2_r_2_7(xpath, base, primary);
+	if matches!(authority, lib_core::regulatory::RegulatoryAuthority::Fda) {
+		write_fda_c_2_r_2_8(xpath, base, primary);
+	} else {
+		remove_nodes(
+			xpath,
+			&format!("{base}/hl7:telecom[starts-with(@value,'mailto:')]"),
+		);
+	}
+	write_c_2_r_3(xpath, base, primary);
+	write_c_2_r_4(xpath, base, primary);
+	if matches!(authority, lib_core::regulatory::RegulatoryAuthority::Mfds) {
+		write_c_2_r_4_kr_1(xpath, base, primary);
+	}
+	write_c_2_r_5(xpath, primary);
+
+	Ok(())
+}
+
+/// e2b:C.2.r.1.1
+fn write_c_2_r_1_1(xpath: &mut Context, base: &str, value: &PrimarySource) {
 	set_text_or_null_flavor(
 		xpath,
-		&organization_path,
-		primary.organization.as_deref(),
-		primary.organization_null_flavor.as_deref(),
+		&format!("{base}/hl7:assignedPerson/hl7:name/hl7:prefix"),
+		value.reporter_title.as_deref(),
+		value.reporter_title_null_flavor.as_deref(),
 	);
-	if has_department {
-		set_text_or_null_flavor(
-			xpath,
-			&format!("{base}/hl7:representedOrganization/hl7:name"),
-			primary.department.as_deref(),
-			primary.department_null_flavor.as_deref(),
-		);
-	}
-	for (path, value, null_flavor) in [
-		(
-			"streetAddressLine",
-			primary.street.as_deref(),
-			primary.street_null_flavor.as_deref(),
-		),
-		(
-			"city",
-			primary.city.as_deref(),
-			primary.city_null_flavor.as_deref(),
-		),
-		(
-			"state",
-			primary.state.as_deref(),
-			primary.state_null_flavor.as_deref(),
-		),
-		(
-			"postalCode",
-			primary.postcode.as_deref(),
-			primary.postcode_null_flavor.as_deref(),
-		),
-	] {
-		set_text_or_null_flavor(
-			xpath,
-			&format!("{base}/hl7:addr/hl7:{path}"),
-			value,
-			null_flavor,
-		);
-	}
+}
+
+/// e2b:C.2.r.1.2
+fn write_c_2_r_1_2(xpath: &mut Context, base: &str, value: &PrimarySource) {
+	set_text_or_null_flavor(
+		xpath,
+		&format!("{base}/hl7:assignedPerson/hl7:name/hl7:given[1]"),
+		value.reporter_given_name.as_deref(),
+		value.reporter_given_name_null_flavor.as_deref(),
+	);
+}
+
+/// e2b:C.2.r.1.3
+fn write_c_2_r_1_3(xpath: &mut Context, base: &str, value: &PrimarySource) {
+	set_text_or_null_flavor(
+		xpath,
+		&format!("{base}/hl7:assignedPerson/hl7:name/hl7:given[2]"),
+		value.reporter_middle_name.as_deref(),
+		value.reporter_middle_name_null_flavor.as_deref(),
+	);
+}
+
+/// e2b:C.2.r.1.4
+fn write_c_2_r_1_4(xpath: &mut Context, base: &str, value: &PrimarySource) {
+	set_text_or_null_flavor(
+		xpath,
+		&format!("{base}/hl7:assignedPerson/hl7:name/hl7:family"),
+		value.reporter_family_name.as_deref(),
+		value.reporter_family_name_null_flavor.as_deref(),
+	);
+}
+
+/// e2b:C.2.r.2.1
+fn write_c_2_r_2_1(xpath: &mut Context, path: &str, value: &PrimarySource) {
+	set_text_or_null_flavor(
+		xpath,
+		path,
+		value.organization.as_deref(),
+		value.organization_null_flavor.as_deref(),
+	);
+}
+
+/// e2b:C.2.r.2.2
+fn write_c_2_r_2_2(xpath: &mut Context, base: &str, value: &PrimarySource) {
+	set_text_or_null_flavor(
+		xpath,
+		&format!("{base}/hl7:representedOrganization/hl7:name"),
+		value.department.as_deref(),
+		value.department_null_flavor.as_deref(),
+	);
+}
+
+/// e2b:C.2.r.2.3
+fn write_c_2_r_2_3(xpath: &mut Context, base: &str, value: &PrimarySource) {
+	set_text_or_null_flavor(
+		xpath,
+		&format!("{base}/hl7:addr/hl7:streetAddressLine"),
+		value.street.as_deref(),
+		value.street_null_flavor.as_deref(),
+	);
+}
+
+/// e2b:C.2.r.2.4
+fn write_c_2_r_2_4(xpath: &mut Context, base: &str, value: &PrimarySource) {
+	set_text_or_null_flavor(
+		xpath,
+		&format!("{base}/hl7:addr/hl7:city"),
+		value.city.as_deref(),
+		value.city_null_flavor.as_deref(),
+	);
+}
+
+/// e2b:C.2.r.2.5
+fn write_c_2_r_2_5(xpath: &mut Context, base: &str, value: &PrimarySource) {
+	set_text_or_null_flavor(
+		xpath,
+		&format!("{base}/hl7:addr/hl7:state"),
+		value.state.as_deref(),
+		value.state_null_flavor.as_deref(),
+	);
+}
+
+/// e2b:C.2.r.2.6
+fn write_c_2_r_2_6(xpath: &mut Context, base: &str, value: &PrimarySource) {
+	set_text_or_null_flavor(
+		xpath,
+		&format!("{base}/hl7:addr/hl7:postalCode"),
+		value.postcode.as_deref(),
+		value.postcode_null_flavor.as_deref(),
+	);
+}
+
+/// e2b:C.2.r.2.7
+fn write_c_2_r_2_7(xpath: &mut Context, base: &str, value: &PrimarySource) {
 	set_telecom_or_null_flavor(
 		xpath,
 		&format!("{base}/hl7:telecom[starts-with(@value,'tel:') or @nullFlavor]"),
-		primary.telephone.as_deref(),
-		primary.telephone_null_flavor.as_deref(),
+		value.telephone.as_deref(),
+		value.telephone_null_flavor.as_deref(),
 	);
-	if let Some(value) = primary.email.as_deref() {
-		let telecom_value = if value.contains(':') {
-			value.to_string()
-		} else {
-			format!("mailto:{value}")
-		};
-		set_attr_first(
-			xpath,
-			&format!("{base}/hl7:telecom[starts-with(@value,'mailto:')]"),
-			"value",
-			&telecom_value,
-		);
+}
+
+/// e2b:FDA.C.2.r.2.8
+fn write_fda_c_2_r_2_8(xpath: &mut Context, base: &str, value: &PrimarySource) {
+	let Some(email) = value.email.as_deref() else {
+		return;
+	};
+	let email = if email.contains(':') {
+		email.to_string()
+	} else {
+		format!("mailto:{email}")
+	};
+	set_attr_first(
+		xpath,
+		&format!("{base}/hl7:telecom[starts-with(@value,'mailto:')]"),
+		"value",
+		&email,
+	);
+}
+
+/// e2b:C.2.r.3
+fn write_c_2_r_3(xpath: &mut Context, base: &str, value: &PrimarySource) {
+	if let Some(code) = value.country_code.as_deref() {
+		set_attr_first(xpath, &format!("{base}/hl7:assignedPerson/hl7:asLocatedEntity/hl7:location/hl7:code"), "code", code);
 	}
-	if let Some(value) = primary.country_code.as_deref() {
-		set_attr_first(
-			xpath,
-			&format!(
-				"{base}/hl7:assignedPerson/hl7:asLocatedEntity/hl7:location/hl7:code"
-			),
-			"code",
-			value,
-		);
-	}
-	if let Some(value) = primary.qualification.as_deref() {
+}
+
+/// e2b:C.2.r.4
+fn write_c_2_r_4(xpath: &mut Context, base: &str, value: &PrimarySource) {
+	if let Some(code) = value.qualification.as_deref() {
 		set_attr_first(
 			xpath,
 			&format!("{base}/hl7:assignedPerson/hl7:asQualifiedEntity/hl7:code"),
 			"code",
-			value,
+			code,
 		);
 	}
-	if let Some(value) = primary.primary_source_regulatory.as_deref() {
-		set_attr_first(
-			xpath,
-			"//hl7:investigationEvent/hl7:outboundRelationship[hl7:relatedInvestigation/hl7:code[@code='2']]/hl7:priorityNumber",
-			"value",
-			value,
-		);
-	}
+}
 
-	Ok(())
+/// e2b:C.2.r.4.KR.1
+fn write_c_2_r_4_kr_1(_xpath: &mut Context, _base: &str, _value: &PrimarySource) {
+	// No XML mapping exists in the current MFDS profile.
+}
+
+/// e2b:C.2.r.5
+fn write_c_2_r_5(xpath: &mut Context, value: &PrimarySource) {
+	if let Some(priority) = value.primary_source_regulatory.as_deref() {
+		set_attr_first(xpath, "//hl7:investigationEvent/hl7:outboundRelationship[hl7:relatedInvestigation/hl7:code[@code='2']]/hl7:priorityNumber", "value", priority);
+	}
 }
 
 fn ensure_primary_source_author_nodes(
@@ -329,12 +397,125 @@ fn ensure_primary_source_author_nodes(
 	)
 }
 
+pub(crate) async fn apply_report_relationships_section(
+	doc: &mut Document,
+	parser: &Parser,
+	mm: &ModelManager,
+	case_id: sqlx::types::Uuid,
+	xpath: &mut Context,
+) -> Result<()> {
+	let documents = mm.dbx().fetch_all(sqlx::query_as::<_, DocumentsHeldBySender>("SELECT * FROM documents_held_by_sender WHERE case_id = $1 AND deleted = false ORDER BY sequence_number").bind(case_id)).await.map_err(model::Error::from)?;
+	let identifiers = mm.dbx().fetch_all(sqlx::query_as::<_, OtherCaseIdentifier>("SELECT * FROM other_case_identifiers WHERE case_id = $1 AND deleted = false ORDER BY sequence_number").bind(case_id)).await.map_err(model::Error::from)?;
+	let linked_reports = mm.dbx().fetch_all(sqlx::query_as::<_, LinkedReportNumber>("SELECT * FROM linked_report_numbers WHERE case_id = $1 AND deleted = false ORDER BY sequence_number").bind(case_id)).await.map_err(model::Error::from)?;
+
+	remove_nodes(
+		xpath,
+		"//hl7:investigationEvent/hl7:reference[hl7:document/hl7:code[@code='1']]",
+	);
+	remove_nodes(xpath, "//hl7:investigationEvent/hl7:subjectOf1[hl7:controlActEvent/hl7:id[@root='2.16.840.1.113883.3.989.2.1.3.3']]");
+	remove_nodes(xpath, "//hl7:investigationEvent/hl7:outboundRelationship[hl7:relatedInvestigation/hl7:code/@nullFlavor='NA']");
+
+	let mut fragment = String::new();
+	for value in identifiers {
+		fragment.push_str(&format!("<subjectOf1 typeCode=\"SUBJ\"><controlActEvent classCode=\"CACT\" moodCode=\"EVN\"><id root=\"2.16.840.1.113883.3.989.2.1.3.3\" assigningAuthorityName=\"{}\" extension=\"{}\"/></controlActEvent></subjectOf1>", write_c_1_9_1_r_1(&value), write_c_1_9_1_r_2(&value)));
+	}
+	for value in linked_reports {
+		fragment.push_str(&write_c_1_10_r(&value));
+	}
+	for value in documents {
+		fragment.push_str(&format!("<reference typeCode=\"REFR\"><document classCode=\"DOC\" moodCode=\"EVN\"><code code=\"1\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.27\"/>{}{}</document></reference>", write_c_1_6_1_r_1(&value), write_c_1_6_1_r_2(&value)));
+	}
+	if fragment.is_empty() {
+		return Ok(());
+	}
+	let Some(xml) =
+		inject_fragment_in_investigation_event(&doc.to_string(), &fragment)
+	else {
+		return Ok(());
+	};
+	*doc = parser.parse_string(&xml).map_err(|err| Error::InvalidXml {
+		message: format!("XML parse error after C relationship injection: {err}"),
+		line: None,
+		column: None,
+	})?;
+	*xpath = Context::new(doc).map_err(|_| Error::InvalidXml {
+		message: "Failed to initialize XPath after C relationship injection"
+			.to_string(),
+		line: None,
+		column: None,
+	})?;
+	let _ = xpath.register_namespace("hl7", "urn:hl7-org:v3");
+	let _ =
+		xpath.register_namespace("xsi", "http://www.w3.org/2001/XMLSchema-instance");
+	Ok(())
+}
+
+/// e2b:C.1.6.1.r.1
+fn write_c_1_6_1_r_1(value: &DocumentsHeldBySender) -> String {
+	value
+		.title
+		.as_deref()
+		.filter(|v| !v.trim().is_empty())
+		.map(|v| format!("<title>{}</title>", xml_escape(v)))
+		.unwrap_or_default()
+}
+
+/// e2b:C.1.6.1.r.2
+fn write_c_1_6_1_r_2(value: &DocumentsHeldBySender) -> String {
+	let Some(document) = value
+		.document_base64
+		.as_deref()
+		.filter(|v| !v.trim().is_empty())
+	else {
+		return String::new();
+	};
+	let media_type = value
+		.media_type
+		.as_deref()
+		.filter(|v| !v.trim().is_empty())
+		.unwrap_or("application/octet-stream");
+	let representation = value
+		.representation
+		.as_deref()
+		.filter(|v| !v.trim().is_empty())
+		.unwrap_or("B64");
+	let compression = value
+		.compression
+		.as_deref()
+		.filter(|v| !v.trim().is_empty())
+		.map(|v| format!(" compression=\"{}\"", xml_escape(v)))
+		.unwrap_or_default();
+	format!(
+		"<text mediaType=\"{}\" representation=\"{}\"{}>{}</text>",
+		xml_escape(media_type),
+		xml_escape(representation),
+		compression,
+		xml_escape(document)
+	)
+}
+
+/// e2b:C.1.9.1.r.1
+fn write_c_1_9_1_r_1(value: &OtherCaseIdentifier) -> String {
+	xml_escape(&value.source_of_identifier)
+}
+
+/// e2b:C.1.9.1.r.2
+fn write_c_1_9_1_r_2(value: &OtherCaseIdentifier) -> String {
+	xml_escape(&value.case_identifier)
+}
+
+/// e2b:C.1.10.r
+fn write_c_1_10_r(value: &LinkedReportNumber) -> String {
+	format!("<outboundRelationship typeCode=\"SPRT\"><relatedInvestigation classCode=\"INVSTG\" moodCode=\"EVN\"><code nullFlavor=\"NA\"/><subjectOf2 typeCode=\"SUBJ\"><controlActEvent classCode=\"CACT\" moodCode=\"EVN\"><id root=\"2.16.840.1.113883.3.989.2.1.3.2\" extension=\"{}\"/></controlActEvent></subjectOf2></relatedInvestigation></outboundRelationship>", xml_escape(&value.linked_report_number))
+}
+
 pub fn export_c_safety_report_patch(
 	raw_xml: &[u8],
 	_case: &Case,
 	report: &SafetyReportIdentification,
 	header: Option<&MessageHeader>,
 	sender: Option<&SenderInformation>,
+	authority: lib_core::regulatory::RegulatoryAuthority,
 ) -> Result<String> {
 	let combination_true = report
 		.combination_product_report_indicator
@@ -358,17 +539,33 @@ pub fn export_c_safety_report_patch(
 		date_most_recent: report.date_of_most_recent_information,
 		fulfil_expedited: report.fulfil_expedited_criteria.unwrap_or(false),
 		additional_documents_available: report.additional_documents_available,
+		other_case_identifiers_exist: report.other_case_identifiers_exist,
+		other_case_identifiers_exist_null_flavor: report
+			.other_case_identifiers_exist_null_flavor
+			.as_deref(),
 		worldwide_unique_id: report.worldwide_unique_id.as_deref(),
 		first_sender_type: report.first_sender_type.as_deref(),
-		local_criteria_report_type,
-		combination_product_indicator: report
-			.combination_product_report_indicator
-			.as_deref(),
+		local_criteria_report_type: matches!(
+			authority,
+			lib_core::regulatory::RegulatoryAuthority::Fda
+		)
+		.then_some(local_criteria_report_type)
+		.flatten(),
+		combination_product_indicator: matches!(
+			authority,
+			lib_core::regulatory::RegulatoryAuthority::Fda
+		)
+		.then_some(report.combination_product_report_indicator.as_deref())
+		.flatten(),
 		nullification_code: report.nullification_code.as_deref(),
 		nullification_reason: report.nullification_reason.as_deref(),
 		sender_type: sender.and_then(|s| s.sender_type.as_deref()),
-		sender_health_professional_type_kr1: sender
-			.and_then(|s| s.health_professional_type_kr1.as_deref()),
+		sender_health_professional_type_kr1: matches!(
+			authority,
+			lib_core::regulatory::RegulatoryAuthority::Mfds
+		)
+		.then(|| sender.and_then(|s| s.health_professional_type_kr1.as_deref()))
+		.flatten(),
 		sender_org_name: sender.and_then(|s| s.organization_name.as_deref()),
 		sender_department: sender.and_then(|s| s.department.as_deref()),
 		sender_street_address: sender.and_then(|s| s.street_address.as_deref()),
@@ -398,45 +595,12 @@ fn is_true_like(value: &str) -> bool {
 	)
 }
 
-pub fn export_c_safety_report_xml(
-	case: &Case,
-	report: &SafetyReportIdentification,
-	header: Option<&MessageHeader>,
-	sender: Option<&SenderInformation>,
-) -> Result<String> {
-	let base_xml = base_icrs_skeleton();
-	let parser = Parser::default();
-	let doc = parser.parse_string(base_xml).map_err(|err| {
-		crate::error::Error::InvalidXml {
-			message: format!("XML parse error (base skeleton): {err}"),
-			line: None,
-			column: None,
-		}
-	})?;
-	let raw = doc.to_string();
-	export_c_safety_report_patch(raw.as_bytes(), case, report, header, sender)
-}
-
-fn base_icrs_skeleton() -> &'static str {
-	"<?xml version=\"1.0\" encoding=\"utf-8\"?>\
-<MCCI_IN200100UV01 xmlns=\"urn:hl7-org:v3\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" ITSVersion=\"XML_1.0\">\
-\t<PORR_IN049016UV>\
-\t\t<controlActProcess classCode=\"CACT\" moodCode=\"EVN\">\
-\t\t\t<code code=\"PORR_TE049016UV\" codeSystem=\"2.16.840.1.113883.1.18\"/>\
-\t\t\t<subject>\
-\t\t\t\t<investigationEvent classCode=\"INVSTG\" moodCode=\"EVN\">\
-\t\t\t\t</investigationEvent>\
-\t\t\t</subject>\
-\t\t</controlActProcess>\
-\t</PORR_IN049016UV>\
-</MCCI_IN200100UV01>"
-}
-
 #[cfg(test)]
 mod primary_source_null_flavor_tests {
 	use super::*;
 	use sqlx::types::time::OffsetDateTime;
 	use sqlx::types::Uuid;
+	use std::collections::BTreeSet;
 
 	fn source() -> PrimarySource {
 		PrimarySource {
@@ -490,8 +654,14 @@ mod primary_source_null_flavor_tests {
 		let mut xpath = Context::new(&doc).expect("xpath");
 		xpath.register_namespace("hl7", "urn:hl7-org:v3").unwrap();
 
-		apply_primary_source_values(&mut doc, &parser, &mut xpath, &source())
-			.expect("apply primary source");
+		apply_primary_source_values(
+			&mut doc,
+			&parser,
+			&mut xpath,
+			&source(),
+			lib_core::regulatory::RegulatoryAuthority::Fda,
+		)
+		.expect("apply primary source");
 
 		assert_eq!(
 			xpath
@@ -530,6 +700,54 @@ mod primary_source_null_flavor_tests {
 			""
 		);
 	}
+
+	#[test]
+	fn primary_source_email_is_fda_only() {
+		let xml = br#"<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3"><PORR_IN049016UV><controlActProcess><subject><investigationEvent><outboundRelationship><relatedInvestigation><code code="2"/><subjectOf2><controlActEvent><author><assignedEntity><assignedPerson><name/></assignedPerson><representedOrganization><name/></representedOrganization><addr/><telecom value="mailto:old@example.com"/></assignedEntity></author></controlActEvent></subjectOf2></relatedInvestigation></outboundRelationship></investigationEvent></subject></controlActProcess></PORR_IN049016UV></MCCI_IN200100UV01>"#;
+		let parser = Parser::default();
+		let mut doc = parser.parse_string(xml).expect("parse");
+		let mut xpath = Context::new(&doc).expect("xpath");
+		xpath.register_namespace("hl7", "urn:hl7-org:v3").unwrap();
+		let mut primary = source();
+		primary.email = Some("new@example.com".to_string());
+
+		apply_primary_source_values(
+			&mut doc,
+			&parser,
+			&mut xpath,
+			&primary,
+			lib_core::regulatory::RegulatoryAuthority::Mfds,
+		)
+		.expect("apply primary source");
+
+		assert!(!doc.to_string().contains("mailto:"));
+	}
+
+	#[test]
+	fn section_c_writers_cover_registry_fields() {
+		let registry: serde_json::Value = serde_json::from_str(include_str!(
+			"../../../../../../registry/sections/c-safety-report.json"
+		))
+		.expect("section C registry");
+		let expected = registry
+			.as_array()
+			.expect("registry array")
+			.iter()
+			.filter(|entry| entry["local_only"] != true)
+			.filter_map(|entry| entry["e2br3_code"].as_str())
+			.collect::<BTreeSet<_>>();
+		let source = format!(
+			"{}\n{}",
+			include_str!("c.rs"),
+			include_str!("../roundtrip/c_safety_report.rs")
+		);
+		let implemented = source
+			.lines()
+			.filter_map(|line| line.trim().strip_prefix("/// e2b:"))
+			.collect::<BTreeSet<_>>();
+
+		assert_eq!(implemented, expected);
+	}
 }
 
 pub(crate) async fn apply_literature_section(
@@ -551,52 +769,8 @@ pub(crate) async fn apply_literature_section(
 
 	let mut fragment = String::new();
 	for item in references {
-		let reference_text = item.reference_text.as_deref().unwrap_or("").trim();
-		let bibliographic = if reference_text.is_empty() {
-			if let Some(null_flavor) = item.reference_text_null_flavor.as_deref() {
-				format!(
-					"<bibliographicDesignationText nullFlavor=\"{}\"/>",
-					xml_escape(null_flavor)
-				)
-			} else {
-				"<bibliographicDesignationText/>".to_string()
-			}
-		} else {
-			format!(
-				"<bibliographicDesignationText>{}</bibliographicDesignationText>",
-				xml_escape(reference_text)
-			)
-		};
-		let attachment = item
-			.document_base64
-			.as_deref()
-			.filter(|v| !v.trim().is_empty())
-			.map(|document| {
-				let media_type = item
-					.media_type
-					.as_deref()
-					.filter(|v| !v.trim().is_empty())
-					.unwrap_or("application/octet-stream");
-				let representation = item
-					.representation
-					.as_deref()
-					.filter(|v| !v.trim().is_empty())
-					.unwrap_or("B64");
-				let compression = item
-					.compression
-					.as_deref()
-					.filter(|v| !v.trim().is_empty())
-					.map(|value| format!(" compression=\"{}\"", xml_escape(value)))
-					.unwrap_or_default();
-				format!(
-					"<text mediaType=\"{}\" representation=\"{}\"{}>{}</text>",
-					xml_escape(media_type),
-					xml_escape(representation),
-					compression,
-					xml_escape(document)
-				)
-			})
-			.unwrap_or_default();
+		let bibliographic = write_c_4_r_1(&item);
+		let attachment = write_c_4_r_2(&item);
 		fragment.push_str(&format!(
 			"<reference typeCode=\"REFR\"><document classCode=\"DOC\" moodCode=\"EVN\"><code code=\"2\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.27\"/>{}{}</document></reference>",
 			bibliographic,
@@ -630,54 +804,82 @@ pub(crate) async fn apply_literature_section(
 	Ok(())
 }
 
+/// e2b:C.4.r.1
+fn write_c_4_r_1(item: &LiteratureReference) -> String {
+	let text = item.reference_text.as_deref().unwrap_or("").trim();
+	if !text.is_empty() {
+		return format!(
+			"<bibliographicDesignationText>{}</bibliographicDesignationText>",
+			xml_escape(text)
+		);
+	}
+	item.reference_text_null_flavor
+		.as_deref()
+		.map(|value| {
+			format!(
+				"<bibliographicDesignationText nullFlavor=\"{}\"/>",
+				xml_escape(value)
+			)
+		})
+		.unwrap_or_else(|| "<bibliographicDesignationText/>".to_string())
+}
+
+/// e2b:C.4.r.2
+fn write_c_4_r_2(item: &LiteratureReference) -> String {
+	let Some(document) = item
+		.document_base64
+		.as_deref()
+		.filter(|v| !v.trim().is_empty())
+	else {
+		return String::new();
+	};
+	let media_type = item
+		.media_type
+		.as_deref()
+		.filter(|v| !v.trim().is_empty())
+		.unwrap_or("application/octet-stream");
+	let representation = item
+		.representation
+		.as_deref()
+		.filter(|v| !v.trim().is_empty())
+		.unwrap_or("B64");
+	let compression = item
+		.compression
+		.as_deref()
+		.filter(|v| !v.trim().is_empty())
+		.map(|value| format!(" compression=\"{}\"", xml_escape(value)))
+		.unwrap_or_default();
+	format!(
+		"<text mediaType=\"{}\" representation=\"{}\"{}>{}</text>",
+		xml_escape(media_type),
+		xml_escape(representation),
+		compression,
+		xml_escape(document)
+	)
+}
+
 pub(crate) async fn apply_study_section(
 	doc: &mut Document,
 	parser: &Parser,
 	mm: &ModelManager,
 	case_id: sqlx::types::Uuid,
 	xpath: &mut Context,
+	authority: lib_core::regulatory::RegulatoryAuthority,
 ) -> Result<()> {
 	let study = fetch_study_information(mm, case_id).await?;
 	let Some(study) = study else {
 		return Ok(());
 	};
 	let registrations = fetch_study_registrations(mm, study.id).await?;
+	let cross_reported_inds =
+		if matches!(authority, lib_core::regulatory::RegulatoryAuthority::Fda) {
+			fetch_study_fda_cross_reported_inds(mm, study.id).await?
+		} else {
+			Vec::new()
+		};
 
 	remove_nodes(xpath, "//hl7:primaryRole/hl7:subjectOf1[hl7:researchStudy]");
 	remove_nodes(xpath, "//hl7:primaryRole/hl7:subjectOf2[hl7:researchStudy]");
-
-	let report_type = xpath
-		.findvalues(
-			"//hl7:investigationEvent/hl7:subjectOf2/hl7:investigationCharacteristic[hl7:code[@code='1' and @codeSystem='2.16.840.1.113883.3.989.2.1.1.23']]/hl7:value/@code",
-			None,
-		)
-		.ok()
-		.and_then(|vals| vals.first().cloned());
-	let msg_receiver = xpath
-		.findvalues(
-			"/hl7:MCCI_IN200100UV01/hl7:PORR_IN049016UV/hl7:receiver/hl7:device/hl7:id/@extension",
-			None,
-		)
-		.ok()
-		.and_then(|vals| vals.first().cloned());
-	let needs_panda = matches!(report_type.as_deref(), Some("1") | Some("2"))
-		&& msg_receiver.as_deref() == Some("CDER_IND_EXEMPT_BA_BE");
-
-	let study_type = study
-		.study_type_reaction
-		.as_deref()
-		.filter(|s| !s.trim().is_empty())
-		.unwrap_or("1");
-	let sponsor_study_number = study
-		.sponsor_study_number
-		.as_deref()
-		.filter(|s| !s.trim().is_empty())
-		.unwrap_or("");
-	let study_name = study
-		.study_name
-		.as_deref()
-		.filter(|s| !s.trim().is_empty())
-		.unwrap_or("");
 
 	let mut auth_xml = String::new();
 	for reg in &registrations {
@@ -686,32 +888,8 @@ pub(crate) async fn apply_study_section(
 		{
 			continue;
 		}
-		let country_xml = match (
-			reg.country_code.as_deref().filter(|v| !v.trim().is_empty()),
-			reg.country_code_null_flavor.as_deref(),
-		) {
-			(Some(code), _) => format!(
-				"<author typeCode=\"AUT\"><territorialAuthority classCode=\"TERR\"><governingPlace classCode=\"COUNTRY\" determinerCode=\"INSTANCE\"><code code=\"{}\" codeSystem=\"1.0.3166.1.2.2\"/></governingPlace></territorialAuthority></author>",
-				xml_escape(code)
-			),
-			(None, Some(null_flavor)) => format!(
-				"<author typeCode=\"AUT\"><territorialAuthority classCode=\"TERR\"><governingPlace classCode=\"COUNTRY\" determinerCode=\"INSTANCE\"><code nullFlavor=\"{}\" codeSystem=\"1.0.3166.1.2.2\"/></governingPlace></territorialAuthority></author>",
-				xml_escape(null_flavor)
-			),
-			(None, None) => String::new(),
-		};
-		let id_xml =
-			if reg.registration_number.trim().is_empty() {
-				format!(
-				"<id nullFlavor=\"{}\" root=\"2.16.840.1.113883.3.989.2.1.3.6\"/>",
-				xml_escape(reg.registration_number_null_flavor.as_deref().unwrap_or("ASKU"))
-			)
-			} else {
-				format!(
-				"<id extension=\"{}\" root=\"2.16.840.1.113883.3.989.2.1.3.6\"/>",
-				xml_escape(&reg.registration_number)
-			)
-			};
+		let country_xml = write_c_5_1_r_2(reg);
+		let id_xml = write_c_5_1_r_1(reg);
 		auth_xml.push_str(&format!(
 			"<authorization typeCode=\"AUTH\"><studyRegistration classCode=\"ACT\" moodCode=\"EVN\">{}{}</studyRegistration></authorization>",
 			id_xml,
@@ -719,50 +897,37 @@ pub(crate) async fn apply_study_section(
 		));
 	}
 
-	if needs_panda {
-		let panda_value = registrations
-			.first()
-			.map(|r| r.registration_number.as_str())
-			.or(study.sponsor_study_number.as_deref())
-			.filter(|s| !s.trim().is_empty())
-			.unwrap_or("054321");
-		auth_xml.push_str(&format!(
-			"<authorization typeCode=\"AUTH\"><studyRegistration classCode=\"ACT\" moodCode=\"EVN\"><id extension=\"{}\" root=\"2.16.840.1.113883.3.989.5.1.2.2.1.2.2\"/></studyRegistration></authorization>",
-			xml_escape(panda_value)
-		));
+	let fda_ids =
+		if matches!(authority, lib_core::regulatory::RegulatoryAuthority::Fda) {
+			format!(
+				"{}{}{}",
+				write_fda_c_5_5a(&study),
+				write_fda_c_5_5b(&study),
+				write_fda_c_5_6_r(&cross_reported_inds)
+			)
+		} else {
+			String::new()
+		};
+	if !fda_ids.is_empty() {
+		auth_xml.push_str(&format!("<authorization typeCode=\"AUTH\"><studyRegistration classCode=\"ACT\" moodCode=\"EVN\">{fda_ids}</studyRegistration></authorization>"));
 	}
 
-	let sponsor_id_xml = if sponsor_study_number.is_empty() {
-		format!(
-			"<id nullFlavor=\"{}\" root=\"2.16.840.1.113883.3.989.2.1.3.5\"/>",
-			xml_escape(
-				study
-					.sponsor_study_number_null_flavor
-					.as_deref()
-					.unwrap_or("ASKU")
-			)
-		)
-	} else {
-		format!(
-			"<id extension=\"{}\" root=\"2.16.840.1.113883.3.989.2.1.3.5\"/>",
-			xml_escape(sponsor_study_number)
-		)
-	};
-	let title_xml = if study_name.is_empty() {
-		if let Some(null_flavor) = study.study_name_null_flavor.as_deref() {
-			format!("<title nullFlavor=\"{}\"/>", xml_escape(null_flavor))
+	let sponsor_id_xml = write_c_5_3(&study);
+	let title_xml = write_c_5_2(&study);
+	let study_type = write_c_5_4(&study);
+	let regional_study_type =
+		if matches!(authority, lib_core::regulatory::RegulatoryAuthority::Mfds) {
+			write_c_5_4_kr_1(&study)
 		} else {
-			"<title/>".to_string()
-		}
-	} else {
-		format!("<title>{}</title>", xml_escape(study_name))
-	};
+			String::new()
+		};
 	let fragment = format!(
-		"<subjectOf1 typeCode=\"SBJ\"><researchStudy classCode=\"CLNTRL\" moodCode=\"EVN\">{}<code code=\"{}\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.8\" codeSystemVersion=\"1.0\"/>{}{}</researchStudy></subjectOf1>",
+		"<subjectOf1 typeCode=\"SBJ\"><researchStudy classCode=\"CLNTRL\" moodCode=\"EVN\">{}<code code=\"{}\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.8\" codeSystemVersion=\"1.0\"/>{}{}{}</researchStudy></subjectOf1>",
 		sponsor_id_xml,
-		xml_escape(study_type),
+		study_type,
 		title_xml,
-		auth_xml
+		auth_xml,
+		regional_study_type
 	);
 	let xml = doc.to_string();
 	if let Some(injected) = inject_study_fragment_in_primary_role(&xml, &fragment) {
@@ -786,6 +951,117 @@ pub(crate) async fn apply_study_section(
 			.register_namespace("xsi", "http://www.w3.org/2001/XMLSchema-instance");
 	}
 	Ok(())
+}
+
+/// e2b:C.5.1.r.1
+fn write_c_5_1_r_1(value: &StudyRegistrationNumber) -> String {
+	if value.registration_number.trim().is_empty() {
+		return format!(
+			"<id nullFlavor=\"{}\" root=\"2.16.840.1.113883.3.989.2.1.3.6\"/>",
+			xml_escape(
+				value
+					.registration_number_null_flavor
+					.as_deref()
+					.unwrap_or("ASKU")
+			)
+		);
+	}
+	format!(
+		"<id extension=\"{}\" root=\"2.16.840.1.113883.3.989.2.1.3.6\"/>",
+		xml_escape(&value.registration_number)
+	)
+}
+
+/// e2b:C.5.1.r.2
+fn write_c_5_1_r_2(value: &StudyRegistrationNumber) -> String {
+	match (value.country_code.as_deref().filter(|v| !v.trim().is_empty()), value.country_code_null_flavor.as_deref()) {
+		(Some(code), _) => format!("<author typeCode=\"AUT\"><territorialAuthority classCode=\"TERR\"><governingPlace classCode=\"COUNTRY\" determinerCode=\"INSTANCE\"><code code=\"{}\" codeSystem=\"1.0.3166.1.2.2\"/></governingPlace></territorialAuthority></author>", xml_escape(code)),
+		(None, Some(null_flavor)) => format!("<author typeCode=\"AUT\"><territorialAuthority classCode=\"TERR\"><governingPlace classCode=\"COUNTRY\" determinerCode=\"INSTANCE\"><code nullFlavor=\"{}\" codeSystem=\"1.0.3166.1.2.2\"/></governingPlace></territorialAuthority></author>", xml_escape(null_flavor)),
+		(None, None) => String::new(),
+	}
+}
+
+/// e2b:C.5.2
+fn write_c_5_2(value: &StudyInformation) -> String {
+	let name = value.study_name.as_deref().unwrap_or("").trim();
+	if !name.is_empty() {
+		return format!("<title>{}</title>", xml_escape(name));
+	}
+	value
+		.study_name_null_flavor
+		.as_deref()
+		.map(|v| format!("<title nullFlavor=\"{}\"/>", xml_escape(v)))
+		.unwrap_or_else(|| "<title/>".to_string())
+}
+
+/// e2b:C.5.3
+fn write_c_5_3(value: &StudyInformation) -> String {
+	let number = value.sponsor_study_number.as_deref().unwrap_or("").trim();
+	if !number.is_empty() {
+		return format!(
+			"<id extension=\"{}\" root=\"2.16.840.1.113883.3.989.2.1.3.5\"/>",
+			xml_escape(number)
+		);
+	}
+	format!(
+		"<id nullFlavor=\"{}\" root=\"2.16.840.1.113883.3.989.2.1.3.5\"/>",
+		xml_escape(
+			value
+				.sponsor_study_number_null_flavor
+				.as_deref()
+				.unwrap_or("ASKU")
+		)
+	)
+}
+
+/// e2b:C.5.4
+fn write_c_5_4(value: &StudyInformation) -> String {
+	xml_escape(
+		value
+			.study_type_reaction
+			.as_deref()
+			.filter(|v| !v.trim().is_empty())
+			.unwrap_or("1"),
+	)
+}
+
+/// e2b:C.5.4.KR.1
+fn write_c_5_4_kr_1(value: &StudyInformation) -> String {
+	value.study_type_reaction_kr1.as_deref().filter(|v| !v.trim().is_empty()).map(|v| format!("<subjectOf2 typeCode=\"SUBJ\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code code=\"{KR_C_5_4_1}\"/><value xsi:type=\"CE\" code=\"{}\"/></observation></subjectOf2>", xml_escape(v))).unwrap_or_default()
+}
+
+/// e2b:FDA.C.5.5a
+fn write_fda_c_5_5a(value: &StudyInformation) -> String {
+	write_fda_study_id(
+		value.fda_ind_number_occurred.as_deref(),
+		"2.16.840.1.113883.3.989.5.1.2.2.1.2.1",
+	)
+}
+
+/// e2b:FDA.C.5.5b
+fn write_fda_c_5_5b(value: &StudyInformation) -> String {
+	write_fda_study_id(
+		value.fda_pre_anda_number_occurred.as_deref(),
+		"2.16.840.1.113883.3.989.5.1.2.2.1.2.2",
+	)
+}
+
+/// e2b:FDA.C.5.6.r
+fn write_fda_c_5_6_r(values: &[StudyFdaCrossReportedInd]) -> String {
+	values.iter().map(|value| {
+		if let Some(number) = value.ind_number.as_deref().filter(|v| !v.trim().is_empty()) {
+			format!("<id extension=\"{}\" root=\"2.16.840.1.113883.3.989.5.1.2.2.1.2.3\"/>", xml_escape(number))
+		} else if let Some(null_flavor) = value.ind_number_null_flavor.as_deref() {
+			format!("<id nullFlavor=\"{}\" root=\"2.16.840.1.113883.3.989.5.1.2.2.1.2.3\"/>", xml_escape(null_flavor))
+		} else { String::new() }
+	}).collect()
+}
+
+fn write_fda_study_id(value: Option<&str>, root: &str) -> String {
+	value
+		.filter(|v| !v.trim().is_empty())
+		.map(|v| format!("<id extension=\"{}\" root=\"{root}\"/>", xml_escape(v)))
+		.unwrap_or_default()
 }
 
 async fn fetch_study_information(
@@ -822,6 +1098,13 @@ async fn fetch_study_registrations(
 		)
 		.await
 		.map_err(|e| Error::Model(lib_core::model::Error::Store(format!("{e}"))))
+}
+
+async fn fetch_study_fda_cross_reported_inds(
+	mm: &ModelManager,
+	study_information_id: sqlx::types::Uuid,
+) -> Result<Vec<StudyFdaCrossReportedInd>> {
+	mm.dbx().fetch_all(sqlx::query_as::<_, StudyFdaCrossReportedInd>("SELECT * FROM study_fda_cross_reported_inds WHERE study_information_id = $1 AND deleted = false ORDER BY sequence_number").bind(study_information_id)).await.map_err(model::Error::from).map_err(Error::from)
 }
 
 fn inject_study_fragment_in_primary_role(

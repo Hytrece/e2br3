@@ -4044,6 +4044,7 @@ fn phases_for_allowed_value_rule(code: &str) -> &'static [ValidationPhase] {
 		| "ICH.E.i.1.1b.ALLOWED.VALUE"
 		| "ICH.E.i.2.1a.ALLOWED.VALUE"
 		| "ICH.E.i.2.1b.ALLOWED.VALUE"
+		| "ICH.E.i.3.1.ALLOWED.VALUE"
 		| "ICH.E.i.3.2a.ALLOWED.VALUE"
 		| "ICH.E.i.3.2b.ALLOWED.VALUE"
 		| "ICH.E.i.3.2c.ALLOWED.VALUE"

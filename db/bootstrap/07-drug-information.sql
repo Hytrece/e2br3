@@ -73,9 +73,6 @@ CREATE TABLE drug_information (
     -- FDA.G.k.10.1 - FDA Specialized Product Category
     fda_specialized_product_category VARCHAR(60),
 
-    -- FDA.G.k.12.r - Structured FDA device information payload
-    fda_device_info_json JSONB,
-
     -- FDA.G.k.1.a - FDA Other Characterisation of Drug Role (1 = Similar Device)
     fda_other_characterization VARCHAR(10),
 
@@ -269,6 +266,72 @@ CREATE TABLE drug_device_characteristics (
 CREATE INDEX idx_drug_device_characteristics_drug ON drug_device_characteristics(drug_id);
 CREATE UNIQUE INDEX idx_drug_device_characteristics_active_sequence_unique
     ON drug_device_characteristics(drug_id, sequence_number)
+    WHERE deleted = false;
+
+-- ============================================================================
+-- FDA.G.k.12.r: Device Information (Repeating)
+-- ============================================================================
+
+CREATE TABLE fda_device_information (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    drug_id UUID NOT NULL REFERENCES drug_information(id) ON DELETE CASCADE,
+    sequence_number INTEGER NOT NULL,
+
+    -- FDA.G.k.12.r.1
+    malfunction BOOLEAN,
+    -- FDA.G.k.12.r.4 / FDA.G.k.12.r.5
+    device_brand_name VARCHAR(80),
+    device_brand_name_null_flavor VARCHAR(2) CHECK (device_brand_name_null_flavor IN ('NI')),
+    common_device_name VARCHAR(80),
+    common_device_name_null_flavor VARCHAR(2) CHECK (common_device_name_null_flavor IN ('NI')),
+    -- FDA.G.k.12.r.6
+    device_product_code VARCHAR(10),
+    -- FDA.G.k.12.r.7.1a-e
+    manufacturer_name VARCHAR(100),
+    manufacturer_address VARCHAR(100),
+    manufacturer_city VARCHAR(35),
+    manufacturer_state VARCHAR(40),
+    manufacturer_country VARCHAR(2),
+    -- FDA.G.k.12.r.8-r.10
+    device_usage VARCHAR(1) CHECK (device_usage IN ('1', '2', '3')),
+    device_lot_number VARCHAR(100),
+    operator_of_device VARCHAR(1) CHECK (operator_of_device IN ('1', '2', '3')),
+
+    deleted BOOLEAN NOT NULL DEFAULT false,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    created_by UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+    updated_by UUID REFERENCES users(id) ON DELETE RESTRICT
+);
+
+CREATE INDEX idx_fda_device_information_drug ON fda_device_information(drug_id);
+CREATE UNIQUE INDEX idx_fda_device_information_active_sequence_unique
+    ON fda_device_information(drug_id, sequence_number)
+    WHERE deleted = false;
+
+-- FDA.G.k.12.r.2.r, FDA.G.k.12.r.3.r, FDA.G.k.12.r.11.r
+CREATE TABLE fda_device_codes (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    device_id UUID NOT NULL REFERENCES fda_device_information(id) ON DELETE CASCADE,
+    element VARCHAR(20) NOT NULL CHECK (element IN ('follow_up_type', 'device_problem', 'remedial_action')),
+    sequence_number INTEGER NOT NULL,
+    value_code VARCHAR(7) NOT NULL,
+    CHECK (
+        (element = 'follow_up_type' AND value_code IN ('1', '2', '3', '4')) OR
+        (element = 'device_problem' AND char_length(value_code) BETWEEN 1 AND 7) OR
+        (element = 'remedial_action' AND value_code IN ('1', '2', '3', '4', '5', '6', '7', '8', '9'))
+    ),
+
+    deleted BOOLEAN NOT NULL DEFAULT false,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    created_by UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+    updated_by UUID REFERENCES users(id) ON DELETE RESTRICT
+);
+
+CREATE INDEX idx_fda_device_codes_device ON fda_device_codes(device_id);
+CREATE UNIQUE INDEX idx_fda_device_codes_active_sequence_unique
+    ON fda_device_codes(device_id, element, sequence_number)
     WHERE deleted = false;
 
 -- ============================================================================

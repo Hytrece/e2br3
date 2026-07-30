@@ -35,8 +35,8 @@ pub use e_reaction_policy::{
 };
 pub use f_test_result_policy::{has_test_name, has_test_payload};
 pub use fda_context::{
-	list_drug_characteristics, list_study_registrations,
-	load_fda_validation_context, FdaValidationContext,
+	list_fda_devices, list_study_registrations, load_fda_validation_context,
+	FdaValidationContext,
 };
 pub use g_drug_policy::{
 	drug_characterization_display_name, has_drug_characterization,

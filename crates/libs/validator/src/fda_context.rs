@@ -1,35 +1,9 @@
 use lib_core::ctx::Ctx;
-use lib_core::model::drug::{
-	derive_fda_device_characteristics, DrugDeviceCharacteristic, DrugInformationBmc,
-};
+use lib_core::model::drug::{FdaDeviceCode, FdaDeviceInformation};
 use lib_core::model::safety_report::{StudyInformation, StudyRegistrationNumber};
 use lib_core::model::store::set_full_context_dbx_or_rollback;
 use lib_core::model::{ModelManager, Result};
 use sqlx::types::Uuid;
-
-fn merge_fda_characteristics(
-	mut derived: Vec<DrugDeviceCharacteristic>,
-	raw: Vec<DrugDeviceCharacteristic>,
-) -> Vec<DrugDeviceCharacteristic> {
-	for row in raw {
-		let code = row.code.as_deref().map(str::trim).unwrap_or("");
-		if code.is_empty() {
-			continue;
-		}
-		let duplicate = derived.iter().any(|existing| {
-			existing.code.as_deref().map(str::trim) == Some(code)
-				&& existing.value_code.as_deref().map(str::trim)
-					== row.value_code.as_deref().map(str::trim)
-				&& existing.value_value.as_deref().map(str::trim)
-					== row.value_value.as_deref().map(str::trim)
-		});
-		if !duplicate {
-			derived.push(row);
-		}
-	}
-	derived.sort_by_key(|row| row.sequence_number);
-	derived
-}
 
 #[derive(Debug, Clone)]
 pub struct FdaValidationContext {
@@ -67,14 +41,11 @@ pub async fn list_study_registrations(
 	Ok(rows)
 }
 
-pub async fn list_drug_characteristics(
+pub async fn list_fda_devices(
 	ctx: &Ctx,
 	mm: &ModelManager,
 	drug_id: Uuid,
-) -> Result<Vec<DrugDeviceCharacteristic>> {
-	let drug = DrugInformationBmc::get(ctx, mm, drug_id).await?;
-	let derived = derive_fda_device_characteristics(&drug);
-	let sql = "SELECT * FROM drug_device_characteristics WHERE drug_id = $1 ORDER BY sequence_number";
+) -> Result<(Vec<FdaDeviceInformation>, Vec<FdaDeviceCode>)> {
 	mm.dbx().begin_txn().await?;
 	set_full_context_dbx_or_rollback(
 		mm.dbx(),
@@ -83,12 +54,30 @@ pub async fn list_drug_characteristics(
 		ctx.role(),
 	)
 	.await?;
-	let raw = mm
+	let devices = mm
 		.dbx()
-		.fetch_all(sqlx::query_as::<_, DrugDeviceCharacteristic>(sql).bind(drug_id))
+		.fetch_all(
+			sqlx::query_as::<_, FdaDeviceInformation>(
+				"SELECT * FROM fda_device_information WHERE drug_id = $1 AND deleted = false ORDER BY sequence_number",
+			)
+			.bind(drug_id),
+		)
 		.await?;
+	let device_ids: Vec<_> = devices.iter().map(|device| device.id).collect();
+	let codes = if device_ids.is_empty() {
+		Vec::new()
+	} else {
+		mm.dbx()
+			.fetch_all(
+				sqlx::query_as::<_, FdaDeviceCode>(
+					"SELECT * FROM fda_device_codes WHERE device_id = ANY($1) AND deleted = false ORDER BY device_id, element, sequence_number",
+				)
+				.bind(&device_ids),
+			)
+			.await?
+	};
 	mm.dbx().commit_txn().await?;
-	Ok(merge_fda_characteristics(derived, raw))
+	Ok((devices, codes))
 }
 
 async fn list_studies(

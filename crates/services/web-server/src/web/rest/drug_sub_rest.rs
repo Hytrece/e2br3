@@ -9,9 +9,14 @@ use lib_core::model::drug::{
 	DrugDeviceCharacteristicBmc, DrugDeviceCharacteristicFilter,
 	DrugDeviceCharacteristicForCreate, DrugDeviceCharacteristicForUpdate,
 	DrugIndication, DrugIndicationBmc, DrugIndicationFilter,
-	DrugIndicationForCreate, DrugIndicationForUpdate,
+	DrugIndicationForCreate, DrugIndicationForUpdate, DrugInformationBmc,
+	FdaDeviceCode, FdaDeviceCodeBmc, FdaDeviceCodeFilter, FdaDeviceCodeForCreate,
+	FdaDeviceCodeForUpdate, FdaDeviceInformation, FdaDeviceInformationBmc,
+	FdaDeviceInformationFilter, FdaDeviceInformationForCreate,
+	FdaDeviceInformationForUpdate,
 };
 use lib_rest_core::Result;
+use serde::Deserialize;
 use uuid::Uuid;
 
 fn ensure_drug_scope(
@@ -29,6 +34,405 @@ fn ensure_drug_scope(
 	}
 	Ok(())
 }
+
+// -- FDA Device Information (FDA.G.k.12.r)
+
+#[derive(Deserialize)]
+pub struct FdaDeviceCodeInput {
+	pub value_code: String,
+}
+
+#[derive(Deserialize)]
+pub struct FdaDeviceReplaceInput {
+	pub malfunction: Option<bool>,
+	pub device_brand_name: Option<String>,
+	pub device_brand_name_null_flavor: Option<String>,
+	pub common_device_name: Option<String>,
+	pub common_device_name_null_flavor: Option<String>,
+	pub device_product_code: Option<String>,
+	pub manufacturer_name: Option<String>,
+	pub manufacturer_address: Option<String>,
+	pub manufacturer_city: Option<String>,
+	pub manufacturer_state: Option<String>,
+	pub manufacturer_country: Option<String>,
+	pub device_usage: Option<String>,
+	pub device_lot_number: Option<String>,
+	pub operator_of_device: Option<String>,
+	#[serde(default)]
+	pub follow_up_types: Vec<FdaDeviceCodeInput>,
+	#[serde(default)]
+	pub device_problem_codes: Vec<FdaDeviceCodeInput>,
+	#[serde(default)]
+	pub remedial_actions: Vec<FdaDeviceCodeInput>,
+}
+
+#[derive(Deserialize)]
+pub struct ReplaceFdaDevicesInput {
+	#[serde(default)]
+	pub devices: Vec<FdaDeviceReplaceInput>,
+}
+
+pub async fn replace_fda_devices(
+	axum::extract::State(mm): axum::extract::State<lib_core::model::ModelManager>,
+	ctx_w: lib_web::middleware::mw_auth::CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
+	axum::extract::Path((case_id, drug_id)): axum::extract::Path<(Uuid, Uuid)>,
+	axum::Json(params): axum::Json<
+		lib_rest_core::rest_params::ParamsForUpdate<ReplaceFdaDevicesInput>,
+	>,
+) -> Result<(
+	axum::http::StatusCode,
+	axum::Json<
+		lib_rest_core::rest_result::DataRestResult<Vec<FdaDeviceInformation>>,
+	>,
+)> {
+	let ctx = ctx_w.0;
+	lib_rest_core::with_authorized_case_child_mutation(
+		&ctx,
+		&snapshot,
+		&mm,
+		case_id,
+		format!("fda_device_information:replace:drug:{drug_id}"),
+		move |ctx, mm| {
+			Box::pin(async move {
+				DrugInformationBmc::get_in_case(&ctx, &mm, case_id, drug_id).await?;
+				let mut filter = FdaDeviceInformationFilter::default();
+				filter.drug_id = Some(modql::filter::OpValsValue::from(vec![
+					modql::filter::OpValValue::Eq(serde_json::json!(
+						drug_id.to_string()
+					)),
+				]));
+				for existing in FdaDeviceInformationBmc::list(
+					&ctx,
+					&mm,
+					Some(vec![filter]),
+					Some(modql::filter::ListOptions::default()),
+				)
+				.await?
+				{
+					FdaDeviceInformationBmc::delete(&ctx, &mm, existing.id).await?;
+				}
+
+				let mut created = Vec::with_capacity(params.data.devices.len());
+				for (device_index, device) in
+					params.data.devices.into_iter().enumerate()
+				{
+					let id = FdaDeviceInformationBmc::create(
+						&ctx,
+						&mm,
+						FdaDeviceInformationForCreate {
+							drug_id,
+							sequence_number: device_index as i32 + 1,
+							malfunction: device.malfunction,
+							device_brand_name: device.device_brand_name,
+							device_brand_name_null_flavor: device
+								.device_brand_name_null_flavor,
+							common_device_name: device.common_device_name,
+							common_device_name_null_flavor: device
+								.common_device_name_null_flavor,
+							device_product_code: device.device_product_code,
+							manufacturer_name: device.manufacturer_name,
+							manufacturer_address: device.manufacturer_address,
+							manufacturer_city: device.manufacturer_city,
+							manufacturer_state: device.manufacturer_state,
+							manufacturer_country: device.manufacturer_country,
+							device_usage: device.device_usage,
+							device_lot_number: device.device_lot_number,
+							operator_of_device: device.operator_of_device,
+						},
+					)
+					.await?;
+					for (element, codes) in [
+						("follow_up_type", device.follow_up_types),
+						("device_problem", device.device_problem_codes),
+						("remedial_action", device.remedial_actions),
+					] {
+						for (code_index, code) in codes.into_iter().enumerate() {
+							FdaDeviceCodeBmc::create(
+								&ctx,
+								&mm,
+								FdaDeviceCodeForCreate {
+									device_id: id,
+									element: element.to_string(),
+									sequence_number: code_index as i32 + 1,
+									value_code: code.value_code,
+								},
+							)
+							.await?;
+						}
+					}
+					created.push(FdaDeviceInformationBmc::get(&ctx, &mm, id).await?);
+				}
+				Ok((
+					axum::http::StatusCode::OK,
+					axum::Json(lib_rest_core::rest_result::DataRestResult {
+						data: created,
+					}),
+				))
+			})
+		},
+	)
+	.await
+}
+
+lib_rest_core::generate_drug_child_rest_fns! {
+	Bmc: FdaDeviceInformationBmc,
+	Entity: FdaDeviceInformation,
+	ForCreate: FdaDeviceInformationForCreate,
+	ForUpdate: FdaDeviceInformationForUpdate,
+	Filter: FdaDeviceInformationFilter,
+	CreateFn: create_fda_device_information,
+	ListFn: list_fda_device_information,
+	GetFn: get_fda_device_information,
+	UpdateFn: update_fda_device_information,
+	DeleteFn: delete_fda_device_information,
+	RestoreFn: restore_fda_device_information,
+	ParentField: drug_id,
+	ScopeFn: ensure_drug_scope,
+	EntityName: "fda_device_information"
+}
+
+async fn ensure_device_scope(
+	ctx: &lib_core::ctx::Ctx,
+	mm: &lib_core::model::ModelManager,
+	drug_id: Uuid,
+	device_id: Uuid,
+) -> Result<()> {
+	let device = FdaDeviceInformationBmc::get(ctx, mm, device_id).await?;
+	ensure_drug_scope(drug_id, device.drug_id, device_id, "fda_device_information")
+}
+
+pub async fn create_fda_device_code(
+	axum::extract::State(mm): axum::extract::State<lib_core::model::ModelManager>,
+	ctx_w: lib_web::middleware::mw_auth::CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
+	axum::extract::Path((case_id, drug_id, device_id)): axum::extract::Path<(
+		Uuid,
+		Uuid,
+		Uuid,
+	)>,
+	axum::Json(params): axum::Json<
+		lib_rest_core::rest_params::ParamsForCreate<FdaDeviceCodeForCreate>,
+	>,
+) -> Result<(
+	axum::http::StatusCode,
+	axum::Json<lib_rest_core::rest_result::DataRestResult<FdaDeviceCode>>,
+)> {
+	let ctx = ctx_w.0;
+	lib_rest_core::with_authorized_case_child_mutation(
+		&ctx,
+		&snapshot,
+		&mm,
+		case_id,
+		format!("fda_device_codes:new:device:{device_id}"),
+		move |ctx, mm| {
+			Box::pin(async move {
+				ensure_device_scope(&ctx, &mm, drug_id, device_id).await?;
+				let mut data = params.data;
+				data.device_id = device_id;
+				let id = FdaDeviceCodeBmc::create(&ctx, &mm, data).await?;
+				let data = FdaDeviceCodeBmc::get(&ctx, &mm, id).await?;
+				Ok((
+					axum::http::StatusCode::CREATED,
+					axum::Json(lib_rest_core::rest_result::DataRestResult { data }),
+				))
+			})
+		},
+	)
+	.await
+}
+
+pub async fn list_fda_device_codes(
+	axum::extract::State(mm): axum::extract::State<lib_core::model::ModelManager>,
+	ctx_w: lib_web::middleware::mw_auth::CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
+	axum::extract::Path((case_id, drug_id, device_id)): axum::extract::Path<(
+		Uuid,
+		Uuid,
+		Uuid,
+	)>,
+) -> Result<(
+	axum::http::StatusCode,
+	axum::Json<lib_rest_core::rest_result::DataRestResult<Vec<FdaDeviceCode>>>,
+)> {
+	let ctx = ctx_w.0;
+	lib_rest_core::with_authorized_case_child_read(
+		&ctx,
+		&snapshot,
+		&mm,
+		case_id,
+		format!("fda_device_codes:list:device:{device_id}"),
+		move |ctx, mm| {
+			Box::pin(async move {
+				ensure_device_scope(&ctx, &mm, drug_id, device_id).await?;
+				let mut filter = FdaDeviceCodeFilter::default();
+				filter.device_id = Some(modql::filter::OpValsValue::from(vec![
+					modql::filter::OpValValue::Eq(serde_json::json!(
+						device_id.to_string()
+					)),
+				]));
+				let data = FdaDeviceCodeBmc::list(
+					&ctx,
+					&mm,
+					Some(vec![filter]),
+					Some(modql::filter::ListOptions::default()),
+				)
+				.await?;
+				Ok((
+					axum::http::StatusCode::OK,
+					axum::Json(lib_rest_core::rest_result::DataRestResult { data }),
+				))
+			})
+		},
+	)
+	.await
+}
+
+async fn scoped_fda_device_code(
+	ctx: &lib_core::ctx::Ctx,
+	mm: &lib_core::model::ModelManager,
+	drug_id: Uuid,
+	device_id: Uuid,
+	id: Uuid,
+) -> Result<FdaDeviceCode> {
+	ensure_device_scope(ctx, mm, drug_id, device_id).await?;
+	let code = FdaDeviceCodeBmc::get(ctx, mm, id).await?;
+	if code.device_id != device_id {
+		return Err(model::Error::EntityUuidNotFound {
+			entity: "fda_device_codes",
+			id,
+		}
+		.into());
+	}
+	Ok(code)
+}
+
+pub async fn get_fda_device_code(
+	axum::extract::State(mm): axum::extract::State<lib_core::model::ModelManager>,
+	ctx_w: lib_web::middleware::mw_auth::CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
+	axum::extract::Path((case_id, drug_id, device_id, id)): axum::extract::Path<(
+		Uuid,
+		Uuid,
+		Uuid,
+		Uuid,
+	)>,
+) -> Result<(
+	axum::http::StatusCode,
+	axum::Json<lib_rest_core::rest_result::DataRestResult<FdaDeviceCode>>,
+)> {
+	let ctx = ctx_w.0;
+	lib_rest_core::with_authorized_case_child_read(
+		&ctx,
+		&snapshot,
+		&mm,
+		case_id,
+		format!("fda_device_codes:{id}:device:{device_id}"),
+		move |ctx, mm| {
+			Box::pin(async move {
+				let data = scoped_fda_device_code(&ctx, &mm, drug_id, device_id, id)
+					.await?;
+				Ok((
+					axum::http::StatusCode::OK,
+					axum::Json(lib_rest_core::rest_result::DataRestResult { data }),
+				))
+			})
+		},
+	)
+	.await
+}
+
+pub async fn update_fda_device_code(
+	axum::extract::State(mm): axum::extract::State<lib_core::model::ModelManager>,
+	ctx_w: lib_web::middleware::mw_auth::CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
+	axum::extract::Path((case_id, drug_id, device_id, id)): axum::extract::Path<(
+		Uuid,
+		Uuid,
+		Uuid,
+		Uuid,
+	)>,
+	axum::Json(params): axum::Json<
+		lib_rest_core::rest_params::ParamsForUpdate<FdaDeviceCodeForUpdate>,
+	>,
+) -> Result<(
+	axum::http::StatusCode,
+	axum::Json<lib_rest_core::rest_result::DataRestResult<FdaDeviceCode>>,
+)> {
+	let ctx = ctx_w.0;
+	lib_rest_core::with_authorized_case_child_mutation(
+		&ctx,
+		&snapshot,
+		&mm,
+		case_id,
+		format!("fda_device_codes:{id}:device:{device_id}"),
+		move |ctx, mm| {
+			Box::pin(async move {
+				scoped_fda_device_code(&ctx, &mm, drug_id, device_id, id).await?;
+				FdaDeviceCodeBmc::update(&ctx, &mm, id, params.data).await?;
+				let data = FdaDeviceCodeBmc::get(&ctx, &mm, id).await?;
+				Ok((
+					axum::http::StatusCode::OK,
+					axum::Json(lib_rest_core::rest_result::DataRestResult { data }),
+				))
+			})
+		},
+	)
+	.await
+}
+
+async fn set_fda_device_code_deleted(
+	ctx: &lib_core::ctx::Ctx,
+	mm: &lib_core::model::ModelManager,
+	drug_id: Uuid,
+	device_id: Uuid,
+	id: Uuid,
+	deleted: bool,
+) -> Result<axum::http::StatusCode> {
+	scoped_fda_device_code(ctx, mm, drug_id, device_id, id).await?;
+	if deleted {
+		FdaDeviceCodeBmc::delete(ctx, mm, id).await?;
+	} else {
+		FdaDeviceCodeBmc::restore(ctx, mm, id).await?;
+	}
+	Ok(axum::http::StatusCode::NO_CONTENT)
+}
+
+macro_rules! fda_device_code_delete_handler {
+	($name:ident, $deleted:literal) => {
+		pub async fn $name(
+			axum::extract::State(mm): axum::extract::State<
+				lib_core::model::ModelManager,
+			>,
+			ctx_w: lib_web::middleware::mw_auth::CtxW,
+			snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
+			axum::extract::Path((case_id, drug_id, device_id, id)): axum::extract::Path<(
+				Uuid,
+				Uuid,
+				Uuid,
+				Uuid,
+			)>,
+		) -> Result<axum::http::StatusCode> {
+			let ctx = ctx_w.0;
+			lib_rest_core::with_authorized_case_child_mutation(
+				&ctx,
+				&snapshot,
+				&mm,
+				case_id,
+				format!("fda_device_codes:{id}:device:{device_id}"),
+				move |ctx, mm| {
+					Box::pin(set_fda_device_code_deleted(
+						ctx, mm, drug_id, device_id, id, $deleted,
+					))
+				},
+			)
+			.await
+		}
+	};
+}
+
+fda_device_code_delete_handler!(delete_fda_device_code, true);
+fda_device_code_delete_handler!(restore_fda_device_code, false);
 
 // -- Drug Active Substances (G.k.2.3.r)
 

@@ -34,20 +34,36 @@ pub struct GDrugImport {
 	pub rechallenge: Option<String>,
 	pub fda_additional_info_coded: Option<String>,
 	pub fda_specialized_product_category: Option<String>,
-	pub fda_device_brand_name: Option<String>,
-	pub fda_common_device_name: Option<String>,
-	pub fda_device_product_code: Option<String>,
-	pub fda_device_manufacturer_name: Option<String>,
-	pub fda_device_manufacturer_address: Option<String>,
-	pub fda_device_manufacturer_city: Option<String>,
-	pub fda_device_manufacturer_state: Option<String>,
-	pub fda_device_manufacturer_country: Option<String>,
-	pub fda_device_lot_number: Option<String>,
-	pub fda_operator_of_device: Option<String>,
+	pub devices: Vec<GDrugFdaDeviceImport>,
 	pub substances: Vec<GDrugSubstanceImport>,
 	pub dosages: Vec<GDrugDosageImport>,
 	pub indications: Vec<GDrugIndicationImport>,
 	pub characteristics: Vec<GDrugDeviceCharacteristicImport>,
+}
+
+#[derive(Debug)]
+pub struct GDrugFdaDeviceImport {
+	pub malfunction: Option<bool>,
+	pub device_brand_name: Option<String>,
+	pub device_brand_name_null_flavor: Option<String>,
+	pub common_device_name: Option<String>,
+	pub common_device_name_null_flavor: Option<String>,
+	pub device_product_code: Option<String>,
+	pub manufacturer_name: Option<String>,
+	pub manufacturer_address: Option<String>,
+	pub manufacturer_city: Option<String>,
+	pub manufacturer_state: Option<String>,
+	pub manufacturer_country: Option<String>,
+	pub device_usage: Option<String>,
+	pub device_lot_number: Option<String>,
+	pub operator_of_device: Option<String>,
+	pub codes: Vec<GDrugFdaDeviceCodeImport>,
+}
+
+#[derive(Debug)]
+pub struct GDrugFdaDeviceCodeImport {
+	pub element: &'static str,
+	pub value_code: String,
 }
 
 #[derive(Debug)]
@@ -207,29 +223,106 @@ pub fn parse_g_drugs(xml: &[u8]) -> Result<Vec<GDrugImport>> {
 			&node,
 			GDrugPaths::FDA_SPECIALIZED_PRODUCT_CATEGORY,
 		);
-		let fda_device_brand_name =
-			first_text(&mut xpath, &node, GDrugPaths::DEVICE_BRAND_NAME);
-		let fda_common_device_name =
-			first_text(&mut xpath, &node, GDrugPaths::COMMON_DEVICE_NAME);
-		let fda_device_product_code =
-			first_attr(&mut xpath, &node, GDrugPaths::DEVICE_PRODUCT_CODE);
-		let fda_device_manufacturer_name =
-			first_text(&mut xpath, &node, GDrugPaths::DEVICE_MANUFACTURER_NAME);
-		let fda_device_manufacturer_address =
-			first_text(&mut xpath, &node, GDrugPaths::DEVICE_MANUFACTURER_ADDRESS);
-		let fda_device_manufacturer_city =
-			first_text(&mut xpath, &node, GDrugPaths::DEVICE_MANUFACTURER_CITY);
-		let fda_device_manufacturer_state =
-			first_text(&mut xpath, &node, GDrugPaths::DEVICE_MANUFACTURER_STATE);
-		let fda_device_manufacturer_country = normalize_iso2(first_text(
-			&mut xpath,
-			&node,
-			GDrugPaths::DEVICE_MANUFACTURER_COUNTRY,
-		));
-		let fda_device_lot_number =
-			first_text(&mut xpath, &node, GDrugPaths::DEVICE_LOT_NUMBER);
-		let fda_operator_of_device =
-			first_attr(&mut xpath, &node, GDrugPaths::DEVICE_OPERATOR_CODE);
+		let mut devices = Vec::new();
+		for device in xpath
+			.findnodes(GDrugPaths::DEVICE_NODE, Some(&node))
+			.unwrap_or_default()
+		{
+			let mut codes = Vec::new();
+			for characteristic in xpath
+				.findnodes(GDrugPaths::DEVICE_CHARACTERISTIC_NODE, Some(&device))
+				.unwrap_or_default()
+			{
+				let characteristic_code =
+					first_attr(&mut xpath, &characteristic, "hl7:code/@code");
+				let value_code =
+					first_attr(&mut xpath, &characteristic, "hl7:value/@code");
+				let element = match characteristic_code.as_deref() {
+					Some("C54592") => Some("follow_up_type"),
+					Some("C54451") => Some("device_problem"),
+					Some("C54594") => Some("remedial_action"),
+					_ => None,
+				};
+				if let (Some(element), Some(value_code)) = (element, value_code) {
+					codes.push(GDrugFdaDeviceCodeImport {
+						element,
+						value_code,
+					});
+				}
+			}
+			let malfunction =
+				first_attr(&mut xpath, &device, GDrugPaths::DEVICE_MALFUNCTION)
+					.map(|value| value.eq_ignore_ascii_case("true") || value == "1");
+			devices.push(GDrugFdaDeviceImport {
+				malfunction,
+				device_brand_name: first_text(
+					&mut xpath,
+					&device,
+					"hl7:partProduct/hl7:name[1]",
+				),
+				device_brand_name_null_flavor: first_attr(
+					&mut xpath,
+					&device,
+					"hl7:partProduct/hl7:name[1]/@nullFlavor",
+				),
+				common_device_name: first_text(
+					&mut xpath,
+					&device,
+					"hl7:partProduct/hl7:name[2]",
+				),
+				common_device_name_null_flavor: first_attr(
+					&mut xpath,
+					&device,
+					"hl7:partProduct/hl7:name[2]/@nullFlavor",
+				),
+				device_product_code: first_attr(
+					&mut xpath,
+					&device,
+					"hl7:partProduct/hl7:code/@code",
+				),
+				manufacturer_name: first_text(
+					&mut xpath,
+					&device,
+					GDrugPaths::DEVICE_MANUFACTURER_NAME,
+				),
+				manufacturer_address: first_text(
+					&mut xpath,
+					&device,
+					GDrugPaths::DEVICE_MANUFACTURER_ADDRESS,
+				),
+				manufacturer_city: first_text(
+					&mut xpath,
+					&device,
+					GDrugPaths::DEVICE_MANUFACTURER_CITY,
+				),
+				manufacturer_state: first_text(
+					&mut xpath,
+					&device,
+					GDrugPaths::DEVICE_MANUFACTURER_STATE,
+				),
+				manufacturer_country: normalize_iso2(first_text(
+					&mut xpath,
+					&device,
+					GDrugPaths::DEVICE_MANUFACTURER_COUNTRY,
+				)),
+				device_usage: first_attr(
+					&mut xpath,
+					&device,
+					GDrugPaths::DEVICE_USAGE,
+				),
+				device_lot_number: first_text(
+					&mut xpath,
+					&device,
+					GDrugPaths::DEVICE_LOT_NUMBER,
+				),
+				operator_of_device: first_attr(
+					&mut xpath,
+					&device,
+					GDrugPaths::DEVICE_OPERATOR_CODE,
+				),
+				codes,
+			});
+		}
 		let subs = xpath
 			.findnodes(GDrugPaths::SUBSTANCE_NODE, Some(&node))
 			.unwrap_or_default();
@@ -478,16 +571,7 @@ pub fn parse_g_drugs(xml: &[u8]) -> Result<Vec<GDrugImport>> {
 			rechallenge,
 			fda_additional_info_coded,
 			fda_specialized_product_category,
-			fda_device_brand_name,
-			fda_common_device_name,
-			fda_device_product_code,
-			fda_device_manufacturer_name,
-			fda_device_manufacturer_address,
-			fda_device_manufacturer_city,
-			fda_device_manufacturer_state,
-			fda_device_manufacturer_country,
-			fda_device_lot_number,
-			fda_operator_of_device,
+			devices,
 			substances,
 			dosages: dosage_list,
 			indications,
@@ -663,5 +747,24 @@ mod tests {
 		assert_eq!(dosage.route_null_flavor.as_deref(), Some("ASKU"));
 		assert_eq!(dosage.dose_form_null_flavor.as_deref(), Some("UNK"));
 		assert_eq!(dosage.parent_route_null_flavor.as_deref(), Some("NASK"));
+	}
+
+	#[test]
+	fn imports_official_fda_scenario_7_device_repeat_groups() {
+		let xml = include_bytes!(concat!(
+			env!("CARGO_MANIFEST_DIR"),
+			"/../../../docs/exporter/fda/FAERS2022Scenario7.xml"
+		));
+		let drugs = parse_g_drugs(xml).expect("parse official FDA scenario 7");
+		let devices: Vec<_> = drugs.iter().flat_map(|drug| &drug.devices).collect();
+
+		assert_eq!(devices.len(), 2);
+		assert!(devices
+			.iter()
+			.all(|device| device.malfunction == Some(true)));
+		assert!(devices.iter().all(|device| device
+			.codes
+			.iter()
+			.any(|code| code.element == "device_problem")));
 	}
 }

@@ -1,6 +1,7 @@
 use super::*;
 use crate::export::sections::c::apply_literature_section;
 use crate::export::sections::c::apply_primary_source_section;
+use crate::export::sections::c::apply_report_relationships_section;
 use crate::export::sections::c::apply_study_section;
 use crate::export::sections::h::{
 	apply_case_summary_section, apply_sender_diagnosis_section,
@@ -29,6 +30,7 @@ pub(crate) async fn apply_section_postprocess(
 	mm: &ModelManager,
 	case_id: sqlx::types::Uuid,
 	xml: String,
+	authority: lib_core::regulatory::RegulatoryAuthority,
 ) -> Result<String> {
 	let parser = Parser::default();
 	let mut doc = parser.parse_string(&xml).map_err(|err| Error::InvalidXml {
@@ -45,10 +47,19 @@ pub(crate) async fn apply_section_postprocess(
 	let _ =
 		xpath.register_namespace("xsi", "http://www.w3.org/2001/XMLSchema-instance");
 	apply_section_n(ctx, &mut doc, &parser, mm, case_id, &mut xpath).await?;
-	apply_patient_section(ctx, &mut doc, &parser, mm, case_id, &mut xpath).await?;
-	apply_primary_source_section(&mut doc, &parser, mm, case_id, &mut xpath).await?;
+	apply_patient_section(
+		ctx, &mut doc, &parser, mm, case_id, &mut xpath, authority,
+	)
+	.await?;
+	apply_primary_source_section(
+		&mut doc, &parser, mm, case_id, &mut xpath, authority,
+	)
+	.await?;
+	apply_report_relationships_section(&mut doc, &parser, mm, case_id, &mut xpath)
+		.await?;
 	apply_literature_section(&mut doc, &parser, mm, case_id, &mut xpath).await?;
-	apply_study_section(&mut doc, &parser, mm, case_id, &mut xpath).await?;
+	apply_study_section(&mut doc, &parser, mm, case_id, &mut xpath, authority)
+		.await?;
 	apply_sender_diagnosis_section(ctx, &mut doc, &parser, mm, case_id, &mut xpath)
 		.await?;
 	apply_case_summary_section(ctx, &mut doc, &parser, mm, case_id, &mut xpath)
@@ -65,6 +76,7 @@ async fn apply_patient_section(
 	mm: &ModelManager,
 	case_id: sqlx::types::Uuid,
 	xpath: &mut Context,
+	authority: lib_core::regulatory::RegulatoryAuthority,
 ) -> Result<()> {
 	let Some(patient) = fetch_patient_information(ctx, mm, case_id).await? else {
 		return Ok(());
@@ -73,6 +85,11 @@ async fn apply_patient_section(
 	let parent = fetch_parent_information(ctx, mm, patient.id).await?;
 	let parent_past_drugs = if let Some(parent) = parent.as_ref() {
 		fetch_parent_past_drug_history(ctx, mm, parent.id).await?
+	} else {
+		Vec::new()
+	};
+	let parent_medical_history = if let Some(parent) = parent.as_ref() {
+		fetch_parent_medical_history(ctx, mm, parent.id).await?
 	} else {
 		Vec::new()
 	};
@@ -178,7 +195,7 @@ async fn apply_patient_section(
 			xpath,
 			"//hl7:primaryRole/hl7:subjectOf2/hl7:observation[hl7:code[@code='C17049']]/hl7:value",
 			"code",
-			v,
+			write_fda_d_11_r_1(v),
 		);
 		remove_attr_first(
 			xpath,
@@ -225,7 +242,7 @@ async fn apply_patient_section(
 			xpath,
 			"//hl7:primaryRole/hl7:subjectOf2/hl7:observation[hl7:code[@code='C16564']]/hl7:value",
 			"code",
-			v,
+			write_fda_d_12(v),
 		);
 		remove_attr_first(
 			xpath,
@@ -263,12 +280,7 @@ async fn apply_patient_section(
 	}
 	if let Some(v) = patient.last_menstrual_period_date {
 		ensure_patient_observation(xpath, doc, parser, "22", "TS")?;
-		set_attr_first(
-			xpath,
-			"//hl7:primaryRole/hl7:subjectOf2/hl7:observation[hl7:code[@code='22']]/hl7:value",
-			"value",
-			&fmt_date(v),
-		);
+		write_d_6(xpath, v);
 		remove_attr_first(
 			xpath,
 			"//hl7:primaryRole/hl7:subjectOf2/hl7:observation[hl7:code[@code='22']]/hl7:value",
@@ -297,11 +309,7 @@ async fn apply_patient_section(
 			"//hl7:primaryRole/hl7:subjectOf2/hl7:organizer[hl7:code[@code='1']]/hl7:component/hl7:observation[hl7:code[@code='18']]/hl7:value",
 			"nullFlavor",
 		);
-		set_text_first(
-			xpath,
-			"//hl7:primaryRole/hl7:subjectOf2/hl7:organizer[hl7:code[@code='1']]/hl7:component/hl7:observation[hl7:code[@code='18']]/hl7:value",
-			v,
-		);
+		write_d_7_2(xpath, v);
 	} else if let Some(null_flavor) =
 		patient.medical_history_text_null_flavor.as_deref()
 	{
@@ -323,20 +331,10 @@ async fn apply_patient_section(
 	{
 		ensure_patient_observation(xpath, doc, parser, "16", "PQ")?;
 		if let Some(v) = patient.gestation_period.as_ref() {
-			set_attr_first(
-				xpath,
-				"//hl7:primaryRole/hl7:subjectOf2/hl7:observation[hl7:code[@code='16']]/hl7:value",
-				"value",
-				&v.to_string(),
-			);
+			write_d_2_2_1a(xpath, &v.to_string());
 		}
 		if let Some(v) = patient.gestation_period_unit.as_deref() {
-			set_attr_first(
-				xpath,
-				"//hl7:primaryRole/hl7:subjectOf2/hl7:observation[hl7:code[@code='16']]/hl7:value",
-				"unit",
-				v,
-			);
+			write_d_2_2_1b(xpath, v);
 		}
 	}
 	if let Some(v) = patient.age_group.as_deref() {
@@ -347,12 +345,7 @@ async fn apply_patient_section(
 			"xsi:type",
 			"CE",
 		);
-		set_attr_first(
-			xpath,
-			"//hl7:primaryRole/hl7:subjectOf2/hl7:observation[hl7:code[@code='4']]/hl7:value",
-			"code",
-			v,
-		);
+		write_d_2_3(xpath, v);
 	}
 	if let Some(v) = patient.concomitant_therapy {
 		ensure_patient_history_organizer(xpath, doc, parser)?;
@@ -370,12 +363,7 @@ async fn apply_patient_section(
 				"<component typeCode=\"COMP\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code code=\"11\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.19\"/><value xsi:type=\"BL\"/></observation></component>",
 			)?;
 		}
-		set_attr_first(
-			xpath,
-			therapy_xpath,
-			"value",
-			if v { "true" } else { "false" },
-		);
+		write_d_7_3(xpath, therapy_xpath, v);
 	}
 
 	for ident in &identifiers {
@@ -384,12 +372,12 @@ async fn apply_patient_section(
 			"//hl7:primaryRole/hl7:player1/hl7:asIdentifiedEntity[hl7:code[@code='{}']]/hl7:id",
 			ident.identifier_type_code
 		);
-		if let Some(null_flavor) = ident.identifier_value_null_flavor.as_deref() {
-			remove_attr_first(xpath, &id_xpath, "extension");
-			set_attr_first(xpath, &id_xpath, "nullFlavor", null_flavor);
-		} else if let Some(value) = ident.identifier_value.as_deref() {
-			remove_attr_first(xpath, &id_xpath, "nullFlavor");
-			set_attr_first(xpath, &id_xpath, "extension", value);
+		match ident.identifier_type_code.as_str() {
+			"1" => write_d_1_1_1(xpath, &id_xpath, ident),
+			"2" => write_d_1_1_2(xpath, &id_xpath, ident),
+			"3" => write_d_1_1_3(xpath, &id_xpath, ident),
+			"4" => write_d_1_1_4(xpath, &id_xpath, ident),
+			_ => write_patient_identifier(xpath, &id_xpath, ident),
 		}
 	}
 
@@ -397,7 +385,7 @@ async fn apply_patient_section(
 		ensure_parent_role(xpath, doc, parser)?;
 		if let Some(v) = parent.parent_identification.as_deref() {
 			let name_xpath = "//hl7:primaryRole/hl7:player1/hl7:role[hl7:code[@code='PRN']]/hl7:associatedPerson/hl7:name";
-			set_text_first(xpath, name_xpath, v);
+			write_d_10_1(xpath, name_xpath, v);
 			remove_attr_first(xpath, name_xpath, "nullFlavor");
 		} else if let Some(null_flavor) =
 			parent.parent_identification_null_flavor.as_deref()
@@ -407,12 +395,7 @@ async fn apply_patient_section(
 			set_attr_first(xpath, name_xpath, "nullFlavor", null_flavor);
 		}
 		if let Some(v) = parent.parent_birth_date {
-			set_attr_first(
-				xpath,
-				"//hl7:primaryRole/hl7:player1/hl7:role[hl7:code[@code='PRN']]/hl7:associatedPerson/hl7:birthTime",
-				"value",
-				&fmt_date(v),
-			);
+			write_d_10_2_1(xpath, v);
 			remove_attr_first(
 				xpath,
 				"//hl7:primaryRole/hl7:player1/hl7:role[hl7:code[@code='PRN']]/hl7:associatedPerson/hl7:birthTime",
@@ -448,7 +431,7 @@ async fn apply_patient_section(
 					"<administrativeGenderCode/>",
 				)?;
 			}
-			set_attr_first(xpath, gender_xpath, "code", v);
+			write_d_10_6(xpath, gender_xpath, v);
 			remove_attr_first(xpath, gender_xpath, "nullFlavor");
 		} else if let Some(null_flavor) = parent.sex_null_flavor.as_deref() {
 			let gender_xpath = "//hl7:primaryRole/hl7:player1/hl7:role[hl7:code[@code='PRN']]/hl7:associatedPerson/hl7:administrativeGenderCode";
@@ -469,12 +452,7 @@ async fn apply_patient_section(
 			set_attr_first(xpath, gender_xpath, "nullFlavor", null_flavor);
 		}
 		if let Some(v) = parent.last_menstrual_period_date {
-			set_attr_first(
-				xpath,
-				"//hl7:primaryRole/hl7:player1/hl7:role[hl7:code[@code='PRN']]/hl7:subjectOf2/hl7:observation[hl7:code[@code='22']]/hl7:value",
-				"value",
-				&fmt_date(v),
-			);
+			write_d_10_3(xpath, v);
 			remove_attr_first(
 				xpath,
 				"//hl7:primaryRole/hl7:player1/hl7:role[hl7:code[@code='PRN']]/hl7:subjectOf2/hl7:observation[hl7:code[@code='22']]/hl7:value",
@@ -496,11 +474,7 @@ async fn apply_patient_section(
 			);
 		}
 		if let Some(v) = parent.medical_history_text.as_deref() {
-			set_text_first(
-				xpath,
-				"//hl7:primaryRole/hl7:player1/hl7:role[hl7:code[@code='PRN']]/hl7:subjectOf2/hl7:organizer[hl7:code[@code='1']]/hl7:component/hl7:observation[hl7:code[@code='18']]/hl7:value",
-				v,
-			);
+			write_d_10_7_2(xpath, v);
 		}
 		if let Some(v) = parent.weight_kg.as_ref() {
 			let weight_xpath = "//hl7:primaryRole/hl7:player1/hl7:role[hl7:code[@code='PRN']]/hl7:subjectOf2/hl7:observation[hl7:code[@code='7']]/hl7:value";
@@ -517,7 +491,7 @@ async fn apply_patient_section(
 					"<subjectOf2 typeCode=\"SBJ\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code code=\"7\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.19\"/><value xsi:type=\"PQ\"/></observation></subjectOf2>",
 				)?;
 			}
-			set_attr_first(xpath, weight_xpath, "value", &v.to_string());
+			write_d_10_4(xpath, weight_xpath, &v.to_string());
 			set_attr_first(xpath, weight_xpath, "unit", "kg");
 		}
 		if let Some(v) = parent.height_cm.as_ref() {
@@ -535,7 +509,7 @@ async fn apply_patient_section(
 					"<subjectOf2 typeCode=\"SBJ\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code code=\"17\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.19\"/><value xsi:type=\"PQ\"/></observation></subjectOf2>",
 				)?;
 			}
-			set_attr_first(xpath, height_xpath, "value", &v.to_string());
+			write_d_10_5(xpath, height_xpath, &v.to_string());
 			set_attr_first(xpath, height_xpath, "unit", "cm");
 		}
 		if parent.parent_age.is_some()
@@ -557,10 +531,10 @@ async fn apply_patient_section(
 				)?;
 			}
 			if let Some(v) = parent.parent_age.as_ref() {
-				set_attr_first(xpath, age_value_xpath, "value", &v.to_string());
+				write_d_10_2_2a(xpath, age_value_xpath, &v.to_string());
 			}
 			if let Some(v) = parent.parent_age_unit.as_deref() {
-				set_attr_first(xpath, age_value_xpath, "unit", v);
+				write_d_10_2_2b(xpath, age_value_xpath, v);
 			}
 			if parent.parent_age.is_some() {
 				remove_attr_first(xpath, age_value_xpath, "nullFlavor");
@@ -577,13 +551,221 @@ async fn apply_patient_section(
 			parser,
 			xpath,
 			&parent_past_drugs,
+			matches!(authority, lib_core::regulatory::RegulatoryAuthority::Mfds),
+		)?;
+		apply_parent_medical_history_section(
+			doc,
+			parser,
+			xpath,
+			&parent_medical_history,
 		)?;
 	}
 
-	apply_past_drug_history_section(doc, parser, xpath, &past_drugs)?;
+	apply_past_drug_history_section(
+		doc,
+		parser,
+		xpath,
+		&past_drugs,
+		matches!(authority, lib_core::regulatory::RegulatoryAuthority::Mfds),
+	)?;
+	if !matches!(authority, lib_core::regulatory::RegulatoryAuthority::Fda) {
+		remove_nodes(
+			xpath,
+			"//hl7:primaryRole/hl7:subjectOf2[hl7:observation/hl7:code[@code='C17049' or @code='C16564']]",
+		);
+	}
 	apply_patient_death_null_flavor(doc, parser, xpath, &death_info)?;
 
 	Ok(())
+}
+
+/// e2b:FDA.D.11.r.1
+fn write_fda_d_11_r_1(value: &str) -> &str {
+	value
+}
+
+/// e2b:FDA.D.12
+fn write_fda_d_12(value: &str) -> &str {
+	value
+}
+
+fn write_patient_identifier(
+	xpath: &mut Context,
+	path: &str,
+	value: &PatientIdentifier,
+) {
+	if let Some(null_flavor) = value.identifier_value_null_flavor.as_deref() {
+		remove_attr_first(xpath, path, "extension");
+		set_attr_first(xpath, path, "nullFlavor", null_flavor);
+	} else if let Some(identifier) = value.identifier_value.as_deref() {
+		remove_attr_first(xpath, path, "nullFlavor");
+		set_attr_first(xpath, path, "extension", identifier);
+	}
+}
+
+/// e2b:D.1.1.1
+fn write_d_1_1_1(xpath: &mut Context, path: &str, value: &PatientIdentifier) {
+	write_patient_identifier(xpath, path, value);
+}
+
+/// e2b:D.1.1.2
+fn write_d_1_1_2(xpath: &mut Context, path: &str, value: &PatientIdentifier) {
+	write_patient_identifier(xpath, path, value);
+}
+
+/// e2b:D.1.1.3
+fn write_d_1_1_3(xpath: &mut Context, path: &str, value: &PatientIdentifier) {
+	write_patient_identifier(xpath, path, value);
+}
+
+/// e2b:D.1.1.4
+fn write_d_1_1_4(xpath: &mut Context, path: &str, value: &PatientIdentifier) {
+	write_patient_identifier(xpath, path, value);
+}
+
+/// e2b:D.10.1
+fn write_d_10_1(xpath: &mut Context, path: &str, value: &str) {
+	set_text_first(xpath, path, value);
+}
+
+/// e2b:D.10.2.1
+fn write_d_10_2_1(xpath: &mut Context, value: time::Date) {
+	set_attr_first(xpath, "//hl7:primaryRole/hl7:player1/hl7:role[hl7:code[@code='PRN']]/hl7:associatedPerson/hl7:birthTime", "value", &fmt_date(value));
+}
+
+/// e2b:D.10.2.2a
+fn write_d_10_2_2a(xpath: &mut Context, path: &str, value: &str) {
+	set_attr_first(xpath, path, "value", value);
+}
+
+/// e2b:D.10.2.2b
+fn write_d_10_2_2b(xpath: &mut Context, path: &str, value: &str) {
+	set_attr_first(xpath, path, "unit", value);
+}
+
+/// e2b:D.10.3
+fn write_d_10_3(xpath: &mut Context, value: time::Date) {
+	set_attr_first(xpath, "//hl7:primaryRole/hl7:player1/hl7:role[hl7:code[@code='PRN']]/hl7:subjectOf2/hl7:observation[hl7:code[@code='22']]/hl7:value", "value", &fmt_date(value));
+}
+
+/// e2b:D.10.4
+fn write_d_10_4(xpath: &mut Context, path: &str, value: &str) {
+	set_attr_first(xpath, path, "value", value);
+}
+
+/// e2b:D.10.5
+fn write_d_10_5(xpath: &mut Context, path: &str, value: &str) {
+	set_attr_first(xpath, path, "value", value);
+}
+
+/// e2b:D.10.6
+fn write_d_10_6(xpath: &mut Context, path: &str, value: &str) {
+	set_attr_first(xpath, path, "code", value);
+}
+
+/// e2b:D.10.7.2
+fn write_d_10_7_2(xpath: &mut Context, value: &str) {
+	set_text_first(xpath, "//hl7:primaryRole/hl7:player1/hl7:role[hl7:code[@code='PRN']]/hl7:subjectOf2/hl7:organizer[hl7:code[@code='1']]/hl7:component/hl7:observation[hl7:code[@code='18']]/hl7:value", value);
+}
+
+/// e2b:D.2.2.1a
+fn write_d_2_2_1a(xpath: &mut Context, value: &str) {
+	set_attr_first(xpath, "//hl7:primaryRole/hl7:subjectOf2/hl7:observation[hl7:code[@code='16']]/hl7:value", "value", value);
+}
+
+/// e2b:D.2.2.1b
+fn write_d_2_2_1b(xpath: &mut Context, value: &str) {
+	set_attr_first(xpath, "//hl7:primaryRole/hl7:subjectOf2/hl7:observation[hl7:code[@code='16']]/hl7:value", "unit", value);
+}
+
+/// e2b:D.2.3
+fn write_d_2_3(xpath: &mut Context, value: &str) {
+	set_attr_first(xpath, "//hl7:primaryRole/hl7:subjectOf2/hl7:observation[hl7:code[@code='4']]/hl7:value", "code", value);
+}
+
+/// e2b:D.6
+fn write_d_6(xpath: &mut Context, value: sqlx::types::time::Date) {
+	set_attr_first(xpath, "//hl7:primaryRole/hl7:subjectOf2/hl7:observation[hl7:code[@code='22']]/hl7:value", "value", &fmt_date(value));
+}
+
+/// e2b:D.7.2
+fn write_d_7_2(xpath: &mut Context, value: &str) {
+	set_text_first(xpath, "//hl7:primaryRole/hl7:subjectOf2/hl7:organizer[hl7:code[@code='1']]/hl7:component/hl7:observation[hl7:code[@code='18']]/hl7:value", value);
+}
+
+/// e2b:D.7.3
+fn write_d_7_3(xpath: &mut Context, path: &str, value: bool) {
+	set_attr_first(xpath, path, "value", if value { "true" } else { "false" });
+}
+
+fn apply_parent_medical_history_section(
+	doc: &mut Document,
+	parser: &Parser,
+	xpath: &mut Context,
+	episodes: &[ParentMedicalHistory],
+) -> Result<()> {
+	if episodes.is_empty() {
+		return Ok(());
+	}
+	let organizer = "//hl7:primaryRole/hl7:player1/hl7:role[hl7:code[@code='PRN']]/hl7:subjectOf2/hl7:organizer[hl7:code[@code='1']]";
+	remove_nodes(xpath, &format!("{organizer}/hl7:component/hl7:observation[hl7:code[@codeSystem='2.16.840.1.113883.6.163']]"));
+	let mut rows = episodes.to_vec();
+	rows.sort_by_key(|row| row.sequence_number);
+	for episode in rows {
+		let mut attrs = String::from("codeSystem=\"2.16.840.1.113883.6.163\"");
+		if let Some(code) = write_d_10_7_1_r_1b(&episode) {
+			attrs.push_str(&format!(" code=\"{}\"", xml_escape(code)));
+		}
+		if let Some(version) = write_d_10_7_1_r_1a(&episode) {
+			attrs.push_str(&format!(
+				" codeSystemVersion=\"{}\"",
+				xml_escape(version)
+			));
+		}
+		let (start, start_null) = write_d_10_7_1_r_2(&episode);
+		let (end, end_null) = write_d_10_7_1_r_4(&episode);
+		let effective_time =
+			history_effective_time(start, start_null, end, end_null);
+		let continuing = write_d_10_7_1_r_3(&episode);
+		let comments = write_d_10_7_1_r_5(&episode);
+		let fragment = format!("<component typeCode=\"COMP\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code {attrs}/>{effective_time}{continuing}{comments}</observation></component>");
+		append_fragment_child(doc, parser, xpath, organizer, &fragment)?;
+	}
+	Ok(())
+}
+
+/// e2b:D.10.7.1.r.1a
+fn write_d_10_7_1_r_1a(value: &ParentMedicalHistory) -> Option<&str> {
+	value.meddra_version.as_deref()
+}
+
+/// e2b:D.10.7.1.r.1b
+fn write_d_10_7_1_r_1b(value: &ParentMedicalHistory) -> Option<&str> {
+	value.meddra_code.as_deref()
+}
+
+/// e2b:D.10.7.1.r.2
+fn write_d_10_7_1_r_2(
+	value: &ParentMedicalHistory,
+) -> (Option<time::Date>, Option<&str>) {
+	(value.start_date, value.start_date_null_flavor.as_deref())
+}
+
+/// e2b:D.10.7.1.r.3
+fn write_d_10_7_1_r_3(value: &ParentMedicalHistory) -> String {
+	value.continuing.map(|v| format!("<inboundRelationship typeCode=\"REFR\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code code=\"13\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.19\"/><value xsi:type=\"BL\" value=\"{}\"/></observation></inboundRelationship>", if v { "true" } else { "false" })).unwrap_or_default()
+}
+
+/// e2b:D.10.7.1.r.4
+fn write_d_10_7_1_r_4(
+	value: &ParentMedicalHistory,
+) -> (Option<time::Date>, Option<&str>) {
+	(value.end_date, value.end_date_null_flavor.as_deref())
+}
+
+/// e2b:D.10.7.1.r.5
+fn write_d_10_7_1_r_5(value: &ParentMedicalHistory) -> String {
+	value.comments.as_deref().map(|v| format!("<outboundRelationship2 typeCode=\"COMP\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code code=\"10\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.19\"/><value>{}</value></observation></outboundRelationship2>", xml_escape(v))).unwrap_or_default()
 }
 
 fn apply_parent_past_drug_history_section(
@@ -591,6 +773,7 @@ fn apply_parent_past_drug_history_section(
 	parser: &Parser,
 	xpath: &mut Context,
 	past_drugs: &[ParentPastDrugHistory],
+	include_mfds: bool,
 ) -> Result<()> {
 	if past_drugs.is_empty() {
 		return Ok(());
@@ -612,15 +795,87 @@ fn apply_parent_past_drug_history_section(
 			parser,
 			xpath,
 			parent_role_xpath,
-			&parent_past_drug_history_fragment(&drug),
+			&parent_past_drug_history_fragment(&drug, include_mfds),
 		)?;
 	}
 
 	Ok(())
 }
 
-fn parent_past_drug_history_fragment(drug: &ParentPastDrugHistory) -> String {
-	let name_fragment = if let Some(name) = drug.drug_name.as_deref() {
+/// e2b:D.10.8.r.1
+fn write_d_10_8_r_1(value: &ParentPastDrugHistory) -> Option<&str> {
+	value.drug_name.as_deref()
+}
+
+/// e2b:D.10.8.r.1.KR.1a
+fn write_d_10_8_r_1_kr_1a(value: &ParentPastDrugHistory) -> Option<&str> {
+	value.mfds_medicinal_product_version.as_deref()
+}
+
+/// e2b:D.10.8.r.1.KR.1b
+fn write_d_10_8_r_1_kr_1b(value: &ParentPastDrugHistory) -> Option<&str> {
+	value.mfds_medicinal_product_id.as_deref()
+}
+
+/// e2b:D.10.8.r.2a
+fn write_d_10_8_r_2a(value: &ParentPastDrugHistory) -> Option<&str> {
+	value.mpid_version.as_deref()
+}
+
+/// e2b:D.10.8.r.2b
+fn write_d_10_8_r_2b(value: &ParentPastDrugHistory) -> Option<&str> {
+	value.mpid.as_deref()
+}
+
+/// e2b:D.10.8.r.3a
+fn write_d_10_8_r_3a(value: &ParentPastDrugHistory) -> Option<&str> {
+	value.phpid_version.as_deref()
+}
+
+/// e2b:D.10.8.r.3b
+fn write_d_10_8_r_3b(value: &ParentPastDrugHistory) -> Option<&str> {
+	value.phpid.as_deref()
+}
+
+/// e2b:D.10.8.r.4
+fn write_d_10_8_r_4(
+	value: &ParentPastDrugHistory,
+) -> (Option<time::Date>, Option<&str>) {
+	(value.start_date, value.start_date_null_flavor.as_deref())
+}
+
+/// e2b:D.10.8.r.5
+fn write_d_10_8_r_5(
+	value: &ParentPastDrugHistory,
+) -> (Option<time::Date>, Option<&str>) {
+	(value.end_date, value.end_date_null_flavor.as_deref())
+}
+
+/// e2b:D.10.8.r.6a
+fn write_d_10_8_r_6a(value: &ParentPastDrugHistory) -> Option<&str> {
+	value.indication_meddra_version.as_deref()
+}
+
+/// e2b:D.10.8.r.6b
+fn write_d_10_8_r_6b(value: &ParentPastDrugHistory) -> Option<&str> {
+	value.indication_meddra_code.as_deref()
+}
+
+/// e2b:D.10.8.r.7a
+fn write_d_10_8_r_7a(value: &ParentPastDrugHistory) -> Option<&str> {
+	value.reaction_meddra_version.as_deref()
+}
+
+/// e2b:D.10.8.r.7b
+fn write_d_10_8_r_7b(value: &ParentPastDrugHistory) -> Option<&str> {
+	value.reaction_meddra_code.as_deref()
+}
+
+fn parent_past_drug_history_fragment(
+	drug: &ParentPastDrugHistory,
+	include_mfds: bool,
+) -> String {
+	let name_fragment = if let Some(name) = write_d_10_8_r_1(drug) {
 		format!("<name>{}</name>", xml_escape(name))
 	} else if let Some(null_flavor) = drug.drug_name_null_flavor.as_deref() {
 		format!("<name nullFlavor=\"{}\"/>", xml_escape(null_flavor))
@@ -628,14 +883,15 @@ fn parent_past_drug_history_fragment(drug: &ParentPastDrugHistory) -> String {
 		"<name/>".to_string()
 	};
 
-	let mfds_code = if drug.mfds_medicinal_product_id.is_some()
-		|| drug.mfds_medicinal_product_version.is_some()
+	let mfds_code = if include_mfds
+		&& (write_d_10_8_r_1_kr_1b(drug).is_some()
+			|| write_d_10_8_r_1_kr_1a(drug).is_some())
 	{
 		let mut attrs = String::new();
-		if let Some(id) = drug.mfds_medicinal_product_id.as_deref() {
+		if let Some(id) = write_d_10_8_r_1_kr_1b(drug) {
 			attrs.push_str(&format!(" code=\"{}\"", xml_escape(id)));
 		}
-		if let Some(version) = drug.mfds_medicinal_product_version.as_deref() {
+		if let Some(version) = write_d_10_8_r_1_kr_1a(drug) {
 			attrs.push_str(&format!(
 				" codeSystemVersion=\"{}\"",
 				xml_escape(version)
@@ -647,11 +903,11 @@ fn parent_past_drug_history_fragment(drug: &ParentPastDrugHistory) -> String {
 	};
 
 	let mut identifiers = String::new();
-	if drug.mpid.is_some() || drug.mpid_version.is_some() {
+	if write_d_10_8_r_2b(drug).is_some() || write_d_10_8_r_2a(drug).is_some() {
 		let mut code_attrs = String::from(
 			"code=\"MPID\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.4\"",
 		);
-		if let Some(version) = drug.mpid_version.as_deref() {
+		if let Some(version) = write_d_10_8_r_2a(drug) {
 			code_attrs.push_str(&format!(
 				" codeSystemVersion=\"{}\"",
 				xml_escape(version)
@@ -659,14 +915,14 @@ fn parent_past_drug_history_fragment(drug: &ParentPastDrugHistory) -> String {
 		}
 		identifiers.push_str(&format!(
 			"<asIdentifiedEntity classCode=\"IDENT\"><id extension=\"{}\"/><code {code_attrs}/></asIdentifiedEntity>",
-			xml_escape(drug.mpid.as_deref().unwrap_or(""))
+			xml_escape(write_d_10_8_r_2b(drug).unwrap_or(""))
 		));
 	}
-	if drug.phpid.is_some() || drug.phpid_version.is_some() {
+	if write_d_10_8_r_3b(drug).is_some() || write_d_10_8_r_3a(drug).is_some() {
 		let mut code_attrs = String::from(
 			"code=\"PHPID\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.4\"",
 		);
-		if let Some(version) = drug.phpid_version.as_deref() {
+		if let Some(version) = write_d_10_8_r_3a(drug) {
 			code_attrs.push_str(&format!(
 				" codeSystemVersion=\"{}\"",
 				xml_escape(version)
@@ -674,25 +930,22 @@ fn parent_past_drug_history_fragment(drug: &ParentPastDrugHistory) -> String {
 		}
 		identifiers.push_str(&format!(
 			"<asIdentifiedEntity classCode=\"IDENT\"><id extension=\"{}\"/><code {code_attrs}/></asIdentifiedEntity>",
-			xml_escape(drug.phpid.as_deref().unwrap_or(""))
+			xml_escape(write_d_10_8_r_3b(drug).unwrap_or(""))
 		));
 	}
 
-	let effective_time = history_effective_time(
-		drug.start_date,
-		drug.start_date_null_flavor.as_deref(),
-		drug.end_date,
-		drug.end_date_null_flavor.as_deref(),
-	);
+	let (start, start_null) = write_d_10_8_r_4(drug);
+	let (end, end_null) = write_d_10_8_r_5(drug);
+	let effective_time = history_effective_time(start, start_null, end, end_null);
 
 	let indication = if drug.indication_meddra_version.is_some()
 		|| drug.indication_meddra_code.is_some()
 	{
 		let mut value_attrs = String::from("xsi:type=\"CE\"");
-		if let Some(code) = drug.indication_meddra_code.as_deref() {
+		if let Some(code) = write_d_10_8_r_6b(drug) {
 			value_attrs.push_str(&format!(" code=\"{}\"", xml_escape(code)));
 		}
-		if let Some(version) = drug.indication_meddra_version.as_deref() {
+		if let Some(version) = write_d_10_8_r_6a(drug) {
 			value_attrs.push_str(&format!(
 				" codeSystemVersion=\"{}\"",
 				xml_escape(version)
@@ -705,14 +958,14 @@ fn parent_past_drug_history_fragment(drug: &ParentPastDrugHistory) -> String {
 		String::new()
 	};
 
-	let reaction = if drug.reaction_meddra_version.is_some()
-		|| drug.reaction_meddra_code.is_some()
+	let reaction = if write_d_10_8_r_7a(drug).is_some()
+		|| write_d_10_8_r_7b(drug).is_some()
 	{
 		let mut value_attrs = String::from("xsi:type=\"CE\"");
-		if let Some(code) = drug.reaction_meddra_code.as_deref() {
+		if let Some(code) = write_d_10_8_r_7b(drug) {
 			value_attrs.push_str(&format!(" code=\"{}\"", xml_escape(code)));
 		}
-		if let Some(version) = drug.reaction_meddra_version.as_deref() {
+		if let Some(version) = write_d_10_8_r_7a(drug) {
 			value_attrs.push_str(&format!(
 				" codeSystemVersion=\"{}\"",
 				xml_escape(version)
@@ -728,6 +981,48 @@ fn parent_past_drug_history_fragment(drug: &ParentPastDrugHistory) -> String {
 	format!(
 		"<subjectOf2 typeCode=\"SBJ\"><organizer classCode=\"CATEGORY\" moodCode=\"EVN\"><code code=\"2\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.20\" displayName=\"drugHistory\"/><component typeCode=\"COMP\"><substanceAdministration classCode=\"SBADM\" moodCode=\"EVN\">{effective_time}<consumable typeCode=\"CSM\"><instanceOfKind classCode=\"INST\"><kindOfProduct classCode=\"MMAT\" determinerCode=\"KIND\">{mfds_code}{name_fragment}{identifiers}</kindOfProduct></instanceOfKind></consumable>{indication}{reaction}</substanceAdministration></component></organizer></subjectOf2>"
 	)
+}
+
+/// e2b:D.7.1.r.1a
+fn write_d_7_1_r_1a(value: &MedicalHistoryEpisode) -> Option<&str> {
+	value.meddra_version.as_deref()
+}
+
+/// e2b:D.7.1.r.1b
+fn write_d_7_1_r_1b(value: &MedicalHistoryEpisode) -> Option<&str> {
+	value.meddra_code.as_deref()
+}
+
+/// e2b:D.7.1.r.2
+fn write_d_7_1_r_2(
+	value: &MedicalHistoryEpisode,
+) -> (Option<sqlx::types::time::Date>, Option<&str>) {
+	(value.start_date, value.start_date_null_flavor.as_deref())
+}
+
+/// e2b:D.7.1.r.3
+fn write_d_7_1_r_3(value: &MedicalHistoryEpisode) -> String {
+	if let Some(null_flavor) = value.continuing_null_flavor.as_deref() {
+		return format!("<inboundRelationship typeCode=\"REFR\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code code=\"13\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.19\"/><value xsi:type=\"BL\" nullFlavor=\"{}\"/></observation></inboundRelationship>", xml_escape(null_flavor));
+	}
+	value.continuing.map(|v| format!("<inboundRelationship typeCode=\"REFR\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code code=\"13\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.19\"/><value xsi:type=\"BL\" value=\"{}\"/></observation></inboundRelationship>", if v { "true" } else { "false" })).unwrap_or_default()
+}
+
+/// e2b:D.7.1.r.4
+fn write_d_7_1_r_4(
+	value: &MedicalHistoryEpisode,
+) -> (Option<sqlx::types::time::Date>, Option<&str>) {
+	(value.end_date, value.end_date_null_flavor.as_deref())
+}
+
+/// e2b:D.7.1.r.5
+fn write_d_7_1_r_5(value: &MedicalHistoryEpisode) -> String {
+	value.comments.as_deref().map(|v| format!("<outboundRelationship2 typeCode=\"COMP\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code code=\"10\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.19\"/><value>{}</value></observation></outboundRelationship2>", xml_escape(v))).unwrap_or_default()
+}
+
+/// e2b:D.7.1.r.6
+fn write_d_7_1_r_6(value: &MedicalHistoryEpisode) -> String {
+	value.family_history.map(|v| format!("<outboundRelationship2 typeCode=\"PERT\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code code=\"38\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.19\"/><value xsi:type=\"BL\" value=\"{}\"/></observation></outboundRelationship2>", if v { "true" } else { "false" })).unwrap_or_default()
 }
 
 fn apply_medical_history_section(
@@ -750,48 +1045,22 @@ fn apply_medical_history_section(
 	rows.sort_by_key(|row| row.sequence_number);
 	for episode in rows {
 		let mut code_attrs = String::from("codeSystem=\"2.16.840.1.113883.6.163\"");
-		if let Some(code) = episode.meddra_code.as_deref() {
+		if let Some(code) = write_d_7_1_r_1b(&episode) {
 			code_attrs.push_str(&format!(" code=\"{}\"", xml_escape(code)));
 		}
-		if let Some(version) = episode.meddra_version.as_deref() {
+		if let Some(version) = write_d_7_1_r_1a(&episode) {
 			code_attrs.push_str(&format!(
 				" codeSystemVersion=\"{}\"",
 				xml_escape(version)
 			));
 		}
-		let effective_time = history_effective_time(
-			episode.start_date,
-			episode.start_date_null_flavor.as_deref(),
-			episode.end_date,
-			episode.end_date_null_flavor.as_deref(),
-		);
-		let continuing = if let Some(null_flavor) =
-			episode.continuing_null_flavor.as_deref()
-		{
-			format!(
-				"<inboundRelationship typeCode=\"REFR\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code code=\"13\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.19\"/><value xsi:type=\"BL\" nullFlavor=\"{}\"/></observation></inboundRelationship>",
-				xml_escape(null_flavor)
-			)
-		} else {
-			episode.continuing.map(|value| {
-				format!(
-					"<inboundRelationship typeCode=\"REFR\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code code=\"13\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.19\"/><value xsi:type=\"BL\" value=\"{}\"/></observation></inboundRelationship>",
-					if value { "true" } else { "false" }
-				)
-			}).unwrap_or_default()
-		};
-		let comments = episode.comments.as_deref().map(|value| {
-			format!(
-				"<outboundRelationship2 typeCode=\"COMP\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code code=\"10\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.19\"/><value>{}</value></observation></outboundRelationship2>",
-				xml_escape(value)
-			)
-		}).unwrap_or_default();
-		let family_history = episode.family_history.map(|value| {
-			format!(
-				"<outboundRelationship2 typeCode=\"PERT\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code code=\"38\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.19\"/><value xsi:type=\"BL\" value=\"{}\"/></observation></outboundRelationship2>",
-				if value { "true" } else { "false" }
-			)
-		}).unwrap_or_default();
+		let (start, start_null) = write_d_7_1_r_2(&episode);
+		let (end, end_null) = write_d_7_1_r_4(&episode);
+		let effective_time =
+			history_effective_time(start, start_null, end, end_null);
+		let continuing = write_d_7_1_r_3(&episode);
+		let comments = write_d_7_1_r_5(&episode);
+		let family_history = write_d_7_1_r_6(&episode);
 		let fragment = format!(
 			"<component typeCode=\"COMP\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code {code_attrs}/>{effective_time}{continuing}{comments}{family_history}</observation></component>"
 		);
@@ -806,11 +1075,83 @@ fn apply_medical_history_section(
 	Ok(())
 }
 
+/// e2b:D.8.r.1
+fn write_d_8_r_1(value: &PastDrugHistory) -> Option<&str> {
+	value.drug_name.as_deref()
+}
+
+/// e2b:D.8.r.1.KR.1a
+fn write_d_8_r_1_kr_1a(value: &PastDrugHistory) -> Option<&str> {
+	value
+		.mfds_medicinal_product_version
+		.as_deref()
+		.filter(|v| !v.trim().is_empty())
+}
+
+/// e2b:D.8.r.1.KR.1b
+fn write_d_8_r_1_kr_1b(value: &PastDrugHistory) -> Option<&str> {
+	value
+		.mfds_medicinal_product_id
+		.as_deref()
+		.filter(|v| !v.trim().is_empty())
+}
+
+/// e2b:D.8.r.2a
+fn write_d_8_r_2a(value: &PastDrugHistory) -> Option<&str> {
+	value.mpid_version.as_deref()
+}
+
+/// e2b:D.8.r.2b
+fn write_d_8_r_2b(value: &PastDrugHistory) -> Option<&str> {
+	value.mpid.as_deref()
+}
+
+/// e2b:D.8.r.3a
+fn write_d_8_r_3a(value: &PastDrugHistory) -> Option<&str> {
+	value.phpid_version.as_deref()
+}
+
+/// e2b:D.8.r.3b
+fn write_d_8_r_3b(value: &PastDrugHistory) -> Option<&str> {
+	value.phpid.as_deref()
+}
+
+/// e2b:D.8.r.4
+fn write_d_8_r_4(value: &PastDrugHistory) -> (Option<time::Date>, Option<&str>) {
+	(value.start_date, value.start_date_null_flavor.as_deref())
+}
+
+/// e2b:D.8.r.5
+fn write_d_8_r_5(value: &PastDrugHistory) -> (Option<time::Date>, Option<&str>) {
+	(value.end_date, value.end_date_null_flavor.as_deref())
+}
+
+/// e2b:D.8.r.6a
+fn write_d_8_r_6a(value: &PastDrugHistory) -> Option<&str> {
+	value.indication_meddra_version.as_deref()
+}
+
+/// e2b:D.8.r.6b
+fn write_d_8_r_6b(value: &PastDrugHistory) -> Option<&str> {
+	value.indication_meddra_code.as_deref()
+}
+
+/// e2b:D.8.r.7a
+fn write_d_8_r_7a(value: &PastDrugHistory) -> Option<&str> {
+	value.reaction_meddra_version.as_deref()
+}
+
+/// e2b:D.8.r.7b
+fn write_d_8_r_7b(value: &PastDrugHistory) -> Option<&str> {
+	value.reaction_meddra_code.as_deref()
+}
+
 fn apply_past_drug_history_section(
 	doc: &mut Document,
 	parser: &Parser,
 	xpath: &mut Context,
 	past_drugs: &[PastDrugHistory],
+	include_mfds: bool,
 ) -> Result<()> {
 	if past_drugs.is_empty() {
 		return Ok(());
@@ -825,7 +1166,7 @@ fn apply_past_drug_history_section(
 	rows.sort_by_key(|row| row.sequence_number);
 
 	for drug in rows {
-		let name_fragment = if let Some(name) = drug.drug_name.as_deref() {
+		let name_fragment = if let Some(name) = write_d_8_r_1(&drug) {
 			format!("<name>{}</name>", xml_escape(name))
 		} else if let Some(null_flavor) = drug.drug_name_null_flavor.as_deref() {
 			format!("<name nullFlavor=\"{}\"/>", xml_escape(null_flavor))
@@ -834,35 +1175,30 @@ fn apply_past_drug_history_section(
 		};
 
 		let mut identifiers = String::new();
-		let mfds_product_id = drug
-			.mfds_medicinal_product_id
-			.as_deref()
-			.filter(|value| !value.trim().is_empty());
-		let mfds_product_version = drug
-			.mfds_medicinal_product_version
-			.as_deref()
-			.filter(|value| !value.trim().is_empty());
-		let mfds_code =
-			if mfds_product_id.is_some() || mfds_product_version.is_some() {
-				let mut attrs = String::new();
-				if let Some(id) = mfds_product_id {
-					attrs.push_str(&format!(" code=\"{}\"", xml_escape(id)));
-				}
-				if let Some(version) = mfds_product_version {
-					attrs.push_str(&format!(
-						" codeSystemVersion=\"{}\"",
-						xml_escape(version)
-					));
-				}
-				format!("<code{attrs}/>")
-			} else {
-				String::new()
-			};
-		if drug.mpid.is_some() || drug.mpid_version.is_some() {
+		let mfds_product_id = write_d_8_r_1_kr_1b(&drug);
+		let mfds_product_version = write_d_8_r_1_kr_1a(&drug);
+		let mfds_code = if include_mfds
+			&& (mfds_product_id.is_some() || mfds_product_version.is_some())
+		{
+			let mut attrs = String::new();
+			if let Some(id) = mfds_product_id {
+				attrs.push_str(&format!(" code=\"{}\"", xml_escape(id)));
+			}
+			if let Some(version) = mfds_product_version {
+				attrs.push_str(&format!(
+					" codeSystemVersion=\"{}\"",
+					xml_escape(version)
+				));
+			}
+			format!("<code{attrs}/>")
+		} else {
+			String::new()
+		};
+		if write_d_8_r_2b(&drug).is_some() || write_d_8_r_2a(&drug).is_some() {
 			let mut code_attrs = String::from(
 				"code=\"MPID\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.4\"",
 			);
-			if let Some(version) = drug.mpid_version.as_deref() {
+			if let Some(version) = write_d_8_r_2a(&drug) {
 				code_attrs.push_str(&format!(
 					" codeSystemVersion=\"{}\"",
 					xml_escape(version)
@@ -870,14 +1206,14 @@ fn apply_past_drug_history_section(
 			}
 			identifiers.push_str(&format!(
 				"<asIdentifiedEntity classCode=\"IDENT\"><id extension=\"{}\"/><code {code_attrs}/></asIdentifiedEntity>",
-				xml_escape(drug.mpid.as_deref().unwrap_or(""))
+				xml_escape(write_d_8_r_2b(&drug).unwrap_or(""))
 			));
 		}
-		if drug.phpid.is_some() || drug.phpid_version.is_some() {
+		if write_d_8_r_3b(&drug).is_some() || write_d_8_r_3a(&drug).is_some() {
 			let mut code_attrs = String::from(
 				"code=\"PHPID\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.4\"",
 			);
-			if let Some(version) = drug.phpid_version.as_deref() {
+			if let Some(version) = write_d_8_r_3a(&drug) {
 				code_attrs.push_str(&format!(
 					" codeSystemVersion=\"{}\"",
 					xml_escape(version)
@@ -885,25 +1221,23 @@ fn apply_past_drug_history_section(
 			}
 			identifiers.push_str(&format!(
 				"<asIdentifiedEntity classCode=\"IDENT\"><id extension=\"{}\"/><code {code_attrs}/></asIdentifiedEntity>",
-				xml_escape(drug.phpid.as_deref().unwrap_or(""))
+				xml_escape(write_d_8_r_3b(&drug).unwrap_or(""))
 			));
 		}
 
-		let effective_time = history_effective_time(
-			drug.start_date,
-			drug.start_date_null_flavor.as_deref(),
-			drug.end_date,
-			drug.end_date_null_flavor.as_deref(),
-		);
+		let (start, start_null) = write_d_8_r_4(&drug);
+		let (end, end_null) = write_d_8_r_5(&drug);
+		let effective_time =
+			history_effective_time(start, start_null, end, end_null);
 
 		let indication = if drug.indication_meddra_version.is_some()
 			|| drug.indication_meddra_code.is_some()
 		{
 			let mut value_attrs = String::from("xsi:type=\"CE\"");
-			if let Some(code) = drug.indication_meddra_code.as_deref() {
+			if let Some(code) = write_d_8_r_6b(&drug) {
 				value_attrs.push_str(&format!(" code=\"{}\"", xml_escape(code)));
 			}
-			if let Some(version) = drug.indication_meddra_version.as_deref() {
+			if let Some(version) = write_d_8_r_6a(&drug) {
 				value_attrs.push_str(&format!(
 					" codeSystemVersion=\"{}\"",
 					xml_escape(version)
@@ -920,10 +1254,10 @@ fn apply_past_drug_history_section(
 			|| drug.reaction_meddra_code.is_some()
 		{
 			let mut value_attrs = String::from("xsi:type=\"CE\"");
-			if let Some(code) = drug.reaction_meddra_code.as_deref() {
+			if let Some(code) = write_d_8_r_7b(&drug) {
 				value_attrs.push_str(&format!(" code=\"{}\"", xml_escape(code)));
 			}
-			if let Some(version) = drug.reaction_meddra_version.as_deref() {
+			if let Some(version) = write_d_8_r_7a(&drug) {
 				value_attrs.push_str(&format!(
 					" codeSystemVersion=\"{}\"",
 					xml_escape(version)
@@ -1034,6 +1368,7 @@ mod tests {
 	use super::*;
 	use sqlx::types::time::OffsetDateTime;
 	use sqlx::types::Uuid;
+	use std::collections::BTreeSet;
 
 	#[test]
 	fn past_drug_fragment_exports_mfds_code_separate_from_identifiers() {
@@ -1072,8 +1407,14 @@ mod tests {
 			.expect("doc");
 		let mut xpath = Context::new(&doc).expect("xpath");
 		let _ = xpath.register_namespace("hl7", "urn:hl7-org:v3");
-		apply_past_drug_history_section(&mut doc, &parser, &mut xpath, &[drug])
-			.expect("apply");
+		apply_past_drug_history_section(
+			&mut doc,
+			&parser,
+			&mut xpath,
+			&[drug],
+			true,
+		)
+		.expect("apply");
 		let fragment = doc.to_string();
 
 		let name = "<name>Past &amp; &lt;drug&gt; \"A\"</name>";
@@ -1130,8 +1471,14 @@ mod tests {
 			.expect("doc");
 		let mut xpath = Context::new(&doc).expect("xpath");
 		let _ = xpath.register_namespace("hl7", "urn:hl7-org:v3");
-		apply_past_drug_history_section(&mut doc, &parser, &mut xpath, &[drug])
-			.expect("apply");
+		apply_past_drug_history_section(
+			&mut doc,
+			&parser,
+			&mut xpath,
+			&[drug],
+			true,
+		)
+		.expect("apply");
 		let fragment = doc.to_string();
 
 		assert!(!fragment.contains("<code code=\"\""));
@@ -1168,7 +1515,8 @@ mod tests {
 			updated_by: None,
 		};
 
-		let fragment = parent_past_drug_history_fragment(&drug);
+		let fragment = parent_past_drug_history_fragment(&drug, true);
+		let non_mfds_fragment = parent_past_drug_history_fragment(&drug, false);
 
 		let mfds_code = "<code code=\"MF&amp;&lt;&gt;&quot;&apos;\" codeSystemVersion=\"MFV&amp;&lt;&gt;&quot;&apos;\"/>";
 		let name =
@@ -1182,7 +1530,34 @@ mod tests {
 		let phpid_index = fragment.find(phpid).expect("PhPID identifier");
 
 		assert!(mfds_index < name_index);
+		assert!(!non_mfds_fragment.contains("MF&amp;"));
 		assert!(name_index < mpid_index);
 		assert!(mpid_index < phpid_index);
+	}
+
+	#[test]
+	fn section_d_writers_cover_registry_fields() {
+		let registry: serde_json::Value = serde_json::from_str(include_str!(
+			"../../../../../../registry/sections/d-patient.json"
+		))
+		.expect("section D registry");
+		let expected = registry
+			.as_array()
+			.expect("registry array")
+			.iter()
+			.filter(|entry| entry["local_only"] != true)
+			.filter_map(|entry| entry["e2br3_code"].as_str())
+			.collect::<BTreeSet<_>>();
+		let source = format!(
+			"{}\n{}",
+			include_str!("postprocess.rs"),
+			include_str!("../roundtrip/d_patient.rs")
+		);
+		let implemented = source
+			.lines()
+			.filter_map(|line| line.trim().strip_prefix("/// e2b:"))
+			.collect::<BTreeSet<_>>();
+
+		assert_eq!(implemented, expected);
 	}
 }

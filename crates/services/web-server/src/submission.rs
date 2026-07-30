@@ -20,9 +20,9 @@ use tokio::runtime::Handle;
 use tokio::task;
 use tokio::time::sleep;
 use uuid::Uuid;
-use xml::export_case_xml;
 use xml::validation::validate_e2b_xml_business;
 use xml::validation::{should_skip_xml_validation, validate_e2b_xml};
+use xml::{export_case_xml_with_options, ExportXmlOptions};
 
 const SYSTEM_REASON_ACK_CALLBACK: &str =
 	"system submission: gateway ack callback processing";

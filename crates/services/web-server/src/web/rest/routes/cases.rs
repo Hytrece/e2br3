@@ -412,6 +412,41 @@ pub fn routes_cases(mm: ModelManager) -> Router {
 		"/cases/{case_id}/drugs/{drug_id}/indications/{id}/restore",
 		axum::routing::post(drug_sub_rest::restore_drug_indication),
 	)
+	// FDA.G.k.12.r Device Information (repeating per drug)
+	.route(
+		"/cases/{case_id}/drugs/{drug_id}/devices",
+		get(drug_sub_rest::list_fda_device_information)
+			.post(drug_sub_rest::create_fda_device_information),
+	)
+	.route(
+		"/cases/{case_id}/drugs/{drug_id}/devices/replace",
+		put(drug_sub_rest::replace_fda_devices),
+	)
+	.route(
+		"/cases/{case_id}/drugs/{drug_id}/devices/{id}",
+		get(drug_sub_rest::get_fda_device_information)
+			.put(drug_sub_rest::update_fda_device_information)
+			.delete(drug_sub_rest::delete_fda_device_information),
+	)
+	.route(
+		"/cases/{case_id}/drugs/{drug_id}/devices/{id}/restore",
+		axum::routing::post(drug_sub_rest::restore_fda_device_information),
+	)
+	.route(
+		"/cases/{case_id}/drugs/{drug_id}/devices/{device_id}/codes",
+		get(drug_sub_rest::list_fda_device_codes)
+			.post(drug_sub_rest::create_fda_device_code),
+	)
+	.route(
+		"/cases/{case_id}/drugs/{drug_id}/devices/{device_id}/codes/{id}",
+		get(drug_sub_rest::get_fda_device_code)
+			.put(drug_sub_rest::update_fda_device_code)
+			.delete(drug_sub_rest::delete_fda_device_code),
+	)
+	.route(
+		"/cases/{case_id}/drugs/{drug_id}/devices/{device_id}/codes/{id}/restore",
+		axum::routing::post(drug_sub_rest::restore_fda_device_code),
+	)
 	// Drug Device Characteristics (collection per drug) - FDA G.k.1.a / G.k.12.*
 	.route(
 		"/cases/{case_id}/drugs/{drug_id}/device-characteristics",

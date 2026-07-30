@@ -1,7 +1,5 @@
 use crate::error::Error;
-use crate::export::roundtrip::{
-	patch_e_reactions, patch_f_test_results, patch_g_drugs, patch_h_narrative,
-};
+use crate::export::roundtrip::{patch_f_test_results, patch_h_narrative};
 use crate::export_data::load_drug_export_bundle;
 use crate::export_utils::{
 	append_fragment_child, fmt_datetime, remove_nodes, set_attr_first,

@@ -1485,8 +1485,6 @@ struct DrugInformationDoc {
 	#[schema(value_type = Object)]
 	drug_additional_info_codes_json: Option<serde_json::Value>,
 	fda_specialized_product_category: Option<String>,
-	#[schema(value_type = Object)]
-	fda_device_info_json: Option<serde_json::Value>,
 	created_at: String,
 	updated_at: String,
 	created_by: String,
@@ -1532,8 +1530,6 @@ struct DrugInformationForUpdateDoc {
 	#[schema(value_type = Object)]
 	drug_additional_info_codes_json: Option<serde_json::Value>,
 	fda_specialized_product_category: Option<String>,
-	#[schema(value_type = Object)]
-	fda_device_info_json: Option<serde_json::Value>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, ToSchema)]

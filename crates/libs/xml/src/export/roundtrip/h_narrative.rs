@@ -26,12 +26,7 @@ pub fn patch_h_narrative(
 	let _ =
 		xpath.register_namespace("xsi", "http://www.w3.org/2001/XMLSchema-instance");
 
-	ensure_investigation_text(&mut doc, &parser, &mut xpath)?;
-	set_text_first(
-		&mut xpath,
-		"//hl7:investigationEvent/hl7:text",
-		&narrative.case_narrative,
-	);
+	write_h_1(&mut doc, &parser, &mut xpath, &narrative.case_narrative)?;
 
 	remove_nodes(
 		&mut xpath,
@@ -39,25 +34,55 @@ pub fn patch_h_narrative(
 	);
 
 	if let Some(comments) = narrative.reporter_comments.as_deref() {
-		let fragment = comment_fragment(comments, "3");
-		append_fragment_child(
-			&mut doc,
-			&parser,
-			&mut xpath,
-			"//hl7:adverseEventAssessment",
-			&fragment,
-		)?;
+		write_h_2(&mut doc, &parser, &mut xpath, comments)?;
 	}
 	if let Some(comments) = narrative.sender_comments.as_deref() {
-		let fragment = comment_fragment(comments, "1");
-		append_fragment_child(
-			&mut doc,
-			&parser,
-			&mut xpath,
-			"//hl7:adverseEventAssessment",
-			&fragment,
-		)?;
+		write_h_4(&mut doc, &parser, &mut xpath, comments)?;
 	}
 
 	Ok(doc.to_string())
+}
+
+/// e2b:H.1
+fn write_h_1(
+	doc: &mut Document,
+	parser: &Parser,
+	xpath: &mut Context,
+	case_narrative: &str,
+) -> Result<()> {
+	ensure_investigation_text(doc, parser, xpath)?;
+	set_text_first(xpath, "//hl7:investigationEvent/hl7:text", case_narrative);
+	Ok(())
+}
+
+/// e2b:H.2
+fn write_h_2(
+	doc: &mut Document,
+	parser: &Parser,
+	xpath: &mut Context,
+	reporter_comments: &str,
+) -> Result<()> {
+	append_fragment_child(
+		doc,
+		parser,
+		xpath,
+		"//hl7:adverseEventAssessment",
+		&comment_fragment(reporter_comments, "3"),
+	)
+}
+
+/// e2b:H.4
+fn write_h_4(
+	doc: &mut Document,
+	parser: &Parser,
+	xpath: &mut Context,
+	sender_comments: &str,
+) -> Result<()> {
+	append_fragment_child(
+		doc,
+		parser,
+		xpath,
+		"//hl7:adverseEventAssessment",
+		&comment_fragment(sender_comments, "1"),
+	)
 }

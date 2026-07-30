@@ -8,6 +8,8 @@ use lib_core::model::drug::{
 	DosageInformationBmc, DosageInformationForCreate, DrugActiveSubstanceBmc,
 	DrugActiveSubstanceForCreate, DrugIndicationBmc, DrugIndicationForCreate,
 	DrugInformationBmc, DrugInformationForCreate, DrugInformationForUpdate,
+	FdaDeviceCodeBmc, FdaDeviceCodeForCreate, FdaDeviceInformationBmc,
+	FdaDeviceInformationForCreate,
 };
 use lib_core::model::drug_reaction_assessment::{
 	DrugReactionAssessmentBmc, DrugReactionAssessmentForCreate,
@@ -65,16 +67,36 @@ async fn import_drugs(
 			action_taken: entry.action_taken,
 			fda_additional_info_coded: entry.fda_additional_info_coded,
 			fda_specialized_product_category: entry.fda_specialized_product_category,
-			fda_device_brand_name: entry.fda_device_brand_name,
-			fda_common_device_name: entry.fda_common_device_name,
-			fda_device_product_code: entry.fda_device_product_code,
-			fda_device_manufacturer_name: entry.fda_device_manufacturer_name,
-			fda_device_manufacturer_address: entry.fda_device_manufacturer_address,
-			fda_device_manufacturer_city: entry.fda_device_manufacturer_city,
-			fda_device_manufacturer_state: entry.fda_device_manufacturer_state,
-			fda_device_manufacturer_country: entry.fda_device_manufacturer_country,
-			fda_device_lot_number: entry.fda_device_lot_number,
-			fda_operator_of_device: entry.fda_operator_of_device,
+			devices: entry
+				.devices
+				.into_iter()
+				.map(|device| g_helpers::FdaDeviceImport {
+					malfunction: device.malfunction,
+					device_brand_name: device.device_brand_name,
+					device_brand_name_null_flavor: device
+						.device_brand_name_null_flavor,
+					common_device_name: device.common_device_name,
+					common_device_name_null_flavor: device
+						.common_device_name_null_flavor,
+					device_product_code: device.device_product_code,
+					manufacturer_name: device.manufacturer_name,
+					manufacturer_address: device.manufacturer_address,
+					manufacturer_city: device.manufacturer_city,
+					manufacturer_state: device.manufacturer_state,
+					manufacturer_country: device.manufacturer_country,
+					device_usage: device.device_usage,
+					device_lot_number: device.device_lot_number,
+					operator_of_device: device.operator_of_device,
+					codes: device
+						.codes
+						.into_iter()
+						.map(|code| g_helpers::FdaDeviceCodeImport {
+							element: code.element,
+							value_code: code.value_code,
+						})
+						.collect(),
+				})
+				.collect(),
 			substances: entry
 				.substances
 				.into_iter()
@@ -144,8 +166,11 @@ async fn import_drugs(
 	let mut map = ImportIdMap::default();
 
 	for (index, drug) in imports.into_iter().enumerate() {
-		let (fda_specialized_product_category, fda_device_info_json) =
-			g_helpers::import_fda_device_info(&drug, &drug.characteristics);
+		let fda_specialized_product_category =
+			g_helpers::import_fda_specialized_product_category(
+				&drug,
+				&drug.characteristics,
+			);
 		let drug_additional_info_codes_json =
 			g_helpers::build_drug_additional_info_codes_json(
 				drug.fda_additional_info_coded.as_deref(),
@@ -205,11 +230,54 @@ async fn import_drugs(
 				drug_additional_info_codes_json,
 				drug_additional_information: None,
 				fda_specialized_product_category,
-				fda_device_info_json,
 				fda_other_characterization: None,
 			},
 		)
 		.await?;
+
+		for (device_index, device) in drug.devices.into_iter().enumerate() {
+			let device_id = FdaDeviceInformationBmc::create(
+				ctx,
+				mm,
+				FdaDeviceInformationForCreate {
+					drug_id,
+					sequence_number: (device_index + 1) as i32,
+					malfunction: device.malfunction,
+					device_brand_name: device.device_brand_name,
+					device_brand_name_null_flavor: device
+						.device_brand_name_null_flavor,
+					common_device_name: device.common_device_name,
+					common_device_name_null_flavor: device
+						.common_device_name_null_flavor,
+					device_product_code: device.device_product_code,
+					manufacturer_name: device.manufacturer_name,
+					manufacturer_address: device.manufacturer_address,
+					manufacturer_city: device.manufacturer_city,
+					manufacturer_state: device.manufacturer_state,
+					manufacturer_country: device.manufacturer_country,
+					device_usage: device.device_usage,
+					device_lot_number: device.device_lot_number,
+					operator_of_device: device.operator_of_device,
+				},
+			)
+			.await?;
+			let mut sequences: HashMap<&'static str, i32> = HashMap::new();
+			for code in device.codes {
+				let sequence = sequences.entry(code.element).or_insert(0);
+				*sequence += 1;
+				FdaDeviceCodeBmc::create(
+					ctx,
+					mm,
+					FdaDeviceCodeForCreate {
+						device_id,
+						element: code.element.to_string(),
+						sequence_number: *sequence,
+						value_code: code.value_code,
+					},
+				)
+				.await?;
+			}
+		}
 
 		for (sidx, sub) in drug.substances.into_iter().enumerate() {
 			let _ = DrugActiveSubstanceBmc::create(

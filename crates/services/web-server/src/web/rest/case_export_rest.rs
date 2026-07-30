@@ -140,9 +140,13 @@ async fn export_xml_options(
 	ctx: &lib_core::ctx::Ctx,
 	mm: &lib_core::model::ModelManager,
 	include_notation: Option<bool>,
+	authority: RegulatoryAuthority,
 ) -> Result<ExportXmlOptions> {
 	if let Some(apply_comments) = include_notation {
-		return Ok(ExportXmlOptions { apply_comments });
+		return Ok(ExportXmlOptions {
+			apply_comments,
+			authority,
+		});
 	}
 	let value = AdminSettingsBmc::get(ctx, mm, SETTINGS_KEY)
 		.await
@@ -152,7 +156,10 @@ async fn export_xml_options(
 		.and_then(|value| value.get("apply_comments_on_exported_xml"))
 		.and_then(|value| value.as_bool())
 		.unwrap_or(false);
-	Ok(ExportXmlOptions { apply_comments })
+	Ok(ExportXmlOptions {
+		apply_comments,
+		authority,
+	})
 }
 
 async fn safety_report_id_for_case(
@@ -208,7 +215,7 @@ async fn generate_validated_case_xml_for_authority_with_notation(
 ) -> Result<(lib_core::model::case::Case, String)> {
 	let ctx_clone = ctx.clone();
 	let mm_clone = mm.clone();
-	let options = export_xml_options(ctx, mm, include_notation).await?;
+	let options = export_xml_options(ctx, mm, include_notation, authority).await?;
 	let xml = task::spawn_blocking(move || {
 		Handle::current().block_on(export_case_xml_with_options(
 			&ctx_clone, &mm_clone, id, options,

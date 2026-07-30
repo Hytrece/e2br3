@@ -13,17 +13,6 @@ pub(crate) async fn export_patch(
 	patch_h_narrative(raw_xml, &narrative)
 }
 
-pub(crate) async fn export_build(
-	ctx: &Ctx,
-	mm: &ModelManager,
-	case_id: sqlx::types::Uuid,
-) -> Result<String> {
-	let narrative = NarrativeInformationBmc::get_by_case(ctx, mm, case_id)
-		.await
-		.map_err(Error::from)?;
-	export_h_narrative_xml(&narrative)
-}
-
 pub(crate) async fn apply_case_summary_section(
 	ctx: &Ctx,
 	doc: &mut Document,
@@ -64,27 +53,13 @@ pub(crate) async fn apply_case_summary_section(
 	}
 
 	if let Some(text) = summary.summary_text.as_deref() {
-		set_text_first(
-			xpath,
-			"//hl7:investigationEvent/hl7:component/hl7:observationEvent[hl7:code[@code='36'] and hl7:author/hl7:assignedEntity/hl7:code[@code='2']]/hl7:value",
-			text,
-		);
+		write_h_5_r_1a(xpath, text);
 	}
 	if let Some(language) = summary.language_code.as_deref() {
-		set_attr_first(
-			xpath,
-			"//hl7:investigationEvent/hl7:component/hl7:observationEvent[hl7:code[@code='36'] and hl7:author/hl7:assignedEntity/hl7:code[@code='2']]/hl7:value",
-			"language",
-			language,
-		);
+		write_h_5_r_1b(xpath, language);
 	}
 	if let Some(summary_type) = summary.summary_type.as_deref() {
-		set_attr_first(
-			xpath,
-			"//hl7:investigationEvent/hl7:component/hl7:observationEvent[hl7:code[@code='36']]/hl7:author/hl7:assignedEntity/hl7:code",
-			"code",
-			summary_type,
-		);
+		write_h_5_r_local_summary_type(xpath, summary_type);
 	}
 	Ok(())
 }
@@ -112,14 +87,11 @@ pub(crate) async fn apply_sender_diagnosis_section(
 	for diagnosis in diagnoses {
 		let mut attrs = String::from("xsi:type=\"CE\"");
 		if let Some(code) = diagnosis.diagnosis_meddra_code.as_deref() {
-			attrs.push_str(&format!(" code=\"{}\"", xml_escape(code)));
+			write_h_3_r_1b(&mut attrs, code);
 		}
 		attrs.push_str(" codeSystem=\"2.16.840.1.113883.6.163\"");
 		if let Some(version) = diagnosis.diagnosis_meddra_version.as_deref() {
-			attrs.push_str(&format!(
-				" codeSystemVersion=\"{}\"",
-				xml_escape(version)
-			));
+			write_h_3_r_1a(&mut attrs, version);
 		}
 		let fragment = format!(
 			"<component1 typeCode=\"COMP\"><observationEvent classCode=\"OBS\" moodCode=\"EVN\"><code code=\"15\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.19\" displayName=\"diagnosis\"/><value {attrs}/><author typeCode=\"AUT\"><assignedEntity classCode=\"ASSIGNED\"><code code=\"1\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.21\" displayName=\"sender\"/></assignedEntity></author></observationEvent></component1>"
@@ -134,6 +106,48 @@ pub(crate) async fn apply_sender_diagnosis_section(
 	}
 
 	Ok(())
+}
+
+/// e2b:H.3.r.1a
+fn write_h_3_r_1a(attrs: &mut String, meddra_version: &str) {
+	attrs.push_str(&format!(
+		" codeSystemVersion=\"{}\"",
+		xml_escape(meddra_version)
+	));
+}
+
+/// e2b:H.3.r.1b
+fn write_h_3_r_1b(attrs: &mut String, meddra_code: &str) {
+	attrs.push_str(&format!(" code=\"{}\"", xml_escape(meddra_code)));
+}
+
+/// e2b:H.5.r.1a
+fn write_h_5_r_1a(xpath: &mut Context, summary_text: &str) {
+	set_text_first(
+		xpath,
+		"//hl7:investigationEvent/hl7:component/hl7:observationEvent[hl7:code[@code='36'] and hl7:author/hl7:assignedEntity/hl7:code[@code='2']]/hl7:value",
+		summary_text,
+	);
+}
+
+/// e2b:H.5.r.1b
+fn write_h_5_r_1b(xpath: &mut Context, language_code: &str) {
+	set_attr_first(
+		xpath,
+		"//hl7:investigationEvent/hl7:component/hl7:observationEvent[hl7:code[@code='36'] and hl7:author/hl7:assignedEntity/hl7:code[@code='2']]/hl7:value",
+		"language",
+		language_code,
+	);
+}
+
+/// e2b:H.5.r.local.summaryType
+fn write_h_5_r_local_summary_type(xpath: &mut Context, summary_type: &str) {
+	set_attr_first(
+		xpath,
+		"//hl7:investigationEvent/hl7:component/hl7:observationEvent[hl7:code[@code='36']]/hl7:author/hl7:assignedEntity/hl7:code",
+		"code",
+		summary_type,
+	);
 }
 
 fn reorder_investigation_event_children(xpath: &mut Context) {
@@ -219,4 +233,35 @@ fn base_h_narrative_skeleton() -> &'static str {
 \t\t</controlActProcess>\
 \t</PORR_IN049016UV>\
 </MCCI_IN200100UV01>"
+}
+
+#[cfg(test)]
+mod tests {
+	use std::collections::BTreeSet;
+
+	#[test]
+	fn section_h_writers_cover_exported_registry_fields() {
+		let registry: serde_json::Value = serde_json::from_str(include_str!(
+			"../../../../../../registry/sections/h-narrative.json"
+		))
+		.expect("section H registry");
+		let expected = registry
+			.as_array()
+			.expect("registry array")
+			.iter()
+			.filter(|entry| entry["e2br3_code"] != "H.additionalInformation")
+			.filter_map(|entry| entry["e2br3_code"].as_str())
+			.collect::<BTreeSet<_>>();
+		let source = format!(
+			"{}\n{}",
+			include_str!("h.rs"),
+			include_str!("../roundtrip/h_narrative.rs")
+		);
+		let implemented = source
+			.lines()
+			.filter_map(|line| line.trim().strip_prefix("/// e2b:"))
+			.collect::<BTreeSet<_>>();
+
+		assert_eq!(implemented, expected);
+	}
 }

@@ -40,7 +40,7 @@ pub(super) fn ensure_primary_role(
 	}
 	let fragment = "\
 		<subject1 typeCode=\"SBJ\">\
-			<primaryRole classCode=\"PAT\">\
+			<primaryRole classCode=\"INVSBJ\">\
 				<player1 classCode=\"PSN\" determinerCode=\"INSTANCE\">\
 					<name/>\
 					<administrativeGenderCode code=\"0\" codeSystem=\"1.0.5218\"/>\

@@ -1,9 +1,9 @@
 use crate::error::Error;
 use crate::export::policy::should_clear_null_flavor_on_value;
-use crate::export::sections::e::reaction_fragment;
 use crate::export::sections::f::test_result_fragment;
 use crate::export::sections::g::{
-	causality_role_fragment, drug_fragment, relatedness_fragment,
+	causality_role_fragment, drug_fragment, fda_other_causality_role_fragment,
+	relatedness_fragment,
 };
 use crate::export::sections::h::comment_fragment;
 use crate::raw::dom_utils::{
@@ -44,8 +44,10 @@ mod types;
 
 pub use c_safety_report::patch_c_safety_report;
 pub use d_patient::patch_d_patient;
+pub(crate) use e_f_sections::patch_e_reactions_for_authority;
 pub use e_f_sections::{patch_e_reactions, patch_f_test_results};
 pub use g_drug::patch_g_drugs;
+pub(crate) use g_drug::patch_g_drugs_for_authority;
 pub use h_narrative::patch_h_narrative;
 pub use types::{CSafetyReportPatch, DPatientDeathCausePatch, DPatientPatch};
 

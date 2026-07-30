@@ -10,14 +10,6 @@ pub(crate) async fn export_patch(
 	patch_f_test_results(raw_xml, &tests)
 }
 
-pub(crate) async fn export_build(
-	mm: &ModelManager,
-	case_id: sqlx::types::Uuid,
-) -> Result<String> {
-	let tests = fetch_test_results(mm, case_id).await?;
-	export_f_test_results_xml(&tests)
-}
-
 async fn fetch_test_results(
 	mm: &ModelManager,
 	case_id: sqlx::types::Uuid,
@@ -36,18 +28,6 @@ async fn fetch_test_results(
 
 use sqlx::types::time::Date;
 
-pub fn export_f_test_results_xml(results: &[TestResult]) -> Result<String> {
-	let mut ordered: Vec<&TestResult> = results.iter().collect();
-	ordered.sort_by_key(|result| result.sequence_number);
-
-	let mut items_xml = String::new();
-	for result in ordered {
-		items_xml.push_str(&test_result_fragment(result)?);
-	}
-	let xml = base_f_test_result_skeleton().replace("{TESTS}", &items_xml);
-	Ok(xml)
-}
-
 pub(crate) fn test_result_fragment(result: &TestResult) -> Result<String> {
 	let mut out = String::new();
 	out.push_str("<subjectOf2 typeCode=\"SBJ\"><organizer classCode=\"CATEGORY\" moodCode=\"EVN\">");
@@ -56,25 +36,25 @@ pub(crate) fn test_result_fragment(result: &TestResult) -> Result<String> {
 	);
 	out.push_str("<component typeCode=\"COMP\"><observation classCode=\"OBS\" moodCode=\"EVN\">");
 	out.push_str("<code");
-	if let Some(code) = result.test_meddra_code.as_deref() {
+	if let Some(code) = write_f_r_2_2b(result) {
 		out.push_str(" code=\"");
 		out.push_str(&xml_escape(code));
 		out.push_str("\"");
 	}
-	if let Some(version) = result.test_meddra_version.as_deref() {
+	if let Some(version) = write_f_r_2_2a(result) {
 		out.push_str(" codeSystemVersion=\"");
 		out.push_str(&xml_escape(version));
 		out.push_str("\"");
 	}
 	out.push_str(" displayName=\"");
-	out.push_str(&xml_escape(&result.test_name));
+	out.push_str(&write_f_r_2_1(result));
 	out.push_str("\">");
 	out.push_str("<originalText>");
-	out.push_str(&xml_escape(&result.test_name));
+	out.push_str(&write_f_r_2_1(result));
 	out.push_str("</originalText>");
 	out.push_str("</code>");
-	out.push_str(&test_date_effective_time(result)?);
-	if let Some(code) = result.test_result_code.as_deref() {
+	out.push_str(&write_f_r_1(result)?);
+	if let Some(code) = write_f_r_3_1(result) {
 		out.push_str("<interpretationCode code=\"");
 		out.push_str(&xml_escape(code));
 		out.push_str("\"/>");
@@ -88,32 +68,32 @@ pub(crate) fn test_result_fragment(result: &TestResult) -> Result<String> {
 			out.push_str(" nullFlavor=\"");
 			out.push_str(&xml_escape(null_flavor));
 			out.push_str("\"");
-		} else if let Some(val) = result.test_result_value.as_deref() {
+		} else if let Some(val) = write_f_r_3_2(result) {
 			out.push_str(" value=\"");
 			out.push_str(&xml_escape(val));
 			out.push_str("\"");
 		}
-		if let Some(unit) = result.test_result_unit.as_deref() {
+		if let Some(unit) = write_f_r_3_3(result) {
 			out.push_str(" unit=\"");
 			out.push_str(&xml_escape(unit));
 			out.push_str("\"");
 		}
 		out.push_str(">");
-		if let Some(text) = result.result_unstructured.as_deref() {
+		if let Some(text) = write_f_r_3_4(result) {
 			out.push_str(&xml_escape(text));
 		}
 		out.push_str("</value>");
 	}
 	if result.normal_low_value.is_some() || result.normal_high_value.is_some() {
 		out.push_str("<referenceRange>");
-		if let Some(low) = result.normal_low_value.as_deref() {
+		if let Some(low) = write_f_r_4(result) {
 			out.push_str(
 				"<observationRange><interpretationCode code=\"L\"/><value value=\"",
 			);
 			out.push_str(&xml_escape(low));
 			out.push_str("\"/></observationRange>");
 		}
-		if let Some(high) = result.normal_high_value.as_deref() {
+		if let Some(high) = write_f_r_5(result) {
 			out.push_str(
 				"<observationRange><interpretationCode code=\"H\"/><value value=\"",
 			);
@@ -122,12 +102,12 @@ pub(crate) fn test_result_fragment(result: &TestResult) -> Result<String> {
 		}
 		out.push_str("</referenceRange>");
 	}
-	if let Some(comments) = result.comments.as_deref() {
+	if let Some(comments) = write_f_r_6(result) {
 		out.push_str("<outboundRelationship2 typeCode=\"COMP\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code code=\"10\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.19\"/><value>");
 		out.push_str(&xml_escape(comments));
 		out.push_str("</value></observation></outboundRelationship2>");
 	}
-	if let Some(value) = result.more_info_available {
+	if let Some(value) = write_f_r_7(result) {
 		let val = if value { "true" } else { "false" };
 		out.push_str("<outboundRelationship2 typeCode=\"COMP\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code code=\"11\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.19\"/><value xsi:type=\"BL\" value=\"");
 		out.push_str(val);
@@ -137,7 +117,8 @@ pub(crate) fn test_result_fragment(result: &TestResult) -> Result<String> {
 	Ok(out)
 }
 
-fn test_date_effective_time(result: &TestResult) -> Result<String> {
+/// e2b:F.r.1
+fn write_f_r_1(result: &TestResult) -> Result<String> {
 	let field = E2bNullFlavorValue::from_parts(
 		result.test_date,
 		result.test_date_null_flavor.as_deref(),
@@ -160,6 +141,61 @@ fn test_date_effective_time(result: &TestResult) -> Result<String> {
 	}
 }
 
+/// e2b:F.r.2.1
+fn write_f_r_2_1(value: &TestResult) -> String {
+	xml_escape(&value.test_name)
+}
+
+/// e2b:F.r.2.2a
+fn write_f_r_2_2a(value: &TestResult) -> Option<&str> {
+	value.test_meddra_version.as_deref()
+}
+
+/// e2b:F.r.2.2b
+fn write_f_r_2_2b(value: &TestResult) -> Option<&str> {
+	value.test_meddra_code.as_deref()
+}
+
+/// e2b:F.r.3.1
+fn write_f_r_3_1(value: &TestResult) -> Option<&str> {
+	value.test_result_code.as_deref()
+}
+
+/// e2b:F.r.3.2
+fn write_f_r_3_2(value: &TestResult) -> Option<&str> {
+	value.test_result_value.as_deref()
+}
+
+/// e2b:F.r.3.3
+fn write_f_r_3_3(value: &TestResult) -> Option<&str> {
+	value.test_result_unit.as_deref()
+}
+
+/// e2b:F.r.3.4
+fn write_f_r_3_4(value: &TestResult) -> Option<&str> {
+	value.result_unstructured.as_deref()
+}
+
+/// e2b:F.r.4
+fn write_f_r_4(value: &TestResult) -> Option<&str> {
+	value.normal_low_value.as_deref()
+}
+
+/// e2b:F.r.5
+fn write_f_r_5(value: &TestResult) -> Option<&str> {
+	value.normal_high_value.as_deref()
+}
+
+/// e2b:F.r.6
+fn write_f_r_6(value: &TestResult) -> Option<&str> {
+	value.comments.as_deref()
+}
+
+/// e2b:F.r.7
+fn write_f_r_7(value: &TestResult) -> Option<bool> {
+	value.more_info_available
+}
+
 fn fmt_date(date: Date) -> String {
 	format!(
 		"{:04}{:02}{:02}",
@@ -178,29 +214,30 @@ fn xml_escape(value: &str) -> String {
 		.replace('\'', "&apos;")
 }
 
-fn base_f_test_result_skeleton() -> &'static str {
-	"<?xml version=\"1.0\" encoding=\"utf-8\"?>\
-<MCCI_IN200100UV01 xmlns=\"urn:hl7-org:v3\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" ITSVersion=\"XML_1.0\">\
-\t<PORR_IN049016UV>\
-\t\t<controlActProcess classCode=\"CACT\" moodCode=\"EVN\">\
-\t\t\t<code code=\"PORR_TE049016UV\" codeSystem=\"2.16.840.1.113883.1.18\"/>\
-\t\t\t<subject>\
-\t\t\t\t<investigationEvent classCode=\"INVSTG\" moodCode=\"EVN\">\
-\t\t\t\t\t<component typeCode=\"COMP\">\
-\t\t\t\t\t\t<adverseEventAssessment classCode=\"INVSTG\" moodCode=\"EVN\">\
-\t\t\t\t\t\t\t<subject1 typeCode=\"SBJ\">\
-\t\t\t\t\t\t\t\t<primaryRole classCode=\"INVSBJ\">\
-\t\t\t\t\t\t\t\t\t<player1 classCode=\"PSN\" determinerCode=\"INSTANCE\"><name/></player1>\
-\t\t\t\t\t\t\t\t\t{TESTS}\
-\t\t\t\t\t\t\t\t</primaryRole>\
-\t\t\t\t\t\t\t</subject1>\
-\t\t\t\t\t\t</adverseEventAssessment>\
-\t\t\t\t\t</component>\
-\t\t\t\t</investigationEvent>\
-\t\t\t</subject>\
-\t\t</controlActProcess>\
-\t</PORR_IN049016UV>\
-</MCCI_IN200100UV01>"
+#[cfg(test)]
+mod registry_coverage_tests {
+	use std::collections::BTreeSet;
+
+	#[test]
+	fn section_f_writers_cover_registry_fields() {
+		let registry: serde_json::Value = serde_json::from_str(include_str!(
+			"../../../../../../registry/sections/f-test.json"
+		))
+		.expect("section F registry");
+		let expected = registry
+			.as_array()
+			.expect("registry array")
+			.iter()
+			.filter(|entry| entry["local_only"] != true)
+			.filter_map(|entry| entry["e2br3_code"].as_str())
+			.collect::<BTreeSet<_>>();
+		let implemented = include_str!("f.rs")
+			.lines()
+			.filter_map(|line| line.trim().strip_prefix("/// e2b:"))
+			.collect::<BTreeSet<_>>();
+
+		assert_eq!(implemented, expected);
+	}
 }
 
 #[cfg(test)]

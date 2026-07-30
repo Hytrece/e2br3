@@ -193,6 +193,15 @@ const E_REACTION_CONSTRAINT_RULES: &[IndexedConstraintRule<Reaction>] = &[
 		},
 	},
 	IndexedConstraintRule {
+		code: "ICH.E.i.3.1.ALLOWED.VALUE",
+		path: |idx| format!("reactions.{idx}.termHighlighted"),
+		value: |reaction| {
+			ConstraintValue::Text(
+				reaction.term_highlighted.as_deref().map(Cow::Borrowed),
+			)
+		},
+	},
+	IndexedConstraintRule {
 		code: "ICH.E.i.9.VOCABULARY",
 		path: |idx| format!("reactions.{idx}.reactionCountry"),
 		value: |reaction| {

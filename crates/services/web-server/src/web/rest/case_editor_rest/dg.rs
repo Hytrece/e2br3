@@ -59,7 +59,6 @@ const DRUG_ROW_ALIASES: &[(&str, &[&str])] = &[
 		"fda_specialized_product_category",
 		&["fdaSpecializedProductCategory"],
 	),
-	("fda_device_info_json", &["fdaDeviceInfo"]),
 	("fda_other_characterization", &["fdaOtherCharacterization"]),
 	("sequence_number", &["sequenceNumber"]),
 ];

@@ -28,17 +28,6 @@ pub(crate) async fn export_patch(
 	)
 }
 
-pub(crate) async fn export_build(
-	ctx: &Ctx,
-	mm: &ModelManager,
-	case_id: sqlx::types::Uuid,
-) -> Result<String> {
-	let patient = PatientInformationBmc::get_by_case(ctx, mm, case_id)
-		.await
-		.map_err(Error::from)?;
-	export_d_patient_xml(&patient)
-}
-
 async fn fetch_death_info(
 	mm: &ModelManager,
 	patient_id: sqlx::types::Uuid,
@@ -139,38 +128,6 @@ pub fn export_d_patient_patch(
 	};
 
 	patch_d_patient(raw_xml, &patch)
-}
-
-pub fn export_d_patient_xml(patient: &PatientInformation) -> Result<String> {
-	let base_xml = base_d_patient_skeleton();
-	let parser = Parser::default();
-	let doc = parser.parse_string(base_xml).map_err(|err| {
-		crate::error::Error::InvalidXml {
-			message: format!("XML parse error (base skeleton): {err}"),
-			line: None,
-			column: None,
-		}
-	})?;
-	let raw = doc.to_string();
-	export_d_patient_patch(raw.as_bytes(), patient, None, &[], &[])
-}
-
-fn base_d_patient_skeleton() -> &'static str {
-	"<?xml version=\"1.0\" encoding=\"utf-8\"?>\
-<MCCI_IN200100UV01 xmlns=\"urn:hl7-org:v3\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" ITSVersion=\"XML_1.0\">\
-\t<PORR_IN049016UV>\
-\t\t<controlActProcess classCode=\"CACT\" moodCode=\"EVN\">\
-\t\t\t<code code=\"PORR_TE049016UV\" codeSystem=\"2.16.840.1.113883.1.18\"/>\
-\t\t\t<subject>\
-\t\t\t\t<investigationEvent classCode=\"INVSTG\" moodCode=\"EVN\">\
-\t\t\t\t\t<component typeCode=\"COMP\">\
-\t\t\t\t\t\t<adverseEventAssessment classCode=\"INVSTG\" moodCode=\"EVN\"/>\
-\t\t\t\t\t</component>\
-\t\t\t\t</investigationEvent>\
-\t\t\t</subject>\
-\t\t</controlActProcess>\
-\t</PORR_IN049016UV>\
-</MCCI_IN200100UV01>"
 }
 
 fn build_patient_name(patient: &PatientInformation) -> Option<String> {

@@ -43,7 +43,6 @@ fn export_g_drug_basic() {
 		drug_additional_info_codes_json: None,
 		drug_additional_information: None,
 		fda_specialized_product_category: None,
-		fda_device_info_json: None,
 		fda_other_characterization: None,
 		created_at: OffsetDateTime::now_utc(),
 		updated_at: OffsetDateTime::now_utc(),

@@ -124,6 +124,14 @@ impl GDrugPaths {
 	pub const INDICATION_VERSION: &'static str = "@codeSystemVersion";
 
 	// Device characteristics
+	pub const DEVICE_NODE: &'static str =
+		"hl7:consumable/hl7:instanceOfKind/hl7:kindOfProduct/hl7:part[hl7:partProduct[@classCode='DEV']]";
+	pub const DEVICE_CHARACTERISTIC_NODE: &'static str =
+		"hl7:partProduct/hl7:asManufacturedProduct/hl7:subjectOf/hl7:characteristic";
+	pub const DEVICE_MALFUNCTION: &'static str =
+		"hl7:partProduct/hl7:asManufacturedProduct/hl7:subjectOf/hl7:characteristic[hl7:code[@code='C54026' or @code='9C54026']]/hl7:value/@value";
+	pub const DEVICE_USAGE: &'static str =
+		"hl7:partProduct/hl7:asManufacturedProduct/hl7:subjectOf/hl7:characteristic[hl7:code[@code='C54595']]/hl7:value/@code";
 	pub const DEVICE_CHAR_NODE: &'static str =
 		"hl7:consumable/hl7:instanceOfKind/hl7:kindOfProduct/hl7:asManufacturedProduct/hl7:subjectOf/hl7:characteristic | hl7:consumable/hl7:instanceOfKind/hl7:kindOfProduct/hl7:part/hl7:partProduct/hl7:asManufacturedProduct/hl7:subjectOf/hl7:characteristic";
 	pub const DEVICE_CHAR_CODE: &'static str = "hl7:code/@code";
@@ -135,24 +143,18 @@ impl GDrugPaths {
 	pub const DEVICE_CHAR_VALUE_CODE: &'static str = "hl7:value/@code";
 	pub const DEVICE_CHAR_VALUE_CODE_SYSTEM: &'static str = "hl7:value/@codeSystem";
 	pub const DEVICE_CHAR_VALUE_DISPLAY: &'static str = "hl7:value/@displayName";
-	pub const DEVICE_BRAND_NAME: &'static str =
-		"hl7:consumable/hl7:instanceOfKind/hl7:kindOfProduct/hl7:part/hl7:partProduct/hl7:name[1]";
-	pub const COMMON_DEVICE_NAME: &'static str =
-		"hl7:consumable/hl7:instanceOfKind/hl7:kindOfProduct/hl7:part/hl7:partProduct/hl7:name[2]";
-	pub const DEVICE_PRODUCT_CODE: &'static str =
-		"hl7:consumable/hl7:instanceOfKind/hl7:kindOfProduct/hl7:part/hl7:partProduct/hl7:code/@code";
 	pub const DEVICE_MANUFACTURER_NAME: &'static str =
-		"hl7:consumable/hl7:instanceOfKind/hl7:kindOfProduct/hl7:part/hl7:partProduct/hl7:asManufacturedProduct/hl7:manufacturerOrganization/hl7:name";
+		"hl7:partProduct/hl7:asManufacturedProduct/hl7:manufacturerOrganization/hl7:name";
 	pub const DEVICE_MANUFACTURER_ADDRESS: &'static str =
-		"hl7:consumable/hl7:instanceOfKind/hl7:kindOfProduct/hl7:part/hl7:partProduct/hl7:asManufacturedProduct/hl7:manufacturerOrganization/hl7:addr/hl7:streetAddressLine";
+		"hl7:partProduct/hl7:asManufacturedProduct/hl7:manufacturerOrganization/hl7:addr/hl7:streetAddressLine";
 	pub const DEVICE_MANUFACTURER_CITY: &'static str =
-		"hl7:consumable/hl7:instanceOfKind/hl7:kindOfProduct/hl7:part/hl7:partProduct/hl7:asManufacturedProduct/hl7:manufacturerOrganization/hl7:addr/hl7:city";
+		"hl7:partProduct/hl7:asManufacturedProduct/hl7:manufacturerOrganization/hl7:addr/hl7:city";
 	pub const DEVICE_MANUFACTURER_STATE: &'static str =
-		"hl7:consumable/hl7:instanceOfKind/hl7:kindOfProduct/hl7:part/hl7:partProduct/hl7:asManufacturedProduct/hl7:manufacturerOrganization/hl7:addr/hl7:state";
+		"hl7:partProduct/hl7:asManufacturedProduct/hl7:manufacturerOrganization/hl7:addr/hl7:state";
 	pub const DEVICE_MANUFACTURER_COUNTRY: &'static str =
-		"hl7:consumable/hl7:instanceOfKind/hl7:kindOfProduct/hl7:part/hl7:partProduct/hl7:asManufacturedProduct/hl7:manufacturerOrganization/hl7:addr/hl7:country";
+		"hl7:partProduct/hl7:asManufacturedProduct/hl7:manufacturerOrganization/hl7:addr/hl7:country";
 	pub const DEVICE_LOT_NUMBER: &'static str =
-		"hl7:consumable/hl7:instanceOfKind/hl7:kindOfProduct/hl7:part/hl7:partProduct/hl7:instanceOfKind/hl7:productInstanceInstance/hl7:lotNumberText";
+		"hl7:partProduct/hl7:instanceOfKind/hl7:productInstanceInstance/hl7:lotNumberText";
 	pub const DEVICE_OPERATOR_CODE: &'static str =
-		"hl7:consumable/hl7:instanceOfKind/hl7:kindOfProduct/hl7:part/hl7:partProduct/hl7:asManufacturedProduct/hl7:subjectOf/hl7:characteristic[hl7:code[@codeSystem='2.16.840.1.113883.3.989.5.1.2.1.1.6']]/hl7:code/@code";
+		"hl7:partProduct/hl7:asManufacturedProduct/hl7:subjectOf/hl7:characteristic[hl7:code[@codeSystem='2.16.840.1.113883.3.989.5.1.2.1.1.6']]/hl7:code/@code";
 }

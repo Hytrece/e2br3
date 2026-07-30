@@ -1,6 +1,18 @@
 use super::*;
 
 pub fn patch_e_reactions(raw_xml: &[u8], reactions: &[Reaction]) -> Result<String> {
+	patch_e_reactions_for_authority(
+		raw_xml,
+		reactions,
+		lib_core::regulatory::RegulatoryAuthority::Ich,
+	)
+}
+
+pub(crate) fn patch_e_reactions_for_authority(
+	raw_xml: &[u8],
+	reactions: &[Reaction],
+	authority: lib_core::regulatory::RegulatoryAuthority,
+) -> Result<String> {
 	let xml_str = std::str::from_utf8(raw_xml).map_err(|err| Error::InvalidXml {
 		message: format!("XML not valid UTF-8: {err}"),
 		line: None,
@@ -31,7 +43,9 @@ pub fn patch_e_reactions(raw_xml: &[u8], reactions: &[Reaction]) -> Result<Strin
 	let mut ordered: Vec<&Reaction> = reactions.iter().collect();
 	ordered.sort_by_key(|reaction| reaction.sequence_number);
 	for reaction in ordered {
-		let fragment = reaction_fragment(reaction)?;
+		let fragment = crate::export::sections::e::reaction_fragment_for_authority(
+			reaction, authority,
+		)?;
 		append_fragment_child(
 			&mut doc,
 			&parser,

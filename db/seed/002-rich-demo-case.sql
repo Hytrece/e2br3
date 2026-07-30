@@ -361,7 +361,7 @@ BEGIN
         cumulative_dose_first_reaction_value, cumulative_dose_first_reaction_unit,
         gestation_period_exposure_value, gestation_period_exposure_unit,
         action_taken, fda_additional_info_coded, drug_additional_info_codes_json,
-        fda_specialized_product_category, fda_device_info_json, drug_additional_information,
+        fda_specialized_product_category, drug_additional_information,
         created_by, updated_by, created_at, updated_at
     )
     VALUES (
@@ -373,7 +373,6 @@ BEGIN
         '2',
         '1', '["3","7"]'::jsonb,
         'combination_product',
-        '{"deviceModel":"DV-1000","deviceBrand":"QVIS Smart Pen","operatorType":"patient"}'::jsonb,
         'Suspect combination product used with connected dosing accessory.',
         v_user_id, v_user_id, NOW(), NOW()
     )

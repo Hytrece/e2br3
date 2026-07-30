@@ -7,6 +7,7 @@ use lib_core::model::narrative::{
 	SenderDiagnosis, SenderDiagnosisBmc, SenderDiagnosisFilter,
 };
 use lib_core::model::parent_history::{
+	ParentMedicalHistory, ParentMedicalHistoryBmc, ParentMedicalHistoryFilter,
 	ParentPastDrugHistory, ParentPastDrugHistoryBmc, ParentPastDrugHistoryFilter,
 };
 use lib_core::model::patient::{

@@ -3,10 +3,7 @@ use crate::import_runtime::shared::{
 	first_attr, first_text, normalize_code, parse_uuid_opt,
 };
 use crate::Result;
-use lib_core::model::drug::{
-	structured_fda_device_info_to_json, DrugAdditionalInfoCodeEntry,
-	FdaDeviceCodeEntry, FdaDeviceInfoData,
-};
+use lib_core::model::drug::DrugAdditionalInfoCodeEntry;
 use libxml::parser::Parser;
 use libxml::xpath::Context;
 use rust_decimal::Decimal;
@@ -71,6 +68,31 @@ pub(crate) struct DrugDeviceCharacteristicImport {
 }
 
 #[derive(Debug)]
+pub(crate) struct FdaDeviceCodeImport {
+	pub(crate) element: &'static str,
+	pub(crate) value_code: String,
+}
+
+#[derive(Debug)]
+pub(crate) struct FdaDeviceImport {
+	pub(crate) malfunction: Option<bool>,
+	pub(crate) device_brand_name: Option<String>,
+	pub(crate) device_brand_name_null_flavor: Option<String>,
+	pub(crate) common_device_name: Option<String>,
+	pub(crate) common_device_name_null_flavor: Option<String>,
+	pub(crate) device_product_code: Option<String>,
+	pub(crate) manufacturer_name: Option<String>,
+	pub(crate) manufacturer_address: Option<String>,
+	pub(crate) manufacturer_city: Option<String>,
+	pub(crate) manufacturer_state: Option<String>,
+	pub(crate) manufacturer_country: Option<String>,
+	pub(crate) device_usage: Option<String>,
+	pub(crate) device_lot_number: Option<String>,
+	pub(crate) operator_of_device: Option<String>,
+	pub(crate) codes: Vec<FdaDeviceCodeImport>,
+}
+
+#[derive(Debug)]
 pub(crate) struct DrugImport {
 	pub(crate) xml_id: Option<Uuid>,
 	pub(crate) sequence_number: i32,
@@ -93,16 +115,7 @@ pub(crate) struct DrugImport {
 	pub(crate) action_taken: Option<String>,
 	pub(crate) fda_additional_info_coded: Option<String>,
 	pub(crate) fda_specialized_product_category: Option<String>,
-	pub(crate) fda_device_brand_name: Option<String>,
-	pub(crate) fda_common_device_name: Option<String>,
-	pub(crate) fda_device_product_code: Option<String>,
-	pub(crate) fda_device_manufacturer_name: Option<String>,
-	pub(crate) fda_device_manufacturer_address: Option<String>,
-	pub(crate) fda_device_manufacturer_city: Option<String>,
-	pub(crate) fda_device_manufacturer_state: Option<String>,
-	pub(crate) fda_device_manufacturer_country: Option<String>,
-	pub(crate) fda_device_lot_number: Option<String>,
-	pub(crate) fda_operator_of_device: Option<String>,
+	pub(crate) devices: Vec<FdaDeviceImport>,
 	pub(crate) substances: Vec<DrugSubstanceImport>,
 	pub(crate) dosages: Vec<DrugDosageImport>,
 	pub(crate) indications: Vec<DrugIndicationImport>,
@@ -164,23 +177,12 @@ fn normalize_characteristic_code(value: Option<&str>) -> String {
 		.replace(['.', '_', '-'], "")
 }
 
-pub(crate) fn import_fda_device_info(
+pub(crate) fn import_fda_specialized_product_category(
 	drug: &DrugImport,
 	characteristics: &[DrugDeviceCharacteristicImport],
-) -> (Option<String>, Option<serde_json::Value>) {
-	let mut info = FdaDeviceInfoData::default();
+) -> Option<String> {
 	let mut specialized_product_category =
 		drug.fda_specialized_product_category.clone();
-	info.device_brand_name = drug.fda_device_brand_name.clone();
-	info.common_device_name = drug.fda_common_device_name.clone();
-	info.device_product_code = drug.fda_device_product_code.clone();
-	info.manufacturer_name = drug.fda_device_manufacturer_name.clone();
-	info.manufacturer_address = drug.fda_device_manufacturer_address.clone();
-	info.manufacturer_city = drug.fda_device_manufacturer_city.clone();
-	info.manufacturer_state = drug.fda_device_manufacturer_state.clone();
-	info.manufacturer_country = drug.fda_device_manufacturer_country.clone();
-	info.device_lot_number = drug.fda_device_lot_number.clone();
-	info.operator_of_device = drug.fda_operator_of_device.clone();
 
 	for characteristic in characteristics {
 		let normalized =
@@ -198,71 +200,13 @@ pub(crate) fn import_fda_device_info(
 			.map(str::trim)
 			.filter(|value| !value.is_empty())
 			.map(str::to_string);
-		let text_value = characteristic
-			.value_value
-			.as_deref()
-			.or(characteristic.value_code.as_deref())
-			.map(str::trim)
-			.filter(|value| !value.is_empty())
-			.map(str::to_string);
-
-		match normalized.as_str() {
-			"FDAGK101" | "C94031"
-				if display == "fda specialized product category" =>
-			{
-				specialized_product_category = code_value
-			}
-			"FDAGK12R1" | "C54026" => {
-				info.malfunction = code_value
-					.as_deref()
-					.map(|value| matches!(value, "1" | "true" | "TRUE" | "True"))
-			}
-			"FDAGK12R2R" | "C54592" => {
-				info.follow_up_types.push(FdaDeviceCodeEntry {
-					value_code: code_value,
-				})
-			}
-			"FDAGK12R3R" | "C54451" => {
-				info.device_problem_codes.push(FdaDeviceCodeEntry {
-					value_code: code_value,
-				})
-			}
-			"FDAGK12R4" => info.device_brand_name = text_value,
-			"FDAGK12R5" => info.common_device_name = text_value,
-			"FDAGK12R6" => info.device_product_code = code_value,
-			"FDAGK12R71A" => info.manufacturer_name = text_value,
-			"FDAGK12R71B" => info.manufacturer_address = text_value,
-			"FDAGK12R71C" => info.manufacturer_city = text_value,
-			"FDAGK12R71D" => info.manufacturer_state = text_value,
-			"FDAGK12R71E" => info.manufacturer_country = code_value,
-			"FDAGK12R8" | "C54595" => info.device_usage = code_value,
-			"FDAGK12R9" => info.device_lot_number = text_value,
-			"FDAGK12R10" | "1" | "2" | "3" | "4" => {
-				if characteristic.value_code.is_some()
-					|| display == "health professional"
-				{
-					info.operator_of_device = Some(
-						characteristic
-							.value_code
-							.clone()
-							.or_else(|| characteristic.code.clone())
-							.unwrap_or_default(),
-					)
-				}
-			}
-			"FDAGK12R11R" | "C54594" => {
-				info.remedial_actions.push(FdaDeviceCodeEntry {
-					value_code: code_value,
-				})
-			}
-			_ => {}
+		if matches!(normalized.as_str(), "FDAGK101" | "C94031")
+			&& display == "fda specialized product category"
+		{
+			specialized_product_category = code_value;
 		}
 	}
-
-	(
-		specialized_product_category,
-		structured_fda_device_info_to_json(Some(info)),
-	)
+	specialized_product_category
 }
 
 pub(crate) fn build_drug_additional_info_codes_json(
