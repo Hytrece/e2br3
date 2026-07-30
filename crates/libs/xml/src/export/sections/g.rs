@@ -1051,6 +1051,7 @@ pub(crate) fn drug_fragment(
 			{
 				out.push_str(" nullFlavor=\"");
 				out.push_str(&xml_escape(null_flavor));
+				out.push_str("\"");
 			} else if let Some(code) = write_g_k_4_r_10_2b(dose) {
 				out.push_str(" code=\"");
 				out.push_str(&xml_escape(code));
