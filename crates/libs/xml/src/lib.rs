@@ -4,7 +4,6 @@ mod export_utils;
 pub mod fda;
 pub mod ich;
 pub mod import;
-mod import_runtime;
 pub mod import_sections;
 pub mod mapping;
 pub mod mfds;
@@ -35,7 +34,7 @@ pub use import::{
 	extract_safety_report_id_from_xml, import_e2b_xml, import_e2b_xml_unvalidated,
 	CImportSettings, XmlImportRequest,
 };
-pub use import_runtime::c::{
+pub use import_sections::c_safety_report::{
 	apply_c_safety_report_import_settings, apply_default_values_to_imported_r2_case,
 };
 pub use parser::parse_e2b_xml;

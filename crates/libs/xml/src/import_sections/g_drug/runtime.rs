@@ -1,6 +1,5 @@
-use crate::error::Error;
-use crate::import_runtime::helpers::g as g_helpers;
-use crate::import_runtime::shared::ImportIdMap;
+use super::helpers as g_helpers;
+use crate::import_sections::shared::ImportIdMap;
 use crate::Result;
 use lib_core::ctx::Ctx;
 use lib_core::model;
@@ -16,7 +15,6 @@ use lib_core::model::drug_reaction_assessment::{
 	RelatednessAssessmentBmc, RelatednessAssessmentForCreate,
 	RelatednessAssessmentForUpdate,
 };
-use lib_core::model::store::set_full_context_dbx;
 use lib_core::model::ModelManager;
 use sqlx::types::Uuid;
 use std::collections::HashMap;
@@ -41,128 +39,7 @@ async fn import_drugs(
 	case_id: Uuid,
 	product_presave_id: Option<Uuid>,
 ) -> Result<ImportIdMap> {
-	let imports = crate::import_sections::g_drug::parse_g_drugs(xml)?
-		.into_iter()
-		.map(|entry| g_helpers::DrugImport {
-			xml_id: entry.xml_id,
-			sequence_number: entry.sequence_number,
-			medicinal_product: entry.medicinal_product,
-			drug_characterization: entry.drug_characterization,
-			mpid: entry.mpid,
-			mpid_version: entry.mpid_version,
-			phpid: entry.phpid,
-			phpid_version: entry.phpid_version,
-			investigational_product_blinded: entry.investigational_product_blinded,
-			obtain_drug_country: entry.obtain_drug_country,
-			drug_authorization_number: entry.drug_authorization_number,
-			manufacturer_name: entry.manufacturer_name,
-			manufacturer_country: entry.manufacturer_country,
-			batch_lot_number: entry.batch_lot_number,
-			cumulative_dose_first_reaction_value: entry
-				.cumulative_dose_first_reaction_value,
-			cumulative_dose_first_reaction_unit: entry
-				.cumulative_dose_first_reaction_unit,
-			gestation_period_exposure_value: entry.gestation_period_exposure_value,
-			gestation_period_exposure_unit: entry.gestation_period_exposure_unit,
-			action_taken: entry.action_taken,
-			fda_additional_info_coded: entry.fda_additional_info_coded,
-			fda_specialized_product_category: entry.fda_specialized_product_category,
-			devices: entry
-				.devices
-				.into_iter()
-				.map(|device| g_helpers::FdaDeviceImport {
-					malfunction: device.malfunction,
-					device_brand_name: device.device_brand_name,
-					device_brand_name_null_flavor: device
-						.device_brand_name_null_flavor,
-					common_device_name: device.common_device_name,
-					common_device_name_null_flavor: device
-						.common_device_name_null_flavor,
-					device_product_code: device.device_product_code,
-					manufacturer_name: device.manufacturer_name,
-					manufacturer_address: device.manufacturer_address,
-					manufacturer_city: device.manufacturer_city,
-					manufacturer_state: device.manufacturer_state,
-					manufacturer_country: device.manufacturer_country,
-					device_usage: device.device_usage,
-					device_lot_number: device.device_lot_number,
-					operator_of_device: device.operator_of_device,
-					codes: device
-						.codes
-						.into_iter()
-						.map(|code| g_helpers::FdaDeviceCodeImport {
-							element: code.element,
-							value_code: code.value_code,
-						})
-						.collect(),
-				})
-				.collect(),
-			substances: entry
-				.substances
-				.into_iter()
-				.map(|sub| g_helpers::DrugSubstanceImport {
-					substance_name: sub.substance_name,
-					substance_termid: sub.substance_termid,
-					substance_termid_version: sub.substance_termid_version,
-					strength_value: sub.strength_value,
-					strength_unit: sub.strength_unit,
-				})
-				.collect(),
-			dosages: entry
-				.dosages
-				.into_iter()
-				.map(|dose| g_helpers::DrugDosageImport {
-					dosage_text: dose.dosage_text,
-					frequency_unit: dose.frequency_unit,
-					number_of_units: dose.number_of_units,
-					start_date: dose.start_date,
-					start_date_null_flavor: dose.start_date_null_flavor,
-					end_date: dose.end_date,
-					end_date_null_flavor: dose.end_date_null_flavor,
-					duration_value: dose.duration_value,
-					duration_unit: dose.duration_unit,
-					dose_value: dose.dose_value,
-					dose_unit: dose.dose_unit,
-					route: dose.route,
-					route_null_flavor: dose.route_null_flavor,
-					route_termid: None,
-					route_termid_version: dose.route_termid_version,
-					dose_form: dose.dose_form,
-					dose_form_null_flavor: dose.dose_form_null_flavor,
-					dose_form_termid: dose.dose_form_termid,
-					dose_form_termid_version: dose.dose_form_termid_version,
-					batch_lot: dose.batch_lot,
-					parent_route_termid: dose.parent_route_termid,
-					parent_route_termid_version: dose.parent_route_termid_version,
-					parent_route: dose.parent_route,
-					parent_route_null_flavor: dose.parent_route_null_flavor,
-				})
-				.collect(),
-			indications: entry
-				.indications
-				.into_iter()
-				.map(|ind| g_helpers::DrugIndicationImport {
-					text: ind.text,
-					version: ind.version,
-					code: ind.code,
-				})
-				.collect(),
-			characteristics: entry
-				.characteristics
-				.into_iter()
-				.map(|ch| g_helpers::DrugDeviceCharacteristicImport {
-					code: ch.code,
-					code_system: ch.code_system,
-					code_display_name: ch.code_display_name,
-					value_type: ch.value_type,
-					value_value: ch.value_value,
-					value_code: ch.value_code,
-					value_code_system: ch.value_code_system,
-					value_display_name: ch.value_display_name,
-				})
-				.collect(),
-		})
-		.collect::<Vec<_>>();
+	let imports = super::parse_g_drugs(xml)?;
 	let mut map = ImportIdMap::default();
 
 	for (index, drug) in imports.into_iter().enumerate() {
@@ -228,7 +105,7 @@ async fn import_drugs(
 				obtain_drug_country: drug.obtain_drug_country,
 				fda_additional_info_coded: drug.fda_additional_info_coded,
 				drug_additional_info_codes_json,
-				drug_additional_information: None,
+				drug_additional_information: drug.drug_additional_information,
 				fda_specialized_product_category,
 				fda_other_characterization: None,
 			},
@@ -356,18 +233,6 @@ async fn import_drugs(
 		}
 
 		if !drug.characteristics.is_empty() {
-			mm.dbx().begin_txn().await.map_err(model::Error::from)?;
-			if let Err(err) = set_full_context_dbx(
-				mm.dbx(),
-				ctx.user_id(),
-				ctx.organization_id(),
-				ctx.role(),
-			)
-			.await
-			{
-				let _ = mm.dbx().rollback_txn().await;
-				return Err(Error::Model(err));
-			}
 			for (cidx, ch) in drug.characteristics.into_iter().enumerate() {
 				mm.dbx()
 					.execute(
@@ -405,7 +270,6 @@ async fn import_drugs(
 					.await
 					.map_err(model::Error::from)?;
 			}
-			mm.dbx().commit_txn().await.map_err(model::Error::from)?;
 		}
 
 		if let Some(xml_id) = drug.xml_id {
@@ -541,12 +405,10 @@ async fn import_drug_reaction_assessments(
 					source_of_assessment: rel.source_of_assessment,
 					method_of_assessment: rel.method_of_assessment,
 					result_of_assessment: rel.result_of_assessment,
-					// KR.2 remains intentionally unsupported in XML import until a
-					// canonical MFDS XML source path or fixture is available locally.
-					result_of_assessment_kr2: None,
+					result_of_assessment_kr2: rel.result_of_assessment_kr2,
 				},
 			)
-			.await;
+			.await?;
 		} else {
 			let id = RelatednessAssessmentBmc::create(
 				ctx,
@@ -557,9 +419,7 @@ async fn import_drug_reaction_assessments(
 					source_of_assessment: rel.source_of_assessment.clone(),
 					method_of_assessment: rel.method_of_assessment.clone(),
 					result_of_assessment: rel.result_of_assessment.clone(),
-					// KR.2 remains intentionally unsupported in XML import until a
-					// canonical MFDS XML source path or fixture is available locally.
-					result_of_assessment_kr2: None,
+					result_of_assessment_kr2: rel.result_of_assessment_kr2.clone(),
 				},
 			)
 			.await?;
@@ -571,12 +431,10 @@ async fn import_drug_reaction_assessments(
 					source_of_assessment: rel.source_of_assessment,
 					method_of_assessment: rel.method_of_assessment,
 					result_of_assessment: rel.result_of_assessment,
-					// KR.2 remains intentionally unsupported in XML import until a
-					// canonical MFDS XML source path or fixture is available locally.
-					result_of_assessment_kr2: None,
+					result_of_assessment_kr2: rel.result_of_assessment_kr2,
 				},
 			)
-			.await;
+			.await?;
 		}
 	}
 

@@ -1,6 +1,7 @@
+use super::helpers as c_helpers;
 use crate::import::CImportSettings;
-use crate::import_runtime::{helpers::c as c_helpers, shared};
 use crate::import_sections::c_safety_report::CSafetyReportImport;
+use crate::import_sections::shared;
 use crate::{error::Error, Result};
 use lib_core::ctx::Ctx;
 use lib_core::model::case_identifiers::{
@@ -23,7 +24,6 @@ use lib_core::model::safety_report::{
 	PrimarySourceForCreate, PrimarySourceForUpdate, SenderInformationBmc,
 	SenderInformationForCreate, SenderInformationForUpdate,
 };
-use lib_core::model::store::set_full_context_from_ctx_dbx;
 use lib_core::model::{self, ModelManager};
 use lib_core::regulatory::{
 	infer_regulatory_authority_from_receivers, RegulatoryAuthority,
@@ -146,12 +146,6 @@ async fn import_c_1_safety_report(
 		settings.apply_default_values_to_imported_r2_cases,
 	);
 
-	mm.dbx().begin_txn().await.map_err(model::Error::from)?;
-	if let Err(err) = set_full_context_from_ctx_dbx(mm.dbx(), ctx).await {
-		let _ = mm.dbx().rollback_txn().await;
-		return Err(Error::Model(err));
-	}
-
 	let receiver_organization = header.and_then(|h| h.message_receiver.clone());
 
 	mm.dbx()
@@ -230,13 +224,10 @@ async fn import_c_1_safety_report(
 		.await
 		.map_err(model::Error::from)?;
 	if visible_count != 1 {
-		let _ = mm.dbx().rollback_txn().await;
 		return Err(Error::Model(model::Error::Store(format!(
 			"section C safety report write invariant failed for case {case_id}: visible_count={visible_count}"
 		))));
 	}
-	mm.dbx().commit_txn().await.map_err(model::Error::from)?;
-
 	Ok(())
 }
 
@@ -365,7 +356,7 @@ async fn import_c_2_sender_information(
 			email: sender.email,
 		},
 	)
-	.await;
+	.await?;
 
 	Ok(())
 }
@@ -635,11 +626,11 @@ async fn import_c_3_primary_sources(
 					telephone: primary.telephone.clone(),
 					telephone_null_flavor: primary.telephone_null_flavor.clone(),
 					country_code: primary.country_code.clone(),
-					country_code_null_flavor: None,
+					country_code_null_flavor: primary.country_code_null_flavor.clone(),
 					email: primary.email.clone(),
-					email_null_flavor: None,
+					email_null_flavor: primary.email_null_flavor.clone(),
 					qualification: primary.qualification.clone(),
-					qualification_null_flavor: None,
+					qualification_null_flavor: primary.qualification_null_flavor.clone(),
 					qualification_kr1: None,
 					primary_source_regulatory: primary.primary_source_regulatory.clone(),
 				},
@@ -679,16 +670,16 @@ async fn import_c_3_primary_sources(
 				telephone: primary.telephone,
 				telephone_null_flavor: primary.telephone_null_flavor,
 				country_code: primary.country_code,
-				country_code_null_flavor: None,
+				country_code_null_flavor: primary.country_code_null_flavor,
 				email: primary.email,
-				email_null_flavor: None,
+				email_null_flavor: primary.email_null_flavor,
 				qualification: primary.qualification,
-				qualification_null_flavor: None,
+				qualification_null_flavor: primary.qualification_null_flavor,
 				qualification_kr1: None,
 				primary_source_regulatory: primary.primary_source_regulatory,
 			},
 		)
-		.await;
+		.await?;
 	}
 
 	Ok(())
@@ -725,7 +716,7 @@ async fn import_c_4_case_identifiers(
 					case_identifier: Some(entry.case_identifier),
 				},
 			)
-			.await;
+			.await?;
 		} else {
 			let _ = OtherCaseIdentifierBmc::create(
 				ctx,
@@ -765,7 +756,7 @@ async fn import_c_4_case_identifiers(
 					linked_report_number: Some(entry.linked_report_number),
 				},
 			)
-			.await;
+			.await?;
 		} else {
 			let _ = LinkedReportNumberBmc::create(
 				ctx,
@@ -818,7 +809,7 @@ async fn import_c_4_documents_held_by_sender(
 					sequence_number: Some(seq),
 				},
 			)
-			.await;
+			.await?;
 		} else {
 			let _ = DocumentsHeldBySenderBmc::create(
 				ctx,
@@ -877,7 +868,7 @@ async fn import_c_4_literature_references(
 					compression: entry.compression,
 				},
 			)
-			.await;
+			.await?;
 		} else {
 			let _ = LiteratureReferenceBmc::create(
 				ctx,
@@ -909,12 +900,6 @@ async fn import_c_5_study_information(
 		return Ok(());
 	};
 
-	mm.dbx().begin_txn().await.map_err(model::Error::from)?;
-	if let Err(err) = set_full_context_from_ctx_dbx(mm.dbx(), ctx).await {
-		let _ = mm.dbx().rollback_txn().await;
-		return Err(Error::Model(err));
-	}
-
 	let (study_id,) = mm
 		.dbx()
 		.fetch_one(
@@ -927,10 +912,12 @@ async fn import_c_5_study_information(
 						sponsor_study_number_null_flavor,
 						study_type_reaction,
 						study_type_reaction_kr1,
+						fda_ind_number_occurred,
+						fda_pre_anda_number_occurred,
 						created_at,
 						updated_at,
 						created_by
-					) VALUES ($1,$2,$3,$4,$5,$6,NULL,NOW(),NOW(),$7)
+					) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,NOW(),NOW(),$10)
 					ON CONFLICT (case_id) DO UPDATE SET
 						study_name = EXCLUDED.study_name,
 						study_name_null_flavor = EXCLUDED.study_name_null_flavor,
@@ -938,8 +925,10 @@ async fn import_c_5_study_information(
 						sponsor_study_number_null_flavor = EXCLUDED.sponsor_study_number_null_flavor,
 						study_type_reaction = EXCLUDED.study_type_reaction,
 						study_type_reaction_kr1 = EXCLUDED.study_type_reaction_kr1,
+						fda_ind_number_occurred = EXCLUDED.fda_ind_number_occurred,
+						fda_pre_anda_number_occurred = EXCLUDED.fda_pre_anda_number_occurred,
 						updated_at = NOW(),
-						updated_by = $7
+						updated_by = $10
 					RETURNING id",
 			)
 			.bind(case_id)
@@ -948,6 +937,9 @@ async fn import_c_5_study_information(
 			.bind(study.sponsor_study_number)
 			.bind(study.sponsor_study_number_null_flavor)
 			.bind(study.study_type_reaction)
+			.bind(study.study_type_reaction_kr1)
+			.bind(study.fda_ind_number_occurred)
+			.bind(study.fda_pre_anda_number_occurred)
 			.bind(ctx.user_id()),
 		)
 		.await
@@ -963,7 +955,6 @@ async fn import_c_5_study_information(
 		.await
 		.map_err(model::Error::from)?;
 	if study_visible_count != 1 {
-		let _ = mm.dbx().rollback_txn().await;
 		return Err(Error::Model(model::Error::Store(format!(
 			"section C study write invariant failed for case {case_id}: visible_count={study_visible_count}"
 		))));
@@ -1017,13 +1008,17 @@ async fn import_c_5_study_information(
 		.await
 		.map_err(model::Error::from)?;
 	if reg_visible_count < 0 {
-		let _ = mm.dbx().rollback_txn().await;
 		return Err(Error::Model(model::Error::Store(
 			"section C study registration invariant failed".to_string(),
 		)));
 	}
-	mm.dbx().commit_txn().await.map_err(model::Error::from)?;
 
+	mm.dbx().execute(sqlx::query("DELETE FROM study_fda_cross_reported_inds WHERE study_information_id = $1").bind(study_id)).await.map_err(model::Error::from)?;
+	for (idx, (ind_number, ind_number_null_flavor)) in
+		study.cross_reported_inds.into_iter().enumerate()
+	{
+		mm.dbx().execute(sqlx::query("INSERT INTO study_fda_cross_reported_inds (study_information_id, ind_number, ind_number_null_flavor, sequence_number, created_at, updated_at, created_by) VALUES ($1,$2,$3,$4,NOW(),NOW(),$5)").bind(study_id).bind(ind_number).bind(ind_number_null_flavor).bind((idx + 1) as i32).bind(ctx.user_id())).await.map_err(model::Error::from)?;
+	}
 	Ok(())
 }
 
@@ -1070,7 +1065,7 @@ async fn import_c_6_receiver_information(
 				email,
 			},
 		)
-		.await;
+		.await?;
 	} else {
 		let _ = ReceiverInformationBmc::create(
 			ctx,

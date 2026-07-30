@@ -3,6 +3,14 @@
 use crate::error::Error;
 use crate::mapping::fda::h_narrative::HNarrativePaths;
 use crate::Result;
+use lib_core::ctx::Ctx;
+use lib_core::model::narrative::{
+	CaseSummaryInformationBmc, CaseSummaryInformationForCreate,
+	NarrativeInformationBmc, NarrativeInformationForCreate, SenderDiagnosisBmc,
+	SenderDiagnosisForCreate,
+};
+use lib_core::model::store::set_full_context_dbx;
+use lib_core::model::ModelManager;
 use libxml::parser::Parser;
 use libxml::xpath::Context;
 
@@ -48,19 +56,16 @@ pub fn parse_h_narrative(xml: &[u8]) -> Result<Option<HNarrativeImport>> {
 	})?;
 	let _ = xpath.register_namespace("hl7", "urn:hl7-org:v3");
 
-	let case_narrative =
-		first_text_root(&mut xpath, HNarrativePaths::CASE_NARRATIVE)
-			.or_else(|| first_text_root(&mut xpath, "//hl7:component1//hl7:text"))
-			.or_else(|| first_text_root(&mut xpath, "//hl7:text"))
-			.ok_or_else(|| Error::InvalidXml {
-				message: "ICH.H.1.REQUIRED: case narrative missing".to_string(),
-				line: None,
-				column: None,
-			})?;
-	let reporter_comments =
-		first_text_root(&mut xpath, HNarrativePaths::REPORTER_COMMENTS);
-	let sender_comments =
-		first_text_root(&mut xpath, HNarrativePaths::SENDER_COMMENTS);
+	let case_narrative = read_h_1(&mut xpath)
+		.or_else(|| first_text_root(&mut xpath, "//hl7:component1//hl7:text"))
+		.or_else(|| first_text_root(&mut xpath, "//hl7:text"))
+		.ok_or_else(|| Error::InvalidXml {
+			message: "ICH.H.1.REQUIRED: case narrative missing".to_string(),
+			line: None,
+			column: None,
+		})?;
+	let reporter_comments = read_h_2(&mut xpath);
+	let sender_comments = read_h_4(&mut xpath);
 
 	Ok(Some(HNarrativeImport {
 		case_narrative,
@@ -103,20 +108,12 @@ pub fn parse_h_sender_diagnoses(xml: &[u8]) -> Result<Vec<HSenderDiagnosisImport
 
 	let mut items = Vec::new();
 	for (idx, node) in nodes.into_iter().enumerate() {
+		let (diagnosis_meddra_version, diagnosis_meddra_code) =
+			read_h_3_r_1(&mut xpath, &node);
 		items.push(HSenderDiagnosisImport {
 			sequence_number: (idx + 1) as i32,
-			diagnosis_meddra_version: first_attr(
-				&mut xpath,
-				&node,
-				"hl7:value",
-				"codeSystemVersion",
-			),
-			diagnosis_meddra_code: first_attr(
-				&mut xpath,
-				&node,
-				"hl7:value",
-				"code",
-			),
+			diagnosis_meddra_version,
+			diagnosis_meddra_code,
 		});
 	}
 
@@ -157,19 +154,110 @@ pub fn parse_h_case_summaries(xml: &[u8]) -> Result<Vec<HCaseSummaryImport>> {
 
 	let mut items = Vec::new();
 	for (idx, node) in nodes.into_iter().enumerate() {
+		let (language_code, summary_text) = read_h_5_r_1(&mut xpath, &node);
 		items.push(HCaseSummaryImport {
 			sequence_number: (idx + 1) as i32,
-			language_code: normalize_lang3(first_attr(
-				&mut xpath,
-				&node,
-				"hl7:value",
-				"language",
-			)),
-			summary_text: first_text(&mut xpath, &node, "hl7:value"),
+			language_code,
+			summary_text,
 		});
 	}
 
 	Ok(items)
+}
+
+pub(crate) async fn import_section_h(
+	ctx: &Ctx,
+	mm: &ModelManager,
+	xml: &[u8],
+	case_id: sqlx::types::Uuid,
+) -> Result<()> {
+	let Some(narrative) = parse_h_narrative(xml)? else {
+		return Ok(());
+	};
+	let sender_diagnoses = parse_h_sender_diagnoses(xml)?;
+	let case_summaries = parse_h_case_summaries(xml)?;
+	set_full_context_dbx(mm.dbx(), ctx.user_id(), ctx.organization_id(), ctx.role())
+		.await
+		.map_err(Error::Model)?;
+	let narrative_id = NarrativeInformationBmc::create(
+		ctx,
+		mm,
+		NarrativeInformationForCreate {
+			case_id,
+			source_narrative_presave_id: None,
+			case_narrative: narrative.case_narrative,
+			reporter_comments: narrative.reporter_comments,
+			sender_comments: narrative.sender_comments,
+			additional_information: None,
+		},
+	)
+	.await?;
+	for item in sender_diagnoses {
+		SenderDiagnosisBmc::create(
+			ctx,
+			mm,
+			SenderDiagnosisForCreate {
+				narrative_id,
+				sequence_number: item.sequence_number,
+				diagnosis_meddra_version: item.diagnosis_meddra_version,
+				diagnosis_meddra_code: item.diagnosis_meddra_code,
+			},
+		)
+		.await?;
+	}
+	for item in case_summaries {
+		CaseSummaryInformationBmc::create(
+			ctx,
+			mm,
+			CaseSummaryInformationForCreate {
+				narrative_id,
+				sequence_number: item.sequence_number,
+				language_code: item.language_code,
+				summary_text: item.summary_text,
+			},
+		)
+		.await?;
+	}
+	Ok(())
+}
+
+/// e2b:H.1
+fn read_h_1(xpath: &mut Context) -> Option<String> {
+	first_text_root(xpath, HNarrativePaths::CASE_NARRATIVE)
+}
+
+/// e2b:H.2
+fn read_h_2(xpath: &mut Context) -> Option<String> {
+	first_text_root(xpath, HNarrativePaths::REPORTER_COMMENTS)
+}
+
+/// e2b:H.3.r.1a
+/// e2b:H.3.r.1b
+fn read_h_3_r_1(
+	xpath: &mut Context,
+	node: &libxml::tree::Node,
+) -> (Option<String>, Option<String>) {
+	(
+		first_attr(xpath, node, "hl7:value", "codeSystemVersion"),
+		first_attr(xpath, node, "hl7:value", "code"),
+	)
+}
+
+/// e2b:H.4
+fn read_h_4(xpath: &mut Context) -> Option<String> {
+	first_text_root(xpath, HNarrativePaths::SENDER_COMMENTS)
+}
+
+/// e2b:H.5.r.1a
+/// e2b:H.5.r.1b
+fn read_h_5_r_1(
+	xpath: &mut Context,
+	node: &libxml::tree::Node,
+) -> (Option<String>, Option<String>) {
+	(
+		normalize_lang3(first_attr(xpath, node, "hl7:value", "language")),
+		first_text(xpath, node, "hl7:value"),
+	)
 }
 
 fn first_text_root(xpath: &mut Context, expr: &str) -> Option<String> {

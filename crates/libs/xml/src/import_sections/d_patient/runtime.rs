@@ -1,4 +1,4 @@
-use crate::import_runtime::helpers::d as d_helpers;
+use super::helpers as d_helpers;
 use crate::Result;
 use lib_core::ctx::Ctx;
 use lib_core::model;
@@ -72,7 +72,7 @@ async fn import_patient_identifiers(
 					identifier_value_null_flavor: entry.identifier_value_null_flavor,
 				},
 			)
-			.await;
+			.await?;
 		} else {
 			let _ = PatientIdentifierBmc::create(
 				ctx,
@@ -130,7 +130,7 @@ async fn import_medical_history(
 					family_history: entry.family_history,
 				},
 			)
-			.await;
+			.await?;
 		} else {
 			let id = MedicalHistoryEpisodeBmc::create(
 				ctx,
@@ -162,7 +162,7 @@ async fn import_medical_history(
 					family_history: entry.family_history,
 				},
 			)
-			.await;
+			.await?;
 		}
 	}
 	Ok(())
@@ -214,7 +214,7 @@ async fn import_past_drug_history(
 					reaction_meddra_code: entry.reaction_meddra_code,
 				},
 			)
-			.await;
+			.await?;
 		} else {
 			let _ = PastDrugHistoryBmc::create(
 				ctx,
@@ -297,7 +297,7 @@ async fn import_patient_death(
 			autopsy_performed_null_flavor: death.autopsy_performed_null_flavor,
 		},
 	)
-	.await;
+	.await?;
 
 	for (idx, cause) in death.reported_causes.into_iter().enumerate() {
 		let seq = (idx + 1) as i32;
@@ -324,7 +324,7 @@ async fn import_patient_death(
 					comments: cause.comments.clone(),
 				},
 			)
-			.await;
+			.await?;
 		} else {
 			ReportedCauseOfDeathBmc::create(
 				ctx,
@@ -366,7 +366,7 @@ async fn import_patient_death(
 					comments: cause.comments.clone(),
 				},
 			)
-			.await;
+			.await?;
 		} else {
 			AutopsyCauseOfDeathBmc::create(
 				ctx,
@@ -462,7 +462,7 @@ async fn import_parent_information(
 			medical_history_text: parent.medical_history_text,
 		},
 	)
-	.await;
+	.await?;
 
 	for (idx, entry) in parent.medical_history.into_iter().enumerate() {
 		let seq = (idx + 1) as i32;
@@ -495,7 +495,7 @@ async fn import_parent_information(
 					comments: entry.comments,
 				},
 			)
-			.await;
+			.await?;
 		} else {
 			let meddra_code = entry.meddra_code.clone();
 			let id = ParentMedicalHistoryBmc::create(
@@ -527,7 +527,7 @@ async fn import_parent_information(
 					comments: entry.comments,
 				},
 			)
-			.await;
+			.await?;
 		}
 	}
 
@@ -570,7 +570,7 @@ async fn import_parent_information(
 					reaction_meddra_code: entry.reaction_meddra_code,
 				},
 			)
-			.await;
+			.await?;
 		} else {
 			let drug_name = entry.drug_name.clone();
 			let id = ParentPastDrugHistoryBmc::create(
@@ -628,7 +628,7 @@ async fn import_parent_information(
 					reaction_meddra_code: entry.reaction_meddra_code,
 				},
 			)
-			.await;
+			.await?;
 		}
 	}
 

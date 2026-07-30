@@ -1,5 +1,5 @@
 use crate::error::Error;
-use crate::import_runtime::shared::{
+use crate::import_sections::shared::{
 	clamp_str, first_attr, first_text, first_value, first_value_root,
 	normalize_code, normalize_code3, normalize_sex_code, parse_bool_attr,
 	parse_bool_value, parse_date,
@@ -142,14 +142,10 @@ pub(crate) fn parse_patient_identifiers(
 
 	let mut items = Vec::new();
 	for node in nodes {
-		let identifier_type_code = normalize_code(
-			first_attr(&mut xpath, &node, "hl7:code", "code"),
-			&["1", "2", "3", "4"],
-			"patient_identifiers.identifier_type_code",
-		);
-		let identifier_value = first_attr(&mut xpath, &node, "hl7:id", "extension");
-		let identifier_value_null_flavor =
-			first_attr(&mut xpath, &node, "hl7:id", "nullFlavor");
+		let identifier_type_code =
+			read_d_local_patient_identifier_type_code(&mut xpath, &node);
+		let (identifier_value, identifier_value_null_flavor) =
+			read_d_local_patient_identifier_value(&mut xpath, &node);
 		if let (Some(identifier_type_code), Some(identifier_value)) =
 			(identifier_type_code.clone(), identifier_value)
 		{
@@ -171,6 +167,33 @@ pub(crate) fn parse_patient_identifiers(
 		}
 	}
 	Ok(items)
+}
+
+/// e2b:D.local.patientIdentifier.typeCode
+fn read_d_local_patient_identifier_type_code(
+	xpath: &mut Context,
+	node: &libxml::tree::Node,
+) -> Option<String> {
+	normalize_code(
+		first_attr(xpath, node, "hl7:code", "code"),
+		&["1", "2", "3", "4"],
+		"patient_identifiers.identifier_type_code",
+	)
+}
+
+/// e2b:D.local.patientIdentifier.value
+/// e2b:D.1.1.1
+/// e2b:D.1.1.2
+/// e2b:D.1.1.3
+/// e2b:D.1.1.4
+fn read_d_local_patient_identifier_value(
+	xpath: &mut Context,
+	node: &libxml::tree::Node,
+) -> (Option<String>, Option<String>) {
+	(
+		first_attr(xpath, node, "hl7:id", "extension"),
+		first_attr(xpath, node, "hl7:id", "nullFlavor"),
+	)
 }
 
 pub(crate) fn parse_medical_history(
@@ -213,41 +236,12 @@ pub(crate) fn parse_medical_history(
 		if code_system.as_deref() != Some("2.16.840.1.113883.6.163") {
 			continue;
 		}
-		let meddra_code = first_attr(&mut xpath, &node, "hl7:code", "code");
-		let meddra_version = clamp_str(
-			first_attr(&mut xpath, &node, "hl7:code", "codeSystemVersion"),
-			10,
-			"medical_history.meddra_version",
-		);
-		let start_date =
-			first_attr(&mut xpath, &node, "hl7:effectiveTime/hl7:low", "value")
-				.and_then(parse_date);
-		let end_date =
-			first_attr(&mut xpath, &node, "hl7:effectiveTime/hl7:high", "value")
-				.and_then(parse_date);
-		let continuing = parse_bool_attr(
-			&mut xpath,
-			&node,
-			"hl7:inboundRelationship/hl7:observation[hl7:code[@code='13']]/hl7:value",
-			"value",
-		);
-		let continuing_null_flavor = first_attr(
-			&mut xpath,
-			&node,
-			"hl7:inboundRelationship/hl7:observation[hl7:code[@code='13']]/hl7:value",
-			"nullFlavor",
-		);
-		let comments = first_text(
-			&mut xpath,
-			&node,
-			"hl7:outboundRelationship2/hl7:observation[hl7:code[@code='10']]/hl7:value",
-		);
-		let family_history = parse_bool_attr(
-			&mut xpath,
-			&node,
-			"hl7:outboundRelationship2/hl7:observation[hl7:code[@code='38']]/hl7:value",
-			"value",
-		);
+		let (meddra_version, meddra_code) = read_d_7_1_r_1(&mut xpath, &node);
+		let start_date = read_d_7_1_r_2(&mut xpath, &node);
+		let (continuing, continuing_null_flavor) = read_d_7_1_r_3(&mut xpath, &node);
+		let end_date = read_d_7_1_r_4(&mut xpath, &node);
+		let comments = read_d_7_1_r_5(&mut xpath, &node);
+		let family_history = read_d_7_1_r_6(&mut xpath, &node);
 		items.push(MedicalHistoryImport {
 			meddra_version,
 			meddra_code,
@@ -260,6 +254,66 @@ pub(crate) fn parse_medical_history(
 		});
 	}
 	Ok(items)
+}
+
+/// e2b:D.7.1.r.1a
+/// e2b:D.7.1.r.1b
+fn read_d_7_1_r_1(
+	xpath: &mut Context,
+	node: &libxml::tree::Node,
+) -> (Option<String>, Option<String>) {
+	(
+		clamp_str(
+			first_attr(xpath, node, "hl7:code", "codeSystemVersion"),
+			10,
+			"medical_history.meddra_version",
+		),
+		first_attr(xpath, node, "hl7:code", "code"),
+	)
+}
+
+/// e2b:D.7.1.r.2
+fn read_d_7_1_r_2(xpath: &mut Context, node: &libxml::tree::Node) -> Option<Date> {
+	first_attr(xpath, node, "hl7:effectiveTime/hl7:low", "value")
+		.and_then(parse_date)
+}
+
+/// e2b:D.7.1.r.3
+fn read_d_7_1_r_3(
+	xpath: &mut Context,
+	node: &libxml::tree::Node,
+) -> (Option<bool>, Option<String>) {
+	let path =
+		"hl7:inboundRelationship/hl7:observation[hl7:code[@code='13']]/hl7:value";
+	(
+		parse_bool_attr(xpath, node, path, "value"),
+		first_attr(xpath, node, path, "nullFlavor"),
+	)
+}
+
+/// e2b:D.7.1.r.4
+fn read_d_7_1_r_4(xpath: &mut Context, node: &libxml::tree::Node) -> Option<Date> {
+	first_attr(xpath, node, "hl7:effectiveTime/hl7:high", "value")
+		.and_then(parse_date)
+}
+
+/// e2b:D.7.1.r.5
+fn read_d_7_1_r_5(xpath: &mut Context, node: &libxml::tree::Node) -> Option<String> {
+	first_text(
+		xpath,
+		node,
+		"hl7:outboundRelationship2/hl7:observation[hl7:code[@code='10']]/hl7:value",
+	)
+}
+
+/// e2b:D.7.1.r.6
+fn read_d_7_1_r_6(xpath: &mut Context, node: &libxml::tree::Node) -> Option<bool> {
+	parse_bool_attr(
+		xpath,
+		node,
+		"hl7:outboundRelationship2/hl7:observation[hl7:code[@code='38']]/hl7:value",
+		"value",
+	)
 }
 
 pub(crate) fn parse_past_drug_history(
@@ -298,97 +352,17 @@ pub(crate) fn parse_past_drug_history(
 
 	let mut items = Vec::new();
 	for node in nodes {
-		let drug_name = first_text(
-			&mut xpath,
-			&node,
-			"hl7:consumable/hl7:instanceOfKind/hl7:kindOfProduct/hl7:name",
-		);
-		let mfds_medicinal_product_id = clamp_str(
-			first_attr(
-				&mut xpath,
-				&node,
-				"hl7:consumable/hl7:instanceOfKind/hl7:kindOfProduct/hl7:code",
-				"code",
-			),
-			10,
-			"past_drug_history.mfds_medicinal_product_id",
-		);
-		let mfds_medicinal_product_version = clamp_str(
-			first_attr(
-				&mut xpath,
-				&node,
-				"hl7:consumable/hl7:instanceOfKind/hl7:kindOfProduct/hl7:code",
-				"codeSystemVersion",
-			),
-			20,
-			"past_drug_history.mfds_medicinal_product_version",
-		);
-		let mpid = first_value(
-			&mut xpath,
-			&node,
-			"hl7:consumable/hl7:instanceOfKind/hl7:kindOfProduct/hl7:asIdentifiedEntity[hl7:code[@code='MPID']]/hl7:id/@extension",
-		);
-		let mpid_version = clamp_str(
-			first_value(
-				&mut xpath,
-				&node,
-				"hl7:consumable/hl7:instanceOfKind/hl7:kindOfProduct/hl7:asIdentifiedEntity[hl7:code[@code='MPID']]/hl7:code/@codeSystemVersion",
-			),
-			10,
-			"past_drug_history.mpid_version",
-		);
-		let phpid = first_value(
-			&mut xpath,
-			&node,
-			"(hl7:consumable/hl7:instanceOfKind/hl7:kindOfProduct/hl7:asIdentifiedEntity[hl7:code[@code='PhPID' or @code='PHPID']]/hl7:id/@extension)[1]",
-		);
-		let phpid_version = clamp_str(
-			first_value(
-				&mut xpath,
-				&node,
-				"(hl7:consumable/hl7:instanceOfKind/hl7:kindOfProduct/hl7:asIdentifiedEntity[hl7:code[@code='PhPID' or @code='PHPID']]/hl7:code/@codeSystemVersion)[1]",
-			),
-			10,
-			"past_drug_history.phpid_version",
-		);
-		let start_date =
-			first_attr(&mut xpath, &node, "hl7:effectiveTime/hl7:low", "value")
-				.and_then(parse_date);
-		let end_date =
-			first_attr(&mut xpath, &node, "hl7:effectiveTime/hl7:high", "value")
-				.and_then(parse_date);
-		let indication_meddra_code = first_attr(
-			&mut xpath,
-			&node,
-			"hl7:outboundRelationship2[@typeCode='RSON']/hl7:observation/hl7:value",
-			"code",
-		);
-		let indication_meddra_version = clamp_str(
-			first_attr(
-				&mut xpath,
-				&node,
-				"hl7:outboundRelationship2[@typeCode='RSON']/hl7:observation/hl7:value",
-				"codeSystemVersion",
-			),
-			10,
-			"past_drug_history.indication_meddra_version",
-		);
-		let reaction_meddra_code = first_attr(
-			&mut xpath,
-			&node,
-			"hl7:outboundRelationship2[@typeCode='CAUS']/hl7:observation/hl7:value",
-			"code",
-		);
-		let reaction_meddra_version = clamp_str(
-			first_attr(
-				&mut xpath,
-				&node,
-				"hl7:outboundRelationship2[@typeCode='CAUS']/hl7:observation/hl7:value",
-				"codeSystemVersion",
-			),
-			10,
-			"past_drug_history.reaction_meddra_version",
-		);
+		let drug_name = read_d_8_r_1(&mut xpath, &node);
+		let (mfds_medicinal_product_version, mfds_medicinal_product_id) =
+			read_d_8_r_1_kr(&mut xpath, &node);
+		let (mpid_version, mpid) = read_d_8_r_2(&mut xpath, &node);
+		let (phpid_version, phpid) = read_d_8_r_3(&mut xpath, &node);
+		let start_date = read_d_8_r_4(&mut xpath, &node);
+		let end_date = read_d_8_r_5(&mut xpath, &node);
+		let (indication_meddra_version, indication_meddra_code) =
+			read_d_8_r_6(&mut xpath, &node);
+		let (reaction_meddra_version, reaction_meddra_code) =
+			read_d_8_r_7(&mut xpath, &node);
 		items.push(PastDrugHistoryImport {
 			drug_name,
 			mpid,
@@ -406,6 +380,129 @@ pub(crate) fn parse_past_drug_history(
 		});
 	}
 	Ok(items)
+}
+
+const PRODUCT: &str = "hl7:consumable/hl7:instanceOfKind/hl7:kindOfProduct";
+
+/// e2b:D.8.r.1
+fn read_d_8_r_1(xpath: &mut Context, node: &libxml::tree::Node) -> Option<String> {
+	first_text(xpath, node, &format!("{PRODUCT}/hl7:name"))
+}
+
+/// e2b:D.8.r.1.KR.1a
+/// e2b:D.8.r.1.KR.1b
+fn read_d_8_r_1_kr(
+	xpath: &mut Context,
+	node: &libxml::tree::Node,
+) -> (Option<String>, Option<String>) {
+	let path = format!("{PRODUCT}/hl7:code");
+	(
+		clamp_str(
+			first_attr(xpath, node, &path, "codeSystemVersion"),
+			20,
+			"past_drug_history.mfds_medicinal_product_version",
+		),
+		clamp_str(
+			first_attr(xpath, node, &path, "code"),
+			10,
+			"past_drug_history.mfds_medicinal_product_id",
+		),
+	)
+}
+
+/// e2b:D.8.r.2a
+/// e2b:D.8.r.2b
+fn read_d_8_r_2(
+	xpath: &mut Context,
+	node: &libxml::tree::Node,
+) -> (Option<String>, Option<String>) {
+	let base = format!("{PRODUCT}/hl7:asIdentifiedEntity[hl7:code[@code='MPID']]");
+	(
+		clamp_str(
+			first_value(xpath, node, &format!("{base}/hl7:code/@codeSystemVersion")),
+			10,
+			"past_drug_history.mpid_version",
+		),
+		first_value(xpath, node, &format!("{base}/hl7:id/@extension")),
+	)
+}
+
+/// e2b:D.8.r.3a
+/// e2b:D.8.r.3b
+fn read_d_8_r_3(
+	xpath: &mut Context,
+	node: &libxml::tree::Node,
+) -> (Option<String>, Option<String>) {
+	let base = format!("({PRODUCT}/hl7:asIdentifiedEntity[hl7:code[@code='PhPID' or @code='PHPID']]");
+	(
+		clamp_str(
+			first_value(
+				xpath,
+				node,
+				&format!("{base}/hl7:code/@codeSystemVersion)[1]"),
+			),
+			10,
+			"past_drug_history.phpid_version",
+		),
+		first_value(xpath, node, &format!("{base}/hl7:id/@extension)[1]")),
+	)
+}
+
+/// e2b:D.8.r.4
+fn read_d_8_r_4(xpath: &mut Context, node: &libxml::tree::Node) -> Option<Date> {
+	first_attr(xpath, node, "hl7:effectiveTime/hl7:low", "value")
+		.and_then(parse_date)
+}
+
+/// e2b:D.8.r.5
+fn read_d_8_r_5(xpath: &mut Context, node: &libxml::tree::Node) -> Option<Date> {
+	first_attr(xpath, node, "hl7:effectiveTime/hl7:high", "value")
+		.and_then(parse_date)
+}
+
+fn read_meddra_pair(
+	xpath: &mut Context,
+	node: &libxml::tree::Node,
+	relationship: &str,
+	field: &str,
+) -> (Option<String>, Option<String>) {
+	let path = format!("hl7:outboundRelationship2[@typeCode='{relationship}']/hl7:observation/hl7:value");
+	(
+		clamp_str(
+			first_attr(xpath, node, &path, "codeSystemVersion"),
+			10,
+			field,
+		),
+		first_attr(xpath, node, &path, "code"),
+	)
+}
+
+/// e2b:D.8.r.6a
+/// e2b:D.8.r.6b
+fn read_d_8_r_6(
+	xpath: &mut Context,
+	node: &libxml::tree::Node,
+) -> (Option<String>, Option<String>) {
+	read_meddra_pair(
+		xpath,
+		node,
+		"RSON",
+		"past_drug_history.indication_meddra_version",
+	)
+}
+
+/// e2b:D.8.r.7a
+/// e2b:D.8.r.7b
+fn read_d_8_r_7(
+	xpath: &mut Context,
+	node: &libxml::tree::Node,
+) -> (Option<String>, Option<String>) {
+	read_meddra_pair(
+		xpath,
+		node,
+		"CAUS",
+		"past_drug_history.reaction_meddra_version",
+	)
 }
 
 pub(crate) fn parse_patient_death(xml: &[u8]) -> Result<Option<DeathImport>> {
@@ -429,18 +526,8 @@ pub(crate) fn parse_patient_death(xml: &[u8]) -> Result<Option<DeathImport>> {
 	})?;
 	let _ = xpath.register_namespace("hl7", "urn:hl7-org:v3");
 
-	let date_of_death = first_value_root(&mut xpath, "//hl7:deceasedTime/@value")
-		.and_then(parse_date);
-	let date_of_death_null_flavor =
-		first_value_root(&mut xpath, "//hl7:deceasedTime/@nullFlavor");
-	let autopsy_performed = parse_bool_value(first_value_root(
-		&mut xpath,
-		"//hl7:observation[hl7:code[@code='5']]/hl7:value/@value",
-	));
-	let autopsy_performed_null_flavor = first_value_root(
-		&mut xpath,
-		"//hl7:observation[hl7:code[@code='5']]/hl7:value/@nullFlavor",
-	);
+	let (date_of_death, date_of_death_null_flavor) = read_d_9_1(&mut xpath);
+	let (autopsy_performed, autopsy_performed_null_flavor) = read_d_9_3(&mut xpath);
 
 	let mut reported_causes = Vec::new();
 	let reported_nodes = xpath
@@ -451,13 +538,8 @@ pub(crate) fn parse_patient_death(xml: &[u8]) -> Result<Option<DeathImport>> {
 			column: None,
 		})?;
 	for node in reported_nodes {
-		let meddra_code = node.get_attribute("code");
-		let meddra_version = clamp_str(
-			node.get_attribute("codeSystemVersion"),
-			10,
-			"death.meddra_version",
-		);
-		let comments = first_text(&mut xpath, &node, "hl7:originalText");
+		let (meddra_version, meddra_code, comments) =
+			read_d_9_2_r(&mut xpath, &node);
 		reported_causes.push(DeathCauseImport {
 			meddra_version,
 			meddra_code,
@@ -477,13 +559,8 @@ pub(crate) fn parse_patient_death(xml: &[u8]) -> Result<Option<DeathImport>> {
 			column: None,
 		})?;
 	for node in autopsy_nodes {
-		let meddra_code = node.get_attribute("code");
-		let meddra_version = clamp_str(
-			node.get_attribute("codeSystemVersion"),
-			10,
-			"death.autopsy_meddra_version",
-		);
-		let comments = first_text(&mut xpath, &node, "hl7:originalText");
+		let (meddra_version, meddra_code, comments) =
+			read_d_9_4_r(&mut xpath, &node);
 		autopsy_causes.push(DeathCauseImport {
 			meddra_version,
 			meddra_code,
@@ -509,6 +586,285 @@ pub(crate) fn parse_patient_death(xml: &[u8]) -> Result<Option<DeathImport>> {
 		reported_causes,
 		autopsy_causes,
 	}))
+}
+
+/// e2b:D.9.1
+fn read_d_9_1(xpath: &mut Context) -> (Option<Date>, Option<String>) {
+	(
+		first_value_root(xpath, "//hl7:deceasedTime/@value").and_then(parse_date),
+		first_value_root(xpath, "//hl7:deceasedTime/@nullFlavor"),
+	)
+}
+
+/// e2b:D.9.3
+fn read_d_9_3(xpath: &mut Context) -> (Option<bool>, Option<String>) {
+	(
+		parse_bool_value(first_value_root(
+			xpath,
+			"//hl7:observation[hl7:code[@code='5']]/hl7:value/@value",
+		)),
+		first_value_root(
+			xpath,
+			"//hl7:observation[hl7:code[@code='5']]/hl7:value/@nullFlavor",
+		),
+	)
+}
+
+/// e2b:D.9.2.r.1a
+/// e2b:D.9.2.r.1b
+/// e2b:D.9.2.r.2
+fn read_d_9_2_r(
+	xpath: &mut Context,
+	node: &libxml::tree::Node,
+) -> (Option<String>, Option<String>, Option<String>) {
+	(
+		clamp_str(
+			node.get_attribute("codeSystemVersion"),
+			10,
+			"death.meddra_version",
+		),
+		node.get_attribute("code"),
+		first_text(xpath, node, "hl7:originalText"),
+	)
+}
+
+/// e2b:D.9.4.r.1a
+/// e2b:D.9.4.r.1b
+/// e2b:D.9.4.r.2
+fn read_d_9_4_r(
+	xpath: &mut Context,
+	node: &libxml::tree::Node,
+) -> (Option<String>, Option<String>, Option<String>) {
+	(
+		clamp_str(
+			node.get_attribute("codeSystemVersion"),
+			10,
+			"death.autopsy_meddra_version",
+		),
+		node.get_attribute("code"),
+		first_text(xpath, node, "hl7:originalText"),
+	)
+}
+
+/// e2b:D.10.1
+fn read_d_10_1(
+	xpath: &mut Context,
+	node: &libxml::tree::Node,
+) -> (Option<String>, Option<String>) {
+	(
+		first_text(xpath, node, "hl7:associatedPerson/hl7:name"),
+		first_attr(xpath, node, "hl7:associatedPerson/hl7:name", "nullFlavor"),
+	)
+}
+
+/// e2b:D.10.2.1
+fn read_d_10_2_1(
+	xpath: &mut Context,
+	node: &libxml::tree::Node,
+) -> (Option<Date>, Option<String>) {
+	let path = "hl7:associatedPerson/hl7:birthTime";
+	(
+		first_attr(xpath, node, path, "value").and_then(parse_date),
+		first_attr(xpath, node, path, "nullFlavor"),
+	)
+}
+
+/// e2b:D.10.2.2a
+fn read_d_10_2_2a(
+	xpath: &mut Context,
+	node: &libxml::tree::Node,
+) -> (Option<Decimal>, Option<String>) {
+	let path = "hl7:subjectOf2/hl7:observation[hl7:code[@code='3']]/hl7:value";
+	(
+		first_attr(xpath, node, path, "value").and_then(|value| value.parse().ok()),
+		first_attr(xpath, node, path, "nullFlavor"),
+	)
+}
+
+/// e2b:D.10.2.2b
+fn read_d_10_2_2b(xpath: &mut Context, node: &libxml::tree::Node) -> Option<String> {
+	normalize_code3(
+		first_attr(
+			xpath,
+			node,
+			"hl7:subjectOf2/hl7:observation[hl7:code[@code='3']]/hl7:value",
+			"unit",
+		),
+		"parent_information.parent_age_unit",
+	)
+}
+
+/// e2b:D.10.3
+fn read_d_10_3(
+	xpath: &mut Context,
+	node: &libxml::tree::Node,
+) -> (Option<Date>, Option<String>) {
+	let path = "hl7:subjectOf2/hl7:observation[hl7:code[@code='22']]/hl7:value";
+	(
+		first_attr(xpath, node, path, "value").and_then(parse_date),
+		first_attr(xpath, node, path, "nullFlavor"),
+	)
+}
+
+/// e2b:D.10.4
+fn read_d_10_4(xpath: &mut Context, node: &libxml::tree::Node) -> Option<Decimal> {
+	first_attr(
+		xpath,
+		node,
+		"hl7:subjectOf2/hl7:observation[hl7:code[@code='7']]/hl7:value",
+		"value",
+	)
+	.and_then(|value| value.parse().ok())
+}
+
+/// e2b:D.10.5
+fn read_d_10_5(xpath: &mut Context, node: &libxml::tree::Node) -> Option<Decimal> {
+	first_attr(
+		xpath,
+		node,
+		"hl7:subjectOf2/hl7:observation[hl7:code[@code='17']]/hl7:value",
+		"value",
+	)
+	.and_then(|value| value.parse().ok())
+}
+
+/// e2b:D.10.6
+fn read_d_10_6(
+	xpath: &mut Context,
+	node: &libxml::tree::Node,
+) -> (Option<String>, Option<String>) {
+	let path = "hl7:associatedPerson/hl7:administrativeGenderCode";
+	(
+		normalize_sex_code(first_attr(xpath, node, path, "code")),
+		first_attr(xpath, node, path, "nullFlavor"),
+	)
+}
+
+/// e2b:D.10.7.2
+fn read_d_10_7_2(xpath: &mut Context, node: &libxml::tree::Node) -> Option<String> {
+	first_text(xpath, node, "hl7:subjectOf2/hl7:organizer[hl7:code[@code='1']]/hl7:component/hl7:observation[hl7:code[@code='18']]/hl7:value")
+}
+
+/// e2b:D.10.7.1.r.1a
+/// e2b:D.10.7.1.r.1b
+fn read_d_10_7_1_r_1(
+	xpath: &mut Context,
+	node: &libxml::tree::Node,
+) -> (Option<String>, Option<String>) {
+	(
+		clamp_str(
+			first_attr(xpath, node, "hl7:code", "codeSystemVersion"),
+			10,
+			"parent_history.meddra_version",
+		),
+		first_attr(xpath, node, "hl7:code", "code"),
+	)
+}
+
+/// e2b:D.10.7.1.r.2
+fn read_d_10_7_1_r_2(
+	xpath: &mut Context,
+	node: &libxml::tree::Node,
+) -> Option<Date> {
+	first_attr(xpath, node, "hl7:effectiveTime/hl7:low", "value")
+		.and_then(parse_date)
+}
+
+/// e2b:D.10.7.1.r.3
+fn read_d_10_7_1_r_3(
+	xpath: &mut Context,
+	node: &libxml::tree::Node,
+) -> (Option<bool>, Option<String>) {
+	let path =
+		"hl7:inboundRelationship/hl7:observation[hl7:code[@code='13']]/hl7:value";
+	(
+		parse_bool_attr(xpath, node, path, "value"),
+		first_attr(xpath, node, path, "nullFlavor"),
+	)
+}
+
+/// e2b:D.10.7.1.r.4
+fn read_d_10_7_1_r_4(
+	xpath: &mut Context,
+	node: &libxml::tree::Node,
+) -> Option<Date> {
+	first_attr(xpath, node, "hl7:effectiveTime/hl7:high", "value")
+		.and_then(parse_date)
+}
+
+/// e2b:D.10.7.1.r.5
+fn read_d_10_7_1_r_5(
+	xpath: &mut Context,
+	node: &libxml::tree::Node,
+) -> Option<String> {
+	first_text(
+		xpath,
+		node,
+		"hl7:outboundRelationship2/hl7:observation[hl7:code[@code='10']]/hl7:value",
+	)
+}
+
+/// e2b:D.10.8.r.1
+fn read_d_10_8_r_1(
+	xpath: &mut Context,
+	node: &libxml::tree::Node,
+) -> Option<String> {
+	read_d_8_r_1(xpath, node)
+}
+
+/// e2b:D.10.8.r.1.KR.1a
+/// e2b:D.10.8.r.1.KR.1b
+fn read_d_10_8_r_1_kr(
+	xpath: &mut Context,
+	node: &libxml::tree::Node,
+) -> (Option<String>, Option<String>) {
+	read_d_8_r_1_kr(xpath, node)
+}
+
+/// e2b:D.10.8.r.2a
+/// e2b:D.10.8.r.2b
+fn read_d_10_8_r_2(
+	xpath: &mut Context,
+	node: &libxml::tree::Node,
+) -> (Option<String>, Option<String>) {
+	read_d_8_r_2(xpath, node)
+}
+
+/// e2b:D.10.8.r.3a
+/// e2b:D.10.8.r.3b
+fn read_d_10_8_r_3(
+	xpath: &mut Context,
+	node: &libxml::tree::Node,
+) -> (Option<String>, Option<String>) {
+	read_d_8_r_3(xpath, node)
+}
+
+/// e2b:D.10.8.r.4
+fn read_d_10_8_r_4(xpath: &mut Context, node: &libxml::tree::Node) -> Option<Date> {
+	read_d_8_r_4(xpath, node)
+}
+
+/// e2b:D.10.8.r.5
+fn read_d_10_8_r_5(xpath: &mut Context, node: &libxml::tree::Node) -> Option<Date> {
+	read_d_8_r_5(xpath, node)
+}
+
+/// e2b:D.10.8.r.6a
+/// e2b:D.10.8.r.6b
+fn read_d_10_8_r_6(
+	xpath: &mut Context,
+	node: &libxml::tree::Node,
+) -> (Option<String>, Option<String>) {
+	read_d_8_r_6(xpath, node)
+}
+
+/// e2b:D.10.8.r.7a
+/// e2b:D.10.8.r.7b
+fn read_d_10_8_r_7(
+	xpath: &mut Context,
+	node: &libxml::tree::Node,
+) -> (Option<String>, Option<String>) {
+	read_d_8_r_7(xpath, node)
 }
 
 pub(crate) fn parse_parent_information(xml: &[u8]) -> Result<Option<ParentImport>> {
@@ -546,93 +902,18 @@ pub(crate) fn parse_parent_information(xml: &[u8]) -> Result<Option<ParentImport
 		return Ok(None);
 	};
 
-	let parent_identification =
-		first_text(&mut xpath, node, "hl7:associatedPerson/hl7:name");
-	let parent_identification_null_flavor = first_attr(
-		&mut xpath,
-		node,
-		"hl7:associatedPerson/hl7:name",
-		"nullFlavor",
-	);
-	let parent_birth_date = first_attr(
-		&mut xpath,
-		node,
-		"hl7:associatedPerson/hl7:birthTime",
-		"value",
-	)
-	.and_then(parse_date);
-	let parent_birth_date_null_flavor = first_attr(
-		&mut xpath,
-		node,
-		"hl7:associatedPerson/hl7:birthTime",
-		"nullFlavor",
-	);
-	let sex = normalize_sex_code(first_attr(
-		&mut xpath,
-		node,
-		"hl7:associatedPerson/hl7:administrativeGenderCode",
-		"code",
-	));
-	let sex_null_flavor = first_attr(
-		&mut xpath,
-		node,
-		"hl7:associatedPerson/hl7:administrativeGenderCode",
-		"nullFlavor",
-	);
-	let parent_age = first_attr(
-		&mut xpath,
-		node,
-		"hl7:subjectOf2/hl7:observation[hl7:code[@code='3']]/hl7:value",
-		"value",
-	)
-	.and_then(|v| v.parse::<Decimal>().ok());
-	let parent_age_null_flavor = first_attr(
-		&mut xpath,
-		node,
-		"hl7:subjectOf2/hl7:observation[hl7:code[@code='3']]/hl7:value",
-		"nullFlavor",
-	);
-	let parent_age_unit = normalize_code3(
-		first_attr(
-			&mut xpath,
-			node,
-			"hl7:subjectOf2/hl7:observation[hl7:code[@code='3']]/hl7:value",
-			"unit",
-		),
-		"parent_information.parent_age_unit",
-	);
-	let last_menstrual_period_date = first_attr(
-		&mut xpath,
-		node,
-		"hl7:subjectOf2/hl7:observation[hl7:code[@code='22']]/hl7:value",
-		"value",
-	)
-	.and_then(parse_date);
-	let last_menstrual_period_date_null_flavor = first_attr(
-		&mut xpath,
-		node,
-		"hl7:subjectOf2/hl7:observation[hl7:code[@code='22']]/hl7:value",
-		"nullFlavor",
-	);
-	let weight_kg = first_attr(
-		&mut xpath,
-		node,
-		"hl7:subjectOf2/hl7:observation[hl7:code[@code='7']]/hl7:value",
-		"value",
-	)
-	.and_then(|v| v.parse::<Decimal>().ok());
-	let height_cm = first_attr(
-		&mut xpath,
-		node,
-		"hl7:subjectOf2/hl7:observation[hl7:code[@code='17']]/hl7:value",
-		"value",
-	)
-	.and_then(|v| v.parse::<Decimal>().ok());
-	let medical_history_text = first_text(
-		&mut xpath,
-		node,
-		"hl7:subjectOf2/hl7:organizer[hl7:code[@code='1']]/hl7:component/hl7:observation[hl7:code[@code='18']]/hl7:value",
-	);
+	let (parent_identification, parent_identification_null_flavor) =
+		read_d_10_1(&mut xpath, node);
+	let (parent_birth_date, parent_birth_date_null_flavor) =
+		read_d_10_2_1(&mut xpath, node);
+	let (parent_age, parent_age_null_flavor) = read_d_10_2_2a(&mut xpath, node);
+	let parent_age_unit = read_d_10_2_2b(&mut xpath, node);
+	let (last_menstrual_period_date, last_menstrual_period_date_null_flavor) =
+		read_d_10_3(&mut xpath, node);
+	let weight_kg = read_d_10_4(&mut xpath, node);
+	let height_cm = read_d_10_5(&mut xpath, node);
+	let (sex, sex_null_flavor) = read_d_10_6(&mut xpath, node);
+	let medical_history_text = read_d_10_7_2(&mut xpath, node);
 
 	let mut medical_history = Vec::new();
 	let history_nodes = xpath
@@ -650,41 +931,19 @@ pub(crate) fn parse_parent_information(xml: &[u8]) -> Result<Option<ParentImport
 		if code_system.as_deref() != Some("2.16.840.1.113883.6.163") {
 			continue;
 		}
-		let meddra_code = first_attr(&mut xpath, &obs, "hl7:code", "code");
-		let meddra_version = clamp_str(
-			first_attr(&mut xpath, &obs, "hl7:code", "codeSystemVersion"),
-			10,
-			"parent_history.meddra_version",
-		);
-		let start_date =
-			first_attr(&mut xpath, &obs, "hl7:effectiveTime/hl7:low", "value")
-				.and_then(parse_date);
-		let end_date =
-			first_attr(&mut xpath, &obs, "hl7:effectiveTime/hl7:high", "value")
-				.and_then(parse_date);
-		let continuing = parse_bool_attr(
-			&mut xpath,
-			&obs,
-			"hl7:inboundRelationship/hl7:observation[hl7:code[@code='13']]/hl7:value",
-			"value",
-		);
-		let comments = first_text(
-			&mut xpath,
-			&obs,
-			"hl7:outboundRelationship2/hl7:observation[hl7:code[@code='10']]/hl7:value",
-		);
-		let family_history = parse_bool_attr(
-			&mut xpath,
-			&obs,
-			"hl7:outboundRelationship2/hl7:observation[hl7:code[@code='38']]/hl7:value",
-			"value",
-		);
+		let (meddra_version, meddra_code) = read_d_10_7_1_r_1(&mut xpath, &obs);
+		let start_date = read_d_10_7_1_r_2(&mut xpath, &obs);
+		let (continuing, continuing_null_flavor) =
+			read_d_10_7_1_r_3(&mut xpath, &obs);
+		let end_date = read_d_10_7_1_r_4(&mut xpath, &obs);
+		let comments = read_d_10_7_1_r_5(&mut xpath, &obs);
+		let family_history = None;
 		medical_history.push(MedicalHistoryImport {
 			meddra_version,
 			meddra_code,
 			start_date,
 			continuing,
-			continuing_null_flavor: None,
+			continuing_null_flavor,
 			end_date,
 			comments,
 			family_history,
@@ -708,6 +967,7 @@ pub(crate) fn parse_parent_information(xml: &[u8]) -> Result<Option<ParentImport
 			&obs,
 			"hl7:consumable/hl7:instanceOfKind/hl7:kindOfProduct/hl7:name",
 		);
+		let drug_name = read_d_10_8_r_1(&mut xpath, &obs).or(drug_name);
 		let mpid = first_value(
 			&mut xpath,
 			&obs,
@@ -722,6 +982,9 @@ pub(crate) fn parse_parent_information(xml: &[u8]) -> Result<Option<ParentImport
 			10,
 			"parent_past_drug.mpid_version",
 		);
+		let (mapped_mpid_version, mapped_mpid) = read_d_10_8_r_2(&mut xpath, &obs);
+		let mpid = mapped_mpid.or(mpid);
+		let mpid_version = mapped_mpid_version.or(mpid_version);
 		let mfds_medicinal_product_version = clamp_str(
 			first_value(
 				&mut xpath,
@@ -740,12 +1003,13 @@ pub(crate) fn parse_parent_information(xml: &[u8]) -> Result<Option<ParentImport
 			10,
 			"parent_past_drug.mfds_medicinal_product_id",
 		);
-		let start_date =
-			first_attr(&mut xpath, &obs, "hl7:effectiveTime/hl7:low", "value")
-				.and_then(parse_date);
-		let end_date =
-			first_attr(&mut xpath, &obs, "hl7:effectiveTime/hl7:high", "value")
-				.and_then(parse_date);
+		let (mapped_mfds_version, mapped_mfds_id) =
+			read_d_10_8_r_1_kr(&mut xpath, &obs);
+		let mfds_medicinal_product_version =
+			mapped_mfds_version.or(mfds_medicinal_product_version);
+		let mfds_medicinal_product_id = mapped_mfds_id.or(mfds_medicinal_product_id);
+		let start_date = read_d_10_8_r_4(&mut xpath, &obs);
+		let end_date = read_d_10_8_r_5(&mut xpath, &obs);
 		let indication_meddra_code = first_attr(
 			&mut xpath,
 			&obs,
@@ -762,6 +1026,12 @@ pub(crate) fn parse_parent_information(xml: &[u8]) -> Result<Option<ParentImport
 			10,
 			"parent_past_drug.indication_meddra_version",
 		);
+		let (mapped_indication_version, mapped_indication_code) =
+			read_d_10_8_r_6(&mut xpath, &obs);
+		let indication_meddra_version =
+			mapped_indication_version.or(indication_meddra_version);
+		let indication_meddra_code =
+			mapped_indication_code.or(indication_meddra_code);
 		let reaction_meddra_code = first_attr(
 			&mut xpath,
 			&obs,
@@ -778,26 +1048,20 @@ pub(crate) fn parse_parent_information(xml: &[u8]) -> Result<Option<ParentImport
 			10,
 			"parent_past_drug.reaction_meddra_version",
 		);
+		let (mapped_reaction_version, mapped_reaction_code) =
+			read_d_10_8_r_7(&mut xpath, &obs);
+		let reaction_meddra_version =
+			mapped_reaction_version.or(reaction_meddra_version);
+		let reaction_meddra_code = mapped_reaction_code.or(reaction_meddra_code);
+		let (phpid_version, phpid) = read_d_10_8_r_3(&mut xpath, &obs);
 		past_drugs.push(PastDrugHistoryImport {
 			drug_name,
 			mpid,
 			mpid_version,
 			mfds_medicinal_product_version,
 			mfds_medicinal_product_id,
-			phpid: first_value(
-				&mut xpath,
-				&obs,
-				"(hl7:consumable/hl7:instanceOfKind/hl7:kindOfProduct/hl7:asIdentifiedEntity[hl7:code[@code='PhPID' or @code='PHPID']]/hl7:id/@extension)[1]",
-			),
-			phpid_version: clamp_str(
-				first_value(
-					&mut xpath,
-					&obs,
-					"(hl7:consumable/hl7:instanceOfKind/hl7:kindOfProduct/hl7:asIdentifiedEntity[hl7:code[@code='PhPID' or @code='PHPID']]/hl7:code/@codeSystemVersion)[1]",
-				),
-				10,
-				"parent_past_drug.phpid_version",
-			),
+			phpid,
+			phpid_version,
 			start_date,
 			end_date,
 			indication_meddra_version,

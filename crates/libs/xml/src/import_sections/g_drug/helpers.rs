@@ -1,5 +1,5 @@
 use crate::error::Error;
-use crate::import_runtime::shared::{
+use crate::import_sections::shared::{
 	first_attr, first_text, normalize_code, parse_uuid_opt,
 };
 use crate::Result;
@@ -7,120 +7,8 @@ use lib_core::model::drug::DrugAdditionalInfoCodeEntry;
 use libxml::parser::Parser;
 use libxml::xpath::Context;
 use rust_decimal::Decimal;
-use sqlx::types::time::Date;
 use sqlx::types::Uuid;
 use std::collections::HashMap;
-
-#[derive(Debug)]
-pub(crate) struct DrugSubstanceImport {
-	pub(crate) substance_name: Option<String>,
-	pub(crate) substance_termid: Option<String>,
-	pub(crate) substance_termid_version: Option<String>,
-	pub(crate) strength_value: Option<Decimal>,
-	pub(crate) strength_unit: Option<String>,
-}
-
-#[derive(Debug)]
-pub(crate) struct DrugDosageImport {
-	pub(crate) dosage_text: Option<String>,
-	pub(crate) frequency_unit: Option<String>,
-	pub(crate) number_of_units: Option<Decimal>,
-	pub(crate) start_date: Option<Date>,
-	pub(crate) start_date_null_flavor: Option<String>,
-	pub(crate) end_date: Option<Date>,
-	pub(crate) end_date_null_flavor: Option<String>,
-	pub(crate) duration_value: Option<Decimal>,
-	pub(crate) duration_unit: Option<String>,
-	pub(crate) dose_value: Option<Decimal>,
-	pub(crate) dose_unit: Option<String>,
-	pub(crate) route: Option<String>,
-	pub(crate) route_null_flavor: Option<String>,
-	pub(crate) route_termid: Option<String>,
-	pub(crate) route_termid_version: Option<String>,
-	pub(crate) dose_form: Option<String>,
-	pub(crate) dose_form_null_flavor: Option<String>,
-	pub(crate) dose_form_termid: Option<String>,
-	pub(crate) dose_form_termid_version: Option<String>,
-	pub(crate) batch_lot: Option<String>,
-	pub(crate) parent_route_termid: Option<String>,
-	pub(crate) parent_route_termid_version: Option<String>,
-	pub(crate) parent_route: Option<String>,
-	pub(crate) parent_route_null_flavor: Option<String>,
-}
-
-#[derive(Debug)]
-pub(crate) struct DrugIndicationImport {
-	pub(crate) text: Option<String>,
-	pub(crate) version: Option<String>,
-	pub(crate) code: Option<String>,
-}
-
-#[derive(Debug)]
-pub(crate) struct DrugDeviceCharacteristicImport {
-	pub(crate) code: Option<String>,
-	pub(crate) code_system: Option<String>,
-	pub(crate) code_display_name: Option<String>,
-	pub(crate) value_type: Option<String>,
-	pub(crate) value_value: Option<String>,
-	pub(crate) value_code: Option<String>,
-	pub(crate) value_code_system: Option<String>,
-	pub(crate) value_display_name: Option<String>,
-}
-
-#[derive(Debug)]
-pub(crate) struct FdaDeviceCodeImport {
-	pub(crate) element: &'static str,
-	pub(crate) value_code: String,
-}
-
-#[derive(Debug)]
-pub(crate) struct FdaDeviceImport {
-	pub(crate) malfunction: Option<bool>,
-	pub(crate) device_brand_name: Option<String>,
-	pub(crate) device_brand_name_null_flavor: Option<String>,
-	pub(crate) common_device_name: Option<String>,
-	pub(crate) common_device_name_null_flavor: Option<String>,
-	pub(crate) device_product_code: Option<String>,
-	pub(crate) manufacturer_name: Option<String>,
-	pub(crate) manufacturer_address: Option<String>,
-	pub(crate) manufacturer_city: Option<String>,
-	pub(crate) manufacturer_state: Option<String>,
-	pub(crate) manufacturer_country: Option<String>,
-	pub(crate) device_usage: Option<String>,
-	pub(crate) device_lot_number: Option<String>,
-	pub(crate) operator_of_device: Option<String>,
-	pub(crate) codes: Vec<FdaDeviceCodeImport>,
-}
-
-#[derive(Debug)]
-pub(crate) struct DrugImport {
-	pub(crate) xml_id: Option<Uuid>,
-	pub(crate) sequence_number: i32,
-	pub(crate) medicinal_product: String,
-	pub(crate) drug_characterization: String,
-	pub(crate) mpid: Option<String>,
-	pub(crate) mpid_version: Option<String>,
-	pub(crate) phpid: Option<String>,
-	pub(crate) phpid_version: Option<String>,
-	pub(crate) investigational_product_blinded: Option<bool>,
-	pub(crate) obtain_drug_country: Option<String>,
-	pub(crate) drug_authorization_number: Option<String>,
-	pub(crate) manufacturer_name: Option<String>,
-	pub(crate) manufacturer_country: Option<String>,
-	pub(crate) batch_lot_number: Option<String>,
-	pub(crate) cumulative_dose_first_reaction_value: Option<Decimal>,
-	pub(crate) cumulative_dose_first_reaction_unit: Option<String>,
-	pub(crate) gestation_period_exposure_value: Option<Decimal>,
-	pub(crate) gestation_period_exposure_unit: Option<String>,
-	pub(crate) action_taken: Option<String>,
-	pub(crate) fda_additional_info_coded: Option<String>,
-	pub(crate) fda_specialized_product_category: Option<String>,
-	pub(crate) devices: Vec<FdaDeviceImport>,
-	pub(crate) substances: Vec<DrugSubstanceImport>,
-	pub(crate) dosages: Vec<DrugDosageImport>,
-	pub(crate) indications: Vec<DrugIndicationImport>,
-	pub(crate) characteristics: Vec<DrugDeviceCharacteristicImport>,
-}
 
 #[derive(Debug)]
 pub(crate) struct DrugObservationImport {
@@ -142,6 +30,7 @@ pub(crate) struct RelatednessImport {
 	pub(crate) source_of_assessment: Option<String>,
 	pub(crate) method_of_assessment: Option<String>,
 	pub(crate) result_of_assessment: Option<String>,
+	pub(crate) result_of_assessment_kr2: Option<String>,
 }
 
 fn build_xpath(xml: &[u8]) -> Result<(libxml::tree::Document, Context)> {
@@ -178,8 +67,8 @@ fn normalize_characteristic_code(value: Option<&str>) -> String {
 }
 
 pub(crate) fn import_fda_specialized_product_category(
-	drug: &DrugImport,
-	characteristics: &[DrugDeviceCharacteristicImport],
+	drug: &super::GDrugImport,
+	characteristics: &[super::GDrugDeviceCharacteristicImport],
 ) -> Option<String> {
 	let mut specialized_product_category =
 		drug.fda_specialized_product_category.clone();
@@ -209,6 +98,7 @@ pub(crate) fn import_fda_specialized_product_category(
 	specialized_product_category
 }
 
+/// e2b:FDA.G.k.local.additionalInfoCodesJson
 pub(crate) fn build_drug_additional_info_codes_json(
 	code: Option<&str>,
 ) -> Option<serde_json::Value> {
@@ -220,6 +110,106 @@ pub(crate) fn build_drug_additional_info_codes_json(
 		value_code: Some(value_code.to_string()),
 	}])
 	.ok()
+}
+
+fn read_pause_value(
+	xpath: &mut Context,
+	node: &libxml::tree::Node,
+) -> Option<Decimal> {
+	first_attr(xpath, node, "hl7:pauseQuantity", "value")
+		.and_then(|v| v.parse().ok())
+}
+
+fn read_pause_unit(
+	xpath: &mut Context,
+	node: &libxml::tree::Node,
+) -> Option<String> {
+	first_attr(xpath, node, "hl7:pauseQuantity", "unit")
+}
+
+/// e2b:G.k.9.i.3.1a
+fn read_g_k_9_i_3_1a(
+	xpath: &mut Context,
+	node: &libxml::tree::Node,
+) -> Option<Decimal> {
+	read_pause_value(xpath, node)
+}
+
+/// e2b:G.k.9.i.3.1b
+fn read_g_k_9_i_3_1b(
+	xpath: &mut Context,
+	node: &libxml::tree::Node,
+) -> Option<String> {
+	read_pause_unit(xpath, node)
+}
+
+/// e2b:G.k.9.i.3.2a
+fn read_g_k_9_i_3_2a(
+	xpath: &mut Context,
+	node: &libxml::tree::Node,
+) -> Option<Decimal> {
+	read_pause_value(xpath, node)
+}
+
+/// e2b:G.k.9.i.3.2b
+fn read_g_k_9_i_3_2b(
+	xpath: &mut Context,
+	node: &libxml::tree::Node,
+) -> Option<String> {
+	read_pause_unit(xpath, node)
+}
+
+/// e2b:G.k.9.i.4
+fn read_g_k_9_i_4(xpath: &mut Context, node: &libxml::tree::Node) -> Option<String> {
+	normalize_code(
+		first_attr(xpath, node, "hl7:value", "code"),
+		&["1", "2", "3", "4"],
+		"drug_reaction_assessments.recurrence_action",
+	)
+}
+
+/// e2b:G.k.9.i.2.r.1
+fn read_g_k_9_i_2_r_1(
+	xpath: &mut Context,
+	node: &libxml::tree::Node,
+) -> Option<String> {
+	first_text(xpath, node, "hl7:causalityAssessment/hl7:author/hl7:assignedEntity/hl7:code/hl7:originalText")
+}
+
+/// e2b:G.k.9.i.2.r.2
+fn read_g_k_9_i_2_r_2(
+	xpath: &mut Context,
+	node: &libxml::tree::Node,
+) -> Option<String> {
+	first_text(
+		xpath,
+		node,
+		"hl7:causalityAssessment/hl7:methodCode/hl7:originalText",
+	)
+	.or_else(|| {
+		first_attr(
+			xpath,
+			node,
+			"hl7:causalityAssessment/hl7:methodCode",
+			"code",
+		)
+	})
+}
+
+/// e2b:G.k.9.i.2.r.3
+fn read_g_k_9_i_2_r_3(
+	xpath: &mut Context,
+	node: &libxml::tree::Node,
+) -> Option<String> {
+	first_text(xpath, node, "hl7:causalityAssessment/hl7:value[not(@code)]")
+}
+
+/// e2b:G.k.9.i.2.r.3.KR.2
+fn read_g_k_9_i_2_r_3_kr_2(
+	xpath: &mut Context,
+	node: &libxml::tree::Node,
+) -> Option<String> {
+	first_attr(xpath, node, "hl7:causalityAssessment/hl7:value[@codeSystem='2.16.840.1.113883.3.989.5.1.10.1.6']", "code")
 }
 
 pub(crate) fn parse_drug_observations(
@@ -276,24 +266,29 @@ pub(crate) fn parse_drug_observations(
 				"hl7:actReference/hl7:id",
 				"root",
 			));
-			let value = first_attr(&mut xpath, &rel, "hl7:pauseQuantity", "value")
-				.and_then(|v| v.parse::<Decimal>().ok());
-			let unit = first_attr(&mut xpath, &rel, "hl7:pauseQuantity", "unit");
 			if let Some(reaction_id) = reaction_id {
 				if matches!(rel_type.as_deref(), Some("SAS")) {
-					administration_start_map.insert(reaction_id, (value, unit));
+					administration_start_map.insert(
+						reaction_id,
+						(
+							read_g_k_9_i_3_1a(&mut xpath, &rel),
+							read_g_k_9_i_3_1b(&mut xpath, &rel),
+						),
+					);
 				} else if matches!(rel_type.as_deref(), Some("SAE")) {
-					last_dose_map.insert(reaction_id, (value, unit));
+					last_dose_map.insert(
+						reaction_id,
+						(
+							read_g_k_9_i_3_2a(&mut xpath, &rel),
+							read_g_k_9_i_3_2b(&mut xpath, &rel),
+						),
+					);
 				}
 			}
 		}
 
 		for obs in obs_nodes {
-			let reaction_recurred = normalize_code(
-				first_attr(&mut xpath, &obs, "hl7:value", "code"),
-				&["1", "2", "3"],
-				"drug_reaction_assessments.reaction_recurred",
-			);
+			let reaction_recurred = None;
 			let reaction_xml_id = parse_uuid_opt(first_attr(
 				&mut xpath,
 				&obs,
@@ -329,16 +324,7 @@ pub(crate) fn parse_drug_observations(
 				} else {
 					(None, None)
 				};
-			let rechallenge_action = normalize_code(
-				first_attr(
-					&mut xpath,
-					&obs,
-					"hl7:outboundRelationship2/hl7:observation[hl7:code[@code='G.k.8.r.1']]/hl7:value",
-					"code",
-				),
-				&["1", "2", "3", "4"],
-				"drug_reaction_assessments.recurrence_action",
-			);
+			let rechallenge_action = read_g_k_9_i_4(&mut xpath, &obs);
 			observations.push(DrugObservationImport {
 				drug_xml_id,
 				drug_sequence,
@@ -373,34 +359,10 @@ pub(crate) fn parse_relatedness_assessments(
 
 	let mut items = Vec::new();
 	for node in nodes {
-		let source_of_assessment = first_text(
-			&mut xpath,
-			&node,
-			"hl7:causalityAssessment/hl7:author/hl7:assignedEntity/hl7:code/hl7:originalText",
-		);
-		let method_of_assessment = first_text(
-			&mut xpath,
-			&node,
-			"hl7:causalityAssessment/hl7:methodCode/hl7:originalText",
-		)
-		.or_else(|| {
-			first_attr(
-				&mut xpath,
-				&node,
-				"hl7:causalityAssessment/hl7:methodCode",
-				"code",
-			)
-		});
-		let result_of_assessment =
-			first_text(&mut xpath, &node, "hl7:causalityAssessment/hl7:value")
-				.or_else(|| {
-					first_attr(
-						&mut xpath,
-						&node,
-						"hl7:causalityAssessment/hl7:value",
-						"code",
-					)
-				});
+		let source_of_assessment = read_g_k_9_i_2_r_1(&mut xpath, &node);
+		let method_of_assessment = read_g_k_9_i_2_r_2(&mut xpath, &node);
+		let result_of_assessment = read_g_k_9_i_2_r_3(&mut xpath, &node);
+		let result_of_assessment_kr2 = read_g_k_9_i_2_r_3_kr_2(&mut xpath, &node);
 		let reaction_xml_id = parse_uuid_opt(first_attr(
 			&mut xpath,
 			&node,
@@ -420,8 +382,23 @@ pub(crate) fn parse_relatedness_assessments(
 			source_of_assessment,
 			method_of_assessment,
 			result_of_assessment,
+			result_of_assessment_kr2,
 		});
 	}
 
 	Ok(items)
+}
+
+#[cfg(test)]
+mod tests {
+	use super::parse_relatedness_assessments;
+
+	#[test]
+	fn mfds_relatedness_code_uses_kr2_field() {
+		let xml = br#"<PORR_IN049016UV xmlns="urn:hl7-org:v3"><component><causalityAssessment><code code="39"/><value codeSystem="2.16.840.1.113883.3.989.5.1.10.1.6" code="1"/></causalityAssessment></component></PORR_IN049016UV>"#;
+		let rows = parse_relatedness_assessments(xml).expect("parse");
+		assert_eq!(rows.len(), 1);
+		assert_eq!(rows[0].result_of_assessment, None);
+		assert_eq!(rows[0].result_of_assessment_kr2.as_deref(), Some("1"));
+	}
 }

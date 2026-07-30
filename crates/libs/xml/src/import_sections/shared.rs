@@ -383,7 +383,7 @@ pub(crate) fn extract_safety_report_id(xml: &[u8]) -> Result<String> {
 #[cfg(test)]
 mod tests {
 	use super::extract_safety_report_id;
-	use crate::import_runtime::helpers::d::parse_patient_death;
+	use crate::import_sections::d_patient::helpers::parse_patient_death;
 
 	#[test]
 	fn extract_safety_report_id_prefers_investigation_event_c_1_1() {

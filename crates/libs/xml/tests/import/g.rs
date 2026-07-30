@@ -56,34 +56,35 @@ fn import_g_section_all_fields_from_scenario6() {
 		first.fda_specialized_product_category.as_deref(),
 		Some("C102835")
 	);
-	assert_eq!(first.fda_device_brand_name.as_deref(), Some("Brand Name"));
+	let device = &first.devices[0];
+	assert_eq!(device.device_brand_name.as_deref(), Some("Brand Name"));
 	assert_eq!(
-		first.fda_common_device_name.as_deref(),
+		device.common_device_name.as_deref(),
 		Some("Common Device Name")
 	);
-	assert_eq!(first.fda_device_product_code.as_deref(), Some("FMF"));
+	assert_eq!(device.device_product_code.as_deref(), Some("FMF"));
 	assert_eq!(
-		first.fda_device_manufacturer_name.as_deref(),
+		device.manufacturer_name.as_deref(),
 		Some("Manufacturer Name")
 	);
 	assert_eq!(
-		first.fda_device_manufacturer_address.as_deref(),
+		device.manufacturer_address.as_deref(),
 		Some("Manufacturer Address 123 google home drive")
 	);
 	assert_eq!(
-		first.fda_device_manufacturer_city.as_deref(),
+		device.manufacturer_city.as_deref(),
 		Some("Manufacturer City")
 	);
 	assert_eq!(
-		first.fda_device_manufacturer_state.as_deref(),
+		device.manufacturer_state.as_deref(),
 		Some("Manufacturer State")
 	);
-	assert_eq!(first.fda_device_manufacturer_country.as_deref(), Some("US"));
+	assert_eq!(device.manufacturer_country.as_deref(), Some("US"));
 	assert_eq!(
-		first.fda_device_lot_number.as_deref(),
+		device.device_lot_number.as_deref(),
 		Some("4577BN2-product-2-device1")
 	);
-	assert_eq!(first.fda_operator_of_device.as_deref(), Some("1"));
+	assert_eq!(device.operator_of_device.as_deref(), Some("1"));
 
 	assert_eq!(first.substances.len(), 2);
 	let first_substance = &first.substances[0];
@@ -120,7 +121,10 @@ fn import_g_section_all_fields_from_scenario6() {
 	assert_eq!(first_dosage.duration_unit.as_deref(), Some("wk"));
 	assert_eq!(first_dosage.dose_value, Some(decimal("10")));
 	assert_eq!(first_dosage.dose_unit.as_deref(), Some("10.a"));
-	assert_eq!(first_dosage.route, None);
+	assert_eq!(
+		first_dosage.route.as_deref(),
+		Some("Free text route content")
+	);
 	assert_eq!(
 		first_dosage.route_termid_version.as_deref(),
 		Some("2014.10.30")

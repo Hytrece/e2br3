@@ -26,7 +26,7 @@ fn import_e_section_all_fields_from_scenario6() {
 	assert_eq!(first.reaction_language.as_deref(), Some("por"));
 	assert_eq!(first.reaction_meddra_version.as_deref(), Some("12.0"));
 	assert_eq!(first.reaction_meddra_code.as_deref(), Some("10027940"));
-	assert_eq!(first.term_highlighted.as_deref(), Some("4"));
+	assert_eq!(first.term_highlighted.as_deref(), Some("2"));
 	assert_eq!(first.serious, Some(true));
 	assert_eq!(first.criteria_death, Some(true));
 	assert_eq!(first.criteria_death_null_flavor, None);

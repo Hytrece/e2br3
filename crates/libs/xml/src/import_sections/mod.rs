@@ -5,3 +5,4 @@ pub mod e_reaction;
 pub mod f_test_result;
 pub mod g_drug;
 pub mod h_narrative;
+pub(crate) mod shared;

@@ -47,6 +47,8 @@ impl GDrugPaths {
 		"hl7:outboundRelationship2[@typeCode='REFR']/hl7:observation[hl7:code[@code='9']]/hl7:value/@code";
 	pub const FDA_SPECIALIZED_PRODUCT_CATEGORY: &'static str =
 		"hl7:consumable/hl7:instanceOfKind/hl7:kindOfProduct/hl7:asManufacturedProduct/hl7:subjectOf/hl7:characteristic[hl7:code[@displayName='FDA Specialized Product Category']]/hl7:value/@code";
+	pub const DRUG_ADDITIONAL_INFORMATION: &'static str =
+		"hl7:outboundRelationship2[@typeCode='REFR']/hl7:observation[hl7:code[@code='2' and @codeSystem='2.16.840.1.113883.3.989.2.1.1.19']]/hl7:value";
 	pub const PARENT_ROUTE_TERMID_VERSION: &'static str =
 		"hl7:outboundRelationship2/hl7:observation[hl7:code[@code='G.k.4.r.11']]/hl7:value/@codeSystemVersion";
 	pub const PARENT_ROUTE_TERMID: &'static str =
@@ -94,6 +96,7 @@ impl GDrugPaths {
 	pub const DOSE_VALUE: &'static str = "hl7:doseQuantity/@value";
 	pub const DOSE_UNIT: &'static str = "hl7:doseQuantity/@unit";
 	pub const ROUTE_CODE: &'static str = "hl7:routeCode/@code";
+	pub const ROUTE_TEXT: &'static str = "hl7:routeCode/hl7:originalText";
 	pub const ROUTE_NULL_FLAVOR: &'static str = "hl7:routeCode/@nullFlavor";
 	pub const ROUTE_CODE_SYSTEM_VERSION: &'static str =
 		"hl7:routeCode/@codeSystemVersion";

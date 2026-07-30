@@ -9,6 +9,10 @@ use rust_decimal::Decimal;
 use sqlx::types::time::Date;
 use time::Month;
 
+pub(crate) mod helpers;
+mod runtime;
+pub(crate) use runtime::import_section_d;
+
 #[derive(Debug)]
 pub struct DPatientImport {
 	pub patient_initials: Option<String>,
@@ -47,15 +51,13 @@ pub struct DParentImport {
 /// Parse the canonical parent value/NullFlavor pairs used by Section D.
 pub fn parse_d_parent(xml: &[u8]) -> Result<Option<DParentImport>> {
 	Ok(
-		crate::import_runtime::helpers::d::parse_parent_information(xml)?.map(
-			|parent| DParentImport {
-				parent_identification: parent.parent_identification,
-				parent_identification_null_flavor: parent
-					.parent_identification_null_flavor,
-				sex: parent.sex,
-				sex_null_flavor: parent.sex_null_flavor,
-			},
-		),
+		helpers::parse_parent_information(xml)?.map(|parent| DParentImport {
+			parent_identification: parent.parent_identification,
+			parent_identification_null_flavor: parent
+				.parent_identification_null_flavor,
+			sex: parent.sex,
+			sex_null_flavor: parent.sex_null_flavor,
+		}),
 	)
 }
 
@@ -81,64 +83,24 @@ pub fn parse_d_patient(xml: &[u8]) -> Result<Option<DPatientImport>> {
 	})?;
 	let _ = xpath.register_namespace("hl7", "urn:hl7-org:v3");
 
-	let patient_name = first_text_root(&mut xpath, DPatientPaths::PATIENT_NAME);
-	let patient_initials = patient_name;
-	let patient_initials_null_flavor =
-		first_value_root(&mut xpath, DPatientPaths::PATIENT_NAME_NULL_FLAVOR);
-
-	let sex =
-		normalize_sex_code(first_value_root(&mut xpath, DPatientPaths::SEX_CODE));
-	let sex_null_flavor =
-		first_value_root(&mut xpath, DPatientPaths::SEX_NULL_FLAVOR);
-	let birth_date =
-		first_value_root(&mut xpath, DPatientPaths::BIRTH_DATE).and_then(parse_date);
-	let birth_date_null_flavor =
-		first_value_root(&mut xpath, DPatientPaths::BIRTH_DATE_NULL_FLAVOR);
-	let age_at_time_of_onset =
-		first_value_root(&mut xpath, DPatientPaths::AGE_VALUE)
-			.and_then(|v| v.parse::<Decimal>().ok());
-	let age_at_time_of_onset_null_flavor =
-		first_value_root(&mut xpath, DPatientPaths::AGE_NULL_FLAVOR);
-	let age_unit = normalize_code3(
-		first_value_root(&mut xpath, DPatientPaths::AGE_UNIT),
-		"patient_information.age_unit",
-	);
-	let gestation_period =
-		first_value_root(&mut xpath, DPatientPaths::GESTATION_VALUE)
-			.and_then(|v| v.parse::<Decimal>().ok());
-	let gestation_period_unit = normalize_code3(
-		first_value_root(&mut xpath, DPatientPaths::GESTATION_UNIT),
-		"patient_information.gestation_period_unit",
-	);
-	let age_group = normalize_code(
-		first_value_root(&mut xpath, DPatientPaths::AGE_GROUP_CODE),
-		&["1", "2", "3", "4", "5", "6"],
-		"patient_information.age_group",
-	);
-	let weight_kg = first_value_root(&mut xpath, DPatientPaths::WEIGHT_VALUE)
-		.and_then(|v| v.parse::<Decimal>().ok());
-	let height_cm = first_value_root(&mut xpath, DPatientPaths::HEIGHT_VALUE)
-		.and_then(|v| v.parse::<Decimal>().ok());
-	let last_menstrual_period_date =
-		first_value_root(&mut xpath, DPatientPaths::LMP_DATE).and_then(parse_date);
-	let last_menstrual_period_date_null_flavor =
-		first_value_root(&mut xpath, DPatientPaths::LMP_DATE_NULL_FLAVOR);
-	let race_code = first_value_root(&mut xpath, DPatientPaths::RACE_CODE);
-	let race_code_null_flavor =
-		first_value_root(&mut xpath, DPatientPaths::RACE_CODE_NULL_FLAVOR);
-	let ethnicity_code = first_value_root(&mut xpath, DPatientPaths::ETHNICITY_CODE);
-	let ethnicity_code_null_flavor =
-		first_value_root(&mut xpath, DPatientPaths::ETHNICITY_CODE_NULL_FLAVOR);
-	let medical_history_text =
-		first_text_root(&mut xpath, DPatientPaths::MEDICAL_HISTORY_TEXT);
-	let medical_history_text_null_flavor = first_value_root(
-		&mut xpath,
-		DPatientPaths::MEDICAL_HISTORY_TEXT_NULL_FLAVOR,
-	);
-	let concomitant_therapy = parse_bool_value(first_value_root(
-		&mut xpath,
-		DPatientPaths::CONCOMITANT_THERAPY_VALUE,
-	));
+	let (patient_initials, patient_initials_null_flavor) = read_d_1(&mut xpath);
+	let (birth_date, birth_date_null_flavor) = read_d_2_1(&mut xpath);
+	let (age_at_time_of_onset, age_at_time_of_onset_null_flavor) =
+		read_d_2_2a(&mut xpath);
+	let age_unit = read_d_2_2b(&mut xpath);
+	let gestation_period = read_d_2_2_1a(&mut xpath);
+	let gestation_period_unit = read_d_2_2_1b(&mut xpath);
+	let age_group = read_d_2_3(&mut xpath);
+	let weight_kg = read_d_3(&mut xpath);
+	let height_cm = read_d_4(&mut xpath);
+	let (sex, sex_null_flavor) = read_d_5(&mut xpath);
+	let (last_menstrual_period_date, last_menstrual_period_date_null_flavor) =
+		read_d_6(&mut xpath);
+	let (medical_history_text, medical_history_text_null_flavor) =
+		read_d_7_2(&mut xpath);
+	let concomitant_therapy = read_d_7_3(&mut xpath);
+	let (race_code, race_code_null_flavor) = read_fda_d_11_r_1(&mut xpath);
+	let (ethnicity_code, ethnicity_code_null_flavor) = read_fda_d_12(&mut xpath);
 
 	if patient_initials.is_none()
 		&& sex.is_none()
@@ -182,6 +144,122 @@ pub fn parse_d_patient(xml: &[u8]) -> Result<Option<DPatientImport>> {
 		medical_history_text_null_flavor,
 		concomitant_therapy,
 	}))
+}
+
+/// e2b:D.1
+fn read_d_1(xpath: &mut Context) -> (Option<String>, Option<String>) {
+	(
+		first_text_root(xpath, DPatientPaths::PATIENT_NAME),
+		first_value_root(xpath, DPatientPaths::PATIENT_NAME_NULL_FLAVOR),
+	)
+}
+
+/// e2b:D.2.1
+fn read_d_2_1(xpath: &mut Context) -> (Option<Date>, Option<String>) {
+	(
+		first_value_root(xpath, DPatientPaths::BIRTH_DATE).and_then(parse_date),
+		first_value_root(xpath, DPatientPaths::BIRTH_DATE_NULL_FLAVOR),
+	)
+}
+
+/// e2b:D.2.2a
+fn read_d_2_2a(xpath: &mut Context) -> (Option<Decimal>, Option<String>) {
+	(
+		first_value_root(xpath, DPatientPaths::AGE_VALUE)
+			.and_then(|value| value.parse().ok()),
+		first_value_root(xpath, DPatientPaths::AGE_NULL_FLAVOR),
+	)
+}
+
+/// e2b:D.2.2b
+fn read_d_2_2b(xpath: &mut Context) -> Option<String> {
+	normalize_code3(
+		first_value_root(xpath, DPatientPaths::AGE_UNIT),
+		"patient_information.age_unit",
+	)
+}
+
+/// e2b:D.2.2.1a
+fn read_d_2_2_1a(xpath: &mut Context) -> Option<Decimal> {
+	first_value_root(xpath, DPatientPaths::GESTATION_VALUE)
+		.and_then(|value| value.parse().ok())
+}
+
+/// e2b:D.2.2.1b
+fn read_d_2_2_1b(xpath: &mut Context) -> Option<String> {
+	normalize_code3(
+		first_value_root(xpath, DPatientPaths::GESTATION_UNIT),
+		"patient_information.gestation_period_unit",
+	)
+}
+
+/// e2b:D.2.3
+fn read_d_2_3(xpath: &mut Context) -> Option<String> {
+	normalize_code(
+		first_value_root(xpath, DPatientPaths::AGE_GROUP_CODE),
+		&["1", "2", "3", "4", "5", "6"],
+		"patient_information.age_group",
+	)
+}
+
+/// e2b:D.3
+fn read_d_3(xpath: &mut Context) -> Option<Decimal> {
+	first_value_root(xpath, DPatientPaths::WEIGHT_VALUE)
+		.and_then(|value| value.parse().ok())
+}
+
+/// e2b:D.4
+fn read_d_4(xpath: &mut Context) -> Option<Decimal> {
+	first_value_root(xpath, DPatientPaths::HEIGHT_VALUE)
+		.and_then(|value| value.parse().ok())
+}
+
+/// e2b:D.5
+fn read_d_5(xpath: &mut Context) -> (Option<String>, Option<String>) {
+	(
+		normalize_sex_code(first_value_root(xpath, DPatientPaths::SEX_CODE)),
+		first_value_root(xpath, DPatientPaths::SEX_NULL_FLAVOR),
+	)
+}
+
+/// e2b:D.6
+fn read_d_6(xpath: &mut Context) -> (Option<Date>, Option<String>) {
+	(
+		first_value_root(xpath, DPatientPaths::LMP_DATE).and_then(parse_date),
+		first_value_root(xpath, DPatientPaths::LMP_DATE_NULL_FLAVOR),
+	)
+}
+
+/// e2b:D.7.2
+fn read_d_7_2(xpath: &mut Context) -> (Option<String>, Option<String>) {
+	(
+		first_text_root(xpath, DPatientPaths::MEDICAL_HISTORY_TEXT),
+		first_value_root(xpath, DPatientPaths::MEDICAL_HISTORY_TEXT_NULL_FLAVOR),
+	)
+}
+
+/// e2b:D.7.3
+fn read_d_7_3(xpath: &mut Context) -> Option<bool> {
+	parse_bool_value(first_value_root(
+		xpath,
+		DPatientPaths::CONCOMITANT_THERAPY_VALUE,
+	))
+}
+
+/// e2b:FDA.D.11.r.1
+fn read_fda_d_11_r_1(xpath: &mut Context) -> (Option<String>, Option<String>) {
+	(
+		first_value_root(xpath, DPatientPaths::RACE_CODE),
+		first_value_root(xpath, DPatientPaths::RACE_CODE_NULL_FLAVOR),
+	)
+}
+
+/// e2b:FDA.D.12
+fn read_fda_d_12(xpath: &mut Context) -> (Option<String>, Option<String>) {
+	(
+		first_value_root(xpath, DPatientPaths::ETHNICITY_CODE),
+		first_value_root(xpath, DPatientPaths::ETHNICITY_CODE_NULL_FLAVOR),
+	)
 }
 
 fn first_value_root(xpath: &mut Context, path: &str) -> Option<String> {

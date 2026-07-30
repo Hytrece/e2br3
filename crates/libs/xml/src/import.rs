@@ -1,5 +1,11 @@
 use crate::error::Error;
-use crate::import_runtime::{c, d, e, f, g, h, shared};
+use crate::import_sections::c_safety_report::import_section_c;
+use crate::import_sections::d_patient::import_section_d;
+use crate::import_sections::e_reaction::import_section_e;
+use crate::import_sections::f_test_result::import_section_f;
+use crate::import_sections::g_drug::import_section_g;
+use crate::import_sections::h_narrative::import_section_h;
+use crate::import_sections::shared;
 use crate::types::XmlImportResult;
 use crate::{parse_e2b_xml, Result};
 use lib_core::ctx::Ctx;
@@ -50,6 +56,25 @@ pub async fn import_e2b_xml_unvalidated(
 	req: XmlImportRequest,
 ) -> Result<XmlImportResult> {
 	let mm = mm.new_with_txn()?;
+	mm.dbx().begin_txn().await.map_err(model::Error::from)?;
+	let result = import_e2b_xml_in_txn(ctx, &mm, req).await;
+	match result {
+		Ok(result) => {
+			mm.dbx().commit_txn().await.map_err(model::Error::from)?;
+			Ok(result)
+		}
+		Err(err) => {
+			let _ = mm.dbx().rollback_txn().await;
+			Err(err)
+		}
+	}
+}
+
+async fn import_e2b_xml_in_txn(
+	ctx: &Ctx,
+	mm: &ModelManager,
+	req: XmlImportRequest,
+) -> Result<XmlImportResult> {
 	let parsed = parse_e2b_xml(&req.xml)?;
 	let safety_report_id_raw = shared::extract_safety_report_id(&req.xml)?;
 	let safety_report_id = shared::clamp_str(
@@ -173,7 +198,7 @@ pub async fn import_e2b_xml_unvalidated(
 		}
 	}
 
-	c::import_section_c(
+	import_section_c(
 		ctx,
 		&mm,
 		&req.xml,
@@ -184,17 +209,17 @@ pub async fn import_e2b_xml_unvalidated(
 		&req.c_settings,
 	)
 	.await?;
-	d::import_section_d(ctx, &mm, &req.xml, case_id).await?;
-	h::import_section_h(ctx, &mm, &req.xml, case_id).await?;
+	import_section_d(ctx, &mm, &req.xml, case_id).await?;
+	import_section_h(ctx, &mm, &req.xml, case_id).await?;
 
 	let snapshot = json!({
 		"parsed": parsed.json,
 		"raw_xml": String::from_utf8_lossy(&req.xml),
 	});
 
-	let reaction_map = e::import_section_e(ctx, &mm, &req.xml, case_id).await?;
-	f::import_section_f(ctx, &mm, &req.xml, case_id).await?;
-	g::import_section_g(
+	let reaction_map = import_section_e(ctx, &mm, &req.xml, case_id).await?;
+	import_section_f(ctx, &mm, &req.xml, case_id).await?;
+	import_section_g(
 		ctx,
 		&mm,
 		&req.xml,

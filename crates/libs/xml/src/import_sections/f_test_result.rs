@@ -3,7 +3,11 @@
 use crate::error::Error;
 use crate::mapping::fda::f_test_result::FTestResultPaths;
 use crate::Result;
+use lib_core::ctx::Ctx;
 use lib_core::e2b::null_flavor::E2bNullFlavorValue;
+use lib_core::model::store::set_full_context_dbx;
+use lib_core::model::test_result::{TestResultBmc, TestResultForCreate};
+use lib_core::model::ModelManager;
 use libxml::parser::Parser;
 use libxml::tree::Node;
 use libxml::xpath::Context;
@@ -60,101 +64,168 @@ pub fn parse_f_test_results(xml: &[u8]) -> Result<Vec<FTestResultImport>> {
 
 	let mut items = Vec::new();
 	for (idx, node) in nodes.into_iter().enumerate() {
-		let test_name = first_text(&mut xpath, &node, FTestResultPaths::TEST_NAME)
-			.or_else(|| {
-				first_attr(&mut xpath, &node, FTestResultPaths::TEST_NAME_DISPLAY)
-			})
-			.unwrap_or_else(|| {
+		let test_name = read_f_r_2_1(&mut xpath, &node).unwrap_or_else(|| {
 				eprintln!(
 					"[import_e2b_xml] test_results[{idx}] missing F.r.2 test_name; importing empty test_name for downstream validation"
 				);
 				String::new()
 			});
-		let test_meddra_code =
-			first_attr(&mut xpath, &node, FTestResultPaths::TEST_MEDDRA_CODE);
-		let test_meddra_version = clamp_str(
-			first_attr(&mut xpath, &node, FTestResultPaths::TEST_MEDDRA_VERSION),
-			10,
-		);
-		let raw_test_date =
-			first_attr(&mut xpath, &node, FTestResultPaths::TEST_DATE);
-		let raw_test_date_null_flavor =
-			first_attr(&mut xpath, &node, FTestResultPaths::TEST_DATE_NULL_FLAVOR);
-		let test_date_value = raw_test_date.and_then(parse_date);
-		let test_date_field = E2bNullFlavorValue::from_parts(
-			test_date_value,
-			raw_test_date_null_flavor.as_deref(),
-		)
-		.map_err(|err| Error::InvalidXml {
-			message: format!("Invalid F.r.1 test date nullFlavor: {err}"),
-			line: None,
-			column: None,
-		})?;
-		let (test_date, test_date_null_flavor) = match test_date_field {
-			Some(field) => field.into_parts(),
-			None => (None, None),
-		};
-		let test_result_code =
-			first_attr(&mut xpath, &node, FTestResultPaths::RESULT_CODE);
-		let raw_test_result_value = first_attr(
-			&mut xpath,
-			&node,
-			FTestResultPaths::RESULT_VALUE,
-		)
-		.or_else(|| {
-			first_attr(&mut xpath, &node, FTestResultPaths::RESULT_VALUE_FALLBACK)
-		});
-		let test_result_null_flavor =
-			first_attr(&mut xpath, &node, FTestResultPaths::RESULT_NULL_FLAVOR);
-		if raw_test_result_value.is_some() && test_result_null_flavor.is_some() {
-			return Err(Error::InvalidXml {
-				message: "F.r.3.2 value and nullFlavor cannot both be set"
-					.to_string(),
-				line: None,
-				column: None,
-			});
-		}
-		let test_result_value = raw_test_result_value;
-		let test_result_unit = first_attr(
-			&mut xpath,
-			&node,
-			FTestResultPaths::RESULT_UNIT,
-		)
-		.or_else(|| {
-			first_attr(&mut xpath, &node, FTestResultPaths::RESULT_UNIT_FALLBACK)
-		});
-		let result_unstructured =
-			first_text(&mut xpath, &node, FTestResultPaths::RESULT_UNSTRUCTURED);
-		let normal_low_value =
-			first_attr(&mut xpath, &node, FTestResultPaths::NORMAL_LOW);
-		let normal_high_value =
-			first_attr(&mut xpath, &node, FTestResultPaths::NORMAL_HIGH);
-		let comments = first_text(&mut xpath, &node, FTestResultPaths::COMMENTS);
-		let more_info_available = parse_bool_value(first_attr(
-			&mut xpath,
-			&node,
-			FTestResultPaths::MORE_INFO,
-		));
+		let (test_date, test_date_null_flavor) = read_f_r_1(&mut xpath, &node)?;
+		let (test_result_value, test_result_null_flavor) =
+			read_f_r_3_2(&mut xpath, &node)?;
 
 		items.push(FTestResultImport {
 			test_name,
 			test_date,
 			test_date_null_flavor,
-			test_meddra_version,
-			test_meddra_code,
-			test_result_code,
+			test_meddra_version: read_f_r_2_2a(&mut xpath, &node),
+			test_meddra_code: read_f_r_2_2b(&mut xpath, &node),
+			test_result_code: read_f_r_3_1(&mut xpath, &node),
 			test_result_value,
 			test_result_null_flavor,
-			test_result_unit,
-			result_unstructured,
-			normal_low_value,
-			normal_high_value,
-			comments,
-			more_info_available,
+			test_result_unit: read_f_r_3_3(&mut xpath, &node),
+			result_unstructured: read_f_r_3_4(&mut xpath, &node),
+			normal_low_value: read_f_r_4(&mut xpath, &node),
+			normal_high_value: read_f_r_5(&mut xpath, &node),
+			comments: read_f_r_6(&mut xpath, &node),
+			more_info_available: read_f_r_7(&mut xpath, &node),
 		});
 	}
 
 	Ok(items)
+}
+
+pub(crate) async fn import_section_f(
+	ctx: &Ctx,
+	mm: &ModelManager,
+	xml: &[u8],
+	case_id: sqlx::types::Uuid,
+) -> Result<()> {
+	let tests = parse_f_test_results(xml)?;
+	set_full_context_dbx(mm.dbx(), ctx.user_id(), ctx.organization_id(), ctx.role())
+		.await
+		.map_err(Error::Model)?;
+	for (idx, entry) in tests.into_iter().enumerate() {
+		TestResultBmc::create(
+			ctx,
+			mm,
+			TestResultForCreate {
+				case_id,
+				sequence_number: (idx + 1) as i32,
+				test_date: entry.test_date,
+				test_date_null_flavor: entry.test_date_null_flavor,
+				test_name: entry.test_name,
+				test_meddra_version: entry.test_meddra_version,
+				test_meddra_code: entry.test_meddra_code,
+				test_result_code: entry.test_result_code,
+				test_result_value: entry.test_result_value,
+				test_result_null_flavor: entry.test_result_null_flavor,
+				test_result_unit: entry.test_result_unit,
+				result_unstructured: entry.result_unstructured,
+				normal_low_value: entry.normal_low_value,
+				normal_high_value: entry.normal_high_value,
+				comments: entry.comments,
+				more_info_available: entry.more_info_available,
+			},
+		)
+		.await?;
+	}
+	Ok(())
+}
+
+/// e2b:F.r.1
+fn read_f_r_1(
+	xpath: &mut Context,
+	node: &Node,
+) -> Result<(Option<Date>, Option<String>)> {
+	let value =
+		first_attr(xpath, node, FTestResultPaths::TEST_DATE).and_then(parse_date);
+	let null_flavor =
+		first_attr(xpath, node, FTestResultPaths::TEST_DATE_NULL_FLAVOR);
+	let field = E2bNullFlavorValue::from_parts(value, null_flavor.as_deref())
+		.map_err(|err| Error::InvalidXml {
+			message: format!("Invalid F.r.1 test date nullFlavor: {err}"),
+			line: None,
+			column: None,
+		})?;
+	Ok(field
+		.map(E2bNullFlavorValue::into_parts)
+		.unwrap_or_default())
+}
+
+/// e2b:F.r.2.1
+fn read_f_r_2_1(xpath: &mut Context, node: &Node) -> Option<String> {
+	first_text(xpath, node, FTestResultPaths::TEST_NAME)
+		.or_else(|| first_attr(xpath, node, FTestResultPaths::TEST_NAME_DISPLAY))
+}
+
+/// e2b:F.r.2.2a
+fn read_f_r_2_2a(xpath: &mut Context, node: &Node) -> Option<String> {
+	clamp_str(
+		first_attr(xpath, node, FTestResultPaths::TEST_MEDDRA_VERSION),
+		10,
+	)
+}
+
+/// e2b:F.r.2.2b
+fn read_f_r_2_2b(xpath: &mut Context, node: &Node) -> Option<String> {
+	first_attr(xpath, node, FTestResultPaths::TEST_MEDDRA_CODE)
+}
+
+/// e2b:F.r.3.1
+fn read_f_r_3_1(xpath: &mut Context, node: &Node) -> Option<String> {
+	first_attr(xpath, node, FTestResultPaths::RESULT_CODE)
+}
+
+/// e2b:F.r.3.2
+fn read_f_r_3_2(
+	xpath: &mut Context,
+	node: &Node,
+) -> Result<(Option<String>, Option<String>)> {
+	let value =
+		first_attr(xpath, node, FTestResultPaths::RESULT_VALUE).or_else(|| {
+			first_attr(xpath, node, FTestResultPaths::RESULT_VALUE_FALLBACK)
+		});
+	let null_flavor = first_attr(xpath, node, FTestResultPaths::RESULT_NULL_FLAVOR);
+	if value.is_some() && null_flavor.is_some() {
+		return Err(Error::InvalidXml {
+			message: "F.r.3.2 value and nullFlavor cannot both be set".to_string(),
+			line: None,
+			column: None,
+		});
+	}
+	Ok((value, null_flavor))
+}
+
+/// e2b:F.r.3.3
+fn read_f_r_3_3(xpath: &mut Context, node: &Node) -> Option<String> {
+	first_attr(xpath, node, FTestResultPaths::RESULT_UNIT)
+		.or_else(|| first_attr(xpath, node, FTestResultPaths::RESULT_UNIT_FALLBACK))
+}
+
+/// e2b:F.r.3.4
+fn read_f_r_3_4(xpath: &mut Context, node: &Node) -> Option<String> {
+	first_text(xpath, node, FTestResultPaths::RESULT_UNSTRUCTURED)
+}
+
+/// e2b:F.r.4
+fn read_f_r_4(xpath: &mut Context, node: &Node) -> Option<String> {
+	first_attr(xpath, node, FTestResultPaths::NORMAL_LOW)
+}
+
+/// e2b:F.r.5
+fn read_f_r_5(xpath: &mut Context, node: &Node) -> Option<String> {
+	first_attr(xpath, node, FTestResultPaths::NORMAL_HIGH)
+}
+
+/// e2b:F.r.6
+fn read_f_r_6(xpath: &mut Context, node: &Node) -> Option<String> {
+	first_text(xpath, node, FTestResultPaths::COMMENTS)
+}
+
+/// e2b:F.r.7
+fn read_f_r_7(xpath: &mut Context, node: &Node) -> Option<bool> {
+	parse_bool_value(first_attr(xpath, node, FTestResultPaths::MORE_INFO))
 }
 
 fn first_attr(xpath: &mut Context, node: &Node, expr: &str) -> Option<String> {
