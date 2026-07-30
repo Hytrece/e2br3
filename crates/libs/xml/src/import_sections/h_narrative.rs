@@ -23,7 +23,6 @@ pub struct HSenderDiagnosisImport {
 #[derive(Debug)]
 pub struct HCaseSummaryImport {
 	pub sequence_number: i32,
-	pub summary_type: Option<String>,
 	pub language_code: Option<String>,
 	pub summary_text: Option<String>,
 }
@@ -160,13 +159,7 @@ pub fn parse_h_case_summaries(xml: &[u8]) -> Result<Vec<HCaseSummaryImport>> {
 	for (idx, node) in nodes.into_iter().enumerate() {
 		items.push(HCaseSummaryImport {
 			sequence_number: (idx + 1) as i32,
-			summary_type: first_attr(
-				&mut xpath,
-				&node,
-				"hl7:author/hl7:assignedEntity/hl7:code",
-				"code",
-			),
-			language_code: normalize_lang2(first_attr(
+			language_code: normalize_lang3(first_attr(
 				&mut xpath,
 				&node,
 				"hl7:value",
@@ -190,23 +183,25 @@ fn first_text_root(xpath: &mut Context, expr: &str) -> Option<String> {
 	None
 }
 
-fn normalize_lang2(value: Option<String>) -> Option<String> {
+fn normalize_lang3(value: Option<String>) -> Option<String> {
 	let v = value?.trim().to_ascii_lowercase();
-	if v.len() == 2 && v.chars().all(|c| c.is_ascii_lowercase()) {
+	if v.len() == 3 && v.chars().all(|c| c.is_ascii_lowercase()) {
 		return Some(v);
 	}
+	None
+}
 
-	match v.as_str() {
-		"eng" => Some("en".to_string()),
-		"jpn" => Some("ja".to_string()),
-		"kor" => Some("ko".to_string()),
-		"deu" | "ger" => Some("de".to_string()),
-		"fra" | "fre" => Some("fr".to_string()),
-		"spa" => Some("es".to_string()),
-		"ita" => Some("it".to_string()),
-		"por" => Some("pt".to_string()),
-		"zho" | "chi" => Some("zh".to_string()),
-		_ => None,
+#[cfg(test)]
+mod tests {
+	use super::normalize_lang3;
+
+	#[test]
+	fn keeps_only_iso_639_2_language_codes() {
+		assert_eq!(
+			normalize_lang3(Some(" ENG ".into())).as_deref(),
+			Some("eng")
+		);
+		assert_eq!(normalize_lang3(Some("en".into())), None);
 	}
 }
 

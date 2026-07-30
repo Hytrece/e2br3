@@ -47,7 +47,6 @@ pub fn router() -> Router {
 		get_editor_sd_page,
 		patch_editor_sd_page,
 		get_editor_lr_page,
-		patch_editor_lr_page,
 		get_editor_si_page,
 		patch_editor_si_page,
 		get_editor_dm_page,
@@ -59,6 +58,7 @@ pub fn router() -> Router {
 		get_editor_lb_page,
 		get_editor_dg_page,
 		get_editor_dh_page_row,
+		get_editor_lr_page_row,
 		get_editor_ae_page_row,
 		get_editor_lb_page_row,
 		get_editor_dg_page_row,
@@ -67,7 +67,6 @@ pub fn router() -> Router {
 		delete_editor_repeatable_page_row,
 		get_editor_rp,
 		get_editor_sd,
-		get_editor_lr,
 		get_editor_si,
 		get_editor_dm,
 		get_editor_nr,
@@ -2556,22 +2555,6 @@ fn patch_editor_sd_page() {}
 fn get_editor_lr_page() {}
 
 #[utoipa::path(
-	patch,
-	path = "/api/cases/{case_id}/editor/pages/LR",
-	tag = "case-editor",
-	security(("auth_token" = [])),
-	params(("case_id" = String, Path, description = "Case ID")),
-	request_body = CaseEditorPagePatchRequestDoc,
-	responses(
-		(status = 200, description = "Updated literature references page projection", body = CaseEditorPageProjectionResponseDoc),
-		(status = 400, description = "Invalid patch or authority context", body = ErrorResponse),
-		(status = 403, description = "Permission denied", body = ErrorResponse),
-		(status = 404, description = "Case not found", body = ErrorResponse)
-	)
-)]
-fn patch_editor_lr_page() {}
-
-#[utoipa::path(
 	get,
 	path = "/api/cases/{case_id}/editor/pages/SI",
 	tag = "case-editor",
@@ -2772,6 +2755,25 @@ fn get_editor_dh_page_row() {}
 
 #[utoipa::path(
 	get,
+	path = "/api/cases/{case_id}/editor/pages/LR/rows/{row_id}",
+	tag = "case-editor",
+	security(("auth_token" = [])),
+	params(
+		("case_id" = String, Path, description = "Case ID"),
+		("row_id" = String, Path, description = "Literature reference row ID"),
+		("authorities" = Option<String>, Query, description = "Comma-separated validation/render authorities: ich,fda,mfds")
+	),
+	responses(
+		(status = 200, description = "Literature reference page row detail", body = CaseEditorRowDetailResponseDoc),
+		(status = 400, description = "Invalid row ID", body = ErrorResponse),
+		(status = 403, description = "Permission denied", body = ErrorResponse),
+		(status = 404, description = "Case or row not found", body = ErrorResponse)
+	)
+)]
+fn get_editor_lr_page_row() {}
+
+#[utoipa::path(
+	get,
 	path = "/api/cases/{case_id}/editor/pages/AE/rows/{row_id}",
 	tag = "case-editor",
 	security(
@@ -2928,22 +2930,6 @@ fn get_editor_rp() {}
 	)
 )]
 fn get_editor_sd() {}
-
-#[utoipa::path(
-	get,
-	path = "/api/cases/{case_id}/editor/LR",
-	tag = "case-editor",
-	security(
-		("auth_token" = [])
-	),
-	params(("case_id" = String, Path, description = "Case ID")),
-	responses(
-		(status = 200, description = "Literature references editor payload", body = CaseEditorDirectSectionResponseDoc),
-		(status = 403, description = "Permission denied", body = ErrorResponse),
-		(status = 404, description = "Case not found", body = ErrorResponse)
-	)
-)]
-fn get_editor_lr() {}
 
 #[utoipa::path(
 	get,

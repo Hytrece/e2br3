@@ -536,8 +536,8 @@ BEGIN
     VALUES (v_sender_diag_id, v_narrative_id, 1, '26.0', '246810', v_user_id, NOW(), NOW())
     ON CONFLICT (id) DO NOTHING;
 
-    INSERT INTO case_summary_information (id, narrative_id, sequence_number, summary_type, language_code, summary_text, created_by, created_at, updated_at)
-    VALUES (v_case_summary_id, v_narrative_id, 1, '01', 'en', 'Case summary text', v_user_id, NOW(), NOW())
+    INSERT INTO case_summary_information (id, narrative_id, sequence_number, language_code, summary_text, created_by, created_at, updated_at)
+    VALUES (v_case_summary_id, v_narrative_id, 1, 'eng', 'Case summary text', v_user_id, NOW(), NOW())
     ON CONFLICT (id) DO NOTHING;
 
     -- ------------------------------------------------------------------------

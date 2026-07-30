@@ -133,27 +133,6 @@
       ]
     },
     {
-      "code": "H.5.r.local.summaryType",
-      "authority": "ICH",
-      "frontendPath": "caseSummaryInformation[].summaryType",
-      "projectionPath": "caseSummaryInformation[].summary_type",
-      "patch": {
-        "kind": "rows",
-        "owner": "caseSummaryInformation"
-      },
-      "roundTripValue": "1",
-      "constraint": {
-        "status": "not_applicable",
-        "reason": "Local case-summary type helper has no portable catalog constraint."
-      },
-      "payloadPath": "[].summaryType",
-      "rowsFixture": {
-        "narrative": {
-          "caseNarrative": "Narrative fixture"
-        }
-      }
-    },
-    {
       "code": "H.5.r.1b",
       "authority": "ICH",
       "frontendPath": "caseSummaryInformation[].languageCode",
@@ -162,7 +141,7 @@
         "kind": "rows",
         "owner": "caseSummaryInformation"
       },
-      "roundTripValue": "en",
+      "roundTripValue": "eng",
       "constraint": {
         "status": "verified",
         "ruleCode": "ICH.H.5.r.1b.LENGTH.MAX",

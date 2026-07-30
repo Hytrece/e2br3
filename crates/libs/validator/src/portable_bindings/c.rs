@@ -405,7 +405,7 @@ pub(super) const BINDINGS: &[PortableFieldBinding] = &[
 		String,
 		["ICH.C.3.4.8.LENGTH.MAX"]
 	),
-	binding!("LR", "literatureReferences[].referenceText", "literatureReference", String, ["ICH.C.4.r.1.LENGTH.MAX"], null: "literatureReferences[].referenceTextNullFlavor"),
+	binding!("LR", "literatureReferences[].referenceText", "referenceText", String, ["ICH.C.4.r.1.LENGTH.MAX"], null: "literatureReferences[].referenceTextNullFlavor"),
 	binding!(
 		"LR",
 		"literatureReferences[].referenceTextNullFlavor",

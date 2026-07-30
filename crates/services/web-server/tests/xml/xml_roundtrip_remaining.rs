@@ -1445,8 +1445,7 @@ async fn test_roundtrip_nr_fields() -> Result<()> {
 		format!("/api/cases/{case_id}/narrative/summaries/{summary_id}"),
 		Some(serde_json::json!({
 			"data": {
-				"summary_type": "2",
-				"language_code": "en",
+				"language_code": "eng",
 				"summary_text": sentinel_h53
 			}
 		})),

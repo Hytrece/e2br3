@@ -354,7 +354,6 @@ mod tests {
 			narrative_id: Uuid::nil(),
 			sequence_number: 1,
 			deleted: false,
-			summary_type: None,
 			language_code: None,
 			summary_text: None,
 			created_at: OffsetDateTime::UNIX_EPOCH,

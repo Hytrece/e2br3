@@ -1056,12 +1056,12 @@ pub(crate) fn drug_fragment(
 				out.push_str(&xml_escape(code));
 				out.push('"');
 			}
-			if dose.route_of_administration_null_flavor.is_none()
-				&& let Some(ver) = write_g_k_4_r_10_2a(dose)
-			{
-				out.push_str(" codeSystemVersion=\"");
-				out.push_str(&xml_escape(ver));
-				out.push_str("\"");
+			if dose.route_of_administration_null_flavor.is_none() {
+				if let Some(ver) = write_g_k_4_r_10_2a(dose) {
+					out.push_str(" codeSystemVersion=\"");
+					out.push_str(&xml_escape(ver));
+					out.push_str("\"");
+				}
 			}
 			if let Some(route) = write_g_k_4_r_10_1(dose) {
 				out.push_str("><originalText>");
@@ -1110,20 +1110,20 @@ pub(crate) fn drug_fragment(
 					out.push_str(&xml_escape(code));
 					out.push_str("\"");
 				}
-				if dose.dose_form_null_flavor.is_none()
-					&& let Some(ver) = write_g_k_4_r_9_2a(dose)
-				{
-					out.push_str(" codeSystemVersion=\"");
-					out.push_str(&xml_escape(ver));
-					out.push_str("\"");
+				if dose.dose_form_null_flavor.is_none() {
+					if let Some(ver) = write_g_k_4_r_9_2a(dose) {
+						out.push_str(" codeSystemVersion=\"");
+						out.push_str(&xml_escape(ver));
+						out.push_str("\"");
+					}
 				}
 				out.push_str(">");
-				if dose.dose_form_null_flavor.is_none()
-					&& let Some(text) = write_g_k_4_r_9_1(dose)
-				{
-					out.push_str("<originalText>");
-					out.push_str(&xml_escape(text));
-					out.push_str("</originalText>");
+				if dose.dose_form_null_flavor.is_none() {
+					if let Some(text) = write_g_k_4_r_9_1(dose) {
+						out.push_str("<originalText>");
+						out.push_str(&xml_escape(text));
+						out.push_str("</originalText>");
+					}
 				}
 				out.push_str("</formCode></kindOfProduct>");
 			}
@@ -1144,18 +1144,18 @@ pub(crate) fn drug_fragment(
 				out.push_str(&xml_escape(code));
 				out.push_str("\"");
 			}
-			if dose.parent_route_null_flavor.is_none()
-				&& let Some(ver) = write_g_k_4_r_11_2a(dose)
-			{
-				out.push_str(" codeSystemVersion=\"");
-				out.push_str(&xml_escape(ver));
-				out.push_str("\"");
+			if dose.parent_route_null_flavor.is_none() {
+				if let Some(ver) = write_g_k_4_r_11_2a(dose) {
+					out.push_str(" codeSystemVersion=\"");
+					out.push_str(&xml_escape(ver));
+					out.push_str("\"");
+				}
 			}
 			out.push_str("><originalText>");
-			if dose.parent_route_null_flavor.is_none()
-				&& let Some(text) = write_g_k_4_r_11_1(dose)
-			{
-				out.push_str(&xml_escape(text));
+			if dose.parent_route_null_flavor.is_none() {
+				if let Some(text) = write_g_k_4_r_11_1(dose) {
+					out.push_str(&xml_escape(text));
+				}
 			}
 			out.push_str(
 				"</originalText></value></observation></outboundRelationship2>",

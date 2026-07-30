@@ -456,49 +456,6 @@ pub(super) fn validate_direct_rows(
 			return Ok(());
 		}
 		"SD" => optional_row_object(section, rows, "senderInformation")?.cloned(),
-		"LR" => {
-			let Some(value) = rows.get("literatureReferences") else {
-				return Ok(());
-			};
-			let Some(items) = value.as_array() else {
-				return Err(Error::BadRequest {
-					message: format!(
-						"{section}.literatureReferences must be an array"
-					),
-				});
-			};
-			for (row_index, value) in items.iter().enumerate() {
-				let row = as_object(section, "literatureReferences", value)?;
-				if bool_field(row, &["deleted", "_delete"]) == Some(true) {
-					continue;
-				}
-				let normalized = normalized_direct_object(
-					row,
-					&[
-						(
-							"literatureReference",
-							&["referenceText", "reference_text"],
-						),
-						(
-							"referenceTextNullFlavor",
-							&[
-								"referenceTextNullFlavor",
-								"reference_text_null_flavor",
-							],
-						),
-						("documentBase64", &["documentBase64", "document_base64"]),
-					],
-				);
-				validate_row_payload_with_indexes(
-					section,
-					section,
-					&normalized,
-					None,
-					&[row_index],
-				)?;
-			}
-			return Ok(());
-		}
 		"SI" => {
 			let study = optional_row_object(section, rows, "studyInformation")?;
 			let mut normalized = study

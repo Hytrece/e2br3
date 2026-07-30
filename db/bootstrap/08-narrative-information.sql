@@ -65,11 +65,8 @@ CREATE TABLE case_summary_information (
     sequence_number INTEGER NOT NULL,
     deleted BOOLEAN NOT NULL DEFAULT false,
 
-    -- Local compatibility field; hidden from the reference-aligned NR UI
-    summary_type VARCHAR(2),  -- E2B(R3) code list
-
     -- H.5.r.1b - Language
-    language_code VARCHAR(2),  -- ISO 639-1
+    language_code VARCHAR(3),  -- ISO 639-2
 
     -- H.5.r.1a - Case summary and reporter's comments
     summary_text TEXT,

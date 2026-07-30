@@ -475,11 +475,11 @@ BEGIN
     ON CONFLICT (id) DO NOTHING;
 
     INSERT INTO case_summary_information (
-        id, narrative_id, sequence_number, summary_type, language_code, summary_text,
+        id, narrative_id, sequence_number, language_code, summary_text,
         created_by, updated_by, created_at, updated_at
     )
     VALUES (
-        v_case_summary_id, v_narrative_id, 1, '01', 'en',
+        v_case_summary_id, v_narrative_id, 1, 'eng',
         'Serious case with death and hospitalization criteria populated for demo coverage; values are synthetic and for non-production testing only.',
         v_user_id, v_user_id, NOW(), NOW()
     )

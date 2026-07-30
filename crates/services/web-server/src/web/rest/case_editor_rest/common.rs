@@ -410,11 +410,6 @@ pub(super) fn direct_page_saved(page_id: &str, data: &Value) -> bool {
 			.and_then(Value::as_array)
 			.map(|rows| !rows.is_empty())
 			.unwrap_or(false),
-		"LR" => map
-			.get("literatureReferences")
-			.and_then(Value::as_array)
-			.map(|rows| !rows.is_empty())
-			.unwrap_or(false),
 		"SI" => map
 			.get("studyInformation")
 			.map(|value| !value.is_null())

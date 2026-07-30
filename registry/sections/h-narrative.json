@@ -151,32 +151,6 @@
     "notes": "Local model exposes this as additional narrative information rather than a numbered H field comment."
   },
   {
-    "id": "H.5.r.local.summaryType",
-    "e2br3_code": "H.5.r.local.summaryType",
-    "label": "Case Summary Type",
-    "section": "H",
-    "authority": "ICH",
-    "status": "complete",
-    "editor_page": "NR",
-    "local_only": true,
-    "backend": {
-      "status": "mapped",
-      "model": "CaseSummaryInformation",
-      "field": "summary_type",
-      "file": "crates/libs/lib-core/src/model/narrative.rs",
-      "evidence": "CaseSummaryInformation.summary_type is annotated as H.5.r.1 case summary type."
-    },
-    "frontend": {
-      "status": "mapped",
-      "section": "caseSummaryInformation",
-      "field": "summaryType",
-      "file": "../frontend/E2BR3-frontend/components/case-form/sections/SectionH.tsx",
-      "evidence": "SectionH registers caseSummaryInformation.${index}.summaryType (added in the frontend; previously only DTO plumbing)."
-    },
-    "action": "",
-    "notes": "Frontend DTO/save plumbing contains summaryType, but the case section does not expose a direct input. Local discriminator for the repeatable H.5.r case summary block; not an E2BR3 data element."
-  },
-  {
     "id": "H.5.r.1b",
     "e2br3_code": "H.5.r.1b",
     "label": "Case Summary Language",
@@ -189,7 +163,7 @@
       "model": "CaseSummaryInformation",
       "field": "language_code",
       "file": "crates/libs/lib-core/src/model/narrative.rs",
-      "evidence": "CaseSummaryInformation.language_code is annotated as H.5.r.2 case summary language."
+      "evidence": "CaseSummaryInformation.language_code stores the H.5.r.1b ISO 639-2 language."
     },
     "frontend": {
       "status": "mapped",

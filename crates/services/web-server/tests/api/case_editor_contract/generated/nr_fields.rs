@@ -8,5 +8,4 @@ field_contract_test!(h_3_r_1b, "H.3.r.1b");
 field_contract_test!(h_4, "H.4");
 field_contract_test!(h_5_r_1a, "H.5.r.1a");
 field_contract_test!(h_5_r_1b, "H.5.r.1b");
-field_contract_test!(h_5_r_local_summarytype, "H.5.r.local.summaryType");
 field_contract_test!(h_additionalinformation, "H.additionalInformation");

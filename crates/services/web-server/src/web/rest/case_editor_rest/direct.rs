@@ -851,19 +851,6 @@ pub async fn patch_editor_sd_page_projection(
 	patch_direct_page_projection(mm, ctx_w, snapshot, case_id, "SD", request).await
 }
 
-pub async fn patch_editor_lr_page_projection(
-	State(mm): State<ModelManager>,
-	ctx_w: CtxW,
-	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
-	Path(case_id): Path<Uuid>,
-	Json(request): Json<CaseEditorPagePatchRequest>,
-) -> Result<(
-	axum::http::StatusCode,
-	Json<CaseEditorPageProjectionResponse>,
-)> {
-	patch_direct_page_projection(mm, ctx_w, snapshot, case_id, "LR", request).await
-}
-
 pub async fn patch_editor_si_page_projection(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
@@ -976,7 +963,6 @@ async fn patch_direct_page_projection_authorized(
 	let data = match page_id {
 		"RP" => load_editor_rp_data(ctx, mm, case_id).await?,
 		"SD" => load_editor_sd_data(ctx, mm, case_id).await?,
-		"LR" => load_editor_lr_data(ctx, mm, case_id).await?,
 		"SI" => load_editor_si_data(ctx, mm, case_id).await?,
 		"DM" => load_editor_dm_data(ctx, mm, case_id).await?,
 		"NR" => load_editor_nr_data(ctx, mm, case_id).await?,
@@ -1008,7 +994,6 @@ async fn apply_direct_page_rows_patch(
 	match page_id {
 		"RP" => apply_rp_page_rows_patch(ctx, mm, case_id, page_id, rows).await,
 		"SD" => apply_sd_page_rows_patch(ctx, mm, case_id, page_id, rows).await,
-		"LR" => apply_lr_page_rows_patch(ctx, mm, case_id, page_id, rows).await,
 		"SI" => apply_si_page_rows_patch(ctx, mm, case_id, page_id, rows).await,
 		"DM" => apply_dm_page_rows_patch(ctx, mm, case_id, page_id, rows).await,
 		"NR" => apply_nr_page_rows_patch(ctx, mm, case_id, page_id, rows).await,
@@ -1325,74 +1310,6 @@ async fn apply_sd_page_rows_patch(
 					telephone: update.telephone,
 					fax: update.fax,
 					email: update.email,
-				},
-			)
-			.await?;
-		}
-	}
-	Ok(())
-}
-
-async fn apply_lr_page_rows_patch(
-	ctx: &lib_core::ctx::Ctx,
-	mm: &ModelManager,
-	case_id: Uuid,
-	page_id: &'static str,
-	rows: &BTreeMap<String, Value>,
-) -> Result<()> {
-	reject_unknown_row_keys(page_id, rows, &["literatureReferences"])?;
-	let Some(value) = rows.get("literatureReferences") else {
-		return Ok(());
-	};
-	let Some(references) = value.as_array() else {
-		return Err(Error::BadRequest {
-			message: format!("{page_id}.literatureReferences must be an array"),
-		});
-	};
-	for (index, value) in references.iter().enumerate() {
-		let reference = as_object(page_id, "literatureReferences", value)?;
-		let id = uuid_field(reference, &["id"]);
-		if bool_field(reference, &["deleted"]) == Some(true) {
-			if let Some(id) = id {
-				LiteratureReferenceBmc::delete(ctx, mm, id).await?;
-			}
-			continue;
-		}
-		let update = LiteratureReferenceForUpdate {
-			reference_text: string_field(reference, &["referenceText"]),
-			reference_text_null_flavor: string_field(
-				reference,
-				&["referenceTextNullFlavor"],
-			),
-			sequence_number: i32_field(reference, &["sequenceNumber"]),
-			document_base64: string_field(reference, &["documentBase64"]),
-			media_type: string_field(reference, &["mediaType"]),
-			representation: string_field(reference, &["representation"]),
-			compression: string_field(reference, &["compression"]),
-		};
-		if let Some(id) = id {
-			LiteratureReferenceBmc::update(ctx, mm, id, update).await?;
-		} else if update.reference_text.is_some()
-			|| update.reference_text_null_flavor.is_some()
-			|| update.document_base64.is_some()
-			|| update.media_type.is_some()
-			|| update.representation.is_some()
-			|| update.compression.is_some()
-		{
-			LiteratureReferenceBmc::create(
-				ctx,
-				mm,
-				LiteratureReferenceForCreate {
-					case_id,
-					reference_text: update.reference_text,
-					reference_text_null_flavor: update.reference_text_null_flavor,
-					sequence_number: update.sequence_number.unwrap_or_else(|| {
-						i32::try_from(index + 1).unwrap_or(i32::MAX)
-					}),
-					document_base64: update.document_base64,
-					media_type: update.media_type,
-					representation: update.representation,
-					compression: update.compression,
 				},
 			)
 			.await?;
@@ -2642,7 +2559,6 @@ async fn apply_nr_page_rows_patch(
 						mm,
 						id,
 						CaseSummaryInformationForUpdate {
-							summary_type: string_field(summary, &["summaryType"]),
 							language_code: string_field(summary, &["languageCode"]),
 							summary_text: string_field(summary, &["summaryText"]),
 						},
@@ -2657,7 +2573,6 @@ async fn apply_nr_page_rows_patch(
 						narrative_id: narrative.id,
 						sequence_number: i32_field(summary, &["sequenceNumber"])
 							.unwrap_or((index + 1) as i32),
-						summary_type: string_field(summary, &["summaryType"]),
 						language_code: string_field(summary, &["languageCode"]),
 						summary_text: string_field(summary, &["summaryText"]),
 					},
@@ -2813,74 +2728,6 @@ direct_page_projection_handler!(
 	get_editor_sd_page_projection,
 	"SD",
 	load_editor_sd_data,
-);
-
-async fn load_editor_lr_data(
-	ctx: &lib_core::ctx::Ctx,
-	mm: &ModelManager,
-	case_id: Uuid,
-) -> Result<Value> {
-	let literature_references = LiteratureReferenceBmc::list(
-		ctx,
-		mm,
-		Some(vec![LiteratureReferenceFilter {
-			case_id: Some(uuid_eq(case_id)),
-			..Default::default()
-		}]),
-		Some(ListOptions::default()),
-	)
-	.await?;
-
-	Ok(json!({
-		"literatureReferences": literature_references
-			.into_iter()
-			.map(|row| json!({
-				"id": row.id,
-				"sequenceNumber": row.sequence_number,
-				"referenceText": row.reference_text,
-				"referenceTextNullFlavor": row.reference_text_null_flavor,
-				"documentBase64": row.document_base64,
-				"mediaType": row.media_type,
-				"representation": row.representation,
-				"compression": row.compression,
-				"deleted": row.deleted,
-			}))
-			.collect::<Vec<_>>()
-	}))
-}
-
-pub async fn get_editor_lr(
-	State(mm): State<ModelManager>,
-	ctx_w: CtxW,
-	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
-	Path(case_id): Path<Uuid>,
-) -> Result<(
-	axum::http::StatusCode,
-	Json<CaseEditorDirectSectionResponse>,
-)> {
-	let ctx = ctx_w.0;
-	lib_rest_core::with_authorized_case_child_read(
-		&ctx,
-		&snapshot,
-		&mm,
-		case_id,
-		"editor/LR",
-		move |ctx, mm| {
-			Box::pin(async move {
-				Ok(direct_section_response(
-					case_id,
-					load_editor_lr_data(ctx, mm, case_id).await?,
-				))
-			})
-		},
-	)
-	.await
-}
-
-direct_page_projection_handler!(
-	get_editor_lr_page_projection,
-	"LR",
-	load_editor_lr_data,
 );
 
 async fn load_editor_si_data(

@@ -112,13 +112,10 @@ pub struct CaseSummaryInformation {
 	pub sequence_number: i32,
 	pub deleted: bool,
 
-	// H.5.r.1 - Case Summary Type
-	pub summary_type: Option<String>,
-
-	// H.5.r.2 - Case Summary Language
+	// H.5.r.1b - Language (ISO 639-2)
 	pub language_code: Option<String>,
 
-	// H.5.r.3 - Text
+	// H.5.r.1a - Case summary and reporter's comments
 	pub summary_text: Option<String>,
 
 	// Timestamps
@@ -132,14 +129,12 @@ pub struct CaseSummaryInformation {
 pub struct CaseSummaryInformationForCreate {
 	pub narrative_id: Uuid,
 	pub sequence_number: i32,
-	pub summary_type: Option<String>,
 	pub language_code: Option<String>,
 	pub summary_text: Option<String>,
 }
 
 #[derive(Fields, Deserialize)]
 pub struct CaseSummaryInformationForUpdate {
-	pub summary_type: Option<String>,
 	pub language_code: Option<String>,
 	pub summary_text: Option<String>,
 }

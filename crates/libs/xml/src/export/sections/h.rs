@@ -58,9 +58,6 @@ pub(crate) async fn apply_case_summary_section(
 	if let Some(language) = summary.language_code.as_deref() {
 		write_h_5_r_1b(xpath, language);
 	}
-	if let Some(summary_type) = summary.summary_type.as_deref() {
-		write_h_5_r_local_summary_type(xpath, summary_type);
-	}
 	Ok(())
 }
 

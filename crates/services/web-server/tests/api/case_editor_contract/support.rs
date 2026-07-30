@@ -208,12 +208,39 @@ async fn repeatable_row_id(
 	case_id: &str,
 ) -> Result<Option<String>> {
 	Ok(match page_id {
+		"LR" => {
+			Some(create_literature_reference_fixture(app, cookie, case_id).await?)
+		}
 		"AE" => Some(create_reaction_contract_fixture(app, cookie, case_id).await?),
 		"LB" => Some(create_test_result_fixture(app, cookie, case_id).await?),
 		"DG" => Some(create_drug_fixture(app, cookie, case_id).await?),
 		"DH" => Some(create_past_drug_history_fixture(app, cookie, case_id).await?),
 		_ => None,
 	})
+}
+
+async fn create_literature_reference_fixture(
+	app: &axum::Router,
+	cookie: &str,
+	case_id: &str,
+) -> Result<String> {
+	let (status, body) = post_json(
+		app,
+		cookie,
+		&format!("/api/cases/{case_id}/editor/pages/LR/rows"),
+		json!({
+			"authorities": ["ich"],
+			"rows": {
+				"literatureReference": {"sequenceNumber": 1}
+			}
+		}),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::CREATED, "{body}");
+	Ok(body["rowId"]
+		.as_str()
+		.ok_or("missing literature reference fixture id")?
+		.to_string())
 }
 
 async fn create_reaction_contract_fixture(

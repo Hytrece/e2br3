@@ -51,8 +51,17 @@ pub fn routes_cases(mm: ModelManager) -> Router {
 		)
 		.route(
 			"/cases/{case_id}/editor/pages/LR",
-			get(case_editor_rest::get_editor_lr_page_projection)
-				.patch(case_editor_rest::patch_editor_lr_page_projection),
+			get(case_editor_rest::get_editor_lr_page_projection),
+		)
+		.route(
+			"/cases/{case_id}/editor/pages/LR/rows",
+			axum::routing::post(case_editor_rest::create_editor_lr_page_row),
+		)
+		.route(
+			"/cases/{case_id}/editor/pages/LR/rows/{row_id}",
+			get(case_editor_rest::get_editor_lr_page_row)
+				.patch(case_editor_rest::patch_editor_lr_page_row)
+				.delete(case_editor_rest::delete_editor_lr_page_row),
 		)
 		.route(
 			"/cases/{case_id}/editor/pages/SI",
@@ -144,10 +153,6 @@ pub fn routes_cases(mm: ModelManager) -> Router {
 		.route(
 			"/cases/{case_id}/editor/SD",
 			get(case_editor_rest::get_editor_sd),
-		)
-		.route(
-			"/cases/{case_id}/editor/LR",
-			get(case_editor_rest::get_editor_lr),
 		)
 		.route(
 			"/cases/{case_id}/editor/SI",
