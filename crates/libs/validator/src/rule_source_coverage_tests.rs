@@ -1,7 +1,4 @@
-use crate::{
-	canonical_rules_for_phase, portable_constraints, portable_field_bindings,
-	ValidationPhase,
-};
+use crate::{case_validation_rules, portable_constraints, portable_field_bindings};
 use serde::Deserialize;
 use std::collections::BTreeSet;
 
@@ -32,7 +29,7 @@ fn executable_rule_source_references_exist_in_compiled_catalogs() {
 		"../../../../registry/rule-source-coverage.json"
 	))
 	.expect("rule source coverage JSON parses");
-	let business = canonical_rules_for_phase(ValidationPhase::CaseValidate)
+	let business = case_validation_rules()
 		.into_iter()
 		.map(|rule| rule.code.to_string())
 		.collect::<BTreeSet<_>>();

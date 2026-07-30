@@ -175,7 +175,7 @@ pub(crate) fn reaction_fragment_for_authority(
 			.as_deref(),
 	));
 	if matches!(authority, lib_core::regulatory::RegulatoryAuthority::Fda) {
-		out.push_str(&observation_rel_required_intervention(
+		out.push_str(&write_fda_e_i_3_2h(
 			reaction.required_intervention,
 			reaction.required_intervention_null_flavor.as_deref(),
 		));
@@ -287,6 +287,11 @@ fn write_e_i_3_2f(
 	null_flavor: Option<&str>,
 ) -> String {
 	observation_rel_bool_or_null_flavor(code, value, null_flavor)
+}
+
+/// e2b:FDA.E.i.3.2h
+fn write_fda_e_i_3_2h(value: Option<bool>, null_flavor: Option<&str>) -> String {
+	observation_rel_required_intervention(value, null_flavor)
 }
 
 /// e2b:E.i.4

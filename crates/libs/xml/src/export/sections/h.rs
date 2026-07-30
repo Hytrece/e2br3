@@ -137,16 +137,6 @@ fn write_h_5_r_1b(xpath: &mut Context, language_code: &str) {
 	);
 }
 
-/// e2b:H.5.r.local.summaryType
-fn write_h_5_r_local_summary_type(xpath: &mut Context, summary_type: &str) {
-	set_attr_first(
-		xpath,
-		"//hl7:investigationEvent/hl7:component/hl7:observationEvent[hl7:code[@code='36']]/hl7:author/hl7:assignedEntity/hl7:code",
-		"code",
-		summary_type,
-	);
-}
-
 fn reorder_investigation_event_children(xpath: &mut Context) {
 	if let Ok(outbound_nodes) =
 		xpath.findnodes("//hl7:investigationEvent/hl7:outboundRelationship", None)

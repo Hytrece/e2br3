@@ -176,13 +176,13 @@ pub(crate) fn resolve_validation_subsection(
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::{canonical_rules_for_phase, ValidationPhase};
+	use crate::case_validation_rules;
 	use std::collections::BTreeSet;
 
 	#[test]
 	fn implemented_allowed_value_registry_contains_all_current_tables() {
 		let codes = implemented_allowed_value_rule_codes();
-		assert_eq!(codes.len(), 77);
+		assert_eq!(codes.len(), 76);
 		assert!(codes.contains("ICH.C.1.3.ALLOWED.VALUE"));
 		assert!(codes.contains("ICH.G.k.9.i.4.ALLOWED.VALUE"));
 		assert!(codes.contains("ICH.E.i.3.2f.ALLOWED.VALUE"));
@@ -201,12 +201,12 @@ mod tests {
 	#[test]
 	fn case_catalog_is_fully_evaluator_backed() {
 		let table = implemented_table_rule_codes();
-		assert_eq!(table.len(), 463);
+		assert_eq!(table.len(), 462);
 	}
 
 	#[test]
-	fn implemented_case_registry_matches_case_validate_catalog() {
-		let expected = canonical_rules_for_phase(ValidationPhase::CaseValidate)
+	fn implemented_case_registry_matches_case_catalog() {
+		let expected = case_validation_rules()
 			.into_iter()
 			.filter(|rule| {
 				["C", "D", "E", "F", "G", "H", "N"].iter().any(|section| {
@@ -223,7 +223,7 @@ mod tests {
 			.collect::<BTreeSet<_>>();
 		let missing = expected.difference(&actual).collect::<Vec<_>>();
 		let unexpected = actual.difference(&expected).collect::<Vec<_>>();
-		assert_eq!(expected.len(), 463);
+		assert_eq!(expected.len(), 462);
 		assert!(
 			missing.is_empty() && unexpected.is_empty(),
 			"missing ({missing_len}): {missing:#?}\nunexpected ({unexpected_len}): {unexpected:#?}",
@@ -255,8 +255,8 @@ mod tests {
 			.copied()
 			.collect::<BTreeSet<_>>();
 
-		assert_eq!(representation.len(), 42);
-		assert_eq!(case_validate.len(), 47);
+		assert_eq!(representation.len(), 43);
+		assert_eq!(case_validate.len(), 46);
 		assert!(representation.is_disjoint(&case_validate));
 		assert_eq!(
 			gated,

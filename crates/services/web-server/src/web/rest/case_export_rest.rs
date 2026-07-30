@@ -22,8 +22,7 @@ use time::Month;
 use tokio::runtime::Handle;
 use tokio::task;
 use uuid::Uuid;
-use xml::validation::validate_e2b_xml;
-use xml::validation::validate_e2b_xml_business;
+use xml::validation::{validate_e2b_xml, validate_export_rules};
 use xml::{export_case_xml_with_options, ExportXmlOptions};
 use zip::write::SimpleFileOptions;
 use zip::{CompressionMethod, ZipWriter};
@@ -261,20 +260,16 @@ async fn generate_validated_case_xml_for_authority_with_notation(
 				),
 			});
 		}
-		let business_report = validate_e2b_xml_business(xml.as_bytes(), None)
+		let export_errors = validate_export_rules(xml.as_bytes(), authority)
 			.map_err(|err| Error::BadRequest {
-				message: format!("export XML business validation failed: {err}"),
+				message: format!("export XML rule validation failed: {err}"),
 			})?;
-		if !business_report.ok {
-			let first = business_report
-				.errors
-				.first()
-				.map(|e| e.message.clone())
-				.unwrap_or_else(|| "unknown business validation error".to_string());
+		if let Some(first) = export_errors.first() {
 			return Err(Error::BadRequest {
 				message: format!(
-					"exported XML failed business validation ({} issue(s)); first: {first}",
-					business_report.errors.len()
+					"exported XML failed export validation ({} issue(s)); first: {}",
+					export_errors.len(),
+					first.message
 				),
 			});
 		}

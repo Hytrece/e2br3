@@ -80,6 +80,12 @@ fn boundary_cases() -> Vec<BoundaryCase> {
 			json!("1")
 		),
 		boundary_case!(
+			"ICH.E.i.3.1.ALLOWED.VALUE",
+			ReactionForUpdate,
+			"term_highlighted",
+			json!("9")
+		),
+		boundary_case!(
 			"ICH.F.r.7.ALLOWED.VALUE",
 			TestResultForUpdate,
 			"more_info_available",
@@ -303,7 +309,7 @@ fn boundary_cases() -> Vec<BoundaryCase> {
 #[test]
 fn every_representation_enforced_code_rejects_invalid_input() {
 	let cases = boundary_cases();
-	assert_eq!(cases.len(), 42);
+	assert_eq!(cases.len(), 43);
 	let accepted = cases
 		.iter()
 		.filter(|case| !(case.rejects)())

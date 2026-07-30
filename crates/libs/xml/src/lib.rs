@@ -1,3 +1,4 @@
+pub mod error;
 pub mod export;
 mod export_data;
 mod export_utils;
@@ -8,20 +9,10 @@ pub mod import_sections;
 pub mod mapping;
 pub mod mfds;
 pub mod model;
-pub mod raw;
-pub mod rules;
-
-pub mod error;
 pub mod parser;
+pub mod raw;
 pub mod types;
 pub mod validation;
-
-pub(crate) use lib_core::regulatory::*;
-pub(crate) use validation::business::shared_specs::*;
-
-pub(crate) fn has_text(value: Option<&str>) -> bool {
-	value.map(|value| !value.trim().is_empty()).unwrap_or(false)
-}
 
 pub use error::Error;
 pub type Result<T> = core::result::Result<T, Error>;
@@ -38,10 +29,9 @@ pub use import_sections::c_safety_report::{
 	apply_c_safety_report_import_settings, apply_default_values_to_imported_r2_case,
 };
 pub use parser::parse_e2b_xml;
-pub use rules::*;
 pub use types::ParsedE2b;
 pub use types::{XmlImportResult, XmlValidationError, XmlValidationReport};
 pub use validation::{
 	default_xsd_path, should_skip_xml_validation, validate_e2b_xml,
-	validate_e2b_xml_basic, validate_e2b_xml_business, XmlValidatorConfig,
+	validate_e2b_xml_basic, XmlValidatorConfig,
 };

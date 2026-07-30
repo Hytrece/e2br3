@@ -9,12 +9,27 @@ use crate::model::Result;
 use modql::field::Fields;
 use modql::filter::{FilterNodes, OpValsBool, OpValsValue};
 use rust_decimal::Decimal;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use sqlx::types::time::{Date, OffsetDateTime};
 use sqlx::types::Uuid;
 use sqlx::FromRow;
 
 // -- Reaction
+
+fn deserialize_term_highlighted<'de, D>(
+	deserializer: D,
+) -> std::result::Result<Option<String>, D::Error>
+where
+	D: Deserializer<'de>,
+{
+	let value = Option::<String>::deserialize(deserializer)?;
+	match value.as_deref() {
+		None | Some("1" | "2" | "3" | "4") => Ok(value),
+		Some(_) => Err(serde::de::Error::custom(
+			"term_highlighted must be one of 1, 2, 3, 4",
+		)),
+	}
+}
 
 #[derive(Debug, Clone, Fields, FromRow, Serialize)]
 pub struct Reaction {
@@ -110,6 +125,7 @@ pub struct ReactionForCreate {
 	pub reaction_language: Option<String>,
 	pub reaction_meddra_code: Option<String>,
 	pub reaction_meddra_version: Option<String>,
+	#[serde(default, deserialize_with = "deserialize_term_highlighted")]
 	pub term_highlighted: Option<String>,
 	pub serious: Option<bool>,
 	pub criteria_death: Option<bool>,
@@ -172,6 +188,7 @@ pub struct ReactionForUpdate {
 	pub reaction_language: Option<String>,
 	pub reaction_meddra_code: Option<String>,
 	pub reaction_meddra_version: Option<String>,
+	#[serde(default, deserialize_with = "deserialize_term_highlighted")]
 	pub term_highlighted: Option<String>,
 	pub serious: Option<bool>,
 	pub criteria_death: Option<bool>,

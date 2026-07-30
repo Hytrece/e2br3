@@ -2202,6 +2202,7 @@ mod golden_companion_tests {
 			start_date: None,
 			start_date_null_flavor: None,
 			continuing: None,
+			continuing_null_flavor: None,
 			end_date: None,
 			end_date_null_flavor: None,
 			comments: None,

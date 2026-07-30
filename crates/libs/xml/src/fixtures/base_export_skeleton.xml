@@ -27,11 +27,20 @@
 			<effectiveTime/>
 			<subject typeCode="SUBJ">
 				<investigationEvent classCode="INVSTG" moodCode="EVN">
+					<id root="2.16.840.1.113883.3.989.2.1.3.1"/>
+					<id root="2.16.840.1.113883.3.989.2.1.3.2"/>
 					<code code="PAT_ADV_EVNT" codeSystem="2.16.840.1.113883.5.4"/>
+					<text/>
 					<statusCode code="active"/>
+					<effectiveTime><low/></effectiveTime>
+					<availabilityTime/>
 					<component typeCode="COMP">
 						<adverseEventAssessment classCode="INVSTG" moodCode="EVN"/>
 					</component>
+					<component typeCode="COMP"><observationEvent classCode="OBS" moodCode="EVN"><code code="23" codeSystem="2.16.840.1.113883.3.989.2.1.1.19"/><value xsi:type="BL"/></observationEvent></component>
+					<component typeCode="COMP"><observationEvent classCode="OBS" moodCode="EVN"><code code="1" codeSystem="2.16.840.1.113883.3.989.2.1.1.19"/><value xsi:type="BL"/></observationEvent></component>
+					<component typeCode="COMP"><observationEvent classCode="OBS" moodCode="EVN"><code code="C54588" codeSystem="2.16.840.1.113883.3.26.1.1"/><value xsi:type="CE"/></observationEvent></component>
+					<component typeCode="COMP"><observationEvent classCode="OBS" moodCode="EVN"><code code="C156384" codeSystem="2.16.840.1.113883.3.26.1.1"/><value xsi:type="BL"/></observationEvent></component>
 					<subjectOf1 typeCode="SUBJ">
 						<controlActEvent classCode="CACT" moodCode="EVN">
 							<author typeCode="AUT">

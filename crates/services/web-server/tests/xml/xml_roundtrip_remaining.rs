@@ -5,6 +5,7 @@ use axum::body::{to_bytes, Body};
 use axum::http::{Request, StatusCode};
 use lib_auth::token::generate_web_token;
 use lib_core::ctx::{Ctx, ROLE_SPONSOR_ADMIN_CRO};
+use lib_core::model::drug::FdaDeviceInformationBmc;
 use lib_core::model::ModelManager;
 use serde_json::Value;
 use serial_test::serial;
@@ -138,6 +139,47 @@ async fn setup_imported_case_from(fixture_name: &str) -> Result<ImportedCaseSetu
 	ensure_fda_device_characteristics(&app, &cookie, &case_id).await?;
 
 	Ok((app, cookie, case_id, mm, ctx))
+}
+
+#[serial]
+#[tokio::test(flavor = "multi_thread")]
+async fn fresh_full_build_validates_for_all_authorities() -> Result<()> {
+	let (_app, _cookie, case_id, mm, ctx) =
+		setup_imported_case_from("FAERS2022Scenario7.xml").await?;
+	let case_id = Uuid::parse_str(&case_id)?;
+	let devices = FdaDeviceInformationBmc::list(&ctx, &mm, None, None).await?;
+	assert!(!devices.is_empty(), "canonical FDA device was not saved");
+	let config = xml::validation::XmlValidatorConfig {
+		xsd_path: Some(resolved_xsd_path()),
+		..Default::default()
+	};
+
+	for authority in [
+		lib_core::regulatory::RegulatoryAuthority::Ich,
+		lib_core::regulatory::RegulatoryAuthority::Fda,
+		lib_core::regulatory::RegulatoryAuthority::Mfds,
+	] {
+		let exported = tokio::task::block_in_place(|| {
+			tokio::runtime::Handle::current().block_on(
+				xml::export::serialize_case_xml_for_authority(
+					&ctx, &mm, case_id, authority,
+				),
+			)
+		})?;
+		let report = xml::validation::validate_e2b_xml(
+			exported.as_bytes(),
+			Some(config.clone()),
+		)?;
+		assert!(report.ok, "{authority:?}: {:?}", report.errors);
+
+		if matches!(authority, lib_core::regulatory::RegulatoryAuthority::Fda) {
+			assert!(exported.contains("C54451"), "FDA device data missing");
+		} else {
+			assert!(!exported.contains("C54451"), "FDA device data leaked");
+		}
+	}
+
+	Ok(())
 }
 
 async fn ensure_reaction_language(
@@ -283,46 +325,6 @@ async fn ensure_fda_device_characteristics(
 		app,
 		cookie,
 		"GET",
-		format!("/api/cases/{case_id}/validation?authority=fda"),
-		None,
-	)
-	.await?;
-	if status != StatusCode::OK {
-		return Err(format!(
-			"validation precheck status {} body {}",
-			status,
-			String::from_utf8_lossy(&body)
-		)
-		.into());
-	}
-	let value: Value = serde_json::from_slice(&body)?;
-	let target_drug_indexes: std::collections::BTreeSet<usize> = value
-		.get("data")
-		.and_then(|v| v.get("issues"))
-		.and_then(Value::as_array)
-		.map(|issues| {
-			issues
-				.iter()
-				.filter(|issue| {
-					issue.get("code").and_then(Value::as_str)
-						== Some("FDA.G.K.12.R.3.REQUIRED")
-				})
-				.filter_map(|issue| issue.get("path").and_then(Value::as_str))
-				.filter_map(|path| {
-					let index = path.strip_prefix("drugs.")?.split('.').next()?;
-					index.parse::<usize>().ok()
-				})
-				.collect()
-		})
-		.unwrap_or_default();
-	if target_drug_indexes.is_empty() {
-		return Ok(());
-	}
-
-	let (status, body) = request_json(
-		app,
-		cookie,
-		"GET",
 		format!("/api/cases/{case_id}/drugs"),
 		None,
 	)
@@ -337,10 +339,10 @@ async fn ensure_fda_device_characteristics(
 	}
 	let value: Value = serde_json::from_slice(&body)?;
 	let Some(drugs) = value.get("data").and_then(Value::as_array) else {
-		return Ok(());
+		return Err(format!("missing drug items: {value}").into());
 	};
 	for (drug_index, drug) in drugs.iter().enumerate() {
-		if !target_drug_indexes.contains(&drug_index) {
+		if drug_index != 0 {
 			continue;
 		}
 		let Some(drug_id) = drug.get("id").and_then(Value::as_str) else {
@@ -349,62 +351,26 @@ async fn ensure_fda_device_characteristics(
 		let (status, body) = request_json(
 			app,
 			cookie,
-			"GET",
-			format!("/api/cases/{case_id}/drugs/{drug_id}/device-characteristics"),
-			None,
+			"PUT",
+			format!("/api/cases/{case_id}/drugs/{drug_id}/devices/replace"),
+			Some(serde_json::json!({
+				"data": { "devices": [{
+					"malfunction": true,
+					"device_problem_codes": [{ "value_code": "1" }]
+				}] }
+			})),
 		)
 		.await?;
 		if status != StatusCode::OK {
 			return Err(format!(
-				"list device characteristics status {} body {}",
+				"replace FDA devices status {} body {}",
 				status,
 				String::from_utf8_lossy(&body)
 			)
 			.into());
 		}
 		let value: Value = serde_json::from_slice(&body)?;
-		let Some(chars) = value.get("data").and_then(Value::as_array) else {
-			continue;
-		};
-		let has_gk12r3 = chars.iter().any(|ch| {
-			ch.get("code")
-				.and_then(Value::as_str)
-				.map(|code| code.eq_ignore_ascii_case("FDA.G.k.12.r.3"))
-				.unwrap_or(false)
-		});
-		if !has_gk12r3 {
-			let next_sequence_number = chars
-				.iter()
-				.filter_map(|ch| ch.get("sequence_number").and_then(Value::as_i64))
-				.max()
-				.unwrap_or(0)
-				+ 1;
-			let (status, body) = request_json(
-				app,
-				cookie,
-				"POST",
-				format!(
-					"/api/cases/{case_id}/drugs/{drug_id}/device-characteristics"
-				),
-				Some(serde_json::json!({
-					"data": {
-						"drug_id": drug_id,
-						"sequence_number": next_sequence_number,
-						"code": "FDA.G.k.12.r.3",
-						"value_code": "1"
-					}
-				})),
-			)
-			.await?;
-			if status != StatusCode::CREATED {
-				return Err(format!(
-					"create gk12r3 status {} body {}",
-					status,
-					String::from_utf8_lossy(&body)
-				)
-				.into());
-			}
-		}
+		assert_eq!(value["data"].as_array().map(Vec::len), Some(1));
 	}
 	Ok(())
 }

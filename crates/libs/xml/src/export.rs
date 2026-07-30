@@ -1,8 +1,5 @@
 use crate::error::Error;
-use crate::export::mode::{
-	apply_dirty_sections_from_db, apply_section_postprocess,
-	build_fresh_export_from_db, try_fast_path_export,
-};
+use crate::export::mode::{apply_section_postprocess, build_fresh_export_from_db};
 use crate::Result;
 use lib_core::ctx::Ctx;
 use lib_core::model::case::CaseBmc;
@@ -67,14 +64,6 @@ pub async fn export_case_xml_with_options(
 		});
 	}
 
-	if let Some(xml) =
-		try_fast_path_export(ctx, mm, case_id, &case, options.authority).await?
-	{
-		return apply_section_postprocess(ctx, mm, case_id, xml, options.authority)
-			.await
-			.map(|xml| apply_export_xml_options(xml, options));
-	}
-
 	serialize_case_xml_for_authority(ctx, mm, case_id, options.authority)
 		.await
 		.map(|xml| apply_export_xml_options(xml, options))
@@ -91,30 +80,14 @@ pub async fn serialize_case_xml(
 		.await
 }
 
-async fn serialize_case_xml_for_authority(
+pub async fn serialize_case_xml_for_authority(
 	ctx: &Ctx,
 	mm: &ModelManager,
 	case_id: sqlx::types::Uuid,
 	authority: RegulatoryAuthority,
 ) -> Result<String> {
 	let case = CaseBmc::get(ctx, mm, case_id).await.map_err(Error::from)?;
-	let has_dirty = case.dirty_c
-		|| case.dirty_d
-		|| case.dirty_e
-		|| case.dirty_f
-		|| case.dirty_g
-		|| case.dirty_h;
-	if let Some(raw_xml) = case.raw_xml.as_deref() {
-		if !has_dirty {
-			return Ok(String::from_utf8_lossy(raw_xml).to_string());
-		}
-	}
-	let xml = if let Some(raw_xml) = case.raw_xml.as_deref() {
-		let xml = String::from_utf8_lossy(raw_xml).to_string();
-		apply_dirty_sections_from_db(ctx, mm, case_id, &case, xml, authority).await?
-	} else {
-		build_fresh_export_from_db(ctx, mm, case_id, &case, authority).await?
-	};
+	let xml = build_fresh_export_from_db(ctx, mm, case_id, &case, authority).await?;
 
 	apply_section_postprocess(ctx, mm, case_id, xml, authority).await
 }

@@ -2,14 +2,14 @@ use crate::common::{cookie_header, init_test_mm, seed_org_with_users, Result};
 use axum::body::{to_bytes, Body};
 use axum::http::{Request, StatusCode};
 use lib_auth::token::generate_web_token;
+use lib_core::regulatory::RegulatoryAuthority;
 use serde_json::Value;
 use serial_test::serial;
 use std::fs;
 use std::path::PathBuf;
 use tower::ServiceExt;
 use uuid::Uuid;
-use xml::validation::validate_e2b_xml_business;
-use xml::validation::{validate_e2b_xml, XmlValidatorConfig};
+use xml::validation::{validate_e2b_xml, validate_export_rules, XmlValidatorConfig};
 
 #[derive(Clone, Copy)]
 struct RoundtripFixture {
@@ -534,12 +534,15 @@ async fn test_roundtrip_fixtures_import_validate_export_revalidate() -> Result<(
 			));
 			continue;
 		}
-		let business_report =
-			validate_e2b_xml_business(&export_bytes, Some(config))?;
-		if !business_report.ok {
+		let authority =
+			RegulatoryAuthority::parse(fixture.authority).ok_or_else(|| {
+				format!("invalid fixture authority {}", fixture.authority)
+			})?;
+		let export_errors = validate_export_rules(&export_bytes, authority)?;
+		if !export_errors.is_empty() {
 			failures.push(format!(
-				"{}: exported business invalid: {:?}",
-				fixture.filename, business_report.errors
+				"{}: exported rule invalid: {:?}",
+				fixture.filename, export_errors
 			));
 		}
 	}

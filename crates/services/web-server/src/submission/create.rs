@@ -57,20 +57,19 @@ pub async fn create_submission(
 				),
 			});
 		}
-		let business_report =
-			validate_e2b_xml_business(xml.as_bytes(), None).map_err(Error::from)?;
-		if !business_report.ok {
-			let preview = business_report
-				.errors
+		let export_errors = validate_export_rules(xml.as_bytes(), export_authority)
+			.map_err(Error::from)?;
+		if !export_errors.is_empty() {
+			let preview = export_errors
 				.iter()
 				.take(3)
-				.map(|err| err.message.as_str())
+				.map(|error| error.message.as_str())
 				.collect::<Vec<_>>()
 				.join("; ");
 			return Err(Error::BadRequest {
 				message: format!(
-					"cannot submit case: XML business validation failed ({} issue(s)): {}",
-					business_report.errors.len(),
+					"cannot submit case: XML export validation failed ({} issue(s)): {}",
+					export_errors.len(),
 					preview
 				),
 			});

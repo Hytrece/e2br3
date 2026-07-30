@@ -1,6 +1,5 @@
 // Shared Section C policy used by exporter + case validators.
 use super::{is_rule_condition_satisfied, RuleFacts};
-use xml::export::policy::should_clear_null_flavor_on_value;
 
 pub fn has_report_type(value: &str) -> bool {
 	!value.trim().is_empty()
@@ -23,11 +22,11 @@ pub fn should_warn_fda_combination_product_indicator_missing() -> bool {
 }
 
 pub fn should_clear_local_criteria_null_flavor_on_value() -> bool {
-	should_clear_null_flavor_on_value("FDA.C.1.7.1.REQUIRED")
+	true
 }
 
 pub fn should_clear_combination_product_null_flavor_on_value() -> bool {
-	should_clear_null_flavor_on_value("FDA.C.1.12.REQUIRED")
+	true
 }
 
 #[cfg(test)]

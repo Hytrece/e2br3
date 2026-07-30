@@ -1,11 +1,35 @@
-pub use xml::export::policy::{
-	normalize_outcome_code, outcome_display_name,
-	should_case_validation_require_required_intervention,
-	should_emit_required_intervention_null_flavor_ni,
-};
-
 #[cfg(test)]
-pub use xml::export::policy::DEFAULT_OUTCOME_DISPLAY;
+pub const DEFAULT_OUTCOME_DISPLAY: &str = "not recovered/not resolved/ongoing";
+
+pub fn normalize_outcome_code(value: Option<&str>) -> Option<&'static str> {
+	match value.map(str::trim).filter(|value| !value.is_empty()) {
+		Some("1") => Some("1"),
+		Some("2") => Some("2"),
+		Some("3") => Some("3"),
+		Some("4") => Some("4"),
+		Some("5") => Some("5"),
+		_ => None,
+	}
+}
+
+pub fn outcome_display_name(code: &str) -> &'static str {
+	match code {
+		"1" => "recovered/resolved",
+		"2" => "recovering/resolving",
+		"3" => "not recovered/not resolved/ongoing",
+		"4" => "recovered/resolved with sequelae",
+		"5" => "fatal",
+		_ => "not recovered/not resolved/ongoing",
+	}
+}
+
+pub fn should_emit_required_intervention_null_flavor_ni() -> bool {
+	true
+}
+
+pub fn should_case_validation_require_required_intervention() -> bool {
+	true
+}
 
 #[cfg(test)]
 mod tests {

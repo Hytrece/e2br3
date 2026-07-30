@@ -14,6 +14,7 @@ mod portable_bindings;
 mod portable_constraints;
 #[cfg(test)]
 mod rule_source_coverage_tests;
+pub mod rules;
 pub use c_reporter_policy::has_any_primary_source_content;
 pub use c_safety_report_policy::{
 	has_report_type, should_clear_combination_product_null_flavor_on_value,
@@ -56,9 +57,9 @@ pub use mfds_context::{
 };
 pub use portable_bindings::*;
 pub use portable_constraints::*;
+pub use rules::*;
 use sqlx::types::Uuid;
 use std::collections::BTreeMap;
-pub use xml::rules::*;
 
 pub fn has_text(value: Option<&str>) -> bool {
 	value.map(|v| !v.trim().is_empty()).unwrap_or(false)
@@ -70,9 +71,7 @@ pub fn push_issue_by_code(
 	path: impl Into<String>,
 ) {
 	let path = path.into();
-	if let Some(rule) =
-		find_canonical_rule_for_phase(code, ValidationPhase::CaseValidate)
-	{
+	if let Some(rule) = find_case_validation_rule(code) {
 		let field_path = case::sections::resolve_validation_field_path(Some(&path));
 		let subsection =
 			case::sections::resolve_validation_subsection(code, Some(&path));

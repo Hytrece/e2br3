@@ -1,10 +1,11 @@
 use crate::error::Error;
 use crate::Result;
+use lib_core::ctx::Ctx;
 use lib_core::model;
 use lib_core::model::drug::{
 	derive_drug_characteristics, DosageInformation, DrugActiveSubstance,
-	DrugDeviceCharacteristic, DrugIndication, DrugInformation, FdaDeviceCode,
-	FdaDeviceInformation,
+	DrugDeviceCharacteristic, DrugIndication, DrugInformation, DrugInformationBmc,
+	FdaDeviceCode, FdaDeviceCodeBmc, FdaDeviceInformation, FdaDeviceInformationBmc,
 };
 use lib_core::model::drug_reaction_assessment::{
 	DrugReactionAssessment, RelatednessAssessment,
@@ -24,20 +25,11 @@ pub(crate) struct DrugExportBundle {
 }
 
 pub(crate) async fn load_drug_export_bundle(
+	ctx: &Ctx,
 	mm: &ModelManager,
 	case_id: sqlx::types::Uuid,
 ) -> Result<DrugExportBundle> {
-	let drugs = mm
-		.dbx()
-		.fetch_all(
-			sqlx::query_as::<_, DrugInformation>(
-				"SELECT * FROM drug_information WHERE case_id = $1 AND deleted = false ORDER BY sequence_number",
-			)
-			.bind(case_id),
-		)
-		.await
-		.map_err(model::Error::from)
-		.map_err(Error::from)?;
+	let drugs = DrugInformationBmc::list_by_case(ctx, mm, case_id).await?;
 	let drug_ids: Vec<_> = drugs.iter().map(|d| d.id).collect();
 
 	let substances = if drug_ids.is_empty() {
@@ -137,35 +129,23 @@ pub(crate) async fn load_drug_export_bundle(
 		}
 	}
 
-	let devices = if drug_ids.is_empty() {
+	let mut devices = if drug_ids.is_empty() {
 		Vec::new()
 	} else {
-		mm.dbx()
-			.fetch_all(
-				sqlx::query_as::<_, FdaDeviceInformation>(
-					"SELECT * FROM fda_device_information WHERE drug_id = ANY($1) AND deleted = false ORDER BY drug_id, sequence_number",
-				)
-				.bind(&drug_ids),
-			)
-			.await
-			.map_err(model::Error::from)
-			.map_err(Error::from)?
+		FdaDeviceInformationBmc::list(ctx, mm, None, None).await?
 	};
+	devices.retain(|device| drug_ids.contains(&device.drug_id));
+	devices.sort_by_key(|device| (device.drug_id, device.sequence_number));
 	let device_ids: Vec<_> = devices.iter().map(|device| device.id).collect();
-	let device_codes = if device_ids.is_empty() {
+	let mut device_codes = if device_ids.is_empty() {
 		Vec::new()
 	} else {
-		mm.dbx()
-			.fetch_all(
-				sqlx::query_as::<_, FdaDeviceCode>(
-					"SELECT * FROM fda_device_codes WHERE device_id = ANY($1) AND deleted = false ORDER BY device_id, element, sequence_number",
-				)
-				.bind(&device_ids),
-			)
-			.await
-			.map_err(model::Error::from)
-			.map_err(Error::from)?
+		FdaDeviceCodeBmc::list(ctx, mm, None, None).await?
 	};
+	device_codes.retain(|code| device_ids.contains(&code.device_id));
+	device_codes.sort_by_key(|code| {
+		(code.device_id, code.element.clone(), code.sequence_number)
+	});
 
 	let assessments = if drug_ids.is_empty() {
 		Vec::new()
@@ -173,7 +153,7 @@ pub(crate) async fn load_drug_export_bundle(
 		mm.dbx()
 			.fetch_all(
 				sqlx::query_as::<_, DrugReactionAssessment>(
-					"SELECT * FROM drug_reaction_assessments WHERE drug_id = ANY($1) AND deleted = false",
+					"SELECT * FROM drug_reaction_assessments WHERE drug_id = ANY($1)",
 				)
 				.bind(&drug_ids),
 			)

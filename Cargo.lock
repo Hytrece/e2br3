@@ -4126,7 +4126,6 @@ dependencies = [
  "time",
  "tokio",
  "uuid",
- "xml",
 ]
 
 [[package]]

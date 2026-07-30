@@ -432,22 +432,6 @@ impl RuleCategory {
 
 #[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
-pub enum ValidationPhase {
-	Import,
-	CaseValidate,
-}
-
-impl ValidationPhase {
-	pub fn as_str(self) -> &'static str {
-		match self {
-			Self::Import => "import",
-			Self::CaseValidate => "case_validate",
-		}
-	}
-}
-
-#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
 pub enum RuleSeverity {
 	Blocking,
 	Warning,
@@ -2516,15 +2500,10 @@ pub struct CanonicalRule<'a> {
 	pub section: &'a str,
 	pub blocking: bool,
 	pub category: RuleCategory,
-	pub phases: &'a [ValidationPhase],
 	pub severity: RuleSeverity,
 	pub message: &'a str,
 	pub condition: RuleCondition,
 }
-
-const PHASES_CASE_VALIDATE: &[ValidationPhase] = &[ValidationPhase::CaseValidate];
-const PHASES_IMPORT_ONLY: &[ValidationPhase] = &[ValidationPhase::Import];
-const PHASES_METADATA_ONLY: &[ValidationPhase] = &[];
 
 #[derive(Debug, Clone, Copy)]
 struct ConditionBinding {
@@ -3766,7 +3745,6 @@ pub fn condition_text_for_code(code: &str) -> Option<&'static str> {
 
 fn to_canonical_rule<'a>(rule: &'a ValidationRuleMetadata) -> CanonicalRule<'a> {
 	let category = category_for_rule(rule);
-	let phases = phases_for_rule(rule);
 	let severity = severity_for_rule(rule);
 	CanonicalRule {
 		code: rule.code,
@@ -3774,7 +3752,6 @@ fn to_canonical_rule<'a>(rule: &'a ValidationRuleMetadata) -> CanonicalRule<'a> 
 		section: rule.section,
 		blocking: severity.is_blocking(),
 		category,
-		phases,
 		severity,
 		message: rule.message,
 		condition: condition_for_code(rule.code),
@@ -3790,14 +3767,13 @@ fn to_canonical_max_length_rule<'a>(
 		section: section_for_rule_code(rule.code),
 		blocking: true,
 		category: RuleCategory::CaseBusiness,
-		phases: phases_for_max_length_rule(rule.code),
 		severity: RuleSeverity::Blocking,
 		message: "Dictionary max length exceeded.",
 		condition: RuleCondition::Always,
 	}
 }
 
-fn phases_for_max_length_rule(code: &str) -> &'static [ValidationPhase] {
+fn is_case_max_length_rule(code: &str) -> bool {
 	match code {
 		"ICH.C.1.1.LENGTH.MAX"
 		| "ICH.C.1.3.LENGTH.MAX"
@@ -3978,8 +3954,8 @@ fn phases_for_max_length_rule(code: &str) -> &'static [ValidationPhase] {
 		| "ICH.N.1.4.LENGTH.MAX"
 		| "ICH.N.2.r.1.LENGTH.MAX"
 		| "ICH.N.2.r.2.LENGTH.MAX"
-		| "ICH.N.2.r.3.LENGTH.MAX" => PHASES_CASE_VALIDATE,
-		_ => PHASES_METADATA_ONLY,
+		| "ICH.N.2.r.3.LENGTH.MAX" => true,
+		_ => false,
 	}
 }
 
@@ -3992,14 +3968,13 @@ fn to_canonical_allowed_value_rule<'a>(
 		section: section_for_rule_code(rule.code),
 		blocking: true,
 		category: RuleCategory::CaseBusiness,
-		phases: phases_for_allowed_value_rule(rule.code),
 		severity: RuleSeverity::Blocking,
 		message: "Dictionary allowed values constraint.",
 		condition: RuleCondition::Always,
 	}
 }
 
-fn phases_for_allowed_value_rule(code: &str) -> &'static [ValidationPhase] {
+fn is_case_allowed_value_rule(code: &str) -> bool {
 	match code {
 		"ICH.N.1.1.ALLOWED.VALUE"
 		| "ICH.N.2.r.4.ALLOWED.VALUE"
@@ -4044,7 +4019,6 @@ fn phases_for_allowed_value_rule(code: &str) -> &'static [ValidationPhase] {
 		| "ICH.E.i.1.1b.ALLOWED.VALUE"
 		| "ICH.E.i.2.1a.ALLOWED.VALUE"
 		| "ICH.E.i.2.1b.ALLOWED.VALUE"
-		| "ICH.E.i.3.1.ALLOWED.VALUE"
 		| "ICH.E.i.3.2a.ALLOWED.VALUE"
 		| "ICH.E.i.3.2b.ALLOWED.VALUE"
 		| "ICH.E.i.3.2c.ALLOWED.VALUE"
@@ -4061,7 +4035,7 @@ fn phases_for_allowed_value_rule(code: &str) -> &'static [ValidationPhase] {
 		| "ICH.G.k.2.5.ALLOWED.VALUE"
 		| "ICH.G.k.8.ALLOWED.VALUE"
 		| "ICH.G.k.9.i.4.ALLOWED.VALUE"
-		| "ICH.G.k.10.r.ALLOWED.VALUE" => PHASES_CASE_VALIDATE,
+		| "ICH.G.k.10.r.ALLOWED.VALUE" => true,
 		"ICH.G.k.2.1.1b.ALLOWED.VALUE"
 		| "ICH.G.k.2.1.2b.ALLOWED.VALUE"
 		| "ICH.G.k.2.3.r.2b.ALLOWED.VALUE"
@@ -4071,8 +4045,8 @@ fn phases_for_allowed_value_rule(code: &str) -> &'static [ValidationPhase] {
 		| "ICH.G.k.7.r.2b.ALLOWED.VALUE"
 		| "ICH.H.3.r.1a.ALLOWED.VALUE"
 		| "ICH.H.3.r.1b.ALLOWED.VALUE"
-		| "ICH.H.5.r.1b.ALLOWED.VALUE" => PHASES_CASE_VALIDATE,
-		_ => PHASES_METADATA_ONLY,
+		| "ICH.H.5.r.1b.ALLOWED.VALUE" => true,
+		_ => false,
 	}
 }
 
@@ -4085,7 +4059,6 @@ fn to_canonical_vocabulary_rule<'a>(
 		section: section_for_rule_code(rule.code),
 		blocking: true,
 		category: RuleCategory::CaseBusiness,
-		phases: phases_for_vocabulary_rule(rule.code),
 		severity: RuleSeverity::Blocking,
 		message: "Dictionary vocabulary constraint.",
 		condition: RuleCondition::Always,
@@ -4101,14 +4074,28 @@ fn to_canonical_vocabulary_variant<'a>(
 		section: section_for_rule_code(rule.code),
 		blocking: true,
 		category: RuleCategory::CaseBusiness,
-		phases: PHASES_CASE_VALIDATE,
 		severity: RuleSeverity::Blocking,
 		message: "Dictionary receiver-specific vocabulary constraint.",
 		condition: RuleCondition::Always,
 	}
 }
 
-fn phases_for_vocabulary_rule(code: &str) -> &'static [ValidationPhase] {
+fn to_canonical_null_flavor_rule<'a>(
+	rule: &'a NullFlavorRuleMetadata,
+) -> CanonicalRule<'a> {
+	CanonicalRule {
+		code: rule.code,
+		authority: rule.authority,
+		section: section_for_rule_code(rule.code),
+		blocking: true,
+		category: RuleCategory::CaseBusiness,
+		severity: RuleSeverity::Blocking,
+		message: "Dictionary nullFlavor allowed set.",
+		condition: RuleCondition::Always,
+	}
+}
+
+fn is_case_vocabulary_rule(code: &str) -> bool {
 	match code {
 		"ICH.C.2.r.3.VOCABULARY"
 		| "ICH.C.3.4.5.VOCABULARY"
@@ -4139,24 +4126,8 @@ fn phases_for_vocabulary_rule(code: &str) -> &'static [ValidationPhase] {
 		| "ICH.G.k.7.r.2a.VOCABULARY"
 		| "ICH.G.k.7.r.2b.VOCABULARY"
 		| "ICH.H.3.r.1a.VOCABULARY"
-		| "ICH.H.3.r.1b.VOCABULARY" => PHASES_CASE_VALIDATE,
-		_ => PHASES_METADATA_ONLY,
-	}
-}
-
-fn to_canonical_null_flavor_rule<'a>(
-	rule: &'a NullFlavorRuleMetadata,
-) -> CanonicalRule<'a> {
-	CanonicalRule {
-		code: rule.code,
-		authority: rule.authority,
-		section: section_for_rule_code(rule.code),
-		blocking: true,
-		category: RuleCategory::CaseBusiness,
-		phases: PHASES_METADATA_ONLY,
-		severity: RuleSeverity::Blocking,
-		message: "Dictionary nullFlavor allowed set.",
-		condition: RuleCondition::Always,
+		| "ICH.H.3.r.1b.VOCABULARY" => true,
+		_ => false,
 	}
 }
 
@@ -4195,14 +4166,14 @@ fn category_for_rule(rule: &ValidationRuleMetadata) -> RuleCategory {
 	}
 }
 
-fn phases_for_rule(rule: &ValidationRuleMetadata) -> &'static [ValidationPhase] {
+fn is_case_validation_rule(rule: &ValidationRuleMetadata) -> bool {
 	if is_dictionary_required_metadata_only(rule.code) {
-		return PHASES_METADATA_ONLY;
+		return false;
 	}
 	if is_xml_structure_rule(rule) {
-		return PHASES_IMPORT_ONLY;
+		return false;
 	}
-	PHASES_CASE_VALIDATE
+	true
 }
 
 fn is_dictionary_required_metadata_only(code: &str) -> bool {
@@ -4242,161 +4213,95 @@ fn severity_for_rule(rule: &ValidationRuleMetadata) -> RuleSeverity {
 	}
 }
 
-fn rule_applies_in_phase(rule: CanonicalRule<'_>, phase: ValidationPhase) -> bool {
-	rule.phases.contains(&phase)
-}
-
-pub fn find_canonical_rule_for_phase(
-	code: &str,
-	phase: ValidationPhase,
-) -> Option<CanonicalRule<'static>> {
+pub fn find_case_validation_rule(code: &str) -> Option<CanonicalRule<'static>> {
 	VALIDATION_RULES
 		.iter()
-		.filter(|rule| rule.code == code)
+		.find(|rule| rule.code == code && is_case_validation_rule(rule))
 		.map(to_canonical_rule)
-		.find(|rule| rule_applies_in_phase(*rule, phase))
 		.or_else(|| {
 			MAX_LENGTH_RULES
 				.iter()
-				.filter(|rule| rule.code == code)
+				.find(|rule| rule.code == code && is_case_max_length_rule(rule.code))
 				.map(to_canonical_max_length_rule)
-				.find(|rule| rule_applies_in_phase(*rule, phase))
 		})
 		.or_else(|| {
 			ALLOWED_VALUE_RULES
 				.iter()
-				.filter(|rule| rule.code == code)
+				.find(|rule| {
+					rule.code == code && is_case_allowed_value_rule(rule.code)
+				})
 				.map(to_canonical_allowed_value_rule)
-				.find(|rule| rule_applies_in_phase(*rule, phase))
 		})
 		.or_else(|| {
 			VOCABULARY_RULES
 				.iter()
-				.filter(|rule| rule.code == code)
+				.find(|rule| rule.code == code && is_case_vocabulary_rule(rule.code))
 				.map(to_canonical_vocabulary_rule)
-				.find(|rule| rule_applies_in_phase(*rule, phase))
 		})
 		.or_else(|| {
 			VOCABULARY_VARIANTS
 				.iter()
-				.filter(|rule| rule.code == code)
+				.find(|rule| rule.code == code)
 				.map(to_canonical_vocabulary_variant)
-				.find(|rule| rule_applies_in_phase(*rule, phase))
-		})
-		.or_else(|| {
-			NULL_FLAVOR_RULES
-				.iter()
-				.filter(|rule| rule.code == code)
-				.map(to_canonical_null_flavor_rule)
-				.find(|rule| rule_applies_in_phase(*rule, phase))
 		})
 }
 
 pub fn find_canonical_rule(code: &str) -> Option<CanonicalRule<'static>> {
-	find_canonical_rule_for_phase(code, ValidationPhase::CaseValidate)
-		.or_else(|| {
-			VALIDATION_RULES
-				.iter()
-				.find(|rule| rule.code == code)
-				.map(to_canonical_rule)
-		})
+	find_case_validation_rule(code).or_else(|| find_catalog_rule(code))
+}
+
+fn find_catalog_rule(code: &str) -> Option<CanonicalRule<'static>> {
+	VALIDATION_RULES
+		.iter()
+		.filter(|rule| rule.code == code)
+		.map(to_canonical_rule)
+		.next()
 		.or_else(|| {
 			MAX_LENGTH_RULES
 				.iter()
-				.find(|rule| rule.code == code)
+				.filter(|rule| rule.code == code)
 				.map(to_canonical_max_length_rule)
+				.next()
 		})
 		.or_else(|| {
 			ALLOWED_VALUE_RULES
 				.iter()
-				.find(|rule| rule.code == code)
+				.filter(|rule| rule.code == code)
 				.map(to_canonical_allowed_value_rule)
+				.next()
 		})
 		.or_else(|| {
 			VOCABULARY_RULES
 				.iter()
-				.find(|rule| rule.code == code)
+				.filter(|rule| rule.code == code)
 				.map(to_canonical_vocabulary_rule)
+				.next()
 		})
 		.or_else(|| {
 			VOCABULARY_VARIANTS
 				.iter()
-				.find(|rule| rule.code == code)
+				.filter(|rule| rule.code == code)
 				.map(to_canonical_vocabulary_variant)
+				.next()
 		})
 		.or_else(|| {
 			NULL_FLAVOR_RULES
 				.iter()
-				.find(|rule| rule.code == code)
+				.filter(|rule| rule.code == code)
 				.map(to_canonical_null_flavor_rule)
+				.next()
 		})
 }
 
 pub fn canonical_rules_for_authority(
 	authority: RegulatoryAuthority,
 ) -> Vec<CanonicalRule<'static>> {
-	let mut rules = VALIDATION_RULES
-		.iter()
+	canonical_rules_all()
+		.into_iter()
 		.filter(|rule| {
 			matches!(rule.authority, RegulatoryAuthority::Ich)
 				|| rule.authority == authority
 		})
-		.map(to_canonical_rule)
-		.collect::<Vec<_>>();
-	rules.extend(
-		MAX_LENGTH_RULES
-			.iter()
-			.filter(|rule| {
-				matches!(rule.authority, RegulatoryAuthority::Ich)
-					|| rule.authority == authority
-			})
-			.map(to_canonical_max_length_rule),
-	);
-	rules.extend(
-		ALLOWED_VALUE_RULES
-			.iter()
-			.filter(|rule| {
-				matches!(rule.authority, RegulatoryAuthority::Ich)
-					|| rule.authority == authority
-			})
-			.map(to_canonical_allowed_value_rule),
-	);
-	rules.extend(
-		VOCABULARY_RULES
-			.iter()
-			.filter(|rule| {
-				matches!(rule.authority, RegulatoryAuthority::Ich)
-					|| rule.authority == authority
-			})
-			.map(to_canonical_vocabulary_rule),
-	);
-	for variant in VOCABULARY_VARIANTS.iter().filter(|rule| {
-		matches!(rule.authority, RegulatoryAuthority::Ich)
-			|| rule.authority == authority
-	}) {
-		if !rules.iter().any(|rule| rule.code == variant.code) {
-			rules.push(to_canonical_vocabulary_variant(variant));
-		}
-	}
-	rules.extend(
-		NULL_FLAVOR_RULES
-			.iter()
-			.filter(|rule| {
-				matches!(rule.authority, RegulatoryAuthority::Ich)
-					|| rule.authority == authority
-			})
-			.map(to_canonical_null_flavor_rule),
-	);
-	rules
-}
-
-pub fn canonical_rules_for_authority_phase(
-	authority: RegulatoryAuthority,
-	phase: ValidationPhase,
-) -> Vec<CanonicalRule<'static>> {
-	canonical_rules_for_authority(authority)
-		.into_iter()
-		.filter(|rule| rule_applies_in_phase(*rule, phase))
 		.collect()
 }
 
@@ -4421,13 +4326,36 @@ pub fn canonical_rules_all() -> Vec<CanonicalRule<'static>> {
 	rules
 }
 
-pub fn canonical_rules_for_phase(
-	phase: ValidationPhase,
-) -> Vec<CanonicalRule<'static>> {
-	canonical_rules_all()
-		.into_iter()
-		.filter(|rule| rule_applies_in_phase(*rule, phase))
-		.collect()
+pub fn case_validation_rules() -> Vec<CanonicalRule<'static>> {
+	let mut rules = VALIDATION_RULES
+		.iter()
+		.filter(|rule| is_case_validation_rule(rule))
+		.map(to_canonical_rule)
+		.chain(
+			MAX_LENGTH_RULES
+				.iter()
+				.filter(|rule| is_case_max_length_rule(rule.code))
+				.map(to_canonical_max_length_rule),
+		)
+		.chain(
+			ALLOWED_VALUE_RULES
+				.iter()
+				.filter(|rule| is_case_allowed_value_rule(rule.code))
+				.map(to_canonical_allowed_value_rule),
+		)
+		.chain(
+			VOCABULARY_RULES
+				.iter()
+				.filter(|rule| is_case_vocabulary_rule(rule.code))
+				.map(to_canonical_vocabulary_rule),
+		)
+		.collect::<Vec<_>>();
+	for variant in VOCABULARY_VARIANTS {
+		if !rules.iter().any(|rule| rule.code == variant.code) {
+			rules.push(to_canonical_vocabulary_variant(variant));
+		}
+	}
+	rules
 }
 
 fn fnv1a_update(mut hash: u64, bytes: &[u8]) -> u64 {
@@ -4458,10 +4386,6 @@ pub fn canonical_rules_version(authority: Option<RegulatoryAuthority>) -> String
 		hash = fnv1a_update(hash, b"|");
 		hash = fnv1a_update(hash, rule.category.as_str().as_bytes());
 		hash = fnv1a_update(hash, b"|");
-		for phase in rule.phases {
-			hash = fnv1a_update(hash, phase.as_str().as_bytes());
-			hash = fnv1a_update(hash, b",");
-		}
 		hash = fnv1a_update(hash, b"|");
 		hash = fnv1a_update(hash, rule.message.as_bytes());
 		hash = fnv1a_update(hash, b"|");
@@ -6036,7 +5960,10 @@ mod tests {
 
 	#[test]
 	fn canonical_lookup_covers_validation_rules() {
-		for rule in VALIDATION_RULES {
+		for rule in VALIDATION_RULES
+			.iter()
+			.filter(|rule| is_case_validation_rule(rule))
+		{
 			let canonical = find_canonical_rule(rule.code);
 			assert!(canonical.is_some(), "missing canonical rule: {}", rule.code);
 		}
@@ -6049,24 +5976,6 @@ mod tests {
 			let key = (rule.code, rule.authority.as_str(), rule.section);
 			assert!(seen.insert(key), "duplicate rule triple: {:?}", key);
 		}
-	}
-
-	#[test]
-	fn duplicate_codes_resolve_by_phase() {
-		let case_rule = find_canonical_rule_for_phase(
-			"FDA.C.1.7.1.REQUIRED",
-			ValidationPhase::CaseValidate,
-		)
-		.expect("case-phase rule should exist");
-		let import_rule = find_canonical_rule_for_phase(
-			"FDA.C.1.7.1.REQUIRED",
-			ValidationPhase::Import,
-		)
-		.expect("import-phase rule should exist");
-		assert_eq!(case_rule.section, "case-identification");
-		assert_eq!(import_rule.section, "xml");
-		assert!(case_rule.blocking);
-		assert!(import_rule.blocking);
 	}
 
 	#[test]

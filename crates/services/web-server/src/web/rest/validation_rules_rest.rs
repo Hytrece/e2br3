@@ -25,7 +25,6 @@ pub struct ValidationRuleDto {
 	pub blocking: bool,
 	pub severity: String,
 	pub category: String,
-	pub phases: Vec<String>,
 	pub message: String,
 	pub condition: String,
 }
@@ -99,11 +98,6 @@ pub async fn list_validation_rules(
 						blocking: rule.blocking,
 						severity: rule.severity.as_str().to_string(),
 						category: rule.category.as_str().to_string(),
-						phases: rule
-							.phases
-							.iter()
-							.map(|phase| phase.as_str().to_string())
-							.collect(),
 						message: rule.message.to_string(),
 						condition: rule.condition.as_str().to_string(),
 					})

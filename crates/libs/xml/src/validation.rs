@@ -5,8 +5,8 @@ use quick_xml::events::Event;
 use quick_xml::Reader;
 use std::path::{Path, PathBuf};
 
-pub(crate) mod business;
-pub use business::validate_e2b_xml_business;
+mod export_rules;
+pub use export_rules::validate_export_rules;
 
 #[derive(Debug, Clone)]
 pub struct XmlValidatorConfig {

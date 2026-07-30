@@ -1,12 +1,13 @@
 use super::*;
 
 pub(crate) async fn export_patch(
+	ctx: &Ctx,
 	mm: &ModelManager,
 	case_id: sqlx::types::Uuid,
 	raw_xml: &[u8],
 	authority: lib_core::regulatory::RegulatoryAuthority,
 ) -> Result<String> {
-	let bundle = load_drug_export_bundle(mm, case_id).await?;
+	let bundle = load_drug_export_bundle(ctx, mm, case_id).await?;
 	crate::export::roundtrip::patch_g_drugs_for_authority(
 		raw_xml,
 		&bundle.drugs,
@@ -1510,7 +1511,34 @@ mod tests {
 	use rust_decimal::Decimal;
 	use sqlx::types::time::Date;
 	use sqlx::types::Uuid;
+	use std::collections::BTreeSet;
 	use time::OffsetDateTime;
+
+	#[test]
+	fn section_g_writers_cover_registry_fields() {
+		let registry: serde_json::Value = serde_json::from_str(include_str!(
+			"../../../../../../registry/sections/g-drug.json"
+		))
+		.expect("section G registry");
+		let expected = registry
+			.as_array()
+			.expect("registry array")
+			.iter()
+			.filter(|entry| entry["local_only"] != true)
+			.filter_map(|entry| entry["e2br3_code"].as_str())
+			.collect::<BTreeSet<_>>();
+		let source = format!(
+			"{}\n{}",
+			include_str!("g.rs"),
+			include_str!("../roundtrip/g_drug.rs")
+		);
+		let implemented = source
+			.lines()
+			.filter_map(|line| line.trim().strip_prefix("/// e2b:"))
+			.collect::<BTreeSet<_>>();
+
+		assert_eq!(implemented, expected);
+	}
 
 	fn test_drug(id: Uuid, case_id: Uuid) -> DrugInformation {
 		DrugInformation {
