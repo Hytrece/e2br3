@@ -13,16 +13,15 @@ use time::Duration;
 use tower::ServiceExt;
 use uuid::Uuid;
 
-fn format_e2b_timestamp_utc(value: OffsetDateTime) -> String {
-	format!(
-		"{:04}{:02}{:02}{:02}{:02}{:02}",
-		value.year(),
-		u8::from(value.month()),
-		value.day(),
-		value.hour(),
-		value.minute(),
-		value.second()
+fn format_e2b_creation_timestamp(value: OffsetDateTime) -> String {
+	chrono::DateTime::<chrono::Utc>::from_timestamp(
+		value.unix_timestamp(),
+		value.nanosecond(),
 	)
+	.unwrap()
+	.with_timezone(&chrono_tz::Asia::Seoul)
+	.format("%Y%m%d%H%M%S%z")
+	.to_string()
 }
 
 fn parse_json_body(body: &[u8]) -> Result<Value> {
@@ -169,8 +168,9 @@ async fn create_case_defaults_c1_2_to_backend_creation_timestamp() -> Result<()>
 	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
 	let cookie = cookie_header(&token.to_string());
 	let app = web_server::app(mm.clone());
-	let lower_bound =
-		format_e2b_timestamp_utc(OffsetDateTime::now_utc() - Duration::seconds(2));
+	let lower_bound = format_e2b_creation_timestamp(
+		OffsetDateTime::now_utc() - Duration::seconds(2),
+	);
 
 	let (status, body) = post_json(
 		&app,
@@ -186,8 +186,9 @@ async fn create_case_defaults_c1_2_to_backend_creation_timestamp() -> Result<()>
 		}),
 	)
 	.await?;
-	let upper_bound =
-		format_e2b_timestamp_utc(OffsetDateTime::now_utc() + Duration::seconds(2));
+	let upper_bound = format_e2b_creation_timestamp(
+		OffsetDateTime::now_utc() + Duration::seconds(2),
+	);
 	assert_eq!(status, StatusCode::CREATED, "{body:?}");
 	let case_id =
 		Uuid::parse_str(body["data"]["id"].as_str().ok_or("missing case id")?)?;
@@ -213,7 +214,7 @@ async fn create_case_defaults_c1_2_to_backend_creation_timestamp() -> Result<()>
 		.await?;
 	mm.dbx().commit_txn().await?;
 
-	assert_eq!(transmission_date.len(), 14);
+	assert_eq!(transmission_date.len(), 19);
 	assert!(
 		transmission_date >= lower_bound && transmission_date <= upper_bound,
 		"transmission_date {transmission_date} not within {lower_bound}..={upper_bound}"

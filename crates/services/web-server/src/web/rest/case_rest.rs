@@ -3,7 +3,10 @@ use crate::web::rest::compliance::{
 };
 use axum::extract::{Path, State};
 use axum::Json;
+use chrono::{DateTime, Utc};
+use chrono_tz::Tz;
 use lib_core::ctx::Ctx;
+use lib_core::model::admin_settings::AdminSettingsBmc;
 use lib_core::model::authorization::CaseMutationKind;
 use lib_core::model::case::{
 	is_allowed_case_status_transition, is_valid_case_status,
@@ -42,6 +45,7 @@ const SYSTEM_VALIDATION_REASON_VALIDATOR: &str =
 	"system validation: validator mark-validated endpoint";
 const FDA_REPORT_TYPE_VALUES: &[&str] = &["1", "2", "3", "4"];
 const REVIEW_RECEIVER_MAX_LEN: usize = 128;
+const SETTINGS_KEY: &str = "system";
 const REVIEW_RECEIVER_ROW_FIELDS: &[&str] = &[
 	"receiver",
 	"receiverName",
@@ -58,6 +62,15 @@ const REVIEW_RECEIVER_ROW_FIELDS: &[&str] = &[
 struct ReviewReceiverRequirements {
 	needs_report_due_default: bool,
 	needs_report_due_date: bool,
+}
+
+fn format_case_creation_timestamp(now: OffsetDateTime, timezone: &str) -> String {
+	let timezone = timezone.parse::<Tz>().unwrap_or(chrono_tz::Asia::Seoul);
+	DateTime::<Utc>::from_timestamp(now.unix_timestamp(), now.nanosecond())
+		.expect("OffsetDateTime is within chrono's supported range")
+		.with_timezone(&timezone)
+		.format("%Y%m%d%H%M%S%z")
+		.to_string()
 }
 
 // -- Public helpers (used by sibling modules)
@@ -753,6 +766,7 @@ pub struct CaseListViewResult {
 pub struct CaseLifecycleItem {
 	pub case_id: Uuid,
 	pub version: i32,
+	pub transmission_date: Option<String>,
 	pub status: String,
 	pub created_at: String,
 	pub updated_at: String,
@@ -770,6 +784,7 @@ pub struct CaseLifecycleResult {
 struct CaseLifecycleRow {
 	case_id: Uuid,
 	version: i32,
+	transmission_date: Option<String>,
 	status: String,
 	created_at: sqlx::types::time::OffsetDateTime,
 	updated_at: sqlx::types::time::OffsetDateTime,
@@ -923,11 +938,14 @@ async fn create_case_authorized(
 	let data = to_internal_case_for_create(ctx, data);
 	validate_case_create_payload(&data)?;
 
+	let timezone = AdminSettingsBmc::get(ctx, mm, SETTINGS_KEY)
+		.await
+		.map_err(Error::Model)?
+		.and_then(|settings| settings.get("timezone")?.as_str().map(str::to_owned))
+		.unwrap_or_else(|| "Asia/Seoul".to_string());
 	let id = CaseBmc::create(ctx, mm, data).await?;
 	let creation_timestamp =
-		crate::web::rest::case_export_rest::format_message_timestamp_utc_pub(
-			OffsetDateTime::now_utc(),
-		);
+		format_case_creation_timestamp(OffsetDateTime::now_utc(), &timezone);
 	SafetyReportIdentificationBmc::create(
 		ctx,
 		mm,
@@ -1493,6 +1511,7 @@ async fn get_case_lifecycle_authorized(
 					r#"
 					SELECT c.id AS case_id,
 					       s.version,
+					       s.transmission_date,
 					       c.status,
 					       c.created_at,
 					       c.updated_at
@@ -1520,6 +1539,7 @@ async fn get_case_lifecycle_authorized(
 		.map(|row| CaseLifecycleItem {
 			case_id: row.case_id,
 			version: row.version,
+			transmission_date: row.transmission_date,
 			status: row.status,
 			created_at: row.created_at.to_string(),
 			updated_at: row.updated_at.to_string(),
@@ -1584,4 +1604,20 @@ async fn list_case_link_options_authorized(
 			data: CaseLinkOptionList { items: scoped },
 		}),
 	))
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn case_creation_timestamp_uses_timezone_offset_at_that_instant() {
+		let winter = OffsetDateTime::from_unix_timestamp(1_767_268_800).unwrap();
+		let summer = OffsetDateTime::from_unix_timestamp(1_783_249_200).unwrap();
+
+		assert!(format_case_creation_timestamp(winter, "Europe/Berlin")
+			.ends_with("+0100"));
+		assert!(format_case_creation_timestamp(summer, "Europe/Berlin")
+			.ends_with("+0200"));
+	}
 }
