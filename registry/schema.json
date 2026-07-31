@@ -65,6 +65,7 @@
         "status": { "$ref": "#/$defs/mappingStatus" },
         "model": { "type": "string" },
         "field": { "type": "string" },
+        "mapping_key": { "type": "string" },
         "section": { "type": "string" },
         "file": { "type": "string" },
         "evidence": { "type": "string" }

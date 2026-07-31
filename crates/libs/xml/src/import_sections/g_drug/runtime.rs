@@ -404,7 +404,9 @@ async fn import_drug_reaction_assessments(
 				RelatednessAssessmentForUpdate {
 					source_of_assessment: rel.source_of_assessment,
 					method_of_assessment: rel.method_of_assessment,
+					method_of_assessment_kr1: rel.method_of_assessment_kr1,
 					result_of_assessment: rel.result_of_assessment,
+					result_of_assessment_kr1: rel.result_of_assessment_kr1,
 					result_of_assessment_kr2: rel.result_of_assessment_kr2,
 				},
 			)
@@ -418,7 +420,9 @@ async fn import_drug_reaction_assessments(
 					sequence_number: *seq,
 					source_of_assessment: rel.source_of_assessment.clone(),
 					method_of_assessment: rel.method_of_assessment.clone(),
+					method_of_assessment_kr1: rel.method_of_assessment_kr1.clone(),
 					result_of_assessment: rel.result_of_assessment.clone(),
+					result_of_assessment_kr1: rel.result_of_assessment_kr1.clone(),
 					result_of_assessment_kr2: rel.result_of_assessment_kr2.clone(),
 				},
 			)
@@ -430,7 +434,9 @@ async fn import_drug_reaction_assessments(
 				RelatednessAssessmentForUpdate {
 					source_of_assessment: rel.source_of_assessment,
 					method_of_assessment: rel.method_of_assessment,
+					method_of_assessment_kr1: rel.method_of_assessment_kr1,
 					result_of_assessment: rel.result_of_assessment,
+					result_of_assessment_kr1: rel.result_of_assessment_kr1,
 					result_of_assessment_kr2: rel.result_of_assessment_kr2,
 				},
 			)

@@ -1502,14 +1502,13 @@
     "notes": ""
   },
   {
-    "id": "FDA.G.k.local.additionalInfoCodesJson",
-    "e2br3_code": "FDA.G.k.local.additionalInfoCodesJson",
+    "id": "G.k.10.r",
+    "e2br3_code": "G.k.10.r",
     "label": "Additional Information on Drug Code List",
     "section": "G",
-    "authority": "FDA",
+    "authority": "ICH",
     "status": "complete",
     "editor_page": "DG",
-    "local_only": true,
     "backend": {
       "status": "mapped",
       "model": "DrugInformation",
@@ -1525,7 +1524,7 @@
       "evidence": "SectionG renders RepeatableFdaCodeList with fieldNumber G.k.10.r bound to drugs[index].drugAdditionalInformationCodes."
     },
     "action": "",
-    "notes": "Backend JSON carrier; the official element FDA.G.k.10a is separately mapped."
+    "notes": "Repeatable G.k.10.r values are stored as a JSON array until the editor storage is normalized."
   },
   {
     "id": "G.k.9.i.3.1a",
@@ -1675,6 +1674,31 @@
     "editor_page": "DG"
   },
   {
+    "id": "G.k.9.i.1",
+    "e2br3_code": "G.k.9.i.1",
+    "label": "Reaction or Event Assessed",
+    "section": "G",
+    "authority": "ICH",
+    "status": "complete",
+    "backend": {
+      "status": "mapped",
+      "model": "DrugReactionAssessment",
+      "field": "reaction_id",
+      "file": "crates/libs/lib-core/src/model/drug_reaction_assessment.rs",
+      "evidence": "DrugReactionAssessment.reaction_id links the assessed reaction emitted by G.k.9.i.1."
+    },
+    "frontend": {
+      "status": "mapped",
+      "section": "drugs.drugReactionAssessments",
+      "field": "reactionId",
+      "file": "../frontend/E2BR3-frontend/components/case-form/sections/SectionG.tsx",
+      "evidence": "The assessment row stores the selected reaction identifier."
+    },
+    "action": "",
+    "notes": "",
+    "editor_page": "DG"
+  },
+  {
     "id": "G.k.9.i.2.r.1",
     "e2br3_code": "G.k.9.i.2.r.1",
     "label": "Source of Assessment",
@@ -1725,6 +1749,31 @@
     "editor_page": "DG"
   },
   {
+    "id": "G.k.9.i.2.r.2.KR.1",
+    "e2br3_code": "G.k.9.i.2.r.2.KR.1",
+    "label": "MFDS Method of Assessment",
+    "section": "G",
+    "authority": "MFDS",
+    "status": "complete",
+    "backend": {
+      "status": "mapped",
+      "model": "RelatednessAssessment",
+      "field": "method_of_assessment_kr1",
+      "file": "crates/libs/lib-core/src/model/drug_reaction_assessment.rs",
+      "evidence": "MFDS export encodes method_of_assessment with the KR.1 code system."
+    },
+    "frontend": {
+      "status": "mapped",
+      "section": "drugs.drugReactionAssessments",
+      "field": "methodOfAssessmentKr1",
+      "file": "../frontend/E2BR3-frontend/components/case-form/sections/SectionG.tsx",
+      "evidence": "MFDS uses the existing assessment-method input as the KR.1 coded value."
+    },
+    "action": "",
+    "notes": "Authority-specific XML encoding shares the canonical assessment field.",
+    "editor_page": "DG"
+  },
+  {
     "id": "G.k.9.i.2.r.3",
     "e2br3_code": "G.k.9.i.2.r.3",
     "label": "Result of Assessment",
@@ -1747,6 +1796,31 @@
     },
     "action": "",
     "notes": "",
+    "editor_page": "DG"
+  },
+  {
+    "id": "G.k.9.i.2.r.3.KR.1",
+    "e2br3_code": "G.k.9.i.2.r.3.KR.1",
+    "label": "WHO-UMC Result of Assessment",
+    "section": "G",
+    "authority": "MFDS",
+    "status": "complete",
+    "backend": {
+      "status": "mapped",
+      "model": "RelatednessAssessment",
+      "field": "result_of_assessment_kr1",
+      "file": "crates/libs/lib-core/src/model/drug_reaction_assessment.rs",
+      "evidence": "MFDS export encodes result_of_assessment with the WHO-UMC KR.1 code system."
+    },
+    "frontend": {
+      "status": "mapped",
+      "section": "drugs.drugReactionAssessments",
+      "field": "resultOfAssessmentKr1",
+      "file": "../frontend/E2BR3-frontend/components/case-form/sections/SectionG.tsx",
+      "evidence": "MFDS uses the existing assessment-result input as the KR.1 coded value."
+    },
+    "action": "",
+    "notes": "Authority-specific XML encoding shares the canonical assessment field.",
     "editor_page": "DG"
   },
   {
@@ -1857,6 +1931,7 @@
       "status": "mapped",
       "model": "FdaDeviceCode",
       "field": "value_code",
+      "mapping_key": "device_problem",
       "file": "crates/libs/lib-core/src/model/drug.rs",
       "evidence": "FdaDeviceCode.value_code stores the official FDA device element in the relational repeat model."
     },
@@ -1929,6 +2004,7 @@
       "status": "mapped",
       "model": "FdaDeviceCode",
       "field": "value_code",
+      "mapping_key": "follow_up_type",
       "file": "crates/libs/lib-core/src/model/drug.rs",
       "evidence": "FdaDeviceCode.value_code stores the official FDA device element in the relational repeat model."
     },
@@ -2121,6 +2197,7 @@
       "status": "mapped",
       "model": "FdaDeviceCode",
       "field": "value_code",
+      "mapping_key": "remedial_action",
       "file": "crates/libs/lib-core/src/model/drug.rs",
       "evidence": "FdaDeviceCode.value_code stores the official FDA device element in the relational repeat model."
     },
@@ -2368,28 +2445,6 @@
       "field": "drugAssessmentNotApplicable",
       "file": "../frontend/E2BR3-frontend/components/case-form/sections/SectionG.tsx",
       "evidence": "Strict frontend input inventory extracts drugs.drugAssessmentNotApplicable from the case-form section source."
-    },
-    "action": "",
-    "notes": "Classified explicitly so frontend inventory remains exhaustive without forcing a false backend BMC mapping. UI/technical control only; intentionally not an E2BR3 data element."
-  },
-  {
-    "id": "G.k.local.drugReactionAssessmentReactionId",
-    "e2br3_code": "G.k.local.drugReactionAssessmentReactionId",
-    "label": "Drug Reaction Assessment Reaction Selector",
-    "section": "G",
-    "authority": "ICH",
-    "status": "not_applicable",
-    "local_only": true,
-    "backend": {
-      "status": "not_applicable",
-      "evidence": "drugReactionAssessments.reactionId is a frontend workflow/control field, not an E2BR3 BMC business field in the tracked backend inventory."
-    },
-    "frontend": {
-      "status": "mapped",
-      "section": "drugs",
-      "field": "drugReactionAssessments.reactionId",
-      "file": "../frontend/E2BR3-frontend/components/case-form/sections/SectionG.tsx",
-      "evidence": "Strict frontend input inventory extracts drugs.drugReactionAssessments.reactionId from the case-form section source."
     },
     "action": "",
     "notes": "Classified explicitly so frontend inventory remains exhaustive without forcing a false backend BMC mapping. UI/technical control only; intentionally not an E2BR3 data element."

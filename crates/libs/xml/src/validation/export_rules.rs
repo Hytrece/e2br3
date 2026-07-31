@@ -615,11 +615,28 @@ mod tests {
 
 	#[test]
 	fn authority_filtering_has_no_fake_rule_code() {
-		let xml = br#"<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3"><value codeSystem="2.16.840.1.113883.3.989.5.1.10.1.1"/></MCCI_IN200100UV01>"#;
-		let errors = validate_export_rules(xml, RegulatoryAuthority::Fda)
-			.expect("authority filtering");
-		assert!(errors.iter().any(|error| {
-			error.code.is_none() && error.message.contains("MFDS regional fields")
-		}));
+		for (xml, authority, message) in [
+			(
+				br#"<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3"><value codeSystem="2.16.840.1.113883.3.989.5.1.10.1.1"/></MCCI_IN200100UV01>"#.as_slice(),
+				RegulatoryAuthority::Fda,
+				"MFDS regional fields",
+			),
+			(
+				br#"<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3"><partProduct classCode="DEV"/></MCCI_IN200100UV01>"#.as_slice(),
+				RegulatoryAuthority::Mfds,
+				"FDA regional fields",
+			),
+			(
+				br#"<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3"><raceCode/></MCCI_IN200100UV01>"#.as_slice(),
+				RegulatoryAuthority::Ich,
+				"FDA regional fields",
+			),
+		] {
+			let errors = validate_export_rules(xml, authority)
+				.expect("authority filtering");
+			assert!(errors.iter().any(|error| {
+				error.code.is_none() && error.message.contains(message)
+			}));
+		}
 	}
 }

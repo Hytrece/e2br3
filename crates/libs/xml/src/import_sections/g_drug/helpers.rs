@@ -29,8 +29,18 @@ pub(crate) struct RelatednessImport {
 	pub(crate) reaction_xml_id: Option<Uuid>,
 	pub(crate) source_of_assessment: Option<String>,
 	pub(crate) method_of_assessment: Option<String>,
+	pub(crate) method_of_assessment_kr1: Option<String>,
 	pub(crate) result_of_assessment: Option<String>,
+	pub(crate) result_of_assessment_kr1: Option<String>,
 	pub(crate) result_of_assessment_kr2: Option<String>,
+}
+
+/// e2b:G.k.9.i.2.r.2.KR.1
+fn read_g_k_9_i_2_r_2_kr_1(
+	xpath: &mut Context,
+	node: &libxml::tree::Node,
+) -> Option<String> {
+	first_attr(xpath, node, "hl7:causalityAssessment/hl7:methodCode[@codeSystem='2.16.840.1.113883.3.989.5.1.10.1.5']", "code")
 }
 
 fn build_xpath(xml: &[u8]) -> Result<(libxml::tree::Document, Context)> {
@@ -204,6 +214,14 @@ fn read_g_k_9_i_2_r_3(
 	first_text(xpath, node, "hl7:causalityAssessment/hl7:value[not(@code)]")
 }
 
+/// e2b:G.k.9.i.2.r.3.KR.1
+fn read_g_k_9_i_2_r_3_kr_1(
+	xpath: &mut Context,
+	node: &libxml::tree::Node,
+) -> Option<String> {
+	first_attr(xpath, node, "hl7:causalityAssessment/hl7:value[@codeSystem='2.16.840.1.113883.3.989.5.1.10.1.5']", "code")
+}
+
 /// e2b:G.k.9.i.2.r.3.KR.2
 fn read_g_k_9_i_2_r_3_kr_2(
 	xpath: &mut Context,
@@ -361,7 +379,9 @@ pub(crate) fn parse_relatedness_assessments(
 	for node in nodes {
 		let source_of_assessment = read_g_k_9_i_2_r_1(&mut xpath, &node);
 		let method_of_assessment = read_g_k_9_i_2_r_2(&mut xpath, &node);
+		let method_of_assessment_kr1 = read_g_k_9_i_2_r_2_kr_1(&mut xpath, &node);
 		let result_of_assessment = read_g_k_9_i_2_r_3(&mut xpath, &node);
+		let result_of_assessment_kr1 = read_g_k_9_i_2_r_3_kr_1(&mut xpath, &node);
 		let result_of_assessment_kr2 = read_g_k_9_i_2_r_3_kr_2(&mut xpath, &node);
 		let reaction_xml_id = parse_uuid_opt(first_attr(
 			&mut xpath,
@@ -381,7 +401,9 @@ pub(crate) fn parse_relatedness_assessments(
 			reaction_xml_id,
 			source_of_assessment,
 			method_of_assessment,
+			method_of_assessment_kr1,
 			result_of_assessment,
+			result_of_assessment_kr1,
 			result_of_assessment_kr2,
 		});
 	}

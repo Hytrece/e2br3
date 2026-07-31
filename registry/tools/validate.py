@@ -754,7 +754,7 @@ def validate_registry(
 
             backend = row.get("backend")
             if isinstance(backend, dict) and backend.get("status") == "mapped":
-                key = f"{backend.get('model')}.{backend.get('field')}"
+                key = f"{backend.get('model')}.{backend.get('field')}:{backend.get('mapping_key', '')}"
                 if key in seen_backend:
                     result.add(f"{row_id}: duplicate backend mapping {key}; first seen in {seen_backend[key]}")
                 seen_backend[key] = row_id

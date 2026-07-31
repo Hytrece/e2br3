@@ -345,8 +345,21 @@ fn write_fda_c_2_r_2_8(xpath: &mut Context, base: &str, value: &PrimarySource) {
 
 /// e2b:C.2.r.3
 fn write_c_2_r_3(xpath: &mut Context, base: &str, value: &PrimarySource) {
+	let path = format!(
+		"{base}/hl7:assignedPerson/hl7:asLocatedEntity/hl7:location/hl7:code"
+	);
 	if let Some(code) = value.country_code.as_deref() {
-		set_attr_first(xpath, &format!("{base}/hl7:assignedPerson/hl7:asLocatedEntity/hl7:location/hl7:code"), "code", code);
+		set_attr_first(xpath, &path, "code", code);
+	} else {
+		if let Ok(nodes) = xpath.findnodes(&path, None) {
+			for mut node in nodes.into_iter().take(1) {
+				let _ = node.remove_attribute("codeSystem");
+				if let Some(null_flavor) = value.country_code_null_flavor.as_deref()
+				{
+					let _ = node.set_attribute("nullFlavor", null_flavor);
+				}
+			}
+		}
 	}
 }
 

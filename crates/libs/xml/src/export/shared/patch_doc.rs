@@ -15,7 +15,20 @@ use libxml::xpath::Context;
 
 pub(crate) fn postprocess_export_doc(doc: &mut Document, xpath: &mut Context) {
 	normalize_export_values(xpath);
+	normalize_empty_text(xpath);
 	prune_optional_nodes(doc, xpath);
+}
+
+// e2b:ICH.XML.TEXT.NULLFLAVOR.REQUIRED
+fn normalize_empty_text(xpath: &mut Context) {
+	if let Ok(nodes) = xpath.findnodes(
+		"//*[self::hl7:text or self::hl7:originalText][normalize-space(.) = '' and not(@nullFlavor) and not(*)]",
+		None,
+	) {
+		for mut node in nodes {
+			let _ = node.set_attribute("nullFlavor", "NI");
+		}
+	}
 }
 
 fn normalize_export_values(xpath: &mut Context) {
@@ -36,6 +49,8 @@ fn normalize_export_values(xpath: &mut Context) {
 				if !valid {
 					let _ = node.set_attribute("nullFlavor", "NI");
 					let _ = node.remove_attribute(spec.attribute);
+					let _ = node.remove_attribute("codeSystem");
+					let _ = node.remove_attribute("codeSystemVersion");
 				}
 			}
 		}

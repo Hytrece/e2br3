@@ -504,7 +504,14 @@ async fn create_reaction(
 					"reaction_meddra_version": "26.0",
 					"reaction_meddra_code": "10000001",
 				"outcome": "1",
-				"reaction_language": "eng"
+				"reaction_language": "eng",
+				"serious": false,
+				"criteria_death_null_flavor": "NI",
+				"criteria_life_threatening_null_flavor": "NI",
+				"criteria_hospitalization_null_flavor": "NI",
+				"criteria_disabling_null_flavor": "NI",
+				"criteria_congenital_anomaly_null_flavor": "NI",
+				"criteria_other_medically_important_null_flavor": "NI"
 			}})
 			.to_string(),
 		))?;
@@ -601,8 +608,11 @@ async fn mark_case_validated(
 	let body = to_bytes(res.into_body(), usize::MAX).await?;
 	let value: Value = serde_json::from_slice(&body)?;
 	if status != StatusCode::OK {
+		let (_, validation) =
+			get_json(app, cookie, &format!("/api/cases/{case_id}/validation"))
+				.await?;
 		return Err(
-			format!("mark validated failed: status={status} body={value}").into(),
+			format!("mark validated failed: status={status} body={value} validation={validation}").into(),
 		);
 	}
 	Ok(())

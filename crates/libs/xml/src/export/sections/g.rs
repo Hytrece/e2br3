@@ -265,6 +265,21 @@ fn write_g_k_11(value: &DrugInformation) -> Option<&str> {
 		.filter(|v| !v.trim().is_empty())
 }
 
+/// e2b:G.k.10.r
+fn write_g_k_10_r(value: &DrugInformation) -> Vec<&str> {
+	value
+		.drug_additional_info_codes_json
+		.as_ref()
+		.and_then(serde_json::Value::as_array)
+		.into_iter()
+		.flatten()
+		.filter_map(|entry| {
+			entry.get("value_code").and_then(serde_json::Value::as_str)
+		})
+		.filter(|code| !code.trim().is_empty())
+		.collect()
+}
+
 /// e2b:FDA.G.k.10a
 fn write_fda_g_k_10a(value: &DrugInformation) -> Option<&str> {
 	value.fda_additional_info_coded.as_deref()
@@ -931,6 +946,11 @@ pub(crate) fn drug_fragment(
 			out.push_str(&fda_device_fragment(device, &codes));
 		}
 	}
+	for code in write_g_k_10_r(drug) {
+		out.push_str("<outboundRelationship2 typeCode=\"REFR\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code code=\"9\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.19\"/><value xsi:type=\"CE\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.17\" code=\"");
+		out.push_str(&xml_escape(code));
+		out.push_str("\"/></observation></outboundRelationship2>");
+	}
 	out.push_str("</kindOfProduct>");
 	if let Some(country) = write_g_k_2_4(drug) {
 		out.push_str("<subjectOf typeCode=\"SBJ\"><productEvent classCode=\"ACT\" moodCode=\"EVN\"><code code=\"1\" codeSystemVersion=\"1.0\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.18\" displayName=\"retailSupply\"/><performer typeCode=\"PRF\"><assignedEntity classCode=\"ASSIGNED\"><representedOrganization determinerCode=\"INSTANCE\" classCode=\"ORG\"><addr><country>");
@@ -1359,12 +1379,27 @@ pub(crate) fn relatedness_fragment(
 		out.push_str("<value xsi:type=\"CE\" codeSystem=\"2.16.840.1.113883.3.989.5.1.10.1.6\" code=\"");
 		out.push_str(&xml_escape(result));
 		out.push_str("\"/>");
+	} else if matches!(authority, RegulatoryAuthority::Mfds) {
+		if let Some(result) = write_g_k_9_i_2_r_3_kr_1(relatedness) {
+			out.push_str("<value xsi:type=\"CE\" codeSystem=\"2.16.840.1.113883.3.989.5.1.10.1.5\" code=\"");
+			out.push_str(&xml_escape(result));
+			out.push_str("\"/>");
+		}
 	} else if let Some(result) = write_g_k_9_i_2_r_3(relatedness) {
 		out.push_str("<value xsi:type=\"ST\">");
 		out.push_str(&xml_escape(result));
 		out.push_str("</value>");
 	}
-	if let Some(method) = write_g_k_9_i_2_r_2(relatedness) {
+	if let Some(method) = matches!(authority, RegulatoryAuthority::Mfds)
+		.then(|| write_g_k_9_i_2_r_2_kr_1(relatedness))
+		.flatten()
+	{
+		out.push_str(
+			"<methodCode codeSystem=\"2.16.840.1.113883.3.989.5.1.10.1.5\" code=\"",
+		);
+		out.push_str(&xml_escape(method));
+		out.push_str("\"/>");
+	} else if let Some(method) = write_g_k_9_i_2_r_2(relatedness) {
 		out.push_str("<methodCode><originalText>");
 		out.push_str(&xml_escape(method));
 		out.push_str("</originalText></methodCode>");
@@ -1375,7 +1410,7 @@ pub(crate) fn relatedness_fragment(
 		out.push_str("</originalText></code></assignedEntity></author>");
 	}
 	out.push_str("<subject1 typeCode=\"SUBJ\"><adverseEffectReference classCode=\"OBS\" moodCode=\"EVN\"><id root=\"");
-	out.push_str(&xml_escape(&assessment.reaction_id.to_string()));
+	out.push_str(&xml_escape(&write_g_k_9_i_1(assessment)));
 	out.push_str("\"/></adverseEffectReference></subject1>");
 	out.push_str("<subject2 typeCode=\"SUBJ\"><productUseReference classCode=\"SBADM\" moodCode=\"EVN\"><id root=\"");
 	out.push_str(&xml_escape(&drug_id.to_string()));
@@ -1394,14 +1429,29 @@ fn write_g_k_9_i_2_r_2(value: &RelatednessAssessment) -> Option<&str> {
 	value.method_of_assessment.as_deref()
 }
 
+/// e2b:G.k.9.i.2.r.2.KR.1
+fn write_g_k_9_i_2_r_2_kr_1(value: &RelatednessAssessment) -> Option<&str> {
+	value.method_of_assessment_kr1.as_deref()
+}
+
 /// e2b:G.k.9.i.2.r.3
 fn write_g_k_9_i_2_r_3(value: &RelatednessAssessment) -> Option<&str> {
 	value.result_of_assessment.as_deref()
 }
 
+/// e2b:G.k.9.i.2.r.3.KR.1
+fn write_g_k_9_i_2_r_3_kr_1(value: &RelatednessAssessment) -> Option<&str> {
+	value.result_of_assessment_kr1.as_deref()
+}
+
 /// e2b:G.k.9.i.2.r.3.KR.2
 fn write_g_k_9_i_2_r_3_kr_2(value: &RelatednessAssessment) -> Option<&str> {
 	value.result_of_assessment_kr2.as_deref()
+}
+
+/// e2b:G.k.9.i.1
+fn write_g_k_9_i_1(value: &DrugReactionAssessment) -> String {
+	value.reaction_id.to_string()
 }
 
 pub(crate) fn causality_role_fragment(drug: &DrugInformation) -> Result<String> {
@@ -1934,6 +1984,39 @@ mod tests {
 		assert!(fda.contains("2.16.840.1.113883.3.989.5.1.2.1.1.8"));
 		assert!(fda.contains("code=\"1\" displayName=\"Similar Device\""));
 		assert!(!mfds.contains("2.16.840.1.113883.3.989.5.1.2.1.1.8"));
+	}
+
+	#[test]
+	fn mfds_relatedness_uses_kr1_code_systems() {
+		let assessment = test_assessment();
+		let relatedness = RelatednessAssessment {
+			id: Uuid::new_v4(),
+			drug_reaction_assessment_id: assessment.id,
+			sequence_number: 1,
+			source_of_assessment: None,
+			method_of_assessment: Some("free text".to_string()),
+			method_of_assessment_kr1: Some("1".to_string()),
+			result_of_assessment: Some("free text".to_string()),
+			result_of_assessment_kr1: Some("3".to_string()),
+			result_of_assessment_kr2: None,
+			deleted: false,
+			created_at: OffsetDateTime::now_utc(),
+			updated_at: OffsetDateTime::now_utc(),
+			created_by: Uuid::new_v4(),
+			updated_by: None,
+		};
+		let xml = relatedness_fragment(
+			Uuid::new_v4(),
+			&assessment,
+			&relatedness,
+			RegulatoryAuthority::Mfds,
+		);
+
+		assert!(xml.contains("methodCode codeSystem=\"2.16.840.1.113883.3.989.5.1.10.1.5\" code=\"1\""));
+		assert!(xml.contains(
+			"codeSystem=\"2.16.840.1.113883.3.989.5.1.10.1.5\" code=\"3\""
+		));
+		assert!(!xml.contains("free text"));
 	}
 
 	fn test_assessment() -> DrugReactionAssessment {

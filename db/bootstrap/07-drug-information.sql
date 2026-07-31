@@ -174,7 +174,7 @@ CREATE TABLE dosage_information (
     dose_form_termid_version VARCHAR(10),
 
 	-- G.k.4.r.10 - Route of Administration
-	route_of_administration VARCHAR(3),  -- E2B(R3) code list
+	route_of_administration VARCHAR(200),  -- G.k.4.r.10.1 free text
 	route_of_administration_null_flavor VARCHAR(4),
     route_termid VARCHAR(50),
     route_termid_version VARCHAR(10),
@@ -388,9 +388,13 @@ CREATE TABLE relatedness_assessments (
 
     -- G.k.9.i.2.r.2 - Method of Assessment
     method_of_assessment VARCHAR(100),
+    -- MFDS.G.k.9.i.2.r.2.KR.1 - MFDS coded method
+    method_of_assessment_kr1 VARCHAR(10),
 
     -- G.k.9.i.2.r.3 - Result of Assessment
     result_of_assessment VARCHAR(50),
+    -- MFDS.G.k.9.i.2.r.3.KR.1 - WHO-UMC coded result
+    result_of_assessment_kr1 VARCHAR(10),
     -- MFDS.G.k.9.i.2.r.3.KR.2 - Additional KR assessment result text
     result_of_assessment_kr2 VARCHAR(2000),
     deleted BOOLEAN NOT NULL DEFAULT false,

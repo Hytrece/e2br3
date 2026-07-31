@@ -171,11 +171,21 @@ async fn fresh_full_build_validates_for_all_authorities() -> Result<()> {
 			Some(config.clone()),
 		)?;
 		assert!(report.ok, "{authority:?}: {:?}", report.errors);
+		let export_errors =
+			xml::validation::validate_export_rules(exported.as_bytes(), authority)?;
+		assert!(export_errors.is_empty(), "{authority:?}: {export_errors:?}");
 
 		if matches!(authority, lib_core::regulatory::RegulatoryAuthority::Fda) {
 			assert!(exported.contains("C54451"), "FDA device data missing");
 		} else {
 			assert!(!exported.contains("C54451"), "FDA device data leaked");
+		}
+		if !matches!(authority, lib_core::regulatory::RegulatoryAuthority::Mfds) {
+			assert!(!exported.contains(".KR."), "MFDS regional data leaked");
+			assert!(
+				!exported.contains("2.16.840.1.113883.3.989.5.1.10."),
+				"MFDS regional OID leaked"
+			);
 		}
 	}
 

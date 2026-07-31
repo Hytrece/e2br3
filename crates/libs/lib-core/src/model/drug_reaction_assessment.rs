@@ -89,9 +89,13 @@ pub struct RelatednessAssessment {
 
 	// G.k.9.i.2.r.2 - Method of Assessment
 	pub method_of_assessment: Option<String>,
+	// MFDS.G.k.9.i.2.r.2.KR.1
+	pub method_of_assessment_kr1: Option<String>,
 
 	// G.k.9.i.2.r.3 - Result of Assessment
 	pub result_of_assessment: Option<String>,
+	// MFDS.G.k.9.i.2.r.3.KR.1
+	pub result_of_assessment_kr1: Option<String>,
 	// MFDS.G.k.9.i.2.r.3.KR.2 - Additional KR assessment result text
 	pub result_of_assessment_kr2: Option<String>,
 
@@ -110,7 +114,9 @@ pub struct RelatednessAssessmentForCreate {
 	pub sequence_number: i32,
 	pub source_of_assessment: Option<String>,
 	pub method_of_assessment: Option<String>,
+	pub method_of_assessment_kr1: Option<String>,
 	pub result_of_assessment: Option<String>,
+	pub result_of_assessment_kr1: Option<String>,
 	pub result_of_assessment_kr2: Option<String>,
 }
 
@@ -118,7 +124,9 @@ pub struct RelatednessAssessmentForCreate {
 pub struct RelatednessAssessmentForUpdate {
 	pub source_of_assessment: Option<String>,
 	pub method_of_assessment: Option<String>,
+	pub method_of_assessment_kr1: Option<String>,
 	pub result_of_assessment: Option<String>,
+	pub result_of_assessment_kr1: Option<String>,
 	pub result_of_assessment_kr2: Option<String>,
 }
 

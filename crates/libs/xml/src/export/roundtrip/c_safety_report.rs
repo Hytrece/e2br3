@@ -501,6 +501,7 @@ fn write_c_1_3(
 	let path = "//hl7:investigationEvent/hl7:subjectOf2/hl7:investigationCharacteristic[hl7:code[@code='1' and @codeSystem='2.16.840.1.113883.3.989.2.1.1.23']]/hl7:value";
 	set_attr_first(xpath, path, "type", "CE");
 	set_attr_first(xpath, path, "code", report_type);
+	remove_nodes(xpath, &format!("{path}/hl7:originalText"));
 	Ok(())
 }
 
