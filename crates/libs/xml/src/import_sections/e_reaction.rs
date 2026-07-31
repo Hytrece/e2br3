@@ -1,6 +1,7 @@
 // Section E importer (Reaction/Event) - FDA mapping.
 
 use crate::error::Error;
+use crate::import_constraint;
 use crate::import_sections::shared::ImportIdMap;
 use crate::mapping::fda::e_reaction::EReactionPaths;
 use crate::Result;
@@ -37,7 +38,7 @@ pub struct EReactionImport {
 	pub criteria_congenital_anomaly_null_flavor: Option<String>,
 	pub criteria_other_medically_important: Option<bool>,
 	pub criteria_other_medically_important_null_flavor: Option<String>,
-	pub required_intervention: Option<String>,
+	pub required_intervention: Option<bool>,
 	pub required_intervention_null_flavor: Option<String>,
 	pub expectedness: Option<String>,
 	pub severity: Option<String>,
@@ -107,26 +108,26 @@ pub fn parse_e_reactions(xml: &[u8]) -> Result<Vec<EReactionImport>> {
 			&node,
 			EReactionPaths::XML_ID_ROOT,
 		));
-		let translation_text = read_e_i_1_1b(&mut xpath, &node);
-		let primary = read_e_i_1_1a(&mut xpath, &node, &translation_text, idx);
-		let reaction_meddra_version = read_e_i_2_1a(&mut xpath, &node);
-		let reaction_meddra_code = read_e_i_2_1b(&mut xpath, &node);
-		let reaction_language = read_e_i_1_2(&mut xpath, &node);
-		let (term_highlighted, serious_from_term) = read_e_i_3_1(&mut xpath, &node);
+		let translation_text = read_e_i_1_1b(&mut xpath, &node)?;
+		let primary = read_e_i_1_1a(&mut xpath, &node, &translation_text, idx)?;
+		let reaction_meddra_version = read_e_i_2_1a(&mut xpath, &node)?;
+		let reaction_meddra_code = read_e_i_2_1b(&mut xpath, &node)?;
+		let reaction_language = read_e_i_1_2(&mut xpath, &node)?;
+		let (term_highlighted, serious_from_term) = read_e_i_3_1(&mut xpath, &node)?;
 		let (criteria_death, criteria_death_null_flavor) =
-			read_e_i_3_2a(&mut xpath, &node);
+			read_e_i_3_2a(&mut xpath, &node)?;
 		let (criteria_life_threatening, criteria_life_threatening_null_flavor) =
-			read_e_i_3_2b(&mut xpath, &node);
+			read_e_i_3_2b(&mut xpath, &node)?;
 		let (criteria_hospitalization, criteria_hospitalization_null_flavor) =
-			read_e_i_3_2c(&mut xpath, &node);
+			read_e_i_3_2c(&mut xpath, &node)?;
 		let (criteria_disabling, criteria_disabling_null_flavor) =
-			read_e_i_3_2d(&mut xpath, &node);
+			read_e_i_3_2d(&mut xpath, &node)?;
 		let (criteria_congenital_anomaly, criteria_congenital_anomaly_null_flavor) =
-			read_e_i_3_2e(&mut xpath, &node);
+			read_e_i_3_2e(&mut xpath, &node)?;
 		let (
 			criteria_other_medically_important,
 			criteria_other_medically_important_null_flavor,
-		) = read_e_i_3_2f(&mut xpath, &node);
+		) = read_e_i_3_2f(&mut xpath, &node)?;
 		let serious = read_e_i_serious(
 			[
 				criteria_death,
@@ -140,7 +141,7 @@ pub fn parse_e_reactions(xml: &[u8]) -> Result<Vec<EReactionImport>> {
 		);
 
 		let (required_intervention, required_intervention_null_flavor) =
-			read_fda_e_i_3_2h(&mut xpath, &node);
+			read_fda_e_i_3_2h(&mut xpath, &node)?;
 		let expectedness = read_e_local_expectedness(&mut xpath, &node);
 		let severity = read_e_local_severity(&mut xpath, &node);
 		let mfds_device_ae_classification =
@@ -177,13 +178,13 @@ pub fn parse_e_reactions(xml: &[u8]) -> Result<Vec<EReactionImport>> {
 			read_e_i_kr_device_action_label_change(&mut xpath, &node);
 		let mfds_device_action_other =
 			read_e_i_kr_device_action_other(&mut xpath, &node);
-		let (start_date, start_date_null_flavor) = read_e_i_4(&mut xpath, &node);
-		let (end_date, end_date_null_flavor) = read_e_i_5(&mut xpath, &node);
-		let duration_value = read_e_i_6a(&mut xpath, &node);
-		let duration_unit = read_e_i_6b(&mut xpath, &node);
-		let outcome = read_e_i_7(&mut xpath, &node);
-		let medical_confirmation = read_e_i_8(&mut xpath, &node);
-		let country_code = read_e_i_9(&mut xpath, &node);
+		let (start_date, start_date_null_flavor) = read_e_i_4(&mut xpath, &node)?;
+		let (end_date, end_date_null_flavor) = read_e_i_5(&mut xpath, &node)?;
+		let duration_value = read_e_i_6a(&mut xpath, &node)?;
+		let duration_unit = read_e_i_6b(&mut xpath, &node)?;
+		let outcome = read_e_i_7(&mut xpath, &node)?;
+		let medical_confirmation = read_e_i_8(&mut xpath, &node)?;
+		let country_code = read_e_i_9(&mut xpath, &node)?;
 
 		imports.push(EReactionImport {
 			xml_id,
@@ -248,8 +249,8 @@ fn read_e_i_1_1a(
 	node: &Node,
 	translation: &Option<String>,
 	index: usize,
-) -> String {
-	first_text(xpath, node, EReactionPaths::PRIMARY_TEXT)
+) -> Result<String> {
+	let value = first_text(xpath, node, EReactionPaths::PRIMARY_TEXT)
 		.or_else(|| first_text(xpath, node, EReactionPaths::PRIMARY_TEXT_ALT))
 		.or_else(|| translation.clone())
 		.unwrap_or_else(|| {
@@ -257,44 +258,57 @@ fn read_e_i_1_1a(
 				"[import_e2b_xml] reactions[{index}] missing E.i.1.1a text; importing empty primary_source_reaction for downstream validation"
 			);
 			String::new()
-		})
+		});
+	import_constraint::string("AE", "primarySourceReaction", Some(&value), None)?;
+	Ok(value)
 }
 
 /// e2b:E.i.1.1b
-fn read_e_i_1_1b(xpath: &mut Context, node: &Node) -> Option<String> {
-	first_text(xpath, node, EReactionPaths::TRANSLATION_TEXT)
+fn read_e_i_1_1b(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
+	portable_string(
+		first_text(xpath, node, EReactionPaths::TRANSLATION_TEXT),
+		"primarySourceReactionTranslation",
+	)
 }
 
 /// e2b:E.i.1.2
-fn read_e_i_1_2(xpath: &mut Context, node: &Node) -> Option<String> {
-	normalize_lang3(
+fn read_e_i_1_2(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
+	portable_string(
 		first_attr(xpath, node, EReactionPaths::PRIMARY_LANG),
-		"reactions.reaction_language",
+		"reactionLanguage",
 	)
 }
 
 /// e2b:E.i.2.1a
-fn read_e_i_2_1a(xpath: &mut Context, node: &Node) -> Option<String> {
-	clamp_str(first_attr(xpath, node, EReactionPaths::MEDDRA_VERSION), 10)
+fn read_e_i_2_1a(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
+	portable_string(
+		first_attr(xpath, node, EReactionPaths::MEDDRA_VERSION),
+		"reactionMeddraVersionLLT",
+	)
 }
 
 /// e2b:E.i.2.1b
-fn read_e_i_2_1b(xpath: &mut Context, node: &Node) -> Option<String> {
-	first_attr(xpath, node, EReactionPaths::MEDDRA_CODE)
+fn read_e_i_2_1b(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
+	portable_string(
+		first_attr(xpath, node, EReactionPaths::MEDDRA_CODE),
+		"reactionMeddraCodeLLT",
+	)
 }
 
 /// e2b:E.i.3.1
-fn read_e_i_3_1(xpath: &mut Context, node: &Node) -> (Option<String>, Option<bool>) {
+fn read_e_i_3_1(
+	xpath: &mut Context,
+	node: &Node,
+) -> Result<(Option<String>, Option<bool>)> {
 	let code = first_attr(xpath, node, EReactionPaths::TERM_HIGHLIGHT_CODE);
-	let highlighted = code
-		.clone()
-		.filter(|value| matches!(value.as_str(), "1" | "2" | "3" | "4"));
+	import_constraint::string("AE", "termHighlighted", code.as_deref(), None)?;
+	let highlighted = code.clone();
 	let serious = code.as_deref().and_then(|value| match value {
 		"3" | "4" => Some(true),
 		"1" | "2" => Some(false),
 		_ => None,
 	});
-	(highlighted, serious)
+	Ok((highlighted, serious))
 }
 
 /// e2b:E.i.serious
@@ -315,23 +329,28 @@ fn read_seriousness(
 	node: &Node,
 	value_path: &str,
 	null_flavor_path: &str,
-) -> (Option<bool>, Option<String>) {
-	parse_bool_with_null_flavor(
-		first_attr(xpath, node, value_path),
-		first_attr(xpath, node, null_flavor_path),
-	)
+	field: &str,
+	null_field: &str,
+) -> Result<(Option<bool>, Option<String>)> {
+	let value = parse_bool_value(first_attr(xpath, node, value_path));
+	let null_flavor = first_attr(xpath, node, null_flavor_path);
+	import_constraint::boolean("AE", field, value, null_flavor.as_deref())?;
+	import_constraint::string("AE", null_field, null_flavor.as_deref(), None)?;
+	Ok((value, null_flavor))
 }
 
 /// e2b:E.i.3.2a
 fn read_e_i_3_2a(
 	xpath: &mut Context,
 	node: &Node,
-) -> (Option<bool>, Option<String>) {
+) -> Result<(Option<bool>, Option<String>)> {
 	read_seriousness(
 		xpath,
 		node,
 		EReactionPaths::CRITERIA_DEATH,
 		EReactionPaths::CRITERIA_DEATH_NULL_FLAVOR,
+		"seriousness.criteriaResultsInDeath",
+		"seriousness.criteriaResultsInDeathNullFlavor",
 	)
 }
 
@@ -339,12 +358,14 @@ fn read_e_i_3_2a(
 fn read_e_i_3_2b(
 	xpath: &mut Context,
 	node: &Node,
-) -> (Option<bool>, Option<String>) {
+) -> Result<(Option<bool>, Option<String>)> {
 	read_seriousness(
 		xpath,
 		node,
 		EReactionPaths::CRITERIA_LIFE_THREATENING,
 		EReactionPaths::CRITERIA_LIFE_THREATENING_NULL_FLAVOR,
+		"seriousness.criteriaLifeThreatening",
+		"seriousness.criteriaLifeThreateningNullFlavor",
 	)
 }
 
@@ -352,12 +373,14 @@ fn read_e_i_3_2b(
 fn read_e_i_3_2c(
 	xpath: &mut Context,
 	node: &Node,
-) -> (Option<bool>, Option<String>) {
+) -> Result<(Option<bool>, Option<String>)> {
 	read_seriousness(
 		xpath,
 		node,
 		EReactionPaths::CRITERIA_HOSPITALIZATION,
 		EReactionPaths::CRITERIA_HOSPITALIZATION_NULL_FLAVOR,
+		"seriousness.criteriaHospitalization",
+		"seriousness.criteriaHospitalizationNullFlavor",
 	)
 }
 
@@ -365,12 +388,14 @@ fn read_e_i_3_2c(
 fn read_e_i_3_2d(
 	xpath: &mut Context,
 	node: &Node,
-) -> (Option<bool>, Option<String>) {
+) -> Result<(Option<bool>, Option<String>)> {
 	read_seriousness(
 		xpath,
 		node,
 		EReactionPaths::CRITERIA_DISABLING,
 		EReactionPaths::CRITERIA_DISABLING_NULL_FLAVOR,
+		"seriousness.criteriaDisabling",
+		"seriousness.criteriaDisablingNullFlavor",
 	)
 }
 
@@ -378,12 +403,14 @@ fn read_e_i_3_2d(
 fn read_e_i_3_2e(
 	xpath: &mut Context,
 	node: &Node,
-) -> (Option<bool>, Option<String>) {
+) -> Result<(Option<bool>, Option<String>)> {
 	read_seriousness(
 		xpath,
 		node,
 		EReactionPaths::CRITERIA_CONGENITAL,
 		EReactionPaths::CRITERIA_CONGENITAL_NULL_FLAVOR,
+		"seriousness.criteriaCongenitalAnomaly",
+		"seriousness.criteriaCongenitalAnomalyNullFlavor",
 	)
 }
 
@@ -391,12 +418,14 @@ fn read_e_i_3_2e(
 fn read_e_i_3_2f(
 	xpath: &mut Context,
 	node: &Node,
-) -> (Option<bool>, Option<String>) {
+) -> Result<(Option<bool>, Option<String>)> {
 	read_seriousness(
 		xpath,
 		node,
 		EReactionPaths::CRITERIA_OTHER,
 		EReactionPaths::CRITERIA_OTHER_NULL_FLAVOR,
+		"seriousness.criteriaOtherMedicallyImportant",
+		"seriousness.criteriaOtherMedicallyImportantNullFlavor",
 	)
 }
 
@@ -404,18 +433,27 @@ fn read_e_i_3_2f(
 fn read_fda_e_i_3_2h(
 	xpath: &mut Context,
 	node: &Node,
-) -> (Option<String>, Option<String>) {
-	(
-		clamp_str(
-			first_attr(xpath, node, EReactionPaths::REQUIRED_INTERVENTION),
-			10,
-		),
-		first_attr(
-			xpath,
-			node,
-			EReactionPaths::REQUIRED_INTERVENTION_NULL_FLAVOR,
-		),
-	)
+) -> Result<(Option<bool>, Option<String>)> {
+	let raw = first_attr(xpath, node, EReactionPaths::REQUIRED_INTERVENTION);
+	let value = raw.as_deref().and_then(normalize_xml_bool);
+	let null_flavor = first_attr(
+		xpath,
+		node,
+		EReactionPaths::REQUIRED_INTERVENTION_NULL_FLAVOR,
+	);
+	import_constraint::boolean(
+		"AE",
+		"requiredIntervention",
+		value,
+		null_flavor.as_deref(),
+	)?;
+	import_constraint::string(
+		"AE",
+		"requiredInterventionNullFlavor",
+		null_flavor.as_deref(),
+		None,
+	)?;
+	Ok((value, null_flavor))
 }
 
 fn read_date(
@@ -425,18 +463,23 @@ fn read_date(
 	fallback_path: &str,
 	null_flavor_path: &str,
 	null_flavor_fallback_path: &str,
-) -> (Option<Date>, Option<String>) {
-	(
-		first_attr(xpath, node, value_path)
-			.or_else(|| first_attr(xpath, node, fallback_path))
-			.and_then(parse_date),
-		first_attr(xpath, node, null_flavor_path)
-			.or_else(|| first_attr(xpath, node, null_flavor_fallback_path)),
-	)
+	field: &str,
+	null_field: &str,
+) -> Result<(Option<Date>, Option<String>)> {
+	let raw = first_attr(xpath, node, value_path)
+		.or_else(|| first_attr(xpath, node, fallback_path));
+	let null_flavor = first_attr(xpath, node, null_flavor_path)
+		.or_else(|| first_attr(xpath, node, null_flavor_fallback_path));
+	import_constraint::string("AE", field, raw.as_deref(), null_flavor.as_deref())?;
+	import_constraint::string("AE", null_field, null_flavor.as_deref(), None)?;
+	Ok((raw.and_then(parse_date), null_flavor))
 }
 
 /// e2b:E.i.4
-fn read_e_i_4(xpath: &mut Context, node: &Node) -> (Option<Date>, Option<String>) {
+fn read_e_i_4(
+	xpath: &mut Context,
+	node: &Node,
+) -> Result<(Option<Date>, Option<String>)> {
 	read_date(
 		xpath,
 		node,
@@ -444,11 +487,16 @@ fn read_e_i_4(xpath: &mut Context, node: &Node) -> (Option<Date>, Option<String>
 		EReactionPaths::START_DATE_FALLBACK,
 		EReactionPaths::START_DATE_NULL_FLAVOR,
 		EReactionPaths::START_DATE_NULL_FLAVOR_FALLBACK,
+		"reactionStartDate",
+		"reactionStartDateNullFlavor",
 	)
 }
 
 /// e2b:E.i.5
-fn read_e_i_5(xpath: &mut Context, node: &Node) -> (Option<Date>, Option<String>) {
+fn read_e_i_5(
+	xpath: &mut Context,
+	node: &Node,
+) -> Result<(Option<Date>, Option<String>)> {
 	read_date(
 		xpath,
 		node,
@@ -456,43 +504,56 @@ fn read_e_i_5(xpath: &mut Context, node: &Node) -> (Option<Date>, Option<String>
 		EReactionPaths::END_DATE_FALLBACK,
 		EReactionPaths::END_DATE_NULL_FLAVOR,
 		EReactionPaths::END_DATE_NULL_FLAVOR_FALLBACK,
+		"reactionEndDate",
+		"reactionEndDateNullFlavor",
 	)
 }
 
 /// e2b:E.i.6a
-fn read_e_i_6a(xpath: &mut Context, node: &Node) -> Option<Decimal> {
-	first_attr(xpath, node, EReactionPaths::DURATION_VALUE)
-		.and_then(|value| value.parse().ok())
+fn read_e_i_6a(xpath: &mut Context, node: &Node) -> Result<Option<Decimal>> {
+	let raw = first_attr(xpath, node, EReactionPaths::DURATION_VALUE);
+	import_constraint::number_string(
+		"AE",
+		"reactionDuration.value",
+		raw.as_deref(),
+	)?;
+	Ok(raw.and_then(|value| value.parse().ok()))
 }
 
 /// e2b:E.i.6b
-fn read_e_i_6b(xpath: &mut Context, node: &Node) -> Option<String> {
-	normalize_code3(
+fn read_e_i_6b(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
+	portable_string(
 		first_attr(xpath, node, EReactionPaths::DURATION_UNIT),
-		"reactions.duration_unit",
+		"reactionDuration.unit",
 	)
 }
 
 /// e2b:E.i.7
-fn read_e_i_7(xpath: &mut Context, node: &Node) -> Option<String> {
-	first_attr(xpath, node, EReactionPaths::OUTCOME_CODE)
+fn read_e_i_7(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
+	portable_string(
+		first_attr(xpath, node, EReactionPaths::OUTCOME_CODE),
+		"reactionOutcome",
+	)
 }
 
 /// e2b:E.i.8
-fn read_e_i_8(xpath: &mut Context, node: &Node) -> Option<bool> {
-	parse_bool_value(first_attr(
+fn read_e_i_8(xpath: &mut Context, node: &Node) -> Result<Option<bool>> {
+	let value = parse_bool_value(first_attr(
 		xpath,
 		node,
 		EReactionPaths::MEDICAL_CONFIRMATION,
-	))
+	));
+	import_constraint::boolean("AE", "medicalConfirmation", value, None)?;
+	Ok(value)
 }
 
 /// e2b:E.i.9
-fn read_e_i_9(xpath: &mut Context, node: &Node) -> Option<String> {
-	normalize_iso2(
+fn read_e_i_9(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
+	Ok(portable_string(
 		first_attr(xpath, node, EReactionPaths::COUNTRY_CODE),
-		"reactions.country_code",
-	)
+		"reactionCountry",
+	)?
+	.map(|value| value.to_ascii_uppercase()))
 }
 
 /// e2b:E.local.expectedness
@@ -710,10 +771,7 @@ pub(crate) async fn import_section_e(
 					.criteria_other_medically_important,
 				criteria_other_medically_important_null_flavor: reaction
 					.criteria_other_medically_important_null_flavor,
-				required_intervention: reaction
-					.required_intervention
-					.as_deref()
-					.and_then(normalize_xml_bool),
+				required_intervention: reaction.required_intervention,
 				required_intervention_null_flavor: reaction
 					.required_intervention_null_flavor,
 				expectedness: reaction.expectedness,
@@ -794,6 +852,11 @@ fn first_text(xpath: &mut Context, node: &Node, expr: &str) -> Option<String> {
 	None
 }
 
+fn portable_string(value: Option<String>, field: &str) -> Result<Option<String>> {
+	import_constraint::string("AE", field, value.as_deref(), None)?;
+	Ok(value)
+}
+
 fn parse_bool_value(value: Option<String>) -> Option<bool> {
 	let val = value?;
 	match val.to_ascii_lowercase().as_str() {
@@ -801,13 +864,6 @@ fn parse_bool_value(value: Option<String>) -> Option<bool> {
 		"false" | "0" => Some(false),
 		_ => None,
 	}
-}
-
-fn parse_bool_with_null_flavor(
-	value: Option<String>,
-	null_flavor: Option<String>,
-) -> (Option<bool>, Option<String>) {
-	(parse_bool_value(value), null_flavor)
 }
 
 #[cfg(test)]
@@ -839,38 +895,6 @@ fn parse_uuid_opt(value: Option<String>) -> Option<Uuid> {
 		return None;
 	}
 	Uuid::parse_str(&value).ok()
-}
-
-fn normalize_iso2(value: Option<String>, _field: &str) -> Option<String> {
-	let v = value?.trim().to_string();
-	let len = v.len();
-	let upper = v.to_ascii_uppercase();
-	if len == 2 && upper.chars().all(|c| c.is_ascii_uppercase()) {
-		Some(upper)
-	} else {
-		None
-	}
-}
-
-fn normalize_lang3(value: Option<String>, _field: &str) -> Option<String> {
-	let v = value?.trim().to_string();
-	let len = v.len();
-	let lower = v.to_ascii_lowercase();
-	if len == 3 && lower.chars().all(|c| c.is_ascii_lowercase()) {
-		Some(lower)
-	} else {
-		None
-	}
-}
-
-fn normalize_code3(value: Option<String>, _field: &str) -> Option<String> {
-	let v = value?.trim().to_string();
-	let len = v.len();
-	if (1..=3).contains(&len) && v.chars().all(|c| c.is_ascii_alphanumeric()) {
-		Some(v)
-	} else {
-		None
-	}
 }
 
 fn parse_date(value: String) -> Option<Date> {

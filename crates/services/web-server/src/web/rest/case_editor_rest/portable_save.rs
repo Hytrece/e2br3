@@ -1527,4 +1527,53 @@ mod portable_save_tests {
 			"studyInformation.fdaCrossReportedIndNumbers.0.indNumberNullFlavor"
 		);
 	}
+
+	#[test]
+	fn dg_relatedness_kr1_values_are_validated() {
+		let row = json!({
+			"drugReactionAssessments": [{
+				"methodOfAssessmentKr1": "3",
+				"resultOfAssessmentKr1": "7"
+			}]
+		});
+		let detail = constraint_violation(
+			validate_row_payload("DG", "drug", row.as_object().unwrap(), None)
+				.unwrap_err(),
+		);
+		assert_eq!(detail.rule_code, "MFDS.G.k.9.i.2.r.2.KR.1.ALLOWED.VALUE");
+		assert_eq!(
+			detail.path,
+			"drugs.0.drugReactionAssessments.0.methodOfAssessmentKr1"
+		);
+		let row = json!({
+			"drugReactionAssessments": [{ "resultOfAssessmentKr1": "7" }]
+		});
+		let detail = constraint_violation(
+			validate_row_payload("DG", "drug", row.as_object().unwrap(), None)
+				.unwrap_err(),
+		);
+		assert_eq!(detail.rule_code, "MFDS.G.k.9.i.2.r.3.KR.1.ALLOWED.VALUE");
+
+		let row = json!({
+			"drugReactionAssessments": [{
+				"resultOfAssessmentKr1": "1",
+				"resultOfAssessmentKr1NullFlavor": "NA"
+			}]
+		});
+		let detail = constraint_violation(
+			validate_row_payload("DG", "drug", row.as_object().unwrap(), None)
+				.unwrap_err(),
+		);
+		assert_eq!(
+			detail.path,
+			"drugs.0.drugReactionAssessments.0.resultOfAssessmentKr1NullFlavor"
+		);
+
+		let row = json!({
+			"drugReactionAssessments": [{
+				"resultOfAssessmentKr1NullFlavor": "NA"
+			}]
+		});
+		validate_row_payload("DG", "drug", row.as_object().unwrap(), None).unwrap();
+	}
 }

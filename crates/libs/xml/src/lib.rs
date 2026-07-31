@@ -5,6 +5,7 @@ mod export_utils;
 pub mod fda;
 pub mod ich;
 pub mod import;
+mod import_constraint;
 pub mod import_sections;
 pub mod mapping;
 pub mod mfds;
@@ -22,8 +23,8 @@ pub use export::{
 	ExportXmlOptions,
 };
 pub use import::{
-	extract_safety_report_id_from_xml, import_e2b_xml, import_e2b_xml_unvalidated,
-	CImportSettings, XmlImportRequest,
+	extract_safety_report_id_from_xml, import_e2b_xml, CImportSettings,
+	XmlImportRequest,
 };
 pub use import_sections::c_safety_report::{
 	apply_c_safety_report_import_settings, apply_default_values_to_imported_r2_case,

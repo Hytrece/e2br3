@@ -412,16 +412,44 @@ pub(super) const BINDINGS: &[PortableFieldBinding] = &[
 		["ICH.G.k.9.i.2.r.2.LENGTH.MAX"]
 	),
 	binding!(
+		"drugs[].drugReactionAssessments[].methodOfAssessmentKr1",
+		"drugReactionAssessments[].methodOfAssessmentKr1",
+		String,
+		[
+			"MFDS.G.k.9.i.2.r.2.KR.1.ALLOWED.VALUE",
+			"MFDS.G.k.9.i.2.r.2.KR.1.LENGTH.MAX"
+		]
+	),
+	binding!(
 		"drugs[].drugReactionAssessments[].resultOfAssessment",
 		"drugReactionAssessments[].resultOfAssessment",
 		String,
 		["ICH.G.k.9.i.2.r.3.LENGTH.MAX"]
 	),
 	binding!(
+		"drugs[].drugReactionAssessments[].resultOfAssessmentKr1",
+		"drugReactionAssessments[].resultOfAssessmentKr1",
+		String,
+		[
+			"MFDS.G.k.9.i.2.r.3.KR.1.ALLOWED.VALUE",
+			"MFDS.G.k.9.i.2.r.3.KR.1.LENGTH.MAX"
+		],
+		null: "drugs[].drugReactionAssessments[].resultOfAssessmentKr1NullFlavor"
+	),
+	binding!(
+		"drugs[].drugReactionAssessments[].resultOfAssessmentKr1NullFlavor",
+		"drugReactionAssessments[].resultOfAssessmentKr1NullFlavor",
+		String,
+		["MFDS.G.k.9.i.2.r.3.KR.1.NULLFLAVOR.ALLOWED"]
+	),
+	binding!(
 		"drugs[].drugReactionAssessments[].resultOfAssessmentKr2",
 		"drugReactionAssessments[].resultOfAssessmentKr2",
 		String,
-		["MFDS.G.k.9.i.2.r.3.KR.2.LENGTH.MAX"]
+		[
+			"MFDS.G.k.9.i.2.r.3.KR.2.ALLOWED.VALUE",
+			"MFDS.G.k.9.i.2.r.3.KR.2.LENGTH.MAX"
+		]
 	),
 	binding!(
 		"drugs[].drugReactionAssessments[].recurrenceAction",

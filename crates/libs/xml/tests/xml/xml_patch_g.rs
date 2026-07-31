@@ -5,12 +5,12 @@ use lib_core::model::drug::{
 use lib_core::model::drug_reaction_assessment::{
 	DrugReactionAssessment, RelatednessAssessment,
 };
-use xml::raw::patch::patch_g_drugs;
-use xml::Error as XmlError;
 use libxml::parser::Parser;
 use libxml::xpath::Context;
 use sqlx::types::Uuid;
 use time::OffsetDateTime;
+use xml::raw::patch::patch_g_drugs;
+use xml::Error as XmlError;
 
 #[test]
 fn patch_g_drug_updates_raw_xml() {
@@ -217,8 +217,12 @@ fn patch_g_drug_emits_relatedness_assessment_values() {
 		sequence_number: 1,
 		source_of_assessment: Some("RTDG18".to_string()),
 		method_of_assessment: Some("RTDG19".to_string()),
+		method_of_assessment_kr1: None,
 		result_of_assessment: Some("RTDG20".to_string()),
+		result_of_assessment_kr1: None,
+		result_of_assessment_kr1_null_flavor: None,
 		result_of_assessment_kr2: None,
+		deleted: false,
 		created_at: OffsetDateTime::now_utc(),
 		updated_at: OffsetDateTime::now_utc(),
 		created_by: Uuid::new_v4(),

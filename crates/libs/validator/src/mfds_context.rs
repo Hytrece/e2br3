@@ -11,7 +11,10 @@ pub struct RelatednessWithDrug {
 	pub relatedness_sequence_number: i32,
 	pub source_of_assessment: Option<String>,
 	pub method_of_assessment: Option<String>,
+	pub method_of_assessment_kr1: Option<String>,
 	pub result_of_assessment: Option<String>,
+	pub result_of_assessment_kr1: Option<String>,
+	pub result_of_assessment_kr1_null_flavor: Option<String>,
 	pub result_of_assessment_kr2: Option<String>,
 }
 
@@ -90,7 +93,10 @@ SELECT di.id as drug_id
      , ra.sequence_number as relatedness_sequence_number
      , ra.source_of_assessment
      , ra.method_of_assessment
+     , ra.method_of_assessment_kr1
      , ra.result_of_assessment
+     , ra.result_of_assessment_kr1
+     , ra.result_of_assessment_kr1_null_flavor
      , ra.result_of_assessment_kr2
 FROM relatedness_assessments ra
 JOIN drug_reaction_assessments dra ON dra.id = ra.drug_reaction_assessment_id

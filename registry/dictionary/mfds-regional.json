@@ -212,6 +212,10 @@
       "data_type": "N",
       "max_length": "1",
       "allowed_values": "1=WHO-UMC\n2=KRCT",
+      "allowed_value_constraint": {
+        "kind": "code_set",
+        "values": ["1", "2"]
+      },
       "oid": "2.16.840.1.113883.3.989.5.1.10.1.4",
       "xpath": "/MCCI_IN200100UV01[@ITSVersion='XML_1.0'][@xsi:schemaLocation='urn:hl7-org:v3 MCCI_IN200100UV01.xsd']/PORR_IN049016UV[r]/controlActProcess[@classCode='CACT'][@moodCode='EVN']/subject[@typeCode='SUBJ'][1]/investigationEvent[@classCode='INVSTG'][@moodCode='EVN']/component[@typeCode='COMP'][adverseEventAssessment][1]/adverseEventAssessment[@classCode='INVSTG'][@moodCode='EVN']/component[@typeCode='COMP'][causalityAssessment/code[@code='39'][@codeSystem='2.16.840.1.113883.3.989.2.1.1.19']][r]/causalityAssessment[@classCode='OBS'][@moodCode='EVN'][subject1[@typeCode='SUBJ']/adverseEffectReference[@classCode='OBS'][@moodCode='EVN']/id[@root='UUID of i-th reaction']][subject2[@typeCode='SUBJ']/productUseReference[@classCode='SBADM'][@moodCode='EVN']/id[@root='UUID of k-th drug']]/methodCode[@codeSystem='2.16.840.1.113883.3.989.5.1.10.1.5']/@code",
       "hl7_data_type": "Coded With Equivalents (CE)",
@@ -227,6 +231,10 @@
       "data_type": "N",
       "max_length": "1",
       "allowed_values": "1=확실함(Certain)\n2=상당히확실함(Probable)\n3=가능함(Possible)\n4=가능성적음(Unlikely)\n5=평가곤란(Conditional/unclassified)\n6=평가불가(Unassessable/unclassifiable)\nnullFlavor:NA",
+      "allowed_value_constraint": {
+        "kind": "code_set",
+        "values": ["1", "2", "3", "4", "5", "6"]
+      },
       "oid": "2.16.840.1.113883.3.989.5.1.10.1.5",
       "xpath": "/MCCI_IN200100UV01[@ITSVersion='XML_1.0'][@xsi:schemaLocation='urn:hl7-org:v3 MCCI_IN200100UV01.xsd']/PORR_IN049016UV[r]/controlActProcess[@classCode='CACT'][@moodCode='EVN']/subject[@typeCode='SUBJ'][1]/investigationEvent[@classCode='INVSTG'][@moodCode='EVN']/component[@typeCode='COMP'][adverseEventAssessment][1]/adverseEventAssessment[@classCode='INVSTG'][@moodCode='EVN']/component[@typeCode='COMP'][causalityAssessment/code[@code='39'][@codeSystem='2.16.840.1.113883.3.989.2.1.1.19']][r]/causalityAssessment[@classCode='OBS'][@moodCode='EVN'][subject1[@typeCode='SUBJ']/adverseEffectReference[@classCode='OBS'][@moodCode='EVN']/id[@root='UUID of i-th reaction']][subject2[@typeCode='SUBJ']/productUseReference[@classCode='SBADM'][@moodCode='EVN']/id[@root='UUID of k-th drug']]/value[@xsi:type='CE'][@codeSystem='2.16.840.1.113883.3.989.5.1.10.1.5']/@code",
       "hl7_data_type": "Coded With Equivalents (CE)",
@@ -245,6 +253,10 @@
       "data_type": "N",
       "max_length": "1",
       "allowed_values": "1=관련성 있음\n2=관령성 없음",
+      "allowed_value_constraint": {
+        "kind": "code_set",
+        "values": ["1", "2"]
+      },
       "oid": "2.16.840.1.113883.3.989.5.1.10.1.6",
       "xpath": "/MCCI_IN200100UV01[@ITSVersion='XML_1.0'][@xsi:schemaLocation='urn:hl7-org:v3 MCCI_IN200100UV01.xsd']/PORR_IN049016UV[r]/controlActProcess[@classCode='CACT'][@moodCode='EVN']/subject[@typeCode='SUBJ'][1]/investigationEvent[@classCode='INVSTG'][@moodCode='EVN']/component[@typeCode='COMP'][adverseEventAssessment][1]/adverseEventAssessment[@classCode='INVSTG'][@moodCode='EVN']/component[@typeCode='COMP'][causalityAssessment/code[@code='39'][@codeSystem='2.16.840.1.113883.3.989.2.1.1.19']][r]/causalityAssessment[@classCode='OBS'][@moodCode='EVN'][subject1[@typeCode='SUBJ']/adverseEffectReference[@classCode='OBS'][@moodCode='EVN']/id[@root='UUID of i-th reaction']][subject2[@typeCode='SUBJ']/productUseReference[@classCode='SBADM'][@moodCode='EVN']/id[@root='UUID of k-th drug']]/value[@xsi:type='CE'][@codeSystem='2.16.840.1.113883.3.989.5.1.10.1.6']/@code",
       "hl7_data_type": "Coded With Equivalents (CE)",

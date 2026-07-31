@@ -1,4 +1,5 @@
 use crate::error::Error;
+use crate::import_constraint;
 use crate::import_sections::shared::{
 	first_attr, first_text, first_text_root, first_value_root, normalize_code,
 	normalize_iso2, telecom_first, telecom_first_in_node, MessageHeaderExtract,
@@ -395,6 +396,29 @@ pub(crate) fn parse_sender_information(
 	}))
 }
 
+fn read_reporter_text_with_null_flavor(
+	xpath: &mut Context,
+	node: &libxml::tree::Node,
+	path: &str,
+	field: &str,
+) -> Result<(Option<String>, Option<String>)> {
+	let value = first_text(xpath, node, path);
+	let null_flavor = first_attr(xpath, node, path, "nullFlavor");
+	import_constraint::string(
+		"RP",
+		field,
+		value.as_deref(),
+		null_flavor.as_deref(),
+	)?;
+	import_constraint::string(
+		"RP",
+		&format!("{field}NullFlavor"),
+		null_flavor.as_deref(),
+		None,
+	)?;
+	Ok((value, null_flavor))
+}
+
 fn read_text_with_null_flavor(
 	xpath: &mut Context,
 	node: &libxml::tree::Node,
@@ -411,11 +435,12 @@ fn read_text_with_null_flavor(
 fn read_c_2_r_1_1(
 	xpath: &mut Context,
 	node: &libxml::tree::Node,
-) -> (Option<String>, Option<String>) {
-	read_text_with_null_flavor(
+) -> Result<(Option<String>, Option<String>)> {
+	read_reporter_text_with_null_flavor(
 		xpath,
 		node,
 		".//hl7:assignedPerson/hl7:name/hl7:prefix",
+		"reporterTitle",
 	)
 }
 
@@ -424,11 +449,12 @@ fn read_c_2_r_1_1(
 fn read_c_2_r_1_2(
 	xpath: &mut Context,
 	node: &libxml::tree::Node,
-) -> (Option<String>, Option<String>) {
-	read_text_with_null_flavor(
+) -> Result<(Option<String>, Option<String>)> {
+	read_reporter_text_with_null_flavor(
 		xpath,
 		node,
 		".//hl7:assignedPerson/hl7:name/hl7:given[1]",
+		"reporterGivenName",
 	)
 }
 
@@ -437,11 +463,12 @@ fn read_c_2_r_1_2(
 fn read_c_2_r_1_3(
 	xpath: &mut Context,
 	node: &libxml::tree::Node,
-) -> (Option<String>, Option<String>) {
-	read_text_with_null_flavor(
+) -> Result<(Option<String>, Option<String>)> {
+	read_reporter_text_with_null_flavor(
 		xpath,
 		node,
 		".//hl7:assignedPerson/hl7:name/hl7:given[2]",
+		"reporterMiddleName",
 	)
 }
 
@@ -450,11 +477,12 @@ fn read_c_2_r_1_3(
 fn read_c_2_r_1_4(
 	xpath: &mut Context,
 	node: &libxml::tree::Node,
-) -> (Option<String>, Option<String>) {
-	read_text_with_null_flavor(
+) -> Result<(Option<String>, Option<String>)> {
+	read_reporter_text_with_null_flavor(
 		xpath,
 		node,
 		".//hl7:assignedPerson/hl7:name/hl7:family",
+		"reporterFamilyName",
 	)
 }
 
@@ -465,20 +493,28 @@ fn read_c_2_r_1_4(
 fn read_c_2_r_2_1_2(
 	xpath: &mut Context,
 	node: &libxml::tree::Node,
-) -> (
+) -> Result<(
 	Option<String>,
 	Option<String>,
 	Option<String>,
 	Option<String>,
-) {
+)> {
 	let nested_path = ".//hl7:representedOrganization/hl7:assignedEntity/hl7:representedOrganization/hl7:name";
 	let direct_path = ".//hl7:representedOrganization/hl7:name";
-	let (nested, nested_null_flavor) =
-		read_text_with_null_flavor(xpath, node, nested_path);
-	let (direct, direct_null_flavor) =
-		read_text_with_null_flavor(xpath, node, direct_path);
+	let (nested, nested_null_flavor) = read_reporter_text_with_null_flavor(
+		xpath,
+		node,
+		nested_path,
+		"reporterOrganization",
+	)?;
+	let (direct, direct_null_flavor) = read_reporter_text_with_null_flavor(
+		xpath,
+		node,
+		direct_path,
+		"reporterDepartment",
+	)?;
 	let has_nested = nested.is_some() || nested_null_flavor.is_some();
-	(
+	Ok((
 		nested.or_else(|| direct.clone()),
 		nested_null_flavor.or_else(|| {
 			(!has_nested)
@@ -487,7 +523,7 @@ fn read_c_2_r_2_1_2(
 		}),
 		has_nested.then_some(direct).flatten(),
 		has_nested.then_some(direct_null_flavor).flatten(),
-	)
+	))
 }
 
 /// e2b:C.2.r.2.3
@@ -495,11 +531,12 @@ fn read_c_2_r_2_1_2(
 fn read_c_2_r_2_3(
 	xpath: &mut Context,
 	node: &libxml::tree::Node,
-) -> (Option<String>, Option<String>) {
-	read_text_with_null_flavor(
+) -> Result<(Option<String>, Option<String>)> {
+	read_reporter_text_with_null_flavor(
 		xpath,
 		node,
 		".//hl7:assignedEntity/hl7:addr/hl7:streetAddressLine",
+		"reporterStreet",
 	)
 }
 
@@ -508,11 +545,12 @@ fn read_c_2_r_2_3(
 fn read_c_2_r_2_4(
 	xpath: &mut Context,
 	node: &libxml::tree::Node,
-) -> (Option<String>, Option<String>) {
-	read_text_with_null_flavor(
+) -> Result<(Option<String>, Option<String>)> {
+	read_reporter_text_with_null_flavor(
 		xpath,
 		node,
 		".//hl7:assignedEntity/hl7:addr/hl7:city",
+		"reporterCity",
 	)
 }
 
@@ -521,11 +559,12 @@ fn read_c_2_r_2_4(
 fn read_c_2_r_2_5(
 	xpath: &mut Context,
 	node: &libxml::tree::Node,
-) -> (Option<String>, Option<String>) {
-	read_text_with_null_flavor(
+) -> Result<(Option<String>, Option<String>)> {
+	read_reporter_text_with_null_flavor(
 		xpath,
 		node,
 		".//hl7:assignedEntity/hl7:addr/hl7:state",
+		"reporterState",
 	)
 }
 
@@ -534,11 +573,12 @@ fn read_c_2_r_2_5(
 fn read_c_2_r_2_6(
 	xpath: &mut Context,
 	node: &libxml::tree::Node,
-) -> (Option<String>, Option<String>) {
-	read_text_with_null_flavor(
+) -> Result<(Option<String>, Option<String>)> {
+	read_reporter_text_with_null_flavor(
 		xpath,
 		node,
 		".//hl7:assignedEntity/hl7:addr/hl7:postalCode",
+		"reporterPostcode",
 	)
 }
 
@@ -547,11 +587,27 @@ fn read_c_2_r_2_6(
 fn read_c_2_r_2_7(
 	xpath: &mut Context,
 	node: &libxml::tree::Node,
-) -> (Option<String>, Option<String>) {
-	(
-		telecom_first_in_node(xpath, node, "tel:"),
-		first_attr(xpath, node, ".//hl7:assignedEntity/hl7:telecom[not(starts-with(@value,'mailto:'))][1]", "nullFlavor"),
-	)
+) -> Result<(Option<String>, Option<String>)> {
+	let value = telecom_first_in_node(xpath, node, "tel:");
+	let null_flavor = first_attr(
+		xpath,
+		node,
+		".//hl7:assignedEntity/hl7:telecom[not(starts-with(@value,'mailto:'))][1]",
+		"nullFlavor",
+	);
+	import_constraint::string(
+		"RP",
+		"reporterTelephone",
+		value.as_deref(),
+		null_flavor.as_deref(),
+	)?;
+	import_constraint::string(
+		"RP",
+		"reporterTelephoneNullFlavor",
+		null_flavor.as_deref(),
+		None,
+	)?;
+	Ok((value, null_flavor))
 }
 
 /// e2b:FDA.C.2.r.2.8
@@ -559,22 +615,43 @@ fn read_c_2_r_2_7(
 fn read_fda_c_2_r_2_8(
 	xpath: &mut Context,
 	node: &libxml::tree::Node,
-) -> (Option<String>, Option<String>) {
-	(
-		telecom_first_in_node(xpath, node, "mailto:"),
-		first_attr(
-			xpath,
-			node,
-			".//hl7:assignedEntity/hl7:telecom[starts-with(@value,'mailto:')][1]",
-			"nullFlavor",
-		),
-	)
+) -> Result<(Option<String>, Option<String>)> {
+	let value = telecom_first_in_node(xpath, node, "mailto:");
+	let null_flavor = first_attr(
+		xpath,
+		node,
+		".//hl7:assignedEntity/hl7:telecom[starts-with(@value,'mailto:')][1]",
+		"nullFlavor",
+	);
+	import_constraint::string(
+		"RP",
+		"reporterEmail",
+		value.as_deref(),
+		null_flavor.as_deref(),
+	)?;
+	import_constraint::string(
+		"RP",
+		"reporterEmailNullFlavor",
+		null_flavor.as_deref(),
+		None,
+	)?;
+	Ok((value, null_flavor))
 }
 
 /// e2b:C.2.r.3
-fn read_c_2_r_3(xpath: &mut Context, node: &libxml::tree::Node) -> Option<String> {
-	first_attr(xpath, node, "../hl7:priorityNumber", "value")
-		.filter(|value| !value.trim().is_empty())
+fn read_c_2_r_3(
+	xpath: &mut Context,
+	node: &libxml::tree::Node,
+) -> Result<Option<String>> {
+	let value = first_attr(xpath, node, "../hl7:priorityNumber", "value")
+		.filter(|value| !value.trim().is_empty());
+	import_constraint::string(
+		"RP",
+		"primarySourceForRegulatoryPurposes",
+		value.as_deref(),
+		None,
+	)?;
+	Ok(value)
 }
 
 /// e2b:C.2.r.4
@@ -582,19 +659,29 @@ fn read_c_2_r_3(xpath: &mut Context, node: &libxml::tree::Node) -> Option<String
 fn read_c_2_r_4(
 	xpath: &mut Context,
 	node: &libxml::tree::Node,
-) -> (Option<String>, Option<String>, Option<String>) {
+) -> Result<(Option<String>, Option<String>, Option<String>)> {
 	let path = ".//hl7:assignedPerson/hl7:asQualifiedEntity/hl7:code";
 	let raw = first_attr(xpath, node, path, "code");
-	(
+	let value = normalize_code(
 		raw.clone(),
-		normalize_code(
-			raw,
-			&["1", "2", "3", "4", "5"],
-			"primary_sources.qualification",
-		)
-		.or(Some("1".to_string())),
-		first_attr(xpath, node, path, "nullFlavor"),
+		&["1", "2", "3", "4", "5"],
+		"primary_sources.qualification",
 	)
+	.or(Some("1".to_string()));
+	let null_flavor = first_attr(xpath, node, path, "nullFlavor");
+	import_constraint::string(
+		"RP",
+		"qualification",
+		value.as_deref(),
+		null_flavor.as_deref(),
+	)?;
+	import_constraint::string(
+		"RP",
+		"qualificationNullFlavor",
+		null_flavor.as_deref(),
+		None,
+	)?;
+	Ok((raw.clone(), value, null_flavor))
 }
 
 /// e2b:C.2.r.5
@@ -602,15 +689,26 @@ fn read_c_2_r_4(
 fn read_c_2_r_5(
 	xpath: &mut Context,
 	node: &libxml::tree::Node,
-) -> (Option<String>, Option<String>) {
+) -> Result<(Option<String>, Option<String>)> {
 	let path = ".//hl7:assignedPerson/hl7:asLocatedEntity/hl7:location/hl7:code";
-	(
-		normalize_iso2(
-			first_attr(xpath, node, path, "code"),
-			"primary_sources.country_code",
-		),
-		first_attr(xpath, node, path, "nullFlavor"),
-	)
+	let value = normalize_iso2(
+		first_attr(xpath, node, path, "code"),
+		"primary_sources.country_code",
+	);
+	let null_flavor = first_attr(xpath, node, path, "nullFlavor");
+	import_constraint::string(
+		"RP",
+		"reporterCountry",
+		value.as_deref(),
+		null_flavor.as_deref(),
+	)?;
+	import_constraint::string(
+		"RP",
+		"reporterCountryNullFlavor",
+		null_flavor.as_deref(),
+		None,
+	)?;
+	Ok((value, null_flavor))
 }
 
 pub(crate) fn parse_primary_sources(xml: &[u8]) -> Result<Vec<PrimarySourceImport>> {
@@ -646,30 +744,30 @@ pub(crate) fn parse_primary_sources(xml: &[u8]) -> Result<Vec<PrimarySourceImpor
 	let mut items = Vec::new();
 	for node in nodes {
 		let (reporter_title, reporter_title_null_flavor) =
-			read_c_2_r_1_1(&mut xpath, &node);
+			read_c_2_r_1_1(&mut xpath, &node)?;
 		let (reporter_given_name, reporter_given_name_null_flavor) =
-			read_c_2_r_1_2(&mut xpath, &node);
+			read_c_2_r_1_2(&mut xpath, &node)?;
 		let (reporter_middle_name, reporter_middle_name_null_flavor) =
-			read_c_2_r_1_3(&mut xpath, &node);
+			read_c_2_r_1_3(&mut xpath, &node)?;
 		let (reporter_family_name, reporter_family_name_null_flavor) =
-			read_c_2_r_1_4(&mut xpath, &node);
+			read_c_2_r_1_4(&mut xpath, &node)?;
 		let (
 			organization,
 			organization_null_flavor,
 			department,
 			department_null_flavor,
-		) = read_c_2_r_2_1_2(&mut xpath, &node);
-		let (street, street_null_flavor) = read_c_2_r_2_3(&mut xpath, &node);
-		let (city, city_null_flavor) = read_c_2_r_2_4(&mut xpath, &node);
-		let (state, state_null_flavor) = read_c_2_r_2_5(&mut xpath, &node);
-		let (postcode, postcode_null_flavor) = read_c_2_r_2_6(&mut xpath, &node);
-		let (telephone, telephone_null_flavor) = read_c_2_r_2_7(&mut xpath, &node);
-		let (email, email_null_flavor) = read_fda_c_2_r_2_8(&mut xpath, &node);
+		) = read_c_2_r_2_1_2(&mut xpath, &node)?;
+		let (street, street_null_flavor) = read_c_2_r_2_3(&mut xpath, &node)?;
+		let (city, city_null_flavor) = read_c_2_r_2_4(&mut xpath, &node)?;
+		let (state, state_null_flavor) = read_c_2_r_2_5(&mut xpath, &node)?;
+		let (postcode, postcode_null_flavor) = read_c_2_r_2_6(&mut xpath, &node)?;
+		let (telephone, telephone_null_flavor) = read_c_2_r_2_7(&mut xpath, &node)?;
+		let (email, email_null_flavor) = read_fda_c_2_r_2_8(&mut xpath, &node)?;
 		let (country_code, country_code_null_flavor) =
-			read_c_2_r_5(&mut xpath, &node);
+			read_c_2_r_5(&mut xpath, &node)?;
 		let (qualification_raw, qualification, qualification_null_flavor) =
-			read_c_2_r_4(&mut xpath, &node);
-		let primary_source_regulatory_raw = read_c_2_r_3(&mut xpath, &node);
+			read_c_2_r_4(&mut xpath, &node)?;
+		let primary_source_regulatory_raw = read_c_2_r_3(&mut xpath, &node)?;
 		let primary_source_regulatory = primary_source_regulatory_raw
 			.clone()
 			.or(Some("2".to_string()));
@@ -849,18 +947,15 @@ mod tests {
 	fn primary_source_import_keeps_contact_null_flavors() {
 		let xml = primary_source_xml(
 			r#"<assignedPerson>
-  <asQualifiedEntity><code nullFlavor="ASKU"/></asQualifiedEntity>
+  <asQualifiedEntity><code nullFlavor="UNK"/></asQualifiedEntity>
   <asLocatedEntity><location><code nullFlavor="NASK"/></location></asLocatedEntity>
 </assignedPerson>
-<telecom nullFlavor="NI"/>"#,
+<telecom nullFlavor="NASK"/>"#,
 		);
 		let sources = parse_primary_sources(xml.as_bytes()).expect("parse");
-		assert_eq!(sources[0].telephone_null_flavor.as_deref(), Some("NI"));
+		assert_eq!(sources[0].telephone_null_flavor.as_deref(), Some("NASK"));
 		assert_eq!(sources[0].country_code_null_flavor.as_deref(), Some("NASK"));
-		assert_eq!(
-			sources[0].qualification_null_flavor.as_deref(),
-			Some("ASKU")
-		);
+		assert_eq!(sources[0].qualification_null_flavor.as_deref(), Some("UNK"));
 	}
 }
 

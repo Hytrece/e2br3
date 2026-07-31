@@ -1,6 +1,7 @@
 // Section F importer (Tests and Procedures) - FDA mapping.
 
 use crate::error::Error;
+use crate::import_constraint;
 use crate::mapping::fda::f_test_result::FTestResultPaths;
 use crate::Result;
 use lib_core::ctx::Ctx;
@@ -64,12 +65,7 @@ pub fn parse_f_test_results(xml: &[u8]) -> Result<Vec<FTestResultImport>> {
 
 	let mut items = Vec::new();
 	for (idx, node) in nodes.into_iter().enumerate() {
-		let test_name = read_f_r_2_1(&mut xpath, &node).unwrap_or_else(|| {
-				eprintln!(
-					"[import_e2b_xml] test_results[{idx}] missing F.r.2 test_name; importing empty test_name for downstream validation"
-				);
-				String::new()
-			});
+		let test_name = read_f_r_2_1(&mut xpath, &node, idx)?;
 		let (test_date, test_date_null_flavor) = read_f_r_1(&mut xpath, &node)?;
 		let (test_result_value, test_result_null_flavor) =
 			read_f_r_3_2(&mut xpath, &node)?;
@@ -78,17 +74,17 @@ pub fn parse_f_test_results(xml: &[u8]) -> Result<Vec<FTestResultImport>> {
 			test_name,
 			test_date,
 			test_date_null_flavor,
-			test_meddra_version: read_f_r_2_2a(&mut xpath, &node),
-			test_meddra_code: read_f_r_2_2b(&mut xpath, &node),
-			test_result_code: read_f_r_3_1(&mut xpath, &node),
+			test_meddra_version: read_f_r_2_2a(&mut xpath, &node)?,
+			test_meddra_code: read_f_r_2_2b(&mut xpath, &node)?,
+			test_result_code: read_f_r_3_1(&mut xpath, &node)?,
 			test_result_value,
 			test_result_null_flavor,
-			test_result_unit: read_f_r_3_3(&mut xpath, &node),
-			result_unstructured: read_f_r_3_4(&mut xpath, &node),
-			normal_low_value: read_f_r_4(&mut xpath, &node),
-			normal_high_value: read_f_r_5(&mut xpath, &node),
-			comments: read_f_r_6(&mut xpath, &node),
-			more_info_available: read_f_r_7(&mut xpath, &node),
+			test_result_unit: read_f_r_3_3(&mut xpath, &node)?,
+			result_unstructured: read_f_r_3_4(&mut xpath, &node)?,
+			normal_low_value: read_f_r_4(&mut xpath, &node)?,
+			normal_high_value: read_f_r_5(&mut xpath, &node)?,
+			comments: read_f_r_6(&mut xpath, &node)?,
+			more_info_available: read_f_r_7(&mut xpath, &node)?,
 		});
 	}
 
@@ -142,6 +138,19 @@ fn read_f_r_1(
 		first_attr(xpath, node, FTestResultPaths::TEST_DATE).and_then(parse_date);
 	let null_flavor =
 		first_attr(xpath, node, FTestResultPaths::TEST_DATE_NULL_FLAVOR);
+	let raw = first_attr(xpath, node, FTestResultPaths::TEST_DATE);
+	import_constraint::string(
+		"LB",
+		"testDate",
+		raw.as_deref(),
+		null_flavor.as_deref(),
+	)?;
+	import_constraint::string(
+		"LB",
+		"testDateNullFlavor",
+		null_flavor.as_deref(),
+		None,
+	)?;
 	let field = E2bNullFlavorValue::from_parts(value, null_flavor.as_deref())
 		.map_err(|err| Error::InvalidXml {
 			message: format!("Invalid F.r.1 test date nullFlavor: {err}"),
@@ -154,27 +163,41 @@ fn read_f_r_1(
 }
 
 /// e2b:F.r.2.1
-fn read_f_r_2_1(xpath: &mut Context, node: &Node) -> Option<String> {
-	first_text(xpath, node, FTestResultPaths::TEST_NAME)
+fn read_f_r_2_1(xpath: &mut Context, node: &Node, index: usize) -> Result<String> {
+	let value = first_text(xpath, node, FTestResultPaths::TEST_NAME)
 		.or_else(|| first_attr(xpath, node, FTestResultPaths::TEST_NAME_DISPLAY))
+		.unwrap_or_else(|| {
+			eprintln!(
+				"[import_e2b_xml] test_results[{index}] missing F.r.2.1; importing empty test_name for downstream validation"
+			);
+			String::new()
+		});
+	import_constraint::string("LB", "testName", Some(&value), None)?;
+	Ok(value)
 }
 
 /// e2b:F.r.2.2a
-fn read_f_r_2_2a(xpath: &mut Context, node: &Node) -> Option<String> {
-	clamp_str(
+fn read_f_r_2_2a(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
+	portable_string(
 		first_attr(xpath, node, FTestResultPaths::TEST_MEDDRA_VERSION),
-		10,
+		"testMeddraVersion",
 	)
 }
 
 /// e2b:F.r.2.2b
-fn read_f_r_2_2b(xpath: &mut Context, node: &Node) -> Option<String> {
-	first_attr(xpath, node, FTestResultPaths::TEST_MEDDRA_CODE)
+fn read_f_r_2_2b(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
+	portable_string(
+		first_attr(xpath, node, FTestResultPaths::TEST_MEDDRA_CODE),
+		"testMeddraCode",
+	)
 }
 
 /// e2b:F.r.3.1
-fn read_f_r_3_1(xpath: &mut Context, node: &Node) -> Option<String> {
-	first_attr(xpath, node, FTestResultPaths::RESULT_CODE)
+fn read_f_r_3_1(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
+	portable_string(
+		first_attr(xpath, node, FTestResultPaths::RESULT_CODE),
+		"testResultCode",
+	)
 }
 
 /// e2b:F.r.3.2
@@ -194,38 +217,69 @@ fn read_f_r_3_2(
 			column: None,
 		});
 	}
+	import_constraint::string(
+		"LB",
+		"testResult",
+		value.as_deref(),
+		null_flavor.as_deref(),
+	)?;
+	import_constraint::string(
+		"LB",
+		"testResultNullFlavor",
+		null_flavor.as_deref(),
+		None,
+	)?;
 	Ok((value, null_flavor))
 }
 
 /// e2b:F.r.3.3
-fn read_f_r_3_3(xpath: &mut Context, node: &Node) -> Option<String> {
-	first_attr(xpath, node, FTestResultPaths::RESULT_UNIT)
-		.or_else(|| first_attr(xpath, node, FTestResultPaths::RESULT_UNIT_FALLBACK))
+fn read_f_r_3_3(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
+	portable_string(
+		first_attr(xpath, node, FTestResultPaths::RESULT_UNIT).or_else(|| {
+			first_attr(xpath, node, FTestResultPaths::RESULT_UNIT_FALLBACK)
+		}),
+		"testUnit",
+	)
 }
 
 /// e2b:F.r.3.4
-fn read_f_r_3_4(xpath: &mut Context, node: &Node) -> Option<String> {
-	first_text(xpath, node, FTestResultPaths::RESULT_UNSTRUCTURED)
+fn read_f_r_3_4(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
+	portable_string(
+		first_text(xpath, node, FTestResultPaths::RESULT_UNSTRUCTURED),
+		"testResultUnstructured",
+	)
 }
 
 /// e2b:F.r.4
-fn read_f_r_4(xpath: &mut Context, node: &Node) -> Option<String> {
-	first_attr(xpath, node, FTestResultPaths::NORMAL_LOW)
+fn read_f_r_4(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
+	portable_string(
+		first_attr(xpath, node, FTestResultPaths::NORMAL_LOW),
+		"lowRange",
+	)
 }
 
 /// e2b:F.r.5
-fn read_f_r_5(xpath: &mut Context, node: &Node) -> Option<String> {
-	first_attr(xpath, node, FTestResultPaths::NORMAL_HIGH)
+fn read_f_r_5(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
+	portable_string(
+		first_attr(xpath, node, FTestResultPaths::NORMAL_HIGH),
+		"highRange",
+	)
 }
 
 /// e2b:F.r.6
-fn read_f_r_6(xpath: &mut Context, node: &Node) -> Option<String> {
-	first_text(xpath, node, FTestResultPaths::COMMENTS)
+fn read_f_r_6(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
+	portable_string(
+		first_text(xpath, node, FTestResultPaths::COMMENTS),
+		"comments",
+	)
 }
 
 /// e2b:F.r.7
-fn read_f_r_7(xpath: &mut Context, node: &Node) -> Option<bool> {
-	parse_bool_value(first_attr(xpath, node, FTestResultPaths::MORE_INFO))
+fn read_f_r_7(xpath: &mut Context, node: &Node) -> Result<Option<bool>> {
+	let value =
+		parse_bool_value(first_attr(xpath, node, FTestResultPaths::MORE_INFO));
+	import_constraint::boolean("LB", "moreInformationAvailable", value, None)?;
+	Ok(value)
 }
 
 fn first_attr(xpath: &mut Context, node: &Node, expr: &str) -> Option<String> {
@@ -247,19 +301,17 @@ fn first_text(xpath: &mut Context, node: &Node, expr: &str) -> Option<String> {
 	None
 }
 
+fn portable_string(value: Option<String>, field: &str) -> Result<Option<String>> {
+	import_constraint::string("LB", field, value.as_deref(), None)?;
+	Ok(value)
+}
+
 fn parse_bool_value(value: Option<String>) -> Option<bool> {
 	let val = value?;
 	match val.to_ascii_lowercase().as_str() {
 		"true" | "1" => Some(true),
 		"false" | "0" => Some(false),
 		_ => None,
-	}
-}
-
-fn clamp_str(value: Option<String>, max: usize) -> Option<String> {
-	match value {
-		Some(v) if v.len() > max => Some(v.chars().take(max).collect()),
-		other => other,
 	}
 }
 

@@ -109,6 +109,7 @@ struct EmbeddedDictionaryEntry {
 
 static EMBEDDED_ICH_DICTIONARY: OnceLock<EmbeddedDictionary> = OnceLock::new();
 static EMBEDDED_FDA_DICTIONARY: OnceLock<EmbeddedDictionary> = OnceLock::new();
+static EMBEDDED_MFDS_DICTIONARY: OnceLock<EmbeddedDictionary> = OnceLock::new();
 static ALLOWED_VALUE_CONSTRAINTS: OnceLock<HashMap<String, AllowedValueConstraint>> =
 	OnceLock::new();
 
@@ -130,6 +131,15 @@ fn embedded_fda_dictionary() -> &'static EmbeddedDictionary {
 	})
 }
 
+fn embedded_mfds_dictionary() -> &'static EmbeddedDictionary {
+	EMBEDDED_MFDS_DICTIONARY.get_or_init(|| {
+		serde_json::from_str(include_str!(
+			"../../../../registry/dictionary/mfds-regional.json"
+		))
+		.expect("embedded MFDS dictionary should parse")
+	})
+}
+
 fn allowed_value_constraints() -> &'static HashMap<String, AllowedValueConstraint> {
 	ALLOWED_VALUE_CONSTRAINTS.get_or_init(|| {
 		let mut constraints = HashMap::new();
@@ -143,6 +153,14 @@ fn allowed_value_constraints() -> &'static HashMap<String, AllowedValueConstrain
 			if let Some(constraint) = entry.allowed_value_constraint.clone() {
 				constraints
 					.insert(format!("{}.ALLOWED.VALUE", entry.code), constraint);
+			}
+		}
+		for entry in &embedded_mfds_dictionary().entries {
+			if let Some(constraint) = entry.allowed_value_constraint.clone() {
+				constraints.insert(
+					format!("MFDS.{}.ALLOWED.VALUE", entry.code),
+					constraint,
+				);
 			}
 		}
 		constraints
@@ -3694,7 +3712,7 @@ const VALUE_POLICY_BINDINGS: &[ValuePolicyBinding] = &[
 	},
 	ValuePolicyBinding {
 		code: "MFDS.G.k.9.i.2.r.3.KR.1.REQUIRED",
-		policy: ValuePolicy::NonEmpty,
+		policy: ValuePolicy::NonEmptyOrNullFlavor,
 	},
 	ValuePolicyBinding {
 		code: "MFDS.G.k.9.i.2.r.3.KR.2.REQUIRED",
@@ -4471,6 +4489,8 @@ pub fn null_flavors_for_rule(code: &str) -> Option<&'static [String]> {
 			(embedded_ich_dictionary(), element_code)
 		} else if element_code.starts_with("FDA.") {
 			(embedded_fda_dictionary(), element_code)
+		} else if let Some(element_code) = element_code.strip_prefix("MFDS.") {
+			(embedded_mfds_dictionary(), element_code)
 		} else {
 			return None;
 		};

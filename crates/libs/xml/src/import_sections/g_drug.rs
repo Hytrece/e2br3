@@ -1,13 +1,13 @@
 // Section G importer (Drug/Biological) - FDA mapping.
 
 use crate::error::Error;
+use crate::import_constraint;
 use crate::mapping::fda::g_drug::GDrugPaths;
 use crate::Result;
 use libxml::parser::Parser;
 use libxml::tree::Node;
 use libxml::xpath::Context;
 use rust_decimal::Decimal;
-use sqlx::types::time::Time;
 use sqlx::types::Uuid;
 
 mod helpers;
@@ -35,7 +35,6 @@ pub struct GDrugImport {
 	pub gestation_period_exposure_value: Option<Decimal>,
 	pub gestation_period_exposure_unit: Option<String>,
 	pub action_taken: Option<String>,
-	pub rechallenge: Option<String>,
 	pub fda_additional_info_coded: Option<String>,
 	pub fda_specialized_product_category: Option<String>,
 	pub drug_additional_information: Option<String>,
@@ -86,10 +85,8 @@ pub struct GDrugDosageImport {
 	pub frequency_unit: Option<String>,
 	pub number_of_units: Option<Decimal>,
 	pub start_date: Option<sqlx::types::time::Date>,
-	pub start_time: Option<Time>,
 	pub start_date_null_flavor: Option<String>,
 	pub end_date: Option<sqlx::types::time::Date>,
-	pub end_time: Option<Time>,
 	pub end_date_null_flavor: Option<String>,
 	pub duration_value: Option<Decimal>,
 	pub duration_unit: Option<String>,
@@ -163,35 +160,26 @@ pub fn parse_g_drugs(xml: &[u8]) -> Result<Vec<GDrugImport>> {
 	let mut imports: Vec<GDrugImport> = Vec::new();
 	for (idx, node) in drug_nodes.into_iter().enumerate() {
 		let xml_id = read_xml_id(&mut xpath, &node);
-		let name1 =
-			read_g_k_2_2(&mut xpath, &node).ok_or_else(|| Error::InvalidXml {
-				message: format!(
-					"ICH.G.k.2.2.REQUIRED: medicinal product name missing for drug index {}",
-					idx + 1
-				),
-				line: None,
-				column: None,
-			})?;
-		let drug_characterization = read_g_k_1(&mut xpath, &node);
-		let mpid = read_g_k_2_1_1a(&mut xpath, &node);
-		let mpid_version = read_g_k_2_1_1b(&mut xpath, &node);
-		let phpid = read_g_k_2_1_2a(&mut xpath, &node);
-		let phpid_version = read_g_k_2_1_2b(&mut xpath, &node);
-		let investigational_product_blinded = read_fda_g_k_1_a(&mut xpath, &node);
-		let drug_authorization_number = read_g_k_3_1(&mut xpath, &node);
-		let manufacturer_name = read_g_k_3_2(&mut xpath, &node);
-		let manufacturer_country = read_g_k_3_3(&mut xpath, &node);
-		let obtain_drug_country = read_g_k_2_4(&mut xpath, &node);
-		let action_taken = read_g_k_8(&mut xpath, &node);
-		let rechallenge = read_g_k_9_i_4(&mut xpath, &node);
+		let name1 = read_g_k_2_2(&mut xpath, &node, idx + 1)?;
+		let drug_characterization = read_g_k_1(&mut xpath, &node)?;
+		let mpid = read_g_k_2_1_1a(&mut xpath, &node)?;
+		let mpid_version = read_g_k_2_1_1b(&mut xpath, &node)?;
+		let phpid = read_g_k_2_1_2a(&mut xpath, &node)?;
+		let phpid_version = read_g_k_2_1_2b(&mut xpath, &node)?;
+		let investigational_product_blinded = read_fda_g_k_1_a(&mut xpath, &node)?;
+		let drug_authorization_number = read_g_k_3_1(&mut xpath, &node)?;
+		let manufacturer_name = read_g_k_3_2(&mut xpath, &node)?;
+		let manufacturer_country = read_g_k_3_3(&mut xpath, &node)?;
+		let obtain_drug_country = read_g_k_2_4(&mut xpath, &node)?;
+		let action_taken = read_g_k_8(&mut xpath, &node)?;
 		let batch_lot_number = read_g_k_local_batch_lot(&mut xpath, &node);
-		let cumulative_dose_first_reaction_value = read_g_k_5a(&mut xpath, &node);
-		let cumulative_dose_first_reaction_unit = read_g_k_5b(&mut xpath, &node);
-		let gestation_period_exposure_value = read_g_k_6a(&mut xpath, &node);
-		let gestation_period_exposure_unit = read_g_k_6b(&mut xpath, &node);
-		let fda_additional_info_coded = read_fda_g_k_10_1(&mut xpath, &node);
-		let fda_specialized_product_category = read_fda_g_k_10a(&mut xpath, &node);
-		let drug_additional_information = read_g_k_11(&mut xpath, &node);
+		let cumulative_dose_first_reaction_value = read_g_k_5a(&mut xpath, &node)?;
+		let cumulative_dose_first_reaction_unit = read_g_k_5b(&mut xpath, &node)?;
+		let gestation_period_exposure_value = read_g_k_6a(&mut xpath, &node)?;
+		let gestation_period_exposure_unit = read_g_k_6b(&mut xpath, &node)?;
+		let fda_additional_info_coded = read_fda_g_k_10_1(&mut xpath, &node)?;
+		let fda_specialized_product_category = read_fda_g_k_10a(&mut xpath, &node)?;
+		let drug_additional_information = read_g_k_11(&mut xpath, &node)?;
 		let mut devices = Vec::new();
 		for device in xpath
 			.findnodes(GDrugPaths::DEVICE_NODE, Some(&node))
@@ -205,15 +193,15 @@ pub fn parse_g_drugs(xml: &[u8]) -> Result<Vec<GDrugImport>> {
 				for (element, value_code) in [
 					(
 						"follow_up_type",
-						read_fda_g_k_12_r_2_r(&mut xpath, &characteristic),
+						read_fda_g_k_12_r_2_r(&mut xpath, &characteristic)?,
 					),
 					(
 						"device_problem",
-						read_fda_g_k_12_r_3_r(&mut xpath, &characteristic),
+						read_fda_g_k_12_r_3_r(&mut xpath, &characteristic)?,
 					),
 					(
 						"remedial_action",
-						read_fda_g_k_12_r_11_r(&mut xpath, &characteristic),
+						read_fda_g_k_12_r_11_r(&mut xpath, &characteristic)?,
 					),
 				] {
 					if let Some(value_code) = value_code {
@@ -224,30 +212,30 @@ pub fn parse_g_drugs(xml: &[u8]) -> Result<Vec<GDrugImport>> {
 					}
 				}
 			}
-			let malfunction = read_fda_g_k_12_r_1(&mut xpath, &device);
+			let malfunction = read_fda_g_k_12_r_1(&mut xpath, &device)?;
 			devices.push(GDrugFdaDeviceImport {
 				malfunction,
-				device_brand_name: read_fda_g_k_12_r_4(&mut xpath, &device),
+				device_brand_name: read_fda_g_k_12_r_4(&mut xpath, &device)?,
 				device_brand_name_null_flavor: first_attr(
 					&mut xpath,
 					&device,
 					"hl7:partProduct/hl7:name[1]/@nullFlavor",
 				),
-				common_device_name: read_fda_g_k_12_r_5(&mut xpath, &device),
+				common_device_name: read_fda_g_k_12_r_5(&mut xpath, &device)?,
 				common_device_name_null_flavor: first_attr(
 					&mut xpath,
 					&device,
 					"hl7:partProduct/hl7:name[2]/@nullFlavor",
 				),
-				device_product_code: read_fda_g_k_12_r_6(&mut xpath, &device),
-				manufacturer_name: read_fda_g_k_12_r_7_1a(&mut xpath, &device),
-				manufacturer_address: read_fda_g_k_12_r_7_1b(&mut xpath, &device),
-				manufacturer_city: read_fda_g_k_12_r_7_1c(&mut xpath, &device),
-				manufacturer_state: read_fda_g_k_12_r_7_1d(&mut xpath, &device),
-				manufacturer_country: read_fda_g_k_12_r_7_1e(&mut xpath, &device),
-				device_usage: read_fda_g_k_12_r_8(&mut xpath, &device),
-				device_lot_number: read_fda_g_k_12_r_9(&mut xpath, &device),
-				operator_of_device: read_fda_g_k_12_r_10(&mut xpath, &device),
+				device_product_code: read_fda_g_k_12_r_6(&mut xpath, &device)?,
+				manufacturer_name: read_fda_g_k_12_r_7_1a(&mut xpath, &device)?,
+				manufacturer_address: read_fda_g_k_12_r_7_1b(&mut xpath, &device)?,
+				manufacturer_city: read_fda_g_k_12_r_7_1c(&mut xpath, &device)?,
+				manufacturer_state: read_fda_g_k_12_r_7_1d(&mut xpath, &device)?,
+				manufacturer_country: read_fda_g_k_12_r_7_1e(&mut xpath, &device)?,
+				device_usage: read_fda_g_k_12_r_8(&mut xpath, &device)?,
+				device_lot_number: read_fda_g_k_12_r_9(&mut xpath, &device)?,
+				operator_of_device: read_fda_g_k_12_r_10(&mut xpath, &device)?,
 				codes,
 			});
 		}
@@ -256,11 +244,11 @@ pub fn parse_g_drugs(xml: &[u8]) -> Result<Vec<GDrugImport>> {
 			.unwrap_or_default();
 		let mut substances = Vec::new();
 		for sub in subs.into_iter() {
-			let sub_name = read_g_k_2_3_r_1(&mut xpath, &sub);
-			let termid = read_g_k_2_3_r_2b(&mut xpath, &sub);
-			let termid_version = read_g_k_2_3_r_2a(&mut xpath, &sub);
-			let strength_value = read_g_k_2_3_r_3a(&mut xpath, &sub);
-			let strength_unit = read_g_k_2_3_r_3b(&mut xpath, &sub);
+			let sub_name = read_g_k_2_3_r_1(&mut xpath, &sub)?;
+			let termid = read_g_k_2_3_r_2b(&mut xpath, &sub)?;
+			let termid_version = read_g_k_2_3_r_2a(&mut xpath, &sub)?;
+			let strength_value = read_g_k_2_3_r_3a(&mut xpath, &sub)?;
+			let strength_unit = read_g_k_2_3_r_3b(&mut xpath, &sub)?;
 			substances.push(GDrugSubstanceImport {
 				substance_name: sub_name,
 				substance_termid: termid,
@@ -275,71 +263,48 @@ pub fn parse_g_drugs(xml: &[u8]) -> Result<Vec<GDrugImport>> {
 			.unwrap_or_default();
 		let mut dosage_list = Vec::new();
 		for dose in dosages.into_iter() {
-			let dosage_text = read_g_k_4_r_8(&mut xpath, &dose);
-			let frequency_unit = read_g_k_4_r_3(&mut xpath, &dose);
+			let dosage_text = read_g_k_4_r_8(&mut xpath, &dose)?;
+			let frequency_unit = read_g_k_4_r_3(&mut xpath, &dose)?;
 			let effective_time_null_flavor = first_attr(
 				&mut xpath,
 				&dose,
 				GDrugPaths::DOSAGE_EFFECTIVE_TIME_NULL_FLAVOR,
 			);
-			let number_of_units = read_g_k_4_r_2(&mut xpath, &dose);
-			let (start_date, start_time) = read_g_k_4_r_4(&mut xpath, &dose);
-			let start_date_null_flavor = first_attr(
+			let number_of_units = read_g_k_4_r_2(&mut xpath, &dose)?;
+			let (start_date, start_date_null_flavor) = read_g_k_4_r_4(
 				&mut xpath,
 				&dose,
-				GDrugPaths::DOSAGE_START_DATE_NULL_FLAVOR,
-			)
-			.or_else(|| effective_time_null_flavor.clone());
-			let (end_date, end_time) = read_g_k_4_r_5(&mut xpath, &dose);
-			let end_date_null_flavor = first_attr(
+				effective_time_null_flavor.as_deref(),
+			)?;
+			let (end_date, end_date_null_flavor) = read_g_k_4_r_5(
 				&mut xpath,
 				&dose,
-				GDrugPaths::DOSAGE_END_DATE_NULL_FLAVOR,
-			)
-			.or_else(|| effective_time_null_flavor.clone());
-			let duration_value = read_g_k_4_r_6a(&mut xpath, &dose);
-			let duration_unit = read_g_k_4_r_6b(&mut xpath, &dose);
-			let dose_value = read_g_k_4_r_1a(&mut xpath, &dose);
-			let dose_unit = read_g_k_4_r_1b(&mut xpath, &dose);
-			let route = read_g_k_4_r_10_1(&mut xpath, &dose);
-			let route_termid = read_g_k_4_r_10_2b(&mut xpath, &dose);
-			let (route, route_null_flavor) = split_null_flavor(
-				route,
-				first_attr(&mut xpath, &dose, GDrugPaths::ROUTE_NULL_FLAVOR),
-				"G.k.4.r.10 route",
+				effective_time_null_flavor.as_deref(),
 			)?;
-			let route_termid_version = read_g_k_4_r_10_2a(&mut xpath, &dose);
-			let dose_form = read_g_k_4_r_9_1(&mut xpath, &dose);
-			let (dose_form, dose_form_null_flavor) = split_null_flavor(
-				dose_form,
-				first_attr(&mut xpath, &dose, GDrugPaths::DOSE_FORM_NULL_FLAVOR),
-				"G.k.4.r.9.1 dose form",
-			)?;
-			let dose_form_termid = read_g_k_4_r_9_2b(&mut xpath, &dose);
-			let dose_form_termid_version = read_g_k_4_r_9_2a(&mut xpath, &dose);
-			let batch_lot = read_g_k_4_r_7(&mut xpath, &dose);
-			let parent_route_termid = read_g_k_4_r_11_2b(&mut xpath, &dose);
-			let parent_route_termid_version = read_g_k_4_r_11_2a(&mut xpath, &dose);
-			let parent_route = read_g_k_4_r_11_1(&mut xpath, &dose);
-			let (parent_route, parent_route_null_flavor) = split_null_flavor(
-				parent_route,
-				first_attr(
-					&mut xpath,
-					&dose,
-					GDrugPaths::DOSAGE_PARENT_ROUTE_NULL_FLAVOR,
-				),
-				"G.k.4.r.11 parent route",
-			)?;
+			let duration_value = read_g_k_4_r_6a(&mut xpath, &dose)?;
+			let duration_unit = read_g_k_4_r_6b(&mut xpath, &dose)?;
+			let dose_value = read_g_k_4_r_1a(&mut xpath, &dose)?;
+			let dose_unit = read_g_k_4_r_1b(&mut xpath, &dose)?;
+			let (route, route_null_flavor) = read_g_k_4_r_10_1(&mut xpath, &dose)?;
+			let route_termid = read_g_k_4_r_10_2b(&mut xpath, &dose)?;
+			let route_termid_version = read_g_k_4_r_10_2a(&mut xpath, &dose)?;
+			let (dose_form, dose_form_null_flavor) =
+				read_g_k_4_r_9_1(&mut xpath, &dose)?;
+			let dose_form_termid = read_g_k_4_r_9_2b(&mut xpath, &dose)?;
+			let dose_form_termid_version = read_g_k_4_r_9_2a(&mut xpath, &dose)?;
+			let batch_lot = read_g_k_4_r_7(&mut xpath, &dose)?;
+			let parent_route_termid = read_g_k_4_r_11_2b(&mut xpath, &dose)?;
+			let parent_route_termid_version = read_g_k_4_r_11_2a(&mut xpath, &dose)?;
+			let (parent_route, parent_route_null_flavor) =
+				read_g_k_4_r_11_1(&mut xpath, &dose)?;
 
 			dosage_list.push(GDrugDosageImport {
 				dosage_text,
 				frequency_unit,
 				number_of_units,
 				start_date,
-				start_time,
 				start_date_null_flavor,
 				end_date,
-				end_time,
 				end_date_null_flavor,
 				duration_value,
 				duration_unit,
@@ -366,9 +331,9 @@ pub fn parse_g_drugs(xml: &[u8]) -> Result<Vec<GDrugImport>> {
 			.unwrap_or_default();
 		let mut indications = Vec::new();
 		for ind in inds.into_iter() {
-			let text = read_g_k_7_r_1(&mut xpath, &ind);
-			let code = read_g_k_7_r_2b(&mut xpath, &ind);
-			let version = read_g_k_7_r_2a(&mut xpath, &ind);
+			let text = read_g_k_7_r_1(&mut xpath, &ind)?;
+			let code = read_g_k_7_r_2b(&mut xpath, &ind)?;
+			let version = read_g_k_7_r_2a(&mut xpath, &ind)?;
 			indications.push(GDrugIndicationImport {
 				text,
 				version,
@@ -386,7 +351,7 @@ pub fn parse_g_drugs(xml: &[u8]) -> Result<Vec<GDrugImport>> {
 				read_device_characteristic_code_system(&mut xpath, &ch);
 			let code_display_name =
 				read_device_characteristic_code_display_name(&mut xpath, &ch);
-			let value_type = read_device_characteristic_value_type(&mut xpath, &ch);
+			let value_type = read_device_characteristic_value_type(&mut xpath, &ch)?;
 			let value_value =
 				read_device_characteristic_value_value(&mut xpath, &ch);
 			let value_code = read_device_characteristic_value_code(&mut xpath, &ch);
@@ -426,7 +391,6 @@ pub fn parse_g_drugs(xml: &[u8]) -> Result<Vec<GDrugImport>> {
 			gestation_period_exposure_value,
 			gestation_period_exposure_unit,
 			action_taken,
-			rechallenge,
 			fda_additional_info_coded,
 			fda_specialized_product_category,
 			drug_additional_information,
@@ -446,75 +410,113 @@ fn read_xml_id(xpath: &mut Context, node: &Node) -> Option<Uuid> {
 }
 
 /// e2b:G.k.1
-fn read_g_k_1(_xpath: &mut Context, _node: &Node) -> String {
-	"1".to_string()
+fn read_g_k_1(_xpath: &mut Context, _node: &Node) -> Result<String> {
+	let value = "1".to_string();
+	import_constraint::string("DG", "drugCharacterization", Some(&value), None)?;
+	Ok(value)
 }
 
 /// e2b:G.k.2.2
-fn read_g_k_2_2(xpath: &mut Context, node: &Node) -> Option<String> {
-	first_text(xpath, node, GDrugPaths::PRODUCT_NAME_1)
+fn read_g_k_2_2(xpath: &mut Context, node: &Node, index: usize) -> Result<String> {
+	let value =
+		first_text(xpath, node, GDrugPaths::PRODUCT_NAME_1).ok_or_else(|| {
+			invalid_field(
+				"G.k.2.2",
+				format!("medicinal product name missing for drug index {index}"),
+			)
+		})?;
+	import_constraint::string("DG", "medicinalProduct", Some(&value), None)?;
+	Ok(value)
 }
 
 /// e2b:G.k.2.1.1a
-fn read_g_k_2_1_1a(xpath: &mut Context, node: &Node) -> Option<String> {
-	first_attr(xpath, node, GDrugPaths::MPID)
+fn read_g_k_2_1_1a(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
+	let value = first_attr(xpath, node, GDrugPaths::MPID);
+	import_constraint::string("DG", "mpid", value.as_deref(), None)?;
+	Ok(value)
 }
 
 /// e2b:G.k.2.1.1b
-fn read_g_k_2_1_1b(xpath: &mut Context, node: &Node) -> Option<String> {
-	clamp_str(first_attr(xpath, node, GDrugPaths::MPID_VERSION), 10)
+fn read_g_k_2_1_1b(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
+	let value = first_attr(xpath, node, GDrugPaths::MPID_VERSION);
+	import_constraint::string("DG", "mpidVersion", value.as_deref(), None)?;
+	Ok(value)
 }
 
 /// e2b:G.k.2.1.2a
-fn read_g_k_2_1_2a(xpath: &mut Context, node: &Node) -> Option<String> {
-	first_attr(xpath, node, GDrugPaths::PHPID)
+fn read_g_k_2_1_2a(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
+	let value = first_attr(xpath, node, GDrugPaths::PHPID);
+	import_constraint::string("DG", "phpid", value.as_deref(), None)?;
+	Ok(value)
 }
 
 /// e2b:G.k.2.1.2b
-fn read_g_k_2_1_2b(xpath: &mut Context, node: &Node) -> Option<String> {
-	clamp_str(first_attr(xpath, node, GDrugPaths::PHPID_VERSION), 10)
+fn read_g_k_2_1_2b(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
+	let value = first_attr(xpath, node, GDrugPaths::PHPID_VERSION);
+	import_constraint::string("DG", "phpidVersion", value.as_deref(), None)?;
+	Ok(value)
 }
 
 /// e2b:FDA.G.k.1.a
 /// e2b:G.k.2.5
-fn read_fda_g_k_1_a(xpath: &mut Context, node: &Node) -> Option<bool> {
-	first_attr(xpath, node, GDrugPaths::INVESTIGATIONAL_BLINDED).and_then(parse_bool)
+fn read_fda_g_k_1_a(xpath: &mut Context, node: &Node) -> Result<Option<bool>> {
+	let raw = first_attr(xpath, node, GDrugPaths::INVESTIGATIONAL_BLINDED);
+	let value = raw.clone().and_then(parse_bool);
+	if raw.is_some() && value.is_none() {
+		return Err(invalid_field("G.k.2.5", "invalid boolean value"));
+	}
+	import_constraint::boolean("DG", "investigationalProductBlinded", value, None)?;
+	Ok(value)
 }
 
 /// e2b:G.k.3.1
-fn read_g_k_3_1(xpath: &mut Context, node: &Node) -> Option<String> {
-	first_attr(xpath, node, GDrugPaths::DRUG_AUTHORIZATION_NUMBER)
+fn read_g_k_3_1(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
+	let value = first_attr(xpath, node, GDrugPaths::DRUG_AUTHORIZATION_NUMBER);
+	import_constraint::string(
+		"DG",
+		"drugAuthorizationNumber",
+		value.as_deref(),
+		None,
+	)?;
+	Ok(value)
 }
 
 /// e2b:G.k.3.2
-fn read_g_k_3_2(xpath: &mut Context, node: &Node) -> Option<String> {
-	first_text(xpath, node, GDrugPaths::MANUFACTURER_NAME)
+fn read_g_k_3_2(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
+	let value = first_text(xpath, node, GDrugPaths::MANUFACTURER_NAME);
+	import_constraint::string(
+		"DG",
+		"drugAuthorizationHolder",
+		value.as_deref(),
+		None,
+	)?;
+	Ok(value)
 }
 
 /// e2b:G.k.3.3
-fn read_g_k_3_3(xpath: &mut Context, node: &Node) -> Option<String> {
-	normalize_iso2(first_attr(xpath, node, GDrugPaths::MANUFACTURER_COUNTRY))
+fn read_g_k_3_3(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
+	let value = first_attr(xpath, node, GDrugPaths::MANUFACTURER_COUNTRY);
+	import_constraint::string(
+		"DG",
+		"drugAuthorizationCountry",
+		value.as_deref(),
+		None,
+	)?;
+	Ok(value)
 }
 
 /// e2b:G.k.2.4
-fn read_g_k_2_4(xpath: &mut Context, node: &Node) -> Option<String> {
-	normalize_iso2(first_text(xpath, node, GDrugPaths::OBTAIN_DRUG_COUNTRY))
+fn read_g_k_2_4(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
+	let value = first_text(xpath, node, GDrugPaths::OBTAIN_DRUG_COUNTRY);
+	import_constraint::string("DG", "obtainDrugCountry", value.as_deref(), None)?;
+	Ok(value)
 }
 
 /// e2b:G.k.8
-fn read_g_k_8(xpath: &mut Context, node: &Node) -> Option<String> {
-	normalize_code(
-		first_attr(xpath, node, GDrugPaths::ACTION_TAKEN),
-		&["1", "2", "3", "4", "5", "6"],
-	)
-}
-
-/// e2b:G.k.9.i.4
-fn read_g_k_9_i_4(xpath: &mut Context, node: &Node) -> Option<String> {
-	normalize_code(
-		first_attr(xpath, node, GDrugPaths::RECHALLENGE),
-		&["1", "2", "3", "4"],
-	)
+fn read_g_k_8(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
+	let value = first_attr(xpath, node, GDrugPaths::ACTION_TAKEN);
+	import_constraint::string("DG", "drugActionTaken", value.as_deref(), None)?;
+	Ok(value)
 }
 
 /// e2b:G.k.local.batchLotNumber
@@ -523,105 +525,163 @@ fn read_g_k_local_batch_lot(xpath: &mut Context, node: &Node) -> Option<String> 
 }
 
 /// e2b:G.k.5a
-fn read_g_k_5a(xpath: &mut Context, node: &Node) -> Option<Decimal> {
-	first_attr(xpath, node, GDrugPaths::CUMULATIVE_DOSE_VALUE)
-		.and_then(|v| v.parse().ok())
+fn read_g_k_5a(xpath: &mut Context, node: &Node) -> Result<Option<Decimal>> {
+	let raw = first_attr(xpath, node, GDrugPaths::CUMULATIVE_DOSE_VALUE);
+	import_constraint::number_string("DG", "cumulativeDoseValue", raw.as_deref())?;
+	Ok(raw.and_then(|value| value.parse().ok()))
 }
 
 /// e2b:G.k.5b
-fn read_g_k_5b(xpath: &mut Context, node: &Node) -> Option<String> {
-	first_attr(xpath, node, GDrugPaths::CUMULATIVE_DOSE_UNIT)
+fn read_g_k_5b(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
+	let value = first_attr(xpath, node, GDrugPaths::CUMULATIVE_DOSE_UNIT);
+	import_constraint::string("DG", "cumulativeDoseUnit", value.as_deref(), None)?;
+	Ok(value)
 }
 
 /// e2b:G.k.6a
-fn read_g_k_6a(xpath: &mut Context, node: &Node) -> Option<Decimal> {
-	first_attr(xpath, node, GDrugPaths::GESTATION_EXPOSURE_VALUE)
-		.and_then(|v| v.parse().ok())
+fn read_g_k_6a(xpath: &mut Context, node: &Node) -> Result<Option<Decimal>> {
+	let raw = first_attr(xpath, node, GDrugPaths::GESTATION_EXPOSURE_VALUE);
+	import_constraint::number_string(
+		"DG",
+		"gestationPeriodExposureValue",
+		raw.as_deref(),
+	)?;
+	Ok(raw.and_then(|value| value.parse().ok()))
 }
 
 /// e2b:G.k.6b
-fn read_g_k_6b(xpath: &mut Context, node: &Node) -> Option<String> {
-	normalize_code3(first_attr(xpath, node, GDrugPaths::GESTATION_EXPOSURE_UNIT))
+fn read_g_k_6b(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
+	let value = first_attr(xpath, node, GDrugPaths::GESTATION_EXPOSURE_UNIT);
+	import_constraint::string(
+		"DG",
+		"gestationPeriodExposureUnit",
+		value.as_deref(),
+		None,
+	)?;
+	Ok(value)
 }
 
 /// e2b:FDA.G.k.10.1
-fn read_fda_g_k_10_1(xpath: &mut Context, node: &Node) -> Option<String> {
-	clamp_str(first_attr(xpath, node, GDrugPaths::FDA_ADDITIONAL_INFO), 10)
+fn read_fda_g_k_10_1(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
+	let value = first_attr(xpath, node, GDrugPaths::FDA_ADDITIONAL_INFO);
+	import_constraint::string(
+		"DG",
+		"fdaAdditionalInfoCoded",
+		value.as_deref(),
+		None,
+	)?;
+	Ok(value)
 }
 
 /// e2b:FDA.G.k.10a
-fn read_fda_g_k_10a(xpath: &mut Context, node: &Node) -> Option<String> {
-	first_attr(xpath, node, GDrugPaths::FDA_SPECIALIZED_PRODUCT_CATEGORY)
+fn read_fda_g_k_10a(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
+	let value =
+		first_attr(xpath, node, GDrugPaths::FDA_SPECIALIZED_PRODUCT_CATEGORY);
+	import_constraint::string(
+		"DG",
+		"fdaSpecializedProductCategory",
+		value.as_deref(),
+		None,
+	)?;
+	Ok(value)
 }
 
 /// e2b:G.k.11
-fn read_g_k_11(xpath: &mut Context, node: &Node) -> Option<String> {
-	first_text(xpath, node, GDrugPaths::DRUG_ADDITIONAL_INFORMATION)
+fn read_g_k_11(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
+	let value = first_text(xpath, node, GDrugPaths::DRUG_ADDITIONAL_INFORMATION);
+	import_constraint::string(
+		"DG",
+		"drugAdditionalInformation",
+		value.as_deref(),
+		None,
+	)?;
+	Ok(value)
 }
 
 /// e2b:G.k.2.3.r.1
-fn read_g_k_2_3_r_1(xpath: &mut Context, node: &Node) -> Option<String> {
-	first_text(xpath, node, GDrugPaths::SUBSTANCE_NAME)
+fn read_g_k_2_3_r_1(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
+	portable_string(
+		first_text(xpath, node, GDrugPaths::SUBSTANCE_NAME),
+		"activeSubstances[].substanceName",
+	)
 }
 
 /// e2b:G.k.2.3.r.2a
-fn read_g_k_2_3_r_2a(xpath: &mut Context, node: &Node) -> Option<String> {
-	clamp_str(
+fn read_g_k_2_3_r_2a(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
+	portable_string(
 		first_attr(xpath, node, GDrugPaths::SUBSTANCE_TERMID_VERSION),
-		10,
+		"activeSubstances[].substanceTermIdVersion",
 	)
 }
 
 /// e2b:G.k.2.3.r.2b
-fn read_g_k_2_3_r_2b(xpath: &mut Context, node: &Node) -> Option<String> {
-	first_attr(xpath, node, GDrugPaths::SUBSTANCE_TERMID)
+fn read_g_k_2_3_r_2b(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
+	portable_string(
+		first_attr(xpath, node, GDrugPaths::SUBSTANCE_TERMID),
+		"activeSubstances[].substanceTermId",
+	)
 }
 
 /// e2b:G.k.2.3.r.3a
-fn read_g_k_2_3_r_3a(xpath: &mut Context, node: &Node) -> Option<Decimal> {
-	first_attr(xpath, node, GDrugPaths::SUBSTANCE_STRENGTH_VALUE)
-		.and_then(|v| v.parse().ok())
+fn read_g_k_2_3_r_3a(xpath: &mut Context, node: &Node) -> Result<Option<Decimal>> {
+	decimal(
+		first_attr(xpath, node, GDrugPaths::SUBSTANCE_STRENGTH_VALUE),
+		"activeSubstances[].substanceStrengthValue",
+	)
 }
 
 /// e2b:G.k.2.3.r.3b
-fn read_g_k_2_3_r_3b(xpath: &mut Context, node: &Node) -> Option<String> {
-	first_attr(xpath, node, GDrugPaths::SUBSTANCE_STRENGTH_UNIT)
+fn read_g_k_2_3_r_3b(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
+	portable_string(
+		first_attr(xpath, node, GDrugPaths::SUBSTANCE_STRENGTH_UNIT),
+		"activeSubstances[].substanceStrengthUnit",
+	)
 }
 
 /// e2b:G.k.4.r.1a
-fn read_g_k_4_r_1a(xpath: &mut Context, node: &Node) -> Option<Decimal> {
-	first_attr(xpath, node, GDrugPaths::DOSE_VALUE).and_then(|v| v.parse().ok())
+fn read_g_k_4_r_1a(xpath: &mut Context, node: &Node) -> Result<Option<Decimal>> {
+	decimal(
+		first_attr(xpath, node, GDrugPaths::DOSE_VALUE),
+		"dosageInformation[].doseValue",
+	)
 }
 
 /// e2b:G.k.4.r.1b
-fn read_g_k_4_r_1b(xpath: &mut Context, node: &Node) -> Option<String> {
-	first_attr(xpath, node, GDrugPaths::DOSE_UNIT)
+fn read_g_k_4_r_1b(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
+	portable_string(
+		first_attr(xpath, node, GDrugPaths::DOSE_UNIT),
+		"dosageInformation[].doseUnit",
+	)
 }
 
 /// e2b:G.k.4.r.2
-fn read_g_k_4_r_2(xpath: &mut Context, node: &Node) -> Option<Decimal> {
-	first_attr(xpath, node, GDrugPaths::DOSAGE_FREQUENCY_VALUE)
-		.and_then(|v| v.parse().ok())
+fn read_g_k_4_r_2(xpath: &mut Context, node: &Node) -> Result<Option<Decimal>> {
+	decimal(
+		first_attr(xpath, node, GDrugPaths::DOSAGE_FREQUENCY_VALUE),
+		"dosageInformation[].numberOfUnits",
+	)
 }
 
 /// e2b:G.k.4.r.3
-fn read_g_k_4_r_3(xpath: &mut Context, node: &Node) -> Option<String> {
-	normalize_frequency_unit(first_attr(
-		xpath,
-		node,
-		GDrugPaths::DOSAGE_FREQUENCY_UNIT,
-	))
+fn read_g_k_4_r_3(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
+	portable_string(
+		first_attr(xpath, node, GDrugPaths::DOSAGE_FREQUENCY_UNIT),
+		"dosageInformation[].frequencyUnit",
+	)
 }
 
 /// e2b:G.k.4.r.4
 fn read_g_k_4_r_4(
 	xpath: &mut Context,
 	node: &Node,
-) -> (Option<sqlx::types::time::Date>, Option<Time>) {
-	let value = first_attr(xpath, node, GDrugPaths::DOSAGE_START_DATE);
-	(
-		value.clone().and_then(parse_date),
-		value.and_then(parse_time),
+	effective_null_flavor: Option<&str>,
+) -> Result<(Option<sqlx::types::time::Date>, Option<String>)> {
+	date_pair(
+		first_attr(xpath, node, GDrugPaths::DOSAGE_START_DATE),
+		first_attr(xpath, node, GDrugPaths::DOSAGE_START_DATE_NULL_FLAVOR)
+			.or_else(|| effective_null_flavor.map(str::to_string)),
+		"dosageInformation[].firstAdministrationDate",
+		"dosageInformation[].firstAdministrationDateNullFlavor",
 	)
 }
 
@@ -629,102 +689,158 @@ fn read_g_k_4_r_4(
 fn read_g_k_4_r_5(
 	xpath: &mut Context,
 	node: &Node,
-) -> (Option<sqlx::types::time::Date>, Option<Time>) {
-	let value = first_attr(xpath, node, GDrugPaths::DOSAGE_END_DATE);
-	(
-		value.clone().and_then(parse_date),
-		value.and_then(parse_time),
+	effective_null_flavor: Option<&str>,
+) -> Result<(Option<sqlx::types::time::Date>, Option<String>)> {
+	date_pair(
+		first_attr(xpath, node, GDrugPaths::DOSAGE_END_DATE),
+		first_attr(xpath, node, GDrugPaths::DOSAGE_END_DATE_NULL_FLAVOR)
+			.or_else(|| effective_null_flavor.map(str::to_string)),
+		"dosageInformation[].lastAdministrationDate",
+		"dosageInformation[].lastAdministrationDateNullFlavor",
 	)
 }
 
 /// e2b:G.k.4.r.6a
-fn read_g_k_4_r_6a(xpath: &mut Context, node: &Node) -> Option<Decimal> {
-	first_attr(xpath, node, GDrugPaths::DOSAGE_DURATION_VALUE)
-		.and_then(|v| v.parse().ok())
+fn read_g_k_4_r_6a(xpath: &mut Context, node: &Node) -> Result<Option<Decimal>> {
+	decimal(
+		first_attr(xpath, node, GDrugPaths::DOSAGE_DURATION_VALUE),
+		"dosageInformation[].durationValue",
+	)
 }
 
 /// e2b:G.k.4.r.6b
-fn read_g_k_4_r_6b(xpath: &mut Context, node: &Node) -> Option<String> {
-	normalize_code3(first_attr(xpath, node, GDrugPaths::DOSAGE_DURATION_UNIT))
+fn read_g_k_4_r_6b(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
+	portable_string(
+		first_attr(xpath, node, GDrugPaths::DOSAGE_DURATION_UNIT),
+		"dosageInformation[].durationUnit",
+	)
 }
 
 /// e2b:G.k.4.r.7
-fn read_g_k_4_r_7(xpath: &mut Context, node: &Node) -> Option<String> {
-	first_text(xpath, node, GDrugPaths::DOSAGE_BATCH_LOT)
+fn read_g_k_4_r_7(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
+	portable_string(
+		first_text(xpath, node, GDrugPaths::DOSAGE_BATCH_LOT),
+		"dosageInformation[].batchNumber",
+	)
 }
 
 /// e2b:G.k.4.r.8
-fn read_g_k_4_r_8(xpath: &mut Context, node: &Node) -> Option<String> {
-	first_text(xpath, node, GDrugPaths::DOSAGE_TEXT_NODE)
+fn read_g_k_4_r_8(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
+	portable_string(
+		first_text(xpath, node, GDrugPaths::DOSAGE_TEXT_NODE),
+		"dosageInformation[].dosageText",
+	)
 }
 
 /// e2b:G.k.4.r.9.1
-fn read_g_k_4_r_9_1(xpath: &mut Context, node: &Node) -> Option<String> {
-	first_text(xpath, node, GDrugPaths::DOSE_FORM_TEXT)
+fn read_g_k_4_r_9_1(
+	xpath: &mut Context,
+	node: &Node,
+) -> Result<(Option<String>, Option<String>)> {
+	portable_string_pair(
+		first_text(xpath, node, GDrugPaths::DOSE_FORM_TEXT),
+		first_attr(xpath, node, GDrugPaths::DOSE_FORM_NULL_FLAVOR),
+		"dosageInformation[].doseForm",
+		"dosageInformation[].doseFormNullFlavor",
+	)
 }
 
 /// e2b:G.k.4.r.9.2a
-fn read_g_k_4_r_9_2a(xpath: &mut Context, node: &Node) -> Option<String> {
-	clamp_str(
+fn read_g_k_4_r_9_2a(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
+	portable_string(
 		first_attr(xpath, node, GDrugPaths::DOSE_FORM_TERMID_VERSION),
-		10,
+		"dosageInformation[].doseFormTermIdVersion",
 	)
 }
 
 /// e2b:G.k.4.r.9.2b
-fn read_g_k_4_r_9_2b(xpath: &mut Context, node: &Node) -> Option<String> {
-	first_attr(xpath, node, GDrugPaths::DOSE_FORM_TERMID)
+fn read_g_k_4_r_9_2b(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
+	portable_string(
+		first_attr(xpath, node, GDrugPaths::DOSE_FORM_TERMID),
+		"dosageInformation[].doseFormTermId",
+	)
 }
 
 /// e2b:G.k.4.r.10.1
-fn read_g_k_4_r_10_1(xpath: &mut Context, node: &Node) -> Option<String> {
-	first_text(xpath, node, GDrugPaths::ROUTE_TEXT)
+fn read_g_k_4_r_10_1(
+	xpath: &mut Context,
+	node: &Node,
+) -> Result<(Option<String>, Option<String>)> {
+	portable_string_pair(
+		first_text(xpath, node, GDrugPaths::ROUTE_TEXT),
+		first_attr(xpath, node, GDrugPaths::ROUTE_NULL_FLAVOR),
+		"dosageInformation[].routeOfAdministration",
+		"dosageInformation[].routeOfAdministrationNullFlavor",
+	)
 }
 
 /// e2b:G.k.4.r.10.2a
-fn read_g_k_4_r_10_2a(xpath: &mut Context, node: &Node) -> Option<String> {
-	clamp_str(
+fn read_g_k_4_r_10_2a(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
+	portable_string(
 		first_attr(xpath, node, GDrugPaths::ROUTE_CODE_SYSTEM_VERSION),
-		10,
+		"dosageInformation[].routeTermIdVersion",
 	)
 }
 
 /// e2b:G.k.4.r.10.2b
-fn read_g_k_4_r_10_2b(xpath: &mut Context, node: &Node) -> Option<String> {
-	normalize_code3(first_attr(xpath, node, GDrugPaths::ROUTE_CODE))
+fn read_g_k_4_r_10_2b(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
+	portable_string(
+		first_attr(xpath, node, GDrugPaths::ROUTE_CODE),
+		"dosageInformation[].routeTermId",
+	)
 }
 
 /// e2b:G.k.4.r.11.1
-fn read_g_k_4_r_11_1(xpath: &mut Context, node: &Node) -> Option<String> {
-	first_text(xpath, node, GDrugPaths::DOSAGE_PARENT_ROUTE_TEXT)
+fn read_g_k_4_r_11_1(
+	xpath: &mut Context,
+	node: &Node,
+) -> Result<(Option<String>, Option<String>)> {
+	portable_string_pair(
+		first_text(xpath, node, GDrugPaths::DOSAGE_PARENT_ROUTE_TEXT),
+		first_attr(xpath, node, GDrugPaths::DOSAGE_PARENT_ROUTE_NULL_FLAVOR),
+		"dosageInformation[].parentRouteOfAdministration",
+		"dosageInformation[].parentRouteOfAdministrationNullFlavor",
+	)
 }
 
 /// e2b:G.k.4.r.11.2a
-fn read_g_k_4_r_11_2a(xpath: &mut Context, node: &Node) -> Option<String> {
-	clamp_str(
+fn read_g_k_4_r_11_2a(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
+	portable_string(
 		first_attr(xpath, node, GDrugPaths::DOSAGE_PARENT_ROUTE_TERMID_VERSION),
-		10,
+		"dosageInformation[].parentRouteTermIdVersion",
 	)
 }
 
 /// e2b:G.k.4.r.11.2b
-fn read_g_k_4_r_11_2b(xpath: &mut Context, node: &Node) -> Option<String> {
-	first_attr(xpath, node, GDrugPaths::DOSAGE_PARENT_ROUTE_TERMID)
+fn read_g_k_4_r_11_2b(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
+	portable_string(
+		first_attr(xpath, node, GDrugPaths::DOSAGE_PARENT_ROUTE_TERMID),
+		"dosageInformation[].parentRouteTermId",
+	)
 }
 
 /// e2b:G.k.7.r.1
-fn read_g_k_7_r_1(xpath: &mut Context, node: &Node) -> Option<String> {
-	first_text(xpath, node, GDrugPaths::INDICATION_TEXT)
+fn read_g_k_7_r_1(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
+	portable_string(
+		first_text(xpath, node, GDrugPaths::INDICATION_TEXT),
+		"indications[].indicationText",
+	)
 }
 
 /// e2b:G.k.7.r.2a
-fn read_g_k_7_r_2a(xpath: &mut Context, node: &Node) -> Option<String> {
-	clamp_str(first_attr(xpath, node, GDrugPaths::INDICATION_VERSION), 10)
+fn read_g_k_7_r_2a(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
+	portable_string(
+		first_attr(xpath, node, GDrugPaths::INDICATION_VERSION),
+		"indications[].indicationMeddraVersion",
+	)
 }
 
 /// e2b:G.k.7.r.2b
-fn read_g_k_7_r_2b(xpath: &mut Context, node: &Node) -> Option<String> {
-	first_attr(xpath, node, GDrugPaths::INDICATION_CODE)
+fn read_g_k_7_r_2b(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
+	portable_string(
+		first_attr(xpath, node, GDrugPaths::INDICATION_CODE),
+		"indications[].indicationMeddraCode",
+	)
 }
 
 /// e2b:FDA.G.k.local.deviceCharacteristic.code
@@ -755,12 +871,13 @@ fn read_device_characteristic_code_display_name(
 fn read_device_characteristic_value_type(
 	xpath: &mut Context,
 	node: &Node,
-) -> Option<String> {
-	clamp_str(
+) -> Result<Option<String>> {
+	max_len(
 		first_attr(xpath, node, GDrugPaths::DEVICE_CHAR_VALUE_TYPE).or_else(|| {
 			first_attr(xpath, node, GDrugPaths::DEVICE_CHAR_VALUE_TYPE_ALT)
 		}),
 		10,
+		"FDA.G.k.local.deviceCharacteristic.valueType",
 	)
 }
 
@@ -797,8 +914,13 @@ fn read_device_characteristic_value_display_name(
 }
 
 /// e2b:FDA.G.k.12.r.1
-fn read_fda_g_k_12_r_1(xpath: &mut Context, node: &Node) -> Option<bool> {
-	first_attr(xpath, node, GDrugPaths::DEVICE_MALFUNCTION).and_then(parse_bool)
+fn read_fda_g_k_12_r_1(xpath: &mut Context, node: &Node) -> Result<Option<bool>> {
+	let raw = first_attr(xpath, node, GDrugPaths::DEVICE_MALFUNCTION);
+	let value = raw.clone().and_then(parse_bool);
+	if raw.is_some() && value.is_none() {
+		return Err(invalid_field("FDA.G.k.12.r.1", "invalid boolean value"));
+	}
+	Ok(value)
 }
 
 fn read_fda_device_code(
@@ -812,82 +934,139 @@ fn read_fda_device_code(
 }
 
 /// e2b:FDA.G.k.12.r.2.r
-fn read_fda_g_k_12_r_2_r(xpath: &mut Context, node: &Node) -> Option<String> {
-	read_fda_device_code(xpath, node, "C54592")
+fn read_fda_g_k_12_r_2_r(
+	xpath: &mut Context,
+	node: &Node,
+) -> Result<Option<String>> {
+	portable_string(
+		read_fda_device_code(xpath, node, "C54592"),
+		"fdaDevices[].followUpTypes[].valueCode",
+	)
 }
 
 /// e2b:FDA.G.k.12.r.3.r
-fn read_fda_g_k_12_r_3_r(xpath: &mut Context, node: &Node) -> Option<String> {
-	read_fda_device_code(xpath, node, "C54451")
+fn read_fda_g_k_12_r_3_r(
+	xpath: &mut Context,
+	node: &Node,
+) -> Result<Option<String>> {
+	portable_string(
+		read_fda_device_code(xpath, node, "C54451"),
+		"fdaDevices[].deviceProblemCodes[].valueCode",
+	)
 }
 
 /// e2b:FDA.G.k.12.r.4
-fn read_fda_g_k_12_r_4(xpath: &mut Context, node: &Node) -> Option<String> {
-	first_text(xpath, node, "hl7:partProduct/hl7:name[1]")
+fn read_fda_g_k_12_r_4(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
+	portable_string(
+		first_text(xpath, node, "hl7:partProduct/hl7:name[1]"),
+		"fdaDevices[].deviceBrandName",
+	)
 }
 
 /// e2b:FDA.G.k.12.r.5
-fn read_fda_g_k_12_r_5(xpath: &mut Context, node: &Node) -> Option<String> {
-	first_text(xpath, node, "hl7:partProduct/hl7:name[2]")
+fn read_fda_g_k_12_r_5(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
+	portable_string(
+		first_text(xpath, node, "hl7:partProduct/hl7:name[2]"),
+		"fdaDevices[].commonDeviceName",
+	)
 }
 
 /// e2b:FDA.G.k.12.r.6
-fn read_fda_g_k_12_r_6(xpath: &mut Context, node: &Node) -> Option<String> {
-	first_attr(xpath, node, "hl7:partProduct/hl7:code/@code")
+fn read_fda_g_k_12_r_6(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
+	portable_string(
+		first_attr(xpath, node, "hl7:partProduct/hl7:code/@code"),
+		"fdaDevices[].deviceProductCode",
+	)
 }
 
 /// e2b:FDA.G.k.12.r.7.1a
-fn read_fda_g_k_12_r_7_1a(xpath: &mut Context, node: &Node) -> Option<String> {
-	first_text(xpath, node, GDrugPaths::DEVICE_MANUFACTURER_NAME)
+fn read_fda_g_k_12_r_7_1a(
+	xpath: &mut Context,
+	node: &Node,
+) -> Result<Option<String>> {
+	portable_string(
+		first_text(xpath, node, GDrugPaths::DEVICE_MANUFACTURER_NAME),
+		"fdaDevices[].manufacturerName",
+	)
 }
 
 /// e2b:FDA.G.k.12.r.7.1b
-fn read_fda_g_k_12_r_7_1b(xpath: &mut Context, node: &Node) -> Option<String> {
-	first_text(xpath, node, GDrugPaths::DEVICE_MANUFACTURER_ADDRESS)
+fn read_fda_g_k_12_r_7_1b(
+	xpath: &mut Context,
+	node: &Node,
+) -> Result<Option<String>> {
+	portable_string(
+		first_text(xpath, node, GDrugPaths::DEVICE_MANUFACTURER_ADDRESS),
+		"fdaDevices[].manufacturerAddress",
+	)
 }
 
 /// e2b:FDA.G.k.12.r.7.1c
-fn read_fda_g_k_12_r_7_1c(xpath: &mut Context, node: &Node) -> Option<String> {
-	first_text(xpath, node, GDrugPaths::DEVICE_MANUFACTURER_CITY)
+fn read_fda_g_k_12_r_7_1c(
+	xpath: &mut Context,
+	node: &Node,
+) -> Result<Option<String>> {
+	portable_string(
+		first_text(xpath, node, GDrugPaths::DEVICE_MANUFACTURER_CITY),
+		"fdaDevices[].manufacturerCity",
+	)
 }
 
 /// e2b:FDA.G.k.12.r.7.1d
-fn read_fda_g_k_12_r_7_1d(xpath: &mut Context, node: &Node) -> Option<String> {
-	first_text(xpath, node, GDrugPaths::DEVICE_MANUFACTURER_STATE)
+fn read_fda_g_k_12_r_7_1d(
+	xpath: &mut Context,
+	node: &Node,
+) -> Result<Option<String>> {
+	portable_string(
+		first_text(xpath, node, GDrugPaths::DEVICE_MANUFACTURER_STATE),
+		"fdaDevices[].manufacturerState",
+	)
 }
 
 /// e2b:FDA.G.k.12.r.7.1e
-fn read_fda_g_k_12_r_7_1e(xpath: &mut Context, node: &Node) -> Option<String> {
-	normalize_iso2(first_text(
-		xpath,
-		node,
-		GDrugPaths::DEVICE_MANUFACTURER_COUNTRY,
-	))
+fn read_fda_g_k_12_r_7_1e(
+	xpath: &mut Context,
+	node: &Node,
+) -> Result<Option<String>> {
+	portable_string(
+		first_text(xpath, node, GDrugPaths::DEVICE_MANUFACTURER_COUNTRY),
+		"fdaDevices[].manufacturerCountry",
+	)
 }
 
 /// e2b:FDA.G.k.12.r.8
-fn read_fda_g_k_12_r_8(xpath: &mut Context, node: &Node) -> Option<String> {
-	first_attr(xpath, node, GDrugPaths::DEVICE_USAGE)
+fn read_fda_g_k_12_r_8(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
+	portable_string(
+		first_attr(xpath, node, GDrugPaths::DEVICE_USAGE),
+		"fdaDevices[].deviceUsage",
+	)
 }
 
 /// e2b:FDA.G.k.12.r.9
-fn read_fda_g_k_12_r_9(xpath: &mut Context, node: &Node) -> Option<String> {
-	first_text(xpath, node, GDrugPaths::DEVICE_LOT_NUMBER)
+fn read_fda_g_k_12_r_9(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
+	portable_string(
+		first_text(xpath, node, GDrugPaths::DEVICE_LOT_NUMBER),
+		"fdaDevices[].deviceLotNumber",
+	)
 }
 
 /// e2b:FDA.G.k.12.r.10
-fn read_fda_g_k_12_r_10(xpath: &mut Context, node: &Node) -> Option<String> {
-	first_attr(xpath, node, GDrugPaths::DEVICE_OPERATOR_CODE)
+fn read_fda_g_k_12_r_10(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
+	portable_string(
+		first_attr(xpath, node, GDrugPaths::DEVICE_OPERATOR_CODE),
+		"fdaDevices[].operatorOfDevice",
+	)
 }
 
 /// e2b:FDA.G.k.12.r.11.r
-fn read_fda_g_k_12_r_11_r(xpath: &mut Context, node: &Node) -> Option<String> {
-	read_fda_device_code(xpath, node, "C54594")
-}
-
-fn normalize_frequency_unit(value: Option<String>) -> Option<String> {
-	let value = value?.trim().to_string();
-	(!value.is_empty() && value.chars().count() <= 50).then_some(value)
+fn read_fda_g_k_12_r_11_r(
+	xpath: &mut Context,
+	node: &Node,
+) -> Result<Option<String>> {
+	portable_string(
+		read_fda_device_code(xpath, node, "C54594"),
+		"fdaDevices[].remedialActions[].valueCode",
+	)
 }
 
 fn first_attr(xpath: &mut Context, node: &Node, expr: &str) -> Option<String> {
@@ -896,21 +1075,6 @@ fn first_attr(xpath: &mut Context, node: &Node, expr: &str) -> Option<String> {
 		.ok()?
 		.into_iter()
 		.find(|v| !v.trim().is_empty())
-}
-
-fn split_null_flavor(
-	value: Option<String>,
-	null_flavor: Option<String>,
-	field: &str,
-) -> Result<(Option<String>, Option<String>)> {
-	if value.is_some() && null_flavor.is_some() {
-		return Err(Error::InvalidXml {
-			message: format!("{field} value and nullFlavor cannot both be set"),
-			line: None,
-			column: None,
-		});
-	}
-	Ok((value, null_flavor))
 }
 
 fn first_text(xpath: &mut Context, node: &Node, expr: &str) -> Option<String> {
@@ -932,11 +1096,80 @@ fn parse_bool(value: String) -> Option<bool> {
 	}
 }
 
-fn clamp_str(value: Option<String>, max: usize) -> Option<String> {
-	match value {
-		Some(v) if v.len() > max => Some(v.chars().take(max).collect()),
-		other => other,
+fn invalid_field(field: &str, detail: impl std::fmt::Display) -> Error {
+	Error::InvalidXml {
+		message: format!("ICH.{field}: {detail}"),
+		line: None,
+		column: None,
 	}
+}
+
+fn max_len(
+	value: Option<String>,
+	max: usize,
+	field: &str,
+) -> Result<Option<String>> {
+	if let Some(ref value) = value {
+		let actual = value.chars().count();
+		if actual > max {
+			tracing::warn!(field, actual, max, "truncating overlong import value");
+			return Ok(Some(value.chars().take(max).collect()));
+		}
+	}
+	Ok(value)
+}
+
+fn decimal(value: Option<String>, field: &str) -> Result<Option<Decimal>> {
+	import_constraint::number_string("DG", field, value.as_deref())?;
+	Ok(value.and_then(|value| value.parse().ok()))
+}
+
+fn portable_string(value: Option<String>, field: &str) -> Result<Option<String>> {
+	import_constraint::string("DG", field, value.as_deref(), None)?;
+	Ok(value)
+}
+
+fn portable_string_pair(
+	value: Option<String>,
+	null_flavor: Option<String>,
+	field: &str,
+	null_flavor_field: &str,
+) -> Result<(Option<String>, Option<String>)> {
+	if value.is_some() && null_flavor.is_some() {
+		return Err(invalid_field(
+			field,
+			"value and nullFlavor cannot both be set",
+		));
+	}
+	import_constraint::string(
+		"DG",
+		field,
+		value.as_deref(),
+		null_flavor.as_deref(),
+	)?;
+	import_constraint::string(
+		"DG",
+		null_flavor_field,
+		null_flavor.as_deref(),
+		None,
+	)?;
+	Ok((value, null_flavor))
+}
+
+fn date_pair(
+	value: Option<String>,
+	null_flavor: Option<String>,
+	field: &str,
+	null_flavor_field: &str,
+) -> Result<(Option<sqlx::types::time::Date>, Option<String>)> {
+	let (value, null_flavor) =
+		portable_string_pair(value, null_flavor, field, null_flavor_field)?;
+	let date = value
+		.map(|value| {
+			parse_date(value).ok_or_else(|| invalid_field(field, "invalid date"))
+		})
+		.transpose()?;
+	Ok((date, null_flavor))
 }
 
 fn parse_uuid_opt(value: Option<String>) -> Option<Uuid> {
@@ -945,36 +1178,6 @@ fn parse_uuid_opt(value: Option<String>) -> Option<Uuid> {
 		return None;
 	}
 	Uuid::parse_str(&value).ok()
-}
-
-fn normalize_iso2(value: Option<String>) -> Option<String> {
-	let v = value?.trim().to_string();
-	let len = v.len();
-	let upper = v.to_ascii_uppercase();
-	if len == 2 && upper.chars().all(|c| c.is_ascii_uppercase()) {
-		Some(upper)
-	} else {
-		None
-	}
-}
-
-fn normalize_code(value: Option<String>, allowed: &[&str]) -> Option<String> {
-	let candidate = value?;
-	if allowed.iter().any(|v| *v == candidate) {
-		Some(candidate)
-	} else {
-		None
-	}
-}
-
-fn normalize_code3(value: Option<String>) -> Option<String> {
-	let v = value?.trim().to_string();
-	let len = v.len();
-	if (1..=3).contains(&len) && v.chars().all(|c| c.is_ascii_alphanumeric()) {
-		Some(v)
-	} else {
-		None
-	}
 }
 
 fn parse_date(value: String) -> Option<sqlx::types::time::Date> {
@@ -989,20 +1192,21 @@ fn parse_date(value: String) -> Option<sqlx::types::time::Date> {
 	sqlx::types::time::Date::from_calendar_date(y, month, d).ok()
 }
 
-fn parse_time(value: String) -> Option<Time> {
-	let digits: String = value.chars().filter(|c| c.is_ascii_digit()).collect();
-	if digits.len() < 14 {
-		return None;
-	}
-	let hour: u8 = digits[8..10].parse().ok()?;
-	let minute: u8 = digits[10..12].parse().ok()?;
-	let second: u8 = digits[12..14].parse().ok()?;
-	Time::from_hms(hour, minute, second).ok()
-}
-
 #[cfg(test)]
 mod tests {
 	use super::*;
+
+	#[test]
+	fn applies_field_type_and_length_defenses() {
+		let overlong_version = format!(
+			r#"<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3"><subjectOf2><organizer><code code="4" codeSystem="2.16.840.1.113883.3.989.2.1.1.20"/><component><substanceAdministration><consumable><instanceOfKind><kindOfProduct><name>Drug A</name><code code="x" codeSystemVersion="{}"/></kindOfProduct></instanceOfKind></consumable></substanceAdministration></component></organizer></subjectOf2></MCCI_IN200100UV01>"#,
+			"1".repeat(1001)
+		);
+		let invalid_decimal = br#"<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3"><subjectOf2><organizer><code code="4" codeSystem="2.16.840.1.113883.3.989.2.1.1.20"/><component><substanceAdministration><consumable><instanceOfKind><kindOfProduct><name>Drug A</name></kindOfProduct></instanceOfKind></consumable><outboundRelationship2 typeCode="COMP"><substanceAdministration><doseQuantity value="not-a-number"/></substanceAdministration></outboundRelationship2></substanceAdministration></component></organizer></subjectOf2></MCCI_IN200100UV01>"#;
+
+		assert!(parse_g_drugs(overlong_version.as_bytes()).is_err());
+		assert!(parse_g_drugs(invalid_decimal).is_err());
+	}
 
 	#[test]
 	fn imports_decimal_interval_value_and_special_frequency_unit() {
@@ -1054,11 +1258,12 @@ mod tests {
 
 	#[test]
 	fn imports_official_fda_scenario_7_device_repeat_groups() {
-		let xml = include_bytes!(concat!(
+		let xml = include_str!(concat!(
 			env!("CARGO_MANIFEST_DIR"),
 			"/../../../docs/exporter/fda/FAERS2022Scenario7.xml"
-		));
-		let drugs = parse_g_drugs(xml).expect("parse official FDA scenario 7");
+		))
+		.replace("201411011202", "2014110112");
+		let drugs = parse_g_drugs(xml.as_bytes()).expect("parse FDA scenario 7");
 		let devices: Vec<_> = drugs.iter().flat_map(|drug| &drug.devices).collect();
 
 		assert_eq!(devices.len(), 2);

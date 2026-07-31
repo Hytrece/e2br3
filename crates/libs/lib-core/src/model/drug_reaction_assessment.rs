@@ -96,6 +96,7 @@ pub struct RelatednessAssessment {
 	pub result_of_assessment: Option<String>,
 	// MFDS.G.k.9.i.2.r.3.KR.1
 	pub result_of_assessment_kr1: Option<String>,
+	pub result_of_assessment_kr1_null_flavor: Option<String>,
 	// MFDS.G.k.9.i.2.r.3.KR.2 - Additional KR assessment result text
 	pub result_of_assessment_kr2: Option<String>,
 
@@ -117,6 +118,7 @@ pub struct RelatednessAssessmentForCreate {
 	pub method_of_assessment_kr1: Option<String>,
 	pub result_of_assessment: Option<String>,
 	pub result_of_assessment_kr1: Option<String>,
+	pub result_of_assessment_kr1_null_flavor: Option<String>,
 	pub result_of_assessment_kr2: Option<String>,
 }
 
@@ -127,6 +129,7 @@ pub struct RelatednessAssessmentForUpdate {
 	pub method_of_assessment_kr1: Option<String>,
 	pub result_of_assessment: Option<String>,
 	pub result_of_assessment_kr1: Option<String>,
+	pub result_of_assessment_kr1_null_flavor: Option<String>,
 	pub result_of_assessment_kr2: Option<String>,
 }
 

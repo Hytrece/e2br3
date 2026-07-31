@@ -407,6 +407,8 @@ async fn import_drug_reaction_assessments(
 					method_of_assessment_kr1: rel.method_of_assessment_kr1,
 					result_of_assessment: rel.result_of_assessment,
 					result_of_assessment_kr1: rel.result_of_assessment_kr1,
+					result_of_assessment_kr1_null_flavor: rel
+						.result_of_assessment_kr1_null_flavor,
 					result_of_assessment_kr2: rel.result_of_assessment_kr2,
 				},
 			)
@@ -423,6 +425,9 @@ async fn import_drug_reaction_assessments(
 					method_of_assessment_kr1: rel.method_of_assessment_kr1.clone(),
 					result_of_assessment: rel.result_of_assessment.clone(),
 					result_of_assessment_kr1: rel.result_of_assessment_kr1.clone(),
+					result_of_assessment_kr1_null_flavor: rel
+						.result_of_assessment_kr1_null_flavor
+						.clone(),
 					result_of_assessment_kr2: rel.result_of_assessment_kr2.clone(),
 				},
 			)
@@ -437,6 +442,8 @@ async fn import_drug_reaction_assessments(
 					method_of_assessment_kr1: rel.method_of_assessment_kr1,
 					result_of_assessment: rel.result_of_assessment,
 					result_of_assessment_kr1: rel.result_of_assessment_kr1,
+					result_of_assessment_kr1_null_flavor: rel
+						.result_of_assessment_kr1_null_flavor,
 					result_of_assessment_kr2: rel.result_of_assessment_kr2,
 				},
 			)

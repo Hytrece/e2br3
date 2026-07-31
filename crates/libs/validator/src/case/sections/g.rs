@@ -245,6 +245,7 @@ struct MfdsRelatednessRuleView {
 	source: Option<String>,
 	method: Option<String>,
 	result_kr1: Option<String>,
+	result_kr1_null_flavor: Option<String>,
 	result_kr2: Option<String>,
 	receiver_is_ct_or_cu: bool,
 	receiver_is_kr: bool,
@@ -266,14 +267,19 @@ const G_MFDS_RELATEDNESS_CATALOG_VALUE_RULES: &[CatalogValueRule<
 >] = &[
 	CatalogValueRule {
 		code: "MFDS.G.k.9.i.2.r.2.KR.1.REQUIRED",
-		path: |item| item.path("methodOfAssessment"),
+		path: |item| item.path("methodOfAssessmentKr1"),
 		value: |item| RuleValue::borrowed(item.method.as_deref(), None),
 		facts: |item| item.facts,
 	},
 	CatalogValueRule {
 		code: "MFDS.G.k.9.i.2.r.3.KR.1.REQUIRED",
-		path: |item| item.path("resultOfAssessment"),
-		value: |item| RuleValue::borrowed(item.result_kr1.as_deref(), None),
+		path: |item| item.path("resultOfAssessmentKr1"),
+		value: |item| {
+			RuleValue::borrowed(
+				item.result_kr1.as_deref(),
+				item.result_kr1_null_flavor.as_deref(),
+			)
+		},
 		facts: |item| item.facts,
 	},
 	CatalogValueRule {
@@ -294,7 +300,7 @@ const G_MFDS_METHOD_PROFILE_VIOLATION_RULES: &[ViolationRule<
 	MfdsRelatednessRuleView,
 >] = &[ViolationRule {
 	code: "MFDS.G.k.9.i.2.r.2.KR.1.REQUIRED",
-	path: |item| item.path("methodOfAssessment"),
+	path: |item| item.path("methodOfAssessmentKr1"),
 	violated: |item| {
 		let Some(code) = item.method.as_deref().map(str::trim) else {
 			return false;
@@ -317,7 +323,7 @@ const G_MFDS_RESULT_PROFILE_VIOLATION_RULES: &[ViolationRule<
 	MfdsRelatednessRuleView,
 >] = &[ViolationRule {
 	code: "MFDS.G.k.9.i.2.r.3.KR.1.REQUIRED",
-	path: |item| item.path("resultOfAssessment"),
+	path: |item| item.path("resultOfAssessmentKr1"),
 	violated: |item| {
 		if item.method.as_deref().map(str::trim) != Some("1") {
 			return false;
@@ -327,7 +333,7 @@ const G_MFDS_RESULT_PROFILE_VIOLATION_RULES: &[ViolationRule<
 			.map(str::trim)
 			.is_some_and(|code| {
 				!code.is_empty()
-					&& !matches!(code, "1" | "2" | "3" | "4" | "5" | "6" | "NA")
+					&& !matches!(code, "1" | "2" | "3" | "4" | "5" | "6")
 			})
 	},
 }];
@@ -1514,11 +1520,12 @@ pub(crate) fn collect_mfds_issues(
 				r.relatedness_sequence_number,
 			)?;
 			let has_source = has_text(r.source_of_assessment.as_deref());
-			let has_method = has_text(r.method_of_assessment.as_deref());
-			let has_result_kr1 = has_text(r.result_of_assessment.as_deref());
+			let has_method = has_text(r.method_of_assessment_kr1.as_deref());
+			let has_result_kr1 = has_text(r.result_of_assessment_kr1.as_deref())
+				|| has_text(r.result_of_assessment_kr1_null_flavor.as_deref());
 			let has_result_kr2 = has_text(r.result_of_assessment_kr2.as_deref());
 			let has_any_result = has_result_kr1 || has_result_kr2;
-			let method_code = r.method_of_assessment.as_deref().map(str::trim);
+			let method_code = r.method_of_assessment_kr1.as_deref().map(str::trim);
 			let method_is_who_umc = method_code == Some("1");
 			let method_is_krct = method_code == Some("2");
 			let method_required_context = has_source || receiver_is_ct_or_cu;
@@ -1529,8 +1536,11 @@ pub(crate) fn collect_mfds_issues(
 				drug_index,
 				assessment_index,
 				source: r.source_of_assessment.clone(),
-				method: r.method_of_assessment.clone(),
-				result_kr1: r.result_of_assessment.clone(),
+				method: r.method_of_assessment_kr1.clone(),
+				result_kr1: r.result_of_assessment_kr1.clone(),
+				result_kr1_null_flavor: r
+					.result_of_assessment_kr1_null_flavor
+					.clone(),
 				result_kr2: r.result_of_assessment_kr2.clone(),
 				receiver_is_ct_or_cu,
 				receiver_is_kr,
@@ -1753,6 +1763,7 @@ mod conditioned_catalog_rule_tests {
 				source: Some("source".to_string()),
 				method: None,
 				result_kr1: None,
+				result_kr1_null_flavor: None,
 				result_kr2: None,
 				receiver_is_ct_or_cu: false,
 				receiver_is_kr: false,
@@ -1768,6 +1779,7 @@ mod conditioned_catalog_rule_tests {
 				source: Some("source".to_string()),
 				method: Some("1".to_string()),
 				result_kr1: None,
+				result_kr1_null_flavor: None,
 				result_kr2: None,
 				receiver_is_ct_or_cu: false,
 				receiver_is_kr: false,
@@ -1784,6 +1796,7 @@ mod conditioned_catalog_rule_tests {
 				source: Some("source".to_string()),
 				method: Some("2".to_string()),
 				result_kr1: None,
+				result_kr1_null_flavor: None,
 				result_kr2: None,
 				receiver_is_ct_or_cu: true,
 				receiver_is_kr: false,
@@ -1800,6 +1813,7 @@ mod conditioned_catalog_rule_tests {
 				source: None,
 				method: Some("1".to_string()),
 				result_kr1: None,
+				result_kr1_null_flavor: None,
 				result_kr2: None,
 				receiver_is_ct_or_cu: false,
 				receiver_is_kr: true,
@@ -1807,6 +1821,22 @@ mod conditioned_catalog_rule_tests {
 				facts: RuleFacts {
 					mfds_relatedness_method_present: Some(true),
 					mfds_relatedness_result_present: Some(false),
+					..RuleFacts::default()
+				},
+			},
+			MfdsRelatednessRuleView {
+				drug_index: 1,
+				assessment_index: 6,
+				source: Some("source".to_string()),
+				method: Some("1".to_string()),
+				result_kr1: None,
+				result_kr1_null_flavor: Some("NA".to_string()),
+				result_kr2: None,
+				receiver_is_ct_or_cu: false,
+				receiver_is_kr: false,
+				receiver_is_fr: false,
+				facts: RuleFacts {
+					mfds_relatedness_kr1_required_context: Some(true),
 					..RuleFacts::default()
 				},
 			},
@@ -2070,6 +2100,7 @@ mod golden_g_required_tests {
 			method_of_assessment_kr1: None,
 			result_of_assessment: None,
 			result_of_assessment_kr1: None,
+			result_of_assessment_kr1_null_flavor: None,
 			result_of_assessment_kr2: None,
 			deleted: false,
 			created_at: OffsetDateTime::UNIX_EPOCH,

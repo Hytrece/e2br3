@@ -142,7 +142,13 @@ const ASSESSMENT_ALIASES: &[(&str, &[&str])] = &[
 const RELATEDNESS_ALIASES: &[(&str, &[&str])] = &[
 	("source_of_assessment", &["sourceOfAssessment"]),
 	("method_of_assessment", &["methodOfAssessment"]),
+	("method_of_assessment_kr1", &["methodOfAssessmentKr1"]),
 	("result_of_assessment", &["resultOfAssessment"]),
+	("result_of_assessment_kr1", &["resultOfAssessmentKr1"]),
+	(
+		"result_of_assessment_kr1_null_flavor",
+		&["resultOfAssessmentKr1NullFlavor"],
+	),
 	("result_of_assessment_kr2", &["resultOfAssessmentKr2"]),
 ];
 
@@ -757,8 +763,20 @@ async fn load_editor_dg_row_detail(
 						json!(relatedness.method_of_assessment),
 					);
 					map.insert(
+						"methodOfAssessmentKr1".to_string(),
+						json!(relatedness.method_of_assessment_kr1),
+					);
+					map.insert(
 						"resultOfAssessment".to_string(),
 						json!(relatedness.result_of_assessment),
+					);
+					map.insert(
+						"resultOfAssessmentKr1".to_string(),
+						json!(relatedness.result_of_assessment_kr1),
+					);
+					map.insert(
+						"resultOfAssessmentKr1NullFlavor".to_string(),
+						json!(relatedness.result_of_assessment_kr1_null_flavor),
 					);
 					map.insert(
 						"resultOfAssessmentKr2".to_string(),

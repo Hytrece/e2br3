@@ -36,7 +36,7 @@ use xml::validation::{
 	should_skip_xml_validation, validate_e2b_xml, validate_e2b_xml_basic,
 };
 use xml::{
-	extract_safety_report_id_from_xml, import_e2b_xml_unvalidated, CImportSettings,
+	extract_safety_report_id_from_xml, import_e2b_xml, CImportSettings,
 	XmlImportRequest, XmlValidationReport,
 };
 use zip::ZipArchive;
@@ -378,13 +378,11 @@ async fn import_single_xml(
 		}
 	}
 
-	let import_result = import_e2b_xml_unvalidated(
+	let import_result = import_e2b_xml(
 		ctx,
 		mm,
 		XmlImportRequest {
 			xml,
-			filename: Some(filename.clone()),
-			skip_validation: false,
 			c_settings,
 			product_presave_id,
 			product_id,

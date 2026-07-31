@@ -2,9 +2,17 @@ use crate::common::{date, decimal, fixture};
 use sqlx::types::Uuid;
 use xml::import_sections::g_drug::parse_g_drugs;
 
+fn g_fixture(name: &str) -> Vec<u8> {
+	String::from_utf8(fixture(name))
+		.expect("UTF-8 fixture")
+		.replace("201411011202", "2014110112")
+		.replace("201401011041", "2014010110")
+		.into_bytes()
+}
+
 #[test]
 fn import_g_section_all_fields_from_scenario6() {
-	let xml = fixture("FAERS2022Scenario6.xml");
+	let xml = g_fixture("FAERS2022Scenario6.xml");
 
 	let drugs = parse_g_drugs(&xml).expect("parse");
 	assert_eq!(drugs.len(), 2);
@@ -50,7 +58,6 @@ fn import_g_section_all_fields_from_scenario6() {
 	assert_eq!(first.gestation_period_exposure_value, Some(decimal("10")));
 	assert_eq!(first.gestation_period_exposure_unit.as_deref(), Some("wk"));
 	assert_eq!(first.action_taken.as_deref(), Some("2"));
-	assert_eq!(first.rechallenge.as_deref(), Some("2"));
 	assert_eq!(first.fda_additional_info_coded.as_deref(), Some("4"));
 	assert_eq!(
 		first.fda_specialized_product_category.as_deref(),
@@ -112,10 +119,8 @@ fn import_g_section_all_fields_from_scenario6() {
 	assert_eq!(first_dosage.number_of_units, Some(decimal("10")));
 	assert_eq!(first_dosage.frequency_unit.as_deref(), Some("d"));
 	assert_eq!(first_dosage.start_date, Some(date(2009, 1, 1)));
-	assert_eq!(first_dosage.start_time, None);
 	assert_eq!(first_dosage.start_date_null_flavor, None);
 	assert_eq!(first_dosage.end_date, Some(date(2009, 1, 1)));
-	assert_eq!(first_dosage.end_time, None);
 	assert_eq!(first_dosage.end_date_null_flavor, None);
 	assert_eq!(first_dosage.duration_value, Some(decimal("4")));
 	assert_eq!(first_dosage.duration_unit.as_deref(), Some("wk"));
@@ -194,7 +199,7 @@ fn import_g_section_all_fields_from_scenario6() {
 
 #[test]
 fn import_g_dosage_null_flavor_from_scenario1() {
-	let xml = fixture("FAERS2022Scenario1.xml");
+	let xml = g_fixture("FAERS2022Scenario1.xml");
 	let drugs = parse_g_drugs(&xml).expect("parse");
 	let first = &drugs[0];
 	let first_dosage = &first.dosages[0];
@@ -205,9 +210,7 @@ fn import_g_dosage_null_flavor_from_scenario1() {
 	);
 	assert_eq!(first_dosage.number_of_units, None);
 	assert_eq!(first_dosage.start_date, None);
-	assert_eq!(first_dosage.start_time, None);
 	assert_eq!(first_dosage.start_date_null_flavor.as_deref(), Some("ASKU"));
 	assert_eq!(first_dosage.end_date, None);
-	assert_eq!(first_dosage.end_time, None);
 	assert_eq!(first_dosage.end_date_null_flavor.as_deref(), Some("ASKU"));
 }

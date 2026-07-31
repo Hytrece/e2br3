@@ -39,29 +39,43 @@ fn import_d_section_all_fields_from_scenario6() {
 #[test]
 fn import_d_section_parses_race_ethnicity_null_flavor() {
 	// FDA.D.11 / FDA.D.12 with nullFlavor instead of a coded value.
-	let xml = br#"<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+	let race_null =
+		&validator::null_flavors_for_rule("FDA.D.11.r.1.NULLFLAVOR.ALLOWED")
+			.expect("race nullFlavor catalog")[0];
+	let ethnicity_null =
+		&validator::null_flavors_for_rule("FDA.D.12.NULLFLAVOR.ALLOWED")
+			.expect("ethnicity nullFlavor catalog")[0];
+	let xml = format!(
+		r#"<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
   <primaryRole>
     <subjectOf2>
       <observation>
         <code code="C17049" codeSystem="2.16.840.1.113883.3.26.1.1"/>
-        <value xsi:type="CE" nullFlavor="ASKU"/>
+        <value xsi:type="CE" nullFlavor="{race_null}"/>
       </observation>
     </subjectOf2>
     <subjectOf2>
       <observation>
         <code code="C16564" codeSystem="2.16.840.1.113883.3.26.1.1"/>
-        <value xsi:type="CE" nullFlavor="MSK"/>
+        <value xsi:type="CE" nullFlavor="{ethnicity_null}"/>
       </observation>
     </subjectOf2>
   </primaryRole>
-</MCCI_IN200100UV01>"#;
+</MCCI_IN200100UV01>"#
+	);
 
-	let patient = parse_d_patient(xml)
+	let patient = parse_d_patient(xml.as_bytes())
 		.expect("parse")
 		.expect("section D should exist when only a null flavor is present");
 
 	assert_eq!(patient.race_code, None);
-	assert_eq!(patient.race_code_null_flavor.as_deref(), Some("ASKU"));
+	assert_eq!(
+		patient.race_code_null_flavor.as_deref(),
+		Some(race_null.as_str())
+	);
 	assert_eq!(patient.ethnicity_code, None);
-	assert_eq!(patient.ethnicity_code_null_flavor.as_deref(), Some("MSK"));
+	assert_eq!(
+		patient.ethnicity_code_null_flavor.as_deref(),
+		Some(ethnicity_null.as_str())
+	);
 }

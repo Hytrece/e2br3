@@ -1760,17 +1760,17 @@
       "model": "RelatednessAssessment",
       "field": "method_of_assessment_kr1",
       "file": "crates/libs/lib-core/src/model/drug_reaction_assessment.rs",
-      "evidence": "MFDS export encodes method_of_assessment with the KR.1 code system."
+      "evidence": "RelatednessAssessment.method_of_assessment_kr1 stores the MFDS coded method."
     },
     "frontend": {
       "status": "mapped",
       "section": "drugs.drugReactionAssessments",
       "field": "methodOfAssessmentKr1",
-      "file": "../frontend/E2BR3-frontend/components/case-form/sections/SectionG.tsx",
-      "evidence": "MFDS uses the existing assessment-method input as the KR.1 coded value."
+      "file": "../frontend/E2BR3-frontend/app/(protected)/[authority]/case/[id]/detail/DG/drug-entry/DrugAssessmentFields.tsx",
+      "evidence": "DrugAssessmentFields binds the KR.1 field to an autocomplete with WHO-UMC and KRCT options."
     },
     "action": "",
-    "notes": "Authority-specific XML encoding shares the canonical assessment field.",
+    "notes": "Stored separately from the general ICH method field.",
     "editor_page": "DG"
   },
   {
@@ -1808,19 +1808,19 @@
     "backend": {
       "status": "mapped",
       "model": "RelatednessAssessment",
-      "field": "result_of_assessment_kr1",
+      "field": "result_of_assessment_kr1 / result_of_assessment_kr1_null_flavor",
       "file": "crates/libs/lib-core/src/model/drug_reaction_assessment.rs",
-      "evidence": "MFDS export encodes result_of_assessment with the WHO-UMC KR.1 code system."
+      "evidence": "RelatednessAssessment stores the WHO-UMC code and its NA nullFlavor in separate columns."
     },
     "frontend": {
       "status": "mapped",
       "section": "drugs.drugReactionAssessments",
-      "field": "resultOfAssessmentKr1",
-      "file": "../frontend/E2BR3-frontend/components/case-form/sections/SectionG.tsx",
-      "evidence": "MFDS uses the existing assessment-result input as the KR.1 coded value."
+      "field": "resultOfAssessmentKr1 / resultOfAssessmentKr1NullFlavor",
+      "file": "../frontend/E2BR3-frontend/app/(protected)/[authority]/case/[id]/detail/DG/drug-entry/DrugAssessmentFields.tsx",
+      "evidence": "DrugAssessmentFields binds the WHO-UMC autocomplete and NA NullFlavor select as mutually exclusive fields."
     },
     "action": "",
-    "notes": "Authority-specific XML encoding shares the canonical assessment field.",
+    "notes": "Value and nullFlavor are stored separately and exported as code or nullFlavor attributes.",
     "editor_page": "DG"
   },
   {

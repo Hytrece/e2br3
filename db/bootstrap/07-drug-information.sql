@@ -395,6 +395,7 @@ CREATE TABLE relatedness_assessments (
     result_of_assessment VARCHAR(50),
     -- MFDS.G.k.9.i.2.r.3.KR.1 - WHO-UMC coded result
     result_of_assessment_kr1 VARCHAR(10),
+    result_of_assessment_kr1_null_flavor VARCHAR(10),
     -- MFDS.G.k.9.i.2.r.3.KR.2 - Additional KR assessment result text
     result_of_assessment_kr2 VARCHAR(2000),
     deleted BOOLEAN NOT NULL DEFAULT false,

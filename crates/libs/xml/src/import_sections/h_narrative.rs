@@ -1,6 +1,7 @@
 // Section H importer (Narrative) - FDA mapping.
 
 use crate::error::Error;
+use crate::import_constraint;
 use crate::mapping::fda::h_narrative::HNarrativePaths;
 use crate::Result;
 use lib_core::ctx::Ctx;
@@ -56,16 +57,9 @@ pub fn parse_h_narrative(xml: &[u8]) -> Result<Option<HNarrativeImport>> {
 	})?;
 	let _ = xpath.register_namespace("hl7", "urn:hl7-org:v3");
 
-	let case_narrative = read_h_1(&mut xpath)
-		.or_else(|| first_text_root(&mut xpath, "//hl7:component1//hl7:text"))
-		.or_else(|| first_text_root(&mut xpath, "//hl7:text"))
-		.ok_or_else(|| Error::InvalidXml {
-			message: "ICH.H.1.REQUIRED: case narrative missing".to_string(),
-			line: None,
-			column: None,
-		})?;
-	let reporter_comments = read_h_2(&mut xpath);
-	let sender_comments = read_h_4(&mut xpath);
+	let case_narrative = read_h_1(&mut xpath)?;
+	let reporter_comments = read_h_2(&mut xpath)?;
+	let sender_comments = read_h_4(&mut xpath)?;
 
 	Ok(Some(HNarrativeImport {
 		case_narrative,
@@ -109,7 +103,7 @@ pub fn parse_h_sender_diagnoses(xml: &[u8]) -> Result<Vec<HSenderDiagnosisImport
 	let mut items = Vec::new();
 	for (idx, node) in nodes.into_iter().enumerate() {
 		let (diagnosis_meddra_version, diagnosis_meddra_code) =
-			read_h_3_r_1(&mut xpath, &node);
+			read_h_3_r_1(&mut xpath, &node)?;
 		items.push(HSenderDiagnosisImport {
 			sequence_number: (idx + 1) as i32,
 			diagnosis_meddra_version,
@@ -154,7 +148,7 @@ pub fn parse_h_case_summaries(xml: &[u8]) -> Result<Vec<HCaseSummaryImport>> {
 
 	let mut items = Vec::new();
 	for (idx, node) in nodes.into_iter().enumerate() {
-		let (language_code, summary_text) = read_h_5_r_1(&mut xpath, &node);
+		let (language_code, summary_text) = read_h_5_r_1(&mut xpath, &node)?;
 		items.push(HCaseSummaryImport {
 			sequence_number: (idx + 1) as i32,
 			language_code,
@@ -222,13 +216,25 @@ pub(crate) async fn import_section_h(
 }
 
 /// e2b:H.1
-fn read_h_1(xpath: &mut Context) -> Option<String> {
-	first_text_root(xpath, HNarrativePaths::CASE_NARRATIVE)
+fn read_h_1(xpath: &mut Context) -> Result<String> {
+	let value = first_text_root(xpath, HNarrativePaths::CASE_NARRATIVE)
+		.or_else(|| first_text_root(xpath, "//hl7:component1//hl7:text"))
+		.or_else(|| first_text_root(xpath, "//hl7:text"))
+		.ok_or_else(|| Error::InvalidXml {
+			message: "ICH.H.1.REQUIRED: case narrative missing".to_string(),
+			line: None,
+			column: None,
+		})?;
+	import_constraint::string("NR", "caseNarrative", Some(&value), None)?;
+	Ok(value)
 }
 
 /// e2b:H.2
-fn read_h_2(xpath: &mut Context) -> Option<String> {
-	first_text_root(xpath, HNarrativePaths::REPORTER_COMMENTS)
+fn read_h_2(xpath: &mut Context) -> Result<Option<String>> {
+	portable_string(
+		first_text_root(xpath, HNarrativePaths::REPORTER_COMMENTS),
+		"reporterComments",
+	)
 }
 
 /// e2b:H.3.r.1a
@@ -236,16 +242,25 @@ fn read_h_2(xpath: &mut Context) -> Option<String> {
 fn read_h_3_r_1(
 	xpath: &mut Context,
 	node: &libxml::tree::Node,
-) -> (Option<String>, Option<String>) {
-	(
-		first_attr(xpath, node, "hl7:value", "codeSystemVersion"),
-		first_attr(xpath, node, "hl7:value", "code"),
-	)
+) -> Result<(Option<String>, Option<String>)> {
+	Ok((
+		portable_string(
+			first_attr(xpath, node, "hl7:value", "codeSystemVersion"),
+			"senderDiagnoses[].diagnosisMeddraVersion",
+		)?,
+		portable_string(
+			first_attr(xpath, node, "hl7:value", "code"),
+			"senderDiagnoses[].diagnosisMeddraCode",
+		)?,
+	))
 }
 
 /// e2b:H.4
-fn read_h_4(xpath: &mut Context) -> Option<String> {
-	first_text_root(xpath, HNarrativePaths::SENDER_COMMENTS)
+fn read_h_4(xpath: &mut Context) -> Result<Option<String>> {
+	portable_string(
+		first_text_root(xpath, HNarrativePaths::SENDER_COMMENTS),
+		"senderComments",
+	)
 }
 
 /// e2b:H.5.r.1a
@@ -253,11 +268,26 @@ fn read_h_4(xpath: &mut Context) -> Option<String> {
 fn read_h_5_r_1(
 	xpath: &mut Context,
 	node: &libxml::tree::Node,
-) -> (Option<String>, Option<String>) {
-	(
-		normalize_lang3(first_attr(xpath, node, "hl7:value", "language")),
-		first_text(xpath, node, "hl7:value"),
-	)
+) -> Result<(Option<String>, Option<String>)> {
+	let language = normalize_lang3(first_attr(xpath, node, "hl7:value", "language"));
+	import_constraint::string(
+		"NR",
+		"caseSummaryInformation[].languageCode",
+		language.as_deref(),
+		None,
+	)?;
+	Ok((
+		language,
+		portable_string(
+			first_text(xpath, node, "hl7:value"),
+			"caseSummaryInformation[].summaryText",
+		)?,
+	))
+}
+
+fn portable_string(value: Option<String>, field: &str) -> Result<Option<String>> {
+	import_constraint::string("NR", field, value.as_deref(), None)?;
+	Ok(value)
 }
 
 fn first_text_root(xpath: &mut Context, expr: &str) -> Option<String> {

@@ -1380,7 +1380,13 @@ pub(crate) fn relatedness_fragment(
 		out.push_str(&xml_escape(result));
 		out.push_str("\"/>");
 	} else if matches!(authority, RegulatoryAuthority::Mfds) {
-		if let Some(result) = write_g_k_9_i_2_r_3_kr_1(relatedness) {
+		if let Some(null_flavor) =
+			relatedness.result_of_assessment_kr1_null_flavor.as_deref()
+		{
+			out.push_str("<value xsi:type=\"CE\" nullFlavor=\"");
+			out.push_str(&xml_escape(null_flavor));
+			out.push_str("\"/>");
+		} else if let Some(result) = write_g_k_9_i_2_r_3_kr_1(relatedness) {
 			out.push_str("<value xsi:type=\"CE\" codeSystem=\"2.16.840.1.113883.3.989.5.1.10.1.5\" code=\"");
 			out.push_str(&xml_escape(result));
 			out.push_str("\"/>");
@@ -1998,6 +2004,7 @@ mod tests {
 			method_of_assessment_kr1: Some("1".to_string()),
 			result_of_assessment: Some("free text".to_string()),
 			result_of_assessment_kr1: Some("3".to_string()),
+			result_of_assessment_kr1_null_flavor: None,
 			result_of_assessment_kr2: None,
 			deleted: false,
 			created_at: OffsetDateTime::now_utc(),
@@ -2017,6 +2024,18 @@ mod tests {
 			"codeSystem=\"2.16.840.1.113883.3.989.5.1.10.1.5\" code=\"3\""
 		));
 		assert!(!xml.contains("free text"));
+
+		let mut null_flavor = relatedness;
+		null_flavor.result_of_assessment_kr1 = None;
+		null_flavor.result_of_assessment_kr1_null_flavor = Some("NA".to_string());
+		let xml = relatedness_fragment(
+			Uuid::new_v4(),
+			&assessment,
+			&null_flavor,
+			RegulatoryAuthority::Mfds,
+		);
+		assert!(xml.contains("<value xsi:type=\"CE\" nullFlavor=\"NA\"/>"));
+		assert!(!xml.contains("code=\"NA\""));
 	}
 
 	fn test_assessment() -> DrugReactionAssessment {

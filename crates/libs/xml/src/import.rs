@@ -31,8 +31,6 @@ pub struct CImportSettings {
 #[derive(Debug, Clone)]
 pub struct XmlImportRequest {
 	pub xml: Vec<u8>,
-	pub filename: Option<String>,
-	pub skip_validation: bool,
 	pub c_settings: CImportSettings,
 	pub product_presave_id: Option<sqlx::types::Uuid>,
 	pub product_id: Option<String>,
@@ -43,14 +41,6 @@ pub fn extract_safety_report_id_from_xml(xml: &[u8]) -> Result<String> {
 }
 
 pub async fn import_e2b_xml(
-	ctx: &Ctx,
-	mm: &ModelManager,
-	req: XmlImportRequest,
-) -> Result<XmlImportResult> {
-	import_e2b_xml_unvalidated(ctx, mm, req).await
-}
-
-pub async fn import_e2b_xml_unvalidated(
 	ctx: &Ctx,
 	mm: &ModelManager,
 	req: XmlImportRequest,
