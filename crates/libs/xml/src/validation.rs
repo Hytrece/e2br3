@@ -170,10 +170,6 @@ pub fn validate_e2b_xml_basic(
 	})
 }
 
-pub fn should_skip_xml_validation() -> bool {
-	false
-}
-
 pub fn validate_e2b_xml_xsd(
 	xml: &[u8],
 	xsd_path: &Path,

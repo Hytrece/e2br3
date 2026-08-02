@@ -562,12 +562,4 @@ pub(super) const EXCLUSIONS: &[PortableBindingExclusion] = &[
 		rule_code: "FDA.G.k.12.r.5.NULLFLAVOR.ALLOWED",
 		reason: "not_in_case_editor_model",
 	},
-	PortableBindingExclusion {
-		rule_code: "MFDS.G.k.9.i.2.r.2.KR.1.LENGTH.MAX",
-		reason: "authority_dependent_business_value",
-	},
-	PortableBindingExclusion {
-		rule_code: "MFDS.G.k.9.i.2.r.3.KR.1.LENGTH.MAX",
-		reason: "authority_dependent_business_value",
-	},
 ];

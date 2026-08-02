@@ -101,15 +101,12 @@ fn read_c_1_2(xpath: &mut Context) -> Result<String> {
 
 /// e2b:C.1.3
 fn read_c_1_3(xpath: &mut Context) -> Result<String> {
-	let value = normalize_code(
-		first_value_root(xpath, CSafetyReportPaths::TYPE_OF_REPORT_CODE),
-		&["1", "2", "3", "4"],
-	)
-	.ok_or_else(|| Error::InvalidXml {
-		message: "ICH.C.1.3.REQUIRED: type of report missing".to_string(),
-		line: None,
-		column: None,
-	})?;
+	let value = first_value_root(xpath, CSafetyReportPaths::TYPE_OF_REPORT_CODE)
+		.ok_or_else(|| Error::InvalidXml {
+			message: "ICH.C.1.3.REQUIRED: type of report missing".to_string(),
+			line: None,
+			column: None,
+		})?;
 	import_constraint::string("CI", "reportType", Some(&value), None)?;
 	Ok(value)
 }
@@ -160,12 +157,9 @@ fn read_c_1_7(xpath: &mut Context) -> Result<bool> {
 
 /// e2b:FDA.C.1.7.1
 fn read_fda_c_1_7_1(xpath: &mut Context) -> Result<Option<String>> {
-	let value = normalize_code(
-		first_value_root(
-			xpath,
-			CSafetyReportPaths::FDA_LOCAL_CRITERIA_REPORT_TYPE_CODE,
-		),
-		&["1", "2", "4", "5", "6"],
+	let value = first_value_root(
+		xpath,
+		CSafetyReportPaths::FDA_LOCAL_CRITERIA_REPORT_TYPE_CODE,
 	);
 	import_constraint::string(
 		"CI",
@@ -193,20 +187,14 @@ fn read_c_1_8_1(xpath: &mut Context) -> Result<Option<String>> {
 
 /// e2b:C.1.8.2
 fn read_c_1_8_2(xpath: &mut Context) -> Result<Option<String>> {
-	let value = normalize_code(
-		first_value_root(xpath, CSafetyReportPaths::FIRST_SENDER_TYPE),
-		&["1", "2", "3", "4", "5", "6"],
-	);
+	let value = first_value_root(xpath, CSafetyReportPaths::FIRST_SENDER_TYPE);
 	import_constraint::string("CI", "firstSenderType", value.as_deref(), None)?;
 	Ok(value)
 }
 
 /// e2b:C.1.11.1
 fn read_c_1_11_1(xpath: &mut Context) -> Result<Option<String>> {
-	let value = normalize_code(
-		first_value_root(xpath, CSafetyReportPaths::NULLIFICATION_CODE),
-		&["1", "2", "3", "4"],
-	);
+	let value = first_value_root(xpath, CSafetyReportPaths::NULLIFICATION_CODE);
 	import_constraint::string(
 		"CI",
 		"nullificationAmendmentCode",
@@ -234,15 +222,6 @@ fn first_text_root(xpath: &mut Context, path: &str) -> Option<String> {
 	match xpath.findvalue(path, None) {
 		Ok(value) if !value.trim().is_empty() => Some(value),
 		_ => None,
-	}
-}
-
-fn normalize_code(value: Option<String>, allowed: &[&str]) -> Option<String> {
-	let candidate = value?;
-	if allowed.iter().any(|v| *v == candidate) {
-		Some(candidate)
-	} else {
-		None
 	}
 }
 
@@ -296,19 +275,7 @@ fn format_datetime(date: Date) -> String {
 
 #[cfg(test)]
 mod tests {
-	use super::{normalize_code, normalize_fda_combination_product_indicator};
-
-	#[test]
-	fn fda_local_criteria_import_uses_current_code_set() {
-		assert_eq!(
-			normalize_code(Some("6".to_string()), &["1", "2", "4", "5", "6"]),
-			Some("6".to_string())
-		);
-		assert_eq!(
-			normalize_code(Some("3".to_string()), &["1", "2", "4", "5", "6"]),
-			None
-		);
-	}
+	use super::normalize_fda_combination_product_indicator;
 
 	#[test]
 	fn fda_combination_product_import_normalizes_to_boolean_strings() {

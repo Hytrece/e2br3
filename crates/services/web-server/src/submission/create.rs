@@ -38,42 +38,40 @@ pub async fn create_submission(
 		message: format!("submission export task failed: {err}"),
 	})?
 	.map_err(Error::from)?;
-	if !should_skip_xml_validation() {
-		let schema_report =
-			validate_e2b_xml(xml.as_bytes(), None).map_err(Error::from)?;
-		if !schema_report.ok {
-			let preview = schema_report
-				.errors
-				.iter()
-				.take(3)
-				.map(|err| err.message.as_str())
-				.collect::<Vec<_>>()
-				.join("; ");
-			return Err(Error::BadRequest {
-				message: format!(
-					"cannot submit case: XML schema/basic validation failed ({} issue(s)): {}",
-					schema_report.errors.len(),
-					preview
-				),
-			});
-		}
-		let export_errors = validate_export_rules(xml.as_bytes(), export_authority)
-			.map_err(Error::from)?;
-		if !export_errors.is_empty() {
-			let preview = export_errors
-				.iter()
-				.take(3)
-				.map(|error| error.message.as_str())
-				.collect::<Vec<_>>()
-				.join("; ");
-			return Err(Error::BadRequest {
-				message: format!(
-					"cannot submit case: XML export validation failed ({} issue(s)): {}",
-					export_errors.len(),
-					preview
-				),
-			});
-		}
+	let schema_report =
+		validate_e2b_xml(xml.as_bytes(), None).map_err(Error::from)?;
+	if !schema_report.ok {
+		let preview = schema_report
+			.errors
+			.iter()
+			.take(3)
+			.map(|err| err.message.as_str())
+			.collect::<Vec<_>>()
+			.join("; ");
+		return Err(Error::BadRequest {
+			message: format!(
+				"cannot submit case: XML schema/basic validation failed ({} issue(s)): {}",
+				schema_report.errors.len(),
+				preview
+			),
+		});
+	}
+	let export_errors = validate_export_rules(xml.as_bytes(), export_authority)
+		.map_err(Error::from)?;
+	if !export_errors.is_empty() {
+		let preview = export_errors
+			.iter()
+			.take(3)
+			.map(|error| error.message.as_str())
+			.collect::<Vec<_>>()
+			.join("; ");
+		return Err(Error::BadRequest {
+			message: format!(
+				"cannot submit case: XML export validation failed ({} issue(s)): {}",
+				export_errors.len(),
+				preview
+			),
+		});
 	}
 
 	let now = OffsetDateTime::now_utc();

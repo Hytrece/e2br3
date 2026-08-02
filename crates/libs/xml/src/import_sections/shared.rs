@@ -1,4 +1,5 @@
 use crate::error::Error;
+use crate::import_constraint;
 use crate::Result;
 use libxml::parser::Parser;
 use libxml::tree::Node;
@@ -130,23 +131,6 @@ pub(crate) fn parse_bool_value(value: Option<String>) -> Option<bool> {
 	}
 }
 
-pub(crate) fn clamp_str(
-	value: Option<String>,
-	max: usize,
-	field: &str,
-) -> Option<String> {
-	match value {
-		Some(v) if v.len() > max => {
-			eprintln!(
-				"[import_e2b_xml] truncating {field} len={} -> {max}",
-				v.len()
-			);
-			Some(v.chars().take(max).collect())
-		}
-		other => other,
-	}
-}
-
 pub(crate) fn parse_uuid_opt(value: Option<String>) -> Option<Uuid> {
 	let value = value?.trim().to_string();
 	if value.is_empty() {
@@ -192,27 +176,6 @@ pub(crate) fn normalize_iso2(value: Option<String>, field: &str) -> Option<Strin
 	} else {
 		tracing::warn!(field, value = %v, len, "dropping invalid ISO-3166-1 alpha-2");
 		None
-	}
-}
-
-pub(crate) fn normalize_code3(value: Option<String>, field: &str) -> Option<String> {
-	let v = value?.trim().to_string();
-	let len = v.len();
-	if (1..=3).contains(&len) && v.chars().all(|c| c.is_ascii_alphanumeric()) {
-		Some(v)
-	} else {
-		tracing::warn!(field, value = %v, len, "dropping invalid 3-char code");
-		None
-	}
-}
-
-pub(crate) fn normalize_sex_code(value: Option<String>) -> Option<String> {
-	let v = value?.trim().to_ascii_uppercase();
-	match v.as_str() {
-		"1" | "M" | "MALE" => Some("1".to_string()),
-		"2" | "F" | "FEMALE" => Some("2".to_string()),
-		"0" | "U" | "UNK" | "UNKNOWN" => Some("0".to_string()),
-		_ => None,
 	}
 }
 
@@ -369,6 +332,7 @@ pub(crate) fn extract_safety_report_id(xml: &[u8]) -> Result<String> {
 		})?;
 	for value in candidates {
 		if !value.trim().is_empty() {
+			import_constraint::string("CI", "safetyReportId", Some(&value), None)?;
 			return Ok(value);
 		}
 	}

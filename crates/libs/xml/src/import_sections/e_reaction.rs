@@ -558,12 +558,12 @@ fn read_e_i_9(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
 
 /// e2b:E.local.expectedness
 fn read_e_local_expectedness(xpath: &mut Context, node: &Node) -> Option<String> {
-	clamp_str(extension_code(xpath, node, "AE_EXPECTEDNESS"), 1)
+	extension_code(xpath, node, "AE_EXPECTEDNESS")
 }
 
 /// e2b:E.local.severity
 fn read_e_local_severity(xpath: &mut Context, node: &Node) -> Option<String> {
-	clamp_str(extension_code(xpath, node, "AE_SEVERITY"), 20)
+	extension_code(xpath, node, "AE_SEVERITY")
 }
 
 /// e2b:E.i.KR.device.aeClassification
@@ -571,7 +571,7 @@ fn read_e_i_kr_device_ae_classification(
 	xpath: &mut Context,
 	node: &Node,
 ) -> Option<String> {
-	clamp_str(extension_code(xpath, node, "KR_DVC_AECL"), 1)
+	extension_code(xpath, node, "KR_DVC_AECL")
 }
 
 /// e2b:E.i.KR.device.aeOutcome
@@ -579,7 +579,7 @@ fn read_e_i_kr_device_ae_outcome(
 	xpath: &mut Context,
 	node: &Node,
 ) -> Option<String> {
-	clamp_str(extension_code(xpath, node, "KR_DVC_AEOUT"), 2)
+	extension_code(xpath, node, "KR_DVC_AEOUT")
 }
 
 /// e2b:E.i.KR.device.causeMedicalDevice
@@ -619,7 +619,7 @@ fn read_e_i_kr_device_cause_other(
 	xpath: &mut Context,
 	node: &Node,
 ) -> Option<String> {
-	clamp_str(extension_text(xpath, node, "KR_DVC_CC_OTH"), 20000)
+	extension_text(xpath, node, "KR_DVC_CC_OTH")
 }
 
 /// e2b:E.i.KR.device.actionReason
@@ -627,7 +627,7 @@ fn read_e_i_kr_device_action_reason(
 	xpath: &mut Context,
 	node: &Node,
 ) -> Option<String> {
-	clamp_str(extension_text(xpath, node, "KR_DVC_ACT_RSN"), 20000)
+	extension_text(xpath, node, "KR_DVC_ACT_RSN")
 }
 
 /// e2b:E.i.KR.device.actionRecall
@@ -699,7 +699,7 @@ fn read_e_i_kr_device_action_other(
 	xpath: &mut Context,
 	node: &Node,
 ) -> Option<String> {
-	clamp_str(extension_text(xpath, node, "KR_DVC_ACT_OTH"), 20000)
+	extension_text(xpath, node, "KR_DVC_ACT_OTH")
 }
 
 fn extension_bool(xpath: &mut Context, node: &Node, code: &str) -> Option<bool> {
@@ -879,13 +879,6 @@ mod split_null_flavor_tests {
 			reactions[0].required_intervention_null_flavor.as_deref(),
 			Some("NI")
 		);
-	}
-}
-
-fn clamp_str(value: Option<String>, max: usize) -> Option<String> {
-	match value {
-		Some(v) if v.len() > max => Some(v.chars().take(max).collect()),
-		other => other,
 	}
 }
 

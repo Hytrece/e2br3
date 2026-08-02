@@ -351,7 +351,7 @@ pub fn parse_g_drugs(xml: &[u8]) -> Result<Vec<GDrugImport>> {
 				read_device_characteristic_code_system(&mut xpath, &ch);
 			let code_display_name =
 				read_device_characteristic_code_display_name(&mut xpath, &ch);
-			let value_type = read_device_characteristic_value_type(&mut xpath, &ch)?;
+			let value_type = read_device_characteristic_value_type(&mut xpath, &ch);
 			let value_value =
 				read_device_characteristic_value_value(&mut xpath, &ch);
 			let value_code = read_device_characteristic_value_code(&mut xpath, &ch);
@@ -871,14 +871,9 @@ fn read_device_characteristic_code_display_name(
 fn read_device_characteristic_value_type(
 	xpath: &mut Context,
 	node: &Node,
-) -> Result<Option<String>> {
-	max_len(
-		first_attr(xpath, node, GDrugPaths::DEVICE_CHAR_VALUE_TYPE).or_else(|| {
-			first_attr(xpath, node, GDrugPaths::DEVICE_CHAR_VALUE_TYPE_ALT)
-		}),
-		10,
-		"FDA.G.k.local.deviceCharacteristic.valueType",
-	)
+) -> Option<String> {
+	first_attr(xpath, node, GDrugPaths::DEVICE_CHAR_VALUE_TYPE)
+		.or_else(|| first_attr(xpath, node, GDrugPaths::DEVICE_CHAR_VALUE_TYPE_ALT))
 }
 
 /// e2b:FDA.G.k.local.deviceCharacteristic.valueValue
@@ -1102,21 +1097,6 @@ fn invalid_field(field: &str, detail: impl std::fmt::Display) -> Error {
 		line: None,
 		column: None,
 	}
-}
-
-fn max_len(
-	value: Option<String>,
-	max: usize,
-	field: &str,
-) -> Result<Option<String>> {
-	if let Some(ref value) = value {
-		let actual = value.chars().count();
-		if actual > max {
-			tracing::warn!(field, actual, max, "truncating overlong import value");
-			return Ok(Some(value.chars().take(max).collect()));
-		}
-	}
-	Ok(value)
 }
 
 fn decimal(value: Option<String>, field: &str) -> Result<Option<Decimal>> {

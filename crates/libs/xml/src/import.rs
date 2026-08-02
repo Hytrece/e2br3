@@ -66,17 +66,7 @@ async fn import_e2b_xml_in_txn(
 	req: XmlImportRequest,
 ) -> Result<XmlImportResult> {
 	let parsed = parse_e2b_xml(&req.xml)?;
-	let safety_report_id_raw = shared::extract_safety_report_id(&req.xml)?;
-	let safety_report_id = shared::clamp_str(
-		Some(safety_report_id_raw),
-		100,
-		"safety_report_identification.safety_report_id",
-	)
-	.ok_or_else(|| Error::InvalidXml {
-		message: "ICH.C.1.REQUIRED: safety report identifier missing".to_string(),
-		line: None,
-		column: None,
-	})?;
+	let safety_report_id = shared::extract_safety_report_id(&req.xml)?;
 	let header_extract = shared::extract_message_header(&req.xml).ok();
 	let next_version = {
 		let dbx = mm.dbx();

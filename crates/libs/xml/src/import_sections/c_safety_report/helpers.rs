@@ -123,6 +123,11 @@ fn sender_text(
 		.or_else(|| first_text_root(xpath, global))
 }
 
+fn sender_string(value: Option<String>, field: &str) -> Result<Option<String>> {
+	import_constraint::string("SD", field, value.as_deref(), None)?;
+	Ok(value)
+}
+
 /// e2b:C.3.1
 fn read_c_3_1(
 	xpath: &mut Context,
@@ -132,31 +137,24 @@ fn read_c_3_1(
 		.and_then(|node| first_attr(xpath, node, "./hl7:code[@codeSystem='2.16.840.1.113883.3.989.2.1.1.7']", "code"))
 		.or_else(|| first_value_root(xpath, "//hl7:sender/hl7:device/hl7:asAgent/hl7:representedOrganization/hl7:code/@code"))
 		.or_else(|| first_value_root(xpath, "//hl7:investigationEvent/hl7:subjectOf1/hl7:controlActEvent/hl7:author/hl7:assignedEntity/hl7:code/@code"));
-	normalize_code(
-		raw,
-		&["1", "2", "3", "4", "5", "6", "7"],
-		"sender_information.sender_type",
-	)
-	.ok_or_else(|| Error::InvalidXml {
+	let value = raw.ok_or_else(|| Error::InvalidXml {
 		message: "ICH.C.3.1.REQUIRED: sender type missing".to_string(),
 		line: None,
 		column: None,
-	})
+	})?;
+	import_constraint::string("SD", "senderType", Some(&value), None)?;
+	Ok(value)
 }
 
 /// e2b:C.3.1.KR.1
 fn read_c_3_1_kr_1(
 	xpath: &mut Context,
 	node: Option<&libxml::tree::Node>,
-) -> Option<String> {
+) -> Result<Option<String>> {
 	let raw = node
 		.and_then(|node| first_attr(xpath, node, &format!("./hl7:subjectOf2/hl7:observation[hl7:code[@code='{KR_C_3_1_1}']]/hl7:value"), "code"))
 		.or_else(|| first_value_root(xpath, &format!("//hl7:investigationEvent/hl7:subjectOf1/hl7:controlActEvent/hl7:author/hl7:assignedEntity/hl7:subjectOf2/hl7:observation[hl7:code[@code='{KR_C_3_1_1}']]/hl7:value/@code")));
-	normalize_code(
-		raw,
-		&["1", "2", "3", "4"],
-		"sender_information.health_professional_type_kr1",
-	)
+	sender_string(raw, "healthProfessionalTypeKr1")
 }
 
 /// e2b:C.3.2
@@ -165,24 +163,29 @@ fn read_c_3_2(
 	node: Option<&libxml::tree::Node>,
 	header: Option<&MessageHeaderExtract>,
 ) -> Result<String> {
-	node.and_then(|node| first_text(xpath, node, "./hl7:representedOrganization/hl7:assignedEntity/hl7:representedOrganization/hl7:name"))
+	let value = node.and_then(|node| first_text(xpath, node, "./hl7:representedOrganization/hl7:assignedEntity/hl7:representedOrganization/hl7:name"))
 		.or_else(|| node.and_then(|node| first_text(xpath, node, "./hl7:representedOrganization/hl7:name")))
 		.or_else(|| first_text_root(xpath, "//hl7:sender/hl7:device/hl7:asAgent/hl7:representedOrganization/hl7:name"))
 		.or_else(|| first_text_root(xpath, "//hl7:assignedEntity/hl7:representedOrganization/hl7:name"))
 		.or_else(|| header.and_then(|header| header.message_sender.clone()))
-		.ok_or_else(|| Error::InvalidXml { message: "ICH.C.3.2.REQUIRED: sender organization missing".to_string(), line: None, column: None })
+		.ok_or_else(|| Error::InvalidXml { message: "ICH.C.3.2.REQUIRED: sender organization missing".to_string(), line: None, column: None })?;
+	import_constraint::string("SD", "organizationName", Some(&value), None)?;
+	Ok(value)
 }
 
 /// e2b:C.3.3.1
 fn read_c_3_3_1(
 	xpath: &mut Context,
 	node: Option<&libxml::tree::Node>,
-) -> Option<String> {
-	sender_text(
-		xpath,
-		node,
-		"./hl7:representedOrganization/hl7:name",
-		"//hl7:assignedEntity/hl7:representedOrganization/hl7:desc",
+) -> Result<Option<String>> {
+	sender_string(
+		sender_text(
+			xpath,
+			node,
+			"./hl7:representedOrganization/hl7:name",
+			"//hl7:assignedEntity/hl7:representedOrganization/hl7:desc",
+		),
+		"department",
 	)
 }
 
@@ -190,12 +193,15 @@ fn read_c_3_3_1(
 fn read_c_3_3_2(
 	xpath: &mut Context,
 	node: Option<&libxml::tree::Node>,
-) -> Option<String> {
-	sender_text(
-		xpath,
-		node,
-		"./hl7:assignedPerson/hl7:name/hl7:prefix",
-		"//hl7:assignedEntity/hl7:assignedPerson/hl7:name/hl7:prefix",
+) -> Result<Option<String>> {
+	sender_string(
+		sender_text(
+			xpath,
+			node,
+			"./hl7:assignedPerson/hl7:name/hl7:prefix",
+			"//hl7:assignedEntity/hl7:assignedPerson/hl7:name/hl7:prefix",
+		),
+		"personTitle",
 	)
 }
 
@@ -203,12 +209,15 @@ fn read_c_3_3_2(
 fn read_c_3_3_3(
 	xpath: &mut Context,
 	node: Option<&libxml::tree::Node>,
-) -> Option<String> {
-	sender_text(
-		xpath,
-		node,
-		"./hl7:assignedPerson/hl7:name/hl7:given[1]",
-		"//hl7:assignedEntity/hl7:assignedPerson/hl7:name/hl7:given[1]",
+) -> Result<Option<String>> {
+	sender_string(
+		sender_text(
+			xpath,
+			node,
+			"./hl7:assignedPerson/hl7:name/hl7:given[1]",
+			"//hl7:assignedEntity/hl7:assignedPerson/hl7:name/hl7:given[1]",
+		),
+		"personGivenName",
 	)
 }
 
@@ -216,12 +225,15 @@ fn read_c_3_3_3(
 fn read_c_3_3_4(
 	xpath: &mut Context,
 	node: Option<&libxml::tree::Node>,
-) -> Option<String> {
-	sender_text(
-		xpath,
-		node,
-		"./hl7:assignedPerson/hl7:name/hl7:given[2]",
-		"//hl7:assignedEntity/hl7:assignedPerson/hl7:name/hl7:given[2]",
+) -> Result<Option<String>> {
+	sender_string(
+		sender_text(
+			xpath,
+			node,
+			"./hl7:assignedPerson/hl7:name/hl7:given[2]",
+			"//hl7:assignedEntity/hl7:assignedPerson/hl7:name/hl7:given[2]",
+		),
+		"personMiddleName",
 	)
 }
 
@@ -229,12 +241,15 @@ fn read_c_3_3_4(
 fn read_c_3_3_5(
 	xpath: &mut Context,
 	node: Option<&libxml::tree::Node>,
-) -> Option<String> {
-	sender_text(
-		xpath,
-		node,
-		"./hl7:assignedPerson/hl7:name/hl7:family",
-		"//hl7:assignedEntity/hl7:assignedPerson/hl7:name/hl7:family",
+) -> Result<Option<String>> {
+	sender_string(
+		sender_text(
+			xpath,
+			node,
+			"./hl7:assignedPerson/hl7:name/hl7:family",
+			"//hl7:assignedEntity/hl7:assignedPerson/hl7:name/hl7:family",
+		),
+		"personFamilyName",
 	)
 }
 
@@ -255,36 +270,39 @@ fn read_sender_address(
 fn read_c_3_4_1(
 	xpath: &mut Context,
 	node: Option<&libxml::tree::Node>,
-) -> Option<String> {
-	read_sender_address(xpath, node, "streetAddressLine")
+) -> Result<Option<String>> {
+	sender_string(
+		read_sender_address(xpath, node, "streetAddressLine"),
+		"streetAddress",
+	)
 }
 /// e2b:C.3.4.2
 fn read_c_3_4_2(
 	xpath: &mut Context,
 	node: Option<&libxml::tree::Node>,
-) -> Option<String> {
-	read_sender_address(xpath, node, "city")
+) -> Result<Option<String>> {
+	sender_string(read_sender_address(xpath, node, "city"), "city")
 }
 /// e2b:C.3.4.3
 fn read_c_3_4_3(
 	xpath: &mut Context,
 	node: Option<&libxml::tree::Node>,
-) -> Option<String> {
-	read_sender_address(xpath, node, "state")
+) -> Result<Option<String>> {
+	sender_string(read_sender_address(xpath, node, "state"), "state")
 }
 /// e2b:C.3.4.4
 fn read_c_3_4_4(
 	xpath: &mut Context,
 	node: Option<&libxml::tree::Node>,
-) -> Option<String> {
-	read_sender_address(xpath, node, "postalCode")
+) -> Result<Option<String>> {
+	sender_string(read_sender_address(xpath, node, "postalCode"), "postcode")
 }
 
 /// e2b:C.3.4.5
 fn read_c_3_4_5(
 	xpath: &mut Context,
 	node: Option<&libxml::tree::Node>,
-) -> Option<String> {
+) -> Result<Option<String>> {
 	let raw = node
 		.and_then(|node| {
 			first_attr(
@@ -305,7 +323,7 @@ fn read_c_3_4_5(
 				"//hl7:assignedEntity/hl7:addr/hl7:country/@code",
 			)
 		});
-	normalize_iso2(raw, "sender_information.country_code")
+	sender_string(raw.map(|value| value.to_ascii_uppercase()), "countryCode")
 }
 
 fn read_sender_telecom(
@@ -321,22 +339,22 @@ fn read_sender_telecom(
 fn read_c_3_4_6(
 	xpath: &mut Context,
 	node: Option<&libxml::tree::Node>,
-) -> Option<String> {
-	read_sender_telecom(xpath, node, "tel:")
+) -> Result<Option<String>> {
+	sender_string(read_sender_telecom(xpath, node, "tel:"), "telephone")
 }
 /// e2b:C.3.4.7
 fn read_c_3_4_7(
 	xpath: &mut Context,
 	node: Option<&libxml::tree::Node>,
-) -> Option<String> {
-	read_sender_telecom(xpath, node, "fax:")
+) -> Result<Option<String>> {
+	sender_string(read_sender_telecom(xpath, node, "fax:"), "fax")
 }
 /// e2b:C.3.4.8
 fn read_c_3_4_8(
 	xpath: &mut Context,
 	node: Option<&libxml::tree::Node>,
-) -> Option<String> {
-	read_sender_telecom(xpath, node, "mailto:")
+) -> Result<Option<String>> {
+	sender_string(read_sender_telecom(xpath, node, "mailto:"), "email")
 }
 
 pub(crate) fn parse_sender_information(
@@ -378,21 +396,21 @@ pub(crate) fn parse_sender_information(
 		health_professional_type_kr1: read_c_3_1_kr_1(
 			&mut xpath,
 			sender_node.as_ref(),
-		),
+		)?,
 		organization_name,
-		department: read_c_3_3_1(&mut xpath, sender_node.as_ref()),
-		person_title: read_c_3_3_2(&mut xpath, sender_node.as_ref()),
-		person_given_name: read_c_3_3_3(&mut xpath, sender_node.as_ref()),
-		person_middle_name: read_c_3_3_4(&mut xpath, sender_node.as_ref()),
-		person_family_name: read_c_3_3_5(&mut xpath, sender_node.as_ref()),
-		street_address: read_c_3_4_1(&mut xpath, sender_node.as_ref()),
-		city: read_c_3_4_2(&mut xpath, sender_node.as_ref()),
-		state: read_c_3_4_3(&mut xpath, sender_node.as_ref()),
-		postcode: read_c_3_4_4(&mut xpath, sender_node.as_ref()),
-		country_code: read_c_3_4_5(&mut xpath, sender_node.as_ref()),
-		telephone: read_c_3_4_6(&mut xpath, sender_node.as_ref()),
-		fax: read_c_3_4_7(&mut xpath, sender_node.as_ref()),
-		email: read_c_3_4_8(&mut xpath, sender_node.as_ref()),
+		department: read_c_3_3_1(&mut xpath, sender_node.as_ref())?,
+		person_title: read_c_3_3_2(&mut xpath, sender_node.as_ref())?,
+		person_given_name: read_c_3_3_3(&mut xpath, sender_node.as_ref())?,
+		person_middle_name: read_c_3_3_4(&mut xpath, sender_node.as_ref())?,
+		person_family_name: read_c_3_3_5(&mut xpath, sender_node.as_ref())?,
+		street_address: read_c_3_4_1(&mut xpath, sender_node.as_ref())?,
+		city: read_c_3_4_2(&mut xpath, sender_node.as_ref())?,
+		state: read_c_3_4_3(&mut xpath, sender_node.as_ref())?,
+		postcode: read_c_3_4_4(&mut xpath, sender_node.as_ref())?,
+		country_code: read_c_3_4_5(&mut xpath, sender_node.as_ref())?,
+		telephone: read_c_3_4_6(&mut xpath, sender_node.as_ref())?,
+		fax: read_c_3_4_7(&mut xpath, sender_node.as_ref())?,
+		email: read_c_3_4_8(&mut xpath, sender_node.as_ref())?,
 	}))
 }
 
@@ -428,6 +446,23 @@ fn read_text_with_null_flavor(
 		first_text(xpath, node, path),
 		first_attr(xpath, node, path, "nullFlavor"),
 	)
+}
+
+fn portable_pair(
+	section: &str,
+	field: &str,
+	null_field: &str,
+	value: Option<String>,
+	null_flavor: Option<String>,
+) -> Result<(Option<String>, Option<String>)> {
+	import_constraint::string(
+		section,
+		field,
+		value.as_deref(),
+		null_flavor.as_deref(),
+	)?;
+	import_constraint::string(section, null_field, null_flavor.as_deref(), None)?;
+	Ok((value, null_flavor))
 }
 
 /// e2b:C.2.r.1.1
@@ -662,17 +697,12 @@ fn read_c_2_r_4(
 ) -> Result<(Option<String>, Option<String>, Option<String>)> {
 	let path = ".//hl7:assignedPerson/hl7:asQualifiedEntity/hl7:code";
 	let raw = first_attr(xpath, node, path, "code");
-	let value = normalize_code(
-		raw.clone(),
-		&["1", "2", "3", "4", "5"],
-		"primary_sources.qualification",
-	)
-	.or(Some("1".to_string()));
+	let value = raw.clone().or(Some("1".to_string()));
 	let null_flavor = first_attr(xpath, node, path, "nullFlavor");
 	import_constraint::string(
 		"RP",
 		"qualification",
-		value.as_deref(),
+		raw.as_deref(),
 		null_flavor.as_deref(),
 	)?;
 	import_constraint::string(
@@ -691,10 +721,8 @@ fn read_c_2_r_5(
 	node: &libxml::tree::Node,
 ) -> Result<(Option<String>, Option<String>)> {
 	let path = ".//hl7:assignedPerson/hl7:asLocatedEntity/hl7:location/hl7:code";
-	let value = normalize_iso2(
-		first_attr(xpath, node, path, "code"),
-		"primary_sources.country_code",
-	);
+	let value = first_attr(xpath, node, path, "code")
+		.map(|value| value.to_ascii_uppercase());
 	let null_flavor = first_attr(xpath, node, path, "nullFlavor");
 	import_constraint::string(
 		"RP",
@@ -995,8 +1023,8 @@ pub(crate) fn parse_other_case_identifiers(
 
 	let mut items = Vec::new();
 	for node in nodes {
-		let source = read_c_1_9_1_r_1(&node);
-		let extension = read_c_1_9_1_r_2(&node);
+		let source = read_c_1_9_1_r_1(&node)?;
+		let extension = read_c_1_9_1_r_2(&node)?;
 		let Some(source) = source else {
 			continue;
 		};
@@ -1015,13 +1043,27 @@ pub(crate) fn parse_other_case_identifiers(
 }
 
 /// e2b:C.1.9.1.r.1
-fn read_c_1_9_1_r_1(node: &libxml::tree::Node) -> Option<String> {
-	node.get_attribute("assigningAuthorityName")
+fn read_c_1_9_1_r_1(node: &libxml::tree::Node) -> Result<Option<String>> {
+	let value = node.get_attribute("assigningAuthorityName");
+	import_constraint::string(
+		"CI",
+		"otherCaseIdentifiers[].source",
+		value.as_deref(),
+		None,
+	)?;
+	Ok(value)
 }
 
 /// e2b:C.1.9.1.r.2
-fn read_c_1_9_1_r_2(node: &libxml::tree::Node) -> Option<String> {
-	node.get_attribute("extension")
+fn read_c_1_9_1_r_2(node: &libxml::tree::Node) -> Result<Option<String>> {
+	let value = node.get_attribute("extension");
+	import_constraint::string(
+		"CI",
+		"otherCaseIdentifiers[].caseIdentifier",
+		value.as_deref(),
+		None,
+	)?;
+	Ok(value)
 }
 
 pub(crate) fn parse_linked_reports(xml: &[u8]) -> Result<Vec<LinkedReportImport>> {
@@ -1058,7 +1100,7 @@ pub(crate) fn parse_linked_reports(xml: &[u8]) -> Result<Vec<LinkedReportImport>
 
 	let mut items = Vec::new();
 	for node in nodes {
-		let extension = read_c_1_10_r(&node);
+		let extension = read_c_1_10_r(&node)?;
 		let Some(linked_report_number) = extension else {
 			continue;
 		};
@@ -1073,8 +1115,15 @@ pub(crate) fn parse_linked_reports(xml: &[u8]) -> Result<Vec<LinkedReportImport>
 }
 
 /// e2b:C.1.10.r
-fn read_c_1_10_r(node: &libxml::tree::Node) -> Option<String> {
-	node.get_attribute("extension")
+fn read_c_1_10_r(node: &libxml::tree::Node) -> Result<Option<String>> {
+	let value = node.get_attribute("extension");
+	import_constraint::string(
+		"CI",
+		"linkedReports[].linkedReportNumber",
+		value.as_deref(),
+		None,
+	)?;
+	Ok(value)
 }
 
 pub(crate) fn parse_documents_held_by_sender(
@@ -1113,9 +1162,9 @@ pub(crate) fn parse_documents_held_by_sender(
 
 	let mut items = Vec::new();
 	for node in nodes {
-		let title = read_c_1_6_1_r_1(&mut xpath, &node);
+		let title = read_c_1_6_1_r_1(&mut xpath, &node)?;
 		let (document_base64, media_type, representation, compression) =
-			read_c_1_6_1_r_2(&mut xpath, &node);
+			read_c_1_6_1_r_2(&mut xpath, &node)?;
 		items.push(DocumentHeldImport {
 			title,
 			document_base64,
@@ -1131,8 +1180,15 @@ pub(crate) fn parse_documents_held_by_sender(
 fn read_c_1_6_1_r_1(
 	xpath: &mut Context,
 	node: &libxml::tree::Node,
-) -> Option<String> {
-	first_text(xpath, node, "hl7:title")
+) -> Result<Option<String>> {
+	let value = first_text(xpath, node, "hl7:title");
+	import_constraint::string(
+		"CI",
+		"documentsHeldBySender[].documentDescription",
+		value.as_deref(),
+		None,
+	)?;
+	Ok(value)
 }
 
 /// e2b:C.1.6.1.r.2
@@ -1142,18 +1198,25 @@ fn read_c_1_6_1_r_1(
 fn read_c_1_6_1_r_2(
 	xpath: &mut Context,
 	node: &libxml::tree::Node,
-) -> (
+) -> Result<(
 	Option<String>,
 	Option<String>,
 	Option<String>,
 	Option<String>,
-) {
-	(
-		first_text(xpath, node, "hl7:text"),
+)> {
+	let document = first_text(xpath, node, "hl7:text");
+	import_constraint::string(
+		"CI",
+		"documentsHeldBySender[].includedDocument",
+		document.as_deref(),
+		None,
+	)?;
+	Ok((
+		document,
 		first_attr(xpath, node, "hl7:text", "mediaType"),
 		first_attr(xpath, node, "hl7:text", "representation"),
 		first_attr(xpath, node, "hl7:text", "compression"),
-	)
+	))
 }
 
 pub(crate) fn parse_literature_references(
@@ -1195,7 +1258,7 @@ pub(crate) fn parse_literature_references(
 		let (reference_text, reference_text_null_flavor) =
 			read_c_4_r_1(&mut xpath, &node, idx)?;
 		let (document_base64, media_type, representation, compression) =
-			read_c_4_r_2(&mut xpath, &node);
+			read_c_4_r_2(&mut xpath, &node)?;
 		items.push(LiteratureImport {
 			reference_text,
 			reference_text_null_flavor,
@@ -1230,6 +1293,18 @@ fn read_c_4_r_1(
 			line: None,
 			column: None,
 		})?;
+	import_constraint::string(
+		"LR",
+		"referenceText",
+		Some(&text),
+		null_flavor.as_deref(),
+	)?;
+	import_constraint::string(
+		"LR",
+		"referenceTextNullFlavor",
+		null_flavor.as_deref(),
+		None,
+	)?;
 	Ok((text, null_flavor))
 }
 
@@ -1240,13 +1315,15 @@ fn read_c_4_r_1(
 fn read_c_4_r_2(
 	xpath: &mut Context,
 	node: &libxml::tree::Node,
-) -> (
+) -> Result<(
 	Option<String>,
 	Option<String>,
 	Option<String>,
 	Option<String>,
-) {
-	read_c_1_6_1_r_2(xpath, node)
+)> {
+	let values = read_c_1_6_1_r_2(xpath, node)?;
+	import_constraint::string("LR", "documentBase64", values.0.as_deref(), None)?;
+	Ok(values)
 }
 
 pub(crate) fn parse_study_information(xml: &[u8]) -> Result<Option<StudyImport>> {
@@ -1281,14 +1358,14 @@ pub(crate) fn parse_study_information(xml: &[u8]) -> Result<Option<StudyImport>>
 		return Ok(None);
 	};
 
-	let (study_name, study_name_null_flavor) = read_c_5_2(&mut xpath, node);
+	let (study_name, study_name_null_flavor) = read_c_5_2(&mut xpath, node)?;
 	let (sponsor_study_number, sponsor_study_number_null_flavor) =
-		read_c_5_3(&mut xpath, node);
-	let study_type_reaction = read_c_5_4(&mut xpath, node);
-	let study_type_reaction_kr1 = read_c_5_4_kr_1(&mut xpath, node);
-	let fda_ind_number_occurred = read_fda_c_5_5a(&mut xpath, node);
-	let fda_pre_anda_number_occurred = read_fda_c_5_5b(&mut xpath, node);
-	let cross_reported_inds = read_fda_c_5_6_r(&mut xpath, node);
+		read_c_5_3(&mut xpath, node)?;
+	let study_type_reaction = read_c_5_4(&mut xpath, node)?;
+	let study_type_reaction_kr1 = read_c_5_4_kr_1(&mut xpath, node)?;
+	let fda_ind_number_occurred = read_fda_c_5_5a(&mut xpath, node)?;
+	let fda_pre_anda_number_occurred = read_fda_c_5_5b(&mut xpath, node)?;
+	let cross_reported_inds = read_fda_c_5_6_r(&mut xpath, node)?;
 
 	let reg_nodes = xpath
 		.findnodes(".//hl7:studyRegistration", Some(node))
@@ -1300,7 +1377,7 @@ pub(crate) fn parse_study_information(xml: &[u8]) -> Result<Option<StudyImport>>
 	let mut registrations = Vec::new();
 	for reg in reg_nodes {
 		let (registration_number, registration_number_null_flavor) =
-			read_c_5_1_r_1(&mut xpath, &reg);
+			read_c_5_1_r_1(&mut xpath, &reg)?;
 		let Some(registration_number) = registration_number.or_else(|| {
 			registration_number_null_flavor
 				.as_ref()
@@ -1309,14 +1386,11 @@ pub(crate) fn parse_study_information(xml: &[u8]) -> Result<Option<StudyImport>>
 			continue;
 		};
 		let (country_code, country_code_null_flavor) =
-			read_c_5_1_r_2(&mut xpath, &reg);
+			read_c_5_1_r_2(&mut xpath, &reg)?;
 		registrations.push(StudyRegistrationImport {
 			registration_number,
 			registration_number_null_flavor,
-			country_code: normalize_iso2(
-				country_code,
-				"study_registration.country_code",
-			),
+			country_code,
 			country_code_null_flavor,
 		});
 	}
@@ -1339,8 +1413,11 @@ pub(crate) fn parse_study_information(xml: &[u8]) -> Result<Option<StudyImport>>
 fn read_c_5_1_r_1(
 	xpath: &mut Context,
 	node: &libxml::tree::Node,
-) -> (Option<String>, Option<String>) {
-	(
+) -> Result<(Option<String>, Option<String>)> {
+	portable_pair(
+		"SI",
+		"studyRegistrationNumbers[].registrationNumber",
+		"studyRegistrationNumbers[].registrationNumberNullFlavor",
 		first_attr(xpath, node, "hl7:id", "extension"),
 		first_attr(xpath, node, "hl7:id", "nullFlavor"),
 	)
@@ -1350,10 +1427,15 @@ fn read_c_5_1_r_1(
 fn read_c_5_1_r_2(
 	xpath: &mut Context,
 	node: &libxml::tree::Node,
-) -> (Option<String>, Option<String>) {
+) -> Result<(Option<String>, Option<String>)> {
 	let path = "hl7:author/hl7:territorialAuthority/hl7:governingPlace/hl7:code";
-	(
-		first_attr(xpath, node, path, "code"),
+	let value = first_attr(xpath, node, path, "code")
+		.map(|value| value.to_ascii_uppercase());
+	portable_pair(
+		"SI",
+		"studyRegistrationNumbers[].countryCode",
+		"studyRegistrationNumbers[].countryCodeNullFlavor",
+		value,
 		first_attr(xpath, node, path, "nullFlavor"),
 	)
 }
@@ -1362,58 +1444,78 @@ fn read_c_5_1_r_2(
 fn read_c_5_2(
 	xpath: &mut Context,
 	node: &libxml::tree::Node,
-) -> (Option<String>, Option<String>) {
-	read_text_with_null_flavor(xpath, node, "hl7:title")
+) -> Result<(Option<String>, Option<String>)> {
+	let (value, null_flavor) = read_text_with_null_flavor(xpath, node, "hl7:title");
+	portable_pair("SI", "studyName", "studyNameNullFlavor", value, null_flavor)
 }
 
 /// e2b:C.5.3
 fn read_c_5_3(
 	xpath: &mut Context,
 	node: &libxml::tree::Node,
-) -> (Option<String>, Option<String>) {
-	(
+) -> Result<(Option<String>, Option<String>)> {
+	portable_pair(
+		"SI",
+		"sponsorStudyNumber",
+		"sponsorStudyNumberNullFlavor",
 		first_attr(xpath, node, "hl7:id", "extension"),
 		first_attr(xpath, node, "hl7:id", "nullFlavor"),
 	)
 }
 
 /// e2b:C.5.4
-fn read_c_5_4(xpath: &mut Context, node: &libxml::tree::Node) -> Option<String> {
-	first_attr(xpath, node, "hl7:code", "code")
+fn read_c_5_4(
+	xpath: &mut Context,
+	node: &libxml::tree::Node,
+) -> Result<Option<String>> {
+	let value = first_attr(xpath, node, "hl7:code", "code");
+	import_constraint::string("SI", "studyTypeReaction", value.as_deref(), None)?;
+	Ok(value)
 }
 
 /// e2b:C.5.4.KR.1
 fn read_c_5_4_kr_1(
 	xpath: &mut Context,
 	node: &libxml::tree::Node,
-) -> Option<String> {
-	first_attr(xpath, node, &format!("hl7:subjectOf2/hl7:observation[hl7:code/@code='{KR_C_5_4_1}']/hl7:value"), "code")
+) -> Result<Option<String>> {
+	let value = first_attr(xpath, node, &format!("hl7:subjectOf2/hl7:observation[hl7:code/@code='{KR_C_5_4_1}']/hl7:value"), "code");
+	import_constraint::string("SI", "studyTypeReactionKr1", value.as_deref(), None)?;
+	Ok(value)
 }
 
 /// e2b:FDA.C.5.5a
 fn read_fda_c_5_5a(
 	xpath: &mut Context,
 	node: &libxml::tree::Node,
-) -> Option<String> {
-	first_attr(
+) -> Result<Option<String>> {
+	let value = first_attr(
 		xpath,
 		node,
 		"hl7:id[@root='2.16.840.1.113883.3.989.5.1.2.2.1.2.1']",
 		"extension",
-	)
+	);
+	import_constraint::string("SI", "fdaIndNumberOccurred", value.as_deref(), None)?;
+	Ok(value)
 }
 
 /// e2b:FDA.C.5.5b
 fn read_fda_c_5_5b(
 	xpath: &mut Context,
 	node: &libxml::tree::Node,
-) -> Option<String> {
-	first_attr(
+) -> Result<Option<String>> {
+	let value = first_attr(
 		xpath,
 		node,
 		"hl7:id[@root='2.16.840.1.113883.3.989.5.1.2.2.1.2.2']",
 		"extension",
-	)
+	);
+	import_constraint::string(
+		"SI",
+		"fdaPreAndaNumberOccurred",
+		value.as_deref(),
+		None,
+	)?;
+	Ok(value)
 }
 
 /// e2b:FDA.C.5.6.r
@@ -1421,7 +1523,7 @@ fn read_fda_c_5_5b(
 fn read_fda_c_5_6_r(
 	xpath: &mut Context,
 	node: &libxml::tree::Node,
-) -> Vec<(Option<String>, Option<String>)> {
+) -> Result<Vec<(Option<String>, Option<String>)>> {
 	xpath
 		.findnodes(
 			"hl7:id[@root='2.16.840.1.113883.3.989.5.1.2.2.1.2.3']",
@@ -1429,7 +1531,15 @@ fn read_fda_c_5_6_r(
 		)
 		.unwrap_or_default()
 		.into_iter()
-		.map(|id| (id.get_property("extension"), id.get_property("nullFlavor")))
+		.map(|id| {
+			portable_pair(
+				"SI",
+				"fdaCrossReportedIndNumbers[].indNumber",
+				"fdaCrossReportedIndNumbers[].indNumberNullFlavor",
+				id.get_property("extension"),
+				id.get_property("nullFlavor"),
+			)
+		})
 		.collect()
 }
 

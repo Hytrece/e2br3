@@ -1,9 +1,8 @@
 use crate::error::Error;
 use crate::import_constraint;
 use crate::import_sections::shared::{
-	clamp_str, first_attr, first_text, first_value, first_value_root,
-	normalize_code, normalize_code3, normalize_sex_code, parse_bool_attr,
-	parse_bool_value, parse_date,
+	first_attr, first_text, first_value, first_value_root, normalize_code,
+	parse_bool_attr, parse_bool_value, parse_date,
 };
 use crate::Result;
 use libxml::parser::Parser;
@@ -881,14 +880,11 @@ fn read_d_10_2_2b(
 ) -> Result<Option<String>> {
 	portable_string(
 		"DM",
-		normalize_code3(
-			first_attr(
-				xpath,
-				node,
-				"hl7:subjectOf2/hl7:observation[hl7:code[@code='3']]/hl7:value",
-				"unit",
-			),
-			"parent_information.parent_age_unit",
+		first_attr(
+			xpath,
+			node,
+			"hl7:subjectOf2/hl7:observation[hl7:code[@code='3']]/hl7:value",
+			"unit",
 		),
 		"parentInformation.parentAge.unit",
 	)
@@ -951,7 +947,7 @@ fn read_d_10_6(
 	node: &libxml::tree::Node,
 ) -> Result<(Option<String>, Option<String>)> {
 	let path = "hl7:associatedPerson/hl7:administrativeGenderCode";
-	let value = normalize_sex_code(first_attr(xpath, node, path, "code"));
+	let value = first_attr(xpath, node, path, "code");
 	let null_flavor = first_attr(xpath, node, path, "nullFlavor");
 	import_constraint::string(
 		"DM",
@@ -1306,97 +1302,16 @@ pub(crate) fn parse_parent_information(xml: &[u8]) -> Result<Option<ParentImport
 			column: None,
 		})?;
 	for obs in drug_nodes {
-		let drug_name = first_text(
-			&mut xpath,
-			&obs,
-			"hl7:consumable/hl7:instanceOfKind/hl7:kindOfProduct/hl7:name",
-		);
-		let drug_name = read_d_10_8_r_1(&mut xpath, &obs)?.or(drug_name);
-		let mpid = first_value(
-			&mut xpath,
-			&obs,
-			"(hl7:consumable/hl7:instanceOfKind/hl7:kindOfProduct/hl7:asIdentifiedEntity[hl7:code[@code='MPID']]/hl7:id/@extension)[1]",
-		);
-		let mpid_version = clamp_str(
-			first_value(
-				&mut xpath,
-				&obs,
-				"(hl7:consumable/hl7:instanceOfKind/hl7:kindOfProduct/hl7:asIdentifiedEntity[hl7:code[@code='MPID']]/hl7:code/@codeSystemVersion)[1]",
-			),
-			10,
-			"parent_past_drug.mpid_version",
-		);
-		let (mapped_mpid_version, mapped_mpid) = read_d_10_8_r_2(&mut xpath, &obs)?;
-		let mpid = mapped_mpid.or(mpid);
-		let mpid_version = mapped_mpid_version.or(mpid_version);
-		let mfds_medicinal_product_version = clamp_str(
-			first_value(
-				&mut xpath,
-				&obs,
-				"(hl7:consumable/hl7:instanceOfKind/hl7:kindOfProduct/hl7:code/@codeSystemVersion)[1]",
-			),
-			20,
-			"parent_past_drug.mfds_medicinal_product_version",
-		);
-		let mfds_medicinal_product_id = clamp_str(
-			first_value(
-				&mut xpath,
-				&obs,
-				"(hl7:consumable/hl7:instanceOfKind/hl7:kindOfProduct/hl7:code/@code)[1]",
-			),
-			10,
-			"parent_past_drug.mfds_medicinal_product_id",
-		);
-		let (mapped_mfds_version, mapped_mfds_id) =
+		let drug_name = read_d_10_8_r_1(&mut xpath, &obs)?;
+		let (mpid_version, mpid) = read_d_10_8_r_2(&mut xpath, &obs)?;
+		let (mfds_medicinal_product_version, mfds_medicinal_product_id) =
 			read_d_10_8_r_1_kr(&mut xpath, &obs)?;
-		let mfds_medicinal_product_version =
-			mapped_mfds_version.or(mfds_medicinal_product_version);
-		let mfds_medicinal_product_id = mapped_mfds_id.or(mfds_medicinal_product_id);
 		let start_date = read_d_10_8_r_4(&mut xpath, &obs)?;
 		let end_date = read_d_10_8_r_5(&mut xpath, &obs)?;
-		let indication_meddra_code = first_attr(
-			&mut xpath,
-			&obs,
-			"hl7:outboundRelationship2[@typeCode='RSON']/hl7:observation/hl7:value",
-			"code",
-		);
-		let indication_meddra_version = clamp_str(
-			first_attr(
-				&mut xpath,
-				&obs,
-				"hl7:outboundRelationship2[@typeCode='RSON']/hl7:observation/hl7:value",
-				"codeSystemVersion",
-			),
-			10,
-			"parent_past_drug.indication_meddra_version",
-		);
-		let (mapped_indication_version, mapped_indication_code) =
+		let (indication_meddra_version, indication_meddra_code) =
 			read_d_10_8_r_6(&mut xpath, &obs)?;
-		let indication_meddra_version =
-			mapped_indication_version.or(indication_meddra_version);
-		let indication_meddra_code =
-			mapped_indication_code.or(indication_meddra_code);
-		let reaction_meddra_code = first_attr(
-			&mut xpath,
-			&obs,
-			"hl7:outboundRelationship2[@typeCode='CAUS']/hl7:observation/hl7:value",
-			"code",
-		);
-		let reaction_meddra_version = clamp_str(
-			first_attr(
-				&mut xpath,
-				&obs,
-				"hl7:outboundRelationship2[@typeCode='CAUS']/hl7:observation/hl7:value",
-				"codeSystemVersion",
-			),
-			10,
-			"parent_past_drug.reaction_meddra_version",
-		);
-		let (mapped_reaction_version, mapped_reaction_code) =
+		let (reaction_meddra_version, reaction_meddra_code) =
 			read_d_10_8_r_7(&mut xpath, &obs)?;
-		let reaction_meddra_version =
-			mapped_reaction_version.or(reaction_meddra_version);
-		let reaction_meddra_code = mapped_reaction_code.or(reaction_meddra_code);
 		let (phpid_version, phpid) = read_d_10_8_r_3(&mut xpath, &obs)?;
 		past_drugs.push(PastDrugHistoryImport {
 			drug_name,

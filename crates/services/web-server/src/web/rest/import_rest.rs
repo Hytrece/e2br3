@@ -32,9 +32,7 @@ use xml::import_sections::{
 	c_safety_report::parse_c_safety_report, d_patient::parse_d_patient,
 	e_reaction::parse_e_reactions, g_drug::parse_g_drugs,
 };
-use xml::validation::{
-	should_skip_xml_validation, validate_e2b_xml, validate_e2b_xml_basic,
-};
+use xml::validation::validate_e2b_xml;
 use xml::{
 	extract_safety_report_id_from_xml, import_e2b_xml, CImportSettings,
 	XmlImportRequest, XmlValidationReport,
@@ -307,11 +305,7 @@ async fn import_single_xml(
 	product_presave_id: Option<Uuid>,
 	product_id: Option<String>,
 ) -> ImportedCaseSummary {
-	let validation_report = if should_skip_xml_validation() {
-		validate_e2b_xml_basic(&xml, None)
-	} else {
-		validate_e2b_xml(&xml, None)
-	};
+	let validation_report = validate_e2b_xml(&xml, None);
 	match validation_report {
 		Ok(report) if report.ok => {}
 		Ok(report) => {
@@ -807,11 +801,7 @@ pub async fn validate_xml(
 		move |_ctx, _mm, _scope| {
 			Box::pin(async move {
 				let payload = read_xml_multipart(multipart).await?;
-				let report = if should_skip_xml_validation() {
-					validate_e2b_xml_basic(&payload.bytes, None)?
-				} else {
-					validate_e2b_xml(&payload.bytes, None)?
-				};
+				let report = validate_e2b_xml(&payload.bytes, None)?;
 				Ok((StatusCode::OK, Json(DataRestResult { data: report })))
 			})
 		},
