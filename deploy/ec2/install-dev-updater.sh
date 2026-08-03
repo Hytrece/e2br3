@@ -8,6 +8,7 @@ After=docker.service network-online.target
 
 [Service]
 Type=oneshot
+Environment=HOME=/root
 ExecStart=/opt/e2br3/deploy/ec2/update-dev.sh
 EOF
 
