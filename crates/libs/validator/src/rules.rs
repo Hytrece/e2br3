@@ -1712,7 +1712,7 @@ pub const VALIDATION_RULES: &[
 		section: "narrative",
 		blocking: true,
 		message:
-			"[H.5.r.1b] Case summary language is required when [H.5.r.1a] summary type is populated.",
+			"[H.5.r.1b] Case summary language is required when [H.5.r.1a] summary text is populated.",
 	},
 	ValidationRuleMetadata {
 		code: "ICH.N.1.2.REQUIRED",
