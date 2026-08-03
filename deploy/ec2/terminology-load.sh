@@ -9,8 +9,8 @@ E2BR3_TERMINOLOGY_DIR="${E2BR3_TERMINOLOGY_DIR:-/opt/e2br3/terminology}"
 usage() {
   cat >&2 <<'EOF'
 Usage:
-  deploy/ec2/terminology-load.sh --dry-run <meddra|whodrug> <input-path> <version> [language]
-  deploy/ec2/terminology-load.sh --load    <meddra|whodrug> <input-path> <version> [language]
+  deploy/ec2/terminology-load.sh --dry-run <dictionary> <input-path> <version> [language]
+  deploy/ec2/terminology-load.sh --load    <dictionary> <input-path> <version> [language]
 
 Environment:
   APP_DIR                  EC2 app directory. Default: /opt/e2br3
@@ -50,9 +50,9 @@ if [ -z "${DICTIONARY}" ] || [ -z "${INPUT_PATH}" ] || [ -z "${VERSION}" ]; then
 fi
 
 case "${DICTIONARY}" in
-  meddra|whodrug) ;;
+  meddra|whodrug|mfds-products|iso3166|ich-constrained-ucum|edqm) ;;
   *)
-    echo "Unsupported dictionary: ${DICTIONARY}. Expected meddra or whodrug." >&2
+    echo "Unsupported dictionary: ${DICTIONARY}." >&2
     exit 2
     ;;
 esac
@@ -107,11 +107,21 @@ echo "Mode: ${MODE}"
 
 cd "${APP_DIR}"
 
-set -- docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" run --rm -T terminology-loader \
-  "${DICTIONARY}" \
-  --input "${CONTAINER_INPUT}" \
-  --version "${VERSION}" \
-  --language "${LANGUAGE}"
+case "${DICTIONARY}" in
+  iso3166|ich-constrained-ucum|edqm)
+    CONTROLLED_DICTIONARY=$(printf '%s' "${DICTIONARY}" | tr '-' '_')
+    set -- docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" run --rm -T terminology-loader \
+      controlled --input "${CONTAINER_INPUT}" --dictionary "${CONTROLLED_DICTIONARY}" \
+      --version "${VERSION}" --language "${LANGUAGE}"
+    ;;
+  *)
+    set -- docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" run --rm -T terminology-loader \
+      "${DICTIONARY}" --input "${CONTAINER_INPUT}" --version "${VERSION}"
+    if [ "${DICTIONARY}" != "mfds-products" ]; then
+      set -- "$@" --language "${LANGUAGE}"
+    fi
+    ;;
+esac
 
 if [ "${MODE}" = "dry-run" ]; then
   set -- "$@" --dry-run

@@ -26,6 +26,7 @@ enum Commands {
 	Meddra(LoadArgs),
 	Whodrug(LoadArgs),
 	MfdsProducts(MfdsLoadArgs),
+	Controlled(ControlledLoadArgs),
 }
 
 #[derive(Args, Debug, Clone)]
@@ -46,6 +47,20 @@ struct MfdsLoadArgs {
 	input: PathBuf,
 	#[arg(long)]
 	version: String,
+	#[arg(long)]
+	dry_run: bool,
+}
+
+#[derive(Args, Debug, Clone)]
+struct ControlledLoadArgs {
+	#[arg(long)]
+	input: PathBuf,
+	#[arg(long)]
+	dictionary: String,
+	#[arg(long)]
+	version: String,
+	#[arg(long, default_value = "en")]
+	language: String,
 	#[arg(long)]
 	dry_run: bool,
 }
@@ -72,6 +87,8 @@ struct MfdsProductArtifact {
 	language: String,
 	source: String,
 	products: Vec<MfdsProductRow>,
+	#[serde(default)]
+	substances: Vec<MfdsProductSubstanceRow>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -87,6 +104,38 @@ struct MfdsProductRow {
 	cancel_name: Option<String>,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct MfdsProductSubstanceRow {
+	item_seq: String,
+	substance_code: String,
+	substance_name_kr: String,
+	substance_name_en: Option<String>,
+	quantity: Option<String>,
+	unit: Option<String>,
+	component_content: Option<String>,
+	material_sequence: Option<String>,
+	total_amount_sequence: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ControlledArtifact {
+	name: String,
+	version: String,
+	source: String,
+	source_sha256: String,
+	license: String,
+	entries: Vec<ControlledArtifactEntry>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ControlledArtifactEntry {
+	code: String,
+	scopes: Vec<String>,
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
 	let cli = Cli::parse();
@@ -96,8 +145,135 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 		Commands::Meddra(args) => load_meddra(&mm, &args).await?,
 		Commands::Whodrug(args) => load_whodrug(&mm, &args).await?,
 		Commands::MfdsProducts(args) => load_mfds_products(&mm, &args).await?,
+		Commands::Controlled(args) => load_controlled(&mm, &args).await?,
 	}
 
+	Ok(())
+}
+
+async fn load_controlled(
+	mm: &ModelManager,
+	args: &ControlledLoadArgs,
+) -> Result<(), Box<dyn std::error::Error>> {
+	if !matches!(
+		args.dictionary.as_str(),
+		"iso3166" | "ich_constrained_ucum" | "edqm"
+	) {
+		return Err(
+			"controlled dictionary must be iso3166, ich_constrained_ucum, or edqm"
+				.into(),
+		);
+	}
+	let bytes = fs::read(&args.input)?;
+	let artifact: ControlledArtifact = serde_json::from_slice(&bytes)?;
+	if artifact.version != args.version {
+		return Err(format!(
+			"controlled artifact version mismatch: expected {}, got {}",
+			args.version, artifact.version
+		)
+		.into());
+	}
+	if artifact.entries.is_empty() {
+		return Err("controlled artifact contains no entries".into());
+	}
+	let mut seen = HashSet::new();
+	for entry in &artifact.entries {
+		if entry.code.trim().is_empty() || entry.scopes.is_empty() {
+			return Err("controlled entries require code and scope".into());
+		}
+		for scope in &entry.scopes {
+			if !seen.insert((entry.code.as_str(), scope.as_str())) {
+				return Err(format!(
+					"duplicate controlled code/scope: {}/{}",
+					entry.code, scope
+				)
+				.into());
+			}
+		}
+	}
+	let loaded_rows = seen.len() as i64;
+	println!(
+		"Controlled terminology parse complete: dictionary={}, rows={}, version={}, language={}, name={}, source={}, license={}",
+		args.dictionary,
+		loaded_rows,
+		args.version,
+		args.language,
+		artifact.name,
+		artifact.source,
+		artifact.license
+	);
+	if args.dry_run {
+		println!("Dry run complete. No DB changes were made.");
+		return Ok(());
+	}
+
+	let source_path = args.input.to_string_lossy().to_string();
+	with_loader_txn(mm, || async {
+		mm.dbx()
+			.execute(
+				sqlx::query(
+					"UPDATE controlled_terminology_terms
+					 SET active = false
+					 WHERE dictionary = $1 AND language = $2 AND active = true",
+				)
+				.bind(&args.dictionary)
+				.bind(&args.language),
+			)
+			.await?;
+
+		const BATCH: usize = 1000;
+		let rows: Vec<(&str, &str)> = artifact
+			.entries
+			.iter()
+			.flat_map(|entry| {
+				entry
+					.scopes
+					.iter()
+					.map(move |scope| (entry.code.as_str(), scope.as_str()))
+			})
+			.collect();
+		for chunk in rows.chunks(BATCH) {
+			let mut qb: QueryBuilder<Postgres> = QueryBuilder::new(
+				"INSERT INTO controlled_terminology_terms
+				 (dictionary, version, language, scope, code, active) ",
+			);
+			qb.push_values(chunk, |mut b, (code, scope)| {
+				b.push_bind(&args.dictionary)
+					.push_bind(&args.version)
+					.push_bind(&args.language)
+					.push_bind(scope)
+					.push_bind(code)
+					.push_bind(true);
+			});
+			qb.push(
+				" ON CONFLICT (dictionary, version, language, scope, code)
+				  DO UPDATE SET active = true",
+			);
+			mm.dbx().execute(qb.build()).await?;
+		}
+
+		retire_other_active_releases(
+			mm,
+			&args.dictionary,
+			&args.version,
+			&args.language,
+		)
+		.await?;
+		upsert_release_header(
+			mm,
+			&args.dictionary,
+			&args.version,
+			&args.language,
+			"active",
+			&source_path,
+			Some(&artifact.source_sha256),
+			loaded_rows,
+		)
+		.await?;
+		Ok(())
+	})
+	.await?;
+	println!("Controlled terminology load committed successfully.");
 	Ok(())
 }
 
@@ -107,8 +283,9 @@ async fn load_mfds_products(
 ) -> Result<(), Box<dyn std::error::Error>> {
 	let artifact = parse_mfds_products(&args.input, &args.version)?;
 	println!(
-		"MFDS product parse complete: rows={}, version={}",
+		"MFDS product parse complete: products={}, substances={}, version={}",
 		artifact.products.len(),
+		artifact.substances.len(),
 		artifact.version
 	);
 	if args.dry_run {
@@ -127,10 +304,16 @@ async fn load_mfds_products(
 			"validated",
 			&source_path,
 			checksum.as_deref(),
-			artifact.products.len() as i64,
+			(artifact.products.len() + artifact.substances.len()) as i64,
 		)
 		.await?;
-		upsert_mfds_product_rows(mm, &artifact.products, &artifact.version).await
+		upsert_mfds_product_rows(mm, &artifact.products, &artifact.version).await?;
+		upsert_mfds_product_substance_rows(
+			mm,
+			&artifact.substances,
+			&artifact.version,
+		)
+		.await
 	})
 	.await?;
 
@@ -578,6 +761,44 @@ async fn upsert_mfds_product_rows(
 	Ok(())
 }
 
+async fn upsert_mfds_product_substance_rows(
+	mm: &ModelManager,
+	rows: &[MfdsProductSubstanceRow],
+	version: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+	const BATCH: usize = 1000;
+	for chunk in rows.chunks(BATCH) {
+		let mut qb: QueryBuilder<Postgres> = QueryBuilder::new(
+			"INSERT INTO mfds_product_substances
+			 (item_seq, substance_code, substance_name_kr, substance_name_en,
+			  quantity, unit, component_content, material_sequence,
+			  total_amount_sequence, version, active) ",
+		);
+		qb.push_values(chunk, |mut b, row| {
+			b.push_bind(&row.item_seq)
+				.push_bind(&row.substance_code)
+				.push_bind(&row.substance_name_kr)
+				.push_bind(&row.substance_name_en)
+				.push_bind(&row.quantity)
+				.push_bind(&row.unit)
+				.push_bind(&row.component_content)
+				.push_bind(row.material_sequence.as_deref().unwrap_or(""))
+				.push_bind(row.total_amount_sequence.as_deref().unwrap_or(""))
+				.push_bind(version)
+				.push_bind(false);
+		});
+		qb.push(
+			" ON CONFLICT (item_seq, substance_code, material_sequence, total_amount_sequence, version)
+			  DO UPDATE SET substance_name_kr = EXCLUDED.substance_name_kr,
+			    substance_name_en = EXCLUDED.substance_name_en,
+			    quantity = EXCLUDED.quantity, unit = EXCLUDED.unit,
+			    component_content = EXCLUDED.component_content, active = false",
+		);
+		mm.dbx().execute(qb.build()).await?;
+	}
+	Ok(())
+}
+
 fn parse_mfds_products(
 	input: &Path,
 	expected_version: &str,
@@ -621,6 +842,34 @@ fn parse_mfds_products(
 		}
 		parse_basic_date(row.permit_date.as_deref())?;
 		parse_basic_date(row.cancel_date.as_deref())?;
+	}
+	let product_codes = seen;
+	let mut seen_substances = HashSet::new();
+	for row in &artifact.substances {
+		if !product_codes.contains(row.item_seq.trim()) {
+			return Err(format!(
+				"MFDS substance references unknown ITEM_SEQ {}",
+				row.item_seq
+			)
+			.into());
+		}
+		if row.substance_code.trim().is_empty()
+			|| row.substance_name_kr.trim().is_empty()
+		{
+			return Err("MFDS substance code and name must be non-empty".into());
+		}
+		if !seen_substances.insert((
+			row.item_seq.trim(),
+			row.substance_code.trim(),
+			row.material_sequence.as_deref().unwrap_or(""),
+			row.total_amount_sequence.as_deref().unwrap_or(""),
+		)) {
+			return Err(format!(
+				"duplicate MFDS substance {}/{}",
+				row.item_seq, row.substance_code
+			)
+			.into());
+		}
 	}
 	Ok(artifact)
 }
@@ -1155,6 +1404,15 @@ mod tests {
     "permit_date": "20200101",
     "cancel_date": "20251231",
     "cancel_name": "취하"
+  }],
+  "substances": [{
+    "item_seq": "200000001",
+    "substance_code": "A001",
+    "substance_name_kr": "테스트성분",
+    "substance_name_en": "Test substance",
+    "quantity": "10",
+    "unit": "mg",
+    "component_content": null
   }]
 }"#,
 		);
@@ -1169,6 +1427,7 @@ mod tests {
 			Some("20251231")
 		);
 		assert_eq!(artifact.products[0].cancel_name.as_deref(), Some("취하"));
+		assert_eq!(artifact.substances[0].substance_code, "A001");
 		let _ = fs::remove_file(path);
 	}
 

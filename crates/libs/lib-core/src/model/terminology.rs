@@ -147,6 +147,18 @@ pub struct MfdsProduct {
 }
 
 #[derive(Debug, Clone, Fields, FromRow, Serialize)]
+pub struct MfdsProductSubstance {
+	pub item_seq: String,
+	pub substance_code: String,
+	pub substance_name_kr: String,
+	pub substance_name_en: Option<String>,
+	pub quantity: Option<String>,
+	pub unit: Option<String>,
+	pub component_content: Option<String>,
+	pub version: String,
+}
+
+#[derive(Debug, Clone, Fields, FromRow, Serialize)]
 pub struct FdaHierarchicalCodeList {
 	pub id: i64,
 	pub list_name: String,
@@ -339,10 +351,12 @@ impl DbBmc for UcumUnitBmc {
 
 impl UcumUnitBmc {
 	pub async fn list_all(_ctx: &Ctx, mm: &ModelManager) -> Result<Vec<UcumUnit>> {
-		let sql = format!(
-			"SELECT id, code, display_name, description, unit_type, active FROM {} WHERE active = true ORDER BY unit_type NULLS LAST, code",
-			Self::TABLE
-		);
+		let sql = "SELECT row_number() OVER (ORDER BY scope, code)::int AS id,
+			code, coalesce(display_name, code) AS display_name,
+			NULL::text AS description, scope AS unit_type, active
+			FROM controlled_terminology_terms
+			WHERE dictionary = 'ich_constrained_ucum' AND active = true
+			ORDER BY scope, code";
 		let units = mm
 			.dbx()
 			.fetch_all(sqlx::query_as::<_, UcumUnit>(&sql))
@@ -456,6 +470,33 @@ impl MfdsProductBmc {
 
 		let rows = mm.dbx().fetch_all(qb.build_query_as::<(String,)>()).await?;
 		Ok(rows.into_iter().map(|(code,)| code).collect())
+	}
+
+	pub async fn substances(
+		_ctx: &Ctx,
+		mm: &ModelManager,
+		item_seq: &str,
+	) -> Result<Vec<MfdsProductSubstance>> {
+		let rows = mm
+			.dbx()
+			.fetch_all(
+				sqlx::query_as::<_, MfdsProductSubstance>(
+					"SELECT item_seq, substance_code,
+				 min(substance_name_kr) AS substance_name_kr,
+				 min(substance_name_en) AS substance_name_en,
+				 CASE WHEN min(quantity) = max(quantity) THEN min(quantity) END AS quantity,
+				 CASE WHEN min(quantity) = max(quantity) AND min(unit) = max(unit)
+				      THEN min(unit) END AS unit,
+				 min(component_content) AS component_content, min(version) AS version
+				 FROM mfds_product_substances
+				 WHERE active = true AND item_seq = $1
+				 GROUP BY item_seq, substance_code
+				 ORDER BY substance_name_kr, substance_code",
+				)
+				.bind(item_seq),
+			)
+			.await?;
+		Ok(rows)
 	}
 }
 

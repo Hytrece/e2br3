@@ -220,6 +220,7 @@ GET /api/terminology/countries
 GET /api/terminology/fda-code-search
 GET /api/terminology/meddra
 GET /api/terminology/mfds-products
+GET /api/terminology/mfds-products/{item_seq}/substances
 GET /api/terminology/releases
 GET /api/terminology/ucum-units
 GET /api/terminology/whodrug

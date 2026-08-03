@@ -116,6 +116,7 @@ pub fn router() -> Router {
 		search_meddra,
 		search_whodrug,
 		search_mfds_products,
+		list_mfds_product_substances,
 		import_meddra,
 		import_whodrug,
 		list_terminology_releases,
@@ -3619,6 +3620,16 @@ fn search_whodrug() {}
 	responses((status = 200, description = "Active MFDS product results", body = GenericDataResponse))
 )]
 fn search_mfds_products() {}
+
+#[utoipa::path(
+	get,
+	path = "/api/terminology/mfds-products/{item_seq}/substances",
+	tag = "terminology",
+	security(("auth_token" = [])),
+	params(("item_seq" = String, Path, description = "MFDS product ITEM_SEQ")),
+	responses((status = 200, description = "Active ingredients linked by MFDS", body = GenericDataResponse))
+)]
+fn list_mfds_product_substances() {}
 
 #[utoipa::path(
 	post,

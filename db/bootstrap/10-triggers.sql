@@ -796,6 +796,9 @@ CREATE TRIGGER audit_controlled_terminology_terms AFTER INSERT OR UPDATE OR DELE
 CREATE TRIGGER audit_mfds_products AFTER INSERT OR UPDATE OR DELETE ON mfds_products
     FOR EACH ROW EXECUTE FUNCTION audit_trigger_function_with_audit_id();
 
+CREATE TRIGGER audit_mfds_product_substances AFTER INSERT OR UPDATE OR DELETE ON mfds_product_substances
+    FOR EACH ROW EXECUTE FUNCTION audit_trigger_function_with_audit_id();
+
 CREATE TRIGGER audit_iso_countries AFTER INSERT OR UPDATE OR DELETE ON iso_countries
     FOR EACH ROW EXECUTE FUNCTION audit_trigger_function_with_audit_id();
 
@@ -1705,6 +1708,21 @@ CREATE POLICY mfds_products_update ON mfds_products
     USING (is_current_user_admin())
     WITH CHECK (is_current_user_admin());
 CREATE POLICY mfds_products_delete ON mfds_products
+    FOR DELETE TO e2br3_app_role
+    USING (is_current_user_admin());
+
+ALTER TABLE mfds_product_substances ENABLE ROW LEVEL SECURITY;
+ALTER TABLE mfds_product_substances FORCE ROW LEVEL SECURITY;
+CREATE POLICY mfds_product_substances_read ON mfds_product_substances
+    FOR SELECT TO e2br3_app_role
+    USING (active = true OR is_current_user_admin());
+CREATE POLICY mfds_product_substances_insert ON mfds_product_substances
+    FOR INSERT TO e2br3_app_role
+    WITH CHECK (is_current_user_admin());
+CREATE POLICY mfds_product_substances_update ON mfds_product_substances
+    FOR UPDATE TO e2br3_app_role
+    USING (is_current_user_admin()) WITH CHECK (is_current_user_admin());
+CREATE POLICY mfds_product_substances_delete ON mfds_product_substances
     FOR DELETE TO e2br3_app_role
     USING (is_current_user_admin());
 

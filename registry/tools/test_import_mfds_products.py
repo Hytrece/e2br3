@@ -17,6 +17,12 @@ class MfdsProductImportTests(unittest.TestCase):
     def fixture(self, name: str) -> bytes:
         return (FIXTURES / name).read_bytes()
 
+    @staticmethod
+    def api_page(items):
+        return json.dumps({"header": {"resultCode": "00"}, "body": {
+            "totalCount": len(items), "items": items
+        }}).encode()
+
     def test_collects_all_pages_merges_duplicates_and_preserves_cancellation(self):
         pages = iter(
             [
@@ -47,6 +53,54 @@ class MfdsProductImportTests(unittest.TestCase):
         cancelled = artifact["products"][1]
         self.assertEqual("20251231", cancelled["cancel_date"])
         self.assertEqual("취하", cancelled["cancel_name"])
+        self.assertEqual([], artifact["substances"])
+
+    def test_collects_explicit_product_substance_links(self):
+        product = self.api_page([{"ITEM_SEQ": "200000001", "ITEM_NAME": "제품"}])
+        substance = self.api_page([{
+            "ITEM_SEQ": "200000001", "MTRAL_CODE": "A001", "MTRAL_NM": "성분",
+            "QNT": "10", "INGD_UNIT_CD": "mg"
+        }])
+        artifact, _ = importer.collect_products(
+            "v1", "key", fetch=lambda *_: product,
+            fetch_substances=lambda *_: substance, rows_per_page=500
+        )
+        self.assertEqual("200000001", artifact["substances"][0]["item_seq"])
+        self.assertEqual("A001", artifact["substances"][0]["substance_code"])
+
+    def test_uncoded_ingredient_is_not_fabricated(self):
+        product = self.api_page([{"ITEM_SEQ": "200000001", "ITEM_NAME": "제품"}])
+        substance = self.api_page([{
+            "ITEM_SEQ": "200000001", "MTRAL_CODE": None,
+            "MAIN_INGR_ENG": "Uncoded combined ingredient"
+        }])
+        artifact, _ = importer.collect_products(
+            "v1", "key", fetch=lambda *_: product,
+            fetch_substances=lambda *_: substance, rows_per_page=500
+        )
+        self.assertEqual([], artifact["substances"])
+
+    def test_same_substance_in_multiple_total_amounts_is_preserved(self):
+        product = self.api_page([{"ITEM_SEQ": "200000001", "ITEM_NAME": "제품"}])
+        rows = [{"ITEM_SEQ": "200000001", "MTRAL_CODE": "A001", "MTRAL_NM": "성분",
+                 "MTRAL_SN": "1", "TAMT_SEQ": seq, "QNT": quantity}
+                for seq, quantity in (("1", "20"), ("2", "2.5"))]
+        artifact, _ = importer.collect_products(
+            "v1", "key", fetch=lambda *_: product,
+            fetch_substances=lambda *_: self.api_page(rows), rows_per_page=500
+        )
+        self.assertEqual(["1", "2"], [row["total_amount_sequence"] for row in artifact["substances"]])
+
+    def test_ingredient_for_absent_product_is_ignored(self):
+        artifact, _ = importer.collect_products(
+            "v1", "key",
+            fetch=lambda *_: self.api_page([{"ITEM_SEQ": "1", "ITEM_NAME": "제품"}]),
+            fetch_substances=lambda *_: self.api_page([{
+                "ITEM_SEQ": "2", "MTRAL_CODE": "A001", "MTRAL_NM": "과거성분"
+            }]),
+            rows_per_page=500,
+        )
+        self.assertEqual([], artifact["substances"])
 
     def test_conflicting_duplicate_identity_is_rejected(self):
         first = json.loads(self.fixture("mfds-products-page-1.json"))
@@ -86,11 +140,12 @@ class MfdsProductImportTests(unittest.TestCase):
                 output=output,
                 raw_dir=raw_dir,
                 fetch=lambda *_: next(pages),
+                fetch_substances=lambda *_: self.api_page([]),
                 rows_per_page=2,
             )
 
             files = [output, *sorted(raw_dir.glob("*.json"))]
-            self.assertEqual(3, len(files))
+            self.assertEqual(4, len(files))
             for path in files:
                 self.assertNotIn("do-not-persist", path.read_text())
             self.assertFalse(list(root.rglob("*.tmp")))
@@ -103,6 +158,15 @@ class MfdsProductImportTests(unittest.TestCase):
 
         request = open_url.call_args.args[0]
         self.assertIn("serviceKey=a%2Bb%2Fc%3D", request.full_url)
+
+    def test_fetch_retries_transient_timeout(self):
+        response = mock.MagicMock()
+        response.__enter__.return_value.read.return_value = b"{}"
+        with mock.patch("urllib.request.urlopen", side_effect=[TimeoutError(), response]) as open_url, \
+             mock.patch("time.sleep") as sleep:
+            self.assertEqual(b"{}", importer.fetch_page(1, 1, "key"))
+        self.assertEqual(2, open_url.call_count)
+        sleep.assert_called_once_with(1)
 
     def test_live_collection_requires_environment_key(self):
         with mock.patch.dict(os.environ, {}, clear=True):

@@ -118,6 +118,36 @@ WHERE country.active = true
     WHERE normalized.code = country.code
   );
 
+UPDATE controlled_terminology_terms
+SET active = false
+WHERE dictionary = 'iso3166' AND language = 'en' AND active = true;
+
+INSERT INTO controlled_terminology_terms
+  (dictionary, version, language, scope, code, display_name, active)
+SELECT
+  'iso3166', 'continuously-maintained', 'en', 'country',
+  upper(trim(code)), nullif(trim(name), ''), true
+FROM staging_iso_countries
+WHERE trim(code) ~ '^[A-Za-z]{2}$'
+  AND nullif(trim(name), '') IS NOT NULL
+ON CONFLICT (dictionary, version, language, scope, code)
+DO UPDATE SET display_name = EXCLUDED.display_name, active = true;
+
+INSERT INTO terminology_releases
+  (dictionary, version, language, status, source_path, loaded_rows, activated_at)
+SELECT
+  'iso3166', 'continuously-maintained', 'en', 'active', :'source_url',
+  count(*), now()
+FROM iso_countries
+WHERE active = true
+ON CONFLICT (dictionary, version, language)
+DO UPDATE SET
+  status = 'active',
+  source_path = EXCLUDED.source_path,
+  loaded_rows = EXCLUDED.loaded_rows,
+  activated_at = now(),
+  updated_at = now();
+
 DO $$
 DECLARE
   loaded_count integer;

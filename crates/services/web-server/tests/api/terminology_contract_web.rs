@@ -63,6 +63,17 @@ async fn seed_active_terminology_rows(
 	.execute(&mut *tx)
 	.await?;
 
+	sqlx::query(
+		"INSERT INTO mfds_product_substances
+		 (item_seq, substance_code, substance_name_kr, quantity, unit, version, active)
+		 VALUES ('9000000001', 'M900001', '활성성분', '10', 'mg', '2026-01', true)
+		 ON CONFLICT (item_seq, substance_code, material_sequence, total_amount_sequence, version)
+		 DO UPDATE SET substance_name_kr=EXCLUDED.substance_name_kr,
+		 quantity=EXCLUDED.quantity, unit=EXCLUDED.unit, active=true",
+	)
+	.execute(&mut *tx)
+	.await?;
+
 	tx.commit().await?;
 	Ok(())
 }
@@ -80,6 +91,7 @@ async fn test_admin_can_access_terminology_endpoints() -> Result<()> {
 		"/api/terminology/meddra?q=test&limit=5",
 		"/api/terminology/whodrug?q=test&limit=5",
 		"/api/terminology/mfds-products?q=9000000001&limit=5",
+		"/api/terminology/mfds-products/9000000001/substances",
 		"/api/terminology/countries",
 		"/api/terminology/code-lists?list_name=report_type",
 	] {
@@ -100,6 +112,28 @@ async fn test_admin_can_access_terminology_endpoints() -> Result<()> {
 		}
 	}
 
+	Ok(())
+}
+
+#[serial]
+#[tokio::test]
+async fn test_mfds_product_substances_returns_active_explicit_link() -> Result<()> {
+	let mm = init_test_mm().await?;
+	seed_active_terminology_rows(&mm).await?;
+	let seed = seed_terminology_admin(&mm).await?;
+	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
+	let app = web_server::app(mm);
+	let req = Request::builder()
+		.method("GET")
+		.uri("/api/terminology/mfds-products/9000000001/substances")
+		.header("cookie", cookie_header(&token.to_string()))
+		.body(Body::empty())?;
+	let res = app.oneshot(req).await?;
+	assert_eq!(res.status(), StatusCode::OK);
+	let payload: serde_json::Value =
+		serde_json::from_slice(&to_bytes(res.into_body(), usize::MAX).await?)?;
+	assert_eq!(payload["data"][0]["substance_code"], "M900001");
+	assert_eq!(payload["data"][0]["quantity"], "10");
 	Ok(())
 }
 

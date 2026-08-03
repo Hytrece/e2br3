@@ -703,6 +703,17 @@ pub async fn activate_release_tx(
 				if changed == 0 {
 					return Err(bad_input("target MFDS product rows were not staged"));
 				}
+				dbx.execute(
+					sqlx::query("UPDATE mfds_product_substances SET active = false WHERE active = true"),
+				)
+				.await
+				.map_err(store_err)?;
+				dbx.execute(
+					sqlx::query("UPDATE mfds_product_substances SET active = true WHERE version = $1")
+						.bind(target_version),
+				)
+				.await
+				.map_err(store_err)?;
 			}
 			_ => return Err(bad_input("invalid dictionary")),
 		}

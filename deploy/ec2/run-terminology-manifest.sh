@@ -60,7 +60,7 @@ while IFS= read -r line || [ -n "${line}" ]; do
   fi
 
   case "${dictionary}" in
-    meddra|whodrug) ;;
+    meddra|whodrug|mfds-products|iso3166|ich-constrained-ucum|edqm) ;;
     *)
       echo "Unsupported dictionary: ${dictionary}" >&2
       exit 1
@@ -84,12 +84,22 @@ while IFS= read -r line || [ -n "${line}" ]; do
   esac
 
   if [ "${CHECK_ONLY:-}" != "1" ]; then
-    docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" run --rm -T terminology-loader \
-      "${dictionary}" \
-      --input "${container_input}" \
-      --version "${version}" \
-      --language "${language}" \
-      </dev/null
+    case "${dictionary}" in
+      iso3166|ich-constrained-ucum|edqm)
+        controlled_dictionary=$(printf '%s' "${dictionary}" | tr '-' '_')
+        set -- docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" run --rm -T terminology-loader \
+          controlled --input "${container_input}" --dictionary "${controlled_dictionary}" \
+          --version "${version}" --language "${language}"
+        ;;
+      *)
+        set -- docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" run --rm -T terminology-loader \
+          "${dictionary}" --input "${container_input}" --version "${version}"
+        if [ "${dictionary}" != "mfds-products" ]; then
+          set -- "$@" --language "${language}"
+        fi
+        ;;
+    esac
+    "$@" </dev/null
   fi
   loaded=$((loaded + 1))
 done < "${TERMINOLOGY_MANIFEST}"

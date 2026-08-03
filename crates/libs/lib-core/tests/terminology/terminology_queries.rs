@@ -171,6 +171,17 @@ async fn test_terminology_queries() -> Result<()> {
 		return Err(err.into());
 	}
 
+	dbx.execute(sqlx::query(
+		"INSERT INTO controlled_terminology_terms
+		 (dictionary, version, language, scope, code, display_name, active)
+		 VALUES
+		 ('ich_constrained_ucum', 'test', 'en', 'unit', 'mg/dL', 'mg/dL', true),
+		 ('ich_constrained_ucum', 'test', 'en', 'unit', 'U/L', 'U/L', true),
+		 ('ich_constrained_ucum', 'test', 'en', 'unit', 'mmol/L', 'mmol/L', true)
+		 ON CONFLICT DO NOTHING",
+	))
+	.await?;
+
 	if let Err(err) = dbx
 		.execute(
 			sqlx::query(

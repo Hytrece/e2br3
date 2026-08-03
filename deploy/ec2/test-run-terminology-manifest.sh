@@ -27,7 +27,7 @@ SH
 chmod +x "${TMP_DIR}/bin/docker"
 
 touch "${APP_DIR}/.env.prod" "${APP_DIR}/docker-compose.prod.yml"
-touch "${INCOMING_DIR}/meddra_28_1.zip" "${INCOMING_DIR}/whodrug.zip"
+touch "${INCOMING_DIR}/meddra_28_1.zip" "${INCOMING_DIR}/whodrug.zip" "${INCOMING_DIR}/mfds-products.json"
 
 grep -F 'E2BR3_TERMINOLOGY_DIR=${E2BR3_TERMINOLOGY_DIR:-/opt/e2br3/terminology}' "${SCRIPT}" >/dev/null
 
@@ -104,6 +104,24 @@ sh "${SCRIPT}" >"${TMP_DIR}/check-only.out"
 grep -F "Terminology manifest check complete: entries=2" "${TMP_DIR}/check-only.out" >/dev/null
 if [ -e "${DOCKER_LOG}" ] && [ -s "${DOCKER_LOG}" ]; then
   echo "CHECK_ONLY=1 must not invoke docker compose"
+  exit 1
+fi
+
+MFDS_MANIFEST="${TMP_DIR}/mfds-manifest.prod"
+cat > "${MFDS_MANIFEST}" <<EOF
+mfds-products ${INCOMING_DIR}/mfds-products.json 2026.08 ko
+EOF
+: > "${DOCKER_LOG}"
+PATH="${TMP_DIR}/bin:${PATH}" \
+APP_DIR="${APP_DIR}" \
+E2BR3_TERMINOLOGY_DIR="${TERMINOLOGY_DIR}" \
+TERMINOLOGY_MANIFEST="${MFDS_MANIFEST}" \
+DOCKER_LOG="${DOCKER_LOG}" \
+sh "${SCRIPT}"
+grep -F "ARG10=mfds-products" "${DOCKER_LOG}" >/dev/null
+grep -F "ARG12=/terminology/incoming/mfds-products.json" "${DOCKER_LOG}" >/dev/null
+if grep -F -- "--language" "${DOCKER_LOG}" >/dev/null; then
+  echo "mfds-products manifest must not pass unsupported --language"
   exit 1
 fi
 

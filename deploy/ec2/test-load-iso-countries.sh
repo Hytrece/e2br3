@@ -87,6 +87,9 @@ grep -F "SELECT set_org_context('00000000-0000-0000-0000-000000000000'::uuid, 's
 grep -F "INSERT INTO iso_countries (code, name, active)" "${PSQL_LOG}" >/dev/null
 grep -F "ON CONFLICT (code)" "${PSQL_LOG}" >/dev/null
 grep -F "UPDATE iso_countries AS country" "${PSQL_LOG}" >/dev/null
+grep -F "INSERT INTO controlled_terminology_terms" "${PSQL_LOG}" >/dev/null
+grep -F "'iso3166', 'continuously-maintained'" "${PSQL_LOG}" >/dev/null
+grep -F "INSERT INTO terminology_releases" "${PSQL_LOG}" >/dev/null
 grep -F "source_url=https://datahub.io/core/country-list/_r/-/data.csv" "${PSQL_LOG}" >/dev/null
 grep -F "\\copy staging_iso_countries(name, code) FROM '" "${PSQL_LOG}" >/dev/null
 grep -F "Loaded ISO countries from :source_url" "${PSQL_LOG}" >/dev/null

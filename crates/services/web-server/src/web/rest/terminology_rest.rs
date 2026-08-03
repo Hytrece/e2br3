@@ -7,8 +7,8 @@ use axum::Json;
 use lib_core::model::terminology::{
 	E2bCodeList, E2bCodeListBmc, FdaHierarchicalCodeList,
 	FdaHierarchicalCodeListBmc, IsoCountry, IsoCountryBmc, MeddraTerm,
-	MeddraTermBmc, MfdsProduct, MfdsProductBmc, UcumUnit, UcumUnitBmc,
-	WhodrugProduct, WhodrugProductBmc,
+	MeddraTermBmc, MfdsProduct, MfdsProductBmc, MfdsProductSubstance, UcumUnit,
+	UcumUnitBmc, WhodrugProduct, WhodrugProductBmc,
 };
 use lib_core::model::terminology_import::{self, TerminologyReleaseRow};
 use lib_core::model::ModelManager;
@@ -202,6 +202,23 @@ pub async fn search_mfds_products(
 			let products =
 				MfdsProductBmc::search(ctx, mm, &params.q, params.limit).await?;
 			Ok((StatusCode::OK, Json(DataRestResult { data: products })))
+		})
+	})
+	.await
+}
+
+/// GET /api/terminology/mfds-products/{item_seq}/substances
+pub async fn list_mfds_product_substances(
+	State(mm): State<ModelManager>,
+	ctx_w: CtxW,
+	snapshot: AuthorizationSnapshotW,
+	Path(item_seq): Path<String>,
+) -> Result<(StatusCode, Json<DataRestResult<Vec<MfdsProductSubstance>>>)> {
+	let ctx = ctx_w.0;
+	with_authorized_terminology_read(&ctx, &snapshot, &mm, move |ctx, mm| {
+		Box::pin(async move {
+			let rows = MfdsProductBmc::substances(ctx, mm, &item_seq).await?;
+			Ok((StatusCode::OK, Json(DataRestResult { data: rows })))
 		})
 	})
 	.await

@@ -90,6 +90,31 @@ CREATE INDEX idx_mfds_products_active_item_seq
 CREATE INDEX idx_mfds_products_name_kr
     ON mfds_products USING gin(to_tsvector('simple', product_name_kr));
 
+CREATE TABLE mfds_product_substances (
+    id BIGSERIAL PRIMARY KEY,
+    audit_id UUID NOT NULL DEFAULT gen_random_uuid(),
+    item_seq VARCHAR(10) NOT NULL,
+    substance_code VARCHAR(40) NOT NULL,
+    substance_name_kr TEXT NOT NULL,
+    substance_name_en TEXT,
+    quantity TEXT,
+    unit TEXT,
+    component_content TEXT,
+    material_sequence TEXT NOT NULL DEFAULT '',
+    total_amount_sequence TEXT NOT NULL DEFAULT '',
+    version VARCHAR(40) NOT NULL,
+    active BOOLEAN NOT NULL DEFAULT false,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT mfds_product_substances_unique
+        UNIQUE (item_seq, substance_code, material_sequence, total_amount_sequence, version),
+    CONSTRAINT mfds_product_substances_product_fk
+        FOREIGN KEY (item_seq, version) REFERENCES mfds_products (item_seq, version) ON DELETE CASCADE,
+    CONSTRAINT mfds_product_substances_audit_id_unique UNIQUE (audit_id)
+);
+
+CREATE INDEX idx_mfds_product_substances_lookup
+    ON mfds_product_substances (item_seq, version) WHERE active = true;
+
 -- Terminology release workflow (staged/approved/active)
 CREATE TABLE IF NOT EXISTS terminology_releases (
     id BIGSERIAL PRIMARY KEY,

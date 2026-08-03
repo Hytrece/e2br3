@@ -20,6 +20,10 @@ pub fn routes_terminology(mm: ModelManager) -> Router {
 			get(terminology_rest::search_mfds_products),
 		)
 		.route(
+			"/terminology/mfds-products/{item_seq}/substances",
+			get(terminology_rest::list_mfds_product_substances),
+		)
+		.route(
 			"/terminology/import/meddra",
 			axum::routing::post(terminology_rest::import_meddra),
 		)

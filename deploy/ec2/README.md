@@ -79,7 +79,8 @@ DATABASE_URL='postgres://<user>:<pwd>@<rds-endpoint>:5432/app_db?sslmode=require
 ```
 
 Optional: reset DB/user first. By default this preserves terminology rows by dumping
-`meddra_terms`, `whodrug_products`, and `terminology_releases`, recreating the database,
+`meddra_terms`, `whodrug_products`, `controlled_terminology_terms`, `mfds_products`,
+`mfds_product_substances`, and `terminology_releases`, recreating the database,
 then restoring those rows before seed data is applied:
 
 ```sh
@@ -197,9 +198,13 @@ Each non-comment line is whitespace-delimited:
 # dictionary host_input_path version [language]
 meddra /opt/e2br3/terminology/incoming/<meddra-release>.zip <meddra-version> en
 whodrug /opt/e2br3/terminology/incoming/<whodrug-release>.zip <whodrug-version> en
+mfds-products /opt/e2br3/terminology/incoming/<mfds-products-release>.json <mfds-products-version> ko
+iso3166 /opt/e2br3/terminology/incoming/<iso3166-release>.json <iso3166-version> en
+ich-constrained-ucum /opt/e2br3/terminology/incoming/<ucum-release>.json <ucum-version> en
+edqm /opt/e2br3/terminology/incoming/<edqm-release>.json <edqm-version> en
 ```
 
-The fields are `dictionary host_input_path version [language]`. `dictionary` is `meddra` or `whodrug`,
+The fields are `dictionary host_input_path version [language]`. Supported dictionaries are shown above;
 `version` is the release identifier passed to the loader, and `language` defaults to `en` when omitted.
 The host input path must be inside `E2BR3_TERMINOLOGY_DIR`. The default `E2BR3_TERMINOLOGY_DIR` is
 `/opt/e2br3/terminology`, mounted into the container as `/terminology`.

@@ -105,13 +105,16 @@ dump_terminology_tables() {
       FROM unnest(ARRAY[
         'public.meddra_terms',
         'public.whodrug_products',
+        'public.controlled_terminology_terms',
+        'public.mfds_products',
+        'public.mfds_product_substances',
         'public.terminology_releases'
       ]) AS t(name)
       WHERE to_regclass(t.name) IS NOT NULL;
     " 2>/dev/null || true
   )"
 
-  if [ "${present_count}" != "3" ]; then
+  if [ "${present_count}" != "6" ]; then
     echo "Terminology tables are not all present; skipping terminology preserve dump."
     return
   fi
@@ -120,6 +123,9 @@ dump_terminology_tables() {
   pg_dump --data-only \
     --table=public.meddra_terms \
     --table=public.whodrug_products \
+    --table=public.controlled_terminology_terms \
+    --table=public.mfds_products \
+    --table=public.mfds_product_substances \
     --table=public.terminology_releases \
     --file="${TERMINOLOGY_DUMP_FILE}" \
     "${SQL_EXEC_URL}"
@@ -130,6 +136,9 @@ set_terminology_user_triggers() {
   psql "${SQL_EXEC_URL}" -v ON_ERROR_STOP=1 <<SQL
 ALTER TABLE IF EXISTS public.meddra_terms ${trigger_state} TRIGGER USER;
 ALTER TABLE IF EXISTS public.whodrug_products ${trigger_state} TRIGGER USER;
+ALTER TABLE IF EXISTS public.controlled_terminology_terms ${trigger_state} TRIGGER USER;
+ALTER TABLE IF EXISTS public.mfds_products ${trigger_state} TRIGGER USER;
+ALTER TABLE IF EXISTS public.mfds_product_substances ${trigger_state} TRIGGER USER;
 ALTER TABLE IF EXISTS public.terminology_releases ${trigger_state} TRIGGER USER;
 SQL
 }

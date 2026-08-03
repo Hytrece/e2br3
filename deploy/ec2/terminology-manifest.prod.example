@@ -6,3 +6,7 @@
 
 meddra /opt/e2br3/terminology/incoming/<meddra-release>.zip <meddra-version> en
 whodrug /opt/e2br3/terminology/incoming/<whodrug-release>.zip <whodrug-version> en
+mfds-products /opt/e2br3/terminology/incoming/<mfds-products-release>.json <mfds-products-version> ko
+iso3166 /opt/e2br3/terminology/incoming/<iso3166-release>.json <iso3166-version> en
+ich-constrained-ucum /opt/e2br3/terminology/incoming/<ucum-release>.json <ucum-version> en
+edqm /opt/e2br3/terminology/incoming/<edqm-release>.json <edqm-version> en

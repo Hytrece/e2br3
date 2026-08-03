@@ -26,6 +26,10 @@ on:
         options:
           - meddra
           - whodrug
+          - mfds-products
+          - iso3166
+          - ich-constrained-ucum
+          - edqm
       input_path:
         description: "EC2 path to terminology source file"
         required: false
@@ -210,8 +214,8 @@ jobs:
         run: |
           set -eu
           case "${DICTIONARY}" in
-            meddra|whodrug) ;;
-            *) echo "dictionary must be meddra or whodrug" >&2; exit 1 ;;
+            meddra|whodrug|mfds-products|iso3166|ich-constrained-ucum|edqm) ;;
+            *) echo "unsupported dictionary" >&2; exit 1 ;;
           esac
           test -n "${INPUT_PATH}"
           test -n "${VERSION}"
@@ -251,6 +255,7 @@ jobs:
             '[
               "set -eu",
               "cd /opt/e2br3",
+              "git -c safe.directory=/opt/e2br3 pull --ff-only",
               $term_command
             ]'
           )"

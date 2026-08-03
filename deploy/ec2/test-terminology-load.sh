@@ -35,7 +35,7 @@ printf 'CMD=%s\n' "$*" >> "${DOCKER_LOG}"
 SH
 chmod +x "${BIN_DIR}/docker"
 
-touch "${INPUT_DIR}/meddra.zip" "${INPUT_DIR}/whodrug.zip"
+touch "${INPUT_DIR}/meddra.zip" "${INPUT_DIR}/whodrug.zip" "${INPUT_DIR}/mfds-products.json"
 
 PATH="${BIN_DIR}:${PATH}" \
 DOCKER_LOG="${LOG}" \
@@ -58,6 +58,19 @@ grep -F "CMD=compose --env-file .env.prod -f docker-compose.prod.yml run --rm -T
 grep -F "ARG_12=/terminology/incoming/whodrug.zip" "${LOG}" >/dev/null
 if grep -F -- "--dry-run" "${LOG}" >/dev/null; then
   echo "load mode must not pass --dry-run"
+  exit 1
+fi
+
+: > "${LOG}"
+PATH="${BIN_DIR}:${PATH}" \
+DOCKER_LOG="${LOG}" \
+APP_DIR="${APP_DIR}" \
+E2BR3_TERMINOLOGY_DIR="${TMP_DIR}/terminology" \
+sh "${SCRIPT}" --load mfds-products "${INPUT_DIR}/mfds-products.json" 2026.08 ko
+
+grep -F "CMD=compose --env-file .env.prod -f docker-compose.prod.yml run --rm -T terminology-loader mfds-products --input /terminology/incoming/mfds-products.json --version 2026.08" "${LOG}" >/dev/null
+if grep -F -- "--language" "${LOG}" >/dev/null; then
+  echo "mfds-products must not pass unsupported --language"
   exit 1
 fi
 
