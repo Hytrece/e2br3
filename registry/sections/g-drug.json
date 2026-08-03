@@ -2428,28 +2428,6 @@
     "notes": "Added from strict frontend inventory coverage; backend implementation is not yet present in the tracked BMC model inventory. Pending the official MFDS medical-device guideline; expected to receive an official KR device code when that source is imported."
   },
   {
-    "id": "G.k.local.drugAssessmentNotApplicable",
-    "e2br3_code": "G.k.local.drugAssessmentNotApplicable",
-    "label": "Drug Assessment Not Applicable UI Flag",
-    "section": "G",
-    "authority": "ICH",
-    "status": "not_applicable",
-    "local_only": true,
-    "backend": {
-      "status": "not_applicable",
-      "evidence": "drugAssessmentNotApplicable is a frontend workflow/control field, not an E2BR3 BMC business field in the tracked backend inventory."
-    },
-    "frontend": {
-      "status": "mapped",
-      "section": "drugs",
-      "field": "drugAssessmentNotApplicable",
-      "file": "../frontend/E2BR3-frontend/components/case-form/sections/SectionG.tsx",
-      "evidence": "Strict frontend input inventory extracts drugs.drugAssessmentNotApplicable from the case-form section source."
-    },
-    "action": "",
-    "notes": "Classified explicitly so frontend inventory remains exhaustive without forcing a false backend BMC mapping. UI/technical control only; intentionally not an E2BR3 data element."
-  },
-  {
     "id": "G.k.local.sourceProductPresaveId",
     "e2br3_code": "G.k.local.sourceProductPresaveId",
     "label": "Source Product Presave Identifier",
