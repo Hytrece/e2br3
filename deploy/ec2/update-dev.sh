@@ -6,9 +6,8 @@ BACKEND_IMAGE=ghcr.io/qvis-safety/e2br3-web-server:dev
 FRONTEND_IMAGE=ghcr.io/qvis-safety/e2br3-frontend:dev
 
 cd "${APP_DIR}"
-git config --global --add safe.directory "${APP_DIR}"
-git fetch origin dev
-git checkout --detach origin/dev
+sudo -u ec2-user git -C "${APP_DIR}" fetch origin dev
+sudo -u ec2-user git -C "${APP_DIR}" checkout --detach origin/dev
 set -a
 . "${APP_DIR}/.env.dev"
 set +a
