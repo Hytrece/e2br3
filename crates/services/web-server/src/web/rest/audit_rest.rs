@@ -206,7 +206,11 @@ pub async fn list_audit_logs_by_record(
 				.map(str::trim)
 				.filter(|field| !field.is_empty())
 			{
-				logs.retain(|log| audit_log_touches_field(log, field));
+				logs.retain(|log| {
+					field
+						.split(',')
+						.any(|field| audit_log_touches_field(log, field.trim()))
+				});
 			}
 			Ok((StatusCode::OK, Json(DataRestResult { data: logs })))
 		})
