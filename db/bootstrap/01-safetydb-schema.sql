@@ -588,6 +588,19 @@ CREATE TABLE source_documents (
 
 CREATE INDEX idx_source_documents_case ON source_documents(case_id);
 
+CREATE TABLE IF NOT EXISTS case_field_notations (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    case_id UUID NOT NULL REFERENCES cases(id) ON DELETE CASCADE,
+    record_id UUID,
+    field_path VARCHAR(255) NOT NULL,
+    notation TEXT NOT NULL,
+    created_by UUID NOT NULL REFERENCES users(id),
+    updated_by UUID REFERENCES users(id),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE NULLS NOT DISTINCT (case_id, record_id, field_path)
+);
+
 CREATE TABLE IF NOT EXISTS case_validation_summaries (
     case_id UUID NOT NULL REFERENCES cases(id) ON DELETE CASCADE,
     appendix VARCHAR(16) NOT NULL,

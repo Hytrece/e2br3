@@ -3,6 +3,7 @@ pub mod app_branding_rest;
 pub mod case_editor_dto;
 pub mod case_editor_rest;
 pub mod case_export_rest;
+pub mod case_field_notation_rest;
 pub mod case_intake_rest;
 pub mod case_query_catalog_rest;
 pub mod case_rest;

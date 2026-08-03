@@ -4,13 +4,13 @@ use lib_core::model::ModelManager;
 use lib_web::handlers::handlers_rest::rest_collection_item_routes;
 
 use crate::web::rest::{
-	audit_rest, case_editor_rest, case_export_rest, case_identifiers_rest,
-	case_intake_rest, case_rest, case_validation_rest, case_workflow_rest,
-	cioms_export_rest, drug_reaction_assessment_rest, drug_rest, drug_sub_rest,
-	message_header_rest, narrative_rest, narrative_sub_rest, parent_history_rest,
-	patient_rest, patient_sub_rest, reaction_rest, receiver_rest,
-	relatedness_assessment_rest, safety_report_rest, safety_report_sub_rest,
-	submission_rest, test_result_rest,
+	audit_rest, case_editor_rest, case_export_rest, case_field_notation_rest,
+	case_identifiers_rest, case_intake_rest, case_rest, case_validation_rest,
+	case_workflow_rest, cioms_export_rest, drug_reaction_assessment_rest, drug_rest,
+	drug_sub_rest, message_header_rest, narrative_rest, narrative_sub_rest,
+	parent_history_rest, patient_rest, patient_sub_rest, reaction_rest,
+	receiver_rest, relatedness_assessment_rest, safety_report_rest,
+	safety_report_sub_rest, submission_rest, test_result_rest,
 };
 
 /// Routes for /api/cases and nested subresources
@@ -18,6 +18,12 @@ pub fn routes_cases(mm: ModelManager) -> Router {
 	Router::new()
 		.route("/cases/list-view", get(case_rest::list_case_view_rows))
 		.route("/cases/link-options", get(case_rest::list_case_link_options))
+		.route(
+			"/cases/{case_id}/field-notation",
+			get(case_field_notation_rest::get_field_notation)
+				.put(case_field_notation_rest::save_field_notation)
+				.delete(case_field_notation_rest::delete_field_notation),
+		)
 		.route(
 			"/cases/export/xml",
 			axum::routing::post(case_export_rest::export_cases_zip),
