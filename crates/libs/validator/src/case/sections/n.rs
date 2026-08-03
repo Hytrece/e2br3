@@ -1,24 +1,11 @@
-use super::rule_table::{
-	e2b_datetime_date, eval_catalog_values, eval_constraints, eval_future_dates,
-	eval_length, eval_value, CatalogValueRule, ConstraintRule, DateValues,
-	FutureDateRule, LengthRule, RuleValue, ValueRule,
+use super::helpers::{
+	e2b_datetime_date, validate_constraint, validate_future_date, validate_length,
+	validate_value, DateValues, RuleValue,
 };
 use crate::allowed_value::ConstraintValue;
 use crate::{RegulatoryAuthority, RuleFacts, ValidationContext, ValidationIssue};
 use lib_core::model::message_header::MessageHeader;
 use std::borrow::Cow;
-
-struct NHeaderPresenceView {
-	value: Option<String>,
-}
-
-const N_HEADER_PRESENCE_RULES: &[CatalogValueRule<NHeaderPresenceView>] =
-	&[CatalogValueRule {
-		code: "ICH.N.REQUIRED",
-		path: |_| "messageHeader".to_string(),
-		value: |item| RuleValue::borrowed(item.value.as_deref(), None),
-		facts: |_| RuleFacts::default(),
-	}];
 
 fn message_type_code(header: &MessageHeader) -> Option<&str> {
 	Some(if header.message_type == "ichicsr" {
@@ -28,154 +15,218 @@ fn message_type_code(header: &MessageHeader) -> Option<&str> {
 	})
 }
 
-const N_VALUE_RULES: &[ValueRule<MessageHeader>] = &[
-	ValueRule {
-		code: "ICH.N.1.1.REQUIRED",
-		path: "messageHeader.messageType",
-		value: |header| {
-			RuleValue::borrowed(Some(header.message_type.as_str()), None)
-		},
-	},
-	ValueRule {
-		code: "ICH.N.1.2.REQUIRED",
-		path: "messageHeader.batchNumber",
-		value: |header| RuleValue::borrowed(header.batch_number.as_deref(), None),
-	},
-	ValueRule {
-		code: "ICH.N.1.3.REQUIRED",
-		path: "messageHeader.batchSenderIdentifier",
-		value: |header| {
-			RuleValue::borrowed(header.batch_sender_identifier.as_deref(), None)
-		},
-	},
-	ValueRule {
-		code: "ICH.N.1.4.REQUIRED",
-		path: "messageHeader.batchReceiverIdentifier",
-		value: |header| {
-			RuleValue::borrowed(header.batch_receiver_identifier.as_deref(), None)
-		},
-	},
-	ValueRule {
-		code: "ICH.N.1.5.REQUIRED",
-		path: "messageHeader.batchTransmissionDate",
-		value: |header| {
-			RuleValue::borrowed(
-				if header.batch_transmission_date.is_some() {
-					Some("1")
-				} else {
-					None
-				},
-				None,
-			)
-		},
-	},
-	ValueRule {
-		code: "ICH.N.2.r.1.REQUIRED",
-		path: "messageHeader.messageNumber",
-		value: |header| {
-			RuleValue::borrowed(Some(header.message_number.as_str()), None)
-		},
-	},
-	ValueRule {
-		code: "ICH.N.2.r.2.REQUIRED",
-		path: "messageHeader.messageSenderIdentifier",
-		value: |header| {
-			RuleValue::borrowed(
-				Some(header.message_sender_identifier.as_str()),
-				None,
-			)
-		},
-	},
-	ValueRule {
-		code: "ICH.N.2.r.3.REQUIRED",
-		path: "messageHeader.messageReceiverIdentifier",
-		value: |header| {
-			RuleValue::borrowed(
-				Some(header.message_receiver_identifier.as_str()),
-				None,
-			)
-		},
-	},
-	ValueRule {
-		code: "ICH.N.2.r.4.REQUIRED",
-		path: "messageHeader.messageDate",
-		value: |header| {
-			RuleValue::borrowed(Some(header.message_date.as_str()), None)
-		},
-	},
-];
+/// ICH.N.REQUIRED
+fn n(header: Option<&MessageHeader>, issues: &mut Vec<ValidationIssue>) {
+	validate_value(
+		issues,
+		"ICH.N.REQUIRED",
+		"messageHeader",
+		RuleValue::borrowed(header.map(|_| "present"), None),
+		RuleFacts::default(),
+	);
+}
 
-const N_FUTURE_DATE_RULES: &[FutureDateRule<MessageHeader>] = &[
-	FutureDateRule {
-		code: "ICH.N.1.5.FUTURE_DATE.FORBIDDEN",
-		path: "messageHeader.batchTransmissionDate",
-		dates: |header| {
-			DateValues::One(header.batch_transmission_date.map(|value| value.date()))
-		},
-	},
-	FutureDateRule {
-		code: "ICH.N.2.r.4.FUTURE_DATE.FORBIDDEN",
-		path: "messageHeader.messageDate",
-		dates: |header| {
-			DateValues::One(e2b_datetime_date(Some(header.message_date.as_str())))
-		},
-	},
-];
+/// ICH.N.1.1.REQUIRED
+/// ICH.N.1.1.ALLOWED.VALUE
+/// ICH.N.1.1.LENGTH.MAX
+fn n_1_1(
+	header: &MessageHeader,
+	validation_ctx: &ValidationContext,
+	issues: &mut Vec<ValidationIssue>,
+) {
+	const PATH: &str = "messageHeader.messageType";
+	validate_value(
+		issues,
+		"ICH.N.1.1.REQUIRED",
+		PATH,
+		RuleValue::borrowed(Some(header.message_type.as_str()), None),
+		RuleFacts::default(),
+	);
+	validate_constraint(
+		issues,
+		"ICH.N.1.1.ALLOWED.VALUE",
+		PATH,
+		ConstraintValue::Text(message_type_code(header).map(Cow::Borrowed)),
+		&validation_ctx.vocabulary,
+	);
+	validate_length(
+		issues,
+		"ICH.N.1.1.LENGTH.MAX",
+		PATH,
+		message_type_code(header),
+	);
+}
 
-const N_CONSTRAINT_RULES: &[ConstraintRule<MessageHeader>] = &[
-	ConstraintRule {
-		code: "ICH.N.2.r.4.ALLOWED.VALUE",
-		path: "messageHeader.messageDate",
-		value: |header| {
-			ConstraintValue::Text(Some(Cow::Borrowed(header.message_date.as_str())))
-		},
-	},
-	ConstraintRule {
-		code: "ICH.N.1.1.ALLOWED.VALUE",
-		path: "messageHeader.messageType",
-		value: |header| {
-			ConstraintValue::Text(message_type_code(header).map(Cow::Borrowed))
-		},
-	},
-];
+/// ICH.N.1.2.REQUIRED
+/// ICH.N.1.2.LENGTH.MAX
+fn n_1_2(header: &MessageHeader, issues: &mut Vec<ValidationIssue>) {
+	const PATH: &str = "messageHeader.batchNumber";
+	validate_value(
+		issues,
+		"ICH.N.1.2.REQUIRED",
+		PATH,
+		RuleValue::borrowed(header.batch_number.as_deref(), None),
+		RuleFacts::default(),
+	);
+	validate_length(
+		issues,
+		"ICH.N.1.2.LENGTH.MAX",
+		PATH,
+		header.batch_number.as_deref(),
+	);
+}
 
-const N_LENGTH_RULES: &[LengthRule<MessageHeader>] = &[
-	LengthRule {
-		code: "ICH.N.1.1.LENGTH.MAX",
-		path: "messageHeader.messageType",
-		value: message_type_code,
-	},
-	LengthRule {
-		code: "ICH.N.1.2.LENGTH.MAX",
-		path: "messageHeader.batchNumber",
-		value: |header| header.batch_number.as_deref(),
-	},
-	LengthRule {
-		code: "ICH.N.1.3.LENGTH.MAX",
-		path: "messageHeader.batchSenderIdentifier",
-		value: |header| header.batch_sender_identifier.as_deref(),
-	},
-	LengthRule {
-		code: "ICH.N.1.4.LENGTH.MAX",
-		path: "messageHeader.batchReceiverIdentifier",
-		value: |header| header.batch_receiver_identifier.as_deref(),
-	},
-	LengthRule {
-		code: "ICH.N.2.r.1.LENGTH.MAX",
-		path: "messageHeader.messageNumber",
-		value: |header| Some(header.message_number.as_str()),
-	},
-	LengthRule {
-		code: "ICH.N.2.r.2.LENGTH.MAX",
-		path: "messageHeader.messageSenderIdentifier",
-		value: |header| Some(header.message_sender_identifier.as_str()),
-	},
-	LengthRule {
-		code: "ICH.N.2.r.3.LENGTH.MAX",
-		path: "messageHeader.messageReceiverIdentifier",
-		value: |header| Some(header.message_receiver_identifier.as_str()),
-	},
-];
+/// ICH.N.1.3.REQUIRED
+/// ICH.N.1.3.LENGTH.MAX
+fn n_1_3(header: &MessageHeader, issues: &mut Vec<ValidationIssue>) {
+	const PATH: &str = "messageHeader.batchSenderIdentifier";
+	validate_value(
+		issues,
+		"ICH.N.1.3.REQUIRED",
+		PATH,
+		RuleValue::borrowed(header.batch_sender_identifier.as_deref(), None),
+		RuleFacts::default(),
+	);
+	validate_length(
+		issues,
+		"ICH.N.1.3.LENGTH.MAX",
+		PATH,
+		header.batch_sender_identifier.as_deref(),
+	);
+}
+
+/// ICH.N.1.4.REQUIRED
+/// ICH.N.1.4.LENGTH.MAX
+fn n_1_4(header: &MessageHeader, issues: &mut Vec<ValidationIssue>) {
+	const PATH: &str = "messageHeader.batchReceiverIdentifier";
+	validate_value(
+		issues,
+		"ICH.N.1.4.REQUIRED",
+		PATH,
+		RuleValue::borrowed(header.batch_receiver_identifier.as_deref(), None),
+		RuleFacts::default(),
+	);
+	validate_length(
+		issues,
+		"ICH.N.1.4.LENGTH.MAX",
+		PATH,
+		header.batch_receiver_identifier.as_deref(),
+	);
+}
+
+/// ICH.N.1.5.REQUIRED
+/// ICH.N.1.5.FUTURE_DATE.FORBIDDEN
+fn n_1_5(header: &MessageHeader, issues: &mut Vec<ValidationIssue>) {
+	const PATH: &str = "messageHeader.batchTransmissionDate";
+	validate_value(
+		issues,
+		"ICH.N.1.5.REQUIRED",
+		PATH,
+		RuleValue::borrowed(
+			if header.batch_transmission_date.is_some() {
+				Some("1")
+			} else {
+				None
+			},
+			None,
+		),
+		RuleFacts::default(),
+	);
+	validate_future_date(
+		issues,
+		"ICH.N.1.5.FUTURE_DATE.FORBIDDEN",
+		PATH,
+		DateValues::One(header.batch_transmission_date.map(|value| value.date())),
+	);
+}
+
+/// ICH.N.2.r.1.REQUIRED
+/// ICH.N.2.r.1.LENGTH.MAX
+fn n_2_r_1(header: &MessageHeader, issues: &mut Vec<ValidationIssue>) {
+	const PATH: &str = "messageHeader.messageNumber";
+	validate_value(
+		issues,
+		"ICH.N.2.r.1.REQUIRED",
+		PATH,
+		RuleValue::borrowed(Some(header.message_number.as_str()), None),
+		RuleFacts::default(),
+	);
+	validate_length(
+		issues,
+		"ICH.N.2.r.1.LENGTH.MAX",
+		PATH,
+		Some(header.message_number.as_str()),
+	);
+}
+
+/// ICH.N.2.r.2.REQUIRED
+/// ICH.N.2.r.2.LENGTH.MAX
+fn n_2_r_2(header: &MessageHeader, issues: &mut Vec<ValidationIssue>) {
+	const PATH: &str = "messageHeader.messageSenderIdentifier";
+	validate_value(
+		issues,
+		"ICH.N.2.r.2.REQUIRED",
+		PATH,
+		RuleValue::borrowed(Some(header.message_sender_identifier.as_str()), None),
+		RuleFacts::default(),
+	);
+	validate_length(
+		issues,
+		"ICH.N.2.r.2.LENGTH.MAX",
+		PATH,
+		Some(header.message_sender_identifier.as_str()),
+	);
+}
+
+/// ICH.N.2.r.3.REQUIRED
+/// ICH.N.2.r.3.LENGTH.MAX
+fn n_2_r_3(header: &MessageHeader, issues: &mut Vec<ValidationIssue>) {
+	const PATH: &str = "messageHeader.messageReceiverIdentifier";
+	validate_value(
+		issues,
+		"ICH.N.2.r.3.REQUIRED",
+		PATH,
+		RuleValue::borrowed(Some(header.message_receiver_identifier.as_str()), None),
+		RuleFacts::default(),
+	);
+	validate_length(
+		issues,
+		"ICH.N.2.r.3.LENGTH.MAX",
+		PATH,
+		Some(header.message_receiver_identifier.as_str()),
+	);
+}
+
+/// ICH.N.2.r.4.REQUIRED
+/// ICH.N.2.r.4.ALLOWED.VALUE
+/// ICH.N.2.r.4.FUTURE_DATE.FORBIDDEN
+fn n_2_r_4(
+	header: &MessageHeader,
+	validation_ctx: &ValidationContext,
+	issues: &mut Vec<ValidationIssue>,
+) {
+	const PATH: &str = "messageHeader.messageDate";
+	validate_value(
+		issues,
+		"ICH.N.2.r.4.REQUIRED",
+		PATH,
+		RuleValue::borrowed(Some(header.message_date.as_str()), None),
+		RuleFacts::default(),
+	);
+	validate_constraint(
+		issues,
+		"ICH.N.2.r.4.ALLOWED.VALUE",
+		PATH,
+		ConstraintValue::Text(Some(Cow::Borrowed(header.message_date.as_str()))),
+		&validation_ctx.vocabulary,
+	);
+	validate_future_date(
+		issues,
+		"ICH.N.2.r.4.FUTURE_DATE.FORBIDDEN",
+		PATH,
+		DateValues::One(e2b_datetime_date(Some(header.message_date.as_str()))),
+	);
+}
 
 pub(crate) fn collect(
 	issues: &mut Vec<ValidationIssue>,
@@ -190,44 +241,50 @@ pub(crate) fn collect_ich_issues(
 	validation_ctx: &ValidationContext,
 	issues: &mut Vec<ValidationIssue>,
 ) {
-	let header_presence = NHeaderPresenceView {
-		value: validation_ctx
-			.message_header
-			.as_ref()
-			.map(|_| "present".to_string()),
-	};
-	eval_catalog_values(
-		issues,
-		std::slice::from_ref(&header_presence),
-		N_HEADER_PRESENCE_RULES,
-	);
+	n(validation_ctx.message_header.as_ref(), issues);
 	if let Some(header) = validation_ctx.message_header.as_ref() {
-		eval_value(issues, header, N_VALUE_RULES);
-		eval_constraints(
-			issues,
-			header,
-			N_CONSTRAINT_RULES,
-			&validation_ctx.vocabulary,
-		);
-		eval_future_dates(issues, header, N_FUTURE_DATE_RULES);
-		eval_length(issues, header, N_LENGTH_RULES);
+		n_1_1(header, validation_ctx, issues);
+		n_1_2(header, issues);
+		n_1_3(header, issues);
+		n_1_4(header, issues);
+		n_1_5(header, issues);
+		n_2_r_1(header, issues);
+		n_2_r_2(header, issues);
+		n_2_r_3(header, issues);
+		n_2_r_4(header, validation_ctx, issues);
 	}
 }
 
 #[cfg(test)]
 pub(super) fn constraint_rule_codes() -> Vec<&'static str> {
-	N_CONSTRAINT_RULES.iter().map(|rule| rule.code).collect()
+	vec!["ICH.N.1.1.ALLOWED.VALUE", "ICH.N.2.r.4.ALLOWED.VALUE"]
 }
 
 #[cfg(test)]
-pub(super) fn table_rule_codes() -> Vec<&'static str> {
-	let mut codes = Vec::new();
-	codes.extend(super::rule_table::table_rule_codes(N_VALUE_RULES));
-	codes.extend(super::rule_table::table_rule_codes(N_FUTURE_DATE_RULES));
-	codes.extend(super::rule_table::table_rule_codes(N_CONSTRAINT_RULES));
-	codes.extend(super::rule_table::table_rule_codes(N_LENGTH_RULES));
-	codes.extend(super::rule_table::table_rule_codes(N_HEADER_PRESENCE_RULES));
-	codes
+pub(super) fn implemented_rule_codes() -> Vec<&'static str> {
+	vec![
+		"ICH.N.REQUIRED",
+		"ICH.N.1.1.REQUIRED",
+		"ICH.N.1.1.ALLOWED.VALUE",
+		"ICH.N.1.1.LENGTH.MAX",
+		"ICH.N.1.2.REQUIRED",
+		"ICH.N.1.2.LENGTH.MAX",
+		"ICH.N.1.3.REQUIRED",
+		"ICH.N.1.3.LENGTH.MAX",
+		"ICH.N.1.4.REQUIRED",
+		"ICH.N.1.4.LENGTH.MAX",
+		"ICH.N.1.5.REQUIRED",
+		"ICH.N.1.5.FUTURE_DATE.FORBIDDEN",
+		"ICH.N.2.r.1.REQUIRED",
+		"ICH.N.2.r.1.LENGTH.MAX",
+		"ICH.N.2.r.2.REQUIRED",
+		"ICH.N.2.r.2.LENGTH.MAX",
+		"ICH.N.2.r.3.REQUIRED",
+		"ICH.N.2.r.3.LENGTH.MAX",
+		"ICH.N.2.r.4.REQUIRED",
+		"ICH.N.2.r.4.ALLOWED.VALUE",
+		"ICH.N.2.r.4.FUTURE_DATE.FORBIDDEN",
+	]
 }
 
 #[cfg(test)]

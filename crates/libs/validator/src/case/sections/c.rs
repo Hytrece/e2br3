@@ -1,11 +1,6 @@
-use super::rule_table::{
-	e2b_datetime_date, eval_catalog_values, eval_conditional_indexed,
-	eval_constraints, eval_future_dates, eval_indexed, eval_indexed_constraints,
-	eval_indexed_length, eval_length, eval_nested_constraints, eval_nested_length,
-	eval_value, eval_violations, no_facts, CatalogValueRule, ConditionalIndexedRule,
-	ConstraintRule, DateValues, FutureDateRule, IndexedConstraintRule,
-	IndexedLengthRule, IndexedRule, LengthRule, NestedConstraintRule,
-	NestedLengthRule, RuleValue, ValueRule, ViolationRule,
+use super::helpers::{
+	e2b_datetime_date, validate_constraint, validate_future_date, validate_length,
+	validate_value, validate_violation, DateValues, RuleValue,
 };
 use crate::allowed_value::{true_marker_value, ConstraintValue};
 use crate::{
@@ -23,6 +18,7 @@ use lib_core::model::safety_report::{
 };
 use lib_core::model::{ModelManager, Result};
 use std::borrow::Cow;
+use std::collections::HashMap;
 
 fn is_later_than(
 	value: Option<sqlx::types::time::Date>,
@@ -37,249 +33,6 @@ fn index_from_sequence(sequence_number: i32, fallback_idx: usize) -> usize {
 		.and_then(|value| usize::try_from(value).ok())
 		.unwrap_or(fallback_idx)
 }
-
-struct CReportRegionalRuleView {
-	local_criteria_report_type: Option<String>,
-	combination_product_report_indicator: Option<String>,
-	facts: RuleFacts,
-}
-
-struct FdaStudyRuleView {
-	study_number: Option<String>,
-	cross_reported: Option<String>,
-	facts: RuleFacts,
-}
-
-const C_FDA_STUDY_CATALOG_VALUE_RULES: &[CatalogValueRule<FdaStudyRuleView>] = &[
-	CatalogValueRule {
-		code: "FDA.C.5.5a.REQUIRED",
-		path: |_| "studyInformation.sponsorStudyNumber".to_string(),
-		value: |item| RuleValue::borrowed(item.study_number.as_deref(), None),
-		facts: |item| item.facts,
-	},
-	CatalogValueRule {
-		code: "FDA.C.5.5b.REQUIRED",
-		path: |_| "studyInformation.sponsorStudyNumber".to_string(),
-		value: |item| RuleValue::borrowed(item.study_number.as_deref(), None),
-		facts: |item| item.facts,
-	},
-	CatalogValueRule {
-		code: "FDA.C.5.6.r.REQUIRED",
-		path: |_| "studyInformation.registrations.0.registrationNumber".to_string(),
-		value: |item| RuleValue::borrowed(item.cross_reported.as_deref(), None),
-		facts: |item| item.facts,
-	},
-];
-
-struct FdaReporterEmailRuleView {
-	index: usize,
-	email: Option<String>,
-	facts: RuleFacts,
-}
-
-const C_FDA_REPORTER_EMAIL_CATALOG_VALUE_RULES: &[CatalogValueRule<
-	FdaReporterEmailRuleView,
->] = &[CatalogValueRule {
-	code: "FDA.C.2.r.2.EMAIL.REQUIRED",
-	path: |item| format!("primarySources.{}.reporterEmail", item.index),
-	value: |item| RuleValue::borrowed(item.email.as_deref(), None),
-	facts: |item| item.facts,
-}];
-
-struct CIchPresenceRuleView {
-	path: String,
-	value: Option<String>,
-	facts: RuleFacts,
-}
-
-struct CIchNullablePresenceRuleView {
-	path: String,
-	value: Option<String>,
-	null_flavor: Option<String>,
-	facts: RuleFacts,
-}
-
-const C_ICH_C2R21_RULE: &[CatalogValueRule<CIchNullablePresenceRuleView>] =
-	&[CatalogValueRule {
-		code: "ICH.C.2.r.2.1.REQUIRED",
-		path: |item| item.path.clone(),
-		value: |item| {
-			RuleValue::borrowed(item.value.as_deref(), item.null_flavor.as_deref())
-		},
-		facts: |item| item.facts,
-	}];
-
-macro_rules! c_ich_presence_rule {
-	($name:ident, $code:literal) => {
-		const $name: &[CatalogValueRule<CIchPresenceRuleView>] =
-			&[CatalogValueRule {
-				code: $code,
-				path: |item| item.path.clone(),
-				value: |item| RuleValue::borrowed(item.value.as_deref(), None),
-				facts: |item| item.facts,
-			}];
-	};
-}
-
-c_ich_presence_rule!(C_ICH_C11_RULE, "ICH.C.1.1.REQUIRED");
-c_ich_presence_rule!(C_ICH_C1_ROOT_RULE, "ICH.C.1.REQUIRED");
-c_ich_presence_rule!(C_ICH_C12_RULE, "ICH.C.1.2.REQUIRED");
-c_ich_presence_rule!(C_ICH_C13_RULE, "ICH.C.1.3.REQUIRED");
-c_ich_presence_rule!(C_ICH_C14_RULE, "ICH.C.1.4.REQUIRED");
-c_ich_presence_rule!(C_ICH_C15_RULE, "ICH.C.1.5.REQUIRED");
-c_ich_presence_rule!(C_ICH_C17_RULE, "ICH.C.1.7.REQUIRED");
-c_ich_presence_rule!(C_ICH_C1112_RULE, "ICH.C.1.11.2.REQUIRED");
-c_ich_presence_rule!(C_ICH_C2R4_RULE, "ICH.C.2.r.4.REQUIRED");
-c_ich_presence_rule!(C_ICH_C2R5_RULE, "ICH.C.2.r.5.REQUIRED");
-c_ich_presence_rule!(C_ICH_C31_RULE, "ICH.C.3.1.REQUIRED");
-c_ich_presence_rule!(C_ICH_C32_RULE, "ICH.C.3.2.REQUIRED");
-c_ich_presence_rule!(C_ICH_C54_AGGREGATE_RULE, "ICH.C.5.4.REQUIRED");
-
-fn eval_c_ich_presence(
-	issues: &mut Vec<ValidationIssue>,
-	path: impl Into<String>,
-	value: Option<String>,
-	facts: RuleFacts,
-	rules: &[CatalogValueRule<CIchPresenceRuleView>],
-) {
-	let view = CIchPresenceRuleView {
-		path: path.into(),
-		value,
-		facts,
-	};
-	eval_catalog_values(issues, std::slice::from_ref(&view), rules);
-}
-
-fn eval_c_ich_nullable_presence(
-	issues: &mut Vec<ValidationIssue>,
-	path: impl Into<String>,
-	value: Option<String>,
-	null_flavor: Option<String>,
-	facts: RuleFacts,
-	rules: &[CatalogValueRule<CIchNullablePresenceRuleView>],
-) {
-	let view = CIchNullablePresenceRuleView {
-		path: path.into(),
-		value,
-		null_flavor,
-		facts,
-	};
-	eval_catalog_values(issues, std::slice::from_ref(&view), rules);
-}
-
-struct CDateRelationView {
-	path: String,
-	violated: bool,
-}
-
-macro_rules! c_date_relation_rule {
-	($name:ident, $code:literal) => {
-		const $name: &[ViolationRule<CDateRelationView>] = &[ViolationRule {
-			code: $code,
-			path: |item| item.path.clone(),
-			violated: |item| item.violated,
-		}];
-	};
-}
-
-c_date_relation_rule!(C_ICH_C14_AFTER_C12_RULE, "ICH.C.1.4.AFTER_C.1.2.FORBIDDEN");
-c_date_relation_rule!(C_ICH_C14_AFTER_C15_RULE, "ICH.C.1.4.AFTER_C.1.5.FORBIDDEN");
-c_date_relation_rule!(C_ICH_C15_AFTER_C12_RULE, "ICH.C.1.5.AFTER_C.1.2.FORBIDDEN");
-
-fn eval_c_date_relation(
-	issues: &mut Vec<ValidationIssue>,
-	path: &'static str,
-	violated: bool,
-	rules: &[ViolationRule<CDateRelationView>],
-) {
-	let view = CDateRelationView {
-		path: path.to_string(),
-		violated,
-	};
-	eval_violations(issues, std::slice::from_ref(&view), rules);
-}
-
-const C_FDA_CATALOG_VALUE_RULES: &[CatalogValueRule<CReportRegionalRuleView>] = &[
-	CatalogValueRule {
-		code: "FDA.C.1.7.1.REQUIRED",
-		path: |_| "safetyReportIdentification.localCriteriaReportType".to_string(),
-		value: |item| {
-			RuleValue::borrowed(item.local_criteria_report_type.as_deref(), None)
-		},
-		facts: |item| item.facts,
-	},
-	CatalogValueRule {
-		code: "FDA.C.1.12.REQUIRED",
-		path: |_| {
-			"safetyReportIdentification.combinationProductReportIndicator"
-				.to_string()
-		},
-		value: |item| {
-			RuleValue::borrowed(
-				item.combination_product_report_indicator.as_deref(),
-				None,
-			)
-		},
-		facts: |item| item.facts,
-	},
-	CatalogValueRule {
-		code: "FDA.C.1.12.RECOMMENDED",
-		path: |_| {
-			"safetyReportIdentification.combinationProductReportIndicator"
-				.to_string()
-		},
-		value: |item| {
-			RuleValue::borrowed(
-				item.combination_product_report_indicator.as_deref(),
-				None,
-			)
-		},
-		facts: |item| item.facts,
-	},
-];
-
-struct MfdsSenderRuleView {
-	path: String,
-	value: Option<String>,
-	facts: RuleFacts,
-}
-
-const C_MFDS_SENDER_CATALOG_VALUE_RULES: &[CatalogValueRule<MfdsSenderRuleView>] =
-	&[CatalogValueRule {
-		code: "MFDS.C.3.1.KR.1.REQUIRED",
-		path: |item| item.path.clone(),
-		value: |item| RuleValue::borrowed(item.value.as_deref(), None),
-		facts: |item| item.facts,
-	}];
-
-struct MfdsPrimarySourceRuleView {
-	path: String,
-	value: Option<String>,
-	facts: RuleFacts,
-}
-
-const C_MFDS_PRIMARY_SOURCE_CATALOG_VALUE_RULES: &[CatalogValueRule<
-	MfdsPrimarySourceRuleView,
->] = &[CatalogValueRule {
-	code: "MFDS.C.2.r.4.KR.1.REQUIRED",
-	path: |item| item.path.clone(),
-	value: |item| RuleValue::borrowed(item.value.as_deref(), None),
-	facts: |item| item.facts,
-}];
-
-struct MfdsStudyRuleView {
-	path: String,
-	value: Option<String>,
-	facts: RuleFacts,
-}
-
-const C_MFDS_STUDY_CATALOG_VALUE_RULES: &[CatalogValueRule<MfdsStudyRuleView>] =
-	&[CatalogValueRule {
-		code: "MFDS.C.5.4.KR.1.REQUIRED",
-		path: |item| item.path.clone(),
-		value: |item| RuleValue::borrowed(item.value.as_deref(), None),
-		facts: |item| item.facts,
-	}];
 
 pub(crate) async fn collect(
 	issues: &mut Vec<ValidationIssue>,
@@ -307,979 +60,1468 @@ pub(crate) async fn collect(
 	Ok(())
 }
 
-const C_VALUE_RULES: &[ValueRule<SafetyReportIdentification>] = &[
-	ValueRule {
-		code: "ICH.C.1.2.REQUIRED",
-		path: "safetyReportIdentification.transmissionDate",
-		value: |report| {
-			RuleValue::borrowed(report.transmission_date.as_deref(), None)
-		},
-	},
-	ValueRule {
-		code: "ICH.C.1.3.REQUIRED",
-		path: "safetyReportIdentification.reportType",
-		value: |report| RuleValue::borrowed(report.report_type.as_deref(), None),
-	},
-	ValueRule {
-		code: "ICH.C.1.4.REQUIRED",
-		path: "safetyReportIdentification.dateFirstReceivedFromSource",
-		value: |report| {
-			RuleValue::owned(
-				report
-					.date_first_received_from_source
-					.map(|v| v.to_string()),
-				None,
-			)
-		},
-	},
-	ValueRule {
-		code: "ICH.C.1.5.REQUIRED",
-		path: "safetyReportIdentification.dateOfMostRecentInformation",
-		value: |report| {
-			RuleValue::owned(
-				report
-					.date_of_most_recent_information
-					.map(|v| v.to_string()),
-				None,
-			)
-		},
-	},
-	ValueRule {
-		code: "ICH.C.1.7.REQUIRED",
-		path: "safetyReportIdentification.fulfilExpeditedCriteria",
-		value: |report| {
-			RuleValue::borrowed(
-				report
-					.fulfil_expedited_criteria
-					.map(|value| if value { "1" } else { "2" }),
-				report.fulfil_expedited_criteria_null_flavor.as_deref(),
-			)
-		},
-	},
-	ValueRule {
-		code: "ICH.C.1.8.1.REQUIRED",
-		path: "safetyReportIdentification.worldwideUniqueId",
-		value: |report| {
-			RuleValue::borrowed(report.worldwide_unique_id.as_deref(), None)
-		},
-	},
-	ValueRule {
-		code: "ICH.C.1.8.2.REQUIRED",
-		path: "safetyReportIdentification.firstSenderType",
-		value: |report| {
-			RuleValue::borrowed(report.first_sender_type.as_deref(), None)
-		},
-	},
-	ValueRule {
-		code: "ICH.C.1.6.1.REQUIRED",
-		path: "safetyReportIdentification.additionalDocumentsAvailable",
-		value: |report| {
-			RuleValue::borrowed(
-				report.additional_documents_available.map(|value| {
-					if value {
-						"true"
-					} else {
-						"false"
-					}
-				}),
-				None,
-			)
-		},
-	},
-	ValueRule {
-		code: "ICH.C.1.9.1.REQUIRED",
-		path: "safetyReportIdentification.otherCaseIdentifiersExist",
-		value: |report| {
-			RuleValue::borrowed(
-				report.other_case_identifiers_exist.map(|value| {
-					if value {
-						"true"
-					} else {
-						"false"
-					}
-				}),
-				report.other_case_identifiers_exist_null_flavor.as_deref(),
-			)
-		},
-	},
-];
+/// ICH.C.1.REQUIRED
+fn c_1(
+	report: Option<&SafetyReportIdentification>,
+	issues: &mut Vec<ValidationIssue>,
+) {
+	validate_value(
+		issues,
+		"ICH.C.1.REQUIRED",
+		"safetyReportIdentification",
+		RuleValue::borrowed(report.map(|_| "present"), None),
+		RuleFacts::default(),
+	);
+}
 
-const C_FUTURE_DATE_RULES: &[FutureDateRule<SafetyReportIdentification>] = &[
-	FutureDateRule {
-		code: "ICH.C.1.2.FUTURE_DATE.FORBIDDEN",
-		path: "safetyReportIdentification.transmissionDate",
-		dates: |report| {
-			DateValues::One(e2b_datetime_date(report.transmission_date.as_deref()))
-		},
-	},
-	FutureDateRule {
-		code: "ICH.C.1.4.FUTURE_DATE.FORBIDDEN",
-		path: "safetyReportIdentification.dateFirstReceivedFromSource",
-		dates: |report| DateValues::One(report.date_first_received_from_source),
-	},
-	FutureDateRule {
-		code: "ICH.C.1.5.FUTURE_DATE.FORBIDDEN",
-		path: "safetyReportIdentification.dateOfMostRecentInformation",
-		dates: |report| DateValues::One(report.date_of_most_recent_information),
-	},
-];
+/// ICH.C.1.1.REQUIRED
+/// ICH.C.1.1.LENGTH.MAX
+fn c_1_1(report: &SafetyReportIdentification, issues: &mut Vec<ValidationIssue>) {
+	validate_value(
+		issues,
+		"ICH.C.1.1.REQUIRED",
+		"safetyReportIdentification.safetyReportId",
+		RuleValue::borrowed(report.safety_report_id.as_deref(), None),
+		RuleFacts::default(),
+	);
+	validate_length(
+		issues,
+		"ICH.C.1.1.LENGTH.MAX",
+		"safetyReportIdentification.safetyReportId",
+		report.safety_report_id.as_deref(),
+	);
+}
 
-const C_CONSTRAINT_RULES: &[ConstraintRule<SafetyReportIdentification>] = &[
-	ConstraintRule {
-		code: "ICH.C.1.2.ALLOWED.VALUE",
-		path: "safetyReportIdentification.transmissionDate",
-		value: |report| {
-			ConstraintValue::Text(
-				report.transmission_date.as_deref().map(Cow::Borrowed),
-			)
-		},
-	},
-	ConstraintRule {
-		code: "ICH.C.1.3.ALLOWED.VALUE",
-		path: "safetyReportIdentification.reportType",
-		value: |report| {
-			ConstraintValue::Text(report.report_type.as_deref().map(Cow::Borrowed))
-		},
-	},
-	ConstraintRule {
-		code: "ICH.C.1.8.2.ALLOWED.VALUE",
-		path: "safetyReportIdentification.firstSenderType",
-		value: |report| {
-			ConstraintValue::Text(
-				report.first_sender_type.as_deref().map(Cow::Borrowed),
-			)
-		},
-	},
-	ConstraintRule {
-		code: "ICH.C.1.8.1.ALLOWED.VALUE",
-		path: "safetyReportIdentification.worldwideUniqueId",
-		value: |report| {
-			ConstraintValue::Text(
-				report.worldwide_unique_id.as_deref().map(Cow::Borrowed),
-			)
-		},
-	},
-	ConstraintRule {
-		code: "ICH.C.1.11.1.ALLOWED.VALUE",
-		path: "safetyReportIdentification.nullificationAmendmentCode",
-		value: |report| {
-			ConstraintValue::Text(
-				report.nullification_code.as_deref().map(Cow::Borrowed),
-			)
-		},
-	},
-	ConstraintRule {
-		code: "ICH.C.1.9.1.ALLOWED.VALUE",
-		path: "safetyReportIdentification.otherCaseIdentifiersExist",
-		value: |report| {
-			true_marker_value(
-				report.other_case_identifiers_exist,
-				report.other_case_identifiers_exist_null_flavor.as_deref(),
-			)
-		},
-	},
-];
+/// ICH.C.1.2.REQUIRED
+/// ICH.C.1.2.FUTURE_DATE.FORBIDDEN
+/// ICH.C.1.2.ALLOWED.VALUE
+fn c_1_2(
+	report: &SafetyReportIdentification,
+	vocabulary: &crate::context::VocabularyContext,
+	issues: &mut Vec<ValidationIssue>,
+) {
+	const PATH: &str = "safetyReportIdentification.transmissionDate";
+	validate_value(
+		issues,
+		"ICH.C.1.2.REQUIRED",
+		PATH,
+		RuleValue::borrowed(report.transmission_date.as_deref(), None),
+		RuleFacts::default(),
+	);
+	validate_future_date(
+		issues,
+		"ICH.C.1.2.FUTURE_DATE.FORBIDDEN",
+		PATH,
+		DateValues::One(e2b_datetime_date(report.transmission_date.as_deref())),
+	);
+	validate_constraint(
+		issues,
+		"ICH.C.1.2.ALLOWED.VALUE",
+		PATH,
+		ConstraintValue::Text(
+			report.transmission_date.as_deref().map(Cow::Borrowed),
+		),
+		vocabulary,
+	);
+}
 
-const C_LENGTH_RULES: &[LengthRule<SafetyReportIdentification>] = &[
-	LengthRule {
-		code: "ICH.C.1.1.LENGTH.MAX",
-		path: "safetyReportIdentification.safetyReportId",
-		value: |report| report.safety_report_id.as_deref(),
-	},
-	LengthRule {
-		code: "ICH.C.1.3.LENGTH.MAX",
-		path: "safetyReportIdentification.reportType",
-		value: |report| report.report_type.as_deref(),
-	},
-	LengthRule {
-		code: "ICH.C.1.8.1.LENGTH.MAX",
-		path: "safetyReportIdentification.worldwideUniqueId",
-		value: |report| report.worldwide_unique_id.as_deref(),
-	},
-	LengthRule {
-		code: "ICH.C.1.8.2.LENGTH.MAX",
-		path: "safetyReportIdentification.firstSenderType",
-		value: |report| report.first_sender_type.as_deref(),
-	},
-	LengthRule {
-		code: "ICH.C.1.11.1.LENGTH.MAX",
-		path: "safetyReportIdentification.nullificationAmendmentCode",
-		value: |report| report.nullification_code.as_deref(),
-	},
-	LengthRule {
-		code: "ICH.C.1.11.2.LENGTH.MAX",
-		path: "safetyReportIdentification.nullificationReason",
-		value: |report| report.nullification_reason.as_deref(),
-	},
-];
+/// ICH.C.1.3.REQUIRED
+/// ICH.C.1.3.ALLOWED.VALUE
+/// ICH.C.1.3.LENGTH.MAX
+fn c_1_3(
+	report: &SafetyReportIdentification,
+	vocabulary: &crate::context::VocabularyContext,
+	issues: &mut Vec<ValidationIssue>,
+) {
+	const PATH: &str = "safetyReportIdentification.reportType";
+	validate_value(
+		issues,
+		"ICH.C.1.3.REQUIRED",
+		PATH,
+		RuleValue::borrowed(report.report_type.as_deref(), None),
+		RuleFacts::default(),
+	);
+	validate_constraint(
+		issues,
+		"ICH.C.1.3.ALLOWED.VALUE",
+		PATH,
+		ConstraintValue::Text(report.report_type.as_deref().map(Cow::Borrowed)),
+		vocabulary,
+	);
+	validate_length(
+		issues,
+		"ICH.C.1.3.LENGTH.MAX",
+		PATH,
+		report.report_type.as_deref(),
+	);
+}
+
+/// ICH.C.1.4.REQUIRED
+/// ICH.C.1.4.FUTURE_DATE.FORBIDDEN
+/// ICH.C.1.4.AFTER_C.1.2.FORBIDDEN
+/// ICH.C.1.4.AFTER_C.1.5.FORBIDDEN
+fn c_1_4(report: &SafetyReportIdentification, issues: &mut Vec<ValidationIssue>) {
+	const PATH: &str = "safetyReportIdentification.dateFirstReceivedFromSource";
+	validate_value(
+		issues,
+		"ICH.C.1.4.REQUIRED",
+		PATH,
+		RuleValue::owned(
+			report
+				.date_first_received_from_source
+				.map(|value| value.to_string()),
+			None,
+		),
+		RuleFacts::default(),
+	);
+	validate_future_date(
+		issues,
+		"ICH.C.1.4.FUTURE_DATE.FORBIDDEN",
+		PATH,
+		DateValues::One(report.date_first_received_from_source),
+	);
+	validate_violation(
+		issues,
+		"ICH.C.1.4.AFTER_C.1.2.FORBIDDEN",
+		PATH,
+		is_later_than(
+			report.date_first_received_from_source,
+			e2b_datetime_date(report.transmission_date.as_deref()),
+		),
+	);
+	validate_violation(
+		issues,
+		"ICH.C.1.4.AFTER_C.1.5.FORBIDDEN",
+		PATH,
+		is_later_than(
+			report.date_first_received_from_source,
+			report.date_of_most_recent_information,
+		),
+	);
+}
+
+/// ICH.C.1.5.REQUIRED
+/// ICH.C.1.5.FUTURE_DATE.FORBIDDEN
+/// ICH.C.1.5.AFTER_C.1.2.FORBIDDEN
+fn c_1_5(report: &SafetyReportIdentification, issues: &mut Vec<ValidationIssue>) {
+	const PATH: &str = "safetyReportIdentification.dateOfMostRecentInformation";
+	validate_value(
+		issues,
+		"ICH.C.1.5.REQUIRED",
+		PATH,
+		RuleValue::owned(
+			report
+				.date_of_most_recent_information
+				.map(|value| value.to_string()),
+			None,
+		),
+		RuleFacts::default(),
+	);
+	validate_future_date(
+		issues,
+		"ICH.C.1.5.FUTURE_DATE.FORBIDDEN",
+		PATH,
+		DateValues::One(report.date_of_most_recent_information),
+	);
+	validate_violation(
+		issues,
+		"ICH.C.1.5.AFTER_C.1.2.FORBIDDEN",
+		PATH,
+		is_later_than(
+			report.date_of_most_recent_information,
+			e2b_datetime_date(report.transmission_date.as_deref()),
+		),
+	);
+}
+
+/// ICH.C.1.6.1.REQUIRED
+fn c_1_6_1(report: &SafetyReportIdentification, issues: &mut Vec<ValidationIssue>) {
+	validate_value(
+		issues,
+		"ICH.C.1.6.1.REQUIRED",
+		"safetyReportIdentification.additionalDocumentsAvailable",
+		RuleValue::borrowed(
+			report.additional_documents_available.map(|value| {
+				if value {
+					"true"
+				} else {
+					"false"
+				}
+			}),
+			None,
+		),
+		RuleFacts::default(),
+	);
+}
+
+/// ICH.C.1.7.REQUIRED
+fn c_1_7(report: &SafetyReportIdentification, issues: &mut Vec<ValidationIssue>) {
+	validate_value(
+		issues,
+		"ICH.C.1.7.REQUIRED",
+		"safetyReportIdentification.fulfilExpeditedCriteria",
+		RuleValue::borrowed(
+			report
+				.fulfil_expedited_criteria
+				.map(|value| if value { "1" } else { "2" }),
+			report.fulfil_expedited_criteria_null_flavor.as_deref(),
+		),
+		RuleFacts::default(),
+	);
+}
+
+/// ICH.C.1.8.1.REQUIRED
+/// ICH.C.1.8.1.ALLOWED.VALUE
+/// ICH.C.1.8.1.LENGTH.MAX
+fn c_1_8_1(
+	report: &SafetyReportIdentification,
+	vocabulary: &crate::context::VocabularyContext,
+	issues: &mut Vec<ValidationIssue>,
+) {
+	const PATH: &str = "safetyReportIdentification.worldwideUniqueId";
+	validate_value(
+		issues,
+		"ICH.C.1.8.1.REQUIRED",
+		PATH,
+		RuleValue::borrowed(report.worldwide_unique_id.as_deref(), None),
+		RuleFacts::default(),
+	);
+	validate_constraint(
+		issues,
+		"ICH.C.1.8.1.ALLOWED.VALUE",
+		PATH,
+		ConstraintValue::Text(
+			report.worldwide_unique_id.as_deref().map(Cow::Borrowed),
+		),
+		vocabulary,
+	);
+	validate_length(
+		issues,
+		"ICH.C.1.8.1.LENGTH.MAX",
+		PATH,
+		report.worldwide_unique_id.as_deref(),
+	);
+}
+
+/// ICH.C.1.8.2.REQUIRED
+/// ICH.C.1.8.2.ALLOWED.VALUE
+/// ICH.C.1.8.2.LENGTH.MAX
+fn c_1_8_2(
+	report: &SafetyReportIdentification,
+	vocabulary: &crate::context::VocabularyContext,
+	issues: &mut Vec<ValidationIssue>,
+) {
+	const PATH: &str = "safetyReportIdentification.firstSenderType";
+	validate_value(
+		issues,
+		"ICH.C.1.8.2.REQUIRED",
+		PATH,
+		RuleValue::borrowed(report.first_sender_type.as_deref(), None),
+		RuleFacts::default(),
+	);
+	validate_constraint(
+		issues,
+		"ICH.C.1.8.2.ALLOWED.VALUE",
+		PATH,
+		ConstraintValue::Text(
+			report.first_sender_type.as_deref().map(Cow::Borrowed),
+		),
+		vocabulary,
+	);
+	validate_length(
+		issues,
+		"ICH.C.1.8.2.LENGTH.MAX",
+		PATH,
+		report.first_sender_type.as_deref(),
+	);
+}
+
+/// ICH.C.1.9.1.REQUIRED
+/// ICH.C.1.9.1.ALLOWED.VALUE
+fn c_1_9_1(
+	report: &SafetyReportIdentification,
+	vocabulary: &crate::context::VocabularyContext,
+	issues: &mut Vec<ValidationIssue>,
+) {
+	const PATH: &str = "safetyReportIdentification.otherCaseIdentifiersExist";
+	validate_value(
+		issues,
+		"ICH.C.1.9.1.REQUIRED",
+		PATH,
+		RuleValue::borrowed(
+			report.other_case_identifiers_exist.map(|value| {
+				if value {
+					"true"
+				} else {
+					"false"
+				}
+			}),
+			report.other_case_identifiers_exist_null_flavor.as_deref(),
+		),
+		RuleFacts::default(),
+	);
+	validate_constraint(
+		issues,
+		"ICH.C.1.9.1.ALLOWED.VALUE",
+		PATH,
+		true_marker_value(
+			report.other_case_identifiers_exist,
+			report.other_case_identifiers_exist_null_flavor.as_deref(),
+		),
+		vocabulary,
+	);
+}
+
+/// ICH.C.1.11.1.ALLOWED.VALUE
+/// ICH.C.1.11.1.LENGTH.MAX
+fn c_1_11_1(
+	report: &SafetyReportIdentification,
+	vocabulary: &crate::context::VocabularyContext,
+	issues: &mut Vec<ValidationIssue>,
+) {
+	const PATH: &str = "safetyReportIdentification.nullificationAmendmentCode";
+	validate_constraint(
+		issues,
+		"ICH.C.1.11.1.ALLOWED.VALUE",
+		PATH,
+		ConstraintValue::Text(
+			report.nullification_code.as_deref().map(Cow::Borrowed),
+		),
+		vocabulary,
+	);
+	validate_length(
+		issues,
+		"ICH.C.1.11.1.LENGTH.MAX",
+		PATH,
+		report.nullification_code.as_deref(),
+	);
+}
+
+/// ICH.C.1.11.2.REQUIRED
+/// ICH.C.1.11.2.LENGTH.MAX
+fn c_1_11_2(report: &SafetyReportIdentification, issues: &mut Vec<ValidationIssue>) {
+	validate_value(
+		issues,
+		"ICH.C.1.11.2.REQUIRED",
+		"safetyReportIdentification.nullificationReason",
+		RuleValue::borrowed(report.nullification_reason.as_deref(), None),
+		RuleFacts {
+			ich_nullification_code_present: Some(has_text(
+				report.nullification_code.as_deref(),
+			)),
+			..RuleFacts::default()
+		},
+	);
+	validate_length(
+		issues,
+		"ICH.C.1.11.2.LENGTH.MAX",
+		"safetyReportIdentification.nullificationReason",
+		report.nullification_reason.as_deref(),
+	);
+}
 
 fn primary_source_regulatory_is_one(source: &PrimarySource) -> bool {
 	source.primary_source_regulatory.as_deref().map(str::trim) == Some("1")
 }
 
-const C_PRIMARY_SOURCE_ICH_RULES: &[ConditionalIndexedRule<PrimarySource>] =
-	&[ConditionalIndexedRule {
-		code: "ICH.C.2.r.3.REQUIRED",
-		path: |idx| format!("primarySources.{idx}.reporterCountry"),
-		trigger: primary_source_regulatory_is_one,
-		value: |source| {
+/// ICH.C.2.r.3.REQUIRED
+/// ICH.C.2.r.3.LENGTH.MAX
+/// ICH.C.2.r.3.VOCABULARY
+fn c_2_r_3(
+	idx: usize,
+	source: &PrimarySource,
+	vocabulary: &crate::context::VocabularyContext,
+	issues: &mut Vec<ValidationIssue>,
+) {
+	let path = format!("primarySources.{idx}.reporterCountry");
+	if primary_source_regulatory_is_one(source) {
+		validate_value(
+			issues,
+			"ICH.C.2.r.3.REQUIRED",
+			&path,
 			RuleValue::borrowed(
 				source.country_code.as_deref(),
 				source.country_code_null_flavor.as_deref(),
-			)
-		},
-		facts: no_facts,
-	}];
-
-const C_PRIMARY_SOURCE_FDA_RULES: &[ConditionalIndexedRule<PrimarySource>] =
-	&[ConditionalIndexedRule {
-		code: "FDA.C.2.r.2.8.REQUIRED",
-		path: |idx| format!("primarySources.{idx}.reporterEmail"),
-		trigger: |_| true,
-		value: |source| {
-			RuleValue::borrowed(
-				source.email.as_deref(),
-				source.email_null_flavor.as_deref(),
-			)
-		},
-		facts: no_facts,
-	}];
-
-const C_PRIMARY_SOURCE_LENGTH_RULES: &[IndexedLengthRule<PrimarySource>] = &[
-	IndexedLengthRule {
-		code: "ICH.C.2.r.1.1.LENGTH.MAX",
-		path: |idx| format!("primarySources.{idx}.reporterTitle"),
-		value: |source| source.reporter_title.as_deref(),
-	},
-	IndexedLengthRule {
-		code: "ICH.C.2.r.1.2.LENGTH.MAX",
-		path: |idx| format!("primarySources.{idx}.reporterGivenName"),
-		value: |source| source.reporter_given_name.as_deref(),
-	},
-	IndexedLengthRule {
-		code: "ICH.C.2.r.1.3.LENGTH.MAX",
-		path: |idx| format!("primarySources.{idx}.reporterMiddleName"),
-		value: |source| source.reporter_middle_name.as_deref(),
-	},
-	IndexedLengthRule {
-		code: "ICH.C.2.r.1.4.LENGTH.MAX",
-		path: |idx| format!("primarySources.{idx}.reporterFamilyName"),
-		value: |source| source.reporter_family_name.as_deref(),
-	},
-	IndexedLengthRule {
-		code: "ICH.C.2.r.2.1.LENGTH.MAX",
-		path: |idx| format!("primarySources.{idx}.reporterOrganization"),
-		value: |source| source.organization.as_deref(),
-	},
-	IndexedLengthRule {
-		code: "ICH.C.2.r.2.2.LENGTH.MAX",
-		path: |idx| format!("primarySources.{idx}.reporterDepartment"),
-		value: |source| source.department.as_deref(),
-	},
-	IndexedLengthRule {
-		code: "ICH.C.2.r.2.3.LENGTH.MAX",
-		path: |idx| format!("primarySources.{idx}.reporterStreet"),
-		value: |source| source.street.as_deref(),
-	},
-	IndexedLengthRule {
-		code: "ICH.C.2.r.2.4.LENGTH.MAX",
-		path: |idx| format!("primarySources.{idx}.reporterCity"),
-		value: |source| source.city.as_deref(),
-	},
-	IndexedLengthRule {
-		code: "ICH.C.2.r.2.5.LENGTH.MAX",
-		path: |idx| format!("primarySources.{idx}.reporterState"),
-		value: |source| source.state.as_deref(),
-	},
-	IndexedLengthRule {
-		code: "ICH.C.2.r.2.6.LENGTH.MAX",
-		path: |idx| format!("primarySources.{idx}.reporterPostcode"),
-		value: |source| source.postcode.as_deref(),
-	},
-	IndexedLengthRule {
-		code: "ICH.C.2.r.2.7.LENGTH.MAX",
-		path: |idx| format!("primarySources.{idx}.reporterTelephone"),
-		value: |source| source.telephone.as_deref(),
-	},
-	IndexedLengthRule {
-		code: "ICH.C.2.r.3.LENGTH.MAX",
-		path: |idx| format!("primarySources.{idx}.reporterCountry"),
-		value: |source| source.country_code.as_deref(),
-	},
-	IndexedLengthRule {
-		code: "ICH.C.2.r.4.LENGTH.MAX",
-		path: |idx| format!("primarySources.{idx}.qualification"),
-		value: |source| source.qualification.as_deref(),
-	},
-	IndexedLengthRule {
-		code: "ICH.C.2.r.5.LENGTH.MAX",
-		path: |idx| {
-			format!("primarySources.{idx}.primarySourceForRegulatoryPurposes")
-		},
-		value: |source| source.primary_source_regulatory.as_deref(),
-	},
-];
-
-const C_PRIMARY_SOURCE_CONSTRAINT_RULES: &[IndexedConstraintRule<PrimarySource>] = &[
-	IndexedConstraintRule {
-		code: "ICH.C.2.r.4.ALLOWED.VALUE",
-		path: |idx| format!("primarySources.{idx}.qualification"),
-		value: |source| {
-			ConstraintValue::Text(source.qualification.as_deref().map(Cow::Borrowed))
-		},
-	},
-	IndexedConstraintRule {
-		code: "ICH.C.2.r.5.ALLOWED.VALUE",
-		path: |idx| {
-			format!("primarySources.{idx}.primarySourceForRegulatoryPurposes")
-		},
-		value: |source| {
-			ConstraintValue::Text(
-				source
-					.primary_source_regulatory
-					.as_deref()
-					.map(Cow::Borrowed),
-			)
-		},
-	},
-	IndexedConstraintRule {
-		code: "ICH.C.2.r.3.VOCABULARY",
-		path: |idx| format!("primarySources.{idx}.reporterCountry"),
-		value: |source| {
-			ConstraintValue::Text(source.country_code.as_deref().map(Cow::Borrowed))
-		},
-	},
-];
-
-const C_SENDER_CONSTRAINT_RULES: &[ConstraintRule<SenderInformation>] = &[
-	ConstraintRule {
-		code: "ICH.C.3.1.ALLOWED.VALUE",
-		path: "senderInformation.senderType",
-		value: |sender| {
-			ConstraintValue::Text(sender.sender_type.as_deref().map(Cow::Borrowed))
-		},
-	},
-	ConstraintRule {
-		code: "ICH.C.3.4.5.VOCABULARY",
-		path: "senderInformation.countryCode",
-		value: |sender| {
-			ConstraintValue::Text(sender.country_code.as_deref().map(Cow::Borrowed))
-		},
-	},
-];
-
-const C_SENDER_LENGTH_RULES: &[LengthRule<SenderInformation>] = &[
-	LengthRule {
-		code: "ICH.C.3.1.LENGTH.MAX",
-		path: "senderInformation.senderType",
-		value: |sender| sender.sender_type.as_deref(),
-	},
-	LengthRule {
-		code: "ICH.C.3.2.LENGTH.MAX",
-		path: "senderInformation.organizationName",
-		value: |sender| sender.organization_name.as_deref(),
-	},
-	LengthRule {
-		code: "ICH.C.3.3.1.LENGTH.MAX",
-		path: "senderInformation.department",
-		value: |sender| sender.department.as_deref(),
-	},
-	LengthRule {
-		code: "ICH.C.3.3.2.LENGTH.MAX",
-		path: "senderInformation.personTitle",
-		value: |sender| sender.person_title.as_deref(),
-	},
-	LengthRule {
-		code: "ICH.C.3.3.3.LENGTH.MAX",
-		path: "senderInformation.personGivenName",
-		value: |sender| sender.person_given_name.as_deref(),
-	},
-	LengthRule {
-		code: "ICH.C.3.3.4.LENGTH.MAX",
-		path: "senderInformation.personMiddleName",
-		value: |sender| sender.person_middle_name.as_deref(),
-	},
-	LengthRule {
-		code: "ICH.C.3.3.5.LENGTH.MAX",
-		path: "senderInformation.personFamilyName",
-		value: |sender| sender.person_family_name.as_deref(),
-	},
-	LengthRule {
-		code: "ICH.C.3.4.1.LENGTH.MAX",
-		path: "senderInformation.streetAddress",
-		value: |sender| sender.street_address.as_deref(),
-	},
-	LengthRule {
-		code: "ICH.C.3.4.2.LENGTH.MAX",
-		path: "senderInformation.city",
-		value: |sender| sender.city.as_deref(),
-	},
-	LengthRule {
-		code: "ICH.C.3.4.3.LENGTH.MAX",
-		path: "senderInformation.state",
-		value: |sender| sender.state.as_deref(),
-	},
-	LengthRule {
-		code: "ICH.C.3.4.4.LENGTH.MAX",
-		path: "senderInformation.postcode",
-		value: |sender| sender.postcode.as_deref(),
-	},
-	LengthRule {
-		code: "ICH.C.3.4.5.LENGTH.MAX",
-		path: "senderInformation.countryCode",
-		value: |sender| sender.country_code.as_deref(),
-	},
-	LengthRule {
-		code: "ICH.C.3.4.6.LENGTH.MAX",
-		path: "senderInformation.telephone",
-		value: |sender| sender.telephone.as_deref(),
-	},
-	LengthRule {
-		code: "ICH.C.3.4.7.LENGTH.MAX",
-		path: "senderInformation.fax",
-		value: |sender| sender.fax.as_deref(),
-	},
-	LengthRule {
-		code: "ICH.C.3.4.8.LENGTH.MAX",
-		path: "senderInformation.email",
-		value: |sender| sender.email.as_deref(),
-	},
-];
-
-fn study_facts(_: &StudyInformation) -> RuleFacts {
-	RuleFacts {
-		ich_report_type_is_study: Some(true),
-		..RuleFacts::default()
+			),
+			RuleFacts::default(),
+		);
 	}
+	validate_length(
+		issues,
+		"ICH.C.2.r.3.LENGTH.MAX",
+		&path,
+		source.country_code.as_deref(),
+	);
+	validate_constraint(
+		issues,
+		"ICH.C.2.r.3.VOCABULARY",
+		&path,
+		ConstraintValue::Text(source.country_code.as_deref().map(Cow::Borrowed)),
+		vocabulary,
+	);
 }
 
-const C_DOCUMENT_RULES: &[IndexedRule<DocumentsHeldBySender>] = &[IndexedRule {
-	code: "ICH.C.1.6.1.r.1.REQUIRED",
-	path: |idx| format!("documentsHeldBySender.{idx}.documentDescription"),
-	value: |document| RuleValue::borrowed(document.title.as_deref(), None),
-	facts: no_facts,
-}];
+/// FDA.C.2.r.2.8.REQUIRED
+fn c_2_r_2_8(idx: usize, source: &PrimarySource, issues: &mut Vec<ValidationIssue>) {
+	let path = format!("primarySources.{idx}.reporterEmail");
+	validate_value(
+		issues,
+		"FDA.C.2.r.2.8.REQUIRED",
+		&path,
+		RuleValue::borrowed(
+			source.email.as_deref(),
+			source.email_null_flavor.as_deref(),
+		),
+		RuleFacts::default(),
+	);
+}
 
-const C_DOCUMENT_LENGTH_RULES: &[IndexedLengthRule<DocumentsHeldBySender>] =
-	&[IndexedLengthRule {
-		code: "ICH.C.1.6.1.r.1.LENGTH.MAX",
-		path: |idx| format!("documentsHeldBySender.{idx}.documentDescription"),
-		value: |document| document.title.as_deref(),
-	}];
-
-const C_DOCUMENT_CONSTRAINT_RULES: &[IndexedConstraintRule<
-	DocumentsHeldBySender,
->] = &[IndexedConstraintRule {
-	code: "ICH.C.1.6.1.r.2.ALLOWED.VALUE",
-	path: |idx| format!("documentsHeldBySender.{idx}.includedDocument"),
-	value: |document| {
-		ConstraintValue::Text(document.document_base64.as_deref().map(Cow::Borrowed))
-	},
-}];
-
-const C_OTHER_IDENTIFIER_RULES: &[IndexedRule<OtherCaseIdentifier>] = &[
-	IndexedRule {
-		code: "ICH.C.1.9.1.r.1.REQUIRED",
-		path: |idx| format!("otherCaseIdentifiers.{idx}.source"),
-		value: |identifier| {
-			RuleValue::borrowed(Some(identifier.source_of_identifier.as_str()), None)
-		},
-		facts: no_facts,
-	},
-	IndexedRule {
-		code: "ICH.C.1.9.1.r.2.REQUIRED",
-		path: |idx| format!("otherCaseIdentifiers.{idx}.caseIdentifier"),
-		value: |identifier| {
-			RuleValue::borrowed(Some(identifier.case_identifier.as_str()), None)
-		},
-		facts: no_facts,
-	},
-];
-
-const C_OTHER_IDENTIFIER_LENGTH_RULES: &[IndexedLengthRule<OtherCaseIdentifier>] = &[
-	IndexedLengthRule {
-		code: "ICH.C.1.9.1.r.1.LENGTH.MAX",
-		path: |idx| format!("otherCaseIdentifiers.{idx}.source"),
-		value: |identifier| Some(identifier.source_of_identifier.as_str()),
-	},
-	IndexedLengthRule {
-		code: "ICH.C.1.9.1.r.2.LENGTH.MAX",
-		path: |idx| format!("otherCaseIdentifiers.{idx}.caseIdentifier"),
-		value: |identifier| Some(identifier.case_identifier.as_str()),
-	},
-];
-
-const C_OTHER_IDENTIFIER_CONSTRAINT_RULES: &[IndexedConstraintRule<
-	OtherCaseIdentifier,
->] = &[IndexedConstraintRule {
-	code: "ICH.C.1.9.1.r.2.ALLOWED.VALUE",
-	path: |idx| format!("otherCaseIdentifiers.{idx}.caseIdentifier"),
-	value: |identifier| {
-		ConstraintValue::Text(Some(Cow::Borrowed(
-			identifier.case_identifier.as_str(),
-		)))
-	},
-}];
-
-const C_LINKED_REPORT_LENGTH_RULES: &[IndexedLengthRule<LinkedReportNumber>] =
-	&[IndexedLengthRule {
-		code: "ICH.C.1.10.r.LENGTH.MAX",
-		path: |idx| format!("linkedReports.{idx}.linkedReportNumber"),
-		value: |report| Some(report.linked_report_number.as_str()),
-	}];
-
-/// Study-only rules (C.1.3 report type = 2). Reached only inside the
-/// `report_type_is_study` gate, so `study_facts` hard-codes the satisfied
-/// condition, matching the previous hand-coded behavior.
-const C_STUDY_RULES: &[IndexedRule<StudyInformation>] = &[
-	IndexedRule {
-		code: "ICH.C.5.4.REQUIRED",
-		path: |idx| format!("studyInformation.{idx}.studyTypeReaction"),
-		value: |study| {
-			RuleValue::borrowed(study.study_type_reaction.as_deref(), None)
-		},
-		facts: study_facts,
-	},
-	IndexedRule {
-		code: "ICH.C.5.3.REQUIRED",
-		path: |idx| format!("studyInformation.{idx}.sponsorStudyNumber"),
-		value: |study| {
-			RuleValue::borrowed(study.sponsor_study_number.as_deref(), None)
-		},
-		facts: study_facts,
-	},
-];
-
-const C_STUDY_LENGTH_RULES: &[IndexedLengthRule<StudyInformation>] = &[
-	IndexedLengthRule {
-		code: "ICH.C.5.4.LENGTH.MAX",
-		path: |idx| format!("studyInformation.{idx}.studyTypeReaction"),
-		value: |study| study.study_type_reaction.as_deref(),
-	},
-	IndexedLengthRule {
-		code: "ICH.C.5.3.LENGTH.MAX",
-		path: |idx| format!("studyInformation.{idx}.sponsorStudyNumber"),
-		value: |study| study.sponsor_study_number.as_deref(),
-	},
-	IndexedLengthRule {
-		code: "ICH.C.5.2.LENGTH.MAX",
-		path: |idx| format!("studyInformation.{idx}.studyName"),
-		value: |study| study.study_name.as_deref(),
-	},
-];
-
-const C_STUDY_CONSTRAINT_RULES: &[IndexedConstraintRule<StudyInformation>] =
-	&[IndexedConstraintRule {
-		code: "ICH.C.5.4.ALLOWED.VALUE",
-		path: |idx| format!("studyInformation.{idx}.studyTypeReaction"),
-		value: |study| {
-			ConstraintValue::Text(
-				study.study_type_reaction.as_deref().map(Cow::Borrowed),
-			)
-		},
-	}];
-
-const C_LITERATURE_LENGTH_RULES: &[IndexedLengthRule<LiteratureReference>] =
-	&[IndexedLengthRule {
-		code: "ICH.C.4.r.1.LENGTH.MAX",
-		path: |idx| format!("literatureReferences.{idx}.referenceText"),
-		value: |reference| reference.reference_text.as_deref(),
-	}];
-
-const C_LITERATURE_CONSTRAINT_RULES: &[IndexedConstraintRule<
-	LiteratureReference,
->] = &[IndexedConstraintRule {
-	code: "ICH.C.4.r.2.ALLOWED.VALUE",
-	path: |idx| format!("literatureReferences.{idx}.documentBase64"),
-	value: |reference| {
-		ConstraintValue::Text(
-			reference.document_base64.as_deref().map(Cow::Borrowed),
-		)
-	},
-}];
-
-const C_STUDY_REGISTRATION_LENGTH_RULES: &[NestedLengthRule<
-	StudyRegistrationNumber,
->] = &[
-	NestedLengthRule {
-		code: "ICH.C.5.1.r.1.LENGTH.MAX",
-		path: |study_idx, idx| {
-			format!("studyInformation.{study_idx}.registrations.{idx}.registrationNumber")
-		},
-		value: |registration| Some(registration.registration_number.as_str()),
-	},
-	NestedLengthRule {
-		code: "ICH.C.5.1.r.2.LENGTH.MAX",
-		path: |study_idx, idx| {
-			format!("studyInformation.{study_idx}.registrations.{idx}.registrationCountry")
-		},
-		value: |registration| registration.country_code.as_deref(),
-	},
-];
-
-const C_STUDY_REGISTRATION_CONSTRAINT_RULES: &[NestedConstraintRule<
-	StudyRegistrationNumber,
->] =
-	&[NestedConstraintRule {
-		code: "ICH.C.5.1.r.2.VOCABULARY",
-		path: |study_idx, idx| {
-			format!("studyInformation.{study_idx}.registrations.{idx}.registrationCountry")
-		},
-		value: |registration| {
-			ConstraintValue::Text(
-				registration.country_code.as_deref().map(Cow::Borrowed),
-			)
-		},
-	}];
-
-pub(crate) fn collect_ich_issues(
-	validation_ctx: &ValidationContext,
+fn c_2_length(
+	idx: usize,
+	code: &str,
+	field: &str,
+	value: Option<&str>,
 	issues: &mut Vec<ValidationIssue>,
 ) {
-	let safety_report_id = validation_ctx
-		.safety_report
-		.as_ref()
-		.and_then(|report| report.safety_report_id.as_deref())
-		.map(str::to_string);
-	eval_c_ich_presence(
-		issues,
-		"safetyReportIdentification.safetyReportId",
-		safety_report_id,
-		RuleFacts::default(),
-		C_ICH_C11_RULE,
-	);
-	eval_c_ich_presence(
-		issues,
-		"safetyReportIdentification",
-		validation_ctx
-			.safety_report
-			.as_ref()
-			.map(|_| "present".to_string()),
-		RuleFacts::default(),
-		C_ICH_C1_ROOT_RULE,
-	);
+	let path = format!("primarySources.{idx}.{field}");
+	validate_length(issues, code, &path, value);
+}
 
-	if let Some(report) = validation_ctx.safety_report.as_ref() {
-		// One-to-one presence/value rules (C.1.2/1.3/1.4/1.5/1.7) are declared
-		// in `C_VALUE_RULES` and evaluated by this single loop.
-		eval_value(issues, report, C_VALUE_RULES);
-		eval_future_dates(issues, report, C_FUTURE_DATE_RULES);
-		eval_constraints(
-			issues,
-			report,
-			C_CONSTRAINT_RULES,
-			&validation_ctx.vocabulary,
-		);
-		eval_length(issues, report, C_LENGTH_RULES);
-		let transmission_date_for_compare =
-			e2b_datetime_date(report.transmission_date.as_deref());
-		eval_c_date_relation(
-			issues,
-			"safetyReportIdentification.dateFirstReceivedFromSource",
-			is_later_than(
-				report.date_first_received_from_source,
-				transmission_date_for_compare,
-			),
-			C_ICH_C14_AFTER_C12_RULE,
-		);
-		eval_c_date_relation(
-			issues,
-			"safetyReportIdentification.dateFirstReceivedFromSource",
-			is_later_than(
-				report.date_first_received_from_source,
-				report.date_of_most_recent_information,
-			),
-			C_ICH_C14_AFTER_C15_RULE,
-		);
-		eval_c_date_relation(
-			issues,
-			"safetyReportIdentification.dateOfMostRecentInformation",
-			is_later_than(
-				report.date_of_most_recent_information,
-				transmission_date_for_compare,
-			),
-			C_ICH_C15_AFTER_C12_RULE,
-		);
-		eval_c_ich_presence(
-			issues,
-			"safetyReportIdentification.nullificationReason",
-			report.nullification_reason.clone(),
-			RuleFacts {
-				ich_nullification_code_present: Some(has_text(
-					report.nullification_code.as_deref(),
-				)),
-				..RuleFacts::default()
-			},
-			C_ICH_C1112_RULE,
-		);
-	} else {
-		push_missing_safety_report_field_issues(issues);
-	}
+/// ICH.C.2.r.1.1.LENGTH.MAX
+fn c_2_r_1_1(idx: usize, source: &PrimarySource, issues: &mut Vec<ValidationIssue>) {
+	c_2_length(
+		idx,
+		"ICH.C.2.r.1.1.LENGTH.MAX",
+		"reporterTitle",
+		source.reporter_title.as_deref(),
+		issues,
+	);
+}
 
-	eval_conditional_indexed(
+/// ICH.C.2.r.1.2.LENGTH.MAX
+fn c_2_r_1_2(idx: usize, source: &PrimarySource, issues: &mut Vec<ValidationIssue>) {
+	c_2_length(
+		idx,
+		"ICH.C.2.r.1.2.LENGTH.MAX",
+		"reporterGivenName",
+		source.reporter_given_name.as_deref(),
 		issues,
-		&validation_ctx.primary_sources,
-		C_PRIMARY_SOURCE_ICH_RULES,
 	);
-	eval_indexed_length(
-		issues,
-		&validation_ctx.primary_sources,
-		C_PRIMARY_SOURCE_LENGTH_RULES,
-	);
-	eval_indexed_constraints(
-		issues,
-		&validation_ctx.primary_sources,
-		C_PRIMARY_SOURCE_CONSTRAINT_RULES,
-		&validation_ctx.vocabulary,
-	);
+}
 
-	eval_indexed(
+/// ICH.C.2.r.1.3.LENGTH.MAX
+fn c_2_r_1_3(idx: usize, source: &PrimarySource, issues: &mut Vec<ValidationIssue>) {
+	c_2_length(
+		idx,
+		"ICH.C.2.r.1.3.LENGTH.MAX",
+		"reporterMiddleName",
+		source.reporter_middle_name.as_deref(),
 		issues,
-		&validation_ctx.documents_held_by_sender,
-		C_DOCUMENT_RULES,
 	);
-	eval_indexed_constraints(
-		issues,
-		&validation_ctx.documents_held_by_sender,
-		C_DOCUMENT_CONSTRAINT_RULES,
-		&validation_ctx.vocabulary,
-	);
-	eval_indexed_length(
-		issues,
-		&validation_ctx.documents_held_by_sender,
-		C_DOCUMENT_LENGTH_RULES,
-	);
-	eval_indexed_length(
-		issues,
-		&validation_ctx.literature_references,
-		C_LITERATURE_LENGTH_RULES,
-	);
-	eval_indexed_constraints(
-		issues,
-		&validation_ctx.literature_references,
-		C_LITERATURE_CONSTRAINT_RULES,
-		&validation_ctx.vocabulary,
-	);
-	eval_indexed(
-		issues,
-		&validation_ctx.other_case_identifiers,
-		C_OTHER_IDENTIFIER_RULES,
-	);
-	eval_indexed_constraints(
-		issues,
-		&validation_ctx.other_case_identifiers,
-		C_OTHER_IDENTIFIER_CONSTRAINT_RULES,
-		&validation_ctx.vocabulary,
-	);
-	eval_indexed_length(
-		issues,
-		&validation_ctx.other_case_identifiers,
-		C_OTHER_IDENTIFIER_LENGTH_RULES,
-	);
-	eval_indexed_length(
-		issues,
-		&validation_ctx.linked_report_numbers,
-		C_LINKED_REPORT_LENGTH_RULES,
-	);
-	eval_indexed_length(issues, &validation_ctx.studies, C_STUDY_LENGTH_RULES);
-	eval_indexed_constraints(
-		issues,
-		&validation_ctx.studies,
-		C_STUDY_CONSTRAINT_RULES,
-		&validation_ctx.vocabulary,
-	);
-	eval_nested_length(
-		issues,
-		&validation_ctx.studies,
-		&validation_ctx.study_registrations,
-		|study| study.id,
-		|registration| registration.study_information_id,
-		|registration, fallback_idx| {
-			index_from_sequence(registration.sequence_number, fallback_idx)
-		},
-		C_STUDY_REGISTRATION_LENGTH_RULES,
-	);
-	eval_nested_constraints(
-		issues,
-		&validation_ctx.studies,
-		&validation_ctx.study_registrations,
-		|study| study.id,
-		|registration| registration.study_information_id,
-		|registration, fallback_idx| {
-			index_from_sequence(registration.sequence_number, fallback_idx)
-		},
-		C_STUDY_REGISTRATION_CONSTRAINT_RULES,
-		&validation_ctx.vocabulary,
-	);
+}
 
-	let report_type_is_study = validation_ctx
-		.safety_report
-		.as_ref()
-		.map(|report| report.report_type.as_deref().map(str::trim) == Some("2"))
-		.unwrap_or(false);
-	eval_c_ich_presence(
+/// ICH.C.2.r.1.4.LENGTH.MAX
+fn c_2_r_1_4(idx: usize, source: &PrimarySource, issues: &mut Vec<ValidationIssue>) {
+	c_2_length(
+		idx,
+		"ICH.C.2.r.1.4.LENGTH.MAX",
+		"reporterFamilyName",
+		source.reporter_family_name.as_deref(),
 		issues,
-		"studyInformation.0.studyTypeReaction",
-		(!validation_ctx.studies.is_empty()).then(|| "present".to_string()),
-		RuleFacts {
-			ich_report_type_is_study: Some(report_type_is_study),
-			..RuleFacts::default()
-		},
-		C_ICH_C54_AGGREGATE_RULE,
 	);
-	if report_type_is_study {
-		eval_indexed(issues, &validation_ctx.studies, C_STUDY_RULES);
-	}
-	let (reporter_organization, reporter_organization_null_flavor) = validation_ctx
-		.primary_sources
+}
+
+/// ICH.C.2.r.2.1.REQUIRED
+/// ICH.C.2.r.2.1.LENGTH.MAX
+fn c_2_r_2_1(
+	sources: &[PrimarySource],
+	report_type_is_study: bool,
+	issues: &mut Vec<ValidationIssue>,
+) {
+	let (value, null_flavor) = sources
 		.iter()
 		.find_map(|source| {
 			let value = source
 				.organization
 				.as_deref()
 				.map(str::trim)
-				.filter(|value| !value.is_empty())
-				.map(str::to_string);
+				.filter(|value| !value.is_empty());
 			let null_flavor = source
 				.organization_null_flavor
 				.as_deref()
 				.map(str::trim)
-				.filter(|value| !value.is_empty())
-				.map(str::to_string);
+				.filter(|value| !value.is_empty());
 			(value.is_some() || null_flavor.is_some())
 				.then_some((value, null_flavor))
 		})
 		.unwrap_or((None, None));
-	eval_c_ich_nullable_presence(
+	validate_value(
 		issues,
+		"ICH.C.2.r.2.1.REQUIRED",
 		"primarySources.0.reporterOrganization",
-		reporter_organization,
-		reporter_organization_null_flavor,
+		RuleValue::borrowed(value, null_flavor),
 		RuleFacts {
 			ich_report_type_is_study: Some(report_type_is_study),
 			..RuleFacts::default()
 		},
-		C_ICH_C2R21_RULE,
+	);
+	for (idx, source) in sources.iter().enumerate() {
+		c_2_length(
+			idx,
+			"ICH.C.2.r.2.1.LENGTH.MAX",
+			"reporterOrganization",
+			source.organization.as_deref(),
+			issues,
+		);
+	}
+}
+
+/// ICH.C.2.r.2.2.LENGTH.MAX
+fn c_2_r_2_2(idx: usize, source: &PrimarySource, issues: &mut Vec<ValidationIssue>) {
+	c_2_length(
+		idx,
+		"ICH.C.2.r.2.2.LENGTH.MAX",
+		"reporterDepartment",
+		source.department.as_deref(),
+		issues,
+	);
+}
+
+/// ICH.C.2.r.2.3.LENGTH.MAX
+fn c_2_r_2_3(idx: usize, source: &PrimarySource, issues: &mut Vec<ValidationIssue>) {
+	c_2_length(
+		idx,
+		"ICH.C.2.r.2.3.LENGTH.MAX",
+		"reporterStreet",
+		source.street.as_deref(),
+		issues,
+	);
+}
+
+/// ICH.C.2.r.2.4.LENGTH.MAX
+fn c_2_r_2_4(idx: usize, source: &PrimarySource, issues: &mut Vec<ValidationIssue>) {
+	c_2_length(
+		idx,
+		"ICH.C.2.r.2.4.LENGTH.MAX",
+		"reporterCity",
+		source.city.as_deref(),
+		issues,
+	);
+}
+
+/// ICH.C.2.r.2.5.LENGTH.MAX
+fn c_2_r_2_5(idx: usize, source: &PrimarySource, issues: &mut Vec<ValidationIssue>) {
+	c_2_length(
+		idx,
+		"ICH.C.2.r.2.5.LENGTH.MAX",
+		"reporterState",
+		source.state.as_deref(),
+		issues,
+	);
+}
+
+/// ICH.C.2.r.2.6.LENGTH.MAX
+fn c_2_r_2_6(idx: usize, source: &PrimarySource, issues: &mut Vec<ValidationIssue>) {
+	c_2_length(
+		idx,
+		"ICH.C.2.r.2.6.LENGTH.MAX",
+		"reporterPostcode",
+		source.postcode.as_deref(),
+		issues,
+	);
+}
+
+/// ICH.C.2.r.2.7.LENGTH.MAX
+fn c_2_r_2_7(idx: usize, source: &PrimarySource, issues: &mut Vec<ValidationIssue>) {
+	c_2_length(
+		idx,
+		"ICH.C.2.r.2.7.LENGTH.MAX",
+		"reporterTelephone",
+		source.telephone.as_deref(),
+		issues,
+	);
+}
+
+/// ICH.C.2.r.4.REQUIRED
+/// ICH.C.2.r.4.ALLOWED.VALUE
+/// ICH.C.2.r.4.LENGTH.MAX
+fn c_2_r_4(
+	idx: usize,
+	source: &PrimarySource,
+	vocabulary: &crate::context::VocabularyContext,
+	issues: &mut Vec<ValidationIssue>,
+) {
+	let path = format!("primarySources.{idx}.qualification");
+	if has_any_primary_source_content(source) {
+		validate_value(
+			issues,
+			"ICH.C.2.r.4.REQUIRED",
+			&path,
+			RuleValue::borrowed(source.qualification.as_deref(), None),
+			RuleFacts::default(),
+		);
+	}
+	validate_constraint(
+		issues,
+		"ICH.C.2.r.4.ALLOWED.VALUE",
+		&path,
+		ConstraintValue::Text(source.qualification.as_deref().map(Cow::Borrowed)),
+		vocabulary,
+	);
+	validate_length(
+		issues,
+		"ICH.C.2.r.4.LENGTH.MAX",
+		&path,
+		source.qualification.as_deref(),
+	);
+}
+
+/// ICH.C.2.r.5.REQUIRED
+/// ICH.C.2.r.5.ALLOWED.VALUE
+/// ICH.C.2.r.5.LENGTH.MAX
+fn c_2_r_5(
+	sources: &[PrimarySource],
+	vocabulary: &crate::context::VocabularyContext,
+	issues: &mut Vec<ValidationIssue>,
+) {
+	for (idx, source) in sources.iter().enumerate() {
+		let path =
+			format!("primarySources.{idx}.primarySourceForRegulatoryPurposes");
+		validate_constraint(
+			issues,
+			"ICH.C.2.r.5.ALLOWED.VALUE",
+			&path,
+			ConstraintValue::Text(
+				source
+					.primary_source_regulatory
+					.as_deref()
+					.map(Cow::Borrowed),
+			),
+			vocabulary,
+		);
+		validate_length(
+			issues,
+			"ICH.C.2.r.5.LENGTH.MAX",
+			&path,
+			source.primary_source_regulatory.as_deref(),
+		);
+	}
+	validate_value(
+		issues,
+		"ICH.C.2.r.5.REQUIRED",
+		"primarySources.0.primarySourceForRegulatoryPurposes",
+		RuleValue::borrowed(
+			sources
+				.iter()
+				.any(primary_source_regulatory_is_one)
+				.then_some("present"),
+			None,
+		),
+		RuleFacts::default(),
+	);
+}
+
+fn c_3_length(
+	code: &str,
+	field: &str,
+	value: Option<&str>,
+	issues: &mut Vec<ValidationIssue>,
+) {
+	let path = format!("senderInformation.{field}");
+	validate_length(issues, code, &path, value);
+}
+
+/// ICH.C.3.1.REQUIRED
+/// ICH.C.3.1.ALLOWED.VALUE
+/// ICH.C.3.1.LENGTH.MAX
+fn c_3_1(
+	sender: Option<&SenderInformation>,
+	vocabulary: &crate::context::VocabularyContext,
+	issues: &mut Vec<ValidationIssue>,
+) {
+	const PATH: &str = "senderInformation.senderType";
+	let value = sender.and_then(|sender| sender.sender_type.as_deref());
+	validate_value(
+		issues,
+		"ICH.C.3.1.REQUIRED",
+		PATH,
+		RuleValue::borrowed(value, None),
+		RuleFacts::default(),
+	);
+	validate_constraint(
+		issues,
+		"ICH.C.3.1.ALLOWED.VALUE",
+		PATH,
+		ConstraintValue::Text(value.map(Cow::Borrowed)),
+		vocabulary,
+	);
+	validate_length(issues, "ICH.C.3.1.LENGTH.MAX", PATH, value);
+}
+
+/// ICH.C.3.2.REQUIRED
+/// ICH.C.3.2.LENGTH.MAX
+fn c_3_2(sender: Option<&SenderInformation>, issues: &mut Vec<ValidationIssue>) {
+	const PATH: &str = "senderInformation.organizationName";
+	let value = sender.and_then(|sender| sender.organization_name.as_deref());
+	validate_value(
+		issues,
+		"ICH.C.3.2.REQUIRED",
+		PATH,
+		RuleValue::borrowed(value, None),
+		RuleFacts {
+			ich_sender_organization_required: Some(
+				sender
+					.and_then(|sender| sender.sender_type.as_deref())
+					.map(str::trim) != Some("7"),
+			),
+			..RuleFacts::default()
+		},
+	);
+	validate_length(issues, "ICH.C.3.2.LENGTH.MAX", PATH, value);
+}
+
+/// ICH.C.3.3.1.LENGTH.MAX
+fn c_3_3_1(sender: &SenderInformation, issues: &mut Vec<ValidationIssue>) {
+	c_3_length(
+		"ICH.C.3.3.1.LENGTH.MAX",
+		"department",
+		sender.department.as_deref(),
+		issues,
+	);
+}
+
+/// ICH.C.3.3.2.LENGTH.MAX
+fn c_3_3_2(sender: &SenderInformation, issues: &mut Vec<ValidationIssue>) {
+	c_3_length(
+		"ICH.C.3.3.2.LENGTH.MAX",
+		"personTitle",
+		sender.person_title.as_deref(),
+		issues,
+	);
+}
+
+/// ICH.C.3.3.3.LENGTH.MAX
+fn c_3_3_3(sender: &SenderInformation, issues: &mut Vec<ValidationIssue>) {
+	c_3_length(
+		"ICH.C.3.3.3.LENGTH.MAX",
+		"personGivenName",
+		sender.person_given_name.as_deref(),
+		issues,
+	);
+}
+
+/// ICH.C.3.3.4.LENGTH.MAX
+fn c_3_3_4(sender: &SenderInformation, issues: &mut Vec<ValidationIssue>) {
+	c_3_length(
+		"ICH.C.3.3.4.LENGTH.MAX",
+		"personMiddleName",
+		sender.person_middle_name.as_deref(),
+		issues,
+	);
+}
+
+/// ICH.C.3.3.5.LENGTH.MAX
+fn c_3_3_5(sender: &SenderInformation, issues: &mut Vec<ValidationIssue>) {
+	c_3_length(
+		"ICH.C.3.3.5.LENGTH.MAX",
+		"personFamilyName",
+		sender.person_family_name.as_deref(),
+		issues,
+	);
+}
+
+/// ICH.C.3.4.1.LENGTH.MAX
+fn c_3_4_1(sender: &SenderInformation, issues: &mut Vec<ValidationIssue>) {
+	c_3_length(
+		"ICH.C.3.4.1.LENGTH.MAX",
+		"streetAddress",
+		sender.street_address.as_deref(),
+		issues,
+	);
+}
+
+/// ICH.C.3.4.2.LENGTH.MAX
+fn c_3_4_2(sender: &SenderInformation, issues: &mut Vec<ValidationIssue>) {
+	c_3_length(
+		"ICH.C.3.4.2.LENGTH.MAX",
+		"city",
+		sender.city.as_deref(),
+		issues,
+	);
+}
+
+/// ICH.C.3.4.3.LENGTH.MAX
+fn c_3_4_3(sender: &SenderInformation, issues: &mut Vec<ValidationIssue>) {
+	c_3_length(
+		"ICH.C.3.4.3.LENGTH.MAX",
+		"state",
+		sender.state.as_deref(),
+		issues,
+	);
+}
+
+/// ICH.C.3.4.4.LENGTH.MAX
+fn c_3_4_4(sender: &SenderInformation, issues: &mut Vec<ValidationIssue>) {
+	c_3_length(
+		"ICH.C.3.4.4.LENGTH.MAX",
+		"postcode",
+		sender.postcode.as_deref(),
+		issues,
+	);
+}
+
+/// ICH.C.3.4.5.VOCABULARY
+/// ICH.C.3.4.5.LENGTH.MAX
+fn c_3_4_5(
+	sender: &SenderInformation,
+	vocabulary: &crate::context::VocabularyContext,
+	issues: &mut Vec<ValidationIssue>,
+) {
+	const PATH: &str = "senderInformation.countryCode";
+	validate_constraint(
+		issues,
+		"ICH.C.3.4.5.VOCABULARY",
+		PATH,
+		ConstraintValue::Text(sender.country_code.as_deref().map(Cow::Borrowed)),
+		vocabulary,
+	);
+	validate_length(
+		issues,
+		"ICH.C.3.4.5.LENGTH.MAX",
+		PATH,
+		sender.country_code.as_deref(),
+	);
+}
+
+/// ICH.C.3.4.6.LENGTH.MAX
+fn c_3_4_6(sender: &SenderInformation, issues: &mut Vec<ValidationIssue>) {
+	c_3_length(
+		"ICH.C.3.4.6.LENGTH.MAX",
+		"telephone",
+		sender.telephone.as_deref(),
+		issues,
+	);
+}
+
+/// ICH.C.3.4.7.LENGTH.MAX
+fn c_3_4_7(sender: &SenderInformation, issues: &mut Vec<ValidationIssue>) {
+	c_3_length(
+		"ICH.C.3.4.7.LENGTH.MAX",
+		"fax",
+		sender.fax.as_deref(),
+		issues,
+	);
+}
+
+/// ICH.C.3.4.8.LENGTH.MAX
+fn c_3_4_8(sender: &SenderInformation, issues: &mut Vec<ValidationIssue>) {
+	c_3_length(
+		"ICH.C.3.4.8.LENGTH.MAX",
+		"email",
+		sender.email.as_deref(),
+		issues,
+	);
+}
+
+/// ICH.C.1.6.1.r.1.REQUIRED
+/// ICH.C.1.6.1.r.1.LENGTH.MAX
+fn c_1_6_1_r_1(
+	idx: usize,
+	document: &DocumentsHeldBySender,
+	issues: &mut Vec<ValidationIssue>,
+) {
+	let path = format!("documentsHeldBySender.{idx}.documentDescription");
+	validate_value(
+		issues,
+		"ICH.C.1.6.1.r.1.REQUIRED",
+		&path,
+		RuleValue::borrowed(document.title.as_deref(), None),
+		RuleFacts::default(),
+	);
+	validate_length(
+		issues,
+		"ICH.C.1.6.1.r.1.LENGTH.MAX",
+		&path,
+		document.title.as_deref(),
+	);
+}
+
+/// ICH.C.1.6.1.r.2.ALLOWED.VALUE
+fn c_1_6_1_r_2(
+	idx: usize,
+	document: &DocumentsHeldBySender,
+	vocabulary: &crate::context::VocabularyContext,
+	issues: &mut Vec<ValidationIssue>,
+) {
+	let path = format!("documentsHeldBySender.{idx}.includedDocument");
+	validate_constraint(
+		issues,
+		"ICH.C.1.6.1.r.2.ALLOWED.VALUE",
+		&path,
+		ConstraintValue::Text(
+			document.document_base64.as_deref().map(Cow::Borrowed),
+		),
+		vocabulary,
+	);
+}
+
+/// ICH.C.1.9.1.r.1.REQUIRED
+/// ICH.C.1.9.1.r.1.LENGTH.MAX
+fn c_1_9_1_r_1(
+	idx: usize,
+	identifier: &OtherCaseIdentifier,
+	issues: &mut Vec<ValidationIssue>,
+) {
+	let path = format!("otherCaseIdentifiers.{idx}.source");
+	validate_value(
+		issues,
+		"ICH.C.1.9.1.r.1.REQUIRED",
+		&path,
+		RuleValue::borrowed(Some(identifier.source_of_identifier.as_str()), None),
+		RuleFacts::default(),
+	);
+	validate_length(
+		issues,
+		"ICH.C.1.9.1.r.1.LENGTH.MAX",
+		&path,
+		Some(identifier.source_of_identifier.as_str()),
+	);
+}
+
+/// ICH.C.1.9.1.r.2.REQUIRED
+/// ICH.C.1.9.1.r.2.ALLOWED.VALUE
+/// ICH.C.1.9.1.r.2.LENGTH.MAX
+fn c_1_9_1_r_2(
+	idx: usize,
+	identifier: &OtherCaseIdentifier,
+	vocabulary: &crate::context::VocabularyContext,
+	issues: &mut Vec<ValidationIssue>,
+) {
+	let path = format!("otherCaseIdentifiers.{idx}.caseIdentifier");
+	let value = Some(identifier.case_identifier.as_str());
+	validate_value(
+		issues,
+		"ICH.C.1.9.1.r.2.REQUIRED",
+		&path,
+		RuleValue::borrowed(value, None),
+		RuleFacts::default(),
+	);
+	validate_constraint(
+		issues,
+		"ICH.C.1.9.1.r.2.ALLOWED.VALUE",
+		&path,
+		ConstraintValue::Text(value.map(Cow::Borrowed)),
+		vocabulary,
+	);
+	validate_length(issues, "ICH.C.1.9.1.r.2.LENGTH.MAX", &path, value);
+}
+
+/// ICH.C.1.10.r.LENGTH.MAX
+fn c_1_10_r(
+	idx: usize,
+	report: &LinkedReportNumber,
+	issues: &mut Vec<ValidationIssue>,
+) {
+	let path = format!("linkedReports.{idx}.linkedReportNumber");
+	validate_length(
+		issues,
+		"ICH.C.1.10.r.LENGTH.MAX",
+		&path,
+		Some(report.linked_report_number.as_str()),
+	);
+}
+
+/// ICH.C.4.r.1.LENGTH.MAX
+fn c_4_r_1(
+	idx: usize,
+	reference: &LiteratureReference,
+	issues: &mut Vec<ValidationIssue>,
+) {
+	let path = format!("literatureReferences.{idx}.referenceText");
+	validate_length(
+		issues,
+		"ICH.C.4.r.1.LENGTH.MAX",
+		&path,
+		reference.reference_text.as_deref(),
+	);
+}
+
+/// ICH.C.4.r.2.ALLOWED.VALUE
+fn c_4_r_2(
+	idx: usize,
+	reference: &LiteratureReference,
+	vocabulary: &crate::context::VocabularyContext,
+	issues: &mut Vec<ValidationIssue>,
+) {
+	let path = format!("literatureReferences.{idx}.documentBase64");
+	validate_constraint(
+		issues,
+		"ICH.C.4.r.2.ALLOWED.VALUE",
+		&path,
+		ConstraintValue::Text(
+			reference.document_base64.as_deref().map(Cow::Borrowed),
+		),
+		vocabulary,
+	);
+}
+
+/// ICH.C.5.1.r.1.LENGTH.MAX
+fn c_5_1_r_1(
+	study_idx: usize,
+	idx: usize,
+	registration: &StudyRegistrationNumber,
+	issues: &mut Vec<ValidationIssue>,
+) {
+	let path = format!(
+		"studyInformation.{study_idx}.registrations.{idx}.registrationNumber"
+	);
+	validate_length(
+		issues,
+		"ICH.C.5.1.r.1.LENGTH.MAX",
+		&path,
+		Some(registration.registration_number.as_str()),
+	);
+}
+
+/// ICH.C.5.1.r.2.LENGTH.MAX
+/// ICH.C.5.1.r.2.VOCABULARY
+fn c_5_1_r_2(
+	study_idx: usize,
+	idx: usize,
+	registration: &StudyRegistrationNumber,
+	vocabulary: &crate::context::VocabularyContext,
+	issues: &mut Vec<ValidationIssue>,
+) {
+	let path = format!(
+		"studyInformation.{study_idx}.registrations.{idx}.registrationCountry"
+	);
+	validate_length(
+		issues,
+		"ICH.C.5.1.r.2.LENGTH.MAX",
+		&path,
+		registration.country_code.as_deref(),
+	);
+	validate_constraint(
+		issues,
+		"ICH.C.5.1.r.2.VOCABULARY",
+		&path,
+		ConstraintValue::Text(
+			registration.country_code.as_deref().map(Cow::Borrowed),
+		),
+		vocabulary,
+	);
+}
+
+/// ICH.C.5.2.LENGTH.MAX
+fn c_5_2(idx: usize, study: &StudyInformation, issues: &mut Vec<ValidationIssue>) {
+	let path = format!("studyInformation.{idx}.studyName");
+	validate_length(
+		issues,
+		"ICH.C.5.2.LENGTH.MAX",
+		&path,
+		study.study_name.as_deref(),
+	);
+}
+
+/// ICH.C.5.3.REQUIRED
+/// ICH.C.5.3.LENGTH.MAX
+fn c_5_3(
+	idx: usize,
+	study: &StudyInformation,
+	report_type_is_study: bool,
+	issues: &mut Vec<ValidationIssue>,
+) {
+	let path = format!("studyInformation.{idx}.sponsorStudyNumber");
+	if report_type_is_study {
+		validate_value(
+			issues,
+			"ICH.C.5.3.REQUIRED",
+			&path,
+			RuleValue::borrowed(study.sponsor_study_number.as_deref(), None),
+			RuleFacts {
+				ich_report_type_is_study: Some(true),
+				..RuleFacts::default()
+			},
+		);
+	}
+	validate_length(
+		issues,
+		"ICH.C.5.3.LENGTH.MAX",
+		&path,
+		study.sponsor_study_number.as_deref(),
+	);
+}
+
+/// ICH.C.5.4.REQUIRED
+/// ICH.C.5.4.ALLOWED.VALUE
+/// ICH.C.5.4.LENGTH.MAX
+fn c_5_4(
+	studies: &[StudyInformation],
+	report_type_is_study: bool,
+	vocabulary: &crate::context::VocabularyContext,
+	issues: &mut Vec<ValidationIssue>,
+) {
+	validate_value(
+		issues,
+		"ICH.C.5.4.REQUIRED",
+		"studyInformation.0.studyTypeReaction",
+		RuleValue::borrowed((!studies.is_empty()).then_some("present"), None),
+		RuleFacts {
+			ich_report_type_is_study: Some(report_type_is_study),
+			..RuleFacts::default()
+		},
+	);
+	for (idx, study) in studies.iter().enumerate() {
+		let path = format!("studyInformation.{idx}.studyTypeReaction");
+		if report_type_is_study {
+			validate_value(
+				issues,
+				"ICH.C.5.4.REQUIRED",
+				&path,
+				RuleValue::borrowed(study.study_type_reaction.as_deref(), None),
+				RuleFacts {
+					ich_report_type_is_study: Some(true),
+					..RuleFacts::default()
+				},
+			);
+		}
+		validate_constraint(
+			issues,
+			"ICH.C.5.4.ALLOWED.VALUE",
+			&path,
+			ConstraintValue::Text(
+				study.study_type_reaction.as_deref().map(Cow::Borrowed),
+			),
+			vocabulary,
+		);
+		validate_length(
+			issues,
+			"ICH.C.5.4.LENGTH.MAX",
+			&path,
+			study.study_type_reaction.as_deref(),
+		);
+	}
+}
+
+pub(crate) fn collect_ich_issues(
+	validation_ctx: &ValidationContext,
+	issues: &mut Vec<ValidationIssue>,
+) {
+	c_1(validation_ctx.safety_report.as_ref(), issues);
+	if let Some(report) = validation_ctx.safety_report.as_ref() {
+		c_1_1(report, issues);
+		c_1_2(report, &validation_ctx.vocabulary, issues);
+		c_1_3(report, &validation_ctx.vocabulary, issues);
+		c_1_4(report, issues);
+		c_1_5(report, issues);
+		c_1_6_1(report, issues);
+		c_1_7(report, issues);
+		c_1_8_1(report, &validation_ctx.vocabulary, issues);
+		c_1_8_2(report, &validation_ctx.vocabulary, issues);
+		c_1_9_1(report, &validation_ctx.vocabulary, issues);
+		c_1_11_1(report, &validation_ctx.vocabulary, issues);
+		c_1_11_2(report, issues);
+	} else {
+		push_missing_safety_report_field_issues(issues);
+	}
+
+	let report_type_is_study =
+		validation_ctx.safety_report.as_ref().is_some_and(|report| {
+			report.report_type.as_deref().map(str::trim) == Some("2")
+		});
+	for (idx, source) in validation_ctx.primary_sources.iter().enumerate() {
+		c_2_r_3(idx, source, &validation_ctx.vocabulary, issues);
+		c_2_r_4(idx, source, &validation_ctx.vocabulary, issues);
+		c_2_r_1_1(idx, source, issues);
+		c_2_r_1_2(idx, source, issues);
+		c_2_r_1_3(idx, source, issues);
+		c_2_r_1_4(idx, source, issues);
+		c_2_r_2_2(idx, source, issues);
+		c_2_r_2_3(idx, source, issues);
+		c_2_r_2_4(idx, source, issues);
+		c_2_r_2_5(idx, source, issues);
+		c_2_r_2_6(idx, source, issues);
+		c_2_r_2_7(idx, source, issues);
+		c_2_r_2_8(idx, source, issues);
+	}
+	c_2_r_2_1(
+		&validation_ctx.primary_sources,
+		report_type_is_study,
+		issues,
+	);
+	c_2_r_5(
+		&validation_ctx.primary_sources,
+		&validation_ctx.vocabulary,
+		issues,
 	);
 
-	if let Some(sender) = validation_ctx.sender.as_ref() {
-		eval_length(issues, sender, C_SENDER_LENGTH_RULES);
-		eval_constraints(
-			issues,
-			sender,
-			C_SENDER_CONSTRAINT_RULES,
+	for (idx, document) in validation_ctx.documents_held_by_sender.iter().enumerate()
+	{
+		c_1_6_1_r_1(idx, document, issues);
+		c_1_6_1_r_2(idx, document, &validation_ctx.vocabulary, issues);
+	}
+	for (idx, reference) in validation_ctx.literature_references.iter().enumerate() {
+		c_4_r_1(idx, reference, issues);
+		c_4_r_2(idx, reference, &validation_ctx.vocabulary, issues);
+	}
+	for (idx, identifier) in validation_ctx.other_case_identifiers.iter().enumerate()
+	{
+		c_1_9_1_r_1(idx, identifier, issues);
+		c_1_9_1_r_2(idx, identifier, &validation_ctx.vocabulary, issues);
+	}
+	for (idx, report) in validation_ctx.linked_report_numbers.iter().enumerate() {
+		c_1_10_r(idx, report, issues);
+	}
+	for (idx, study) in validation_ctx.studies.iter().enumerate() {
+		c_5_2(idx, study, issues);
+		c_5_3(idx, study, report_type_is_study, issues);
+	}
+	c_5_4(
+		&validation_ctx.studies,
+		report_type_is_study,
+		&validation_ctx.vocabulary,
+		issues,
+	);
+	let study_indices = validation_ctx
+		.studies
+		.iter()
+		.enumerate()
+		.map(|(idx, study)| (study.id, idx))
+		.collect::<HashMap<_, _>>();
+	let mut fallback_idx_by_study = HashMap::new();
+	for registration in &validation_ctx.study_registrations {
+		let study_id = registration.study_information_id;
+		let Some(study_idx) = study_indices.get(&study_id).copied() else {
+			continue;
+		};
+		let fallback_idx = fallback_idx_by_study.entry(study_id).or_insert(0);
+		let idx = index_from_sequence(registration.sequence_number, *fallback_idx);
+		*fallback_idx += 1;
+		c_5_1_r_1(study_idx, idx, registration, issues);
+		c_5_1_r_2(
+			study_idx,
+			idx,
+			registration,
 			&validation_ctx.vocabulary,
-		);
-		eval_c_ich_presence(
 			issues,
-			"senderInformation.senderType",
-			sender.sender_type.clone(),
-			RuleFacts::default(),
-			C_ICH_C31_RULE,
 		);
-		eval_c_ich_presence(
-			issues,
-			"senderInformation.organizationName",
-			sender.organization_name.clone(),
-			RuleFacts {
-				ich_sender_organization_required: Some(
-					sender.sender_type.as_deref().map(str::trim) != Some("7"),
-				),
-				..RuleFacts::default()
-			},
-			C_ICH_C32_RULE,
-		);
-	} else {
-		eval_c_ich_presence(
-			issues,
-			"senderInformation.senderType",
-			None,
-			RuleFacts::default(),
-			C_ICH_C31_RULE,
-		);
-		eval_c_ich_presence(
-			issues,
-			"senderInformation.organizationName",
-			None,
-			RuleFacts {
-				ich_sender_organization_required: Some(true),
-				..RuleFacts::default()
-			},
-			C_ICH_C32_RULE,
-		);
+	}
+
+	c_3_1(
+		validation_ctx.sender.as_ref(),
+		&validation_ctx.vocabulary,
+		issues,
+	);
+	c_3_2(validation_ctx.sender.as_ref(), issues);
+	if let Some(sender) = validation_ctx.sender.as_ref() {
+		c_3_3_1(sender, issues);
+		c_3_3_2(sender, issues);
+		c_3_3_3(sender, issues);
+		c_3_3_4(sender, issues);
+		c_3_3_5(sender, issues);
+		c_3_4_1(sender, issues);
+		c_3_4_2(sender, issues);
+		c_3_4_3(sender, issues);
+		c_3_4_4(sender, issues);
+		c_3_4_5(sender, &validation_ctx.vocabulary, issues);
+		c_3_4_6(sender, issues);
+		c_3_4_7(sender, issues);
+		c_3_4_8(sender, issues);
 	}
 
 	if validation_ctx.primary_sources.is_empty() {
-		eval_c_ich_presence(
+		crate::push_issue_by_code(
 			issues,
+			"ICH.C.2.r.4.REQUIRED",
 			"primarySources.0.qualification",
-			None,
-			RuleFacts::default(),
-			C_ICH_C2R4_RULE,
 		);
 	}
-
-	eval_c_ich_presence(
-		issues,
-		"primarySources.0.primarySourceForRegulatoryPurposes",
-		validation_ctx
-			.primary_sources
-			.iter()
-			.any(|source| {
-				source.primary_source_regulatory.as_deref().map(str::trim)
-					== Some("1")
-			})
-			.then(|| "present".to_string()),
-		RuleFacts::default(),
-		C_ICH_C2R5_RULE,
-	);
-
-	eval_conditional_indexed(
-		issues,
-		&validation_ctx.primary_sources,
-		C_PRIMARY_SOURCE_FDA_RULES,
-	);
-
-	validation_ctx
-		.primary_sources
-		.iter()
-		.enumerate()
-		.for_each(|(idx, source)| {
-			if !has_any_primary_source_content(source) {
-				return;
-			}
-			eval_c_ich_presence(
-				issues,
-				format!("primarySources.{idx}.qualification"),
-				source.qualification.clone(),
-				RuleFacts::default(),
-				C_ICH_C2R4_RULE,
-			);
-		});
 }
 
 fn push_missing_safety_report_field_issues(issues: &mut Vec<ValidationIssue>) {
-	for (rules, path) in [
+	for (code, path) in [
 		(
-			C_ICH_C12_RULE,
+			"ICH.C.1.1.REQUIRED",
+			"safetyReportIdentification.safetyReportId",
+		),
+		(
+			"ICH.C.1.2.REQUIRED",
 			"safetyReportIdentification.transmissionDate",
 		),
-		(C_ICH_C13_RULE, "safetyReportIdentification.reportType"),
 		(
-			C_ICH_C14_RULE,
+			"ICH.C.1.3.REQUIRED",
+			"safetyReportIdentification.reportType",
+		),
+		(
+			"ICH.C.1.4.REQUIRED",
 			"safetyReportIdentification.dateFirstReceivedFromSource",
 		),
 		(
-			C_ICH_C15_RULE,
+			"ICH.C.1.5.REQUIRED",
 			"safetyReportIdentification.dateOfMostRecentInformation",
 		),
 		(
-			C_ICH_C17_RULE,
+			"ICH.C.1.7.REQUIRED",
 			"safetyReportIdentification.fulfilExpeditedCriteria",
 		),
 	] {
-		eval_c_ich_presence(issues, path, None, RuleFacts::default(), rules);
+		crate::push_issue_by_code(issues, code, path);
 	}
+}
+
+/// FDA.C.1.7.1.REQUIRED
+fn fda_c_1_7_1(
+	value: Option<&str>,
+	facts: RuleFacts,
+	issues: &mut Vec<ValidationIssue>,
+) {
+	validate_value(
+		issues,
+		"FDA.C.1.7.1.REQUIRED",
+		"safetyReportIdentification.localCriteriaReportType",
+		RuleValue::borrowed(value, None),
+		facts,
+	);
+}
+
+/// FDA.C.1.12.REQUIRED
+/// FDA.C.1.12.RECOMMENDED
+fn fda_c_1_12(
+	value: Option<&str>,
+	facts: RuleFacts,
+	issues: &mut Vec<ValidationIssue>,
+) {
+	const PATH: &str =
+		"safetyReportIdentification.combinationProductReportIndicator";
+	for code in ["FDA.C.1.12.REQUIRED", "FDA.C.1.12.RECOMMENDED"] {
+		validate_value(issues, code, PATH, RuleValue::borrowed(value, None), facts);
+	}
+}
+
+/// FDA.C.2.r.2.EMAIL.REQUIRED
+fn fda_c_2_r_2_email(
+	idx: usize,
+	value: Option<&str>,
+	issues: &mut Vec<ValidationIssue>,
+) {
+	let path = format!("primarySources.{idx}.reporterEmail");
+	validate_value(
+		issues,
+		"FDA.C.2.r.2.EMAIL.REQUIRED",
+		&path,
+		RuleValue::borrowed(value, None),
+		RuleFacts {
+			fda_primary_source_present: Some(true),
+			..RuleFacts::default()
+		},
+	);
+}
+
+/// FDA.C.5.5a.REQUIRED
+fn fda_c_5_5a(
+	study_number: Option<&str>,
+	facts: RuleFacts,
+	issues: &mut Vec<ValidationIssue>,
+) {
+	validate_value(
+		issues,
+		"FDA.C.5.5a.REQUIRED",
+		"studyInformation.sponsorStudyNumber",
+		RuleValue::borrowed(study_number, None),
+		facts,
+	);
+}
+
+/// FDA.C.5.5b.REQUIRED
+fn fda_c_5_5b(
+	study_number: Option<&str>,
+	facts: RuleFacts,
+	issues: &mut Vec<ValidationIssue>,
+) {
+	validate_value(
+		issues,
+		"FDA.C.5.5b.REQUIRED",
+		"studyInformation.sponsorStudyNumber",
+		RuleValue::borrowed(study_number, None),
+		facts,
+	);
+}
+
+/// FDA.C.5.6.r.REQUIRED
+fn fda_c_5_6_r(
+	has_cross_reported: bool,
+	facts: RuleFacts,
+	issues: &mut Vec<ValidationIssue>,
+) {
+	validate_value(
+		issues,
+		"FDA.C.5.6.r.REQUIRED",
+		"studyInformation.registrations.0.registrationNumber",
+		RuleValue::borrowed(has_cross_reported.then_some("present"), None),
+		facts,
+	);
+}
+
+/// MFDS.C.3.1.KR.1.REQUIRED
+fn mfds_c_3_1_kr_1(
+	idx: usize,
+	value: Option<&str>,
+	sender_is_health_professional: bool,
+	issues: &mut Vec<ValidationIssue>,
+) {
+	let path = format!("senderInformation.{idx}.healthProfessionalTypeKr1");
+	validate_value(
+		issues,
+		"MFDS.C.3.1.KR.1.REQUIRED",
+		&path,
+		RuleValue::borrowed(value, None),
+		RuleFacts {
+			mfds_sender_type_is_health_professional: Some(
+				sender_is_health_professional,
+			),
+			..RuleFacts::default()
+		},
+	);
+}
+
+/// MFDS.C.2.r.4.KR.1.REQUIRED
+fn mfds_c_2_r_4_kr_1(
+	idx: usize,
+	value: Option<&str>,
+	qualification_is_three: bool,
+	issues: &mut Vec<ValidationIssue>,
+) {
+	let path = format!("primarySources.{idx}.qualificationKr1");
+	validate_value(
+		issues,
+		"MFDS.C.2.r.4.KR.1.REQUIRED",
+		&path,
+		RuleValue::borrowed(value, None),
+		RuleFacts {
+			mfds_primary_source_qualification_is_three: Some(qualification_is_three),
+			..RuleFacts::default()
+		},
+	);
+}
+
+/// MFDS.C.5.4.KR.1.REQUIRED
+fn mfds_c_5_4_kr_1(
+	idx: usize,
+	value: Option<&str>,
+	study_type_is_three: bool,
+	issues: &mut Vec<ValidationIssue>,
+) {
+	let path = format!("studyInformation.{idx}.studyTypeReactionKr1");
+	validate_value(
+		issues,
+		"MFDS.C.5.4.KR.1.REQUIRED",
+		&path,
+		RuleValue::borrowed(value, None),
+		RuleFacts {
+			mfds_study_type_reaction_is_three: Some(study_type_is_three),
+			..RuleFacts::default()
+		},
+	);
 }
 
 pub(crate) async fn collect_fda_issues(
@@ -1290,26 +1532,21 @@ pub(crate) async fn collect_fda_issues(
 	issues: &mut Vec<ValidationIssue>,
 ) -> Result<()> {
 	if let Some(report) = validation_ctx.safety_report.as_ref() {
-		let view = CReportRegionalRuleView {
-			local_criteria_report_type: report.local_criteria_report_type.clone(),
-			combination_product_report_indicator: report
-				.combination_product_report_indicator
-				.clone(),
-			facts: RuleFacts {
-				fda_fulfil_expedited_criteria: Some(
-					report.fulfil_expedited_criteria.unwrap_or(false),
-				),
-				fda_combination_product_true: Some(
-					report.combination_product_report_indicator.as_deref()
-						== Some("true"),
-				),
-				..RuleFacts::default()
-			},
+		let facts = RuleFacts {
+			fda_fulfil_expedited_criteria: Some(
+				report.fulfil_expedited_criteria.unwrap_or(false),
+			),
+			fda_combination_product_true: Some(
+				report.combination_product_report_indicator.as_deref()
+					== Some("true"),
+			),
+			..RuleFacts::default()
 		};
-		eval_catalog_values(
+		fda_c_1_7_1(report.local_criteria_report_type.as_deref(), facts, issues);
+		fda_c_1_12(
+			report.combination_product_report_indicator.as_deref(),
+			facts,
 			issues,
-			std::slice::from_ref(&view),
-			C_FDA_CATALOG_VALUE_RULES,
 		);
 	}
 
@@ -1326,8 +1563,7 @@ pub(crate) async fn collect_fda_issues(
 		.first()
 		.and_then(|s| s.sponsor_study_number.as_deref())
 		.map(str::trim)
-		.filter(|v| !v.is_empty())
-		.map(str::to_string);
+		.filter(|v| !v.is_empty());
 	let has_ind_number = study_number.is_some();
 	let has_cross_reported = if has_ind_number {
 		if let Some(study) = fda_ctx.studies.first() {
@@ -1341,50 +1577,30 @@ pub(crate) async fn collect_fda_issues(
 	} else {
 		false
 	};
-	let study_view = FdaStudyRuleView {
-		study_number,
-		cross_reported: has_cross_reported.then(|| "present".to_string()),
-		facts: RuleFacts {
-			fda_type_of_report_is_one_or_two: Some(matches!(
-				type_of_report,
-				Some("1") | Some("2")
-			)),
-			fda_type_of_report_is_two: Some(type_of_report == Some("2")),
-			fda_msg_receiver_is_cder_ind_or_cber_ind: Some(
-				is_fda_ind_message_receiver(message_receiver),
-			),
-			fda_msg_receiver_is_cder_ind_exempt_ba_be: Some(
-				is_fda_pre_anda_message_receiver(message_receiver),
-			),
-			fda_has_ind_number: Some(has_ind_number),
-			..RuleFacts::default()
-		},
+	let facts = RuleFacts {
+		fda_type_of_report_is_one_or_two: Some(matches!(
+			type_of_report,
+			Some("1") | Some("2")
+		)),
+		fda_type_of_report_is_two: Some(type_of_report == Some("2")),
+		fda_msg_receiver_is_cder_ind_or_cber_ind: Some(is_fda_ind_message_receiver(
+			message_receiver,
+		)),
+		fda_msg_receiver_is_cder_ind_exempt_ba_be: Some(
+			is_fda_pre_anda_message_receiver(message_receiver),
+		),
+		fda_has_ind_number: Some(has_ind_number),
+		..RuleFacts::default()
 	};
-	eval_catalog_values(
-		issues,
-		std::slice::from_ref(&study_view),
-		C_FDA_STUDY_CATALOG_VALUE_RULES,
-	);
+	fda_c_5_5a(study_number, facts, issues);
+	fda_c_5_5b(study_number, facts, issues);
+	fda_c_5_6_r(has_cross_reported, facts, issues);
 
-	let reporter_views = validation_ctx
-		.primary_sources
-		.iter()
-		.enumerate()
-		.filter(|(_, source)| has_any_primary_source_content(source))
-		.map(|(idx, source)| FdaReporterEmailRuleView {
-			index: idx,
-			email: source.email.clone(),
-			facts: RuleFacts {
-				fda_primary_source_present: Some(true),
-				..RuleFacts::default()
-			},
-		})
-		.collect::<Vec<_>>();
-	eval_catalog_values(
-		issues,
-		&reporter_views,
-		C_FDA_REPORTER_EMAIL_CATALOG_VALUE_RULES,
-	);
+	for (idx, source) in validation_ctx.primary_sources.iter().enumerate() {
+		if has_any_primary_source_content(source) {
+			fda_c_2_r_2_email(idx, source.email.as_deref(), issues);
+		}
+	}
 	Ok(())
 }
 
@@ -1393,148 +1609,159 @@ pub(crate) fn collect_mfds_issues(
 	mfds_ctx: &MfdsValidationContext,
 	issues: &mut Vec<ValidationIssue>,
 ) {
-	let sender_views = mfds_ctx
-		.senders
-		.iter()
-		.enumerate()
-		.map(|(idx, sender)| MfdsSenderRuleView {
-			path: format!("senderInformation.{idx}.healthProfessionalTypeKr1"),
-			value: sender.health_professional_type_kr1.clone(),
-			facts: RuleFacts {
-				mfds_sender_type_is_health_professional: Some(
-					sender
-						.sender_type
-						.as_deref()
-						.map(|value| value.trim() == "3")
-						.unwrap_or(false),
-				),
-				..RuleFacts::default()
-			},
-		})
-		.collect::<Vec<_>>();
-	eval_catalog_values(issues, &sender_views, C_MFDS_SENDER_CATALOG_VALUE_RULES);
-
-	let primary_source_views = validation_ctx
-		.primary_sources
-		.iter()
-		.enumerate()
-		.map(|(idx, source)| MfdsPrimarySourceRuleView {
-			path: format!("primarySources.{idx}.qualificationKr1"),
-			value: source.qualification_kr1.clone(),
-			facts: RuleFacts {
-				mfds_primary_source_qualification_is_three: Some(
-					source.qualification.as_deref().map(str::trim) == Some("3"),
-				),
-				..RuleFacts::default()
-			},
-		})
-		.collect::<Vec<_>>();
-	eval_catalog_values(
-		issues,
-		&primary_source_views,
-		C_MFDS_PRIMARY_SOURCE_CATALOG_VALUE_RULES,
-	);
-
-	let study_views = mfds_ctx
-		.studies
-		.iter()
-		.enumerate()
-		.map(|(idx, study)| MfdsStudyRuleView {
-			path: format!("studyInformation.{idx}.studyTypeReactionKr1"),
-			value: study.study_type_reaction_kr1.clone(),
-			facts: RuleFacts {
-				mfds_study_type_reaction_is_three: Some(
-					study.study_type_reaction.as_deref().map(str::trim) == Some("3"),
-				),
-				..RuleFacts::default()
-			},
-		})
-		.collect::<Vec<_>>();
-	eval_catalog_values(issues, &study_views, C_MFDS_STUDY_CATALOG_VALUE_RULES);
+	for (idx, sender) in mfds_ctx.senders.iter().enumerate() {
+		mfds_c_3_1_kr_1(
+			idx,
+			sender.health_professional_type_kr1.as_deref(),
+			sender.sender_type.as_deref().map(str::trim) == Some("3"),
+			issues,
+		);
+	}
+	for (idx, source) in validation_ctx.primary_sources.iter().enumerate() {
+		mfds_c_2_r_4_kr_1(
+			idx,
+			source.qualification_kr1.as_deref(),
+			source.qualification.as_deref().map(str::trim) == Some("3"),
+			issues,
+		);
+	}
+	for (idx, study) in mfds_ctx.studies.iter().enumerate() {
+		mfds_c_5_4_kr_1(
+			idx,
+			study.study_type_reaction_kr1.as_deref(),
+			study.study_type_reaction.as_deref().map(str::trim) == Some("3"),
+			issues,
+		);
+	}
 }
 
 #[cfg(test)]
 pub(super) fn constraint_rule_codes() -> Vec<&'static str> {
-	C_CONSTRAINT_RULES
-		.iter()
-		.map(|rule| rule.code)
-		.chain(C_DOCUMENT_CONSTRAINT_RULES.iter().map(|rule| rule.code))
-		.chain(C_LITERATURE_CONSTRAINT_RULES.iter().map(|rule| rule.code))
-		.chain(
-			C_OTHER_IDENTIFIER_CONSTRAINT_RULES
-				.iter()
-				.map(|rule| rule.code),
-		)
-		.chain(
-			C_PRIMARY_SOURCE_CONSTRAINT_RULES
-				.iter()
-				.map(|rule| rule.code),
-		)
-		.chain(C_SENDER_CONSTRAINT_RULES.iter().map(|rule| rule.code))
-		.chain(C_STUDY_CONSTRAINT_RULES.iter().map(|rule| rule.code))
-		.chain(
-			C_STUDY_REGISTRATION_CONSTRAINT_RULES
-				.iter()
-				.map(|rule| rule.code),
-		)
-		.collect()
+	vec![
+		"ICH.C.1.2.ALLOWED.VALUE",
+		"ICH.C.1.3.ALLOWED.VALUE",
+		"ICH.C.1.8.1.ALLOWED.VALUE",
+		"ICH.C.1.8.2.ALLOWED.VALUE",
+		"ICH.C.1.9.1.ALLOWED.VALUE",
+		"ICH.C.1.11.1.ALLOWED.VALUE",
+		"ICH.C.1.6.1.r.2.ALLOWED.VALUE",
+		"ICH.C.4.r.2.ALLOWED.VALUE",
+		"ICH.C.1.9.1.r.2.ALLOWED.VALUE",
+		"ICH.C.2.r.4.ALLOWED.VALUE",
+		"ICH.C.2.r.5.ALLOWED.VALUE",
+		"ICH.C.2.r.3.VOCABULARY",
+		"ICH.C.3.1.ALLOWED.VALUE",
+		"ICH.C.3.4.5.VOCABULARY",
+		"ICH.C.5.4.ALLOWED.VALUE",
+		"ICH.C.5.1.r.2.VOCABULARY",
+	]
 }
 
 #[cfg(test)]
-pub(super) fn table_rule_codes() -> Vec<&'static str> {
-	let mut codes = Vec::new();
-	macro_rules! add {
-		($rules:expr) => {
-			codes.extend(super::rule_table::table_rule_codes($rules));
-		};
-	}
-	add!(C_VALUE_RULES);
-	add!(C_FUTURE_DATE_RULES);
-	add!(C_CONSTRAINT_RULES);
-	add!(C_LENGTH_RULES);
-	add!(C_PRIMARY_SOURCE_ICH_RULES);
-	add!(C_PRIMARY_SOURCE_FDA_RULES);
-	add!(C_PRIMARY_SOURCE_LENGTH_RULES);
-	add!(C_PRIMARY_SOURCE_CONSTRAINT_RULES);
-	add!(C_SENDER_CONSTRAINT_RULES);
-	add!(C_SENDER_LENGTH_RULES);
-	add!(C_DOCUMENT_RULES);
-	add!(C_DOCUMENT_LENGTH_RULES);
-	add!(C_DOCUMENT_CONSTRAINT_RULES);
-	add!(C_OTHER_IDENTIFIER_RULES);
-	add!(C_OTHER_IDENTIFIER_LENGTH_RULES);
-	add!(C_OTHER_IDENTIFIER_CONSTRAINT_RULES);
-	add!(C_LINKED_REPORT_LENGTH_RULES);
-	add!(C_STUDY_RULES);
-	add!(C_STUDY_LENGTH_RULES);
-	add!(C_STUDY_CONSTRAINT_RULES);
-	add!(C_LITERATURE_LENGTH_RULES);
-	add!(C_LITERATURE_CONSTRAINT_RULES);
-	add!(C_STUDY_REGISTRATION_LENGTH_RULES);
-	add!(C_STUDY_REGISTRATION_CONSTRAINT_RULES);
-	add!(C_FDA_CATALOG_VALUE_RULES);
-	add!(C_MFDS_SENDER_CATALOG_VALUE_RULES);
-	add!(C_MFDS_PRIMARY_SOURCE_CATALOG_VALUE_RULES);
-	add!(C_MFDS_STUDY_CATALOG_VALUE_RULES);
-	add!(C_ICH_C11_RULE);
-	add!(C_ICH_C1_ROOT_RULE);
-	add!(C_ICH_C1112_RULE);
-	add!(C_ICH_C2R21_RULE);
-	add!(C_ICH_C2R4_RULE);
-	add!(C_ICH_C2R5_RULE);
-	add!(C_ICH_C31_RULE);
-	add!(C_ICH_C32_RULE);
-	add!(C_ICH_C14_AFTER_C12_RULE);
-	add!(C_ICH_C14_AFTER_C15_RULE);
-	add!(C_ICH_C15_AFTER_C12_RULE);
-	add!(C_FDA_STUDY_CATALOG_VALUE_RULES);
-	add!(C_FDA_REPORTER_EMAIL_CATALOG_VALUE_RULES);
-	add!(C_ICH_C12_RULE);
-	add!(C_ICH_C13_RULE);
-	add!(C_ICH_C14_RULE);
-	add!(C_ICH_C15_RULE);
-	add!(C_ICH_C17_RULE);
-	add!(C_ICH_C54_AGGREGATE_RULE);
+pub(super) fn implemented_rule_codes() -> Vec<&'static str> {
+	let codes = vec![
+		"ICH.C.1.1.REQUIRED",
+		"ICH.C.1.2.REQUIRED",
+		"ICH.C.1.3.REQUIRED",
+		"ICH.C.1.4.REQUIRED",
+		"ICH.C.1.5.REQUIRED",
+		"ICH.C.1.6.1.REQUIRED",
+		"ICH.C.1.7.REQUIRED",
+		"ICH.C.1.8.1.REQUIRED",
+		"ICH.C.1.8.2.REQUIRED",
+		"ICH.C.1.9.1.REQUIRED",
+		"ICH.C.1.2.FUTURE_DATE.FORBIDDEN",
+		"ICH.C.1.4.FUTURE_DATE.FORBIDDEN",
+		"ICH.C.1.5.FUTURE_DATE.FORBIDDEN",
+		"ICH.C.1.2.ALLOWED.VALUE",
+		"ICH.C.1.3.ALLOWED.VALUE",
+		"ICH.C.1.8.1.ALLOWED.VALUE",
+		"ICH.C.1.8.2.ALLOWED.VALUE",
+		"ICH.C.1.9.1.ALLOWED.VALUE",
+		"ICH.C.1.11.1.ALLOWED.VALUE",
+		"ICH.C.1.1.LENGTH.MAX",
+		"ICH.C.1.3.LENGTH.MAX",
+		"ICH.C.1.8.1.LENGTH.MAX",
+		"ICH.C.1.8.2.LENGTH.MAX",
+		"ICH.C.1.11.1.LENGTH.MAX",
+		"ICH.C.1.11.2.LENGTH.MAX",
+		"ICH.C.1.4.AFTER_C.1.2.FORBIDDEN",
+		"ICH.C.1.4.AFTER_C.1.5.FORBIDDEN",
+		"ICH.C.1.5.AFTER_C.1.2.FORBIDDEN",
+		"ICH.C.1.11.2.REQUIRED",
+		"ICH.C.2.r.3.REQUIRED",
+		"ICH.C.2.r.3.LENGTH.MAX",
+		"ICH.C.2.r.3.VOCABULARY",
+		"ICH.C.2.r.4.REQUIRED",
+		"ICH.C.2.r.4.ALLOWED.VALUE",
+		"ICH.C.2.r.4.LENGTH.MAX",
+		"ICH.C.2.r.1.1.LENGTH.MAX",
+		"ICH.C.2.r.1.2.LENGTH.MAX",
+		"ICH.C.2.r.1.3.LENGTH.MAX",
+		"ICH.C.2.r.1.4.LENGTH.MAX",
+		"ICH.C.2.r.2.1.LENGTH.MAX",
+		"ICH.C.2.r.2.2.LENGTH.MAX",
+		"ICH.C.2.r.2.3.LENGTH.MAX",
+		"ICH.C.2.r.2.4.LENGTH.MAX",
+		"ICH.C.2.r.2.5.LENGTH.MAX",
+		"ICH.C.2.r.2.6.LENGTH.MAX",
+		"ICH.C.2.r.2.7.LENGTH.MAX",
+		"ICH.C.2.r.5.REQUIRED",
+		"ICH.C.2.r.5.ALLOWED.VALUE",
+		"ICH.C.2.r.5.LENGTH.MAX",
+		"FDA.C.2.r.2.8.REQUIRED",
+		"ICH.C.3.1.REQUIRED",
+		"ICH.C.3.1.ALLOWED.VALUE",
+		"ICH.C.3.1.LENGTH.MAX",
+		"ICH.C.3.2.REQUIRED",
+		"ICH.C.3.2.LENGTH.MAX",
+		"ICH.C.3.3.1.LENGTH.MAX",
+		"ICH.C.3.3.2.LENGTH.MAX",
+		"ICH.C.3.3.3.LENGTH.MAX",
+		"ICH.C.3.3.4.LENGTH.MAX",
+		"ICH.C.3.3.5.LENGTH.MAX",
+		"ICH.C.3.4.1.LENGTH.MAX",
+		"ICH.C.3.4.2.LENGTH.MAX",
+		"ICH.C.3.4.3.LENGTH.MAX",
+		"ICH.C.3.4.4.LENGTH.MAX",
+		"ICH.C.3.4.5.VOCABULARY",
+		"ICH.C.3.4.5.LENGTH.MAX",
+		"ICH.C.3.4.6.LENGTH.MAX",
+		"ICH.C.3.4.7.LENGTH.MAX",
+		"ICH.C.3.4.8.LENGTH.MAX",
+		"ICH.C.1.6.1.r.1.REQUIRED",
+		"ICH.C.1.6.1.r.1.LENGTH.MAX",
+		"ICH.C.1.6.1.r.2.ALLOWED.VALUE",
+		"ICH.C.1.9.1.r.1.REQUIRED",
+		"ICH.C.1.9.1.r.1.LENGTH.MAX",
+		"ICH.C.1.9.1.r.2.REQUIRED",
+		"ICH.C.1.9.1.r.2.ALLOWED.VALUE",
+		"ICH.C.1.9.1.r.2.LENGTH.MAX",
+		"ICH.C.1.10.r.LENGTH.MAX",
+		"ICH.C.4.r.1.LENGTH.MAX",
+		"ICH.C.4.r.2.ALLOWED.VALUE",
+		"ICH.C.5.1.r.1.LENGTH.MAX",
+		"ICH.C.5.1.r.2.LENGTH.MAX",
+		"ICH.C.5.1.r.2.VOCABULARY",
+		"ICH.C.5.2.LENGTH.MAX",
+		"ICH.C.5.3.REQUIRED",
+		"ICH.C.5.3.LENGTH.MAX",
+		"ICH.C.5.4.REQUIRED",
+		"ICH.C.5.4.ALLOWED.VALUE",
+		"ICH.C.5.4.LENGTH.MAX",
+		"FDA.C.1.7.1.REQUIRED",
+		"FDA.C.1.12.REQUIRED",
+		"FDA.C.1.12.RECOMMENDED",
+		"FDA.C.2.r.2.EMAIL.REQUIRED",
+		"FDA.C.5.5a.REQUIRED",
+		"FDA.C.5.5b.REQUIRED",
+		"FDA.C.5.6.r.REQUIRED",
+		"MFDS.C.3.1.KR.1.REQUIRED",
+		"MFDS.C.2.r.4.KR.1.REQUIRED",
+		"MFDS.C.5.4.KR.1.REQUIRED",
+		"ICH.C.1.REQUIRED",
+		"ICH.C.2.r.2.1.REQUIRED",
+	];
 	codes
 }
 
@@ -1550,15 +1777,8 @@ mod conditioned_catalog_rule_tests {
 			..RuleFacts::default()
 		};
 		let mut issues = Vec::new();
-		eval_catalog_values(
-			&mut issues,
-			&[CReportRegionalRuleView {
-				local_criteria_report_type: None,
-				combination_product_report_indicator: None,
-				facts,
-			}],
-			C_FDA_CATALOG_VALUE_RULES,
-		);
+		fda_c_1_7_1(None, facts, &mut issues);
+		fda_c_1_12(None, facts, &mut issues);
 		assert_eq!(
 			issues
 				.iter()
@@ -1572,57 +1792,17 @@ mod conditioned_catalog_rule_tests {
 		);
 
 		issues.clear();
-		eval_catalog_values(
-			&mut issues,
-			&[CReportRegionalRuleView {
-				local_criteria_report_type: Some("1".to_string()),
-				combination_product_report_indicator: Some("true".to_string()),
-				facts,
-			}],
-			C_FDA_CATALOG_VALUE_RULES,
-		);
+		fda_c_1_7_1(Some("1"), facts, &mut issues);
+		fda_c_1_12(Some("true"), facts, &mut issues);
 		assert!(issues.is_empty());
 	}
 
 	#[test]
 	fn mfds_rules_preserve_nonzero_paths_and_catalog_conditions() {
 		let mut issues = Vec::new();
-		eval_catalog_values(
-			&mut issues,
-			&[MfdsSenderRuleView {
-				path: "senderInformation.2.healthProfessionalTypeKr1".to_string(),
-				value: None,
-				facts: RuleFacts {
-					mfds_sender_type_is_health_professional: Some(true),
-					..RuleFacts::default()
-				},
-			}],
-			C_MFDS_SENDER_CATALOG_VALUE_RULES,
-		);
-		eval_catalog_values(
-			&mut issues,
-			&[MfdsPrimarySourceRuleView {
-				path: "primarySources.3.qualificationKr1".to_string(),
-				value: None,
-				facts: RuleFacts {
-					mfds_primary_source_qualification_is_three: Some(true),
-					..RuleFacts::default()
-				},
-			}],
-			C_MFDS_PRIMARY_SOURCE_CATALOG_VALUE_RULES,
-		);
-		eval_catalog_values(
-			&mut issues,
-			&[MfdsStudyRuleView {
-				path: "studyInformation.4.studyTypeReactionKr1".to_string(),
-				value: None,
-				facts: RuleFacts {
-					mfds_study_type_reaction_is_three: Some(true),
-					..RuleFacts::default()
-				},
-			}],
-			C_MFDS_STUDY_CATALOG_VALUE_RULES,
-		);
+		mfds_c_3_1_kr_1(2, None, true, &mut issues);
+		mfds_c_2_r_4_kr_1(3, None, true, &mut issues);
+		mfds_c_5_4_kr_1(4, None, true, &mut issues);
 
 		assert_eq!(issues.len(), 3);
 		assert_eq!(
@@ -1638,18 +1818,7 @@ mod conditioned_catalog_rule_tests {
 		);
 
 		issues.clear();
-		eval_catalog_values(
-			&mut issues,
-			&[MfdsStudyRuleView {
-				path: "studyInformation.4.studyTypeReactionKr1".to_string(),
-				value: None,
-				facts: RuleFacts {
-					mfds_study_type_reaction_is_three: Some(false),
-					..RuleFacts::default()
-				},
-			}],
-			C_MFDS_STUDY_CATALOG_VALUE_RULES,
-		);
+		mfds_c_5_4_kr_1(4, None, false, &mut issues);
 		assert!(issues.is_empty());
 	}
 }

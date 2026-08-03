@@ -1,10 +1,6 @@
-use super::rule_table::{
-	eval_catalog_values, eval_companions, eval_indexed, eval_indexed_constraints,
-	eval_indexed_derived_length, eval_indexed_future_dates, eval_indexed_length,
-	eval_indexed_meddra, eval_violations, CatalogValueRule, CompanionRule,
-	DateValues, IndexedConstraintRule, IndexedDerivedLengthRule,
-	IndexedFutureDateRule, IndexedLengthRule, IndexedMeddraRule, IndexedRule,
-	RuleValue, ViolationRule,
+use super::helpers::{
+	validate_constraint, validate_future_date, validate_length, validate_meddra,
+	validate_value, validate_violation, DateValues, RuleValue,
 };
 use crate::allowed_value::{true_marker_value, ConstraintValue};
 use crate::{
@@ -24,353 +20,380 @@ fn bool_text(value: Option<bool>) -> Option<&'static str> {
 	value.map(|value| if value { "true" } else { "false" })
 }
 
-struct FdaReactionRuleView {
-	index: usize,
-	required_intervention: Option<bool>,
-	facts: RuleFacts,
+/// ICH.E.i.1.1a.REQUIRED
+/// ICH.E.i.1.1a.LENGTH.MAX
+fn e_i_1_1a(
+	idx: usize,
+	reaction: Option<&Reaction>,
+	issues: &mut Vec<ValidationIssue>,
+) {
+	let path = format!("reactions.{idx}.primarySourceReaction");
+	let value = reaction.map(|reaction| reaction.primary_source_reaction.as_str());
+	validate_value(
+		issues,
+		"ICH.E.i.1.1a.REQUIRED",
+		&path,
+		RuleValue::borrowed(value, None),
+		RuleFacts::default(),
+	);
+	validate_length(issues, "ICH.E.i.1.1a.LENGTH.MAX", &path, value);
 }
 
-struct EReactionRootView {
-	value: Option<String>,
+/// ICH.E.i.1.1b.REQUIRED
+/// ICH.E.i.1.1b.ALLOWED.VALUE
+/// ICH.E.i.1.1b.LENGTH.MAX
+fn e_i_1_1b(
+	idx: usize,
+	reaction: &Reaction,
+	validation_ctx: &ValidationContext,
+	issues: &mut Vec<ValidationIssue>,
+) {
+	let path = format!("reactions.{idx}.reactionLanguage");
+	validate_violation(
+		issues,
+		"ICH.E.i.1.1b.REQUIRED",
+		&path,
+		has_text(Some(reaction.primary_source_reaction.as_str()))
+			&& !has_text(reaction.reaction_language.as_deref()),
+	);
+	validate_constraint(
+		issues,
+		"ICH.E.i.1.1b.ALLOWED.VALUE",
+		&path,
+		ConstraintValue::Text(
+			reaction.reaction_language.as_deref().map(Cow::Borrowed),
+		),
+		&validation_ctx.vocabulary,
+	);
+	validate_length(
+		issues,
+		"ICH.E.i.1.1b.LENGTH.MAX",
+		&path,
+		reaction.reaction_language.as_deref(),
+	);
 }
 
-const E_REACTION_ROOT_RULES: &[CatalogValueRule<EReactionRootView>] = &[
-	CatalogValueRule {
-		code: "ICH.E.i.1.1a.REQUIRED",
-		path: |_| "reactions.0.primarySourceReaction".to_string(),
-		value: |item| RuleValue::borrowed(item.value.as_deref(), None),
-		facts: |_| RuleFacts::default(),
-	},
-	CatalogValueRule {
-		code: "ICH.E.i.7.REQUIRED",
-		path: |_| "reactions.0.reactionOutcome".to_string(),
-		value: |item| RuleValue::borrowed(item.value.as_deref(), None),
-		facts: |_| RuleFacts::default(),
-	},
-];
-
-const E_FDA_CATALOG_VALUE_RULES: &[CatalogValueRule<FdaReactionRuleView>] =
-	&[CatalogValueRule {
-		code: "FDA.E.i.3.2h.REQUIRED",
-		path: |item| format!("reactions.{}.requiredIntervention", item.index),
-		value: |item| {
-			RuleValue::borrowed(bool_text(item.required_intervention), None)
-		},
-		facts: |item| item.facts,
-	}];
-
-struct ECriteriaViolationView {
-	path: String,
-	missing_serious_criteria: bool,
-	has_non_ni_null_flavor: bool,
+/// ICH.E.i.1.2.LENGTH.MAX
+fn e_i_1_2(idx: usize, reaction: &Reaction, issues: &mut Vec<ValidationIssue>) {
+	validate_length(
+		issues,
+		"ICH.E.i.1.2.LENGTH.MAX",
+		&format!("reactions.{idx}.primarySourceReactionTranslation"),
+		reaction.primary_source_reaction_translation.as_deref(),
+	);
 }
 
-const E_CRITERIA_REQUIRED_VIOLATION_RULES: &[ViolationRule<
-	ECriteriaViolationView,
->] = &[ViolationRule {
-	code: "ICH.E.i.3.2.CRITERIA.REQUIRED",
-	path: |item| item.path.clone(),
-	violated: |item| item.missing_serious_criteria,
-}];
+/// ICH.E.i.2.1a.REQUIRED
+/// ICH.E.i.2.1a.LENGTH.MAX
+fn e_i_2_1a(idx: usize, reaction: &Reaction, issues: &mut Vec<ValidationIssue>) {
+	let path = format!("reactions.{idx}.reactionMeddraVersion");
+	validate_violation(
+		issues,
+		"ICH.E.i.2.1a.REQUIRED",
+		&path,
+		has_text(reaction.reaction_meddra_code.as_deref())
+			&& !has_text(reaction.reaction_meddra_version.as_deref()),
+	);
+	validate_length(
+		issues,
+		"ICH.E.i.2.1a.LENGTH.MAX",
+		&path,
+		reaction.reaction_meddra_version.as_deref(),
+	);
+}
 
-const E_NI_ONLY_VIOLATION_RULES: &[ViolationRule<ECriteriaViolationView>] =
-	&[ViolationRule {
-		code: "ICH.E.i.3.2.NI.ONLY",
-		path: |item| item.path.clone(),
-		violated: |item| item.has_non_ni_null_flavor,
-	}];
+/// ICH.E.i.2.1b.REQUIRED
+/// ICH.E.i.2.1b.LENGTH.MAX
+fn e_i_2_1b(idx: usize, reaction: &Reaction, issues: &mut Vec<ValidationIssue>) {
+	let path = format!("reactions.{idx}.reactionMeddraCode");
+	validate_violation(
+		issues,
+		"ICH.E.i.2.1b.REQUIRED",
+		&path,
+		!has_text(reaction.reaction_meddra_code.as_deref()),
+	);
+	validate_length(
+		issues,
+		"ICH.E.i.2.1b.LENGTH.MAX",
+		&path,
+		reaction.reaction_meddra_code.as_deref(),
+	);
+}
 
-const E_REACTION_VALUE_RULES: &[IndexedRule<Reaction>] = &[
-	IndexedRule {
-		code: "ICH.E.i.1.1a.REQUIRED",
-		path: |idx| format!("reactions.{idx}.primarySourceReaction"),
-		value: |reaction| {
-			RuleValue::borrowed(
-				Some(reaction.primary_source_reaction.as_str()),
-				None,
-			)
-		},
-		facts: |_| RuleFacts::default(),
-	},
-	IndexedRule {
-		code: "ICH.E.i.7.REQUIRED",
-		path: |idx| format!("reactions.{idx}.reactionOutcome"),
-		value: |reaction| RuleValue::borrowed(reaction.outcome.as_deref(), None),
-		facts: |_| RuleFacts::default(),
-	},
-	IndexedRule {
-		code: "ICH.E.i.3.2a.REQUIRED",
-		path: |idx| format!("reactions.{idx}.criteriaDeath"),
-		value: |reaction| {
-			RuleValue::borrowed(
-				bool_text(reaction.criteria_death),
-				reaction.criteria_death_null_flavor.as_deref(),
-			)
-		},
-		facts: |_| RuleFacts::default(),
-	},
-	IndexedRule {
-		code: "ICH.E.i.3.2b.REQUIRED",
-		path: |idx| format!("reactions.{idx}.criteriaLifeThreatening"),
-		value: |reaction| {
-			RuleValue::borrowed(
-				bool_text(reaction.criteria_life_threatening),
-				reaction.criteria_life_threatening_null_flavor.as_deref(),
-			)
-		},
-		facts: |_| RuleFacts::default(),
-	},
-	IndexedRule {
-		code: "ICH.E.i.3.2c.REQUIRED",
-		path: |idx| format!("reactions.{idx}.criteriaHospitalization"),
-		value: |reaction| {
-			RuleValue::borrowed(
-				bool_text(reaction.criteria_hospitalization),
-				reaction.criteria_hospitalization_null_flavor.as_deref(),
-			)
-		},
-		facts: |_| RuleFacts::default(),
-	},
-	IndexedRule {
-		code: "ICH.E.i.3.2d.REQUIRED",
-		path: |idx| format!("reactions.{idx}.criteriaDisabling"),
-		value: |reaction| {
-			RuleValue::borrowed(
-				bool_text(reaction.criteria_disabling),
-				reaction.criteria_disabling_null_flavor.as_deref(),
-			)
-		},
-		facts: |_| RuleFacts::default(),
-	},
-	IndexedRule {
-		code: "ICH.E.i.3.2e.REQUIRED",
-		path: |idx| format!("reactions.{idx}.criteriaCongenitalAnomaly"),
-		value: |reaction| {
-			RuleValue::borrowed(
-				bool_text(reaction.criteria_congenital_anomaly),
-				reaction.criteria_congenital_anomaly_null_flavor.as_deref(),
-			)
-		},
-		facts: |_| RuleFacts::default(),
-	},
-	IndexedRule {
-		code: "ICH.E.i.3.2f.REQUIRED",
-		path: |idx| format!("reactions.{idx}.criteriaOtherMedicallyImportant"),
-		value: |reaction| {
-			RuleValue::borrowed(
-				bool_text(reaction.criteria_other_medically_important),
-				reaction
-					.criteria_other_medically_important_null_flavor
-					.as_deref(),
-			)
-		},
-		facts: |_| RuleFacts::default(),
-	},
-];
+/// ICH.E.i.2.1a.ALLOWED.VALUE
+/// ICH.E.i.2.1a.VOCABULARY
+/// ICH.E.i.2.1b.ALLOWED.VALUE
+/// ICH.E.i.2.1b.VOCABULARY
+fn e_i_2_1_meddra(
+	idx: usize,
+	reaction: &Reaction,
+	validation_ctx: &ValidationContext,
+	issues: &mut Vec<ValidationIssue>,
+) {
+	validate_meddra(
+		issues,
+		&validation_ctx.vocabulary,
+		"ICH.E.i.2.1a.ALLOWED.VALUE",
+		"ICH.E.i.2.1b.ALLOWED.VALUE",
+		"ICH.E.i.2.1a.VOCABULARY",
+		"ICH.E.i.2.1b.VOCABULARY",
+		format!("reactions.{idx}.reactionMeddraVersion"),
+		format!("reactions.{idx}.reactionMeddraCode"),
+		reaction.reaction_meddra_version.as_deref(),
+		reaction.reaction_meddra_code.as_deref(),
+	);
+}
 
-const E_REACTION_FUTURE_DATE_RULES: &[IndexedFutureDateRule<Reaction>] =
-	&[IndexedFutureDateRule {
-		code: "ICH.E.i.4-5.FUTURE_DATE.FORBIDDEN",
-		path: |idx| format!("reactions.{idx}.reactionDateRange"),
-		dates: |reaction| DateValues::Two(reaction.start_date, reaction.end_date),
-	}];
+/// ICH.E.i.3.1.LENGTH.MAX
+fn e_i_3_1(idx: usize, reaction: &Reaction, issues: &mut Vec<ValidationIssue>) {
+	validate_length(
+		issues,
+		"ICH.E.i.3.1.LENGTH.MAX",
+		&format!("reactions.{idx}.termHighlightedByReporter"),
+		reaction.term_highlighted.as_deref(),
+	);
+}
 
-const E_REACTION_CONSTRAINT_RULES: &[IndexedConstraintRule<Reaction>] = &[
-	IndexedConstraintRule {
-		code: "ICH.E.i.1.1b.ALLOWED.VALUE",
-		path: |idx| format!("reactions.{idx}.reactionLanguage"),
-		value: |reaction| {
-			ConstraintValue::Text(
-				reaction.reaction_language.as_deref().map(Cow::Borrowed),
-			)
-		},
-	},
-	IndexedConstraintRule {
-		code: "ICH.E.i.7.ALLOWED.VALUE",
-		path: |idx| format!("reactions.{idx}.reactionOutcome"),
-		value: |reaction| {
-			ConstraintValue::Text(reaction.outcome.as_deref().map(Cow::Borrowed))
-		},
-	},
-	IndexedConstraintRule {
-		code: "ICH.E.i.9.VOCABULARY",
-		path: |idx| format!("reactions.{idx}.reactionCountry"),
-		value: |reaction| {
-			ConstraintValue::Text(
-				reaction.country_code.as_deref().map(Cow::Borrowed),
-			)
-		},
-	},
-	IndexedConstraintRule {
-		code: "ICH.E.i.3.2a.ALLOWED.VALUE",
-		path: |idx| format!("reactions.{idx}.criteriaDeath"),
-		value: |reaction| {
-			true_marker_value(
-				reaction.criteria_death,
-				reaction.criteria_death_null_flavor.as_deref(),
-			)
-		},
-	},
-	IndexedConstraintRule {
-		code: "ICH.E.i.3.2b.ALLOWED.VALUE",
-		path: |idx| format!("reactions.{idx}.criteriaLifeThreatening"),
-		value: |reaction| {
-			true_marker_value(
-				reaction.criteria_life_threatening,
-				reaction.criteria_life_threatening_null_flavor.as_deref(),
-			)
-		},
-	},
-	IndexedConstraintRule {
-		code: "ICH.E.i.3.2c.ALLOWED.VALUE",
-		path: |idx| format!("reactions.{idx}.criteriaHospitalization"),
-		value: |reaction| {
-			true_marker_value(
-				reaction.criteria_hospitalization,
-				reaction.criteria_hospitalization_null_flavor.as_deref(),
-			)
-		},
-	},
-	IndexedConstraintRule {
-		code: "ICH.E.i.3.2d.ALLOWED.VALUE",
-		path: |idx| format!("reactions.{idx}.criteriaDisabling"),
-		value: |reaction| {
-			true_marker_value(
-				reaction.criteria_disabling,
-				reaction.criteria_disabling_null_flavor.as_deref(),
-			)
-		},
-	},
-	IndexedConstraintRule {
-		code: "ICH.E.i.3.2e.ALLOWED.VALUE",
-		path: |idx| format!("reactions.{idx}.criteriaCongenitalAnomaly"),
-		value: |reaction| {
-			true_marker_value(
-				reaction.criteria_congenital_anomaly,
-				reaction.criteria_congenital_anomaly_null_flavor.as_deref(),
-			)
-		},
-	},
-	IndexedConstraintRule {
-		code: "ICH.E.i.3.2f.ALLOWED.VALUE",
-		path: |idx| format!("reactions.{idx}.criteriaOtherMedicallyImportant"),
-		value: |reaction| {
-			true_marker_value(
-				reaction.criteria_other_medically_important,
-				reaction
-					.criteria_other_medically_important_null_flavor
-					.as_deref(),
-			)
-		},
-	},
-];
+fn e_i_3_2_marker(
+	issues: &mut Vec<ValidationIssue>,
+	required_code: &str,
+	allowed_code: &str,
+	path: &str,
+	value: Option<bool>,
+	null_flavor: Option<&str>,
+	validation_ctx: &ValidationContext,
+) {
+	validate_value(
+		issues,
+		required_code,
+		path,
+		RuleValue::borrowed(bool_text(value), null_flavor),
+		RuleFacts::default(),
+	);
+	validate_constraint(
+		issues,
+		allowed_code,
+		path,
+		true_marker_value(value, null_flavor),
+		&validation_ctx.vocabulary,
+	);
+}
 
-const E_REACTION_MEDDRA_RULES: &[IndexedMeddraRule<Reaction>] =
-	&[IndexedMeddraRule {
-		version_allowed_code: "ICH.E.i.2.1a.ALLOWED.VALUE",
-		version_code: "ICH.E.i.2.1a.VOCABULARY",
-		code_allowed_code: "ICH.E.i.2.1b.ALLOWED.VALUE",
-		code_code: "ICH.E.i.2.1b.VOCABULARY",
-		version_path: |idx| format!("reactions.{idx}.reactionMeddraVersion"),
-		code_path: |idx| format!("reactions.{idx}.reactionMeddraCode"),
-		values: |reaction| {
-			(
-				reaction.reaction_meddra_version.as_deref(),
-				reaction.reaction_meddra_code.as_deref(),
-			)
+/// ICH.E.i.3.2.CRITERIA.REQUIRED
+/// ICH.E.i.3.2.NI.ONLY
+fn e_i_3_2(idx: usize, reaction: &Reaction, issues: &mut Vec<ValidationIssue>) {
+	let any_criteria_true = [
+		reaction.criteria_death,
+		reaction.criteria_life_threatening,
+		reaction.criteria_hospitalization,
+		reaction.criteria_disabling,
+		reaction.criteria_congenital_anomaly,
+		reaction.criteria_other_medically_important,
+	]
+	.into_iter()
+	.flatten()
+	.any(|value| value);
+	let has_non_ni_null_flavor = [
+		reaction.criteria_death_null_flavor.as_deref(),
+		reaction.criteria_life_threatening_null_flavor.as_deref(),
+		reaction.criteria_hospitalization_null_flavor.as_deref(),
+		reaction.criteria_disabling_null_flavor.as_deref(),
+		reaction.criteria_congenital_anomaly_null_flavor.as_deref(),
+		reaction
+			.criteria_other_medically_important_null_flavor
+			.as_deref(),
+	]
+	.into_iter()
+	.flatten()
+	.any(|value| !value.trim().eq_ignore_ascii_case("NI"));
+	let path = format!("reactions.{idx}.seriousnessCriteria");
+	validate_violation(
+		issues,
+		"ICH.E.i.3.2.CRITERIA.REQUIRED",
+		&path,
+		reaction.serious == Some(true) && !any_criteria_true,
+	);
+	validate_violation(issues, "ICH.E.i.3.2.NI.ONLY", &path, has_non_ni_null_flavor);
+}
+
+macro_rules! reaction_marker_field {
+	($name:ident, $suffix:literal, $path:literal, $value:ident, $null_flavor:ident) => {
+		#[doc = concat!("ICH.E.i.3.2", $suffix, ".REQUIRED")]
+		#[doc = concat!("ICH.E.i.3.2", $suffix, ".ALLOWED.VALUE")]
+		fn $name(
+			idx: usize,
+			reaction: &Reaction,
+			validation_ctx: &ValidationContext,
+			issues: &mut Vec<ValidationIssue>,
+		) {
+			e_i_3_2_marker(
+				issues,
+				concat!("ICH.E.i.3.2", $suffix, ".REQUIRED"),
+				concat!("ICH.E.i.3.2", $suffix, ".ALLOWED.VALUE"),
+				&format!("reactions.{idx}.{}", $path),
+				reaction.$value,
+				reaction.$null_flavor.as_deref(),
+				validation_ctx,
+			);
+		}
+	};
+}
+
+reaction_marker_field!(
+	e_i_3_2a,
+	"a",
+	"criteriaDeath",
+	criteria_death,
+	criteria_death_null_flavor
+);
+reaction_marker_field!(
+	e_i_3_2b,
+	"b",
+	"criteriaLifeThreatening",
+	criteria_life_threatening,
+	criteria_life_threatening_null_flavor
+);
+reaction_marker_field!(
+	e_i_3_2c,
+	"c",
+	"criteriaHospitalization",
+	criteria_hospitalization,
+	criteria_hospitalization_null_flavor
+);
+reaction_marker_field!(
+	e_i_3_2d,
+	"d",
+	"criteriaDisabling",
+	criteria_disabling,
+	criteria_disabling_null_flavor
+);
+reaction_marker_field!(
+	e_i_3_2e,
+	"e",
+	"criteriaCongenitalAnomaly",
+	criteria_congenital_anomaly,
+	criteria_congenital_anomaly_null_flavor
+);
+reaction_marker_field!(
+	e_i_3_2f,
+	"f",
+	"criteriaOtherMedicallyImportant",
+	criteria_other_medically_important,
+	criteria_other_medically_important_null_flavor
+);
+
+/// ICH.E.i.4-5.FUTURE_DATE.FORBIDDEN
+fn e_i_4_5(idx: usize, reaction: &Reaction, issues: &mut Vec<ValidationIssue>) {
+	validate_future_date(
+		issues,
+		"ICH.E.i.4-5.FUTURE_DATE.FORBIDDEN",
+		&format!("reactions.{idx}.reactionDateRange"),
+		DateValues::Two(reaction.start_date, reaction.end_date),
+	);
+}
+
+/// ICH.E.i.6a.REQUIRED
+/// ICH.E.i.6a.LENGTH.MAX
+fn e_i_6a(idx: usize, reaction: &Reaction, issues: &mut Vec<ValidationIssue>) {
+	let path = format!("reactions.{idx}.durationValue");
+	validate_violation(
+		issues,
+		"ICH.E.i.6a.REQUIRED",
+		&path,
+		has_text(reaction.duration_unit.as_deref())
+			&& reaction.duration_value.is_none(),
+	);
+	let value = decimal_text(reaction.duration_value);
+	validate_length(issues, "ICH.E.i.6a.LENGTH.MAX", &path, value.as_deref());
+}
+
+/// ICH.E.i.6b.REQUIRED
+/// ICH.E.i.6b.LENGTH.MAX
+fn e_i_6b(idx: usize, reaction: &Reaction, issues: &mut Vec<ValidationIssue>) {
+	let path = format!("reactions.{idx}.durationUnit");
+	validate_violation(
+		issues,
+		"ICH.E.i.6b.REQUIRED",
+		&path,
+		reaction.duration_value.is_some()
+			&& !has_text(reaction.duration_unit.as_deref()),
+	);
+	validate_length(
+		issues,
+		"ICH.E.i.6b.LENGTH.MAX",
+		&path,
+		reaction.duration_unit.as_deref(),
+	);
+}
+
+/// ICH.E.i.7.REQUIRED
+/// ICH.E.i.7.ALLOWED.VALUE
+/// ICH.E.i.7.LENGTH.MAX
+fn e_i_7(
+	idx: usize,
+	reaction: Option<&Reaction>,
+	validation_ctx: &ValidationContext,
+	issues: &mut Vec<ValidationIssue>,
+) {
+	let path = format!("reactions.{idx}.reactionOutcome");
+	let value = reaction.and_then(|reaction| reaction.outcome.as_deref());
+	validate_value(
+		issues,
+		"ICH.E.i.7.REQUIRED",
+		&path,
+		RuleValue::borrowed(value, None),
+		RuleFacts::default(),
+	);
+	if reaction.is_some() {
+		validate_constraint(
+			issues,
+			"ICH.E.i.7.ALLOWED.VALUE",
+			&path,
+			ConstraintValue::Text(value.map(Cow::Borrowed)),
+			&validation_ctx.vocabulary,
+		);
+		validate_length(issues, "ICH.E.i.7.LENGTH.MAX", &path, value);
+	}
+}
+
+/// ICH.E.i.9.VOCABULARY
+/// ICH.E.i.9.LENGTH.MAX
+fn e_i_9(
+	idx: usize,
+	reaction: &Reaction,
+	validation_ctx: &ValidationContext,
+	issues: &mut Vec<ValidationIssue>,
+) {
+	let path = format!("reactions.{idx}.reactionCountry");
+	validate_constraint(
+		issues,
+		"ICH.E.i.9.VOCABULARY",
+		&path,
+		ConstraintValue::Text(reaction.country_code.as_deref().map(Cow::Borrowed)),
+		&validation_ctx.vocabulary,
+	);
+	validate_length(
+		issues,
+		"ICH.E.i.9.LENGTH.MAX",
+		&path,
+		reaction.country_code.as_deref(),
+	);
+}
+
+/// FDA.E.i.3.2h.REQUIRED
+fn fda_e_i_3_2h(idx: usize, reaction: &Reaction, issues: &mut Vec<ValidationIssue>) {
+	validate_value(
+		issues,
+		"FDA.E.i.3.2h.REQUIRED",
+		&format!("reactions.{idx}.requiredIntervention"),
+		RuleValue::borrowed(bool_text(reaction.required_intervention), None),
+		RuleFacts {
+			fda_reaction_other_medically_important: reaction
+				.criteria_other_medically_important,
+			..RuleFacts::default()
 		},
-	}];
-
-const E_REACTION_LENGTH_RULES: &[IndexedLengthRule<Reaction>] = &[
-	IndexedLengthRule {
-		code: "ICH.E.i.1.1a.LENGTH.MAX",
-		path: |idx| format!("reactions.{idx}.primarySourceReaction"),
-		value: |reaction| Some(reaction.primary_source_reaction.as_str()),
-	},
-	IndexedLengthRule {
-		code: "ICH.E.i.1.1b.LENGTH.MAX",
-		path: |idx| format!("reactions.{idx}.reactionLanguage"),
-		value: |reaction| reaction.reaction_language.as_deref(),
-	},
-	IndexedLengthRule {
-		code: "ICH.E.i.1.2.LENGTH.MAX",
-		path: |idx| format!("reactions.{idx}.primarySourceReactionTranslation"),
-		value: |reaction| reaction.primary_source_reaction_translation.as_deref(),
-	},
-	IndexedLengthRule {
-		code: "ICH.E.i.2.1a.LENGTH.MAX",
-		path: |idx| format!("reactions.{idx}.reactionMeddraVersion"),
-		value: |reaction| reaction.reaction_meddra_version.as_deref(),
-	},
-	IndexedLengthRule {
-		code: "ICH.E.i.2.1b.LENGTH.MAX",
-		path: |idx| format!("reactions.{idx}.reactionMeddraCode"),
-		value: |reaction| reaction.reaction_meddra_code.as_deref(),
-	},
-	IndexedLengthRule {
-		code: "ICH.E.i.6b.LENGTH.MAX",
-		path: |idx| format!("reactions.{idx}.durationUnit"),
-		value: |reaction| reaction.duration_unit.as_deref(),
-	},
-	IndexedLengthRule {
-		code: "ICH.E.i.7.LENGTH.MAX",
-		path: |idx| format!("reactions.{idx}.reactionOutcome"),
-		value: |reaction| reaction.outcome.as_deref(),
-	},
-	IndexedLengthRule {
-		code: "ICH.E.i.9.LENGTH.MAX",
-		path: |idx| format!("reactions.{idx}.reactionCountry"),
-		value: |reaction| reaction.country_code.as_deref(),
-	},
-];
-
-const E_REACTION_DERIVED_LENGTH_RULES: &[IndexedDerivedLengthRule<Reaction>] = &[
-	IndexedDerivedLengthRule {
-		code: "ICH.E.i.3.1.LENGTH.MAX",
-		path: |idx| format!("reactions.{idx}.termHighlightedByReporter"),
-		value: |reaction| reaction.term_highlighted.clone(),
-	},
-	IndexedDerivedLengthRule {
-		code: "ICH.E.i.6a.LENGTH.MAX",
-		path: |idx| format!("reactions.{idx}.durationValue"),
-		value: |reaction| decimal_text(reaction.duration_value),
-	},
-];
-
-const E_REACTION_COMPANION_RULES: &[CompanionRule<Reaction>] = &[
-	CompanionRule {
-		code: "ICH.E.i.2.1a.REQUIRED",
-		path: |idx| format!("reactions.{idx}.reactionMeddraVersion"),
-		trigger: |reaction| has_text(reaction.reaction_meddra_code.as_deref()),
-		required: |reaction| has_text(reaction.reaction_meddra_version.as_deref()),
-	},
-	CompanionRule {
-		code: "ICH.E.i.2.1b.REQUIRED",
-		path: |idx| format!("reactions.{idx}.reactionMeddraCode"),
-		trigger: |_| true,
-		required: |reaction| has_text(reaction.reaction_meddra_code.as_deref()),
-	},
-	CompanionRule {
-		code: "ICH.E.i.6a.REQUIRED",
-		path: |idx| format!("reactions.{idx}.durationValue"),
-		trigger: |reaction| has_text(reaction.duration_unit.as_deref()),
-		required: |reaction| reaction.duration_value.is_some(),
-	},
-	CompanionRule {
-		code: "ICH.E.i.6b.REQUIRED",
-		path: |idx| format!("reactions.{idx}.durationUnit"),
-		trigger: |reaction| reaction.duration_value.is_some(),
-		required: |reaction| has_text(reaction.duration_unit.as_deref()),
-	},
-	CompanionRule {
-		code: "ICH.E.i.1.1b.REQUIRED",
-		path: |idx| format!("reactions.{idx}.reactionLanguage"),
-		trigger: |reaction| {
-			has_text(Some(reaction.primary_source_reaction.as_str()))
-		},
-		required: |reaction| has_text(reaction.reaction_language.as_deref()),
-	},
-];
+	);
+}
 
 pub(crate) fn collect(
 	issues: &mut Vec<ValidationIssue>,
@@ -389,85 +412,32 @@ pub(crate) fn collect_ich_issues(
 	validation_ctx: &ValidationContext,
 	issues: &mut Vec<ValidationIssue>,
 ) {
-	let root = EReactionRootView {
-		value: (!validation_ctx.reactions.is_empty()).then(|| "present".to_string()),
-	};
-	eval_catalog_values(issues, std::slice::from_ref(&root), E_REACTION_ROOT_RULES);
-
-	eval_indexed(issues, &validation_ctx.reactions, E_REACTION_VALUE_RULES);
-	eval_companions(
-		issues,
-		&validation_ctx.reactions,
-		E_REACTION_COMPANION_RULES,
-	);
-	eval_indexed_future_dates(
-		issues,
-		&validation_ctx.reactions,
-		E_REACTION_FUTURE_DATE_RULES,
-	);
-	eval_indexed_constraints(
-		issues,
-		&validation_ctx.reactions,
-		E_REACTION_CONSTRAINT_RULES,
-		&validation_ctx.vocabulary,
-	);
-	eval_indexed_meddra(
-		issues,
-		&validation_ctx.vocabulary,
-		&validation_ctx.reactions,
-		E_REACTION_MEDDRA_RULES,
-	);
-	eval_indexed_length(issues, &validation_ctx.reactions, E_REACTION_LENGTH_RULES);
-	eval_indexed_derived_length(
-		issues,
-		&validation_ctx.reactions,
-		E_REACTION_DERIVED_LENGTH_RULES,
-	);
-
-	let criteria_violations = validation_ctx
-		.reactions
-		.iter()
-		.enumerate()
-		.map(|(idx, reaction)| {
-			let any_criteria_true = [
-				reaction.criteria_death,
-				reaction.criteria_life_threatening,
-				reaction.criteria_hospitalization,
-				reaction.criteria_disabling,
-				reaction.criteria_congenital_anomaly,
-				reaction.criteria_other_medically_important,
-			]
-			.into_iter()
-			.flatten()
-			.any(|value| value);
-			let criteria_null_flavors = [
-				reaction.criteria_death_null_flavor.as_deref(),
-				reaction.criteria_life_threatening_null_flavor.as_deref(),
-				reaction.criteria_hospitalization_null_flavor.as_deref(),
-				reaction.criteria_disabling_null_flavor.as_deref(),
-				reaction.criteria_congenital_anomaly_null_flavor.as_deref(),
-				reaction
-					.criteria_other_medically_important_null_flavor
-					.as_deref(),
-			];
-			let has_non_ni_null_flavor = criteria_null_flavors.iter().any(|nf| {
-				nf.map(str::trim)
-					.is_some_and(|v| !v.eq_ignore_ascii_case("NI"))
-			});
-			ECriteriaViolationView {
-				path: format!("reactions.{idx}.seriousnessCriteria"),
-				missing_serious_criteria: reaction.serious == Some(true)
-					&& !any_criteria_true,
-				has_non_ni_null_flavor,
-			}
-		})
-		.collect::<Vec<_>>();
-	eval_violations(
-		issues,
-		&criteria_violations,
-		E_CRITERIA_REQUIRED_VIOLATION_RULES,
-	);
-	eval_violations(issues, &criteria_violations, E_NI_ONLY_VIOLATION_RULES);
+	if validation_ctx.reactions.is_empty() {
+		e_i_1_1a(0, None, issues);
+		e_i_7(0, None, validation_ctx, issues);
+		return;
+	}
+	for (idx, reaction) in validation_ctx.reactions.iter().enumerate() {
+		e_i_1_1a(idx, Some(reaction), issues);
+		e_i_1_1b(idx, reaction, validation_ctx, issues);
+		e_i_1_2(idx, reaction, issues);
+		e_i_2_1a(idx, reaction, issues);
+		e_i_2_1b(idx, reaction, issues);
+		e_i_2_1_meddra(idx, reaction, validation_ctx, issues);
+		e_i_3_1(idx, reaction, issues);
+		e_i_3_2(idx, reaction, issues);
+		e_i_3_2a(idx, reaction, validation_ctx, issues);
+		e_i_3_2b(idx, reaction, validation_ctx, issues);
+		e_i_3_2c(idx, reaction, validation_ctx, issues);
+		e_i_3_2d(idx, reaction, validation_ctx, issues);
+		e_i_3_2e(idx, reaction, validation_ctx, issues);
+		e_i_3_2f(idx, reaction, validation_ctx, issues);
+		e_i_4_5(idx, reaction, issues);
+		e_i_6a(idx, reaction, issues);
+		e_i_6b(idx, reaction, issues);
+		e_i_7(idx, Some(reaction), validation_ctx, issues);
+		e_i_9(idx, reaction, validation_ctx, issues);
+	}
 }
 
 pub(crate) fn collect_fda_issues(
@@ -475,109 +445,73 @@ pub(crate) fn collect_fda_issues(
 	issues: &mut Vec<ValidationIssue>,
 ) {
 	if should_case_validation_require_required_intervention() {
-		let views = validation_ctx
-			.reactions
-			.iter()
-			.enumerate()
-			.map(|(idx, reaction)| FdaReactionRuleView {
-				index: idx,
-				required_intervention: reaction.required_intervention.clone(),
-				facts: RuleFacts {
-					fda_reaction_other_medically_important: reaction
-						.criteria_other_medically_important,
-					..RuleFacts::default()
-				},
-			})
-			.collect::<Vec<_>>();
-		eval_catalog_values(issues, &views, E_FDA_CATALOG_VALUE_RULES);
+		for (idx, reaction) in validation_ctx.reactions.iter().enumerate() {
+			fda_e_i_3_2h(idx, reaction, issues);
+		}
 	}
 }
 
 #[cfg(test)]
 pub(super) fn constraint_rule_codes() -> Vec<&'static str> {
-	E_REACTION_CONSTRAINT_RULES
-		.iter()
-		.map(|rule| rule.code)
-		.chain(super::rule_table::indexed_meddra_constraint_codes(
-			E_REACTION_MEDDRA_RULES,
-		))
-		.collect()
+	vec![
+		"ICH.E.i.1.1b.ALLOWED.VALUE",
+		"ICH.E.i.7.ALLOWED.VALUE",
+		"ICH.E.i.9.VOCABULARY",
+		"ICH.E.i.3.2a.ALLOWED.VALUE",
+		"ICH.E.i.3.2b.ALLOWED.VALUE",
+		"ICH.E.i.3.2c.ALLOWED.VALUE",
+		"ICH.E.i.3.2d.ALLOWED.VALUE",
+		"ICH.E.i.3.2e.ALLOWED.VALUE",
+		"ICH.E.i.3.2f.ALLOWED.VALUE",
+		"ICH.E.i.2.1a.ALLOWED.VALUE",
+		"ICH.E.i.2.1b.ALLOWED.VALUE",
+	]
 }
 
 #[cfg(test)]
-pub(super) fn table_rule_codes() -> Vec<&'static str> {
-	let mut codes = Vec::new();
-	codes.extend(super::rule_table::table_rule_codes(E_REACTION_VALUE_RULES));
-	codes.extend(super::rule_table::table_rule_codes(
-		E_REACTION_FUTURE_DATE_RULES,
-	));
-	codes.extend(super::rule_table::table_rule_codes(
-		E_REACTION_CONSTRAINT_RULES,
-	));
-	codes.extend(super::rule_table::table_rule_codes(E_REACTION_LENGTH_RULES));
-	codes.extend(super::rule_table::table_rule_codes(
-		E_REACTION_DERIVED_LENGTH_RULES,
-	));
-	codes.extend(super::rule_table::table_rule_codes(
-		E_REACTION_COMPANION_RULES,
-	));
-	codes.extend(super::rule_table::table_rule_codes(
-		E_FDA_CATALOG_VALUE_RULES,
-	));
-	codes.extend(super::rule_table::table_rule_codes(
-		E_CRITERIA_REQUIRED_VIOLATION_RULES,
-	));
-	codes.extend(super::rule_table::table_rule_codes(
-		E_NI_ONLY_VIOLATION_RULES,
-	));
-	codes.extend(super::rule_table::table_rule_codes(E_REACTION_ROOT_RULES));
-	codes.extend(super::rule_table::indexed_meddra_rule_codes(
-		E_REACTION_MEDDRA_RULES,
-	));
-	codes
-}
-
-#[cfg(test)]
-mod conditioned_catalog_rule_tests {
-	use super::*;
-
-	#[test]
-	fn fda_reaction_rule_uses_catalog_condition_and_concrete_path() {
-		let mut issues = Vec::new();
-		eval_catalog_values(
-			&mut issues,
-			&[FdaReactionRuleView {
-				index: 3,
-				required_intervention: None,
-				facts: RuleFacts {
-					fda_reaction_other_medically_important: Some(true),
-					..RuleFacts::default()
-				},
-			}],
-			E_FDA_CATALOG_VALUE_RULES,
-		);
-		assert_eq!(issues.len(), 1);
-		assert_eq!(issues[0].code, "FDA.E.i.3.2h.REQUIRED");
-		assert_eq!(
-			issues[0].field_path.as_deref(),
-			Some("reactions.3.requiredIntervention")
-		);
-
-		issues.clear();
-		eval_catalog_values(
-			&mut issues,
-			&[FdaReactionRuleView {
-				index: 3,
-				required_intervention: None,
-				facts: RuleFacts {
-					fda_reaction_other_medically_important: Some(false),
-					..RuleFacts::default()
-				},
-			}],
-			E_FDA_CATALOG_VALUE_RULES,
-		);
-		assert!(issues.is_empty());
-	}
+pub(super) fn implemented_rule_codes() -> Vec<&'static str> {
+	vec![
+		"ICH.E.i.1.1a.REQUIRED",
+		"ICH.E.i.7.REQUIRED",
+		"ICH.E.i.3.2a.REQUIRED",
+		"ICH.E.i.3.2b.REQUIRED",
+		"ICH.E.i.3.2c.REQUIRED",
+		"ICH.E.i.3.2d.REQUIRED",
+		"ICH.E.i.3.2e.REQUIRED",
+		"ICH.E.i.3.2f.REQUIRED",
+		"ICH.E.i.4-5.FUTURE_DATE.FORBIDDEN",
+		"ICH.E.i.1.1b.ALLOWED.VALUE",
+		"ICH.E.i.7.ALLOWED.VALUE",
+		"ICH.E.i.9.VOCABULARY",
+		"ICH.E.i.3.2a.ALLOWED.VALUE",
+		"ICH.E.i.3.2b.ALLOWED.VALUE",
+		"ICH.E.i.3.2c.ALLOWED.VALUE",
+		"ICH.E.i.3.2d.ALLOWED.VALUE",
+		"ICH.E.i.3.2e.ALLOWED.VALUE",
+		"ICH.E.i.3.2f.ALLOWED.VALUE",
+		"ICH.E.i.1.1a.LENGTH.MAX",
+		"ICH.E.i.1.1b.LENGTH.MAX",
+		"ICH.E.i.1.2.LENGTH.MAX",
+		"ICH.E.i.2.1a.LENGTH.MAX",
+		"ICH.E.i.2.1b.LENGTH.MAX",
+		"ICH.E.i.6b.LENGTH.MAX",
+		"ICH.E.i.7.LENGTH.MAX",
+		"ICH.E.i.9.LENGTH.MAX",
+		"ICH.E.i.3.1.LENGTH.MAX",
+		"ICH.E.i.6a.LENGTH.MAX",
+		"ICH.E.i.2.1a.REQUIRED",
+		"ICH.E.i.2.1b.REQUIRED",
+		"ICH.E.i.6a.REQUIRED",
+		"ICH.E.i.6b.REQUIRED",
+		"ICH.E.i.1.1b.REQUIRED",
+		"FDA.E.i.3.2h.REQUIRED",
+		"ICH.E.i.3.2.CRITERIA.REQUIRED",
+		"ICH.E.i.3.2.NI.ONLY",
+		"ICH.E.i.2.1a.ALLOWED.VALUE",
+		"ICH.E.i.2.1b.ALLOWED.VALUE",
+		"ICH.E.i.2.1a.VOCABULARY",
+		"ICH.E.i.2.1b.VOCABULARY",
+	]
 }
 
 #[cfg(test)]
@@ -753,6 +687,25 @@ mod tests {
 			issue.code == "ICH.E.i.7.ALLOWED.VALUE"
 				&& issue.path == "reactions.0.reactionOutcome"
 		}));
+	}
+
+	#[test]
+	fn fda_reaction_rule_uses_catalog_condition_and_concrete_path() {
+		let mut reaction = reaction();
+		reaction.criteria_other_medically_important = Some(true);
+		let mut issues = Vec::new();
+		fda_e_i_3_2h(3, &reaction, &mut issues);
+		assert_eq!(issues.len(), 1);
+		assert_eq!(issues[0].code, "FDA.E.i.3.2h.REQUIRED");
+		assert_eq!(
+			issues[0].field_path.as_deref(),
+			Some("reactions.3.requiredIntervention")
+		);
+
+		issues.clear();
+		reaction.criteria_other_medically_important = Some(false);
+		fda_e_i_3_2h(3, &reaction, &mut issues);
+		assert!(issues.is_empty());
 	}
 
 	#[test]

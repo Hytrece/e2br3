@@ -4,8 +4,8 @@ pub(crate) mod e;
 pub(crate) mod f;
 pub(crate) mod g;
 pub(crate) mod h;
+pub(crate) mod helpers;
 pub(crate) mod n;
-pub(crate) mod rule_table;
 
 use crate::{
 	FdaValidationContext, MfdsValidationContext, RegulatoryAuthority,
@@ -33,15 +33,15 @@ pub(crate) fn implemented_allowed_value_rule_codes() -> BTreeSet<&'static str> {
 }
 
 #[cfg(test)]
-pub(crate) fn implemented_table_rule_codes() -> BTreeSet<&'static str> {
+pub(crate) fn implemented_rule_codes() -> BTreeSet<&'static str> {
 	[
-		c::table_rule_codes(),
-		d::table_rule_codes(),
-		e::table_rule_codes(),
-		f::table_rule_codes(),
-		g::table_rule_codes(),
-		h::table_rule_codes(),
-		n::table_rule_codes(),
+		c::implemented_rule_codes(),
+		d::implemented_rule_codes(),
+		e::implemented_rule_codes(),
+		f::implemented_rule_codes(),
+		g::implemented_rule_codes(),
+		h::implemented_rule_codes(),
+		n::implemented_rule_codes(),
 	]
 	.into_iter()
 	.flatten()
@@ -50,7 +50,7 @@ pub(crate) fn implemented_table_rule_codes() -> BTreeSet<&'static str> {
 
 #[cfg(test)]
 pub(crate) fn implemented_case_rule_codes() -> BTreeSet<&'static str> {
-	implemented_table_rule_codes()
+	implemented_rule_codes()
 }
 
 pub(crate) async fn collect_section_issues(
@@ -180,7 +180,7 @@ mod tests {
 	use std::collections::BTreeSet;
 
 	#[test]
-	fn implemented_allowed_value_registry_contains_all_current_tables() {
+	fn implemented_allowed_value_registry_contains_all_current_rules() {
 		let codes = implemented_allowed_value_rule_codes();
 		assert_eq!(codes.len(), 76);
 		assert!(codes.contains("ICH.C.1.3.ALLOWED.VALUE"));
@@ -190,7 +190,7 @@ mod tests {
 	}
 
 	#[test]
-	fn implemented_case_registry_is_backed_by_executed_tables() {
+	fn implemented_case_registry_is_backed_by_field_validators() {
 		let codes = implemented_case_rule_codes();
 		assert!(codes.contains("ICH.C.1.3.ALLOWED.VALUE"));
 		assert!(codes.contains("ICH.C.1.4.AFTER_C.1.2.FORBIDDEN"));
@@ -199,9 +199,9 @@ mod tests {
 	}
 
 	#[test]
-	fn case_catalog_is_fully_evaluator_backed() {
-		let table = implemented_table_rule_codes();
-		assert_eq!(table.len(), 462);
+	fn case_catalog_is_fully_field_validator_backed() {
+		let implemented = implemented_rule_codes();
+		assert_eq!(implemented.len(), 462);
 	}
 
 	#[test]

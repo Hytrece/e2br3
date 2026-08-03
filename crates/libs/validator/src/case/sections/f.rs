@@ -1,8 +1,6 @@
-use super::rule_table::{
-	eval_companions, eval_indexed, eval_indexed_constraints,
-	eval_indexed_future_dates, eval_indexed_length, eval_indexed_meddra,
-	CompanionRule, DateValues, IndexedConstraintRule, IndexedFutureDateRule,
-	IndexedLengthRule, IndexedMeddraRule, IndexedRule, RuleValue,
+use super::helpers::{
+	validate_constraint, validate_future_date, validate_length, validate_meddra,
+	validate_value, validate_violation, DateValues, RuleValue,
 };
 use crate::allowed_value::ConstraintValue;
 use crate::{
@@ -19,187 +17,270 @@ fn test_payload_facts(test: &TestResult) -> RuleFacts {
 	}
 }
 
-const F_TEST_MEDDRA_RULES: &[IndexedMeddraRule<TestResult>] = &[IndexedMeddraRule {
-	version_allowed_code: "ICH.F.r.2.2a.ALLOWED.VALUE",
-	version_code: "ICH.F.r.2.2a.VOCABULARY",
-	code_allowed_code: "ICH.F.r.2.2b.ALLOWED.VALUE",
-	code_code: "ICH.F.r.2.2b.VOCABULARY",
-	version_path: |idx| format!("testResults.{idx}.testMeddraVersion"),
-	code_path: |idx| format!("testResults.{idx}.testMeddraCode"),
-	values: |test| {
-		(
-			test.test_meddra_version.as_deref(),
-			test.test_meddra_code.as_deref(),
-		)
-	},
-}];
+/// ICH.F.r.1.REQUIRED
+/// ICH.F.r.1.FUTURE_DATE.FORBIDDEN
+fn f_r_1(idx: usize, test: &TestResult, issues: &mut Vec<ValidationIssue>) {
+	let path = format!("testResults.{idx}.testDate");
+	validate_violation(
+		issues,
+		"ICH.F.r.1.REQUIRED",
+		&path,
+		has_text(Some(test.test_name.as_str()))
+			&& test.test_date.is_none()
+			&& !has_text(test.test_date_null_flavor.as_deref()),
+	);
+	validate_future_date(
+		issues,
+		"ICH.F.r.1.FUTURE_DATE.FORBIDDEN",
+		&path,
+		DateValues::One(test.test_date),
+	);
+}
 
-const F_INDEXED_RULES: &[IndexedRule<TestResult>] = &[IndexedRule {
-	code: "ICH.F.r.2.REQUIRED",
-	path: |idx| format!("testResults.{idx}.testName"),
-	value: |test| RuleValue::borrowed(Some(test.test_name.as_str()), None),
-	facts: test_payload_facts,
-}];
+/// ICH.F.r.2.REQUIRED
+fn f_r_2(idx: usize, test: &TestResult, issues: &mut Vec<ValidationIssue>) {
+	validate_value(
+		issues,
+		"ICH.F.r.2.REQUIRED",
+		&format!("testResults.{idx}.testName"),
+		RuleValue::borrowed(Some(test.test_name.as_str()), None),
+		test_payload_facts(test),
+	);
+}
 
-const F_FUTURE_DATE_RULES: &[IndexedFutureDateRule<TestResult>] =
-	&[IndexedFutureDateRule {
-		code: "ICH.F.r.1.FUTURE_DATE.FORBIDDEN",
-		path: |idx| format!("testResults.{idx}.testDate"),
-		dates: |test| DateValues::One(test.test_date),
-	}];
+/// ICH.F.r.2.1.REQUIRED
+/// ICH.F.r.2.1.LENGTH.MAX
+fn f_r_2_1(idx: usize, test: &TestResult, issues: &mut Vec<ValidationIssue>) {
+	let path = format!("testResults.{idx}.testName");
+	validate_violation(
+		issues,
+		"ICH.F.r.2.1.REQUIRED",
+		&path,
+		test.test_date.is_some()
+			&& !has_text(test.test_meddra_code.as_deref())
+			&& !has_text(Some(test.test_name.as_str())),
+	);
+	validate_length(
+		issues,
+		"ICH.F.r.2.1.LENGTH.MAX",
+		&path,
+		Some(test.test_name.as_str()),
+	);
+}
 
-const F_CONSTRAINT_RULES: &[IndexedConstraintRule<TestResult>] = &[
-	IndexedConstraintRule {
-		code: "ICH.F.r.3.3.ALLOWED.VALUE",
-		path: |idx| format!("testResults.{idx}.testResultUnit"),
-		value: |test| {
-			ConstraintValue::Text(
-				test.test_result_unit.as_deref().map(Cow::Borrowed),
-			)
-		},
-	},
-	IndexedConstraintRule {
-		code: "ICH.F.r.3.1.ALLOWED.VALUE",
-		path: |idx| format!("testResults.{idx}.testResultCode"),
-		value: |test| {
-			ConstraintValue::Text(
-				test.test_result_code.as_deref().map(Cow::Borrowed),
-			)
-		},
-	},
-	IndexedConstraintRule {
-		code: "ICH.F.r.3.2.ALLOWED.VALUE",
-		path: |idx| format!("testResults.{idx}.testResultValue"),
-		value: |test| {
-			ConstraintValue::Text(
-				test.test_result_value.as_deref().map(Cow::Borrowed),
-			)
-		},
-	},
-];
+/// ICH.F.r.2.2a.REQUIRED
+/// ICH.F.r.2.2a.LENGTH.MAX
+fn f_r_2_2a(idx: usize, test: &TestResult, issues: &mut Vec<ValidationIssue>) {
+	let path = format!("testResults.{idx}.testMeddraVersion");
+	validate_violation(
+		issues,
+		"ICH.F.r.2.2a.REQUIRED",
+		&path,
+		has_text(test.test_meddra_code.as_deref())
+			&& !has_text(test.test_meddra_version.as_deref()),
+	);
+	validate_length(
+		issues,
+		"ICH.F.r.2.2a.LENGTH.MAX",
+		&path,
+		test.test_meddra_version.as_deref(),
+	);
+}
 
-const F_LENGTH_RULES: &[IndexedLengthRule<TestResult>] = &[
-	IndexedLengthRule {
-		code: "ICH.F.r.2.1.LENGTH.MAX",
-		path: |idx| format!("testResults.{idx}.testName"),
-		value: |test| Some(test.test_name.as_str()),
-	},
-	IndexedLengthRule {
-		code: "ICH.F.r.2.2a.LENGTH.MAX",
-		path: |idx| format!("testResults.{idx}.testMeddraVersion"),
-		value: |test| test.test_meddra_version.as_deref(),
-	},
-	IndexedLengthRule {
-		code: "ICH.F.r.2.2b.LENGTH.MAX",
-		path: |idx| format!("testResults.{idx}.testMeddraCode"),
-		value: |test| test.test_meddra_code.as_deref(),
-	},
-	IndexedLengthRule {
-		code: "ICH.F.r.3.1.LENGTH.MAX",
-		path: |idx| format!("testResults.{idx}.testResultCode"),
-		value: |test| test.test_result_code.as_deref(),
-	},
-	IndexedLengthRule {
-		code: "ICH.F.r.3.2.LENGTH.MAX",
-		path: |idx| format!("testResults.{idx}.testResultValue"),
-		value: |test| test.test_result_value.as_deref(),
-	},
-	IndexedLengthRule {
-		code: "ICH.F.r.3.3.LENGTH.MAX",
-		path: |idx| format!("testResults.{idx}.testResultUnit"),
-		value: |test| test.test_result_unit.as_deref(),
-	},
-	IndexedLengthRule {
-		code: "ICH.F.r.3.4.LENGTH.MAX",
-		path: |idx| format!("testResults.{idx}.resultUnstructured"),
-		value: |test| test.result_unstructured.as_deref(),
-	},
-	IndexedLengthRule {
-		code: "ICH.F.r.4.LENGTH.MAX",
-		path: |idx| format!("testResults.{idx}.normalLowValue"),
-		value: |test| test.normal_low_value.as_deref(),
-	},
-	IndexedLengthRule {
-		code: "ICH.F.r.5.LENGTH.MAX",
-		path: |idx| format!("testResults.{idx}.normalHighValue"),
-		value: |test| test.normal_high_value.as_deref(),
-	},
-	IndexedLengthRule {
-		code: "ICH.F.r.6.LENGTH.MAX",
-		path: |idx| format!("testResults.{idx}.comments"),
-		value: |test| test.comments.as_deref(),
-	},
-];
+/// ICH.F.r.2.2b.REQUIRED
+/// ICH.F.r.2.2b.LENGTH.MAX
+fn f_r_2_2b(idx: usize, test: &TestResult, issues: &mut Vec<ValidationIssue>) {
+	let path = format!("testResults.{idx}.testMeddraCode");
+	validate_violation(
+		issues,
+		"ICH.F.r.2.2b.REQUIRED",
+		&path,
+		test.test_date.is_some()
+			&& !has_text(Some(test.test_name.as_str()))
+			&& !has_text(test.test_meddra_code.as_deref()),
+	);
+	validate_length(
+		issues,
+		"ICH.F.r.2.2b.LENGTH.MAX",
+		&path,
+		test.test_meddra_code.as_deref(),
+	);
+}
 
-const F_COMPANION_RULES: &[CompanionRule<TestResult>] = &[
-	CompanionRule {
-		code: "ICH.F.r.1.REQUIRED",
-		path: |idx| format!("testResults.{idx}.testDate"),
-		trigger: |test| has_text(Some(test.test_name.as_str())),
-		required: |test| {
-			test.test_date.is_some()
-				|| has_text(test.test_date_null_flavor.as_deref())
-		},
-	},
-	CompanionRule {
-		code: "ICH.F.r.2.1.REQUIRED",
-		path: |idx| format!("testResults.{idx}.testName"),
-		trigger: |test| {
-			test.test_date.is_some() && !has_text(test.test_meddra_code.as_deref())
-		},
-		required: |test| has_text(Some(test.test_name.as_str())),
-	},
-	CompanionRule {
-		code: "ICH.F.r.2.2a.REQUIRED",
-		path: |idx| format!("testResults.{idx}.testMeddraVersion"),
-		trigger: |test| has_text(test.test_meddra_code.as_deref()),
-		required: |test| has_text(test.test_meddra_version.as_deref()),
-	},
-	CompanionRule {
-		code: "ICH.F.r.2.2b.REQUIRED",
-		path: |idx| format!("testResults.{idx}.testMeddraCode"),
-		trigger: |test| {
-			test.test_date.is_some() && !has_text(Some(test.test_name.as_str()))
-		},
-		required: |test| has_text(test.test_meddra_code.as_deref()),
-	},
-	CompanionRule {
-		code: "ICH.F.r.3.3.REQUIRED",
-		path: |idx| format!("testResults.{idx}.testResultUnit"),
-		trigger: |test| has_text(test.test_result_value.as_deref()),
-		required: |test| has_text(test.test_result_unit.as_deref()),
-	},
-	CompanionRule {
-		code: "ICH.F.r.3.1.REQUIRED",
-		path: |idx| format!("testResults.{idx}.testResultCode"),
-		trigger: |test| {
-			has_text(Some(test.test_name.as_str()))
-				&& !has_text(test.test_result_value.as_deref())
-				&& !has_text(test.result_unstructured.as_deref())
-		},
-		required: |test| has_text(test.test_result_code.as_deref()),
-	},
-	CompanionRule {
-		code: "ICH.F.r.3.2.REQUIRED",
-		path: |idx| format!("testResults.{idx}.testResultValue"),
-		trigger: |test| {
-			has_text(Some(test.test_name.as_str()))
-				&& !has_text(test.test_result_code.as_deref())
-				&& !has_text(test.result_unstructured.as_deref())
-		},
-		required: |test| has_text(test.test_result_value.as_deref()),
-	},
-	CompanionRule {
-		code: "ICH.F.r.3.4.REQUIRED",
-		path: |idx| format!("testResults.{idx}.resultUnstructured"),
-		trigger: |test| {
-			has_text(Some(test.test_name.as_str()))
-				&& !has_text(test.test_result_code.as_deref())
-				&& !has_text(test.test_result_value.as_deref())
-		},
-		required: |test| has_text(test.result_unstructured.as_deref()),
-	},
-];
+/// ICH.F.r.2.2a.ALLOWED.VALUE
+/// ICH.F.r.2.2a.VOCABULARY
+/// ICH.F.r.2.2b.ALLOWED.VALUE
+/// ICH.F.r.2.2b.VOCABULARY
+fn f_r_2_2_meddra(
+	idx: usize,
+	test: &TestResult,
+	validation_ctx: &ValidationContext,
+	issues: &mut Vec<ValidationIssue>,
+) {
+	validate_meddra(
+		issues,
+		&validation_ctx.vocabulary,
+		"ICH.F.r.2.2a.ALLOWED.VALUE",
+		"ICH.F.r.2.2b.ALLOWED.VALUE",
+		"ICH.F.r.2.2a.VOCABULARY",
+		"ICH.F.r.2.2b.VOCABULARY",
+		format!("testResults.{idx}.testMeddraVersion"),
+		format!("testResults.{idx}.testMeddraCode"),
+		test.test_meddra_version.as_deref(),
+		test.test_meddra_code.as_deref(),
+	);
+}
+
+/// ICH.F.r.3.1.REQUIRED
+/// ICH.F.r.3.1.ALLOWED.VALUE
+/// ICH.F.r.3.1.LENGTH.MAX
+fn f_r_3_1(
+	idx: usize,
+	test: &TestResult,
+	validation_ctx: &ValidationContext,
+	issues: &mut Vec<ValidationIssue>,
+) {
+	let path = format!("testResults.{idx}.testResultCode");
+	validate_violation(
+		issues,
+		"ICH.F.r.3.1.REQUIRED",
+		&path,
+		has_text(Some(test.test_name.as_str()))
+			&& !has_text(test.test_result_value.as_deref())
+			&& !has_text(test.result_unstructured.as_deref())
+			&& !has_text(test.test_result_code.as_deref()),
+	);
+	validate_constraint(
+		issues,
+		"ICH.F.r.3.1.ALLOWED.VALUE",
+		&path,
+		ConstraintValue::Text(test.test_result_code.as_deref().map(Cow::Borrowed)),
+		&validation_ctx.vocabulary,
+	);
+	validate_length(
+		issues,
+		"ICH.F.r.3.1.LENGTH.MAX",
+		&path,
+		test.test_result_code.as_deref(),
+	);
+}
+
+/// ICH.F.r.3.2.REQUIRED
+/// ICH.F.r.3.2.ALLOWED.VALUE
+/// ICH.F.r.3.2.LENGTH.MAX
+fn f_r_3_2(
+	idx: usize,
+	test: &TestResult,
+	validation_ctx: &ValidationContext,
+	issues: &mut Vec<ValidationIssue>,
+) {
+	let path = format!("testResults.{idx}.testResultValue");
+	validate_violation(
+		issues,
+		"ICH.F.r.3.2.REQUIRED",
+		&path,
+		has_text(Some(test.test_name.as_str()))
+			&& !has_text(test.test_result_code.as_deref())
+			&& !has_text(test.result_unstructured.as_deref())
+			&& !has_text(test.test_result_value.as_deref()),
+	);
+	validate_constraint(
+		issues,
+		"ICH.F.r.3.2.ALLOWED.VALUE",
+		&path,
+		ConstraintValue::Text(test.test_result_value.as_deref().map(Cow::Borrowed)),
+		&validation_ctx.vocabulary,
+	);
+	validate_length(
+		issues,
+		"ICH.F.r.3.2.LENGTH.MAX",
+		&path,
+		test.test_result_value.as_deref(),
+	);
+}
+
+/// ICH.F.r.3.3.REQUIRED
+/// ICH.F.r.3.3.ALLOWED.VALUE
+/// ICH.F.r.3.3.LENGTH.MAX
+fn f_r_3_3(
+	idx: usize,
+	test: &TestResult,
+	validation_ctx: &ValidationContext,
+	issues: &mut Vec<ValidationIssue>,
+) {
+	let path = format!("testResults.{idx}.testResultUnit");
+	validate_violation(
+		issues,
+		"ICH.F.r.3.3.REQUIRED",
+		&path,
+		has_text(test.test_result_value.as_deref())
+			&& !has_text(test.test_result_unit.as_deref()),
+	);
+	validate_constraint(
+		issues,
+		"ICH.F.r.3.3.ALLOWED.VALUE",
+		&path,
+		ConstraintValue::Text(test.test_result_unit.as_deref().map(Cow::Borrowed)),
+		&validation_ctx.vocabulary,
+	);
+	validate_length(
+		issues,
+		"ICH.F.r.3.3.LENGTH.MAX",
+		&path,
+		test.test_result_unit.as_deref(),
+	);
+}
+
+/// ICH.F.r.3.4.REQUIRED
+/// ICH.F.r.3.4.LENGTH.MAX
+fn f_r_3_4(idx: usize, test: &TestResult, issues: &mut Vec<ValidationIssue>) {
+	let path = format!("testResults.{idx}.resultUnstructured");
+	validate_violation(
+		issues,
+		"ICH.F.r.3.4.REQUIRED",
+		&path,
+		has_text(Some(test.test_name.as_str()))
+			&& !has_text(test.test_result_code.as_deref())
+			&& !has_text(test.test_result_value.as_deref())
+			&& !has_text(test.result_unstructured.as_deref()),
+	);
+	validate_length(
+		issues,
+		"ICH.F.r.3.4.LENGTH.MAX",
+		&path,
+		test.result_unstructured.as_deref(),
+	);
+}
+
+/// ICH.F.r.4.LENGTH.MAX
+fn f_r_4(idx: usize, test: &TestResult, issues: &mut Vec<ValidationIssue>) {
+	validate_length(
+		issues,
+		"ICH.F.r.4.LENGTH.MAX",
+		&format!("testResults.{idx}.normalLowValue"),
+		test.normal_low_value.as_deref(),
+	);
+}
+
+/// ICH.F.r.5.LENGTH.MAX
+fn f_r_5(idx: usize, test: &TestResult, issues: &mut Vec<ValidationIssue>) {
+	validate_length(
+		issues,
+		"ICH.F.r.5.LENGTH.MAX",
+		&format!("testResults.{idx}.normalHighValue"),
+		test.normal_high_value.as_deref(),
+	);
+}
+
+/// ICH.F.r.6.LENGTH.MAX
+fn f_r_6(idx: usize, test: &TestResult, issues: &mut Vec<ValidationIssue>) {
+	validate_length(
+		issues,
+		"ICH.F.r.6.LENGTH.MAX",
+		&format!("testResults.{idx}.comments"),
+		test.comments.as_deref(),
+	);
+}
 
 pub(crate) fn collect(
 	issues: &mut Vec<ValidationIssue>,
@@ -214,47 +295,65 @@ pub(crate) fn collect_ich_issues(
 	validation_ctx: &ValidationContext,
 	issues: &mut Vec<ValidationIssue>,
 ) {
-	eval_indexed(issues, &validation_ctx.tests, F_INDEXED_RULES);
-	eval_companions(issues, &validation_ctx.tests, F_COMPANION_RULES);
-	eval_indexed_future_dates(issues, &validation_ctx.tests, F_FUTURE_DATE_RULES);
-	eval_indexed_constraints(
-		issues,
-		&validation_ctx.tests,
-		F_CONSTRAINT_RULES,
-		&validation_ctx.vocabulary,
-	);
-	eval_indexed_length(issues, &validation_ctx.tests, F_LENGTH_RULES);
-	eval_indexed_meddra(
-		issues,
-		&validation_ctx.vocabulary,
-		&validation_ctx.tests,
-		F_TEST_MEDDRA_RULES,
-	);
+	for (idx, test) in validation_ctx.tests.iter().enumerate() {
+		f_r_2(idx, test, issues);
+		f_r_1(idx, test, issues);
+		f_r_2_1(idx, test, issues);
+		f_r_2_2a(idx, test, issues);
+		f_r_2_2b(idx, test, issues);
+		f_r_3_3(idx, test, validation_ctx, issues);
+		f_r_3_1(idx, test, validation_ctx, issues);
+		f_r_3_2(idx, test, validation_ctx, issues);
+		f_r_3_4(idx, test, issues);
+		f_r_4(idx, test, issues);
+		f_r_5(idx, test, issues);
+		f_r_6(idx, test, issues);
+		f_r_2_2_meddra(idx, test, validation_ctx, issues);
+	}
 }
 
 #[cfg(test)]
 pub(super) fn constraint_rule_codes() -> Vec<&'static str> {
-	F_CONSTRAINT_RULES
-		.iter()
-		.map(|rule| rule.code)
-		.chain(super::rule_table::indexed_meddra_constraint_codes(
-			F_TEST_MEDDRA_RULES,
-		))
-		.collect()
+	vec![
+		"ICH.F.r.3.3.ALLOWED.VALUE",
+		"ICH.F.r.3.1.ALLOWED.VALUE",
+		"ICH.F.r.3.2.ALLOWED.VALUE",
+		"ICH.F.r.2.2a.ALLOWED.VALUE",
+		"ICH.F.r.2.2b.ALLOWED.VALUE",
+	]
 }
 
 #[cfg(test)]
-pub(super) fn table_rule_codes() -> Vec<&'static str> {
-	let mut codes = Vec::new();
-	codes.extend(super::rule_table::table_rule_codes(F_INDEXED_RULES));
-	codes.extend(super::rule_table::table_rule_codes(F_FUTURE_DATE_RULES));
-	codes.extend(super::rule_table::table_rule_codes(F_CONSTRAINT_RULES));
-	codes.extend(super::rule_table::table_rule_codes(F_LENGTH_RULES));
-	codes.extend(super::rule_table::table_rule_codes(F_COMPANION_RULES));
-	codes.extend(super::rule_table::indexed_meddra_rule_codes(
-		F_TEST_MEDDRA_RULES,
-	));
-	codes
+pub(super) fn implemented_rule_codes() -> Vec<&'static str> {
+	vec![
+		"ICH.F.r.2.REQUIRED",
+		"ICH.F.r.1.FUTURE_DATE.FORBIDDEN",
+		"ICH.F.r.3.3.ALLOWED.VALUE",
+		"ICH.F.r.3.1.ALLOWED.VALUE",
+		"ICH.F.r.3.2.ALLOWED.VALUE",
+		"ICH.F.r.2.1.LENGTH.MAX",
+		"ICH.F.r.2.2a.LENGTH.MAX",
+		"ICH.F.r.2.2b.LENGTH.MAX",
+		"ICH.F.r.3.1.LENGTH.MAX",
+		"ICH.F.r.3.2.LENGTH.MAX",
+		"ICH.F.r.3.3.LENGTH.MAX",
+		"ICH.F.r.3.4.LENGTH.MAX",
+		"ICH.F.r.4.LENGTH.MAX",
+		"ICH.F.r.5.LENGTH.MAX",
+		"ICH.F.r.6.LENGTH.MAX",
+		"ICH.F.r.1.REQUIRED",
+		"ICH.F.r.2.1.REQUIRED",
+		"ICH.F.r.2.2a.REQUIRED",
+		"ICH.F.r.2.2b.REQUIRED",
+		"ICH.F.r.3.3.REQUIRED",
+		"ICH.F.r.3.1.REQUIRED",
+		"ICH.F.r.3.2.REQUIRED",
+		"ICH.F.r.3.4.REQUIRED",
+		"ICH.F.r.2.2a.ALLOWED.VALUE",
+		"ICH.F.r.2.2b.ALLOWED.VALUE",
+		"ICH.F.r.2.2a.VOCABULARY",
+		"ICH.F.r.2.2b.VOCABULARY",
+	]
 }
 
 #[cfg(test)]

@@ -1,8 +1,6 @@
-use super::rule_table::{
-	eval_catalog_values, eval_companions, eval_indexed_constraints,
-	eval_indexed_length, eval_indexed_meddra, eval_length, CatalogValueRule,
-	CompanionRule, IndexedConstraintRule, IndexedLengthRule, IndexedMeddraRule,
-	LengthRule, RuleValue,
+use super::helpers::{
+	validate_constraint, validate_length, validate_meddra, validate_value,
+	validate_violation, RuleValue,
 };
 use crate::allowed_value::ConstraintValue;
 use crate::{
@@ -14,120 +12,168 @@ use lib_core::model::narrative::{
 };
 use std::borrow::Cow;
 
-struct HNarrativePresenceView {
-	value: Option<String>,
+/// ICH.H.1.REQUIRED
+/// ICH.H.1.LENGTH.MAX
+fn h_1(narrative: Option<&NarrativeInformation>, issues: &mut Vec<ValidationIssue>) {
+	const PATH: &str = "narrative.caseNarrative";
+	let value = match narrative {
+		Some(narrative) if should_require_case_narrative(narrative) => {
+			Some(narrative.case_narrative.as_str())
+		}
+		Some(_) => Some("present"),
+		None => None,
+	};
+	validate_value(
+		issues,
+		"ICH.H.1.REQUIRED",
+		PATH,
+		RuleValue::borrowed(value, None),
+		RuleFacts::default(),
+	);
+	validate_length(
+		issues,
+		"ICH.H.1.LENGTH.MAX",
+		PATH,
+		narrative.map(|narrative| narrative.case_narrative.as_str()),
+	);
 }
 
-const H_NARRATIVE_PRESENCE_RULES: &[CatalogValueRule<HNarrativePresenceView>] =
-	&[CatalogValueRule {
-		code: "ICH.H.1.REQUIRED",
-		path: |_| "narrative.caseNarrative".to_string(),
-		value: |item| RuleValue::borrowed(item.value.as_deref(), None),
-		facts: |_| RuleFacts::default(),
-	}];
+/// ICH.H.2.LENGTH.MAX
+fn h_2(narrative: &NarrativeInformation, issues: &mut Vec<ValidationIssue>) {
+	validate_length(
+		issues,
+		"ICH.H.2.LENGTH.MAX",
+		"narrative.reporterComments",
+		narrative.reporter_comments.as_deref(),
+	);
+}
 
-const H_NARRATIVE_LENGTH_RULES: &[LengthRule<NarrativeInformation>] = &[
-	LengthRule {
-		code: "ICH.H.1.LENGTH.MAX",
-		path: "narrative.caseNarrative",
-		value: |narrative| Some(narrative.case_narrative.as_str()),
-	},
-	LengthRule {
-		code: "ICH.H.2.LENGTH.MAX",
-		path: "narrative.reporterComments",
-		value: |narrative| narrative.reporter_comments.as_deref(),
-	},
-	LengthRule {
-		code: "ICH.H.4.LENGTH.MAX",
-		path: "narrative.senderComments",
-		value: |narrative| narrative.sender_comments.as_deref(),
-	},
-];
+/// ICH.H.3.r.1a.REQUIRED
+/// ICH.H.3.r.1a.LENGTH.MAX
+fn h_3_r_1a(
+	idx: usize,
+	diagnosis: &SenderDiagnosis,
+	issues: &mut Vec<ValidationIssue>,
+) {
+	let path = format!("narrative.senderDiagnoses.{idx}.diagnosisMeddraVersion");
+	validate_violation(
+		issues,
+		"ICH.H.3.r.1a.REQUIRED",
+		&path,
+		has_text(diagnosis.diagnosis_meddra_code.as_deref())
+			&& !has_text(diagnosis.diagnosis_meddra_version.as_deref()),
+	);
+	validate_length(
+		issues,
+		"ICH.H.3.r.1a.LENGTH.MAX",
+		&path,
+		diagnosis.diagnosis_meddra_version.as_deref(),
+	);
+}
 
-const H_SENDER_DIAGNOSIS_COMPANIONS: &[CompanionRule<SenderDiagnosis>] = &[
-	CompanionRule {
-		code: "ICH.H.3.r.1a.REQUIRED",
-		path: |idx| {
-			format!("narrative.senderDiagnoses.{idx}.diagnosisMeddraVersion")
-		},
-		trigger: |diagnosis| has_text(diagnosis.diagnosis_meddra_code.as_deref()),
-		required: |diagnosis| {
-			has_text(diagnosis.diagnosis_meddra_version.as_deref())
-		},
-	},
-	CompanionRule {
-		code: "ICH.H.3.r.1b.REQUIRED",
-		path: |idx| format!("narrative.senderDiagnoses.{idx}.diagnosisMeddraCode"),
-		trigger: |diagnosis| has_text(diagnosis.diagnosis_meddra_version.as_deref()),
-		required: |diagnosis| has_text(diagnosis.diagnosis_meddra_code.as_deref()),
-	},
-];
+/// ICH.H.3.r.1b.REQUIRED
+/// ICH.H.3.r.1b.LENGTH.MAX
+fn h_3_r_1b(
+	idx: usize,
+	diagnosis: &SenderDiagnosis,
+	issues: &mut Vec<ValidationIssue>,
+) {
+	let path = format!("narrative.senderDiagnoses.{idx}.diagnosisMeddraCode");
+	validate_violation(
+		issues,
+		"ICH.H.3.r.1b.REQUIRED",
+		&path,
+		has_text(diagnosis.diagnosis_meddra_version.as_deref())
+			&& !has_text(diagnosis.diagnosis_meddra_code.as_deref()),
+	);
+	validate_length(
+		issues,
+		"ICH.H.3.r.1b.LENGTH.MAX",
+		&path,
+		diagnosis.diagnosis_meddra_code.as_deref(),
+	);
+}
 
-const H_SENDER_DIAGNOSIS_LENGTH_RULES: &[IndexedLengthRule<SenderDiagnosis>] = &[
-	IndexedLengthRule {
-		code: "ICH.H.3.r.1a.LENGTH.MAX",
-		path: |idx| {
-			format!("narrative.senderDiagnoses.{idx}.diagnosisMeddraVersion")
-		},
-		value: |diagnosis| diagnosis.diagnosis_meddra_version.as_deref(),
-	},
-	IndexedLengthRule {
-		code: "ICH.H.3.r.1b.LENGTH.MAX",
-		path: |idx| format!("narrative.senderDiagnoses.{idx}.diagnosisMeddraCode"),
-		value: |diagnosis| diagnosis.diagnosis_meddra_code.as_deref(),
-	},
-];
+/// ICH.H.3.r.1a.ALLOWED.VALUE
+/// ICH.H.3.r.1a.VOCABULARY
+/// ICH.H.3.r.1b.ALLOWED.VALUE
+/// ICH.H.3.r.1b.VOCABULARY
+fn h_3_r_1(
+	idx: usize,
+	diagnosis: &SenderDiagnosis,
+	vocabulary: &crate::context::VocabularyContext,
+	issues: &mut Vec<ValidationIssue>,
+) {
+	validate_meddra(
+		issues,
+		vocabulary,
+		"ICH.H.3.r.1a.ALLOWED.VALUE",
+		"ICH.H.3.r.1b.ALLOWED.VALUE",
+		"ICH.H.3.r.1a.VOCABULARY",
+		"ICH.H.3.r.1b.VOCABULARY",
+		format!("narrative.senderDiagnoses.{idx}.diagnosisMeddraVersion"),
+		format!("narrative.senderDiagnoses.{idx}.diagnosisMeddraCode"),
+		diagnosis.diagnosis_meddra_version.as_deref(),
+		diagnosis.diagnosis_meddra_code.as_deref(),
+	);
+}
 
-const H_SENDER_DIAGNOSIS_MEDDRA_RULES: &[IndexedMeddraRule<SenderDiagnosis>] =
-	&[IndexedMeddraRule {
-		version_allowed_code: "ICH.H.3.r.1a.ALLOWED.VALUE",
-		version_code: "ICH.H.3.r.1a.VOCABULARY",
-		code_allowed_code: "ICH.H.3.r.1b.ALLOWED.VALUE",
-		code_code: "ICH.H.3.r.1b.VOCABULARY",
-		version_path: |idx| {
-			format!("narrative.senderDiagnoses.{idx}.diagnosisMeddraVersion")
-		},
-		code_path: |idx| {
-			format!("narrative.senderDiagnoses.{idx}.diagnosisMeddraCode")
-		},
-		values: |diagnosis| {
-			(
-				diagnosis.diagnosis_meddra_version.as_deref(),
-				diagnosis.diagnosis_meddra_code.as_deref(),
-			)
-		},
-	}];
+/// ICH.H.4.LENGTH.MAX
+fn h_4(narrative: &NarrativeInformation, issues: &mut Vec<ValidationIssue>) {
+	validate_length(
+		issues,
+		"ICH.H.4.LENGTH.MAX",
+		"narrative.senderComments",
+		narrative.sender_comments.as_deref(),
+	);
+}
 
-const H_CASE_SUMMARY_COMPANIONS: &[CompanionRule<CaseSummaryInformation>] =
-	&[CompanionRule {
-		code: "ICH.H.5.r.1b.REQUIRED",
-		path: |idx| format!("narrative.caseSummaries.{idx}.languageCode"),
-		trigger: |summary| has_text(summary.summary_text.as_deref()),
-		required: |summary| has_text(summary.language_code.as_deref()),
-	}];
+/// ICH.H.5.r.1a.LENGTH.MAX
+fn h_5_r_1a(
+	idx: usize,
+	summary: &CaseSummaryInformation,
+	issues: &mut Vec<ValidationIssue>,
+) {
+	let path = format!("narrative.caseSummaries.{idx}.summaryText");
+	validate_length(
+		issues,
+		"ICH.H.5.r.1a.LENGTH.MAX",
+		&path,
+		summary.summary_text.as_deref(),
+	);
+}
 
-const H_CASE_SUMMARY_LENGTH_RULES: &[IndexedLengthRule<CaseSummaryInformation>] = &[
-	IndexedLengthRule {
-		code: "ICH.H.5.r.1a.LENGTH.MAX",
-		path: |idx| format!("narrative.caseSummaries.{idx}.summaryText"),
-		value: |summary| summary.summary_text.as_deref(),
-	},
-	IndexedLengthRule {
-		code: "ICH.H.5.r.1b.LENGTH.MAX",
-		path: |idx| format!("narrative.caseSummaries.{idx}.languageCode"),
-		value: |summary| summary.language_code.as_deref(),
-	},
-];
-
-const H_CASE_SUMMARY_CONSTRAINT_RULES: &[IndexedConstraintRule<
-	CaseSummaryInformation,
->] = &[IndexedConstraintRule {
-	code: "ICH.H.5.r.1b.ALLOWED.VALUE",
-	path: |idx| format!("narrative.caseSummaries.{idx}.languageCode"),
-	value: |summary| {
-		ConstraintValue::Text(summary.language_code.as_deref().map(Cow::Borrowed))
-	},
-}];
+/// ICH.H.5.r.1b.REQUIRED
+/// ICH.H.5.r.1b.LENGTH.MAX
+/// ICH.H.5.r.1b.ALLOWED.VALUE
+fn h_5_r_1b(
+	idx: usize,
+	summary: &CaseSummaryInformation,
+	vocabulary: &crate::context::VocabularyContext,
+	issues: &mut Vec<ValidationIssue>,
+) {
+	let path = format!("narrative.caseSummaries.{idx}.languageCode");
+	validate_violation(
+		issues,
+		"ICH.H.5.r.1b.REQUIRED",
+		&path,
+		has_text(summary.summary_text.as_deref())
+			&& !has_text(summary.language_code.as_deref()),
+	);
+	validate_length(
+		issues,
+		"ICH.H.5.r.1b.LENGTH.MAX",
+		&path,
+		summary.language_code.as_deref(),
+	);
+	validate_constraint(
+		issues,
+		"ICH.H.5.r.1b.ALLOWED.VALUE",
+		&path,
+		ConstraintValue::Text(summary.language_code.as_deref().map(Cow::Borrowed)),
+		vocabulary,
+	);
+}
 
 pub(crate) fn collect(
 	issues: &mut Vec<ValidationIssue>,
@@ -142,97 +188,51 @@ pub(crate) fn collect_ich_issues(
 	validation_ctx: &ValidationContext,
 	issues: &mut Vec<ValidationIssue>,
 ) {
+	h_1(validation_ctx.narrative.as_ref(), issues);
 	if let Some(narrative) = validation_ctx.narrative.as_ref() {
-		eval_length(issues, narrative, H_NARRATIVE_LENGTH_RULES);
+		h_2(narrative, issues);
+		h_4(narrative, issues);
 	}
-	let narrative_presence = HNarrativePresenceView {
-		value: validation_ctx.narrative.as_ref().and_then(|narrative| {
-			if should_require_case_narrative(narrative) {
-				Some(narrative.case_narrative.clone())
-			} else {
-				Some("present".to_string())
-			}
-		}),
-	};
-	eval_catalog_values(
-		issues,
-		std::slice::from_ref(&narrative_presence),
-		H_NARRATIVE_PRESENCE_RULES,
-	);
-
-	eval_companions(
-		issues,
-		&validation_ctx.sender_diagnoses,
-		H_SENDER_DIAGNOSIS_COMPANIONS,
-	);
-	eval_indexed_length(
-		issues,
-		&validation_ctx.sender_diagnoses,
-		H_SENDER_DIAGNOSIS_LENGTH_RULES,
-	);
-	eval_indexed_meddra(
-		issues,
-		&validation_ctx.vocabulary,
-		&validation_ctx.sender_diagnoses,
-		H_SENDER_DIAGNOSIS_MEDDRA_RULES,
-	);
-	eval_companions(
-		issues,
-		&validation_ctx.case_summaries,
-		H_CASE_SUMMARY_COMPANIONS,
-	);
-	eval_indexed_length(
-		issues,
-		&validation_ctx.case_summaries,
-		H_CASE_SUMMARY_LENGTH_RULES,
-	);
-	eval_indexed_constraints(
-		issues,
-		&validation_ctx.case_summaries,
-		H_CASE_SUMMARY_CONSTRAINT_RULES,
-		&validation_ctx.vocabulary,
-	);
+	for (idx, diagnosis) in validation_ctx.sender_diagnoses.iter().enumerate() {
+		h_3_r_1a(idx, diagnosis, issues);
+		h_3_r_1b(idx, diagnosis, issues);
+		h_3_r_1(idx, diagnosis, &validation_ctx.vocabulary, issues);
+	}
+	for (idx, summary) in validation_ctx.case_summaries.iter().enumerate() {
+		h_5_r_1a(idx, summary, issues);
+		h_5_r_1b(idx, summary, &validation_ctx.vocabulary, issues);
+	}
 }
 
 #[cfg(test)]
 pub(super) fn constraint_rule_codes() -> Vec<&'static str> {
-	H_CASE_SUMMARY_CONSTRAINT_RULES
-		.iter()
-		.map(|rule| rule.code)
-		.chain(super::rule_table::indexed_meddra_constraint_codes(
-			H_SENDER_DIAGNOSIS_MEDDRA_RULES,
-		))
-		.collect()
+	vec![
+		"ICH.H.3.r.1a.ALLOWED.VALUE",
+		"ICH.H.3.r.1b.ALLOWED.VALUE",
+		"ICH.H.5.r.1b.ALLOWED.VALUE",
+	]
 }
 
 #[cfg(test)]
-pub(super) fn table_rule_codes() -> Vec<&'static str> {
-	let mut codes = Vec::new();
-	codes.extend(super::rule_table::table_rule_codes(
-		H_NARRATIVE_LENGTH_RULES,
-	));
-	codes.extend(super::rule_table::table_rule_codes(
-		H_SENDER_DIAGNOSIS_COMPANIONS,
-	));
-	codes.extend(super::rule_table::table_rule_codes(
-		H_SENDER_DIAGNOSIS_LENGTH_RULES,
-	));
-	codes.extend(super::rule_table::indexed_meddra_rule_codes(
-		H_SENDER_DIAGNOSIS_MEDDRA_RULES,
-	));
-	codes.extend(super::rule_table::table_rule_codes(
-		H_CASE_SUMMARY_COMPANIONS,
-	));
-	codes.extend(super::rule_table::table_rule_codes(
-		H_CASE_SUMMARY_LENGTH_RULES,
-	));
-	codes.extend(super::rule_table::table_rule_codes(
-		H_CASE_SUMMARY_CONSTRAINT_RULES,
-	));
-	codes.extend(super::rule_table::table_rule_codes(
-		H_NARRATIVE_PRESENCE_RULES,
-	));
-	codes
+pub(super) fn implemented_rule_codes() -> Vec<&'static str> {
+	vec![
+		"ICH.H.1.REQUIRED",
+		"ICH.H.1.LENGTH.MAX",
+		"ICH.H.2.LENGTH.MAX",
+		"ICH.H.3.r.1a.REQUIRED",
+		"ICH.H.3.r.1a.LENGTH.MAX",
+		"ICH.H.3.r.1a.ALLOWED.VALUE",
+		"ICH.H.3.r.1a.VOCABULARY",
+		"ICH.H.3.r.1b.REQUIRED",
+		"ICH.H.3.r.1b.LENGTH.MAX",
+		"ICH.H.3.r.1b.ALLOWED.VALUE",
+		"ICH.H.3.r.1b.VOCABULARY",
+		"ICH.H.4.LENGTH.MAX",
+		"ICH.H.5.r.1a.LENGTH.MAX",
+		"ICH.H.5.r.1b.REQUIRED",
+		"ICH.H.5.r.1b.LENGTH.MAX",
+		"ICH.H.5.r.1b.ALLOWED.VALUE",
+	]
 }
 
 #[cfg(test)]
