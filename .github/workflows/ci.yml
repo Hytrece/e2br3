@@ -188,7 +188,6 @@ jobs:
     needs: [fmt]
     runs-on: ubuntu-latest
     permissions:
-      actions: write
       contents: read
       packages: write
     steps:
@@ -214,7 +213,8 @@ jobs:
         run: |
           IMAGE_REF="ghcr.io/qvis-safety/e2br3-web-server:${GITHUB_SHA}"
           echo "IMAGE_REF=${IMAGE_REF}" >> "${GITHUB_ENV}"
-          docker buildx build --platform linux/amd64 --push --tag "${IMAGE_REF}" .
+          docker buildx build --platform linux/amd64 --push \
+            --tag "${IMAGE_REF}" --tag ghcr.io/qvis-safety/e2br3-web-server:dev .
 
       - name: Build and push frontend image
         run: |
@@ -222,16 +222,5 @@ jobs:
           FRONTEND_IMAGE_REF="ghcr.io/qvis-safety/e2br3-frontend:${FRONTEND_SHA}"
           echo "FRONTEND_IMAGE_REF=${FRONTEND_IMAGE_REF}" >> "${GITHUB_ENV}"
           docker buildx build --platform linux/amd64 --push \
-            --tag "${FRONTEND_IMAGE_REF}" frontend/E2BR3-frontend
-
-      - name: Dispatch staging deployment
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh workflow run cd.yml \
-            --repo QVIS-safety/e2br3 \
-            --ref main \
-            -f operation=deploy-dev \
-            -f image_ref="${IMAGE_REF}" \
-            -f frontend_image_ref="${FRONTEND_IMAGE_REF}" \
-            -f checkout_sha="${GITHUB_SHA}"
+            --tag "${FRONTEND_IMAGE_REF}" --tag ghcr.io/qvis-safety/e2br3-frontend:dev \
+            frontend/E2BR3-frontend
