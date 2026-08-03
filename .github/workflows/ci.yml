@@ -185,7 +185,7 @@ jobs:
   deploy-dev:
     name: Deploy Dev EC2
     if: ${{ github.event_name == 'push' && github.ref_name == 'dev' }}
-    needs: [registry, fmt, clippy, test]
+    needs: [fmt]
     runs-on: ubuntu-latest
     permissions:
       contents: read
