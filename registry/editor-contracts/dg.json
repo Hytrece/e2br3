@@ -48,7 +48,7 @@
       "roundTripValue": "LOT-001",
       "constraint": {
         "status": "not_applicable",
-        "reason": "Local batch/lot mirror has no portable catalog constraint."
+        "reason": "Local batch/lot mirror has no Input Contract."
       },
       "payloadPath": "drugBatchNumber"
     },
@@ -686,7 +686,7 @@
       "roundTripValue": false,
       "constraint": {
         "status": "not_applicable",
-        "reason": "Local continuing helper has no portable catalog constraint."
+        "reason": "Local continuing helper has no Input Contract."
       },
       "payloadPath": "dosageInformation[].continuing"
     },

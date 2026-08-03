@@ -17,5 +17,7 @@ generate_single_row_presave_rest_fns! {
 	GetFn: get_narrative_presave,
 	UpdateFn: update_narrative_presave,
 	DeleteFn: delete_narrative_presave,
-	Kind: Narrative
+	Kind: Narrative,
+	ValidateCreate: super::input_contract::narrative_create,
+	ValidateUpdate: super::input_contract::narrative_update
 }

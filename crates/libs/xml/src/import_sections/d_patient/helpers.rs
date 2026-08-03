@@ -109,38 +109,42 @@ pub(crate) struct ParentImport {
 	pub(crate) past_drugs: Vec<PastDrugHistoryImport>,
 }
 
-fn portable_string(
-	section: &str,
+fn input_string(
 	value: Option<String>,
 	field: &str,
+	check: impl for<'a> Fn(
+		input_contracts::FieldInput<'a>,
+	) -> Vec<input_contracts::InputIssue>,
 ) -> Result<Option<String>> {
-	import_constraint::string(section, field, value.as_deref(), None)?;
+	import_constraint::string(field, value.as_deref(), None, check)?;
 	Ok(value)
 }
 
-fn portable_date(
-	section: &str,
+fn input_date(
 	value: Option<String>,
 	null_flavor: Option<String>,
 	field: &str,
-	null_field: &str,
+	check: impl for<'a> Fn(
+		input_contracts::FieldInput<'a>,
+	) -> Vec<input_contracts::InputIssue>,
 ) -> Result<Option<Date>> {
 	import_constraint::string(
-		section,
 		field,
 		value.as_deref(),
 		null_flavor.as_deref(),
+		check,
 	)?;
-	import_constraint::string(section, null_field, null_flavor.as_deref(), None)?;
 	Ok(value.and_then(parse_date))
 }
 
-fn portable_number(
-	section: &str,
+fn input_number(
 	value: Option<String>,
 	field: &str,
+	check: impl for<'a> Fn(
+		input_contracts::FieldInput<'a>,
+	) -> Vec<input_contracts::InputIssue>,
 ) -> Result<Option<Decimal>> {
-	import_constraint::number_string(section, field, value.as_deref())?;
+	import_constraint::number_string(field, value.as_deref(), check)?;
 	Ok(value.and_then(|value| value.parse().ok()))
 }
 
@@ -232,25 +236,32 @@ fn read_d_local_patient_identifier_value(
 ) -> Result<(Option<String>, Option<String>)> {
 	let value = first_attr(xpath, node, "hl7:id", "extension");
 	let null_flavor = first_attr(xpath, node, "hl7:id", "nullFlavor");
-	if let Some(field) = match type_code {
-		Some("1") => Some("gpMedicalRecordNumber"),
-		Some("2") => Some("specialistRecordNumber"),
-		Some("3") => Some("hospitalRecordNumber"),
-		Some("4") => Some("investigationNumber"),
-		_ => None,
-	} {
-		import_constraint::string(
-			"DM",
-			field,
+	match type_code {
+		Some("1") => import_constraint::string(
+			"gpMedicalRecordNumber",
 			value.as_deref(),
 			null_flavor.as_deref(),
-		)?;
-		import_constraint::string(
-			"DM",
-			&format!("{field}NullFlavor"),
+			input_contracts::generated::d::d_1_1_1,
+		)?,
+		Some("2") => import_constraint::string(
+			"specialistRecordNumber",
+			value.as_deref(),
 			null_flavor.as_deref(),
-			None,
-		)?;
+			input_contracts::generated::d::d_1_1_2,
+		)?,
+		Some("3") => import_constraint::string(
+			"hospitalRecordNumber",
+			value.as_deref(),
+			null_flavor.as_deref(),
+			input_contracts::generated::d::d_1_1_3,
+		)?,
+		Some("4") => import_constraint::string(
+			"investigationNumber",
+			value.as_deref(),
+			null_flavor.as_deref(),
+			input_contracts::generated::d::d_1_1_4,
+		)?,
+		_ => {}
 	}
 	Ok((value, null_flavor))
 }
@@ -323,15 +334,15 @@ fn read_d_7_1_r_1(
 	node: &libxml::tree::Node,
 ) -> Result<(Option<String>, Option<String>)> {
 	Ok((
-		portable_string(
-			"DM",
+		input_string(
 			first_attr(xpath, node, "hl7:code", "codeSystemVersion"),
 			"medicalHistoryEpisodes[].meddraVersion",
+			input_contracts::generated::d::d_7_1_r_1a,
 		)?,
-		portable_string(
-			"DM",
+		input_string(
 			first_attr(xpath, node, "hl7:code", "code"),
 			"medicalHistoryEpisodes[].meddraCode",
+			input_contracts::generated::d::d_7_1_r_1b,
 		)?,
 	))
 }
@@ -341,12 +352,11 @@ fn read_d_7_1_r_2(
 	xpath: &mut Context,
 	node: &libxml::tree::Node,
 ) -> Result<Option<Date>> {
-	portable_date(
-		"DM",
+	input_date(
 		first_attr(xpath, node, "hl7:effectiveTime/hl7:low", "value"),
 		first_attr(xpath, node, "hl7:effectiveTime/hl7:low", "nullFlavor"),
 		"medicalHistoryEpisodes[].startDate",
-		"medicalHistoryEpisodes[].startDateNullFlavor",
+		input_contracts::generated::d::d_7_1_r_2,
 	)
 }
 
@@ -360,16 +370,16 @@ fn read_d_7_1_r_3(
 	let value = parse_bool_attr(xpath, node, path, "value");
 	let null_flavor = first_attr(xpath, node, path, "nullFlavor");
 	import_constraint::boolean(
-		"DM",
 		"medicalHistoryEpisodes[].continuing",
 		value,
 		null_flavor.as_deref(),
+		input_contracts::generated::d::d_7_1_r_3,
 	)?;
 	import_constraint::string(
-		"DM",
 		"medicalHistoryEpisodes[].continuingNullFlavor",
-		null_flavor.as_deref(),
 		None,
+		None,
+		input_contracts::generated::d::d_7_1_r_3,
 	)?;
 	Ok((value, null_flavor))
 }
@@ -379,12 +389,11 @@ fn read_d_7_1_r_4(
 	xpath: &mut Context,
 	node: &libxml::tree::Node,
 ) -> Result<Option<Date>> {
-	portable_date(
-		"DM",
+	input_date(
 		first_attr(xpath, node, "hl7:effectiveTime/hl7:high", "value"),
 		first_attr(xpath, node, "hl7:effectiveTime/hl7:high", "nullFlavor"),
 		"medicalHistoryEpisodes[].endDate",
-		"medicalHistoryEpisodes[].endDateNullFlavor",
+		input_contracts::generated::d::d_7_1_r_4,
 	)
 }
 
@@ -393,11 +402,11 @@ fn read_d_7_1_r_5(
 	xpath: &mut Context,
 	node: &libxml::tree::Node,
 ) -> Result<Option<String>> {
-	portable_string("DM", first_text(
+	input_string(first_text(
 		xpath,
 		node,
 		"hl7:outboundRelationship2/hl7:observation[hl7:code[@code='10']]/hl7:value",
-	), "medicalHistoryEpisodes[].comments")
+	), "medicalHistoryEpisodes[].comments", input_contracts::generated::d::d_7_1_r_5)
 }
 
 /// e2b:D.7.1.r.6
@@ -412,10 +421,10 @@ fn read_d_7_1_r_6(
 		"value",
 	);
 	import_constraint::boolean(
-		"DM",
 		"medicalHistoryEpisodes[].familyHistory",
 		value,
 		None,
+		input_contracts::generated::d::d_7_1_r_6,
 	)?;
 	Ok(value)
 }
@@ -493,10 +502,10 @@ fn read_d_8_r_1(
 	xpath: &mut Context,
 	node: &libxml::tree::Node,
 ) -> Result<Option<String>> {
-	portable_string(
-		"DH",
+	input_string(
 		first_text(xpath, node, &format!("{PRODUCT}/hl7:name")),
 		"drugName",
+		input_contracts::generated::d::d_8_r_1,
 	)
 }
 
@@ -508,15 +517,15 @@ fn read_d_8_r_1_kr(
 ) -> Result<(Option<String>, Option<String>)> {
 	let path = format!("{PRODUCT}/hl7:code");
 	Ok((
-		portable_string(
-			"DH",
+		input_string(
 			first_attr(xpath, node, &path, "codeSystemVersion"),
 			"mfdsMedicinalProductVersion",
+			input_contracts::generated::d::mfds_d_8_r_1_kr_1a,
 		)?,
-		portable_string(
-			"DH",
+		input_string(
 			first_attr(xpath, node, &path, "code"),
 			"mfdsMedicinalProductId",
+			input_contracts::generated::d::mfds_d_8_r_1_kr_1b,
 		)?,
 	))
 }
@@ -529,15 +538,15 @@ fn read_d_8_r_2(
 ) -> Result<(Option<String>, Option<String>)> {
 	let base = format!("{PRODUCT}/hl7:asIdentifiedEntity[hl7:code[@code='MPID']]");
 	Ok((
-		portable_string(
-			"DH",
+		input_string(
 			first_value(xpath, node, &format!("{base}/hl7:code/@codeSystemVersion")),
 			"mpidVersion",
+			input_contracts::generated::d::d_8_r_2a,
 		)?,
-		portable_string(
-			"DH",
+		input_string(
 			first_value(xpath, node, &format!("{base}/hl7:id/@extension")),
 			"mpid",
+			input_contracts::generated::d::d_8_r_2b,
 		)?,
 	))
 }
@@ -550,19 +559,19 @@ fn read_d_8_r_3(
 ) -> Result<(Option<String>, Option<String>)> {
 	let base = format!("({PRODUCT}/hl7:asIdentifiedEntity[hl7:code[@code='PhPID' or @code='PHPID']]");
 	Ok((
-		portable_string(
-			"DH",
+		input_string(
 			first_value(
 				xpath,
 				node,
 				&format!("{base}/hl7:code/@codeSystemVersion)[1]"),
 			),
 			"phpidVersion",
+			input_contracts::generated::d::d_8_r_3a,
 		)?,
-		portable_string(
-			"DH",
+		input_string(
 			first_value(xpath, node, &format!("{base}/hl7:id/@extension)[1]")),
 			"phpid",
+			input_contracts::generated::d::d_8_r_3b,
 		)?,
 	))
 }
@@ -572,12 +581,11 @@ fn read_d_8_r_4(
 	xpath: &mut Context,
 	node: &libxml::tree::Node,
 ) -> Result<Option<Date>> {
-	portable_date(
-		"DH",
+	input_date(
 		first_attr(xpath, node, "hl7:effectiveTime/hl7:low", "value"),
 		first_attr(xpath, node, "hl7:effectiveTime/hl7:low", "nullFlavor"),
 		"startDate",
-		"startDateNullFlavor",
+		input_contracts::generated::d::d_8_r_4,
 	)
 }
 
@@ -586,12 +594,11 @@ fn read_d_8_r_5(
 	xpath: &mut Context,
 	node: &libxml::tree::Node,
 ) -> Result<Option<Date>> {
-	portable_date(
-		"DH",
+	input_date(
 		first_attr(xpath, node, "hl7:effectiveTime/hl7:high", "value"),
 		first_attr(xpath, node, "hl7:effectiveTime/hl7:high", "nullFlavor"),
 		"endDate",
-		"endDateNullFlavor",
+		input_contracts::generated::d::d_8_r_5,
 	)
 }
 
@@ -601,15 +608,25 @@ fn read_meddra_pair(
 	relationship: &str,
 	version_field: &str,
 	code_field: &str,
+	version_check: impl for<'a> Fn(
+		input_contracts::FieldInput<'a>,
+	) -> Vec<input_contracts::InputIssue>,
+	code_check: impl for<'a> Fn(
+		input_contracts::FieldInput<'a>,
+	) -> Vec<input_contracts::InputIssue>,
 ) -> Result<(Option<String>, Option<String>)> {
 	let path = format!("hl7:outboundRelationship2[@typeCode='{relationship}']/hl7:observation/hl7:value");
 	Ok((
-		portable_string(
-			"DH",
+		input_string(
 			first_attr(xpath, node, &path, "codeSystemVersion"),
 			version_field,
+			version_check,
 		)?,
-		portable_string("DH", first_attr(xpath, node, &path, "code"), code_field)?,
+		input_string(
+			first_attr(xpath, node, &path, "code"),
+			code_field,
+			code_check,
+		)?,
 	))
 }
 
@@ -625,6 +642,8 @@ fn read_d_8_r_6(
 		"RSON",
 		"indicationMeddraVersion",
 		"indicationMeddraCode",
+		input_contracts::generated::d::d_8_r_6a,
+		input_contracts::generated::d::d_8_r_6b,
 	)
 }
 
@@ -640,6 +659,8 @@ fn read_d_8_r_7(
 		"CAUS",
 		"reactionMeddraVersion",
 		"reactionMeddraCode",
+		input_contracts::generated::d::d_8_r_7a,
+		input_contracts::generated::d::d_8_r_7b,
 	)
 }
 
@@ -730,12 +751,11 @@ pub(crate) fn parse_patient_death(xml: &[u8]) -> Result<Option<DeathImport>> {
 fn read_d_9_1(xpath: &mut Context) -> Result<(Option<Date>, Option<String>)> {
 	let value = first_value_root(xpath, "//hl7:deceasedTime/@value");
 	let null_flavor = first_value_root(xpath, "//hl7:deceasedTime/@nullFlavor");
-	let date = portable_date(
-		"DM",
+	let date = input_date(
 		value,
 		null_flavor.clone(),
 		"patientDeath.dateOfDeath",
-		"patientDeath.dateOfDeathNullFlavor",
+		input_contracts::generated::d::d_9_1,
 	)?;
 	Ok((date, null_flavor))
 }
@@ -751,16 +771,16 @@ fn read_d_9_3(xpath: &mut Context) -> Result<(Option<bool>, Option<String>)> {
 		"//hl7:observation[hl7:code[@code='5']]/hl7:value/@nullFlavor",
 	);
 	import_constraint::boolean(
-		"DM",
 		"patientDeath.autopsyPerformed",
 		value,
 		null_flavor.as_deref(),
+		input_contracts::generated::d::d_9_3,
 	)?;
 	import_constraint::string(
-		"DM",
 		"patientDeath.autopsyPerformedNullFlavor",
-		null_flavor.as_deref(),
 		None,
+		None,
+		input_contracts::generated::d::d_9_3,
 	)?;
 	Ok((value, null_flavor))
 }
@@ -773,20 +793,20 @@ fn read_d_9_2_r(
 	node: &libxml::tree::Node,
 ) -> Result<(Option<String>, Option<String>, Option<String>)> {
 	Ok((
-		portable_string(
-			"DM",
+		input_string(
 			node.get_attribute("codeSystemVersion"),
 			"patientDeath.reportedCausesOfDeath[].meddraVersion",
+			input_contracts::generated::d::d_9_2_r_1a,
 		)?,
-		portable_string(
-			"DM",
+		input_string(
 			node.get_attribute("code"),
 			"patientDeath.reportedCausesOfDeath[].meddraCode",
+			input_contracts::generated::d::d_9_2_r_1b,
 		)?,
-		portable_string(
-			"DM",
+		input_string(
 			first_text(xpath, node, "hl7:originalText"),
 			"patientDeath.reportedCausesOfDeath[].causeText",
+			input_contracts::generated::d::d_9_2_r_2,
 		)?,
 	))
 }
@@ -799,20 +819,20 @@ fn read_d_9_4_r(
 	node: &libxml::tree::Node,
 ) -> Result<(Option<String>, Option<String>, Option<String>)> {
 	Ok((
-		portable_string(
-			"DM",
+		input_string(
 			node.get_attribute("codeSystemVersion"),
 			"patientDeath.autopsyCausesOfDeath[].meddraVersion",
+			input_contracts::generated::d::d_9_4_r_1a,
 		)?,
-		portable_string(
-			"DM",
+		input_string(
 			node.get_attribute("code"),
 			"patientDeath.autopsyCausesOfDeath[].meddraCode",
+			input_contracts::generated::d::d_9_4_r_1b,
 		)?,
-		portable_string(
-			"DM",
+		input_string(
 			first_text(xpath, node, "hl7:originalText"),
 			"patientDeath.autopsyCausesOfDeath[].causeText",
+			input_contracts::generated::d::d_9_4_r_2,
 		)?,
 	))
 }
@@ -826,16 +846,16 @@ fn read_d_10_1(
 	let null_flavor =
 		first_attr(xpath, node, "hl7:associatedPerson/hl7:name", "nullFlavor");
 	import_constraint::string(
-		"DM",
 		"parentInformation.parentIdentification",
 		value.as_deref(),
 		null_flavor.as_deref(),
+		input_contracts::generated::d::d_10_1,
 	)?;
 	import_constraint::string(
-		"DM",
 		"parentInformation.parentIdentificationNullFlavor",
-		null_flavor.as_deref(),
 		None,
+		None,
+		input_contracts::generated::d::d_10_1,
 	)?;
 	Ok((value, null_flavor))
 }
@@ -847,12 +867,11 @@ fn read_d_10_2_1(
 ) -> Result<(Option<Date>, Option<String>)> {
 	let path = "hl7:associatedPerson/hl7:birthTime";
 	let null_flavor = first_attr(xpath, node, path, "nullFlavor");
-	let date = portable_date(
-		"DM",
+	let date = input_date(
 		first_attr(xpath, node, path, "value"),
 		null_flavor.clone(),
 		"parentInformation.parentBirthDate",
-		"parentInformation.parentBirthDateNullFlavor",
+		input_contracts::generated::d::d_10_2_1,
 	)?;
 	Ok((date, null_flavor))
 }
@@ -864,10 +883,10 @@ fn read_d_10_2_2a(
 ) -> Result<(Option<Decimal>, Option<String>)> {
 	let path = "hl7:subjectOf2/hl7:observation[hl7:code[@code='3']]/hl7:value";
 	Ok((
-		portable_number(
-			"DM",
+		input_number(
 			first_attr(xpath, node, path, "value"),
 			"parentInformation.parentAge.value",
+			input_contracts::generated::d::d_10_2_2a,
 		)?,
 		first_attr(xpath, node, path, "nullFlavor"),
 	))
@@ -878,8 +897,7 @@ fn read_d_10_2_2b(
 	xpath: &mut Context,
 	node: &libxml::tree::Node,
 ) -> Result<Option<String>> {
-	portable_string(
-		"DM",
+	input_string(
 		first_attr(
 			xpath,
 			node,
@@ -887,6 +905,7 @@ fn read_d_10_2_2b(
 			"unit",
 		),
 		"parentInformation.parentAge.unit",
+		input_contracts::generated::d::d_10_2_2b,
 	)
 }
 
@@ -897,12 +916,11 @@ fn read_d_10_3(
 ) -> Result<(Option<Date>, Option<String>)> {
 	let path = "hl7:subjectOf2/hl7:observation[hl7:code[@code='22']]/hl7:value";
 	let null_flavor = first_attr(xpath, node, path, "nullFlavor");
-	let date = portable_date(
-		"DM",
+	let date = input_date(
 		first_attr(xpath, node, path, "value"),
 		null_flavor.clone(),
 		"parentInformation.parentLastMenstrualPeriodDate",
-		"parentInformation.parentLastMenstrualPeriodDateNullFlavor",
+		input_contracts::generated::d::d_10_3,
 	)?;
 	Ok((date, null_flavor))
 }
@@ -912,8 +930,7 @@ fn read_d_10_4(
 	xpath: &mut Context,
 	node: &libxml::tree::Node,
 ) -> Result<Option<Decimal>> {
-	portable_number(
-		"DM",
+	input_number(
 		first_attr(
 			xpath,
 			node,
@@ -921,6 +938,7 @@ fn read_d_10_4(
 			"value",
 		),
 		"parentInformation.parentWeight.value",
+		input_contracts::generated::d::d_10_4,
 	)
 }
 
@@ -929,8 +947,7 @@ fn read_d_10_5(
 	xpath: &mut Context,
 	node: &libxml::tree::Node,
 ) -> Result<Option<Decimal>> {
-	portable_number(
-		"DM",
+	input_number(
 		first_attr(
 			xpath,
 			node,
@@ -938,6 +955,7 @@ fn read_d_10_5(
 			"value",
 		),
 		"parentInformation.parentHeight.value",
+		input_contracts::generated::d::d_10_5,
 	)
 }
 
@@ -950,16 +968,16 @@ fn read_d_10_6(
 	let value = first_attr(xpath, node, path, "code");
 	let null_flavor = first_attr(xpath, node, path, "nullFlavor");
 	import_constraint::string(
-		"DM",
 		"parentInformation.parentSex",
 		value.as_deref(),
 		null_flavor.as_deref(),
+		input_contracts::generated::d::d_10_6,
 	)?;
 	import_constraint::string(
-		"DM",
 		"parentInformation.parentSexNullFlavor",
-		null_flavor.as_deref(),
 		None,
+		None,
+		input_contracts::generated::d::d_10_6,
 	)?;
 	Ok((value, null_flavor))
 }
@@ -969,7 +987,7 @@ fn read_d_10_7_2(
 	xpath: &mut Context,
 	node: &libxml::tree::Node,
 ) -> Result<Option<String>> {
-	portable_string("DM", first_text(xpath, node, "hl7:subjectOf2/hl7:organizer[hl7:code[@code='1']]/hl7:component/hl7:observation[hl7:code[@code='18']]/hl7:value"), "parentInformation.medicalHistoryText")
+	input_string(first_text(xpath, node, "hl7:subjectOf2/hl7:organizer[hl7:code[@code='1']]/hl7:component/hl7:observation[hl7:code[@code='18']]/hl7:value"), "parentInformation.medicalHistoryText", input_contracts::generated::d::d_10_7_2)
 }
 
 /// e2b:D.10.7.1.r.1a
@@ -979,15 +997,15 @@ fn read_d_10_7_1_r_1(
 	node: &libxml::tree::Node,
 ) -> Result<(Option<String>, Option<String>)> {
 	Ok((
-		portable_string(
-			"DM",
+		input_string(
 			first_attr(xpath, node, "hl7:code", "codeSystemVersion"),
 			"parentInformation.medicalHistoryEpisodes[].meddraVersion",
+			input_contracts::generated::d::d_10_7_1_r_1a,
 		)?,
-		portable_string(
-			"DM",
+		input_string(
 			first_attr(xpath, node, "hl7:code", "code"),
 			"parentInformation.medicalHistoryEpisodes[].meddraCode",
+			input_contracts::generated::d::d_10_7_1_r_1b,
 		)?,
 	))
 }
@@ -997,12 +1015,11 @@ fn read_d_10_7_1_r_2(
 	xpath: &mut Context,
 	node: &libxml::tree::Node,
 ) -> Result<Option<Date>> {
-	portable_date(
-		"DM",
+	input_date(
 		first_attr(xpath, node, "hl7:effectiveTime/hl7:low", "value"),
 		first_attr(xpath, node, "hl7:effectiveTime/hl7:low", "nullFlavor"),
 		"parentInformation.medicalHistoryEpisodes[].startDate",
-		"parentInformation.medicalHistoryEpisodes[].startDateNullFlavor",
+		input_contracts::generated::d::d_10_7_1_r_2,
 	)
 }
 
@@ -1016,16 +1033,16 @@ fn read_d_10_7_1_r_3(
 	let value = parse_bool_attr(xpath, node, path, "value");
 	let null_flavor = first_attr(xpath, node, path, "nullFlavor");
 	import_constraint::boolean(
-		"DM",
 		"parentInformation.medicalHistoryEpisodes[].continuing",
 		value,
 		null_flavor.as_deref(),
+		input_contracts::generated::d::d_10_7_1_r_3,
 	)?;
 	import_constraint::string(
-		"DM",
 		"parentInformation.medicalHistoryEpisodes[].continuingNullFlavor",
-		null_flavor.as_deref(),
 		None,
+		None,
+		input_contracts::generated::d::d_10_7_1_r_3,
 	)?;
 	Ok((value, null_flavor))
 }
@@ -1035,12 +1052,11 @@ fn read_d_10_7_1_r_4(
 	xpath: &mut Context,
 	node: &libxml::tree::Node,
 ) -> Result<Option<Date>> {
-	portable_date(
-		"DM",
+	input_date(
 		first_attr(xpath, node, "hl7:effectiveTime/hl7:high", "value"),
 		first_attr(xpath, node, "hl7:effectiveTime/hl7:high", "nullFlavor"),
 		"parentInformation.medicalHistoryEpisodes[].endDate",
-		"parentInformation.medicalHistoryEpisodes[].endDateNullFlavor",
+		input_contracts::generated::d::d_10_7_1_r_4,
 	)
 }
 
@@ -1049,11 +1065,11 @@ fn read_d_10_7_1_r_5(
 	xpath: &mut Context,
 	node: &libxml::tree::Node,
 ) -> Result<Option<String>> {
-	portable_string("DM", first_text(
+	input_string(first_text(
 		xpath,
 		node,
 		"hl7:outboundRelationship2/hl7:observation[hl7:code[@code='10']]/hl7:value",
-	), "parentInformation.medicalHistoryEpisodes[].comments")
+	), "parentInformation.medicalHistoryEpisodes[].comments", input_contracts::generated::d::d_10_7_1_r_5)
 }
 
 /// e2b:D.10.8.r.1
@@ -1061,10 +1077,10 @@ fn read_d_10_8_r_1(
 	xpath: &mut Context,
 	node: &libxml::tree::Node,
 ) -> Result<Option<String>> {
-	portable_string(
-		"DM",
+	input_string(
 		first_text(xpath, node, &format!("{PRODUCT}/hl7:name")),
 		"parentInformation.pastDrugHistory[].drugName",
+		input_contracts::generated::d::d_10_8_r_1,
 	)
 }
 
@@ -1076,15 +1092,15 @@ fn read_d_10_8_r_1_kr(
 ) -> Result<(Option<String>, Option<String>)> {
 	let path = format!("{PRODUCT}/hl7:code");
 	Ok((
-		portable_string(
-			"DM",
+		input_string(
 			first_attr(xpath, node, &path, "codeSystemVersion"),
 			"parentInformation.pastDrugHistory[].mfdsMedicinalProductVersion",
+			input_contracts::generated::d::mfds_d_10_8_r_1_kr_1a,
 		)?,
-		portable_string(
-			"DM",
+		input_string(
 			first_attr(xpath, node, &path, "code"),
 			"parentInformation.pastDrugHistory[].mfdsMedicinalProductId",
+			input_contracts::generated::d::mfds_d_10_8_r_1_kr_1b,
 		)?,
 	))
 }
@@ -1097,15 +1113,15 @@ fn read_d_10_8_r_2(
 ) -> Result<(Option<String>, Option<String>)> {
 	let base = format!("{PRODUCT}/hl7:asIdentifiedEntity[hl7:code[@code='MPID']]");
 	Ok((
-		portable_string(
-			"DM",
+		input_string(
 			first_value(xpath, node, &format!("{base}/hl7:code/@codeSystemVersion")),
 			"parentInformation.pastDrugHistory[].mpidVersion",
+			input_contracts::generated::d::d_10_8_r_2a,
 		)?,
-		portable_string(
-			"DM",
+		input_string(
 			first_value(xpath, node, &format!("{base}/hl7:id/@extension")),
 			"parentInformation.pastDrugHistory[].mpid",
+			input_contracts::generated::d::d_10_8_r_2b,
 		)?,
 	))
 }
@@ -1118,19 +1134,19 @@ fn read_d_10_8_r_3(
 ) -> Result<(Option<String>, Option<String>)> {
 	let base = format!("({PRODUCT}/hl7:asIdentifiedEntity[hl7:code[@code='PhPID' or @code='PHPID']]");
 	Ok((
-		portable_string(
-			"DM",
+		input_string(
 			first_value(
 				xpath,
 				node,
 				&format!("{base}/hl7:code/@codeSystemVersion)[1]"),
 			),
 			"parentInformation.pastDrugHistory[].phpidVersion",
+			input_contracts::generated::d::d_10_8_r_3a,
 		)?,
-		portable_string(
-			"DM",
+		input_string(
 			first_value(xpath, node, &format!("{base}/hl7:id/@extension)[1]")),
 			"parentInformation.pastDrugHistory[].phpid",
+			input_contracts::generated::d::d_10_8_r_3b,
 		)?,
 	))
 }
@@ -1140,12 +1156,11 @@ fn read_d_10_8_r_4(
 	xpath: &mut Context,
 	node: &libxml::tree::Node,
 ) -> Result<Option<Date>> {
-	portable_date(
-		"DM",
+	input_date(
 		first_attr(xpath, node, "hl7:effectiveTime/hl7:low", "value"),
 		first_attr(xpath, node, "hl7:effectiveTime/hl7:low", "nullFlavor"),
 		"parentInformation.pastDrugHistory[].startDate",
-		"parentInformation.pastDrugHistory[].startDateNullFlavor",
+		input_contracts::generated::d::d_10_8_r_4,
 	)
 }
 
@@ -1154,12 +1169,11 @@ fn read_d_10_8_r_5(
 	xpath: &mut Context,
 	node: &libxml::tree::Node,
 ) -> Result<Option<Date>> {
-	portable_date(
-		"DM",
+	input_date(
 		first_attr(xpath, node, "hl7:effectiveTime/hl7:high", "value"),
 		first_attr(xpath, node, "hl7:effectiveTime/hl7:high", "nullFlavor"),
 		"parentInformation.pastDrugHistory[].endDate",
-		"parentInformation.pastDrugHistory[].endDateNullFlavor",
+		input_contracts::generated::d::d_10_8_r_5,
 	)
 }
 
@@ -1172,15 +1186,15 @@ fn read_d_10_8_r_6(
 	let path =
 		"hl7:outboundRelationship2[@typeCode='RSON']/hl7:observation/hl7:value";
 	Ok((
-		portable_string(
-			"DM",
+		input_string(
 			first_attr(xpath, node, path, "codeSystemVersion"),
 			"parentInformation.pastDrugHistory[].indicationMeddraVersion",
+			input_contracts::generated::d::d_10_8_r_6a,
 		)?,
-		portable_string(
-			"DM",
+		input_string(
 			first_attr(xpath, node, path, "code"),
 			"parentInformation.pastDrugHistory[].indicationMeddraCode",
+			input_contracts::generated::d::d_10_8_r_6b,
 		)?,
 	))
 }
@@ -1194,15 +1208,15 @@ fn read_d_10_8_r_7(
 	let path =
 		"hl7:outboundRelationship2[@typeCode='CAUS']/hl7:observation/hl7:value";
 	Ok((
-		portable_string(
-			"DM",
+		input_string(
 			first_attr(xpath, node, path, "codeSystemVersion"),
 			"parentInformation.pastDrugHistory[].reactionMeddraVersion",
+			input_contracts::generated::d::d_10_8_r_7a,
 		)?,
-		portable_string(
-			"DM",
+		input_string(
 			first_attr(xpath, node, path, "code"),
 			"parentInformation.pastDrugHistory[].reactionMeddraCode",
+			input_contracts::generated::d::d_10_8_r_7b,
 		)?,
 	))
 }

@@ -71,7 +71,7 @@
       "roundTripValue": "Additional information",
       "constraint": {
         "status": "not_applicable",
-        "reason": "Local additional narrative field has no portable catalog constraint."
+        "reason": "Local additional narrative field has no Input Contract."
       },
       "payloadPath": "additionalInformation",
       "fixture": {

@@ -225,15 +225,21 @@ fn read_h_1(xpath: &mut Context) -> Result<String> {
 			line: None,
 			column: None,
 		})?;
-	import_constraint::string("NR", "caseNarrative", Some(&value), None)?;
+	import_constraint::string(
+		"caseNarrative",
+		Some(&value),
+		None,
+		input_contracts::generated::h::h_1,
+	)?;
 	Ok(value)
 }
 
 /// e2b:H.2
 fn read_h_2(xpath: &mut Context) -> Result<Option<String>> {
-	portable_string(
+	input_string(
 		first_text_root(xpath, HNarrativePaths::REPORTER_COMMENTS),
 		"reporterComments",
+		input_contracts::generated::h::h_2,
 	)
 }
 
@@ -244,22 +250,25 @@ fn read_h_3_r_1(
 	node: &libxml::tree::Node,
 ) -> Result<(Option<String>, Option<String>)> {
 	Ok((
-		portable_string(
+		input_string(
 			first_attr(xpath, node, "hl7:value", "codeSystemVersion"),
 			"senderDiagnoses[].diagnosisMeddraVersion",
+			input_contracts::generated::h::h_3_r_1a,
 		)?,
-		portable_string(
+		input_string(
 			first_attr(xpath, node, "hl7:value", "code"),
 			"senderDiagnoses[].diagnosisMeddraCode",
+			input_contracts::generated::h::h_3_r_1b,
 		)?,
 	))
 }
 
 /// e2b:H.4
 fn read_h_4(xpath: &mut Context) -> Result<Option<String>> {
-	portable_string(
+	input_string(
 		first_text_root(xpath, HNarrativePaths::SENDER_COMMENTS),
 		"senderComments",
+		input_contracts::generated::h::h_4,
 	)
 }
 
@@ -271,22 +280,29 @@ fn read_h_5_r_1(
 ) -> Result<(Option<String>, Option<String>)> {
 	let language = normalize_lang3(first_attr(xpath, node, "hl7:value", "language"));
 	import_constraint::string(
-		"NR",
 		"caseSummaryInformation[].languageCode",
 		language.as_deref(),
 		None,
+		input_contracts::generated::h::h_5_r_1b,
 	)?;
 	Ok((
 		language,
-		portable_string(
+		input_string(
 			first_text(xpath, node, "hl7:value"),
 			"caseSummaryInformation[].summaryText",
+			input_contracts::generated::h::h_5_r_1a,
 		)?,
 	))
 }
 
-fn portable_string(value: Option<String>, field: &str) -> Result<Option<String>> {
-	import_constraint::string("NR", field, value.as_deref(), None)?;
+fn input_string(
+	value: Option<String>,
+	field: &str,
+	check: impl for<'a> Fn(
+		input_contracts::FieldInput<'a>,
+	) -> Vec<input_contracts::InputIssue>,
+) -> Result<Option<String>> {
+	import_constraint::string(field, value.as_deref(), None, check)?;
 	Ok(value)
 }
 

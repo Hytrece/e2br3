@@ -710,5 +710,7 @@ generate_presave_child_rest_fns! {
 	ParentField: receiver_presave_id,
 	ParentKind: Receiver,
 	EntityName: "receiver_presave_consignees",
-	DeleteMode: hard
+	DeleteMode: hard,
+	ValidateCreate: super::shared::no_input_contract,
+	ValidateUpdate: super::shared::no_input_contract
 }

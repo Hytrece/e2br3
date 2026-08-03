@@ -123,8 +123,14 @@ fn sender_text(
 		.or_else(|| first_text_root(xpath, global))
 }
 
-fn sender_string(value: Option<String>, field: &str) -> Result<Option<String>> {
-	import_constraint::string("SD", field, value.as_deref(), None)?;
+fn sender_string(
+	value: Option<String>,
+	field: &str,
+	check: impl for<'a> Fn(
+		input_contracts::FieldInput<'a>,
+	) -> Vec<input_contracts::InputIssue>,
+) -> Result<Option<String>> {
+	import_constraint::string(field, value.as_deref(), None, check)?;
 	Ok(value)
 }
 
@@ -142,7 +148,12 @@ fn read_c_3_1(
 		line: None,
 		column: None,
 	})?;
-	import_constraint::string("SD", "senderType", Some(&value), None)?;
+	import_constraint::string(
+		"senderType",
+		Some(&value),
+		None,
+		input_contracts::generated::c::c_3_1,
+	)?;
 	Ok(value)
 }
 
@@ -154,7 +165,11 @@ fn read_c_3_1_kr_1(
 	let raw = node
 		.and_then(|node| first_attr(xpath, node, &format!("./hl7:subjectOf2/hl7:observation[hl7:code[@code='{KR_C_3_1_1}']]/hl7:value"), "code"))
 		.or_else(|| first_value_root(xpath, &format!("//hl7:investigationEvent/hl7:subjectOf1/hl7:controlActEvent/hl7:author/hl7:assignedEntity/hl7:subjectOf2/hl7:observation[hl7:code[@code='{KR_C_3_1_1}']]/hl7:value/@code")));
-	sender_string(raw, "healthProfessionalTypeKr1")
+	sender_string(
+		raw,
+		"healthProfessionalTypeKr1",
+		input_contracts::generated::c::mfds_c_3_1_kr_1,
+	)
 }
 
 /// e2b:C.3.2
@@ -169,7 +184,12 @@ fn read_c_3_2(
 		.or_else(|| first_text_root(xpath, "//hl7:assignedEntity/hl7:representedOrganization/hl7:name"))
 		.or_else(|| header.and_then(|header| header.message_sender.clone()))
 		.ok_or_else(|| Error::InvalidXml { message: "ICH.C.3.2.REQUIRED: sender organization missing".to_string(), line: None, column: None })?;
-	import_constraint::string("SD", "organizationName", Some(&value), None)?;
+	import_constraint::string(
+		"organizationName",
+		Some(&value),
+		None,
+		input_contracts::generated::c::c_3_2,
+	)?;
 	Ok(value)
 }
 
@@ -186,6 +206,7 @@ fn read_c_3_3_1(
 			"//hl7:assignedEntity/hl7:representedOrganization/hl7:desc",
 		),
 		"department",
+		input_contracts::generated::c::c_3_3_1,
 	)
 }
 
@@ -202,6 +223,7 @@ fn read_c_3_3_2(
 			"//hl7:assignedEntity/hl7:assignedPerson/hl7:name/hl7:prefix",
 		),
 		"personTitle",
+		input_contracts::generated::c::c_3_3_2,
 	)
 }
 
@@ -218,6 +240,7 @@ fn read_c_3_3_3(
 			"//hl7:assignedEntity/hl7:assignedPerson/hl7:name/hl7:given[1]",
 		),
 		"personGivenName",
+		input_contracts::generated::c::c_3_3_3,
 	)
 }
 
@@ -234,6 +257,7 @@ fn read_c_3_3_4(
 			"//hl7:assignedEntity/hl7:assignedPerson/hl7:name/hl7:given[2]",
 		),
 		"personMiddleName",
+		input_contracts::generated::c::c_3_3_4,
 	)
 }
 
@@ -250,6 +274,7 @@ fn read_c_3_3_5(
 			"//hl7:assignedEntity/hl7:assignedPerson/hl7:name/hl7:family",
 		),
 		"personFamilyName",
+		input_contracts::generated::c::c_3_3_5,
 	)
 }
 
@@ -274,6 +299,7 @@ fn read_c_3_4_1(
 	sender_string(
 		read_sender_address(xpath, node, "streetAddressLine"),
 		"streetAddress",
+		input_contracts::generated::c::c_3_4_1,
 	)
 }
 /// e2b:C.3.4.2
@@ -281,21 +307,33 @@ fn read_c_3_4_2(
 	xpath: &mut Context,
 	node: Option<&libxml::tree::Node>,
 ) -> Result<Option<String>> {
-	sender_string(read_sender_address(xpath, node, "city"), "city")
+	sender_string(
+		read_sender_address(xpath, node, "city"),
+		"city",
+		input_contracts::generated::c::c_3_4_2,
+	)
 }
 /// e2b:C.3.4.3
 fn read_c_3_4_3(
 	xpath: &mut Context,
 	node: Option<&libxml::tree::Node>,
 ) -> Result<Option<String>> {
-	sender_string(read_sender_address(xpath, node, "state"), "state")
+	sender_string(
+		read_sender_address(xpath, node, "state"),
+		"state",
+		input_contracts::generated::c::c_3_4_3,
+	)
 }
 /// e2b:C.3.4.4
 fn read_c_3_4_4(
 	xpath: &mut Context,
 	node: Option<&libxml::tree::Node>,
 ) -> Result<Option<String>> {
-	sender_string(read_sender_address(xpath, node, "postalCode"), "postcode")
+	sender_string(
+		read_sender_address(xpath, node, "postalCode"),
+		"postcode",
+		input_contracts::generated::c::c_3_4_4,
+	)
 }
 
 /// e2b:C.3.4.5
@@ -323,7 +361,11 @@ fn read_c_3_4_5(
 				"//hl7:assignedEntity/hl7:addr/hl7:country/@code",
 			)
 		});
-	sender_string(raw.map(|value| value.to_ascii_uppercase()), "countryCode")
+	sender_string(
+		raw.map(|value| value.to_ascii_uppercase()),
+		"countryCode",
+		input_contracts::generated::c::c_3_4_5,
+	)
 }
 
 fn read_sender_telecom(
@@ -340,21 +382,33 @@ fn read_c_3_4_6(
 	xpath: &mut Context,
 	node: Option<&libxml::tree::Node>,
 ) -> Result<Option<String>> {
-	sender_string(read_sender_telecom(xpath, node, "tel:"), "telephone")
+	sender_string(
+		read_sender_telecom(xpath, node, "tel:"),
+		"telephone",
+		input_contracts::generated::c::c_3_4_6,
+	)
 }
 /// e2b:C.3.4.7
 fn read_c_3_4_7(
 	xpath: &mut Context,
 	node: Option<&libxml::tree::Node>,
 ) -> Result<Option<String>> {
-	sender_string(read_sender_telecom(xpath, node, "fax:"), "fax")
+	sender_string(
+		read_sender_telecom(xpath, node, "fax:"),
+		"fax",
+		input_contracts::generated::c::c_3_4_7,
+	)
 }
 /// e2b:C.3.4.8
 fn read_c_3_4_8(
 	xpath: &mut Context,
 	node: Option<&libxml::tree::Node>,
 ) -> Result<Option<String>> {
-	sender_string(read_sender_telecom(xpath, node, "mailto:"), "email")
+	sender_string(
+		read_sender_telecom(xpath, node, "mailto:"),
+		"email",
+		input_contracts::generated::c::c_3_4_8,
+	)
 }
 
 pub(crate) fn parse_sender_information(
@@ -419,20 +473,17 @@ fn read_reporter_text_with_null_flavor(
 	node: &libxml::tree::Node,
 	path: &str,
 	field: &str,
+	check: impl for<'a> Fn(
+		input_contracts::FieldInput<'a>,
+	) -> Vec<input_contracts::InputIssue>,
 ) -> Result<(Option<String>, Option<String>)> {
 	let value = first_text(xpath, node, path);
 	let null_flavor = first_attr(xpath, node, path, "nullFlavor");
 	import_constraint::string(
-		"RP",
 		field,
 		value.as_deref(),
 		null_flavor.as_deref(),
-	)?;
-	import_constraint::string(
-		"RP",
-		&format!("{field}NullFlavor"),
-		null_flavor.as_deref(),
-		None,
+		check,
 	)?;
 	Ok((value, null_flavor))
 }
@@ -448,20 +499,20 @@ fn read_text_with_null_flavor(
 	)
 }
 
-fn portable_pair(
-	section: &str,
+fn input_pair(
 	field: &str,
-	null_field: &str,
 	value: Option<String>,
 	null_flavor: Option<String>,
+	check: impl for<'a> Fn(
+		input_contracts::FieldInput<'a>,
+	) -> Vec<input_contracts::InputIssue>,
 ) -> Result<(Option<String>, Option<String>)> {
 	import_constraint::string(
-		section,
 		field,
 		value.as_deref(),
 		null_flavor.as_deref(),
+		check,
 	)?;
-	import_constraint::string(section, null_field, null_flavor.as_deref(), None)?;
 	Ok((value, null_flavor))
 }
 
@@ -476,6 +527,7 @@ fn read_c_2_r_1_1(
 		node,
 		".//hl7:assignedPerson/hl7:name/hl7:prefix",
 		"reporterTitle",
+		input_contracts::generated::c::c_2_r_1_1,
 	)
 }
 
@@ -490,6 +542,7 @@ fn read_c_2_r_1_2(
 		node,
 		".//hl7:assignedPerson/hl7:name/hl7:given[1]",
 		"reporterGivenName",
+		input_contracts::generated::c::c_2_r_1_2,
 	)
 }
 
@@ -504,6 +557,7 @@ fn read_c_2_r_1_3(
 		node,
 		".//hl7:assignedPerson/hl7:name/hl7:given[2]",
 		"reporterMiddleName",
+		input_contracts::generated::c::c_2_r_1_3,
 	)
 }
 
@@ -518,6 +572,7 @@ fn read_c_2_r_1_4(
 		node,
 		".//hl7:assignedPerson/hl7:name/hl7:family",
 		"reporterFamilyName",
+		input_contracts::generated::c::c_2_r_1_4,
 	)
 }
 
@@ -541,12 +596,14 @@ fn read_c_2_r_2_1_2(
 		node,
 		nested_path,
 		"reporterOrganization",
+		input_contracts::generated::c::c_2_r_2_1,
 	)?;
 	let (direct, direct_null_flavor) = read_reporter_text_with_null_flavor(
 		xpath,
 		node,
 		direct_path,
 		"reporterDepartment",
+		input_contracts::generated::c::c_2_r_2_2,
 	)?;
 	let has_nested = nested.is_some() || nested_null_flavor.is_some();
 	Ok((
@@ -572,6 +629,7 @@ fn read_c_2_r_2_3(
 		node,
 		".//hl7:assignedEntity/hl7:addr/hl7:streetAddressLine",
 		"reporterStreet",
+		input_contracts::generated::c::c_2_r_2_3,
 	)
 }
 
@@ -586,6 +644,7 @@ fn read_c_2_r_2_4(
 		node,
 		".//hl7:assignedEntity/hl7:addr/hl7:city",
 		"reporterCity",
+		input_contracts::generated::c::c_2_r_2_4,
 	)
 }
 
@@ -600,6 +659,7 @@ fn read_c_2_r_2_5(
 		node,
 		".//hl7:assignedEntity/hl7:addr/hl7:state",
 		"reporterState",
+		input_contracts::generated::c::c_2_r_2_5,
 	)
 }
 
@@ -614,6 +674,7 @@ fn read_c_2_r_2_6(
 		node,
 		".//hl7:assignedEntity/hl7:addr/hl7:postalCode",
 		"reporterPostcode",
+		input_contracts::generated::c::c_2_r_2_6,
 	)
 }
 
@@ -631,16 +692,16 @@ fn read_c_2_r_2_7(
 		"nullFlavor",
 	);
 	import_constraint::string(
-		"RP",
 		"reporterTelephone",
 		value.as_deref(),
 		null_flavor.as_deref(),
+		input_contracts::generated::c::c_2_r_2_7,
 	)?;
 	import_constraint::string(
-		"RP",
 		"reporterTelephoneNullFlavor",
-		null_flavor.as_deref(),
 		None,
+		None,
+		input_contracts::generated::c::c_2_r_2_7,
 	)?;
 	Ok((value, null_flavor))
 }
@@ -659,16 +720,16 @@ fn read_fda_c_2_r_2_8(
 		"nullFlavor",
 	);
 	import_constraint::string(
-		"RP",
 		"reporterEmail",
 		value.as_deref(),
 		null_flavor.as_deref(),
+		input_contracts::generated::c::fda_c_2_r_2_8,
 	)?;
 	import_constraint::string(
-		"RP",
 		"reporterEmailNullFlavor",
-		null_flavor.as_deref(),
 		None,
+		None,
+		input_contracts::generated::c::fda_c_2_r_2_8,
 	)?;
 	Ok((value, null_flavor))
 }
@@ -681,10 +742,10 @@ fn read_c_2_r_3(
 	let value = first_attr(xpath, node, "../hl7:priorityNumber", "value")
 		.filter(|value| !value.trim().is_empty());
 	import_constraint::string(
-		"RP",
 		"primarySourceForRegulatoryPurposes",
 		value.as_deref(),
 		None,
+		input_contracts::generated::c::c_2_r_5,
 	)?;
 	Ok(value)
 }
@@ -700,16 +761,16 @@ fn read_c_2_r_4(
 	let value = raw.clone().or(Some("1".to_string()));
 	let null_flavor = first_attr(xpath, node, path, "nullFlavor");
 	import_constraint::string(
-		"RP",
 		"qualification",
 		raw.as_deref(),
 		null_flavor.as_deref(),
+		input_contracts::generated::c::c_2_r_4,
 	)?;
 	import_constraint::string(
-		"RP",
 		"qualificationNullFlavor",
-		null_flavor.as_deref(),
 		None,
+		None,
+		input_contracts::generated::c::c_2_r_4,
 	)?;
 	Ok((raw.clone(), value, null_flavor))
 }
@@ -725,16 +786,16 @@ fn read_c_2_r_5(
 		.map(|value| value.to_ascii_uppercase());
 	let null_flavor = first_attr(xpath, node, path, "nullFlavor");
 	import_constraint::string(
-		"RP",
 		"reporterCountry",
 		value.as_deref(),
 		null_flavor.as_deref(),
+		input_contracts::generated::c::c_2_r_3,
 	)?;
 	import_constraint::string(
-		"RP",
 		"reporterCountryNullFlavor",
-		null_flavor.as_deref(),
 		None,
+		None,
+		input_contracts::generated::c::c_2_r_3,
 	)?;
 	Ok((value, null_flavor))
 }
@@ -1046,10 +1107,10 @@ pub(crate) fn parse_other_case_identifiers(
 fn read_c_1_9_1_r_1(node: &libxml::tree::Node) -> Result<Option<String>> {
 	let value = node.get_attribute("assigningAuthorityName");
 	import_constraint::string(
-		"CI",
 		"otherCaseIdentifiers[].source",
 		value.as_deref(),
 		None,
+		input_contracts::generated::c::c_1_9_1_r_1,
 	)?;
 	Ok(value)
 }
@@ -1058,10 +1119,10 @@ fn read_c_1_9_1_r_1(node: &libxml::tree::Node) -> Result<Option<String>> {
 fn read_c_1_9_1_r_2(node: &libxml::tree::Node) -> Result<Option<String>> {
 	let value = node.get_attribute("extension");
 	import_constraint::string(
-		"CI",
 		"otherCaseIdentifiers[].caseIdentifier",
 		value.as_deref(),
 		None,
+		input_contracts::generated::c::c_1_9_1_r_2,
 	)?;
 	Ok(value)
 }
@@ -1118,10 +1179,10 @@ pub(crate) fn parse_linked_reports(xml: &[u8]) -> Result<Vec<LinkedReportImport>
 fn read_c_1_10_r(node: &libxml::tree::Node) -> Result<Option<String>> {
 	let value = node.get_attribute("extension");
 	import_constraint::string(
-		"CI",
 		"linkedReports[].linkedReportNumber",
 		value.as_deref(),
 		None,
+		input_contracts::generated::c::c_1_10_r,
 	)?;
 	Ok(value)
 }
@@ -1183,10 +1244,10 @@ fn read_c_1_6_1_r_1(
 ) -> Result<Option<String>> {
 	let value = first_text(xpath, node, "hl7:title");
 	import_constraint::string(
-		"CI",
 		"documentsHeldBySender[].documentDescription",
 		value.as_deref(),
 		None,
+		input_contracts::generated::c::c_1_6_1_r_1,
 	)?;
 	Ok(value)
 }
@@ -1206,10 +1267,10 @@ fn read_c_1_6_1_r_2(
 )> {
 	let document = first_text(xpath, node, "hl7:text");
 	import_constraint::string(
-		"CI",
 		"documentsHeldBySender[].includedDocument",
 		document.as_deref(),
 		None,
+		input_contracts::generated::c::c_1_6_1_r_2,
 	)?;
 	Ok((
 		document,
@@ -1294,16 +1355,16 @@ fn read_c_4_r_1(
 			column: None,
 		})?;
 	import_constraint::string(
-		"LR",
 		"referenceText",
 		Some(&text),
 		null_flavor.as_deref(),
+		input_contracts::generated::c::c_4_r_1,
 	)?;
 	import_constraint::string(
-		"LR",
 		"referenceTextNullFlavor",
-		null_flavor.as_deref(),
 		None,
+		None,
+		input_contracts::generated::c::c_4_r_1,
 	)?;
 	Ok((text, null_flavor))
 }
@@ -1322,7 +1383,12 @@ fn read_c_4_r_2(
 	Option<String>,
 )> {
 	let values = read_c_1_6_1_r_2(xpath, node)?;
-	import_constraint::string("LR", "documentBase64", values.0.as_deref(), None)?;
+	import_constraint::string(
+		"documentBase64",
+		values.0.as_deref(),
+		None,
+		input_contracts::generated::c::c_4_r_2,
+	)?;
 	Ok(values)
 }
 
@@ -1414,12 +1480,11 @@ fn read_c_5_1_r_1(
 	xpath: &mut Context,
 	node: &libxml::tree::Node,
 ) -> Result<(Option<String>, Option<String>)> {
-	portable_pair(
-		"SI",
+	input_pair(
 		"studyRegistrationNumbers[].registrationNumber",
-		"studyRegistrationNumbers[].registrationNumberNullFlavor",
 		first_attr(xpath, node, "hl7:id", "extension"),
 		first_attr(xpath, node, "hl7:id", "nullFlavor"),
+		input_contracts::generated::c::c_5_1_r_1,
 	)
 }
 
@@ -1431,12 +1496,11 @@ fn read_c_5_1_r_2(
 	let path = "hl7:author/hl7:territorialAuthority/hl7:governingPlace/hl7:code";
 	let value = first_attr(xpath, node, path, "code")
 		.map(|value| value.to_ascii_uppercase());
-	portable_pair(
-		"SI",
+	input_pair(
 		"studyRegistrationNumbers[].countryCode",
-		"studyRegistrationNumbers[].countryCodeNullFlavor",
 		value,
 		first_attr(xpath, node, path, "nullFlavor"),
+		input_contracts::generated::c::c_5_1_r_2,
 	)
 }
 
@@ -1446,7 +1510,12 @@ fn read_c_5_2(
 	node: &libxml::tree::Node,
 ) -> Result<(Option<String>, Option<String>)> {
 	let (value, null_flavor) = read_text_with_null_flavor(xpath, node, "hl7:title");
-	portable_pair("SI", "studyName", "studyNameNullFlavor", value, null_flavor)
+	input_pair(
+		"studyName",
+		value,
+		null_flavor,
+		input_contracts::generated::c::c_5_2,
+	)
 }
 
 /// e2b:C.5.3
@@ -1454,12 +1523,11 @@ fn read_c_5_3(
 	xpath: &mut Context,
 	node: &libxml::tree::Node,
 ) -> Result<(Option<String>, Option<String>)> {
-	portable_pair(
-		"SI",
+	input_pair(
 		"sponsorStudyNumber",
-		"sponsorStudyNumberNullFlavor",
 		first_attr(xpath, node, "hl7:id", "extension"),
 		first_attr(xpath, node, "hl7:id", "nullFlavor"),
+		input_contracts::generated::c::c_5_3,
 	)
 }
 
@@ -1469,7 +1537,12 @@ fn read_c_5_4(
 	node: &libxml::tree::Node,
 ) -> Result<Option<String>> {
 	let value = first_attr(xpath, node, "hl7:code", "code");
-	import_constraint::string("SI", "studyTypeReaction", value.as_deref(), None)?;
+	import_constraint::string(
+		"studyTypeReaction",
+		value.as_deref(),
+		None,
+		input_contracts::generated::c::c_5_4,
+	)?;
 	Ok(value)
 }
 
@@ -1479,7 +1552,12 @@ fn read_c_5_4_kr_1(
 	node: &libxml::tree::Node,
 ) -> Result<Option<String>> {
 	let value = first_attr(xpath, node, &format!("hl7:subjectOf2/hl7:observation[hl7:code/@code='{KR_C_5_4_1}']/hl7:value"), "code");
-	import_constraint::string("SI", "studyTypeReactionKr1", value.as_deref(), None)?;
+	import_constraint::string(
+		"studyTypeReactionKr1",
+		value.as_deref(),
+		None,
+		input_contracts::generated::c::mfds_c_5_4_kr_1,
+	)?;
 	Ok(value)
 }
 
@@ -1494,7 +1572,12 @@ fn read_fda_c_5_5a(
 		"hl7:id[@root='2.16.840.1.113883.3.989.5.1.2.2.1.2.1']",
 		"extension",
 	);
-	import_constraint::string("SI", "fdaIndNumberOccurred", value.as_deref(), None)?;
+	import_constraint::string(
+		"fdaIndNumberOccurred",
+		value.as_deref(),
+		None,
+		input_contracts::generated::c::fda_c_5_5a,
+	)?;
 	Ok(value)
 }
 
@@ -1510,10 +1593,10 @@ fn read_fda_c_5_5b(
 		"extension",
 	);
 	import_constraint::string(
-		"SI",
 		"fdaPreAndaNumberOccurred",
 		value.as_deref(),
 		None,
+		input_contracts::generated::c::fda_c_5_5b,
 	)?;
 	Ok(value)
 }
@@ -1532,12 +1615,11 @@ fn read_fda_c_5_6_r(
 		.unwrap_or_default()
 		.into_iter()
 		.map(|id| {
-			portable_pair(
-				"SI",
+			input_pair(
 				"fdaCrossReportedIndNumbers[].indNumber",
-				"fdaCrossReportedIndNumbers[].indNumberNullFlavor",
 				id.get_property("extension"),
 				id.get_property("nullFlavor"),
+				input_contracts::generated::c::fda_c_5_6_r,
 			)
 		})
 		.collect()

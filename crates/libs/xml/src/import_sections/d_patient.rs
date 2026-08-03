@@ -154,6 +154,7 @@ fn read_d_1(xpath: &mut Context) -> Result<(Option<String>, Option<String>)> {
 		first_value_root(xpath, DPatientPaths::PATIENT_NAME_NULL_FLAVOR),
 		"patientInitials",
 		"patientInitialsNullFlavor",
+		input_contracts::generated::d::d_1,
 	)
 }
 
@@ -164,13 +165,18 @@ fn read_d_2_1(xpath: &mut Context) -> Result<(Option<Date>, Option<String>)> {
 		first_value_root(xpath, DPatientPaths::BIRTH_DATE_NULL_FLAVOR),
 		"patientBirthDate",
 		"patientBirthDateNullFlavor",
+		input_contracts::generated::d::d_2_1,
 	)
 }
 
 /// e2b:D.2.2a
 fn read_d_2_2a(xpath: &mut Context) -> Result<(Option<Decimal>, Option<String>)> {
 	let raw = first_value_root(xpath, DPatientPaths::AGE_VALUE);
-	import_constraint::number_string("DM", "patientAge.value", raw.as_deref())?;
+	import_constraint::number_string(
+		"patientAge.value",
+		raw.as_deref(),
+		input_contracts::generated::d::d_2_2a,
+	)?;
 	Ok((
 		raw.and_then(|value| value.parse().ok()),
 		first_value_root(xpath, DPatientPaths::AGE_NULL_FLAVOR),
@@ -179,49 +185,55 @@ fn read_d_2_2a(xpath: &mut Context) -> Result<(Option<Decimal>, Option<String>)>
 
 /// e2b:D.2.2b
 fn read_d_2_2b(xpath: &mut Context) -> Result<Option<String>> {
-	portable_string(
+	input_string(
 		first_value_root(xpath, DPatientPaths::AGE_UNIT),
 		"patientAge.unit",
+		input_contracts::generated::d::d_2_2b,
 	)
 }
 
 /// e2b:D.2.2.1a
 fn read_d_2_2_1a(xpath: &mut Context) -> Result<Option<Decimal>> {
-	portable_decimal(
+	input_decimal(
 		first_value_root(xpath, DPatientPaths::GESTATION_VALUE),
 		"gestationPeriod.value",
+		input_contracts::generated::d::d_2_2_1a,
 	)
 }
 
 /// e2b:D.2.2.1b
 fn read_d_2_2_1b(xpath: &mut Context) -> Result<Option<String>> {
-	portable_string(
+	input_string(
 		first_value_root(xpath, DPatientPaths::GESTATION_UNIT),
 		"gestationPeriod.unit",
+		input_contracts::generated::d::d_2_2_1b,
 	)
 }
 
 /// e2b:D.2.3
 fn read_d_2_3(xpath: &mut Context) -> Result<Option<String>> {
-	portable_string(
+	input_string(
 		first_value_root(xpath, DPatientPaths::AGE_GROUP_CODE),
 		"patientAgeGroup",
+		input_contracts::generated::d::d_2_3,
 	)
 }
 
 /// e2b:D.3
 fn read_d_3(xpath: &mut Context) -> Result<Option<Decimal>> {
-	portable_decimal(
+	input_decimal(
 		first_value_root(xpath, DPatientPaths::WEIGHT_VALUE),
 		"patientWeight.value",
+		input_contracts::generated::d::d_3,
 	)
 }
 
 /// e2b:D.4
 fn read_d_4(xpath: &mut Context) -> Result<Option<Decimal>> {
-	portable_decimal(
+	input_decimal(
 		first_value_root(xpath, DPatientPaths::HEIGHT_VALUE),
 		"patientHeight.value",
+		input_contracts::generated::d::d_4,
 	)
 }
 
@@ -232,6 +244,7 @@ fn read_d_5(xpath: &mut Context) -> Result<(Option<String>, Option<String>)> {
 		first_value_root(xpath, DPatientPaths::SEX_NULL_FLAVOR),
 		"patientSex",
 		"patientSexNullFlavor",
+		input_contracts::generated::d::d_5,
 	)
 }
 
@@ -242,6 +255,7 @@ fn read_d_6(xpath: &mut Context) -> Result<(Option<Date>, Option<String>)> {
 		first_value_root(xpath, DPatientPaths::LMP_DATE_NULL_FLAVOR),
 		"lastMenstrualPeriodDate",
 		"lastMenstrualPeriodDateNullFlavor",
+		input_contracts::generated::d::d_6,
 	)
 }
 
@@ -252,6 +266,7 @@ fn read_d_7_2(xpath: &mut Context) -> Result<(Option<String>, Option<String>)> {
 		first_value_root(xpath, DPatientPaths::MEDICAL_HISTORY_TEXT_NULL_FLAVOR),
 		"medicalHistoryText",
 		"medicalHistoryTextNullFlavor",
+		input_contracts::generated::d::d_7_2,
 	)
 }
 
@@ -261,7 +276,12 @@ fn read_d_7_3(xpath: &mut Context) -> Result<Option<bool>> {
 		xpath,
 		DPatientPaths::CONCOMITANT_THERAPY_VALUE,
 	));
-	import_constraint::boolean("DM", "concomitantTherapies", value, None)?;
+	import_constraint::boolean(
+		"concomitantTherapies",
+		value,
+		None,
+		input_contracts::generated::d::d_7_3,
+	)?;
 	Ok(value)
 }
 
@@ -274,6 +294,7 @@ fn read_fda_d_11_r_1(
 		first_value_root(xpath, DPatientPaths::RACE_CODE_NULL_FLAVOR),
 		"raceCode",
 		"raceCodeNullFlavor",
+		input_contracts::generated::d::fda_d_11_r_1,
 	)
 }
 
@@ -284,6 +305,7 @@ fn read_fda_d_12(xpath: &mut Context) -> Result<(Option<String>, Option<String>)
 		first_value_root(xpath, DPatientPaths::ETHNICITY_CODE_NULL_FLAVOR),
 		"ethnicityCode",
 		"ethnicityCodeNullFlavor",
+		input_contracts::generated::d::fda_d_12,
 	)
 }
 
@@ -301,13 +323,25 @@ fn first_text_root(xpath: &mut Context, path: &str) -> Option<String> {
 	}
 }
 
-fn portable_string(value: Option<String>, field: &str) -> Result<Option<String>> {
-	import_constraint::string("DM", field, value.as_deref(), None)?;
+fn input_string(
+	value: Option<String>,
+	field: &str,
+	check: impl for<'a> Fn(
+		input_contracts::FieldInput<'a>,
+	) -> Vec<input_contracts::InputIssue>,
+) -> Result<Option<String>> {
+	import_constraint::string(field, value.as_deref(), None, check)?;
 	Ok(value)
 }
 
-fn portable_decimal(value: Option<String>, field: &str) -> Result<Option<Decimal>> {
-	import_constraint::number_string("DM", field, value.as_deref())?;
+fn input_decimal(
+	value: Option<String>,
+	field: &str,
+	check: impl for<'a> Fn(
+		input_contracts::FieldInput<'a>,
+	) -> Vec<input_contracts::InputIssue>,
+) -> Result<Option<Decimal>> {
+	import_constraint::number_string(field, value.as_deref(), check)?;
 	Ok(value.and_then(|value| value.parse().ok()))
 }
 
@@ -315,15 +349,17 @@ fn string_pair(
 	value: Option<String>,
 	null_flavor: Option<String>,
 	field: &str,
-	null_field: &str,
+	_null_field: &str,
+	check: impl for<'a> Fn(
+		input_contracts::FieldInput<'a>,
+	) -> Vec<input_contracts::InputIssue>,
 ) -> Result<(Option<String>, Option<String>)> {
 	import_constraint::string(
-		"DM",
 		field,
 		value.as_deref(),
 		null_flavor.as_deref(),
+		check,
 	)?;
-	import_constraint::string("DM", null_field, null_flavor.as_deref(), None)?;
 	Ok((value, null_flavor))
 }
 
@@ -332,8 +368,12 @@ fn date_pair(
 	null_flavor: Option<String>,
 	field: &str,
 	null_field: &str,
+	check: impl for<'a> Fn(
+		input_contracts::FieldInput<'a>,
+	) -> Vec<input_contracts::InputIssue>,
 ) -> Result<(Option<Date>, Option<String>)> {
-	let (value, null_flavor) = string_pair(value, null_flavor, field, null_field)?;
+	let (value, null_flavor) =
+		string_pair(value, null_flavor, field, null_field, check)?;
 	Ok((value.and_then(parse_date), null_flavor))
 }
 

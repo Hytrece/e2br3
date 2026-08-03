@@ -17,5 +17,7 @@ generate_single_row_presave_rest_fns! {
 	GetFn: get_reporter_presave,
 	UpdateFn: update_reporter_presave,
 	DeleteFn: delete_reporter_presave,
-	Kind: Reporter
+	Kind: Reporter,
+	ValidateCreate: super::input_contract::reporter_create,
+	ValidateUpdate: super::input_contract::reporter_update
 }

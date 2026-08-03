@@ -549,6 +549,10 @@ where
 {
 	mm.dbx().begin_txn().await?;
 	let run_result = async {
+		// A previous loader transaction may have returned this pooled connection
+		// while it was still using the RLS role. Trigger management needs the
+		// login role that owns the terminology table.
+		mm.dbx().execute(sqlx::query("RESET ROLE")).await?;
 		mm.dbx()
 			.execute(sqlx::query(
 				"ALTER TABLE whodrug_products DISABLE TRIGGER audit_whodrug_products",

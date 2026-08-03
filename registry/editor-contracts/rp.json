@@ -628,7 +628,7 @@
       "roundTripValue": "NASK",
       "constraint": {
         "status": "not_applicable",
-        "reason": "The portable catalog has no reporterEmailNullFlavor binding."
+        "reason": "The field has no Input Contract for reporterEmailNullFlavor."
       },
       "businessValidation": {
         "status": "not_applicable",

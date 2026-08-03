@@ -17,7 +17,11 @@ pub async fn create_product_presave(
 		move |ctx, mm| {
 			Box::pin(async move {
 				let ParamsForCreate { data } = params;
-				for substance in &data.rows.active_substances {
+				super::input_contract::product_create(&data.rows.product)?;
+				for (index, substance) in
+					data.rows.active_substances.iter().enumerate()
+				{
+					super::input_contract::substance_detail(substance, index)?;
 					validate_product_active_substance_detail_create(substance)?;
 					if substance.deleted {
 						return Err(Error::BadRequest {
@@ -114,6 +118,7 @@ pub async fn update_product_presave(
 		move |ctx, mm| {
 			Box::pin(async move {
 				let ParamsForUpdate { data } = params;
+				super::input_contract::product_update(&data)?;
 				if data.deleted == Some(true) {
 					PresaveLifecycleService::archive(
 						ctx,
@@ -279,6 +284,18 @@ pub async fn update_product_presave_details(
 			Box::pin(async move {
 				let ParamsForUpdate { data } = params;
 				let rows = data.rows;
+				if let Some(product) = &rows.product {
+					super::input_contract::product_update(product)?;
+				}
+				if let Some(substances) = &rows.active_substances {
+					for (index, substance) in substances.iter().enumerate() {
+						if !substance.deleted {
+							super::input_contract::substance_detail(
+								substance, index,
+							)?;
+						}
+					}
+				}
 				if rows
 					.product
 					.as_ref()
@@ -516,5 +533,7 @@ generate_presave_child_rest_fns! {
 	ParentField: product_presave_id,
 	ParentKind: Product,
 	EntityName: "product_presave_active_substances",
-	DeleteMode: hard
+	DeleteMode: hard,
+	ValidateCreate: super::input_contract::substance_create,
+	ValidateUpdate: super::input_contract::substance_update
 }

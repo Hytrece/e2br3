@@ -1,6 +1,8 @@
 //! Shared imports and helpers for case editor REST modules.
 
-pub(super) use super::portable_save::{validate_direct_rows, validate_row_payload};
+pub(super) use super::input_contract_save::{
+	validate_direct_rows, validate_row_payload,
+};
 pub(super) use crate::web::rest::case_editor_dto::{
 	CaseEditorAeListRowDto, CaseEditorCiCaseDto, CaseEditorCiDocumentDto,
 	CaseEditorCiLinkedReportDto, CaseEditorCiOtherIdentifierDto,

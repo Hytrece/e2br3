@@ -2,29 +2,42 @@
 
 ## Case Validator Coverage
 
-The validator's executable coverage registry is derived only from rule tables
-passed to shared evaluators in `case/sections/rule_table.rs`. It does not scan
-arbitrary source strings or maintain a parallel direct-branch inventory.
+The validator executes explicit field-code functions in
+`case/sections/{c,d,e,f,g,h,n}.rs`. Each section exposes its implemented rule
+codes for the exact-set regression, while shared primitives such as length,
+allowed-value, date, MedDRA, and vocabulary checks live in
+`case/sections/helpers.rs`.
 
-| Catalog scope | Catalog rules | Evaluator tables | Direct inventory | Overlap | Direct-only | Missing | Unexpected |
-|---|---:|---:|---:|---:|---:|---:|---:|
-| `CaseValidate`, sections C/D/E/F/G/H/N, ICH/FDA/MFDS | 461 | 461 | 0 | 0 | 0 | 0 | 0 |
+| Catalog scope | Catalog rules | Field validators | Missing | Unexpected |
+|---|---:|---:|---:|---:|
+| `CaseValidate`, sections C/D/E/F/G/H/N, ICH/FDA/MFDS | 462 | 462 | 0 | 0 |
 
 The exact-set regression is
-`case::sections::tests::implemented_case_registry_matches_case_validate_catalog`.
+`case::sections::tests::implemented_case_registry_matches_case_catalog`.
 Run it with:
 
 ```bash
-cargo test -p validator implemented_case_registry_matches_case_validate_catalog --lib
+cargo test -p validator implemented_case_registry_matches_case_catalog --lib
 ```
 
-The 461 table-backed rules cover required/presence, companion, allowed-value,
-vocabulary, MedDRA, maximum-length, future-date, and algorithmic violation
-evaluators. Section-specific prepared views resolve concrete paths and facts;
-`CatalogValueRule` delegates conditions and value policies to the catalog, while
-`ViolationRule` handles normalized relation predicates. These counts are
-enforced by `case_catalog_is_fully_evaluator_backed`; a catalog rule added to
-this scope fails the exact-set test until its case table is registered.
+The 462 field validators cover required/presence, companion, allowed-value,
+vocabulary, MedDRA, maximum-length, future-date, and algorithmic violations.
+They resolve concrete paths and conditional facts in the owning field function
+and reuse the shared helpers. The count is enforced by
+`case_catalog_is_fully_field_validator_backed`; a catalog rule added to this
+scope fails the exact-set test until its field validator is registered.
+
+## Input Contract Coverage
+
+The portable runtime projection and cross-layer bindings have been removed.
+The existing dictionaries were converted once into 262 explicit field-code
+functions for Rust and matching Zod schemas for the frontend. Their comments
+cover the same 399 input rule codes with no missing or unexpected rules.
+
+Backend editor saves, XML import, and case intake call the Rust field functions
+directly. The frontend calls the corresponding Zod schemas from explicit field
+functions using frontend-local paths. Neither side performs runtime dictionary
+lookup or maps frontend paths to backend request paths.
 
 ## Release-Backed Terminology
 

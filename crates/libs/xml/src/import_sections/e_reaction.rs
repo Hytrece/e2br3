@@ -259,39 +259,48 @@ fn read_e_i_1_1a(
 			);
 			String::new()
 		});
-	import_constraint::string("AE", "primarySourceReaction", Some(&value), None)?;
+	import_constraint::string(
+		"primarySourceReaction",
+		Some(&value),
+		None,
+		input_contracts::generated::e::e_i_1_1a,
+	)?;
 	Ok(value)
 }
 
 /// e2b:E.i.1.1b
 fn read_e_i_1_1b(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
-	portable_string(
+	input_string(
 		first_text(xpath, node, EReactionPaths::TRANSLATION_TEXT),
 		"primarySourceReactionTranslation",
+		input_contracts::generated::e::e_i_1_2,
 	)
 }
 
 /// e2b:E.i.1.2
 fn read_e_i_1_2(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
-	portable_string(
+	input_string(
 		first_attr(xpath, node, EReactionPaths::PRIMARY_LANG),
 		"reactionLanguage",
+		input_contracts::generated::e::e_i_1_1b,
 	)
 }
 
 /// e2b:E.i.2.1a
 fn read_e_i_2_1a(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
-	portable_string(
+	input_string(
 		first_attr(xpath, node, EReactionPaths::MEDDRA_VERSION),
 		"reactionMeddraVersionLLT",
+		input_contracts::generated::e::e_i_2_1a,
 	)
 }
 
 /// e2b:E.i.2.1b
 fn read_e_i_2_1b(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
-	portable_string(
+	input_string(
 		first_attr(xpath, node, EReactionPaths::MEDDRA_CODE),
 		"reactionMeddraCodeLLT",
+		input_contracts::generated::e::e_i_2_1b,
 	)
 }
 
@@ -301,7 +310,12 @@ fn read_e_i_3_1(
 	node: &Node,
 ) -> Result<(Option<String>, Option<bool>)> {
 	let code = first_attr(xpath, node, EReactionPaths::TERM_HIGHLIGHT_CODE);
-	import_constraint::string("AE", "termHighlighted", code.as_deref(), None)?;
+	import_constraint::string(
+		"termHighlighted",
+		code.as_deref(),
+		None,
+		input_contracts::generated::e::e_i_3_1,
+	)?;
 	let highlighted = code.clone();
 	let serious = code.as_deref().and_then(|value| match value {
 		"3" | "4" => Some(true),
@@ -330,12 +344,14 @@ fn read_seriousness(
 	value_path: &str,
 	null_flavor_path: &str,
 	field: &str,
-	null_field: &str,
+	_null_field: &str,
+	check: impl for<'a> Fn(
+		input_contracts::FieldInput<'a>,
+	) -> Vec<input_contracts::InputIssue>,
 ) -> Result<(Option<bool>, Option<String>)> {
 	let value = parse_bool_value(first_attr(xpath, node, value_path));
 	let null_flavor = first_attr(xpath, node, null_flavor_path);
-	import_constraint::boolean("AE", field, value, null_flavor.as_deref())?;
-	import_constraint::string("AE", null_field, null_flavor.as_deref(), None)?;
+	import_constraint::boolean(field, value, null_flavor.as_deref(), check)?;
 	Ok((value, null_flavor))
 }
 
@@ -351,6 +367,7 @@ fn read_e_i_3_2a(
 		EReactionPaths::CRITERIA_DEATH_NULL_FLAVOR,
 		"seriousness.criteriaResultsInDeath",
 		"seriousness.criteriaResultsInDeathNullFlavor",
+		input_contracts::generated::e::e_i_3_2a,
 	)
 }
 
@@ -366,6 +383,7 @@ fn read_e_i_3_2b(
 		EReactionPaths::CRITERIA_LIFE_THREATENING_NULL_FLAVOR,
 		"seriousness.criteriaLifeThreatening",
 		"seriousness.criteriaLifeThreateningNullFlavor",
+		input_contracts::generated::e::e_i_3_2b,
 	)
 }
 
@@ -381,6 +399,7 @@ fn read_e_i_3_2c(
 		EReactionPaths::CRITERIA_HOSPITALIZATION_NULL_FLAVOR,
 		"seriousness.criteriaHospitalization",
 		"seriousness.criteriaHospitalizationNullFlavor",
+		input_contracts::generated::e::e_i_3_2c,
 	)
 }
 
@@ -396,6 +415,7 @@ fn read_e_i_3_2d(
 		EReactionPaths::CRITERIA_DISABLING_NULL_FLAVOR,
 		"seriousness.criteriaDisabling",
 		"seriousness.criteriaDisablingNullFlavor",
+		input_contracts::generated::e::e_i_3_2d,
 	)
 }
 
@@ -411,6 +431,7 @@ fn read_e_i_3_2e(
 		EReactionPaths::CRITERIA_CONGENITAL_NULL_FLAVOR,
 		"seriousness.criteriaCongenitalAnomaly",
 		"seriousness.criteriaCongenitalAnomalyNullFlavor",
+		input_contracts::generated::e::e_i_3_2e,
 	)
 }
 
@@ -426,6 +447,7 @@ fn read_e_i_3_2f(
 		EReactionPaths::CRITERIA_OTHER_NULL_FLAVOR,
 		"seriousness.criteriaOtherMedicallyImportant",
 		"seriousness.criteriaOtherMedicallyImportantNullFlavor",
+		input_contracts::generated::e::e_i_3_2f,
 	)
 }
 
@@ -442,16 +464,16 @@ fn read_fda_e_i_3_2h(
 		EReactionPaths::REQUIRED_INTERVENTION_NULL_FLAVOR,
 	);
 	import_constraint::boolean(
-		"AE",
 		"requiredIntervention",
 		value,
 		null_flavor.as_deref(),
+		input_contracts::generated::e::fda_e_i_3_2h,
 	)?;
 	import_constraint::string(
-		"AE",
 		"requiredInterventionNullFlavor",
-		null_flavor.as_deref(),
 		None,
+		None,
+		input_contracts::generated::e::fda_e_i_3_2h,
 	)?;
 	Ok((value, null_flavor))
 }
@@ -464,14 +486,16 @@ fn read_date(
 	null_flavor_path: &str,
 	null_flavor_fallback_path: &str,
 	field: &str,
-	null_field: &str,
+	_null_field: &str,
+	check: impl for<'a> Fn(
+		input_contracts::FieldInput<'a>,
+	) -> Vec<input_contracts::InputIssue>,
 ) -> Result<(Option<Date>, Option<String>)> {
 	let raw = first_attr(xpath, node, value_path)
 		.or_else(|| first_attr(xpath, node, fallback_path));
 	let null_flavor = first_attr(xpath, node, null_flavor_path)
 		.or_else(|| first_attr(xpath, node, null_flavor_fallback_path));
-	import_constraint::string("AE", field, raw.as_deref(), null_flavor.as_deref())?;
-	import_constraint::string("AE", null_field, null_flavor.as_deref(), None)?;
+	import_constraint::string(field, raw.as_deref(), null_flavor.as_deref(), check)?;
 	Ok((raw.and_then(parse_date), null_flavor))
 }
 
@@ -489,6 +513,7 @@ fn read_e_i_4(
 		EReactionPaths::START_DATE_NULL_FLAVOR_FALLBACK,
 		"reactionStartDate",
 		"reactionStartDateNullFlavor",
+		input_contracts::generated::e::e_i_4,
 	)
 }
 
@@ -506,6 +531,7 @@ fn read_e_i_5(
 		EReactionPaths::END_DATE_NULL_FLAVOR_FALLBACK,
 		"reactionEndDate",
 		"reactionEndDateNullFlavor",
+		input_contracts::generated::e::e_i_5,
 	)
 }
 
@@ -513,26 +539,28 @@ fn read_e_i_5(
 fn read_e_i_6a(xpath: &mut Context, node: &Node) -> Result<Option<Decimal>> {
 	let raw = first_attr(xpath, node, EReactionPaths::DURATION_VALUE);
 	import_constraint::number_string(
-		"AE",
 		"reactionDuration.value",
 		raw.as_deref(),
+		input_contracts::generated::e::e_i_6a,
 	)?;
 	Ok(raw.and_then(|value| value.parse().ok()))
 }
 
 /// e2b:E.i.6b
 fn read_e_i_6b(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
-	portable_string(
+	input_string(
 		first_attr(xpath, node, EReactionPaths::DURATION_UNIT),
 		"reactionDuration.unit",
+		input_contracts::generated::e::e_i_6b,
 	)
 }
 
 /// e2b:E.i.7
 fn read_e_i_7(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
-	portable_string(
+	input_string(
 		first_attr(xpath, node, EReactionPaths::OUTCOME_CODE),
 		"reactionOutcome",
+		input_contracts::generated::e::e_i_7,
 	)
 }
 
@@ -543,15 +571,21 @@ fn read_e_i_8(xpath: &mut Context, node: &Node) -> Result<Option<bool>> {
 		node,
 		EReactionPaths::MEDICAL_CONFIRMATION,
 	));
-	import_constraint::boolean("AE", "medicalConfirmation", value, None)?;
+	import_constraint::boolean(
+		"medicalConfirmation",
+		value,
+		None,
+		input_contracts::generated::e::e_i_8,
+	)?;
 	Ok(value)
 }
 
 /// e2b:E.i.9
 fn read_e_i_9(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
-	Ok(portable_string(
+	Ok(input_string(
 		first_attr(xpath, node, EReactionPaths::COUNTRY_CODE),
 		"reactionCountry",
+		input_contracts::generated::e::e_i_9,
 	)?
 	.map(|value| value.to_ascii_uppercase()))
 }
@@ -852,8 +886,14 @@ fn first_text(xpath: &mut Context, node: &Node, expr: &str) -> Option<String> {
 	None
 }
 
-fn portable_string(value: Option<String>, field: &str) -> Result<Option<String>> {
-	import_constraint::string("AE", field, value.as_deref(), None)?;
+fn input_string(
+	value: Option<String>,
+	field: &str,
+	check: impl for<'a> Fn(
+		input_contracts::FieldInput<'a>,
+	) -> Vec<input_contracts::InputIssue>,
+) -> Result<Option<String>> {
+	import_constraint::string(field, value.as_deref(), None, check)?;
 	Ok(value)
 }
 

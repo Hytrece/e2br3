@@ -11,6 +11,7 @@ lib-auth = { path = "../../libs/lib-auth"}
 lib-core = { path = "../../libs/lib-core"}
 xml = { path = "../../libs/xml" }
 lib-web = { path = "../../libs/lib-web"}
+input-contracts = { path = "../../libs/input-contracts" }
 validator = { path = "../../libs/validator"}
 # -- Async
 tokio = { version = "1", features = ["full"] }

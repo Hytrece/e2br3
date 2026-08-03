@@ -350,7 +350,7 @@
       "roundTripValue": "Receiver Org",
       "constraint": {
         "status": "not_applicable",
-        "reason": "The local receiver master-data field has no portable catalog constraint."
+        "reason": "The local receiver master-data field has no Input Contract."
       },
       "businessValidation": {
         "status": "not_applicable",
@@ -370,7 +370,7 @@
       "roundTripValue": "2",
       "constraint": {
         "status": "not_applicable",
-        "reason": "The local receiver master-data field has no portable catalog constraint."
+        "reason": "The local receiver master-data field has no Input Contract."
       },
       "businessValidation": {
         "status": "not_applicable",
@@ -390,7 +390,7 @@
       "roundTripValue": "Safety",
       "constraint": {
         "status": "not_applicable",
-        "reason": "The local receiver master-data field has no portable catalog constraint."
+        "reason": "The local receiver master-data field has no Input Contract."
       },
       "businessValidation": {
         "status": "not_applicable",
@@ -410,7 +410,7 @@
       "roundTripValue": "2 Test Road",
       "constraint": {
         "status": "not_applicable",
-        "reason": "The local receiver master-data field has no portable catalog constraint."
+        "reason": "The local receiver master-data field has no Input Contract."
       },
       "businessValidation": {
         "status": "not_applicable",
@@ -430,7 +430,7 @@
       "roundTripValue": "Busan",
       "constraint": {
         "status": "not_applicable",
-        "reason": "The local receiver master-data field has no portable catalog constraint."
+        "reason": "The local receiver master-data field has no Input Contract."
       },
       "businessValidation": {
         "status": "not_applicable",
@@ -450,7 +450,7 @@
       "roundTripValue": "Busan",
       "constraint": {
         "status": "not_applicable",
-        "reason": "The local receiver master-data field has no portable catalog constraint."
+        "reason": "The local receiver master-data field has no Input Contract."
       },
       "businessValidation": {
         "status": "not_applicable",
@@ -470,7 +470,7 @@
       "roundTripValue": "48000",
       "constraint": {
         "status": "not_applicable",
-        "reason": "The local receiver master-data field has no portable catalog constraint."
+        "reason": "The local receiver master-data field has no Input Contract."
       },
       "businessValidation": {
         "status": "not_applicable",
@@ -490,7 +490,7 @@
       "roundTripValue": "KR",
       "constraint": {
         "status": "not_applicable",
-        "reason": "The local receiver master-data field has no portable catalog constraint."
+        "reason": "The local receiver master-data field has no Input Contract."
       },
       "businessValidation": {
         "status": "not_applicable",
@@ -510,7 +510,7 @@
       "roundTripValue": "+821055555555",
       "constraint": {
         "status": "not_applicable",
-        "reason": "The local receiver master-data field has no portable catalog constraint."
+        "reason": "The local receiver master-data field has no Input Contract."
       },
       "businessValidation": {
         "status": "not_applicable",
@@ -530,7 +530,7 @@
       "roundTripValue": "+82511234567",
       "constraint": {
         "status": "not_applicable",
-        "reason": "The local receiver master-data field has no portable catalog constraint."
+        "reason": "The local receiver master-data field has no Input Contract."
       },
       "businessValidation": {
         "status": "not_applicable",
@@ -550,7 +550,7 @@
       "roundTripValue": "receiver@example.test",
       "constraint": {
         "status": "not_applicable",
-        "reason": "The local receiver master-data field has no portable catalog constraint."
+        "reason": "The local receiver master-data field has no Input Contract."
       },
       "businessValidation": {
         "status": "not_applicable",

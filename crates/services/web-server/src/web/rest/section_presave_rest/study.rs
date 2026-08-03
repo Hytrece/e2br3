@@ -84,6 +84,7 @@ pub async fn create_study_presave(
 		move |ctx, mm| {
 			Box::pin(async move {
 				let ParamsForCreate { data } = params;
+				super::input_contract::study_create(&data.rows.study)?;
 				for row in &data.rows.products {
 					validate_study_product_detail_create(row)?;
 					if row.deleted {
@@ -92,7 +93,9 @@ pub async fn create_study_presave(
 						});
 					}
 				}
-				for row in &data.rows.registration_numbers {
+				for (index, row) in data.rows.registration_numbers.iter().enumerate()
+				{
+					super::input_contract::registration_detail(row, index)?;
 					validate_study_registration_number_detail_create(row)?;
 					if row.deleted {
 						return Err(Error::BadRequest {
@@ -102,7 +105,10 @@ pub async fn create_study_presave(
 						});
 					}
 				}
-				for row in &data.rows.fda_cross_reported_inds {
+				for (index, row) in
+					data.rows.fda_cross_reported_inds.iter().enumerate()
+				{
+					super::input_contract::fda_ind_detail(row, index)?;
 					if row.sequence_number.is_none()
 						|| row.ind_number.is_none()
 						|| row.deleted
@@ -226,6 +232,7 @@ pub async fn update_study_presave(
 		move |ctx, mm| {
 			Box::pin(async move {
 				let ParamsForUpdate { data } = params;
+				super::input_contract::study_update(&data)?;
 				if data.deleted == Some(true) {
 					PresaveLifecycleService::archive(
 						ctx,
@@ -509,6 +516,26 @@ pub async fn update_study_presave_details(
 			Box::pin(async move {
 				let ParamsForUpdate { data } = params;
 				let rows = data.rows;
+				if let Some(study) = &rows.study {
+					super::input_contract::study_update(study)?;
+				}
+				if let Some(registrations) = &rows.registration_numbers {
+					for (index, registration) in registrations.iter().enumerate() {
+						if !registration.deleted {
+							super::input_contract::registration_detail(
+								registration,
+								index,
+							)?;
+						}
+					}
+				}
+				if let Some(items) = &rows.fda_cross_reported_inds {
+					for (index, item) in items.iter().enumerate() {
+						if !item.deleted {
+							super::input_contract::fda_ind_detail(item, index)?;
+						}
+					}
+				}
 				if rows
 					.study
 					.as_ref()
@@ -992,7 +1019,9 @@ generate_presave_child_rest_fns! {
 	ParentField: study_presave_id,
 	ParentKind: Study,
 	EntityName: "study_presave_registration_numbers",
-	DeleteMode: soft
+	DeleteMode: soft,
+	ValidateCreate: super::input_contract::registration_create,
+	ValidateUpdate: super::input_contract::registration_update
 }
 
 generate_presave_child_rest_fns! {
@@ -1008,7 +1037,9 @@ generate_presave_child_rest_fns! {
 	ParentField: study_presave_id,
 	ParentKind: Study,
 	EntityName: "study_presave_products",
-	DeleteMode: soft
+	DeleteMode: soft,
+	ValidateCreate: super::shared::no_input_contract,
+	ValidateUpdate: super::shared::no_input_contract
 }
 
 generate_presave_child_rest_fns! {
@@ -1024,5 +1055,7 @@ generate_presave_child_rest_fns! {
 	ParentField: study_presave_id,
 	ParentKind: Study,
 	EntityName: "study_presave_reporters",
-	DeleteMode: soft
+	DeleteMode: soft,
+	ValidateCreate: super::shared::no_input_contract,
+	ValidateUpdate: super::shared::no_input_contract
 }

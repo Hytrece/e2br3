@@ -332,7 +332,12 @@ pub(crate) fn extract_safety_report_id(xml: &[u8]) -> Result<String> {
 		})?;
 	for value in candidates {
 		if !value.trim().is_empty() {
-			import_constraint::string("CI", "safetyReportId", Some(&value), None)?;
+			import_constraint::string(
+				"safetyReportId",
+				Some(&value),
+				None,
+				input_contracts::generated::c::c_1_1,
+			)?;
 			return Ok(value);
 		}
 	}

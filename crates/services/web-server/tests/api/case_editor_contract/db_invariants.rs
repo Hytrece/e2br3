@@ -6,9 +6,7 @@ use lib_core::ctx::ROLE_SPONSOR_ADMIN_CRO;
 use lib_core::model::store::set_full_context_dbx;
 use serde_json::json;
 use serial_test::serial;
-use std::collections::BTreeSet;
 use uuid::Uuid;
-use validator::portable_field_bindings;
 
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 struct EditorDbPair {
@@ -101,20 +99,6 @@ const EDITOR_DB_PAIRS: &[EditorDbPair] = &[
 	pair!("SI", "studyInformation.studyRegistrationNumbers[].countryCodeNullFlavor", "study_registration_numbers", "country_code", "country_code_null_flavor"),
 	pair!("SI", "studyInformation.studyRegistrationNumbers[].registrationNumberNullFlavor", "study_registration_numbers", "registration_number", "registration_number_null_flavor"),
 ];
-
-#[test]
-fn split_binding_inventory_covers_every_catalog_null_flavor() {
-	let catalog = portable_field_bindings()
-		.into_iter()
-		.filter(|binding| binding.frontend_path.ends_with("NullFlavor"))
-		.map(|binding| (binding.section, binding.frontend_path))
-		.collect::<BTreeSet<_>>();
-	let inventory = EDITOR_DB_PAIRS
-		.iter()
-		.map(|pair| (pair.section, pair.frontend_path))
-		.collect::<BTreeSet<_>>();
-	assert_eq!(inventory, catalog);
-}
 
 #[serial]
 #[tokio::test]

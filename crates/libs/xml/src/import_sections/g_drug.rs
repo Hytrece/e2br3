@@ -412,7 +412,12 @@ fn read_xml_id(xpath: &mut Context, node: &Node) -> Option<Uuid> {
 /// e2b:G.k.1
 fn read_g_k_1(_xpath: &mut Context, _node: &Node) -> Result<String> {
 	let value = "1".to_string();
-	import_constraint::string("DG", "drugCharacterization", Some(&value), None)?;
+	import_constraint::string(
+		"drugCharacterization",
+		Some(&value),
+		None,
+		input_contracts::generated::g::g_k_1,
+	)?;
 	Ok(value)
 }
 
@@ -425,35 +430,60 @@ fn read_g_k_2_2(xpath: &mut Context, node: &Node, index: usize) -> Result<String
 				format!("medicinal product name missing for drug index {index}"),
 			)
 		})?;
-	import_constraint::string("DG", "medicinalProduct", Some(&value), None)?;
+	import_constraint::string(
+		"medicinalProduct",
+		Some(&value),
+		None,
+		input_contracts::generated::g::g_k_2_2,
+	)?;
 	Ok(value)
 }
 
 /// e2b:G.k.2.1.1a
 fn read_g_k_2_1_1a(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
 	let value = first_attr(xpath, node, GDrugPaths::MPID);
-	import_constraint::string("DG", "mpid", value.as_deref(), None)?;
+	import_constraint::string(
+		"mpid",
+		value.as_deref(),
+		None,
+		input_contracts::generated::g::g_k_2_1_1b,
+	)?;
 	Ok(value)
 }
 
 /// e2b:G.k.2.1.1b
 fn read_g_k_2_1_1b(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
 	let value = first_attr(xpath, node, GDrugPaths::MPID_VERSION);
-	import_constraint::string("DG", "mpidVersion", value.as_deref(), None)?;
+	import_constraint::string(
+		"mpidVersion",
+		value.as_deref(),
+		None,
+		input_contracts::generated::g::g_k_2_1_1a,
+	)?;
 	Ok(value)
 }
 
 /// e2b:G.k.2.1.2a
 fn read_g_k_2_1_2a(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
 	let value = first_attr(xpath, node, GDrugPaths::PHPID);
-	import_constraint::string("DG", "phpid", value.as_deref(), None)?;
+	import_constraint::string(
+		"phpid",
+		value.as_deref(),
+		None,
+		input_contracts::generated::g::g_k_2_1_2b,
+	)?;
 	Ok(value)
 }
 
 /// e2b:G.k.2.1.2b
 fn read_g_k_2_1_2b(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
 	let value = first_attr(xpath, node, GDrugPaths::PHPID_VERSION);
-	import_constraint::string("DG", "phpidVersion", value.as_deref(), None)?;
+	import_constraint::string(
+		"phpidVersion",
+		value.as_deref(),
+		None,
+		input_contracts::generated::g::g_k_2_1_2a,
+	)?;
 	Ok(value)
 }
 
@@ -465,7 +495,12 @@ fn read_fda_g_k_1_a(xpath: &mut Context, node: &Node) -> Result<Option<bool>> {
 	if raw.is_some() && value.is_none() {
 		return Err(invalid_field("G.k.2.5", "invalid boolean value"));
 	}
-	import_constraint::boolean("DG", "investigationalProductBlinded", value, None)?;
+	import_constraint::boolean(
+		"investigationalProductBlinded",
+		value,
+		None,
+		input_contracts::generated::g::g_k_2_5,
+	)?;
 	Ok(value)
 }
 
@@ -473,10 +508,10 @@ fn read_fda_g_k_1_a(xpath: &mut Context, node: &Node) -> Result<Option<bool>> {
 fn read_g_k_3_1(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
 	let value = first_attr(xpath, node, GDrugPaths::DRUG_AUTHORIZATION_NUMBER);
 	import_constraint::string(
-		"DG",
 		"drugAuthorizationNumber",
 		value.as_deref(),
 		None,
+		input_contracts::generated::g::g_k_3_1,
 	)?;
 	Ok(value)
 }
@@ -485,10 +520,10 @@ fn read_g_k_3_1(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
 fn read_g_k_3_2(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
 	let value = first_text(xpath, node, GDrugPaths::MANUFACTURER_NAME);
 	import_constraint::string(
-		"DG",
 		"drugAuthorizationHolder",
 		value.as_deref(),
 		None,
+		input_contracts::generated::g::g_k_3_3,
 	)?;
 	Ok(value)
 }
@@ -497,10 +532,10 @@ fn read_g_k_3_2(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
 fn read_g_k_3_3(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
 	let value = first_attr(xpath, node, GDrugPaths::MANUFACTURER_COUNTRY);
 	import_constraint::string(
-		"DG",
 		"drugAuthorizationCountry",
 		value.as_deref(),
 		None,
+		input_contracts::generated::g::g_k_3_2,
 	)?;
 	Ok(value)
 }
@@ -508,14 +543,24 @@ fn read_g_k_3_3(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
 /// e2b:G.k.2.4
 fn read_g_k_2_4(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
 	let value = first_text(xpath, node, GDrugPaths::OBTAIN_DRUG_COUNTRY);
-	import_constraint::string("DG", "obtainDrugCountry", value.as_deref(), None)?;
+	import_constraint::string(
+		"obtainDrugCountry",
+		value.as_deref(),
+		None,
+		input_contracts::generated::g::g_k_2_4,
+	)?;
 	Ok(value)
 }
 
 /// e2b:G.k.8
 fn read_g_k_8(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
 	let value = first_attr(xpath, node, GDrugPaths::ACTION_TAKEN);
-	import_constraint::string("DG", "drugActionTaken", value.as_deref(), None)?;
+	import_constraint::string(
+		"drugActionTaken",
+		value.as_deref(),
+		None,
+		input_contracts::generated::g::g_k_8,
+	)?;
 	Ok(value)
 }
 
@@ -527,14 +572,23 @@ fn read_g_k_local_batch_lot(xpath: &mut Context, node: &Node) -> Option<String> 
 /// e2b:G.k.5a
 fn read_g_k_5a(xpath: &mut Context, node: &Node) -> Result<Option<Decimal>> {
 	let raw = first_attr(xpath, node, GDrugPaths::CUMULATIVE_DOSE_VALUE);
-	import_constraint::number_string("DG", "cumulativeDoseValue", raw.as_deref())?;
+	import_constraint::number_string(
+		"cumulativeDoseValue",
+		raw.as_deref(),
+		input_contracts::generated::g::g_k_5a,
+	)?;
 	Ok(raw.and_then(|value| value.parse().ok()))
 }
 
 /// e2b:G.k.5b
 fn read_g_k_5b(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
 	let value = first_attr(xpath, node, GDrugPaths::CUMULATIVE_DOSE_UNIT);
-	import_constraint::string("DG", "cumulativeDoseUnit", value.as_deref(), None)?;
+	import_constraint::string(
+		"cumulativeDoseUnit",
+		value.as_deref(),
+		None,
+		input_contracts::generated::g::g_k_5b,
+	)?;
 	Ok(value)
 }
 
@@ -542,9 +596,9 @@ fn read_g_k_5b(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
 fn read_g_k_6a(xpath: &mut Context, node: &Node) -> Result<Option<Decimal>> {
 	let raw = first_attr(xpath, node, GDrugPaths::GESTATION_EXPOSURE_VALUE);
 	import_constraint::number_string(
-		"DG",
 		"gestationPeriodExposureValue",
 		raw.as_deref(),
+		input_contracts::generated::g::g_k_6a,
 	)?;
 	Ok(raw.and_then(|value| value.parse().ok()))
 }
@@ -553,10 +607,10 @@ fn read_g_k_6a(xpath: &mut Context, node: &Node) -> Result<Option<Decimal>> {
 fn read_g_k_6b(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
 	let value = first_attr(xpath, node, GDrugPaths::GESTATION_EXPOSURE_UNIT);
 	import_constraint::string(
-		"DG",
 		"gestationPeriodExposureUnit",
 		value.as_deref(),
 		None,
+		input_contracts::generated::g::g_k_6b,
 	)?;
 	Ok(value)
 }
@@ -565,10 +619,10 @@ fn read_g_k_6b(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
 fn read_fda_g_k_10_1(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
 	let value = first_attr(xpath, node, GDrugPaths::FDA_ADDITIONAL_INFO);
 	import_constraint::string(
-		"DG",
 		"fdaAdditionalInfoCoded",
 		value.as_deref(),
 		None,
+		input_contracts::generated::g::fda_g_k_10a,
 	)?;
 	Ok(value)
 }
@@ -578,10 +632,10 @@ fn read_fda_g_k_10a(xpath: &mut Context, node: &Node) -> Result<Option<String>> 
 	let value =
 		first_attr(xpath, node, GDrugPaths::FDA_SPECIALIZED_PRODUCT_CATEGORY);
 	import_constraint::string(
-		"DG",
 		"fdaSpecializedProductCategory",
 		value.as_deref(),
 		None,
+		input_contracts::generated::g::fda_g_k_10_1,
 	)?;
 	Ok(value)
 }
@@ -590,35 +644,38 @@ fn read_fda_g_k_10a(xpath: &mut Context, node: &Node) -> Result<Option<String>> 
 fn read_g_k_11(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
 	let value = first_text(xpath, node, GDrugPaths::DRUG_ADDITIONAL_INFORMATION);
 	import_constraint::string(
-		"DG",
 		"drugAdditionalInformation",
 		value.as_deref(),
 		None,
+		input_contracts::generated::g::g_k_11,
 	)?;
 	Ok(value)
 }
 
 /// e2b:G.k.2.3.r.1
 fn read_g_k_2_3_r_1(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
-	portable_string(
+	input_string(
 		first_text(xpath, node, GDrugPaths::SUBSTANCE_NAME),
 		"activeSubstances[].substanceName",
+		input_contracts::generated::g::g_k_2_3_r_1,
 	)
 }
 
 /// e2b:G.k.2.3.r.2a
 fn read_g_k_2_3_r_2a(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
-	portable_string(
+	input_string(
 		first_attr(xpath, node, GDrugPaths::SUBSTANCE_TERMID_VERSION),
 		"activeSubstances[].substanceTermIdVersion",
+		input_contracts::generated::g::g_k_2_3_r_2a,
 	)
 }
 
 /// e2b:G.k.2.3.r.2b
 fn read_g_k_2_3_r_2b(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
-	portable_string(
+	input_string(
 		first_attr(xpath, node, GDrugPaths::SUBSTANCE_TERMID),
 		"activeSubstances[].substanceTermId",
+		input_contracts::generated::g::g_k_2_3_r_2b,
 	)
 }
 
@@ -627,14 +684,16 @@ fn read_g_k_2_3_r_3a(xpath: &mut Context, node: &Node) -> Result<Option<Decimal>
 	decimal(
 		first_attr(xpath, node, GDrugPaths::SUBSTANCE_STRENGTH_VALUE),
 		"activeSubstances[].substanceStrengthValue",
+		input_contracts::generated::g::g_k_2_3_r_3a,
 	)
 }
 
 /// e2b:G.k.2.3.r.3b
 fn read_g_k_2_3_r_3b(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
-	portable_string(
+	input_string(
 		first_attr(xpath, node, GDrugPaths::SUBSTANCE_STRENGTH_UNIT),
 		"activeSubstances[].substanceStrengthUnit",
+		input_contracts::generated::g::g_k_2_3_r_3b,
 	)
 }
 
@@ -643,14 +702,16 @@ fn read_g_k_4_r_1a(xpath: &mut Context, node: &Node) -> Result<Option<Decimal>> 
 	decimal(
 		first_attr(xpath, node, GDrugPaths::DOSE_VALUE),
 		"dosageInformation[].doseValue",
+		input_contracts::generated::g::g_k_4_r_1a,
 	)
 }
 
 /// e2b:G.k.4.r.1b
 fn read_g_k_4_r_1b(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
-	portable_string(
+	input_string(
 		first_attr(xpath, node, GDrugPaths::DOSE_UNIT),
 		"dosageInformation[].doseUnit",
+		input_contracts::generated::g::g_k_4_r_1b,
 	)
 }
 
@@ -659,14 +720,16 @@ fn read_g_k_4_r_2(xpath: &mut Context, node: &Node) -> Result<Option<Decimal>> {
 	decimal(
 		first_attr(xpath, node, GDrugPaths::DOSAGE_FREQUENCY_VALUE),
 		"dosageInformation[].numberOfUnits",
+		input_contracts::generated::g::g_k_4_r_2,
 	)
 }
 
 /// e2b:G.k.4.r.3
 fn read_g_k_4_r_3(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
-	portable_string(
+	input_string(
 		first_attr(xpath, node, GDrugPaths::DOSAGE_FREQUENCY_UNIT),
 		"dosageInformation[].frequencyUnit",
+		input_contracts::generated::g::g_k_4_r_3,
 	)
 }
 
@@ -682,6 +745,7 @@ fn read_g_k_4_r_4(
 			.or_else(|| effective_null_flavor.map(str::to_string)),
 		"dosageInformation[].firstAdministrationDate",
 		"dosageInformation[].firstAdministrationDateNullFlavor",
+		input_contracts::generated::g::g_k_4_r_4,
 	)
 }
 
@@ -697,6 +761,7 @@ fn read_g_k_4_r_5(
 			.or_else(|| effective_null_flavor.map(str::to_string)),
 		"dosageInformation[].lastAdministrationDate",
 		"dosageInformation[].lastAdministrationDateNullFlavor",
+		input_contracts::generated::g::g_k_4_r_5,
 	)
 }
 
@@ -705,30 +770,34 @@ fn read_g_k_4_r_6a(xpath: &mut Context, node: &Node) -> Result<Option<Decimal>> 
 	decimal(
 		first_attr(xpath, node, GDrugPaths::DOSAGE_DURATION_VALUE),
 		"dosageInformation[].durationValue",
+		input_contracts::generated::g::g_k_4_r_6a,
 	)
 }
 
 /// e2b:G.k.4.r.6b
 fn read_g_k_4_r_6b(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
-	portable_string(
+	input_string(
 		first_attr(xpath, node, GDrugPaths::DOSAGE_DURATION_UNIT),
 		"dosageInformation[].durationUnit",
+		input_contracts::generated::g::g_k_4_r_6b,
 	)
 }
 
 /// e2b:G.k.4.r.7
 fn read_g_k_4_r_7(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
-	portable_string(
+	input_string(
 		first_text(xpath, node, GDrugPaths::DOSAGE_BATCH_LOT),
 		"dosageInformation[].batchNumber",
+		input_contracts::generated::g::g_k_4_r_7,
 	)
 }
 
 /// e2b:G.k.4.r.8
 fn read_g_k_4_r_8(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
-	portable_string(
+	input_string(
 		first_text(xpath, node, GDrugPaths::DOSAGE_TEXT_NODE),
 		"dosageInformation[].dosageText",
+		input_contracts::generated::g::g_k_4_r_8,
 	)
 }
 
@@ -737,27 +806,30 @@ fn read_g_k_4_r_9_1(
 	xpath: &mut Context,
 	node: &Node,
 ) -> Result<(Option<String>, Option<String>)> {
-	portable_string_pair(
+	input_string_pair(
 		first_text(xpath, node, GDrugPaths::DOSE_FORM_TEXT),
 		first_attr(xpath, node, GDrugPaths::DOSE_FORM_NULL_FLAVOR),
 		"dosageInformation[].doseForm",
 		"dosageInformation[].doseFormNullFlavor",
+		input_contracts::generated::g::g_k_4_r_9_1,
 	)
 }
 
 /// e2b:G.k.4.r.9.2a
 fn read_g_k_4_r_9_2a(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
-	portable_string(
+	input_string(
 		first_attr(xpath, node, GDrugPaths::DOSE_FORM_TERMID_VERSION),
 		"dosageInformation[].doseFormTermIdVersion",
+		input_contracts::generated::g::g_k_4_r_9_2a,
 	)
 }
 
 /// e2b:G.k.4.r.9.2b
 fn read_g_k_4_r_9_2b(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
-	portable_string(
+	input_string(
 		first_attr(xpath, node, GDrugPaths::DOSE_FORM_TERMID),
 		"dosageInformation[].doseFormTermId",
+		input_contracts::generated::g::g_k_4_r_9_2b,
 	)
 }
 
@@ -766,27 +838,30 @@ fn read_g_k_4_r_10_1(
 	xpath: &mut Context,
 	node: &Node,
 ) -> Result<(Option<String>, Option<String>)> {
-	portable_string_pair(
+	input_string_pair(
 		first_text(xpath, node, GDrugPaths::ROUTE_TEXT),
 		first_attr(xpath, node, GDrugPaths::ROUTE_NULL_FLAVOR),
 		"dosageInformation[].routeOfAdministration",
 		"dosageInformation[].routeOfAdministrationNullFlavor",
+		input_contracts::generated::g::g_k_4_r_10_1,
 	)
 }
 
 /// e2b:G.k.4.r.10.2a
 fn read_g_k_4_r_10_2a(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
-	portable_string(
+	input_string(
 		first_attr(xpath, node, GDrugPaths::ROUTE_CODE_SYSTEM_VERSION),
 		"dosageInformation[].routeTermIdVersion",
+		input_contracts::generated::g::g_k_4_r_10_2a,
 	)
 }
 
 /// e2b:G.k.4.r.10.2b
 fn read_g_k_4_r_10_2b(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
-	portable_string(
+	input_string(
 		first_attr(xpath, node, GDrugPaths::ROUTE_CODE),
 		"dosageInformation[].routeTermId",
+		input_contracts::generated::g::g_k_4_r_10_2b,
 	)
 }
 
@@ -795,51 +870,57 @@ fn read_g_k_4_r_11_1(
 	xpath: &mut Context,
 	node: &Node,
 ) -> Result<(Option<String>, Option<String>)> {
-	portable_string_pair(
+	input_string_pair(
 		first_text(xpath, node, GDrugPaths::DOSAGE_PARENT_ROUTE_TEXT),
 		first_attr(xpath, node, GDrugPaths::DOSAGE_PARENT_ROUTE_NULL_FLAVOR),
 		"dosageInformation[].parentRouteOfAdministration",
 		"dosageInformation[].parentRouteOfAdministrationNullFlavor",
+		input_contracts::generated::g::g_k_4_r_11_1,
 	)
 }
 
 /// e2b:G.k.4.r.11.2a
 fn read_g_k_4_r_11_2a(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
-	portable_string(
+	input_string(
 		first_attr(xpath, node, GDrugPaths::DOSAGE_PARENT_ROUTE_TERMID_VERSION),
 		"dosageInformation[].parentRouteTermIdVersion",
+		input_contracts::generated::g::g_k_4_r_11_2a,
 	)
 }
 
 /// e2b:G.k.4.r.11.2b
 fn read_g_k_4_r_11_2b(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
-	portable_string(
+	input_string(
 		first_attr(xpath, node, GDrugPaths::DOSAGE_PARENT_ROUTE_TERMID),
 		"dosageInformation[].parentRouteTermId",
+		input_contracts::generated::g::g_k_4_r_11_2b,
 	)
 }
 
 /// e2b:G.k.7.r.1
 fn read_g_k_7_r_1(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
-	portable_string(
+	input_string(
 		first_text(xpath, node, GDrugPaths::INDICATION_TEXT),
 		"indications[].indicationText",
+		input_contracts::generated::g::g_k_7_r_1,
 	)
 }
 
 /// e2b:G.k.7.r.2a
 fn read_g_k_7_r_2a(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
-	portable_string(
+	input_string(
 		first_attr(xpath, node, GDrugPaths::INDICATION_VERSION),
 		"indications[].indicationMeddraVersion",
+		input_contracts::generated::g::g_k_7_r_2a,
 	)
 }
 
 /// e2b:G.k.7.r.2b
 fn read_g_k_7_r_2b(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
-	portable_string(
+	input_string(
 		first_attr(xpath, node, GDrugPaths::INDICATION_CODE),
 		"indications[].indicationMeddraCode",
+		input_contracts::generated::g::g_k_7_r_2b,
 	)
 }
 
@@ -933,9 +1014,10 @@ fn read_fda_g_k_12_r_2_r(
 	xpath: &mut Context,
 	node: &Node,
 ) -> Result<Option<String>> {
-	portable_string(
+	input_string(
 		read_fda_device_code(xpath, node, "C54592"),
 		"fdaDevices[].followUpTypes[].valueCode",
+		input_contracts::generated::g::fda_g_k_12_r_2_r,
 	)
 }
 
@@ -944,33 +1026,37 @@ fn read_fda_g_k_12_r_3_r(
 	xpath: &mut Context,
 	node: &Node,
 ) -> Result<Option<String>> {
-	portable_string(
+	input_string(
 		read_fda_device_code(xpath, node, "C54451"),
 		"fdaDevices[].deviceProblemCodes[].valueCode",
+		input_contracts::generated::g::fda_g_k_12_r_3_r,
 	)
 }
 
 /// e2b:FDA.G.k.12.r.4
 fn read_fda_g_k_12_r_4(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
-	portable_string(
+	input_string(
 		first_text(xpath, node, "hl7:partProduct/hl7:name[1]"),
 		"fdaDevices[].deviceBrandName",
+		input_contracts::generated::g::fda_g_k_12_r_4,
 	)
 }
 
 /// e2b:FDA.G.k.12.r.5
 fn read_fda_g_k_12_r_5(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
-	portable_string(
+	input_string(
 		first_text(xpath, node, "hl7:partProduct/hl7:name[2]"),
 		"fdaDevices[].commonDeviceName",
+		input_contracts::generated::g::fda_g_k_12_r_5,
 	)
 }
 
 /// e2b:FDA.G.k.12.r.6
 fn read_fda_g_k_12_r_6(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
-	portable_string(
+	input_string(
 		first_attr(xpath, node, "hl7:partProduct/hl7:code/@code"),
 		"fdaDevices[].deviceProductCode",
+		input_contracts::generated::g::fda_g_k_12_r_6,
 	)
 }
 
@@ -979,9 +1065,10 @@ fn read_fda_g_k_12_r_7_1a(
 	xpath: &mut Context,
 	node: &Node,
 ) -> Result<Option<String>> {
-	portable_string(
+	input_string(
 		first_text(xpath, node, GDrugPaths::DEVICE_MANUFACTURER_NAME),
 		"fdaDevices[].manufacturerName",
+		input_contracts::generated::g::fda_g_k_12_r_7_1a,
 	)
 }
 
@@ -990,9 +1077,10 @@ fn read_fda_g_k_12_r_7_1b(
 	xpath: &mut Context,
 	node: &Node,
 ) -> Result<Option<String>> {
-	portable_string(
+	input_string(
 		first_text(xpath, node, GDrugPaths::DEVICE_MANUFACTURER_ADDRESS),
 		"fdaDevices[].manufacturerAddress",
+		input_contracts::generated::g::fda_g_k_12_r_7_1b,
 	)
 }
 
@@ -1001,9 +1089,10 @@ fn read_fda_g_k_12_r_7_1c(
 	xpath: &mut Context,
 	node: &Node,
 ) -> Result<Option<String>> {
-	portable_string(
+	input_string(
 		first_text(xpath, node, GDrugPaths::DEVICE_MANUFACTURER_CITY),
 		"fdaDevices[].manufacturerCity",
+		input_contracts::generated::g::fda_g_k_12_r_7_1c,
 	)
 }
 
@@ -1012,9 +1101,10 @@ fn read_fda_g_k_12_r_7_1d(
 	xpath: &mut Context,
 	node: &Node,
 ) -> Result<Option<String>> {
-	portable_string(
+	input_string(
 		first_text(xpath, node, GDrugPaths::DEVICE_MANUFACTURER_STATE),
 		"fdaDevices[].manufacturerState",
+		input_contracts::generated::g::fda_g_k_12_r_7_1d,
 	)
 }
 
@@ -1023,33 +1113,37 @@ fn read_fda_g_k_12_r_7_1e(
 	xpath: &mut Context,
 	node: &Node,
 ) -> Result<Option<String>> {
-	portable_string(
+	input_string(
 		first_text(xpath, node, GDrugPaths::DEVICE_MANUFACTURER_COUNTRY),
 		"fdaDevices[].manufacturerCountry",
+		input_contracts::generated::g::fda_g_k_12_r_7_1e,
 	)
 }
 
 /// e2b:FDA.G.k.12.r.8
 fn read_fda_g_k_12_r_8(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
-	portable_string(
+	input_string(
 		first_attr(xpath, node, GDrugPaths::DEVICE_USAGE),
 		"fdaDevices[].deviceUsage",
+		input_contracts::generated::g::fda_g_k_12_r_8,
 	)
 }
 
 /// e2b:FDA.G.k.12.r.9
 fn read_fda_g_k_12_r_9(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
-	portable_string(
+	input_string(
 		first_text(xpath, node, GDrugPaths::DEVICE_LOT_NUMBER),
 		"fdaDevices[].deviceLotNumber",
+		input_contracts::generated::g::fda_g_k_12_r_9,
 	)
 }
 
 /// e2b:FDA.G.k.12.r.10
 fn read_fda_g_k_12_r_10(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
-	portable_string(
+	input_string(
 		first_attr(xpath, node, GDrugPaths::DEVICE_OPERATOR_CODE),
 		"fdaDevices[].operatorOfDevice",
+		input_contracts::generated::g::fda_g_k_12_r_10,
 	)
 }
 
@@ -1058,9 +1152,10 @@ fn read_fda_g_k_12_r_11_r(
 	xpath: &mut Context,
 	node: &Node,
 ) -> Result<Option<String>> {
-	portable_string(
+	input_string(
 		read_fda_device_code(xpath, node, "C54594"),
 		"fdaDevices[].remedialActions[].valueCode",
+		input_contracts::generated::g::fda_g_k_12_r_11_r,
 	)
 }
 
@@ -1099,21 +1194,36 @@ fn invalid_field(field: &str, detail: impl std::fmt::Display) -> Error {
 	}
 }
 
-fn decimal(value: Option<String>, field: &str) -> Result<Option<Decimal>> {
-	import_constraint::number_string("DG", field, value.as_deref())?;
+fn decimal(
+	value: Option<String>,
+	field: &str,
+	check: impl for<'a> Fn(
+		input_contracts::FieldInput<'a>,
+	) -> Vec<input_contracts::InputIssue>,
+) -> Result<Option<Decimal>> {
+	import_constraint::number_string(field, value.as_deref(), check)?;
 	Ok(value.and_then(|value| value.parse().ok()))
 }
 
-fn portable_string(value: Option<String>, field: &str) -> Result<Option<String>> {
-	import_constraint::string("DG", field, value.as_deref(), None)?;
+fn input_string(
+	value: Option<String>,
+	field: &str,
+	check: impl for<'a> Fn(
+		input_contracts::FieldInput<'a>,
+	) -> Vec<input_contracts::InputIssue>,
+) -> Result<Option<String>> {
+	import_constraint::string(field, value.as_deref(), None, check)?;
 	Ok(value)
 }
 
-fn portable_string_pair(
+fn input_string_pair(
 	value: Option<String>,
 	null_flavor: Option<String>,
 	field: &str,
-	null_flavor_field: &str,
+	_null_flavor_field: &str,
+	check: impl for<'a> Fn(
+		input_contracts::FieldInput<'a>,
+	) -> Vec<input_contracts::InputIssue>,
 ) -> Result<(Option<String>, Option<String>)> {
 	if value.is_some() && null_flavor.is_some() {
 		return Err(invalid_field(
@@ -1122,16 +1232,10 @@ fn portable_string_pair(
 		));
 	}
 	import_constraint::string(
-		"DG",
 		field,
 		value.as_deref(),
 		null_flavor.as_deref(),
-	)?;
-	import_constraint::string(
-		"DG",
-		null_flavor_field,
-		null_flavor.as_deref(),
-		None,
+		check,
 	)?;
 	Ok((value, null_flavor))
 }
@@ -1141,9 +1245,12 @@ fn date_pair(
 	null_flavor: Option<String>,
 	field: &str,
 	null_flavor_field: &str,
+	check: impl for<'a> Fn(
+		input_contracts::FieldInput<'a>,
+	) -> Vec<input_contracts::InputIssue>,
 ) -> Result<(Option<sqlx::types::time::Date>, Option<String>)> {
 	let (value, null_flavor) =
-		portable_string_pair(value, null_flavor, field, null_flavor_field)?;
+		input_string_pair(value, null_flavor, field, null_flavor_field, check)?;
 	let date = value
 		.map(|value| {
 			parse_date(value).ok_or_else(|| invalid_field(field, "invalid date"))

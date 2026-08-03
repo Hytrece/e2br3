@@ -94,7 +94,12 @@ fn read_c_1_2(xpath: &mut Context) -> Result<String> {
 	let value = first_value_root(xpath, CSafetyReportPaths::DATE_OF_CREATION)
 		.as_deref()
 		.and_then(normalize_datetime);
-	import_constraint::string("CI", "transmissionDate", value.as_deref(), None)?;
+	import_constraint::string(
+		"transmissionDate",
+		value.as_deref(),
+		None,
+		input_contracts::generated::c::c_1_2,
+	)?;
 	Ok(value
 		.unwrap_or_else(|| format_datetime(time::OffsetDateTime::now_utc().date())))
 }
@@ -107,7 +112,12 @@ fn read_c_1_3(xpath: &mut Context) -> Result<String> {
 			line: None,
 			column: None,
 		})?;
-	import_constraint::string("CI", "reportType", Some(&value), None)?;
+	import_constraint::string(
+		"reportType",
+		Some(&value),
+		None,
+		input_contracts::generated::c::c_1_3,
+	)?;
 	Ok(value)
 }
 
@@ -115,10 +125,10 @@ fn read_c_1_3(xpath: &mut Context) -> Result<String> {
 fn read_c_1_4(xpath: &mut Context, fallback: Date) -> Result<Date> {
 	let value = first_value_root(xpath, CSafetyReportPaths::DATE_FIRST_RECEIVED);
 	import_constraint::string(
-		"CI",
 		"dateFirstReceivedFromSource",
 		value.as_deref(),
 		None,
+		input_contracts::generated::c::c_1_4,
 	)?;
 	Ok(value.and_then(parse_date).unwrap_or(fallback))
 }
@@ -127,10 +137,10 @@ fn read_c_1_4(xpath: &mut Context, fallback: Date) -> Result<Date> {
 fn read_c_1_5(xpath: &mut Context, fallback: Date) -> Result<Date> {
 	let value = first_value_root(xpath, CSafetyReportPaths::DATE_MOST_RECENT);
 	import_constraint::string(
-		"CI",
 		"dateOfMostRecentInformation",
 		value.as_deref(),
 		None,
+		input_contracts::generated::c::c_1_5,
 	)?;
 	Ok(value.and_then(parse_date).unwrap_or(fallback))
 }
@@ -141,7 +151,12 @@ fn read_c_1_6_1(xpath: &mut Context) -> Result<Option<bool>> {
 		xpath,
 		CSafetyReportPaths::ADDITIONAL_DOCUMENTS_AVAILABLE,
 	));
-	import_constraint::boolean("CI", "additionalDocumentsAvailable", value, None)?;
+	import_constraint::boolean(
+		"additionalDocumentsAvailable",
+		value,
+		None,
+		input_contracts::generated::c::c_1_6_1,
+	)?;
 	Ok(value)
 }
 
@@ -151,7 +166,12 @@ fn read_c_1_7(xpath: &mut Context) -> Result<bool> {
 		xpath,
 		CSafetyReportPaths::FULFIL_EXPEDITED,
 	));
-	import_constraint::boolean("CI", "fulfilExpeditedCriteria", value, None)?;
+	import_constraint::boolean(
+		"fulfilExpeditedCriteria",
+		value,
+		None,
+		input_contracts::generated::c::c_1_7,
+	)?;
 	Ok(value.unwrap_or(false))
 }
 
@@ -162,10 +182,10 @@ fn read_fda_c_1_7_1(xpath: &mut Context) -> Result<Option<String>> {
 		CSafetyReportPaths::FDA_LOCAL_CRITERIA_REPORT_TYPE_CODE,
 	);
 	import_constraint::string(
-		"CI",
 		"localCriteriaReportType",
 		value.as_deref(),
 		None,
+		input_contracts::generated::c::fda_c_1_7_1,
 	)?;
 	Ok(value)
 }
@@ -181,14 +201,24 @@ fn read_fda_c_1_12(xpath: &mut Context) -> Option<String> {
 /// e2b:C.1.8.1
 fn read_c_1_8_1(xpath: &mut Context) -> Result<Option<String>> {
 	let value = first_value_root(xpath, CSafetyReportPaths::WORLDWIDE_UNIQUE_ID_EXT);
-	import_constraint::string("CI", "worldwideUniqueId", value.as_deref(), None)?;
+	import_constraint::string(
+		"worldwideUniqueId",
+		value.as_deref(),
+		None,
+		input_contracts::generated::c::c_1_8_1,
+	)?;
 	Ok(value)
 }
 
 /// e2b:C.1.8.2
 fn read_c_1_8_2(xpath: &mut Context) -> Result<Option<String>> {
 	let value = first_value_root(xpath, CSafetyReportPaths::FIRST_SENDER_TYPE);
-	import_constraint::string("CI", "firstSenderType", value.as_deref(), None)?;
+	import_constraint::string(
+		"firstSenderType",
+		value.as_deref(),
+		None,
+		input_contracts::generated::c::c_1_8_2,
+	)?;
 	Ok(value)
 }
 
@@ -196,10 +226,10 @@ fn read_c_1_8_2(xpath: &mut Context) -> Result<Option<String>> {
 fn read_c_1_11_1(xpath: &mut Context) -> Result<Option<String>> {
 	let value = first_value_root(xpath, CSafetyReportPaths::NULLIFICATION_CODE);
 	import_constraint::string(
-		"CI",
 		"nullificationAmendmentCode",
 		value.as_deref(),
 		None,
+		input_contracts::generated::c::c_1_11_1,
 	)?;
 	Ok(value)
 }
@@ -207,7 +237,12 @@ fn read_c_1_11_1(xpath: &mut Context) -> Result<Option<String>> {
 /// e2b:C.1.11.2
 fn read_c_1_11_2(xpath: &mut Context) -> Result<Option<String>> {
 	let value = first_text_root(xpath, CSafetyReportPaths::NULLIFICATION_REASON);
-	import_constraint::string("CI", "nullificationReason", value.as_deref(), None)?;
+	import_constraint::string(
+		"nullificationReason",
+		value.as_deref(),
+		None,
+		input_contracts::generated::c::c_1_11_2,
+	)?;
 	Ok(value)
 }
 

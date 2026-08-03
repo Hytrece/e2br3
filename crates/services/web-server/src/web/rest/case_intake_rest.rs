@@ -235,32 +235,28 @@ fn validate_intake_pair(
 	value: Option<&str>,
 	null_flavor: Option<&str>,
 	null_flavor_path: &str,
+	rule_code: &'static str,
+	check: impl for<'a> Fn(
+		input_contracts::FieldInput<'a>,
+	) -> Vec<input_contracts::InputIssue>,
 ) -> Result<()> {
 	let null_flavor = null_flavor.map(str::trim).filter(|value| !value.is_empty());
-	let binding = validator::portable_field_bindings()
-		.into_iter()
-		.find(|binding| binding.frontend_path == null_flavor_path)
-		.expect("intake NullFlavor path must exist in portable bindings");
-	let rules = validator::portable_constraints();
 	if value.map(str::trim).is_some_and(|value| {
-		binding.rule_codes.iter().any(|code| {
-			rules
-				.iter()
-				.find(|rule| rule.code == *code)
-				.is_some_and(|rule| {
-					rule.values.iter().any(|allowed| allowed == value)
-				})
-		})
+		check(input_contracts::FieldInput::new(
+			input_contracts::InputValue::Missing,
+			Some(value),
+		))
+		.is_empty()
 	}) {
 		return Err(Error::ConstraintViolation(ConstraintViolation {
-			rule_code: binding.rule_codes[0].to_string(),
+			rule_code: rule_code.to_string(),
 			path: null_flavor_path.trim_end_matches("NullFlavor").to_string(),
 			message: "NullFlavor must be sent in its companion field".to_string(),
 		}));
 	}
 	if value_present && null_flavor.is_some() {
 		return Err(Error::ConstraintViolation(ConstraintViolation {
-			rule_code: binding.rule_codes[0].to_string(),
+			rule_code: rule_code.to_string(),
 			path: null_flavor_path.to_string(),
 			message: "value and NullFlavor cannot both be set".to_string(),
 		}));
@@ -268,63 +264,71 @@ fn validate_intake_pair(
 	let Some(null_flavor) = null_flavor else {
 		return Ok(());
 	};
-	for rule_code in binding.rule_codes {
-		if let Err(error) = validator::validate_portable_value(
-			rule_code,
-			validator::PortableInputValue::String(null_flavor),
-			None,
-		) {
-			return Err(Error::ConstraintViolation(ConstraintViolation {
-				rule_code: error.code,
-				path: null_flavor_path.to_string(),
-				message: error.message,
-			}));
-		}
+	if let Some(issue) = check(input_contracts::FieldInput::new(
+		input_contracts::InputValue::Missing,
+		Some(null_flavor),
+	))
+	.into_iter()
+	.next()
+	{
+		return Err(Error::ConstraintViolation(ConstraintViolation {
+			rule_code: issue.code.to_string(),
+			path: null_flavor_path.to_string(),
+			message: issue.message,
+		}));
 	}
 	Ok(())
 }
 
 fn validate_intake_pairs(data: &CaseIntakeCheckInput) -> Result<()> {
-	for (present, value, null_flavor, path) in [
-		(
-			data.reporter_organization.is_some(),
-			data.reporter_organization.as_deref(),
-			data.reporter_organization_null_flavor.as_deref(),
-			"primarySources[].reporterOrganizationNullFlavor",
-		),
-		(
-			data.sponsor_study_number.is_some(),
-			data.sponsor_study_number.as_deref(),
-			data.sponsor_study_number_null_flavor.as_deref(),
-			"studyInformation.sponsorStudyNumberNullFlavor",
-		),
-		(
-			data.patient_initials.is_some(),
-			data.patient_initials.as_deref(),
-			data.patient_initials_null_flavor.as_deref(),
-			"patientInformation.patientInitialsNullFlavor",
-		),
-		(
-			data.investigation_number.is_some(),
-			data.investigation_number.as_deref(),
-			data.investigation_number_null_flavor.as_deref(),
-			"patientInformation.investigationNumberNullFlavor",
-		),
-		(
-			data.sex_d5.is_some(),
-			data.sex_d5.as_deref(),
-			data.sex_d5_null_flavor.as_deref(),
-			"patientInformation.patientSexNullFlavor",
-		),
-		(
-			data.ae_start_date.is_some(),
-			None,
-			data.ae_start_date_null_flavor.as_deref(),
-			"reactions[].reactionStartDateNullFlavor",
-		),
-	] {
-		validate_intake_pair(present, value, null_flavor, path)?;
-	}
+	validate_intake_pair(
+		data.reporter_organization.is_some(),
+		data.reporter_organization.as_deref(),
+		data.reporter_organization_null_flavor.as_deref(),
+		"primarySources[].reporterOrganizationNullFlavor",
+		"ICH.C.2.r.2.1.NULLFLAVOR.ALLOWED",
+		input_contracts::generated::c::c_2_r_2_1,
+	)?;
+	validate_intake_pair(
+		data.sponsor_study_number.is_some(),
+		data.sponsor_study_number.as_deref(),
+		data.sponsor_study_number_null_flavor.as_deref(),
+		"studyInformation.sponsorStudyNumberNullFlavor",
+		"ICH.C.5.3.NULLFLAVOR.ALLOWED",
+		input_contracts::generated::c::c_5_3,
+	)?;
+	validate_intake_pair(
+		data.patient_initials.is_some(),
+		data.patient_initials.as_deref(),
+		data.patient_initials_null_flavor.as_deref(),
+		"patientInformation.patientInitialsNullFlavor",
+		"ICH.D.1.NULLFLAVOR.ALLOWED",
+		input_contracts::generated::d::d_1,
+	)?;
+	validate_intake_pair(
+		data.investigation_number.is_some(),
+		data.investigation_number.as_deref(),
+		data.investigation_number_null_flavor.as_deref(),
+		"patientInformation.investigationNumberNullFlavor",
+		"ICH.D.1.1.4.NULLFLAVOR.ALLOWED",
+		input_contracts::generated::d::d_1_1_4,
+	)?;
+	validate_intake_pair(
+		data.sex_d5.is_some(),
+		data.sex_d5.as_deref(),
+		data.sex_d5_null_flavor.as_deref(),
+		"patientInformation.patientSexNullFlavor",
+		"ICH.D.5.NULLFLAVOR.ALLOWED",
+		input_contracts::generated::d::d_5,
+	)?;
+	validate_intake_pair(
+		data.ae_start_date.is_some(),
+		None,
+		data.ae_start_date_null_flavor.as_deref(),
+		"reactions[].reactionStartDateNullFlavor",
+		"ICH.E.i.4.NULLFLAVOR.ALLOWED",
+		input_contracts::generated::e::e_i_4,
+	)?;
 	Ok(())
 }
 
@@ -738,9 +742,19 @@ mod tests {
 	#[test]
 	fn intake_null_flavor_uses_explicit_catalog_companion() {
 		let path = "reactions[].reactionStartDateNullFlavor";
-		assert!(validate_intake_pair(false, None, Some("ASKU"), path).is_ok());
-		assert!(validate_intake_pair(false, None, Some("UNK"), path).is_err());
-		assert!(validate_intake_pair(true, None, Some("ASKU"), path).is_err());
-		assert!(validate_intake_pair(true, Some("ASKU"), None, path).is_err());
+		let validate = |present, value, null_flavor| {
+			validate_intake_pair(
+				present,
+				value,
+				null_flavor,
+				path,
+				"ICH.E.i.4.NULLFLAVOR.ALLOWED",
+				input_contracts::generated::e::e_i_4,
+			)
+		};
+		assert!(validate(false, None, Some("ASKU")).is_ok());
+		assert!(validate(false, None, Some("UNK")).is_err());
+		assert!(validate(true, None, Some("ASKU")).is_err());
+		assert!(validate(true, Some("ASKU"), None).is_err());
 	}
 }

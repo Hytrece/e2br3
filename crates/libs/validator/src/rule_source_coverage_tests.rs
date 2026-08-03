@@ -1,4 +1,4 @@
-use crate::{case_validation_rules, portable_constraints, portable_field_bindings};
+use crate::case_validation_rules;
 use serde::Deserialize;
 use std::collections::BTreeSet;
 
@@ -24,7 +24,7 @@ struct Requirement {
 }
 
 #[test]
-fn executable_rule_source_references_exist_in_compiled_catalogs() {
+fn executable_rule_source_references_exist_in_compiled_rules() {
 	let coverage: Coverage = serde_json::from_str(include_str!(
 		"../../../../registry/rule-source-coverage.json"
 	))
@@ -33,14 +33,19 @@ fn executable_rule_source_references_exist_in_compiled_catalogs() {
 		.into_iter()
 		.map(|rule| rule.code.to_string())
 		.collect::<BTreeSet<_>>();
-	let portable = portable_constraints()
-		.into_iter()
-		.map(|rule| rule.code)
-		.collect::<BTreeSet<_>>();
-	let bound = portable_field_bindings()
-		.into_iter()
-		.flat_map(|binding| binding.rule_codes.iter().copied())
-		.collect::<BTreeSet<_>>();
+	let input_contracts = [
+		include_str!("../../input-contracts/src/generated/c.rs"),
+		include_str!("../../input-contracts/src/generated/d.rs"),
+		include_str!("../../input-contracts/src/generated/e.rs"),
+		include_str!("../../input-contracts/src/generated/f.rs"),
+		include_str!("../../input-contracts/src/generated/g.rs"),
+		include_str!("../../input-contracts/src/generated/h.rs"),
+		include_str!("../../input-contracts/src/generated/n.rs"),
+	]
+	.into_iter()
+	.flat_map(str::lines)
+	.filter_map(|line| line.strip_prefix("/// "))
+	.collect::<BTreeSet<_>>();
 	let mut missing = Vec::new();
 
 	for source in coverage.sources {
@@ -58,15 +63,9 @@ fn executable_rule_source_references_exist_in_compiled_catalogs() {
 				}
 				"constraint" => {
 					for code in requirement.rule_codes {
-						if !portable.contains(&code) {
+						if !input_contracts.contains(code.as_str()) {
 							missing.push(format!(
-								"{} references missing portable constraint {}",
-								requirement.id, code
-							));
-						}
-						if !bound.contains(code.as_str()) {
-							missing.push(format!(
-								"{} references unbound portable constraint {}",
+								"{} references missing input contract {}",
 								requirement.id, code
 							));
 						}

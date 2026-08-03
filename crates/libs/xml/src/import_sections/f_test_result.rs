@@ -140,16 +140,16 @@ fn read_f_r_1(
 		first_attr(xpath, node, FTestResultPaths::TEST_DATE_NULL_FLAVOR);
 	let raw = first_attr(xpath, node, FTestResultPaths::TEST_DATE);
 	import_constraint::string(
-		"LB",
 		"testDate",
 		raw.as_deref(),
 		null_flavor.as_deref(),
+		input_contracts::generated::f::f_r_1,
 	)?;
 	import_constraint::string(
-		"LB",
 		"testDateNullFlavor",
-		null_flavor.as_deref(),
 		None,
+		None,
+		input_contracts::generated::f::f_r_1,
 	)?;
 	let field = E2bNullFlavorValue::from_parts(value, null_flavor.as_deref())
 		.map_err(|err| Error::InvalidXml {
@@ -172,31 +172,39 @@ fn read_f_r_2_1(xpath: &mut Context, node: &Node, index: usize) -> Result<String
 			);
 			String::new()
 		});
-	import_constraint::string("LB", "testName", Some(&value), None)?;
+	import_constraint::string(
+		"testName",
+		Some(&value),
+		None,
+		input_contracts::generated::f::f_r_2_1,
+	)?;
 	Ok(value)
 }
 
 /// e2b:F.r.2.2a
 fn read_f_r_2_2a(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
-	portable_string(
+	input_string(
 		first_attr(xpath, node, FTestResultPaths::TEST_MEDDRA_VERSION),
 		"testMeddraVersion",
+		input_contracts::generated::f::f_r_2_2a,
 	)
 }
 
 /// e2b:F.r.2.2b
 fn read_f_r_2_2b(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
-	portable_string(
+	input_string(
 		first_attr(xpath, node, FTestResultPaths::TEST_MEDDRA_CODE),
 		"testMeddraCode",
+		input_contracts::generated::f::f_r_2_2b,
 	)
 }
 
 /// e2b:F.r.3.1
 fn read_f_r_3_1(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
-	portable_string(
+	input_string(
 		first_attr(xpath, node, FTestResultPaths::RESULT_CODE),
 		"testResultCode",
+		input_contracts::generated::f::f_r_3_1,
 	)
 }
 
@@ -218,59 +226,64 @@ fn read_f_r_3_2(
 		});
 	}
 	import_constraint::string(
-		"LB",
 		"testResult",
 		value.as_deref(),
 		null_flavor.as_deref(),
+		input_contracts::generated::f::f_r_3_2,
 	)?;
 	import_constraint::string(
-		"LB",
 		"testResultNullFlavor",
-		null_flavor.as_deref(),
 		None,
+		None,
+		input_contracts::generated::f::f_r_3_2,
 	)?;
 	Ok((value, null_flavor))
 }
 
 /// e2b:F.r.3.3
 fn read_f_r_3_3(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
-	portable_string(
+	input_string(
 		first_attr(xpath, node, FTestResultPaths::RESULT_UNIT).or_else(|| {
 			first_attr(xpath, node, FTestResultPaths::RESULT_UNIT_FALLBACK)
 		}),
 		"testUnit",
+		input_contracts::generated::f::f_r_3_3,
 	)
 }
 
 /// e2b:F.r.3.4
 fn read_f_r_3_4(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
-	portable_string(
+	input_string(
 		first_text(xpath, node, FTestResultPaths::RESULT_UNSTRUCTURED),
 		"testResultUnstructured",
+		input_contracts::generated::f::f_r_3_4,
 	)
 }
 
 /// e2b:F.r.4
 fn read_f_r_4(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
-	portable_string(
+	input_string(
 		first_attr(xpath, node, FTestResultPaths::NORMAL_LOW),
 		"lowRange",
+		input_contracts::generated::f::f_r_4,
 	)
 }
 
 /// e2b:F.r.5
 fn read_f_r_5(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
-	portable_string(
+	input_string(
 		first_attr(xpath, node, FTestResultPaths::NORMAL_HIGH),
 		"highRange",
+		input_contracts::generated::f::f_r_5,
 	)
 }
 
 /// e2b:F.r.6
 fn read_f_r_6(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
-	portable_string(
+	input_string(
 		first_text(xpath, node, FTestResultPaths::COMMENTS),
 		"comments",
+		input_contracts::generated::f::f_r_6,
 	)
 }
 
@@ -278,7 +291,12 @@ fn read_f_r_6(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
 fn read_f_r_7(xpath: &mut Context, node: &Node) -> Result<Option<bool>> {
 	let value =
 		parse_bool_value(first_attr(xpath, node, FTestResultPaths::MORE_INFO));
-	import_constraint::boolean("LB", "moreInformationAvailable", value, None)?;
+	import_constraint::boolean(
+		"moreInformationAvailable",
+		value,
+		None,
+		input_contracts::generated::f::f_r_7,
+	)?;
 	Ok(value)
 }
 
@@ -301,8 +319,14 @@ fn first_text(xpath: &mut Context, node: &Node, expr: &str) -> Option<String> {
 	None
 }
 
-fn portable_string(value: Option<String>, field: &str) -> Result<Option<String>> {
-	import_constraint::string("LB", field, value.as_deref(), None)?;
+fn input_string(
+	value: Option<String>,
+	field: &str,
+	check: impl for<'a> Fn(
+		input_contracts::FieldInput<'a>,
+	) -> Vec<input_contracts::InputIssue>,
+) -> Result<Option<String>> {
+	import_constraint::string(field, value.as_deref(), None, check)?;
 	Ok(value)
 }
 

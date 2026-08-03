@@ -17,6 +17,7 @@ pub async fn create_sender_presave(
 		move |ctx, mm| {
 			Box::pin(async move {
 				let ParamsForCreate { data } = params;
+				super::input_contract::sender_create(&data.rows.sender)?;
 				for gateway in &data.rows.gateways {
 					validate_sender_gateway_detail_create(gateway)?;
 					if gateway.deleted {
@@ -25,7 +26,10 @@ pub async fn create_sender_presave(
 						});
 					}
 				}
-				for person in &data.rows.responsible_persons {
+				for (index, person) in
+					data.rows.responsible_persons.iter().enumerate()
+				{
+					super::input_contract::sender_person_detail(person, index)?;
 					validate_sender_responsible_person_detail_create(person)?;
 					if person.deleted {
 						return Err(Error::BadRequest {
@@ -136,6 +140,7 @@ pub async fn update_sender_presave(
 		move |ctx, mm| {
 			Box::pin(async move {
 				let ParamsForUpdate { data } = params;
+				super::input_contract::sender_update(&data)?;
 				if data.deleted == Some(true) {
 					PresaveLifecycleService::archive(
 						ctx,
@@ -357,6 +362,18 @@ pub async fn update_sender_presave_details(
 			Box::pin(async move {
 				let ParamsForUpdate { data } = params;
 				let rows = data.rows;
+				if let Some(sender) = &rows.sender {
+					super::input_contract::sender_update(sender)?;
+				}
+				if let Some(persons) = &rows.responsible_persons {
+					for (index, person) in persons.iter().enumerate() {
+						if !person.deleted {
+							super::input_contract::sender_person_detail(
+								person, index,
+							)?;
+						}
+					}
+				}
 				if rows
 					.sender
 					.as_ref()
@@ -719,7 +736,9 @@ generate_presave_child_rest_fns! {
 	ParentField: sender_presave_id,
 	ParentKind: Sender,
 	EntityName: "sender_presave_gateways",
-	DeleteMode: soft
+	DeleteMode: soft,
+	ValidateCreate: super::shared::no_input_contract,
+	ValidateUpdate: super::shared::no_input_contract
 }
 
 #[derive(Debug, Deserialize)]
@@ -765,5 +784,7 @@ generate_presave_child_rest_fns! {
 	ParentField: sender_presave_id,
 	ParentKind: Sender,
 	EntityName: "sender_presave_responsible_persons",
-	DeleteMode: soft
+	DeleteMode: soft,
+	ValidateCreate: super::input_contract::sender_person_create,
+	ValidateUpdate: super::input_contract::sender_person_update
 }

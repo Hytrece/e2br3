@@ -1,80 +1,81 @@
 use crate::{Error, Result};
-use validator::{bindings_for_section, validate_portable_value, PortableInputValue};
+use input_contracts::{FieldInput, InputIssue, InputValue};
 
-fn validate(
-	section: &str,
-	request_path: &str,
-	value: PortableInputValue<'_>,
+fn check(
+	field: &str,
+	value: InputValue<'_>,
 	null_flavor: Option<&str>,
+	check: impl for<'a> Fn(FieldInput<'a>) -> Vec<InputIssue>,
 ) -> Result<()> {
-	let binding = bindings_for_section(section)
-		.find(|binding| binding.request_path == request_path)
-		.ok_or_else(|| Error::InvalidXml {
-			message: format!(
-				"missing portable constraint binding for {section}.{request_path}"
-			),
+	if let Some(issue) = check(FieldInput::new(value, null_flavor))
+		.into_iter()
+		.next()
+	{
+		return Err(Error::InvalidXml {
+			message: format!("{} ({field}): {}", issue.code, issue.message),
 			line: None,
 			column: None,
-		})?;
-	for code in binding.rule_codes {
-		validate_portable_value(code, value, null_flavor).map_err(|violation| {
-			Error::InvalidXml {
-				message: format!("{}: {}", violation.code, violation.message),
-				line: None,
-				column: None,
-			}
-		})?;
+		});
 	}
 	Ok(())
 }
 
-pub(crate) fn string(
-	section: &str,
-	request_path: &str,
+pub(crate) fn string<F>(
+	field: &str,
 	value: Option<&str>,
 	null_flavor: Option<&str>,
-) -> Result<()> {
-	validate(
-		section,
-		request_path,
-		value.map_or(PortableInputValue::Missing, PortableInputValue::String),
+	check_field: F,
+) -> Result<()>
+where
+	F: for<'a> Fn(FieldInput<'a>) -> Vec<InputIssue>,
+{
+	check(
+		field,
+		value.map_or(InputValue::Missing, InputValue::String),
 		null_flavor,
+		check_field,
 	)
 }
 
-pub(crate) fn boolean(
-	section: &str,
-	request_path: &str,
+pub(crate) fn boolean<F>(
+	field: &str,
 	value: Option<bool>,
 	null_flavor: Option<&str>,
-) -> Result<()> {
-	validate(
-		section,
-		request_path,
-		value.map_or(PortableInputValue::Missing, PortableInputValue::Boolean),
+	check_field: F,
+) -> Result<()>
+where
+	F: for<'a> Fn(FieldInput<'a>) -> Vec<InputIssue>,
+{
+	check(
+		field,
+		value.map_or(InputValue::Missing, InputValue::Boolean),
 		null_flavor,
+		check_field,
 	)
 }
 
-pub(crate) fn number_string(
-	section: &str,
-	request_path: &str,
+pub(crate) fn number_string<F>(
+	field: &str,
 	value: Option<&str>,
-) -> Result<()> {
+	check_field: F,
+) -> Result<()>
+where
+	F: for<'a> Fn(FieldInput<'a>) -> Vec<InputIssue>,
+{
 	let number = value
 		.map(str::parse::<serde_json::Number>)
 		.transpose()
 		.map_err(|_| Error::InvalidXml {
-			message: format!("{section}.{request_path}: invalid numeric value"),
+			message: format!("{field}: invalid numeric value"),
 			line: None,
 			column: None,
 		})?;
-	validate(
-		section,
-		request_path,
+	check(
+		field,
 		number
 			.as_ref()
-			.map_or(PortableInputValue::Missing, PortableInputValue::Number),
+			.map_or(InputValue::Missing, InputValue::Number),
 		None,
+		check_field,
 	)
 }

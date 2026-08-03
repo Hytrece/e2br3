@@ -1,0 +1,15 @@
+[package]
+name = "input-contracts"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+doctest = false
+
+[lints]
+workspace = true
+
+[dependencies]
+base64 = "0.22"
+serde_json = "1"
+

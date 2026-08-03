@@ -150,7 +150,7 @@
       "roundTripValue": true,
       "constraint": {
         "status": "not_applicable",
-        "reason": "Derived local editor flag has no portable catalog constraint."
+        "reason": "Derived local editor flag has no Input Contract."
       },
       "payloadPath": "seriousness.serious"
     },
@@ -286,7 +286,7 @@
       "roundTripValue": "1",
       "constraint": {
         "status": "not_applicable",
-        "reason": "Local expectedness field has no portable catalog constraint."
+        "reason": "Local expectedness field has no Input Contract."
       },
       "payloadPath": "expectedness"
     },
@@ -302,7 +302,7 @@
       "roundTripValue": "moderate",
       "constraint": {
         "status": "not_applicable",
-        "reason": "Local severity field has no portable catalog constraint."
+        "reason": "Local severity field has no Input Contract."
       },
       "payloadPath": "severity"
     },
@@ -404,7 +404,7 @@
       "roundTripValue": "0",
       "constraint": {
         "status": "not_applicable",
-        "reason": "This app-local MFDS device field has no portable catalog constraint."
+        "reason": "This app-local MFDS device field has no Input Contract."
       },
       "payloadPath": "mfdsDeviceAe.aeClassification"
     },
@@ -420,7 +420,7 @@
       "roundTripValue": "10",
       "constraint": {
         "status": "not_applicable",
-        "reason": "This app-local MFDS device field has no portable catalog constraint."
+        "reason": "This app-local MFDS device field has no Input Contract."
       },
       "payloadPath": "mfdsDeviceAe.aeOutcome"
     },
@@ -436,7 +436,7 @@
       "roundTripValue": true,
       "constraint": {
         "status": "not_applicable",
-        "reason": "This app-local MFDS device field has no portable catalog constraint."
+        "reason": "This app-local MFDS device field has no Input Contract."
       },
       "payloadPath": "mfdsDeviceAe.causeMedicalDevice"
     },
@@ -452,7 +452,7 @@
       "roundTripValue": true,
       "constraint": {
         "status": "not_applicable",
-        "reason": "This app-local MFDS device field has no portable catalog constraint."
+        "reason": "This app-local MFDS device field has no Input Contract."
       },
       "payloadPath": "mfdsDeviceAe.causeProcedureIssue"
     },
@@ -468,7 +468,7 @@
       "roundTripValue": true,
       "constraint": {
         "status": "not_applicable",
-        "reason": "This app-local MFDS device field has no portable catalog constraint."
+        "reason": "This app-local MFDS device field has no Input Contract."
       },
       "payloadPath": "mfdsDeviceAe.causePatientCondition"
     },
@@ -484,7 +484,7 @@
       "roundTripValue": true,
       "constraint": {
         "status": "not_applicable",
-        "reason": "This app-local MFDS device field has no portable catalog constraint."
+        "reason": "This app-local MFDS device field has no Input Contract."
       },
       "payloadPath": "mfdsDeviceAe.causeUnableToAssess"
     },
@@ -500,7 +500,7 @@
       "roundTripValue": "Other cause",
       "constraint": {
         "status": "not_applicable",
-        "reason": "This app-local MFDS device field has no portable catalog constraint."
+        "reason": "This app-local MFDS device field has no Input Contract."
       },
       "payloadPath": "mfdsDeviceAe.causeOther"
     },
@@ -516,7 +516,7 @@
       "roundTripValue": "Action reason",
       "constraint": {
         "status": "not_applicable",
-        "reason": "This app-local MFDS device field has no portable catalog constraint."
+        "reason": "This app-local MFDS device field has no Input Contract."
       },
       "payloadPath": "mfdsDeviceAe.actionReason"
     },
@@ -532,7 +532,7 @@
       "roundTripValue": true,
       "constraint": {
         "status": "not_applicable",
-        "reason": "This app-local MFDS device field has no portable catalog constraint."
+        "reason": "This app-local MFDS device field has no Input Contract."
       },
       "payloadPath": "mfdsDeviceAe.actionRecall"
     },
@@ -548,7 +548,7 @@
       "roundTripValue": true,
       "constraint": {
         "status": "not_applicable",
-        "reason": "This app-local MFDS device field has no portable catalog constraint."
+        "reason": "This app-local MFDS device field has no Input Contract."
       },
       "payloadPath": "mfdsDeviceAe.actionRepair"
     },
@@ -564,7 +564,7 @@
       "roundTripValue": true,
       "constraint": {
         "status": "not_applicable",
-        "reason": "This app-local MFDS device field has no portable catalog constraint."
+        "reason": "This app-local MFDS device field has no Input Contract."
       },
       "payloadPath": "mfdsDeviceAe.actionInspection"
     },
@@ -580,7 +580,7 @@
       "roundTripValue": true,
       "constraint": {
         "status": "not_applicable",
-        "reason": "This app-local MFDS device field has no portable catalog constraint."
+        "reason": "This app-local MFDS device field has no Input Contract."
       },
       "payloadPath": "mfdsDeviceAe.actionReplacement"
     },
@@ -596,7 +596,7 @@
       "roundTripValue": true,
       "constraint": {
         "status": "not_applicable",
-        "reason": "This app-local MFDS device field has no portable catalog constraint."
+        "reason": "This app-local MFDS device field has no Input Contract."
       },
       "payloadPath": "mfdsDeviceAe.actionImprovement"
     },
@@ -612,7 +612,7 @@
       "roundTripValue": true,
       "constraint": {
         "status": "not_applicable",
-        "reason": "This app-local MFDS device field has no portable catalog constraint."
+        "reason": "This app-local MFDS device field has no Input Contract."
       },
       "payloadPath": "mfdsDeviceAe.actionMonitoring"
     },
@@ -628,7 +628,7 @@
       "roundTripValue": true,
       "constraint": {
         "status": "not_applicable",
-        "reason": "This app-local MFDS device field has no portable catalog constraint."
+        "reason": "This app-local MFDS device field has no Input Contract."
       },
       "payloadPath": "mfdsDeviceAe.actionNotification"
     },
@@ -644,7 +644,7 @@
       "roundTripValue": true,
       "constraint": {
         "status": "not_applicable",
-        "reason": "This app-local MFDS device field has no portable catalog constraint."
+        "reason": "This app-local MFDS device field has no Input Contract."
       },
       "payloadPath": "mfdsDeviceAe.actionLabelChange"
     },
@@ -660,7 +660,7 @@
       "roundTripValue": "Other action",
       "constraint": {
         "status": "not_applicable",
-        "reason": "This app-local MFDS device field has no portable catalog constraint."
+        "reason": "This app-local MFDS device field has no Input Contract."
       },
       "payloadPath": "mfdsDeviceAe.actionOther"
     }

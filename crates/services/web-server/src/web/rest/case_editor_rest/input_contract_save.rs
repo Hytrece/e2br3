@@ -1,10 +1,18 @@
 use super::common::*;
+use input_contracts::{FieldInput, InputIssue, InputValue};
 use lib_rest_core::ConstraintViolation;
 use std::collections::BTreeSet;
-use validator::{
-	bindings_for_section, validate_portable_value, PortableFieldBinding,
-	PortableInputValue, PortableValueType,
-};
+
+#[path = "input_contract_fields.rs"]
+mod input_contract_fields;
+use input_contract_fields::validate_section_fields;
+
+#[derive(Clone, Copy)]
+enum InputType {
+	String,
+	Boolean,
+	Number,
+}
 
 struct RequestMatch<'a> {
 	value: &'a Value,
@@ -84,24 +92,15 @@ fn value_at_request_path<'a>(
 		.map(|matched| matched.value)
 }
 
-fn input_value<'a>(
-	value: &'a Value,
-	value_type: PortableValueType,
-) -> PortableInputValue<'a> {
+fn input_value<'a>(value: &'a Value, value_type: InputType) -> InputValue<'a> {
 	if value.is_null() {
-		return PortableInputValue::Missing;
+		return InputValue::Missing;
 	}
 	match (value_type, value) {
-		(PortableValueType::String, Value::String(value)) => {
-			PortableInputValue::String(value)
-		}
-		(PortableValueType::Boolean, Value::Bool(value)) => {
-			PortableInputValue::Boolean(*value)
-		}
-		(PortableValueType::Number, Value::Number(value)) => {
-			PortableInputValue::Number(value)
-		}
-		_ => PortableInputValue::InvalidType,
+		(InputType::String, Value::String(value)) => InputValue::String(value),
+		(InputType::Boolean, Value::Bool(value)) => InputValue::Boolean(*value),
+		(InputType::Number, Value::Number(value)) => InputValue::Number(value),
+		_ => InputValue::InvalidType,
 	}
 }
 
@@ -122,31 +121,6 @@ fn concrete_frontend_path(template: &str, request_indexes: &[usize]) -> String {
 		})
 		.collect::<Vec<_>>()
 		.join(".")
-}
-
-fn companion_binding(
-	section: &str,
-	binding: &PortableFieldBinding,
-) -> Option<&'static PortableFieldBinding> {
-	let path = binding.null_flavor_path?;
-	bindings_for_section(section).find(|candidate| candidate.frontend_path == path)
-}
-
-fn validate_binding_value(
-	binding: &PortableFieldBinding,
-	value: &Value,
-	path: &str,
-) -> Result<()> {
-	for rule_code in binding.rule_codes {
-		if let Err(error) = validate_portable_value(
-			rule_code,
-			input_value(value, binding.value_type),
-			None,
-		) {
-			return Err(violation(&error.code, path, &error.message));
-		}
-	}
-	Ok(())
 }
 
 fn violation(rule_code: &str, path: &str, message: &str) -> Error {
@@ -1206,15 +1180,91 @@ fn normalized_changed_path(path: &str) -> String {
 }
 
 fn binding_was_changed(
-	binding: &PortableFieldBinding,
+	request_path: &str,
 	changed_paths: Option<&BTreeSet<String>>,
 ) -> bool {
 	changed_paths.is_none_or(|paths| {
 		paths.iter().any(|path| {
-			path == binding.request_path
-				|| normalized_changed_path(path) == binding.request_path
+			path == request_path || normalized_changed_path(path) == request_path
 		})
 	})
+}
+
+fn validate_field<F>(
+	row: &Map<String, Value>,
+	request_path: &str,
+	frontend_path: &str,
+	value_type: InputType,
+	null_flavor: Option<(&str, &str, &'static str)>,
+	changed_paths: Option<&BTreeSet<String>>,
+	outer_indexes: &[usize],
+	check: F,
+) -> Result<()>
+where
+	F: for<'a> Fn(FieldInput<'a>) -> Vec<InputIssue>,
+{
+	if !binding_was_changed(request_path, changed_paths)
+		&& null_flavor
+			.is_none_or(|(path, _, _)| !binding_was_changed(path, changed_paths))
+	{
+		return Ok(());
+	}
+	let mut matched_indexes = request_matches(row, request_path)
+		.into_iter()
+		.map(|matched| matched.indexes)
+		.collect::<Vec<_>>();
+	if let Some((null_flavor_path, _, _)) = null_flavor {
+		for matched in request_matches(row, null_flavor_path) {
+			if !matched_indexes.contains(&matched.indexes) {
+				matched_indexes.push(matched.indexes);
+			}
+		}
+	}
+	for indexes in matched_indexes {
+		let mut concrete_indexes = outer_indexes.to_vec();
+		concrete_indexes.extend_from_slice(&indexes);
+		let value = value_at_request_path(row, request_path, &indexes)
+			.map(|value| input_value(value, value_type))
+			.unwrap_or(InputValue::Missing);
+		let companion =
+			null_flavor.and_then(|(request_path, frontend_path, code)| {
+				value_at_request_path(row, request_path, &indexes)
+					.map(|value| (value, frontend_path, code))
+			});
+		let null_flavor_value = companion
+			.as_ref()
+			.and_then(|(value, _, _)| {
+				(!value.is_null()).then(|| {
+					value.as_str().unwrap_or("__invalid_null_flavor_type__")
+				})
+			})
+			.map(str::trim)
+			.filter(|value| !value.is_empty());
+		if value != InputValue::Missing && null_flavor_value.is_some() {
+			let (_, null_flavor_path, code) =
+				companion.expect("companion is present");
+			let path = concrete_frontend_path(null_flavor_path, &concrete_indexes);
+			return Err(violation(
+				code,
+				&path,
+				"value and NullFlavor cannot both be set",
+			));
+		}
+		if let Some(issue) = check(FieldInput {
+			value,
+			null_flavor: null_flavor_value,
+		})
+		.into_iter()
+		.next()
+		{
+			let issue_path = null_flavor
+				.filter(|(_, _, code)| *code == issue.code)
+				.map_or(frontend_path, |(_, path, _)| path);
+			let path = concrete_frontend_path(issue_path, &concrete_indexes);
+			return Err(violation(issue.code, &path, &issue.message));
+		}
+	}
+	Ok(())
 }
 
 pub(crate) fn validate_row_payload(
@@ -1233,54 +1283,11 @@ fn validate_row_payload_with_indexes(
 	changed_paths: Option<&BTreeSet<String>>,
 	outer_indexes: &[usize],
 ) -> Result<()> {
-	for binding in bindings_for_section(section) {
-		if !binding_was_changed(binding, changed_paths) {
-			continue;
-		}
-		for matched in request_matches(row, binding.request_path) {
-			let mut concrete_indexes = outer_indexes.to_vec();
-			concrete_indexes.extend_from_slice(&matched.indexes);
-			if input_value(matched.value, binding.value_type)
-				!= PortableInputValue::Missing
-			{
-				if let Some((companion, _)) = companion_binding(section, binding)
-					.and_then(|companion| {
-						value_at_request_path(
-							row,
-							companion.request_path,
-							&matched.indexes,
-						)
-						.map(|value| (companion, value))
-					})
-					.filter(|(companion, value)| {
-						input_value(value, companion.value_type)
-							!= PortableInputValue::Missing
-					}) {
-					let path = concrete_frontend_path(
-						companion.frontend_path,
-						&concrete_indexes,
-					);
-					return Err(violation(
-						companion
-							.rule_codes
-							.first()
-							.copied()
-							.unwrap_or("NULL_FLAVOR_PAIR"),
-						&path,
-						"value and NullFlavor cannot both be set",
-					));
-				}
-			}
-			let path =
-				concrete_frontend_path(binding.frontend_path, &concrete_indexes);
-			validate_binding_value(binding, matched.value, &path)?;
-		}
-	}
-	Ok(())
+	validate_section_fields(section, row, changed_paths, outer_indexes)
 }
 
 #[cfg(test)]
-mod portable_save_tests {
+mod input_contract_save_tests {
 	use super::*;
 
 	fn error_message(error: Error) -> String {
@@ -1300,16 +1307,8 @@ mod portable_save_tests {
 		}
 	}
 
-	fn portable_constraint_message(code: &str) -> String {
-		validator::portable_constraints()
-			.into_iter()
-			.find(|constraint| constraint.code == code)
-			.expect("portable Catalog constraint exists")
-			.message
-	}
-
 	#[test]
-	fn portable_save_rejects_repeatable_row_values() {
+	fn input_contract_save_rejects_repeatable_row_values() {
 		let reaction = Map::from_iter([(
 			"primarySourceReaction".to_string(),
 			json!("X".repeat(251)),
@@ -1319,10 +1318,7 @@ mod portable_save_tests {
 		let detail = constraint_violation(error);
 		assert_eq!(detail.rule_code, "ICH.E.i.1.1a.LENGTH.MAX");
 		assert_eq!(detail.path, "reactions.0.primarySourceReaction");
-		assert_eq!(
-			detail.message,
-			portable_constraint_message("ICH.E.i.1.1a.LENGTH.MAX")
-		);
+		assert_eq!(detail.message, "must contain at most 250 characters");
 
 		let test_result =
 			Map::from_iter([("testResult".to_string(), json!("not-a-number"))]);
@@ -1333,7 +1329,7 @@ mod portable_save_tests {
 	}
 
 	#[test]
-	fn portable_save_preserves_nested_concrete_indexes() {
+	fn input_contract_save_preserves_nested_concrete_indexes() {
 		let drug = Map::from_iter([(
 			"dosageInformation".to_string(),
 			json!([
@@ -1347,7 +1343,7 @@ mod portable_save_tests {
 	}
 
 	#[test]
-	fn portable_save_accepts_split_null_flavor_and_rejects_in_band_token() {
+	fn input_contract_save_accepts_split_null_flavor_and_rejects_in_band_token() {
 		let allowed = Map::from_iter([
 			("reactionStartDate".to_string(), Value::Null),
 			("reactionStartDateNullFlavor".to_string(), json!("MSK")),
@@ -1364,7 +1360,7 @@ mod portable_save_tests {
 	}
 
 	#[test]
-	fn portable_save_accepts_split_value_and_null_flavor_only_values() {
+	fn input_contract_save_accepts_split_value_and_null_flavor_only_values() {
 		let drug = Map::from_iter([(
 			"dosageInformation".to_string(),
 			json!([{
@@ -1377,7 +1373,7 @@ mod portable_save_tests {
 	}
 
 	#[test]
-	fn portable_save_rejects_value_and_null_flavor_together() {
+	fn input_contract_save_rejects_value_and_null_flavor_together() {
 		let reaction = Map::from_iter([
 			("reactionStartDate".to_string(), json!("20260715")),
 			("reactionStartDateNullFlavor".to_string(), json!("MSK")),
@@ -1392,7 +1388,7 @@ mod portable_save_tests {
 	}
 
 	#[test]
-	fn portable_save_rejects_invalid_batch_transmission_date() {
+	fn input_contract_save_rejects_invalid_batch_transmission_date() {
 		let message_header = Map::from_iter([(
 			"batchTransmissionDate".to_string(),
 			json!("not-a-date"),
@@ -1406,7 +1402,7 @@ mod portable_save_tests {
 	}
 
 	#[test]
-	fn portable_save_rejects_direct_page_rows_before_mutation() {
+	fn input_contract_save_rejects_direct_page_rows_before_mutation() {
 		let narrative_rows = BTreeMap::from([(
 			"narrative".to_string(),
 			json!({ "caseNarrative": "X".repeat(100_001) }),
@@ -1430,7 +1426,7 @@ mod portable_save_tests {
 	}
 
 	#[test]
-	fn dm_identifier_rows_project_to_flattened_portable_bindings() {
+	fn dm_identifier_rows_project_to_flattened_input_contracts() {
 		let rows = BTreeMap::from([
 			("patientInformation".to_string(), json!({})),
 			(
@@ -1495,7 +1491,7 @@ mod portable_save_tests {
 	}
 
 	#[test]
-	fn portable_save_rejects_si_nested_values_before_mutation() {
+	fn input_contract_save_rejects_si_nested_values_before_mutation() {
 		let registrations = BTreeMap::from([
 			("studyInformation".to_string(), json!({})),
 			(

@@ -215,7 +215,9 @@ macro_rules! generate_single_row_presave_rest_fns {
 		GetFn: $get_fn:ident,
 		UpdateFn: $update_fn:ident,
 		DeleteFn: $delete_fn:ident,
-		Kind: $kind:ident
+		Kind: $kind:ident,
+		ValidateCreate: $validate_create:path,
+		ValidateUpdate: $validate_update:path
 	) => {
 		#[derive(Debug, Serialize)]
 		pub struct $rows {
@@ -266,8 +268,9 @@ macro_rules! generate_single_row_presave_rest_fns {
 				stringify!($kind),
 				move |ctx, mm| {
 					Box::pin(async move {
-						let id =
-							$bmc::create(ctx, mm, params.data.rows.$row).await?;
+						let data = params.data.rows.$row;
+						$validate_create(&data)?;
+						let id = $bmc::create(ctx, mm, data).await?;
 						Ok(rest_created(details($bmc::get(ctx, mm, id).await?)))
 					})
 				},
@@ -339,6 +342,7 @@ macro_rules! generate_single_row_presave_rest_fns {
 				move |ctx, mm| {
 					Box::pin(async move {
 						let data = params.data.rows.$row;
+						$validate_update(&data)?;
 						if data.deleted == Some(true) {
 							PresaveLifecycleService::archive(
 								ctx,
@@ -424,7 +428,9 @@ macro_rules! generate_presave_child_rest_fns {
 		ParentField: $parent_field:ident,
 		ParentKind: $parent_kind:ident,
 		EntityName: $entity_name:literal,
-		DeleteMode: $delete_mode:ident
+		DeleteMode: $delete_mode:ident,
+		ValidateCreate: $validate_create:path,
+		ValidateUpdate: $validate_update:path
 	) => {
 		pub async fn $create_fn(
 			State(mm): State<ModelManager>,
@@ -443,6 +449,7 @@ macro_rules! generate_presave_child_rest_fns {
 				move |ctx, mm| {
 					Box::pin(async move {
 						let ParamsForCreate { data } = params;
+						$validate_create(&data)?;
 						let id =
 							$bmc::create(ctx, mm, data.into_core(parent_id)).await?;
 						Ok(rest_created($bmc::get(ctx, mm, id).await?))
@@ -527,6 +534,7 @@ macro_rules! generate_presave_child_rest_fns {
 							id,
 							$entity_name,
 						)?;
+						$validate_update(&data)?;
 						$bmc::update(ctx, mm, id, data).await?;
 						Ok(rest_ok($bmc::get(ctx, mm, id).await?))
 					})
@@ -575,6 +583,10 @@ macro_rules! generate_presave_child_rest_fns {
 }
 
 pub(super) use generate_presave_child_rest_fns;
+
+pub(super) fn no_input_contract<T>(_: &T) -> Result<()> {
+	Ok(())
+}
 
 pub(super) fn normalized_set(values: &[String]) -> HashSet<String> {
 	values

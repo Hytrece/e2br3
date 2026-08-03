@@ -410,11 +410,11 @@ async fn apply_ci_rows_patch(
 		],
 	)?;
 
-	let portable_row = rows
+	let contract_row = rows
 		.iter()
 		.map(|(key, value)| (key.clone(), value.clone()))
 		.collect::<Map<String, Value>>();
-	validate_row_payload("CI", "CI", &portable_row, None)?;
+	validate_row_payload("CI", "CI", &contract_row, None)?;
 
 	if let Some(row) = optional_row_object("CI", rows, "safetyReportIdentification")?
 	{

@@ -10,8 +10,6 @@ mod fda_context;
 mod g_drug_policy;
 mod h_narrative_policy;
 mod mfds_context;
-mod portable_bindings;
-mod portable_constraints;
 #[cfg(test)]
 mod rule_source_coverage_tests;
 pub mod rules;
@@ -55,8 +53,6 @@ pub use mfds_context::{
 	load_mfds_validation_context, MfdsValidationContext, ParentPastDrugByCase,
 	PastDrugByCase, RelatednessWithDrug,
 };
-pub use portable_bindings::*;
-pub use portable_constraints::*;
 pub use rules::*;
 use sqlx::types::Uuid;
 use std::collections::BTreeMap;
@@ -210,97 +206,5 @@ pub fn build_report(
 		section_summaries,
 		subsection_summaries,
 		issues,
-	}
-}
-
-#[cfg(test)]
-mod portable_constraint_api_tests {
-	use super::{
-		portable_constraints, validate_portable_value, PortableConstraintKind,
-		PortableInputValue,
-	};
-	use std::collections::{BTreeSet, HashMap};
-
-	#[test]
-	fn portable_projection_spans_catalog_authorities_without_business_rules() {
-		let codes = portable_constraints()
-			.into_iter()
-			.map(|rule| rule.code)
-			.collect::<BTreeSet<_>>();
-
-		assert!(codes.contains("ICH.C.1.1.LENGTH.MAX"));
-		assert!(codes
-			.iter()
-			.any(|code| code.starts_with("FDA.") && code.ends_with(".LENGTH.MAX")));
-		assert!(codes
-			.iter()
-			.any(|code| code.starts_with("MFDS.") && code.ends_with(".LENGTH.MAX")));
-		assert!(codes.iter().all(|code| !code.ends_with(".REQUIRED")));
-		assert!(codes.iter().all(|code| !code.ends_with(".VOCABULARY")));
-	}
-
-	#[test]
-	fn portable_string_binding_rejects_boolean_input() {
-		let result = validate_portable_value(
-			"ICH.C.1.3.ALLOWED.VALUE",
-			PortableInputValue::Boolean(true),
-			None,
-		);
-
-		assert!(result.is_err());
-	}
-
-	#[test]
-	fn projects_only_portable_constraint_kinds() {
-		let rules = portable_constraints();
-		let by_code = rules
-			.iter()
-			.map(|rule| (rule.code.as_str(), rule))
-			.collect::<HashMap<_, _>>();
-
-		assert_eq!(
-			by_code["ICH.C.1.1.LENGTH.MAX"].kind,
-			PortableConstraintKind::MaxLength
-		);
-		assert_eq!(
-			by_code["ICH.C.1.3.ALLOWED.VALUE"].kind,
-			PortableConstraintKind::InlineAllowedValues
-		);
-		assert_eq!(
-			by_code["ICH.C.1.2.ALLOWED.VALUE"].kind,
-			PortableConstraintKind::Format
-		);
-		assert!(by_code.contains_key("ICH.C.1.7.NULLFLAVOR.ALLOWED"));
-		assert!(!by_code.contains_key("ICH.C.1.8.1.ALLOWED.VALUE"));
-		assert!(!rules.iter().any(|rule| rule.code.ends_with(".VOCABULARY")));
-		assert!(!rules.iter().any(|rule| rule.code.ends_with(".REQUIRED")));
-	}
-
-	#[test]
-	fn portable_evaluator_matches_ci_catalog_values() {
-		assert!(validate_portable_value(
-			"ICH.C.1.3.ALLOWED.VALUE",
-			PortableInputValue::String("1"),
-			None,
-		)
-		.is_ok());
-		assert!(validate_portable_value(
-			"ICH.C.1.3.ALLOWED.VALUE",
-			PortableInputValue::String("9"),
-			None,
-		)
-		.is_err());
-		assert!(validate_portable_value(
-			"ICH.C.1.1.LENGTH.MAX",
-			PortableInputValue::String(&"X".repeat(100)),
-			None,
-		)
-		.is_ok());
-		assert!(validate_portable_value(
-			"ICH.C.1.1.LENGTH.MAX",
-			PortableInputValue::String(&"X".repeat(101)),
-			None,
-		)
-		.is_err());
 	}
 }

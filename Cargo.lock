@@ -1578,6 +1578,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "input-contracts"
+version = "0.1.0"
+dependencies = [
+ "base64",
+ "serde_json",
+]
+
+[[package]]
 name = "ipnet"
 version = "2.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4255,6 +4263,7 @@ dependencies = [
  "derive_more",
  "hmac",
  "httpc-test",
+ "input-contracts",
  "lib-auth",
  "lib-core",
  "lib-rest-core",
@@ -4668,6 +4677,7 @@ name = "xml"
 version = "0.1.0"
 dependencies = [
  "derive_more",
+ "input-contracts",
  "lib-core",
  "libxml",
  "modql",
@@ -4682,7 +4692,6 @@ dependencies = [
  "tokio",
  "tracing",
  "uuid",
- "validator",
 ]
 
 [[package]]
