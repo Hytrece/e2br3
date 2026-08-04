@@ -13,7 +13,10 @@ use lib_core::model::case::{CaseBmc, CaseListViewRow};
 use lib_core::model::case_query::{
 	build_where, combine_where, validate_conditions, RawCondition, ReportFilters,
 };
-use lib_core::model::case_query_catalog::{catalog, find_page, CatalogItem, CatalogPage, DataType, JoinKind};
+use lib_core::model::case_query_catalog::{
+	catalog, find_page, join_has_deleted_filter, join_sequence_column, CatalogItem,
+	CatalogPage, DataType, JoinKind,
+};
 use lib_core::model::case_validation_summary::CaseValidationSummaryBmc;
 use lib_core::model::ModelManager;
 use lib_rest_core::rest_result::DataRestResult;
@@ -105,23 +108,37 @@ fn element_value_expression(item: &CatalogItem) -> String {
 			"CASE WHEN c.{column} IS NULL THEN '[]'::jsonb ELSE jsonb_build_array(c.{column}::text) END",
 			column = item.source.column,
 		),
-		JoinKind::OneToOne(table) | JoinKind::OneToMany(table) => format!(
-			"COALESCE((SELECT jsonb_agg(t.{column}::text) FROM {table} t WHERE t.case_id = c.id AND t.{column} IS NOT NULL), '[]'::jsonb)",
-			column = item.source.column,
-			table = table,
-		),
+		JoinKind::OneToOne(table) | JoinKind::OneToMany(table) => {
+			let active = if join_has_deleted_filter(table) {
+				" AND t.deleted = false"
+			} else {
+				""
+			};
+			let order = join_sequence_column(table)
+				.map(|column| format!(" ORDER BY t.{column}"))
+				.unwrap_or_default();
+			format!(
+				"COALESCE((SELECT jsonb_agg(t.{column}::text{order}) FROM {table} t WHERE t.case_id = c.id{active} AND t.{column} IS NOT NULL), '[]'::jsonb)",
+				column = item.source.column,
+				table = table,
+				order = order,
+				active = active,
+			)
+		}
 	}
 }
 
 fn result_elements(pages: &[&'static CatalogPage]) -> Vec<CaseQueryElement> {
 	pages
 		.iter()
-		.flat_map(|page| page.items.iter().map(move |item| CaseQueryElement {
-			page: page.id.to_string(),
-			item: item.id.to_string(),
-			label: item.label.to_string(),
-			data_type: item.data_type,
-		}))
+		.flat_map(|page| {
+			page.items.iter().map(move |item| CaseQueryElement {
+				page: page.id.to_string(),
+				item: item.id.to_string(),
+				label: item.label.to_string(),
+				data_type: item.data_type,
+			})
+		})
 		.collect()
 }
 
@@ -140,7 +157,7 @@ fn result_values_sql(pages: &[&'static CatalogPage]) -> String {
 		.collect::<Vec<_>>()
 		.join(", ");
 	format!(
-			"SELECT c.id AS case_id, jsonb_build_object({fields}) AS values \
+		"SELECT c.id AS case_id, jsonb_build_object({fields}) AS values \
 			 FROM cases c WHERE c.id = ANY($1) ORDER BY array_position($1, c.id)"
 	)
 }
@@ -152,7 +169,7 @@ fn resolve_result_pages(page_ids: &[String]) -> Result<Vec<&'static CatalogPage>
 		});
 	}
 
-	let mut pages = Vec::new();
+	let mut pages: Vec<&'static CatalogPage> = Vec::new();
 	for page_id in page_ids {
 		let page = find_page(page_id).ok_or_else(|| Error::BadRequest {
 			message: format!("unknown result page {page_id}"),

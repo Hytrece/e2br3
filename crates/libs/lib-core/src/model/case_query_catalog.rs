@@ -619,6 +619,37 @@ pub fn find_page(page_id: &str) -> Option<&'static CatalogPage> {
 	CATALOG.iter().find(|page| page.id == page_id)
 }
 
+/// Whether a joined case table uses soft deletion for repeatable rows.
+pub fn join_has_deleted_filter(table: &str) -> bool {
+	matches!(
+		table,
+		"patient_information"
+			| "primary_sources"
+			| "literature_references"
+			| "past_drug_history"
+			| "reactions"
+			| "test_results"
+			| "drug_information"
+	)
+}
+
+/// Sequence column used to preserve the E2B row order in result values.
+pub fn join_sequence_column(table: &str) -> Option<&'static str> {
+	if matches!(
+		table,
+		"primary_sources"
+			| "literature_references"
+			| "past_drug_history"
+			| "reactions"
+			| "test_results"
+			| "drug_information"
+	) {
+		Some("sequence_number")
+	} else {
+		None
+	}
+}
+
 /// Looks up an item by page id and item id (used by the query builder in 2.2).
 pub fn find_item(page_id: &str, item_id: &str) -> Option<&'static CatalogItem> {
 	find_page(page_id)?

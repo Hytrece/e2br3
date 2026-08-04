@@ -7,7 +7,7 @@
 //! tested without a database.
 
 use crate::model::case_query_catalog::{
-	find_item, DataType, FieldSource, JoinKind, Operator,
+	find_item, join_has_deleted_filter, DataType, FieldSource, JoinKind, Operator,
 };
 use serde::Deserialize;
 use std::fmt;
@@ -161,8 +161,13 @@ pub fn build_where(conditions: &[ValidatedCondition]) -> (String, Vec<String>) {
 		let predicate = match cond.source.join {
 			JoinKind::CaseColumn => core,
 			JoinKind::OneToOne(table) | JoinKind::OneToMany(table) => {
+				let active = if join_has_deleted_filter(table) {
+					" AND t.deleted = false"
+				} else {
+					""
+				};
 				format!(
-					"EXISTS (SELECT 1 FROM {table} t WHERE t.case_id = c.id AND {core})"
+					"EXISTS (SELECT 1 FROM {table} t WHERE t.case_id = c.id{active} AND {core})"
 				)
 			}
 		};
@@ -335,7 +340,7 @@ mod tests {
 		let (sql, binds) = build_where(&conditions);
 		assert_eq!(
 			sql,
-			"EXISTS (SELECT 1 FROM drug_information t WHERE t.case_id = c.id AND t.medicinal_product::text ILIKE '%' || $1 || '%')"
+			"EXISTS (SELECT 1 FROM drug_information t WHERE t.case_id = c.id AND t.deleted = false AND t.medicinal_product::text ILIKE '%' || $1 || '%')"
 		);
 		assert_eq!(binds, vec!["aspirin".to_string()]);
 	}
@@ -352,7 +357,7 @@ mod tests {
 		let (sql, binds) = build_where(&conditions);
 		assert_eq!(
 			sql,
-			"EXISTS (SELECT 1 FROM patient_information t WHERE t.case_id = c.id AND t.age_at_time_of_onset BETWEEN $1::numeric AND $2::numeric)"
+			"EXISTS (SELECT 1 FROM patient_information t WHERE t.case_id = c.id AND t.deleted = false AND t.age_at_time_of_onset BETWEEN $1::numeric AND $2::numeric)"
 		);
 		assert_eq!(binds, vec!["18".to_string(), "65".to_string()]);
 	}
