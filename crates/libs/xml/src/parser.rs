@@ -23,18 +23,33 @@ pub fn parse_e2b_xml(xml: &[u8]) -> Result<ParsedE2b> {
 
 fn extract_root_element_name(xml: &[u8]) -> Option<String> {
 	let xml_str = std::str::from_utf8(xml).ok()?;
-	let start = xml_str.find('<')?;
-	let rest = &xml_str[start + 1..];
-	if rest.starts_with('?') || rest.starts_with('!') {
-		return None;
+	let mut rest = xml_str;
+	loop {
+		let start = rest.find('<')?;
+		rest = &rest[start + 1..];
+		if rest.starts_with('?') || rest.starts_with('!') {
+			rest = rest.get(rest.find('>')? + 1..)?;
+			continue;
+		}
+		let end = rest
+			.find(|c: char| c.is_whitespace() || c == '>' || c == '/')
+			.unwrap_or(rest.len());
+		let name = rest[..end].trim();
+		return (!name.is_empty()).then(|| name.to_string());
 	}
-	let end = rest
-		.find(|c: char| c.is_whitespace() || c == '>' || c == '/')
-		.unwrap_or(rest.len());
-	let name = rest[..end].trim();
-	if name.is_empty() {
-		None
-	} else {
-		Some(name.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+	use super::extract_root_element_name;
+
+	#[test]
+	fn root_name_skips_xml_declaration_and_comments() {
+		assert_eq!(
+			extract_root_element_name(
+				br#"<?xml version=\"1.0\"?><!----><MCCI_IN200100UV01/>"#
+			),
+			Some("MCCI_IN200100UV01".to_string())
+		);
 	}
 }

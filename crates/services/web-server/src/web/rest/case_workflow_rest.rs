@@ -97,6 +97,25 @@ fn parse_workflow_due_at(value: Option<&str>) -> Result<Option<OffsetDateTime>> 
 	})
 }
 
+fn resolve_workflow_due_at(
+	requested: Option<&str>,
+	due_days: i32,
+) -> Result<Option<OffsetDateTime>> {
+	if let Some(due_at) = parse_workflow_due_at(requested)? {
+		return Ok(Some(due_at));
+	}
+	if due_days <= 0 {
+		return Ok(None);
+	}
+	OffsetDateTime::now_utc()
+		.checked_add(Duration::days(i64::from(due_days)))
+		.ok_or_else(|| Error::BadRequest {
+			message: "workflow due_days produces an out-of-range deadline"
+				.to_string(),
+		})
+		.map(Some)
+}
+
 async fn require_current_workflow_step_owner(
 	ctx: &Ctx,
 	mm: &ModelManager,
@@ -323,7 +342,8 @@ async fn transition_case_workflow_authorized(
 		.map(str::trim)
 		.filter(|value| !value.is_empty())
 		.map(|value| value.to_string());
-	let due_at = parse_workflow_due_at(input.due_at.as_deref())?;
+	let due_at =
+		resolve_workflow_due_at(input.due_at.as_deref(), target_status.due_days)?;
 	let workflow_description = target_status.description.clone();
 	let override_reason = normalize_override_reason(
 		input.override_reason.as_deref(),
@@ -455,7 +475,8 @@ async fn assign_case_workflow_authorized(
 		.map(str::trim)
 		.filter(|value| !value.is_empty())
 		.map(|value| value.to_string());
-	let due_at = parse_workflow_due_at(input.due_at.as_deref())?;
+	let due_at =
+		resolve_workflow_due_at(input.due_at.as_deref(), current_status.due_days)?;
 	let workflow_description = current_status.description.clone();
 	let override_reason = normalize_override_reason(
 		input.override_reason.as_deref(),

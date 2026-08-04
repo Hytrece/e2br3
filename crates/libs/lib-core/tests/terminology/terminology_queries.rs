@@ -51,6 +51,7 @@ async fn active_controlled_terms_and_mfds_products_support_membership() -> Resul
 	let version = format!("test-{}", &suffix[..16]);
 	let whodrug_version = format!("T{}", &suffix[..8]);
 	let item_seq = format!("P{}", &suffix[..8]);
+	let substance_code = format!("S{}", &suffix[..8]);
 	let whodrug_code = format!("W{}", &suffix[..8]);
 
 	dbx.begin_txn().await?;
@@ -100,6 +101,17 @@ async fn active_controlled_terms_and_mfds_products_support_membership() -> Resul
 		.bind(&version),
 	)
 	.await?;
+	dbx.execute(
+		sqlx::query(
+			"INSERT INTO mfds_product_substances
+			 (item_seq, substance_code, substance_name_kr, version, active)
+			 VALUES ($1, $2, '시험 성분', $3, true)",
+		)
+		.bind(&item_seq)
+		.bind(&substance_code)
+		.bind(&version),
+	)
+	.await?;
 
 	let country_codes = vec!["KR".to_string(), "ZZ".to_string()];
 	let existing_countries = ControlledTermBmc::existing_active_codes(
@@ -120,11 +132,31 @@ async fn active_controlled_terms_and_mfds_products_support_membership() -> Resul
 		MfdsProductBmc::existing_active_item_seqs(&mm, &product_codes).await?;
 	assert!(existing_products.contains(&item_seq));
 	assert!(!existing_products.contains("missing"));
+	let existing_substances = MfdsProductBmc::existing_active_substance_codes(
+		&mm,
+		&[substance_code.clone(), "missing".to_string()],
+	)
+	.await?;
+	assert!(existing_substances.contains(&substance_code));
+	assert!(!existing_substances.contains("missing"));
 	let whodrug_codes = vec![whodrug_code.clone(), "missing".to_string()];
 	let existing_whodrug =
 		WhodrugProductBmc::existing_active_codes(&mm, &whodrug_codes).await?;
 	assert!(existing_whodrug.contains(&whodrug_code));
 	assert!(!existing_whodrug.contains("missing"));
+	assert!(WhodrugProductBmc::active_versions(&mm)
+		.await?
+		.contains(&whodrug_version));
+	let existing_whodrug_keys = WhodrugProductBmc::existing_active_keys(
+		&mm,
+		&[
+			(whodrug_version.clone(), whodrug_code.clone()),
+			(whodrug_version.clone(), "missing".to_string()),
+		],
+	)
+	.await?;
+	assert!(existing_whodrug_keys
+		.contains(&(whodrug_version.clone(), whodrug_code.clone())));
 
 	dbx.rollback_txn().await?;
 	Ok(())

@@ -17,8 +17,8 @@ use lib_core::model::patient::{
 	ReportedCauseOfDeath,
 };
 use lib_core::regulatory::{
-	is_fda_ind_message_receiver, is_mfds_clinical_trial_receiver,
-	is_mfds_compassionate_use_receiver,
+	is_fda_ind_message_receiver, is_fda_premarket_message_receiver,
+	is_mfds_clinical_trial_receiver, is_mfds_compassionate_use_receiver,
 };
 use sqlx::types::{Decimal, Uuid};
 use std::collections::HashMap;
@@ -1599,42 +1599,80 @@ fn d_10_8_r(
 	);
 }
 
-/// FDA.D.11.r.1.REQUIRED
-/// FDA.D.11.REQUIRED
-fn fda_d_11(patient: &PatientInformation, issues: &mut Vec<ValidationIssue>) {
+/// FDA.D.11.r.1 / FDA.D.11
+fn fda_d_11(
+	patient: Option<&PatientInformation>,
+	vaers: bool,
+	issues: &mut Vec<ValidationIssue>,
+) {
 	const PATH: &str = "patientInformation.raceCode";
-	let valid = matches!(
-		patient.race_code.as_deref().map(str::trim),
-		Some("C16352" | "C41259" | "C41260" | "C41219" | "C41261")
-	) || patient.race_code_null_flavor.is_some();
+	let null_flavor = patient
+		.and_then(|patient| patient.race_code_null_flavor.as_deref())
+		.map(str::trim)
+		.filter(|value| !value.is_empty());
+	let present = patient
+		.is_some_and(|patient| has_text(patient.race_code.as_deref()))
+		|| null_flavor.is_some();
 	required_field(
 		issues,
-		"FDA.D.11.r.1.REQUIRED",
+		if vaers {
+			"FDA.D.11.REQUIRED"
+		} else {
+			"FDA.D.11.r.1.REQUIRED"
+		},
 		PATH,
-		"FDA requires [D.11.r.1].",
-		valid,
+		"FDA requires patient race or an allowed null flavor.",
+		present,
 	);
-	required_field(
+	reject_when(
 		issues,
-		"FDA.D.11.REQUIRED",
-		PATH,
-		"FDA requires [D.11] patient race when patient payload is present.",
-		valid,
+		"FDA.D.11.NULLFLAVOR.ALLOWED",
+		"patientInformation.raceCodeNullFlavor",
+		SECTION,
+		"FDA D.11 null flavor is not allowed for this reporting route.",
+		null_flavor.is_some_and(|value| {
+			if vaers {
+				!matches!(value, "MSK" | "UNK" | "OTH")
+			} else {
+				!matches!(value, "MSK" | "UNK" | "OTH" | "NA")
+			}
+		}),
 	);
 }
 
-/// FDA.D.12.REQUIRED
-fn fda_d_12(patient: &PatientInformation, issues: &mut Vec<ValidationIssue>) {
-	let valid = matches!(
-		patient.ethnicity_code.as_deref().map(str::trim),
-		Some("C17459" | "C41222")
-	) || patient.ethnicity_code_null_flavor.is_some();
+/// FDA.D.12
+fn fda_d_12(
+	patient: Option<&PatientInformation>,
+	vaers: bool,
+	issues: &mut Vec<ValidationIssue>,
+) {
+	let null_flavor = patient
+		.and_then(|patient| patient.ethnicity_code_null_flavor.as_deref())
+		.map(str::trim)
+		.filter(|value| !value.is_empty());
+	let present = patient
+		.is_some_and(|patient| has_text(patient.ethnicity_code.as_deref()))
+		|| null_flavor.is_some();
 	required_field(
 		issues,
 		"FDA.D.12.REQUIRED",
 		"patientInformation.ethnicityCode",
-		"FDA requires [D.12] patient ethnicity when patient payload is present.",
-		valid,
+		"FDA requires patient ethnicity or an allowed null flavor.",
+		present,
+	);
+	reject_when(
+		issues,
+		"FDA.D.12.NULLFLAVOR.ALLOWED",
+		"patientInformation.ethnicityCodeNullFlavor",
+		SECTION,
+		"FDA D.12 null flavor is not allowed for this reporting route.",
+		null_flavor.is_some_and(|value| {
+			if vaers {
+				!matches!(value, "NI" | "MSK" | "UNK")
+			} else {
+				!matches!(value, "NI" | "MSK" | "UNK" | "NA")
+			}
+		}),
 	);
 }
 
@@ -1720,7 +1758,7 @@ fn fda_d_9_1_required(
 	death_date_present: bool,
 ) -> bool {
 	report_type.map(str::trim) == Some("2")
-		&& is_fda_ind_message_receiver(receiver)
+		&& is_fda_premarket_message_receiver(receiver)
 		&& death_reported
 		&& !death_date_present
 }
@@ -1765,8 +1803,8 @@ fn fda_d_11_d_12_na(
 		.patient_initials_null_flavor
 		.as_deref()
 		.map(str::trim);
-	if matches!(initials, Some("AGGREGATE"))
-		|| matches!(null_flavor, Some("NA" | "SUMMARY"))
+	if matches!(initials, Some("AGGREGATE" | "SUMMARY"))
+		|| matches!(null_flavor, Some("NA"))
 	{
 		if patient.race_code_null_flavor.as_deref().map(str::trim) != Some("NA") {
 			push_business_issue(
@@ -1853,6 +1891,7 @@ fn mfds_d_8_r_1_kr_1b(
 		!valid_mfds_product(
 			&validation_ctx.vocabulary,
 			vocabulary_receiver,
+			past.mfds_medicinal_product_version.as_deref(),
 			past.mfds_medicinal_product_id.as_deref(),
 		),
 	);
@@ -1889,6 +1928,83 @@ fn mfds_d_8_r_1_kr_1a(
 	);
 }
 
+/// MFDS.D.8.r.2a/b and D.8.r.3a/b companion rules.
+fn mfds_d_8_identifier_companions(
+	idx: usize,
+	past: &crate::PastDrugByCase,
+	issues: &mut Vec<ValidationIssue>,
+) {
+	for (code, field, missing) in [
+		(
+			"MFDS.D.8.r.2a.REQUIRED",
+			"mpidVersion",
+			has_text(past.mpid.as_deref())
+				&& !has_text(past.mpid_version.as_deref()),
+		),
+		(
+			"MFDS.D.8.r.2b.REQUIRED",
+			"mpid",
+			has_text(past.mpid_version.as_deref())
+				&& !has_text(past.mpid.as_deref()),
+		),
+		(
+			"MFDS.D.8.r.3a.REQUIRED",
+			"phpidVersion",
+			has_text(past.phpid.as_deref())
+				&& !has_text(past.phpid_version.as_deref()),
+		),
+		(
+			"MFDS.D.8.r.3b.REQUIRED",
+			"phpid",
+			has_text(past.phpid_version.as_deref())
+				&& !has_text(past.phpid.as_deref()),
+		),
+	] {
+		warn_when(
+			issues,
+			code,
+			&format!("patientInformation.pastDrugHistory.{idx}.{field}"),
+			SECTION,
+			"MFDS requires each D.8 MPID/PhPID identifier and version as a pair.",
+			missing,
+		);
+	}
+}
+
+/// MFDS.D.10.8.r.2b / D.10.8.r.3b reverse companion rules.
+fn mfds_d_10_8_identifier_companions(
+	parent_idx: usize,
+	idx: usize,
+	past: &crate::ParentPastDrugByCase,
+	issues: &mut Vec<ValidationIssue>,
+) {
+	for (code, field, missing) in [
+		(
+			"MFDS.D.10.8.r.2b.REQUIRED",
+			"mpid",
+			has_text(past.mpid_version.as_deref())
+				&& !has_text(past.mpid.as_deref()),
+		),
+		(
+			"MFDS.D.10.8.r.3b.REQUIRED",
+			"phpid",
+			has_text(past.phpid_version.as_deref())
+				&& !has_text(past.phpid.as_deref()),
+		),
+	] {
+		warn_when(
+			issues,
+			code,
+			&format!(
+				"patientInformation.parents.{parent_idx}.pastDrugs.{idx}.{field}"
+			),
+			SECTION,
+			"MFDS requires each D.10.8 MPID/PhPID identifier and version as a pair.",
+			missing,
+		);
+	}
+}
+
 /// MFDS.D.10.8.r.1.KR.1b.VOCABULARY
 /// MFDS.D.10.8.r.1.KR.1b.REQUIRED
 fn mfds_d_10_8_r_1_kr_1b(
@@ -1912,6 +2028,7 @@ fn mfds_d_10_8_r_1_kr_1b(
 		!valid_mfds_product(
 			&validation_ctx.vocabulary,
 			vocabulary_receiver,
+			past.mfds_medicinal_product_version.as_deref(),
 			past.mfds_medicinal_product_id.as_deref(),
 		),
 	);
@@ -2123,36 +2240,24 @@ pub(crate) fn collect_fda_issues(
 ) {
 	fda_d_1(validation_ctx, fda_ctx, issues);
 	fda_d_9_1(validation_ctx, issues);
-	if let Some(patient) = validation_ctx.patient.as_ref() {
-		fda_d_11_d_12_na(patient, issues);
+	let vaers = is_fda_vaers(validation_ctx);
+	if !vaers {
+		if let Some(patient) = validation_ctx.patient.as_ref() {
+			fda_d_11_d_12_na(patient, issues);
+		}
 	}
-	if is_fda_vaers(validation_ctx) {
-		let local_criteria = validation_ctx
-			.safety_report
-			.as_ref()
-			.and_then(|report| report.local_criteria_report_type.as_deref());
+	let local_criteria = validation_ctx
+		.safety_report
+		.as_ref()
+		.and_then(|report| report.local_criteria_report_type.as_deref());
+	if vaers {
 		if fda_d_2_required(local_criteria) {
 			fda_d_2(validation_ctx.patient.as_ref(), issues);
 		}
-		if local_criteria.map(str::trim) != Some("5") {
-			if let Some(patient) = validation_ctx.patient.as_ref() {
-				fda_d_11(patient, issues);
-				fda_d_12(patient, issues);
-			} else {
-				push_business_issue(
-					issues,
-					"FDA.D.11.r.1.REQUIRED",
-					"patientInformation.raceCode",
-					"Race or an allowed null flavor is required for VAERS reports",
-				);
-				push_business_issue(
-					issues,
-					"FDA.D.12.REQUIRED",
-					"patientInformation.ethnicityCode",
-					"Ethnicity or an allowed null flavor is required for VAERS reports",
-				);
-			}
-		}
+	}
+	if !vaers || local_criteria.map(str::trim) != Some("5") {
+		fda_d_11(validation_ctx.patient.as_ref(), vaers, issues);
+		fda_d_12(validation_ctx.patient.as_ref(), vaers, issues);
 	}
 }
 pub(crate) fn collect_mfds_issues(
@@ -2176,6 +2281,7 @@ pub(crate) fn collect_mfds_issues(
 		.or_else(|| receiver_is_fr.then_some("FR"));
 
 	for (idx, past) in mfds_ctx.past_drugs.iter().enumerate() {
+		mfds_d_8_identifier_companions(idx, past, issues);
 		mfds_d_8_r_1_kr_1b(
 			idx,
 			past,
@@ -2205,6 +2311,7 @@ pub(crate) fn collect_mfds_issues(
 			validation_ctx,
 			issues,
 		);
+		mfds_d_10_8_identifier_companions(parent_idx, idx, past, issues);
 		mfds_d_10_8_r_1_kr_1a(parent_idx, idx, past, receiver_is_fr, issues);
 	}
 }
@@ -3165,8 +3272,8 @@ mod golden_companion_tests {
 	fn fda_patient_rules_keep_catalog_conditions_and_paths() {
 		let patient = patient();
 		let mut issues = Vec::new();
-		fda_d_11(&patient, &mut issues);
-		fda_d_12(&patient, &mut issues);
+		fda_d_11(Some(&patient), false, &mut issues);
+		fda_d_12(Some(&patient), false, &mut issues);
 		assert_eq!(
 			issues
 				.iter()
@@ -3174,7 +3281,6 @@ mod golden_companion_tests {
 				.collect::<Vec<_>>(),
 			[
 				("FDA.D.11.r.1.REQUIRED", Some("patientInformation.raceCode")),
-				("FDA.D.11.REQUIRED", Some("patientInformation.raceCode")),
 				(
 					"FDA.D.12.REQUIRED",
 					Some("patientInformation.ethnicityCode")
@@ -3230,14 +3336,40 @@ mod golden_companion_tests {
 		patient.race_code_null_flavor = Some("UNK".to_string());
 		patient.ethnicity_code_null_flavor = Some("UNK".to_string());
 		let mut issues = Vec::new();
-		fda_d_11(&patient, &mut issues);
-		fda_d_12(&patient, &mut issues);
+		fda_d_11(Some(&patient), true, &mut issues);
+		fda_d_12(Some(&patient), true, &mut issues);
 		assert!(issues.is_empty());
+
+		patient.race_code_null_flavor = Some("NA".to_string());
+		patient.ethnicity_code_null_flavor = Some("NA".to_string());
+		fda_d_11(Some(&patient), true, &mut issues);
+		fda_d_12(Some(&patient), true, &mut issues);
+		assert!(issues
+			.iter()
+			.any(|issue| issue.code == "FDA.D.11.NULLFLAVOR.ALLOWED"));
+		assert!(issues
+			.iter()
+			.any(|issue| issue.code == "FDA.D.12.NULLFLAVOR.ALLOWED"));
+	}
+
+	#[test]
+	fn fda_race_and_ethnicity_are_reported_when_patient_row_is_missing() {
+		let mut issues = Vec::new();
+		fda_d_11(None, true, &mut issues);
+		fda_d_12(None, true, &mut issues);
+		assert!(issues.iter().any(|issue| issue.code == "FDA.D.11.REQUIRED"));
+		assert!(issues.iter().any(|issue| issue.code == "FDA.D.12.REQUIRED"));
 	}
 
 	#[test]
 	fn fda_death_date_rule_is_ind_study_only_and_accepts_null_flavor() {
 		assert!(fda_d_9_1_required(Some("2"), Some("CDER_IND"), true, false));
+		assert!(fda_d_9_1_required(
+			Some("2"),
+			Some("CDER_IND_EXEMPT_BA_BE"),
+			true,
+			false
+		));
 		assert!(!fda_d_9_1_required(
 			Some("1"),
 			Some("CDER_IND"),
@@ -3280,6 +3412,8 @@ mod golden_companion_tests {
 			drug_name_null_flavor: None,
 			mpid: None,
 			mpid_version: None,
+			phpid: None,
+			phpid_version: None,
 			mfds_medicinal_product_id: Some("product".to_string()),
 			mfds_medicinal_product_version: None,
 		};
@@ -3302,6 +3436,8 @@ mod golden_companion_tests {
 			drug_name_null_flavor: Some("UNK".to_string()),
 			mpid: None,
 			mpid_version: None,
+			phpid: None,
+			phpid_version: None,
 			mfds_medicinal_product_id: None,
 			mfds_medicinal_product_version: None,
 		};
@@ -3310,6 +3446,27 @@ mod golden_companion_tests {
 		assert!(!issues
 			.iter()
 			.any(|issue| issue.code == "MFDS.D.8.r.1.KR.1b.REQUIRED"));
+	}
+
+	#[test]
+	fn mfds_past_drug_identifiers_and_versions_are_paired() {
+		let past = crate::PastDrugByCase {
+			drug_name_null_flavor: None,
+			mpid: Some("MPID".to_string()),
+			mpid_version: None,
+			phpid: None,
+			phpid_version: Some("1".to_string()),
+			mfds_medicinal_product_id: None,
+			mfds_medicinal_product_version: None,
+		};
+		let mut issues = Vec::new();
+		mfds_d_8_identifier_companions(0, &past, &mut issues);
+		assert!(issues
+			.iter()
+			.any(|issue| issue.code == "MFDS.D.8.r.2a.REQUIRED"));
+		assert!(issues
+			.iter()
+			.any(|issue| issue.code == "MFDS.D.8.r.3b.REQUIRED"));
 	}
 
 	#[test]
@@ -3323,6 +3480,8 @@ mod golden_companion_tests {
 			drug_name_null_flavor: None,
 			mpid: None,
 			mpid_version: None,
+			phpid: None,
+			phpid_version: None,
 			mfds_medicinal_product_id: Some("product".to_string()),
 			mfds_medicinal_product_version: None,
 		};

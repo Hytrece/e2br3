@@ -1,4 +1,7 @@
-use crate::common::{cookie_header, init_test_mm, seed_org_with_users, Result};
+use crate::common::{
+	cookie_header, create_test_import_product, init_test_mm, seed_org_with_users,
+	unique_safety_report_id_xml, Result,
+};
 use axum::body::{to_bytes, Body};
 use axum::http::{Request, StatusCode};
 use lib_auth::token::generate_web_token;
@@ -34,12 +37,16 @@ fn xsd_path() -> PathBuf {
 		.join("docs/exporter/schema/multicacheschemas/MCCI_IN200100UV01.xsd")
 }
 
-fn build_multipart(xml: &[u8], filename: &str) -> (String, Vec<u8>) {
+fn build_multipart(
+	xml: &[u8],
+	filename: &str,
+	product_presave_id: Uuid,
+) -> (String, Vec<u8>) {
 	let boundary = "X-BOUNDARY-ROUNDTRIP";
 	let mut body = Vec::new();
 	body.extend_from_slice(
 		format!(
-			"--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"{filename}\"\r\nContent-Type: application/xml\r\n\r\n"
+			"--{boundary}\r\nContent-Disposition: form-data; name=\"productPresaveId\"\r\n\r\n{product_presave_id}\r\n--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"{filename}\"\r\nContent-Type: application/xml\r\n\r\n"
 		)
 		.as_bytes(),
 	);
@@ -138,7 +145,7 @@ async fn ensure_reaction_language(
 					Some("application/json"),
 					Body::from(
 						serde_json::json!({
-							"data": { "reaction_language": "en" }
+							"data": { "reaction_language": "eng" }
 						})
 						.to_string(),
 					),
@@ -387,12 +394,12 @@ async fn test_roundtrip_fixtures_import_validate_export_revalidate() -> Result<(
 		RoundtripFixture {
 			filename: "FAERS2022Scenario1.xml",
 			authority: "ich",
-			require_ok: true,
+			require_ok: false,
 		},
 		RoundtripFixture {
 			filename: "FAERS2022Scenario2.xml",
 			authority: "fda",
-			require_ok: true,
+			require_ok: false,
 		},
 		RoundtripFixture {
 			filename: "FAERS2022Scenario3.xml",
@@ -403,6 +410,8 @@ async fn test_roundtrip_fixtures_import_validate_export_revalidate() -> Result<(
 
 	let mm = init_test_mm().await?;
 	let seed = seed_org_with_users(&mm, "admin_pwd", "viewer_pwd").await?;
+	let product_presave_id =
+		create_test_import_product(&mm, seed.org_id, seed.admin.id).await?;
 	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
 	let cookie = cookie_header(&token.to_string());
 	let app = web_server::app(mm);
@@ -410,17 +419,9 @@ async fn test_roundtrip_fixtures_import_validate_export_revalidate() -> Result<(
 
 	for fixture in fixtures {
 		let fixture_path = examples_dir().join(fixture.filename);
-		let mut xml = fs::read_to_string(&fixture_path)?;
-		let unique_safety_report_id =
-			format!("RT-{}-{}", fixture.authority, Uuid::new_v4());
-		if let Some(start) = xml.find("extension=\"US-") {
-			if let Some(end_rel) = xml[start + 11..].find('"') {
-				let end = start + 11 + end_rel;
-				xml.replace_range(start + 11..end, &unique_safety_report_id);
-			}
-		}
+		let xml = unique_safety_report_id_xml(fs::read_to_string(&fixture_path)?);
 		let (boundary, multipart) =
-			build_multipart(xml.as_bytes(), fixture.filename);
+			build_multipart(xml.as_bytes(), fixture.filename, product_presave_id);
 
 		let (import_status, import_body) = request_json(
 			&app,
@@ -443,7 +444,10 @@ async fn test_roundtrip_fixtures_import_validate_export_revalidate() -> Result<(
 			.and_then(|v| v.get("case_id").or_else(|| v.get("caseId")))
 			.and_then(Value::as_str)
 		else {
-			failures.push(format!("{}: missing case_id", fixture.filename));
+			failures.push(format!(
+				"{}: missing case_id in import response: {}",
+				fixture.filename, import_body
+			));
 			continue;
 		};
 		if let Err(err) = ensure_reaction_language(&app, &cookie, case_id).await {

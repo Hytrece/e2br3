@@ -357,20 +357,9 @@ fn c_1_7(report: &SafetyReportIdentification, issues: &mut Vec<ValidationIssue>)
 	);
 }
 
-/// ICH.C.1.8.1.ALLOWED.VALUE
 /// ICH.C.1.8.1.LENGTH.MAX
-fn c_1_8_1(
-	report: &SafetyReportIdentification,
-	vocabulary: &crate::context::VocabularyContext,
-	issues: &mut Vec<ValidationIssue>,
-) {
+fn c_1_8_1(report: &SafetyReportIdentification, issues: &mut Vec<ValidationIssue>) {
 	const PATH: &str = "safetyReportIdentification.worldwideUniqueId";
-	allowed(
-		issues,
-		"ICH.C.1.8.1.ALLOWED.VALUE",
-		PATH,
-		valid_ich_identifier(vocabulary, report.worldwide_unique_id.as_deref()),
-	);
 	length(
 		issues,
 		"ICH.C.1.8.1.LENGTH.MAX",
@@ -1013,6 +1002,56 @@ fn c_1_6_1_r_2(
 	);
 }
 
+fn fda_attachment(
+	field_code: &str,
+	path: String,
+	document: Option<&str>,
+	file_name: Option<&str>,
+	media_type: Option<&str>,
+	issues: &mut Vec<ValidationIssue>,
+) {
+	if trimmed(document).is_none() {
+		return;
+	}
+	let Some(file_name) = trimmed(file_name) else {
+		push_business_violation(
+			issues,
+			true,
+			&format!("FDA.{field_code}.FILE_NAME.REQUIRED"),
+			path,
+			"FDA attachments require the original file name.",
+		);
+		return;
+	};
+	let matches = lib_core::regulatory::fda_attachment_media_type(file_name)
+		.zip(trimmed(media_type))
+		.is_some_and(|(expected, actual)| actual.eq_ignore_ascii_case(expected));
+	push_business_violation(
+		issues,
+		!matches,
+		&format!("FDA.{field_code}.MEDIA_TYPE.MATCH"),
+		path,
+		"FDA attachment file extension must be supported and match its media type.",
+	);
+}
+
+/// FDA.C.1.6.1.r.2.FILE_NAME.REQUIRED
+/// FDA.C.1.6.1.r.2.MEDIA_TYPE.MATCH
+fn fda_c_1_6_1_r_2(
+	idx: usize,
+	document: &DocumentsHeldBySender,
+	issues: &mut Vec<ValidationIssue>,
+) {
+	fda_attachment(
+		"C.1.6.1.r.2",
+		format!("documentsHeldBySender.{idx}.includedDocument"),
+		document.document_base64.as_deref(),
+		document.file_name.as_deref(),
+		document.media_type.as_deref(),
+		issues,
+	);
+}
+
 /// ICH.C.1.9.1.r.1.REQUIRED
 /// ICH.C.1.9.1.r.1.LENGTH.MAX
 fn c_1_9_1_r_1(
@@ -1110,6 +1149,23 @@ fn c_4_r_2(
 		"ICH.C.4.r.2.ALLOWED.VALUE",
 		&path,
 		valid_base64(reference.document_base64.as_deref()),
+	);
+}
+
+/// FDA.C.4.r.2.FILE_NAME.REQUIRED
+/// FDA.C.4.r.2.MEDIA_TYPE.MATCH
+fn fda_c_4_r_2(
+	idx: usize,
+	reference: &LiteratureReference,
+	issues: &mut Vec<ValidationIssue>,
+) {
+	fda_attachment(
+		"C.4.r.2",
+		format!("literatureReferences.{idx}.documentBase64"),
+		reference.document_base64.as_deref(),
+		reference.file_name.as_deref(),
+		reference.media_type.as_deref(),
+		issues,
 	);
 }
 
@@ -1256,7 +1312,7 @@ pub(crate) fn collect_ich_issues(
 		c_1_4(report, issues);
 		c_1_5(report, issues);
 		c_1_7(report, issues);
-		c_1_8_1(report, &validation_ctx.vocabulary, issues);
+		c_1_8_1(report, issues);
 		c_1_8_2(report, issues);
 		c_1_9_1(report, issues);
 		c_1_11_1(report, issues);
@@ -2013,6 +2069,13 @@ pub(crate) async fn collect_fda_issues(
 		});
 	fda_primary_reporter_rules(&validation_ctx.primary_sources, vaers, issues);
 	fda_sender_rules(validation_ctx.sender.as_ref(), issues);
+	for (idx, document) in validation_ctx.documents_held_by_sender.iter().enumerate()
+	{
+		fda_c_1_6_1_r_2(idx, document, issues);
+	}
+	for (idx, reference) in validation_ctx.literature_references.iter().enumerate() {
+		fda_c_4_r_2(idx, reference, issues);
+	}
 	fda_study_route_rules(validation_ctx, fda_ctx, issues);
 	fda_repeating_flag_rules(validation_ctx, issues);
 	Ok(())
@@ -2523,6 +2586,7 @@ mod golden_c1_value_tests {
 			case_id: Uuid::nil(),
 			title: title.map(str::to_string),
 			document_base64: None,
+			file_name: None,
 			media_type: None,
 			representation: None,
 			compression: None,
@@ -2643,6 +2707,7 @@ mod golden_c1_value_tests {
 			reference_text_null_flavor: None,
 			sequence_number: 0,
 			document_base64: None,
+			file_name: None,
 			media_type: None,
 			representation: None,
 			compression: None,
@@ -3218,6 +3283,39 @@ mod golden_c1_value_tests {
 					"ICH.C.1.9.1.r.2.REQUIRED",
 					"otherCaseIdentifiers.0.caseIdentifier",
 					true
+				),
+			]
+		);
+	}
+
+	#[test]
+	fn fda_attachments_require_file_name_and_matching_media_type() {
+		let mut document = document(Some("held"));
+		document.document_base64 = Some("QUJD".to_string());
+		let mut reference = literature_reference("paper".to_string());
+		reference.document_base64 = Some("REVG".to_string());
+		reference.file_name = Some("paper.pdf".to_string());
+		reference.media_type = Some("text/plain".to_string());
+		let mut issues = Vec::new();
+		fda_c_1_6_1_r_2(0, &document, &mut issues);
+		fda_c_4_r_2(0, &reference, &mut issues);
+		let mut actual = issues
+			.into_iter()
+			.map(|issue| (issue.code, issue.path, issue.blocking))
+			.collect::<Vec<_>>();
+		actual.sort();
+		assert_eq!(
+			actual,
+			vec![
+				issue(
+					"FDA.C.1.6.1.r.2.FILE_NAME.REQUIRED",
+					"documentsHeldBySender.0.includedDocument",
+					true,
+				),
+				issue(
+					"FDA.C.4.r.2.MEDIA_TYPE.MATCH",
+					"literatureReferences.0.documentBase64",
+					true,
 				),
 			]
 		);

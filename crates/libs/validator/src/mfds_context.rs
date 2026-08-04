@@ -23,6 +23,8 @@ pub struct PastDrugByCase {
 	pub drug_name_null_flavor: Option<String>,
 	pub mpid: Option<String>,
 	pub mpid_version: Option<String>,
+	pub phpid: Option<String>,
+	pub phpid_version: Option<String>,
 	pub mfds_medicinal_product_id: Option<String>,
 	pub mfds_medicinal_product_version: Option<String>,
 }
@@ -33,6 +35,8 @@ pub struct ParentPastDrugByCase {
 	pub sequence_number: i32,
 	pub mpid: Option<String>,
 	pub mpid_version: Option<String>,
+	pub phpid: Option<String>,
+	pub phpid_version: Option<String>,
 	pub mfds_medicinal_product_id: Option<String>,
 	pub mfds_medicinal_product_version: Option<String>,
 }
@@ -128,6 +132,8 @@ async fn list_past_drugs_by_case(
 SELECT pdh.drug_name_null_flavor
      , pdh.mpid
      , pdh.mpid_version
+     , pdh.phpid
+     , pdh.phpid_version
      , pdh.mfds_medicinal_product_id
      , pdh.mfds_medicinal_product_version
 FROM past_drug_history pdh
@@ -156,6 +162,8 @@ SELECT pph.parent_id
      , pph.sequence_number
      , pph.mpid
      , pph.mpid_version
+     , pph.phpid
+     , pph.phpid_version
      , pph.mfds_medicinal_product_id
      , pph.mfds_medicinal_product_version
 FROM parent_past_drug_history pph

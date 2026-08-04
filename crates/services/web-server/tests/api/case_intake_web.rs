@@ -463,8 +463,10 @@ async fn test_case_intake_duplicate_check_accepts_null_flavor_codes_as_optional(
 	let safety_report_id = format!("INTAKE-{}", Uuid::new_v4());
 	let check_body = json!({
 		"data": intake_data(&safety_report_id, 142, "1", json!({
-			"patient_initials": "UNK",
-			"reaction_meddra_version": "UNK"
+			"patient_initials": null,
+			"patient_initials_null_flavor": "UNK",
+			"reaction_meddra_version": null,
+			"reaction_meddra_version_null_flavor": "UNK"
 		}))
 	});
 	let (status, body) =

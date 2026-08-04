@@ -268,6 +268,7 @@ pub(crate) fn valid_meddra_term(
 pub(crate) fn valid_mfds_product(
 	vocabulary: &VocabularyContext,
 	receiver: Option<&str>,
+	version: Option<&str>,
 	value: Option<&str>,
 ) -> bool {
 	let Some(value) = value.map(str::trim).filter(|value| !value.is_empty()) else {
@@ -280,8 +281,52 @@ pub(crate) fn valid_mfds_product(
 				crate::VocabularyScope::ItemSeq,
 				value,
 			),
-		Some(receiver) if receiver.eq_ignore_ascii_case("FR") => vocabulary
-			.contains_snapshot_code("WHODrug", crate::VocabularyScope::All, value),
+		Some(receiver) if receiver.eq_ignore_ascii_case("FR") => {
+			if !vocabulary.whodrug_available() {
+				return true;
+			}
+			let version = version.map(str::trim).filter(|value| !value.is_empty());
+			match version {
+				Some(version) => {
+					vocabulary.contains_whodrug_version(version)
+						&& vocabulary.contains_whodrug_product(version, value)
+				}
+				None => vocabulary.contains_snapshot_code(
+					"WHODrug",
+					crate::VocabularyScope::All,
+					value,
+				),
+			}
+		}
+		_ => true,
+	}
+}
+
+pub(crate) fn valid_mfds_substance(
+	vocabulary: &VocabularyContext,
+	receiver: Option<&str>,
+	version: Option<&str>,
+	value: Option<&str>,
+) -> bool {
+	let Some(value) = value.map(str::trim).filter(|value| !value.is_empty()) else {
+		return true;
+	};
+	match receiver.map(str::trim) {
+		Some(receiver) if receiver.eq_ignore_ascii_case("KR") => vocabulary
+			.contains_snapshot_code(
+				"MFDS_SUBSTANCE",
+				crate::VocabularyScope::All,
+				value,
+			),
+		Some(receiver) if receiver.eq_ignore_ascii_case("FR") => {
+			!vocabulary.whodrug_available()
+				|| version
+					.map(str::trim)
+					.filter(|version| !version.is_empty())
+					.is_none_or(|version| {
+						vocabulary.contains_whodrug_version(version)
+					})
+		}
 		_ => true,
 	}
 }
@@ -316,4 +361,47 @@ pub(crate) fn valid_iso3166(
 				value,
 			)
 		})
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn mfds_foreign_product_matches_the_entered_whodrug_version() {
+		let vocabulary = VocabularyContext::for_whodrug(&[("2025.09", "MPID1")]);
+		assert!(valid_mfds_product(
+			&vocabulary,
+			Some("FR"),
+			Some("2025.09"),
+			Some("MPID1")
+		));
+		assert!(!valid_mfds_product(
+			&vocabulary,
+			Some("FR"),
+			Some("2025.08"),
+			Some("MPID1")
+		));
+	}
+
+	#[test]
+	fn mfds_domestic_substance_matches_the_active_dictionary() {
+		let vocabulary = VocabularyContext::for_active_codes(&[(
+			"MFDS_SUBSTANCE",
+			crate::VocabularyScope::All,
+			"SUB1",
+		)]);
+		assert!(valid_mfds_substance(
+			&vocabulary,
+			Some("KR"),
+			None,
+			Some("SUB1")
+		));
+		assert!(!valid_mfds_substance(
+			&vocabulary,
+			Some("KR"),
+			None,
+			Some("missing")
+		));
+	}
 }

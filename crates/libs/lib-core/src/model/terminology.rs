@@ -255,6 +255,45 @@ impl DbBmc for WhodrugProductBmc {
 }
 
 impl WhodrugProductBmc {
+	pub async fn active_versions(mm: &ModelManager) -> Result<HashSet<String>> {
+		let rows = mm
+			.dbx()
+			.fetch_all(sqlx::query_as::<_, (String,)>(
+				"SELECT DISTINCT version FROM whodrug_products WHERE active = true",
+			))
+			.await?;
+		Ok(rows.into_iter().map(|(version,)| version).collect())
+	}
+
+	pub async fn existing_active_keys(
+		mm: &ModelManager,
+		keys: &[(String, String)],
+	) -> Result<HashSet<(String, String)>> {
+		if keys.is_empty() {
+			return Ok(HashSet::new());
+		}
+
+		let mut qb: QueryBuilder<Postgres> =
+			QueryBuilder::new("WITH requested(version, code) AS (");
+		qb.push_values(keys, |mut row, (version, code)| {
+			row.push_bind(version).push_bind(code);
+		});
+		qb.push(
+			") SELECT DISTINCT products.version, products.code
+			 FROM whodrug_products products
+			 JOIN requested ON requested.version = products.version
+			  AND requested.code = products.code
+			 WHERE products.active = true",
+		);
+
+		Ok(mm
+			.dbx()
+			.fetch_all(qb.build_query_as::<(String, String)>())
+			.await?
+			.into_iter()
+			.collect())
+	}
+
 	pub async fn existing_active_codes(
 		mm: &ModelManager,
 		codes: &[String],
@@ -308,6 +347,30 @@ impl DbBmc for IsoCountryBmc {
 }
 
 impl IsoCountryBmc {
+	pub async fn existing_active_codes(
+		mm: &ModelManager,
+		codes: &[String],
+	) -> Result<HashSet<String>> {
+		if codes.is_empty() {
+			return Ok(HashSet::new());
+		}
+		let mut qb: QueryBuilder<Postgres> = QueryBuilder::new(
+			"SELECT code FROM iso_countries WHERE active = true AND code IN (",
+		);
+		let mut separated = qb.separated(", ");
+		for code in codes {
+			separated.push_bind(code);
+		}
+		separated.push_unseparated(")");
+		Ok(mm
+			.dbx()
+			.fetch_all(qb.build_query_as::<(String,)>())
+			.await?
+			.into_iter()
+			.map(|(code,)| code)
+			.collect())
+	}
+
 	pub async fn list_all(_ctx: &Ctx, mm: &ModelManager) -> Result<Vec<IsoCountry>> {
 		let sql = format!(
 			"SELECT * FROM {} WHERE active = true ORDER BY name",
@@ -422,6 +485,28 @@ impl DbBmc for MfdsProductBmc {
 }
 
 impl MfdsProductBmc {
+	pub async fn existing_active_substance_codes(
+		mm: &ModelManager,
+		codes: &[String],
+	) -> Result<HashSet<String>> {
+		if codes.is_empty() {
+			return Ok(HashSet::new());
+		}
+
+		let mut qb: QueryBuilder<Postgres> = QueryBuilder::new(
+			"SELECT DISTINCT substance_code FROM mfds_product_substances
+			 WHERE active = true AND substance_code IN (",
+		);
+		let mut separated = qb.separated(", ");
+		for code in codes {
+			separated.push_bind(code);
+		}
+		separated.push_unseparated(")");
+
+		let rows = mm.dbx().fetch_all(qb.build_query_as::<(String,)>()).await?;
+		Ok(rows.into_iter().map(|(code,)| code).collect())
+	}
+
 	pub async fn search(
 		_ctx: &Ctx,
 		mm: &ModelManager,

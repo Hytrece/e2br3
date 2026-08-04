@@ -23,6 +23,7 @@ use uuid::Uuid;
 mod build;
 mod canvas;
 mod data;
+mod font;
 mod format;
 mod layout;
 #[cfg(test)]
@@ -35,6 +36,7 @@ pub use build::export_case_cioms_pdf;
 use build::*;
 use canvas::*;
 use data::*;
+use font::*;
 use format::*;
 use layout::*;
 use types::*;

@@ -84,10 +84,14 @@ fn c_1_2_matches_n_2_r_4(
 fn fda_n_routing(header: &MessageHeader, issues: &mut Vec<ValidationIssue>) {
 	let batch_receiver = trimmed(header.batch_receiver_identifier.as_deref());
 	let message_receiver = header.message_receiver_identifier.trim();
-	let vaers_receiver = matches!(
-		message_receiver.to_ascii_uppercase().as_str(),
-		"CBER_VAERS" | "CBER VAERS"
-	);
+	let is_vaers = |value: &str| {
+		matches!(
+			value.trim().to_ascii_uppercase().as_str(),
+			"CBER_VAERS" | "CBER VAERS"
+		)
+	};
+	let vaers_message_receiver = is_vaers(message_receiver);
+	let vaers_batch_receiver = batch_receiver.is_some_and(is_vaers);
 	let premarket_receiver = matches!(
 		message_receiver,
 		FDA_MSG_RECEIVER_CDER_IND
@@ -113,17 +117,18 @@ fn fda_n_routing(header: &MessageHeader, issues: &mut Vec<ValidationIssue>) {
 		issues,
 		batch_receiver == Some(FDA_BATCH_RECEIVER_POSTMARKET)
 			&& message_receiver != FDA_MSG_RECEIVER_CDER
-			&& !vaers_receiver,
+			&& !vaers_message_receiver,
 		"FDA.R0006",
 		"messageHeader.messageReceiverIdentifier",
 		"FDA postmarket N.2.r.3 must be CDER when N.1.4 is ZZFDA.",
 	);
 	push_business_violation(
 		issues,
-		vaers_receiver && batch_receiver != Some(FDA_BATCH_RECEIVER_POSTMARKET),
-		"FDA.R0004",
+		(vaers_message_receiver || vaers_batch_receiver)
+			&& batch_receiver != Some(message_receiver),
+		"FDA.VAERS.N.ROUTE.PAIR",
 		"messageHeader.batchReceiverIdentifier",
-		"FDA VAERS N.1.4 must be ZZFDA.",
+		"VAERS N.1.4 and N.2.r.3 must use the same CBER VAERS or CBER_VAERS identifier.",
 	);
 	push_business_violation(
 		issues,
@@ -540,14 +545,22 @@ mod tests {
 	}
 
 	#[test]
-	fn fda_vaers_receiver_requires_postmarket_batch_route() {
+	fn fda_vaers_receiver_requires_the_matching_esg_identifier() {
 		let mut header = message_header();
 		header.message_receiver_identifier = "CBER_VAERS".to_string();
-		header.batch_receiver_identifier =
-			Some(FDA_BATCH_RECEIVER_PREMARKET.to_string());
+		header.batch_receiver_identifier = Some("CBER VAERS".to_string());
 		let mut issues = Vec::new();
 		fda_n_routing(&header, &mut issues);
-		assert!(issues.iter().any(|issue| issue.code == "FDA.R0004"));
+		assert!(issues
+			.iter()
+			.any(|issue| issue.code == "FDA.VAERS.N.ROUTE.PAIR"));
+
+		header.batch_receiver_identifier = Some("CBER_VAERS".to_string());
+		issues.clear();
+		fda_n_routing(&header, &mut issues);
+		assert!(!issues
+			.iter()
+			.any(|issue| issue.code == "FDA.VAERS.N.ROUTE.PAIR"));
 	}
 
 	#[test]

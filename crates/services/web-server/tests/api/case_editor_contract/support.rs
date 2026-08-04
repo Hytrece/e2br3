@@ -514,9 +514,22 @@ pub async fn verify_field(spec: FieldSpec) -> Result<()> {
 		.and_then(|constraint| constraint.get("invalidValue"))
 		.cloned()
 	{
+		let invalid_payload_path = field
+			.get("constraint")
+			.and_then(|constraint| constraint.get("ruleCode"))
+			.and_then(Value::as_str)
+			.filter(|rule| rule.ends_with(".NULLFLAVOR.ALLOWED"))
+			.filter(|_| !payload_path.ends_with("NullFlavor"))
+			.map_or_else(
+				|| payload_path.to_string(),
+				|_| format!("{payload_path}NullFlavor"),
+			);
 		let mut invalid_row =
 			field.get("fixture").cloned().unwrap_or_else(|| json!({}));
-		merge_json(&mut invalid_row, build_path(payload_path, invalid_value));
+		merge_json(
+			&mut invalid_row,
+			build_path(&invalid_payload_path, invalid_value),
+		);
 		let mut invalid_rows = contract
 			.get("rowPrerequisites")
 			.and_then(|fixtures| fixtures.get(owner))

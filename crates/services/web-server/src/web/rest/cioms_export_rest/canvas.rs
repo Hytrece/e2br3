@@ -1,14 +1,46 @@
 use super::*;
+use std::collections::BTreeMap;
 
 pub(super) struct PdfCanvas {
 	pub(super) stream: String,
+	font_codes: BTreeMap<u32, u16>,
+	next_font_code: u16,
+	legacy_unicode: bool,
 }
 
 impl PdfCanvas {
 	pub(super) fn new() -> Self {
 		Self {
 			stream: String::new(),
+			font_codes: BTreeMap::new(),
+			next_font_code: 1,
+			legacy_unicode: true,
 		}
+	}
+
+	pub(super) fn with_font_mapping(mapping: &[(u16, u32)]) -> Self {
+		let next_font_code = mapping
+			.iter()
+			.map(|(code, _)| *code)
+			.max()
+			.unwrap_or(0)
+			.saturating_add(1);
+		Self {
+			stream: String::new(),
+			font_codes: mapping
+				.iter()
+				.map(|(code, codepoint)| (*codepoint, *code))
+				.collect(),
+			next_font_code: next_font_code.max(1),
+			legacy_unicode: false,
+		}
+	}
+
+	pub(super) fn font_mapping(&self) -> Vec<(u16, u32)> {
+		self.font_codes
+			.iter()
+			.map(|(&codepoint, &code)| (code, codepoint))
+			.collect()
 	}
 
 	pub(super) fn rect(&mut self, x: i32, y: i32, w: i32, h: i32) {
@@ -30,12 +62,37 @@ impl PdfCanvas {
 				escape_pdf_text(value)
 			);
 		} else {
+			let encoded = if self.legacy_unicode {
+				encode_pdf_unicode_text(value)
+			} else {
+				self.encode_font_text(value)
+			};
 			let _ = writeln!(
 				self.stream,
 				"BT /F2 {size} Tf {x} {y} Td <{}> Tj ET",
-				encode_pdf_unicode_text(value)
+				encoded
 			);
 		}
+	}
+
+	fn encode_font_text(&mut self, value: &str) -> String {
+		value
+			.chars()
+			.map(|ch| {
+				let codepoint = ch as u32;
+				let code = if let Some(&code) = self.font_codes.get(&codepoint) {
+					code
+				} else {
+					let code = self.next_font_code;
+					// ponytail: one 16-bit codebook per PDF; split/segment only if a case exceeds 65,534 unique scalars.
+					assert!(code != u16::MAX, "CIOMS font code space exhausted");
+					self.font_codes.insert(codepoint, code);
+					self.next_font_code += 1;
+					code
+				};
+				format!("{code:04X}")
+			})
+			.collect()
 	}
 
 	pub(super) fn wrapped_text(
@@ -82,9 +139,7 @@ pub(super) fn wrap_pdf_text(value: &str, max_chars: usize) -> Vec<String> {
 	let mut line = String::new();
 	let mut lines = Vec::new();
 	for word in value.split_whitespace() {
-		if word.chars().count() > max_chars
-			&& word.chars().all(|ch| ch.is_ascii_alphabetic())
-		{
+		if word.chars().count() > max_chars {
 			if !line.is_empty() {
 				lines.push(line);
 				line = String::new();
@@ -166,24 +221,24 @@ pub(super) fn is_basic_data_ordering(settings: &CiomsSettings) -> bool {
 	settings.data_ordering.eq_ignore_ascii_case("Basic")
 }
 
-fn basic_repeated_item_rows(data: &CiomsCaseData) -> Vec<String> {
+pub(super) fn basic_repeated_item_rows(data: &CiomsCaseData) -> Vec<String> {
 	let mut rows = Vec::new();
 	for reaction in &data.reactions {
 		rows.push(format!(
-			"Reaction | {} | {}",
+			"Type: Reaction; Sequence: {}; Value: {}",
 			reaction.sequence_number, reaction.primary_source_reaction
 		));
 	}
 	for drug in &data.drugs {
 		rows.push(format!(
-			"Drug | {} | {}",
+			"Type: Drug; Sequence: {}; Value: {}",
 			drug.sequence_number,
 			drug_name(Some(drug))
 		));
 	}
 	for dosage in &data.dosages {
 		rows.push(format!(
-			"Dosage | {} | {}",
+			"Type: Dosage; Sequence: {}; Value: {}",
 			dosage.sequence_number,
 			dosage
 				.dosage_text
@@ -194,30 +249,26 @@ fn basic_repeated_item_rows(data: &CiomsCaseData) -> Vec<String> {
 	}
 	for indication in &data.indications {
 		rows.push(format!(
-			"Indication | {} | {}",
+			"Type: Indication; Sequence: {}; Value: {}",
 			indication.sequence_number,
 			indication.indication_text.as_deref().unwrap_or("")
 		));
 	}
 	for source in &data.primary_sources {
 		rows.push(format!(
-			"Primary source | {} | {}",
+			"Type: Primary source; Sequence: {}; Value: {}",
 			source.sequence_number,
 			reporter_name(Some(source))
 		));
 	}
 	for (idx, sender) in data.senders.iter().enumerate() {
 		rows.push(format!(
-			"Sender | {} | {}",
+			"Type: Sender; Sequence: {}; Value: {}",
 			idx + 1,
 			sender.organization_name.as_deref().unwrap_or("")
 		));
 	}
 	rows
-}
-
-pub(super) fn basic_repeated_items_text(data: &CiomsCaseData) -> String {
-	basic_repeated_item_rows(data).join("\n")
 }
 
 pub(super) fn render_basic_repeated_items_table(
@@ -231,14 +282,13 @@ pub(super) fn render_basic_repeated_items_table(
 	if rows.is_empty() {
 		return;
 	}
-
 	let row_count = rows.len().min(12);
-	let h = 22 + (row_count as i32 * 12);
+	let h = 22 + row_count as i32 * 12;
 	canvas.rect(x, y, w, h);
 	canvas.text(x + 4, y + h - 12, 7, "BASIC REPEATED ITEM TABLE");
 	canvas.line(x, y + h - 18, x + w, y + h - 18);
-	for (idx, row) in rows.into_iter().take(row_count).enumerate() {
-		canvas.wrapped_text(x + 4, y + h - 30 - (idx as i32 * 12), 7, 90, 1, &row);
+	for (index, row) in rows.into_iter().take(row_count).enumerate() {
+		canvas.wrapped_text(x + 4, y + h - 30 - index as i32 * 12, 7, 90, 1, &row);
 	}
 }
 

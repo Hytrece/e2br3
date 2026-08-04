@@ -1,4 +1,5 @@
 use xml::import_sections::e_reaction::parse_e_reactions;
+use xml::Error as XmlError;
 
 #[test]
 fn import_e_reaction_preserves_term_highlight_code() {
@@ -55,7 +56,7 @@ fn import_e_reaction_basic() {
 }
 
 #[test]
-fn import_e_reaction_allows_missing_primary_text_for_validation_phase() {
+fn import_e_reaction_requires_primary_text() {
 	let xml = br#"<?xml version="1.0" encoding="utf-8"?>
 <MCCI_IN200100UV01 xmlns="urn:hl7-org:v3" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
   <PORR_IN049016UV>
@@ -83,9 +84,13 @@ fn import_e_reaction_allows_missing_primary_text_for_validation_phase() {
   </PORR_IN049016UV>
 </MCCI_IN200100UV01>"#;
 
-	let reactions = parse_e_reactions(xml).expect("parse should succeed");
-	assert_eq!(reactions.len(), 1);
-	assert_eq!(reactions[0].primary_source_reaction, "");
+	let err = parse_e_reactions(xml).expect_err("missing reaction text should fail");
+	match err {
+		XmlError::InvalidXml { message, .. } => {
+			assert!(message.contains("ICH.E.i.1.1a.REQUIRED"));
+		}
+		other => panic!("unexpected error type: {other:?}"),
+	}
 }
 
 #[test]

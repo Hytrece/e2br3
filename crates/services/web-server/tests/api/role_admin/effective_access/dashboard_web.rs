@@ -9,6 +9,16 @@ async fn test_home_notice_matrix_privileges_surface_in_current_user_capabilities
 	let admin_token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
 	let admin_cookie = cookie_header(&admin_token.to_string());
 	let app = web_server::app(mm.clone());
+	let runtime = assert_get_status(
+		&app,
+		&admin_cookie,
+		"/api/settings/runtime",
+		StatusCode::OK,
+	)
+	.await?;
+	let revision = runtime["notices_revision"]
+		.as_str()
+		.ok_or("missing notice revision")?;
 	let profile_id = format!("qa_home_notice_{}", Uuid::new_v4().simple());
 	let profile_id =
 		create_empty_custom_role(&app, &admin_cookie, &profile_id).await?;
@@ -21,6 +31,7 @@ async fn test_home_notice_matrix_privileges_surface_in_current_user_capabilities
 		"/api/admin/notices".to_string(),
 		Some(json!({
 			"data": {
+				"revision": revision,
 				"notices": [{
 					"id": "pdf-notice-read",
 					"title": "PDF permission notice"

@@ -167,7 +167,7 @@
     "backend": {
       "status": "mapped",
       "model": "DocumentsHeldBySender",
-      "field": "document_base64",
+      "field": "document_base64/file_name",
       "file": "crates/libs/lib-core/src/model/safety_report.rs",
       "evidence": "Frontend save endpoint posts document_base64 for C.1.6.1.r.2 documents held by sender."
     },
@@ -1361,7 +1361,7 @@
     "backend": {
       "status": "mapped",
       "model": "LiteratureReference",
-      "field": "document_base64",
+      "field": "document_base64/file_name",
       "file": "crates/libs/lib-core/src/model/safety_report.rs",
       "evidence": "LiteratureReference.document_base64 stores the C.4.r.2 attachment payload."
     },

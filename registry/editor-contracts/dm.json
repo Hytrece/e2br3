@@ -90,7 +90,7 @@
       "projectionValue": "36.50",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.D.2.2a.ALLOWED.VALUE",
+        "ruleCode": "ICH.D.2.2a.LENGTH.MAX",
         "invalidValue": "not-a-number"
       },
       "payloadPath": "patientAge.value"
@@ -125,7 +125,7 @@
       "projectionValue": "22.00",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.D.2.2.1a.ALLOWED.VALUE",
+        "ruleCode": "ICH.D.2.2.1a.LENGTH.MAX",
         "invalidValue": "not-a-number"
       },
       "payloadPath": "gestationPeriod.value"
@@ -177,7 +177,7 @@
       "projectionValue": "62.50",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.D.3.ALLOWED.VALUE",
+        "ruleCode": "ICH.D.3.LENGTH.MAX",
         "invalidValue": "not-a-number"
       },
       "payloadPath": "patientWeight.value"
@@ -195,7 +195,7 @@
       "projectionValue": "171.00",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.D.4.ALLOWED.VALUE",
+        "ruleCode": "ICH.D.4.LENGTH.MAX",
         "invalidValue": "not-a-number"
       },
       "payloadPath": "patientHeight.value"
@@ -570,7 +570,7 @@
       "projectionValue": "54.00",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.D.10.2.2a.ALLOWED.VALUE",
+        "ruleCode": "ICH.D.10.2.2a.LENGTH.MAX",
         "invalidValue": "not-a-number"
       },
       "payloadPath": "parentAge.value"
@@ -622,7 +622,7 @@
       "projectionValue": "64.50",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.D.10.4.ALLOWED.VALUE",
+        "ruleCode": "ICH.D.10.4.LENGTH.MAX",
         "invalidValue": "not-a-number"
       },
       "payloadPath": "parentWeight.value"
@@ -640,7 +640,7 @@
       "projectionValue": "168.00",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.D.10.5.ALLOWED.VALUE",
+        "ruleCode": "ICH.D.10.5.LENGTH.MAX",
         "invalidValue": "not-a-number"
       },
       "payloadPath": "parentHeight.value"

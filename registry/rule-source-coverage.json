@@ -170,8 +170,8 @@
         {
           "id": "filename-media-type-match",
           "sourceExcerpt": "file extension in the filename does not match the media type",
-          "disposition": "deferred",
-          "reason": "Literature attachment filename is not preserved through UI, API, DB, or XML roundtrip."
+          "disposition": "constraint",
+          "ruleCodes": ["FDA.C.4.r.2.MEDIA_TYPE.MATCH"]
         }
       ]
     },

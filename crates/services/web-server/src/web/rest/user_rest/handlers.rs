@@ -463,9 +463,18 @@ async fn current_user_menu_privileges(
 	let Ok(profile_id) = Uuid::parse_str(ctx.role()) else {
 		return Ok(Vec::new());
 	};
-	let row = PermissionProfileBmc::get(ctx, mm, profile_id)
-		.await
-		.map_err(Error::Model)?;
+	let row = match PermissionProfileBmc::get(ctx, mm, profile_id).await {
+		Ok(row) => row,
+		Err(lib_core::model::Error::EntityUuidNotFound { .. }) => {
+			return Ok(Vec::new());
+		}
+		Err(lib_core::model::Error::Store(message))
+			if message.contains("RowNotFound") =>
+		{
+			return Ok(Vec::new());
+		}
+		Err(error) => return Err(Error::Model(error)),
+	};
 	if !row.active || row.organization_id != ctx.organization_id() {
 		return Ok(Vec::new());
 	}

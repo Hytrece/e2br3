@@ -1,10 +1,34 @@
 use super::*;
 use crate::runtime_settings;
+use lib_core::model::patient::{MedicalHistoryEpisode, PastDrugHistory};
 
 #[derive(Debug, sqlx::FromRow)]
 struct CiomsFieldNotationRow {
 	field_path: String,
 	notation: String,
+}
+
+async fn load_list_by_patient<T>(
+	ctx: &lib_core::ctx::Ctx,
+	mm: &ModelManager,
+	table: &'static str,
+	patient_id: Uuid,
+) -> Result<Vec<T>>
+where
+	for<'r> T: sqlx::FromRow<'r, sqlx::postgres::PgRow> + Send + Unpin,
+{
+	let sql = format!(
+		"SELECT * FROM {table} WHERE patient_id = $1 AND deleted IS NOT TRUE ORDER BY sequence_number"
+	);
+	lib_rest_core::with_rls_read(mm, ctx, |dbx| {
+		Box::pin(async move {
+			dbx.fetch_all(sqlx::query_as::<_, T>(&sql).bind(patient_id))
+				.await
+				.map_err(ModelError::Dbx)
+				.map_err(Error::Model)
+		})
+	})
+	.await
 }
 
 #[derive(Clone, Copy)]
@@ -162,6 +186,53 @@ pub(super) async fn load_indications_by_case(
 	.await
 }
 
+async fn load_causality_rows_by_case(
+	ctx: &lib_core::ctx::Ctx,
+	mm: &ModelManager,
+	case_id: Uuid,
+) -> Result<Vec<CiomsDrugReactionCausalityRow>> {
+	lib_rest_core::with_rls_read(mm, ctx, |dbx| {
+		Box::pin(async move {
+			dbx.fetch_all(
+				sqlx::query_as::<_, CiomsDrugReactionCausalityRow>(
+					"SELECT dra.drug_id,
+				        dra.reaction_id,
+				        di.drug_characterization,
+				        dra.administration_start_interval_value,
+				        dra.administration_start_interval_unit,
+				        dra.last_dose_interval_value,
+				        dra.last_dose_interval_unit,
+				        dra.recurrence_action,
+				        dra.reaction_recurred,
+				        ra.sequence_number AS relatedness_sequence_number,
+				        ra.source_of_assessment AS relatedness_source,
+				        ra.method_of_assessment AS relatedness_method,
+				        ra.method_of_assessment_kr1 AS relatedness_method_kr1,
+				        ra.result_of_assessment AS relatedness_result,
+				        ra.result_of_assessment_kr1 AS relatedness_result_kr1,
+				        ra.result_of_assessment_kr2 AS relatedness_result_kr2
+				 FROM drug_reaction_assessments dra
+				 JOIN drug_information di ON di.id = dra.drug_id
+				 JOIN reactions r ON r.id = dra.reaction_id
+				 LEFT JOIN relatedness_assessments ra
+				   ON ra.drug_reaction_assessment_id = dra.id
+				  AND ra.deleted IS NOT TRUE
+				 WHERE di.case_id = $1
+				   AND di.deleted IS NOT TRUE
+				   AND r.case_id = $1
+				   AND r.deleted IS NOT TRUE
+				 ORDER BY di.sequence_number, r.sequence_number, dra.id, ra.sequence_number",
+				)
+				.bind(case_id),
+			)
+			.await
+			.map_err(ModelError::Dbx)
+			.map_err(Error::Model)
+		})
+	})
+	.await
+}
+
 pub(super) async fn load_cioms_case_data(
 	ctx: &lib_core::ctx::Ctx,
 	mm: &ModelManager,
@@ -204,6 +275,26 @@ pub(super) async fn load_cioms_case_data(
 	let test_results = TestResultBmc::list_by_case(ctx, mm, case_id)
 		.await
 		.map_err(Error::Model)?;
+	let causality_rows = load_causality_rows_by_case(ctx, mm, case_id).await?;
+	let (medical_history_episodes, past_drug_history) = match patient.as_ref() {
+		Some(patient) => (
+			load_list_by_patient::<MedicalHistoryEpisode>(
+				ctx,
+				mm,
+				"medical_history_episodes",
+				patient.id,
+			)
+			.await?,
+			load_list_by_patient::<PastDrugHistory>(
+				ctx,
+				mm,
+				"past_drug_history",
+				patient.id,
+			)
+			.await?,
+		),
+		None => (Vec::new(), Vec::new()),
+	};
 	let field_notations = lib_rest_core::with_rls_read(mm, ctx, |dbx| {
 		Box::pin(async move {
 			dbx.fetch_all(sqlx::query_as::<_, CiomsFieldNotationRow>(
@@ -249,5 +340,8 @@ pub(super) async fn load_cioms_case_data(
 		senders,
 		narrative,
 		field_notations,
+		causality_rows,
+		medical_history_episodes,
+		past_drug_history,
 	})
 }

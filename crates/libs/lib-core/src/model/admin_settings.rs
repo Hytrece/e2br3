@@ -338,6 +338,35 @@ impl AdminSettingsBmc {
 		Ok(rows.into_iter().map(|(value,)| value).collect())
 	}
 
+	pub async fn dashboard_notices_revision(
+		ctx: &Ctx,
+		mm: &ModelManager,
+	) -> Result<String> {
+		let dbx = mm.dbx();
+		dbx.begin_txn().await?;
+		if let Err(err) = set_full_context_from_ctx_dbx(dbx, ctx).await {
+			dbx.rollback_txn().await?;
+			return Err(err);
+		}
+		let revision = match dbx
+			.fetch_one(
+				sqlx::query_as::<_, (String,)>(
+					"SELECT COALESCE(EXTRACT(EPOCH FROM MAX(updated_at))::text, '0') FROM dashboard_notices WHERE organization_id = $1",
+				)
+				.bind(ctx.organization_id()),
+			)
+			.await
+		{
+			Ok((revision,)) => revision,
+			Err(err) => {
+				dbx.rollback_txn().await?;
+				return Err(crate::model::Error::Store(err.to_string()));
+			}
+		};
+		dbx.commit_txn().await?;
+		Ok(revision)
+	}
+
 	pub async fn replace_dashboard_notices(
 		ctx: &Ctx,
 		mm: &ModelManager,
@@ -509,6 +538,36 @@ impl AdminSettingsBmc {
 
 		dbx.commit_txn().await?;
 		Ok(())
+	}
+
+	/// Return workflow statuses currently referenced by cases in this organization.
+	pub async fn list_workflow_statuses_in_use(
+		ctx: &Ctx,
+		mm: &ModelManager,
+	) -> Result<Vec<String>> {
+		let dbx = mm.dbx();
+		dbx.begin_txn().await?;
+		if let Err(err) = set_full_context_from_ctx_dbx(dbx, ctx).await {
+			dbx.rollback_txn().await?;
+			return Err(err);
+		}
+		let rows = match dbx
+			.fetch_all(
+				sqlx::query_as::<_, (String,)>(
+					"SELECT DISTINCT workflow_status FROM cases WHERE organization_id = $1 AND trim(workflow_status) <> ''",
+				)
+				.bind(ctx.organization_id()),
+			)
+			.await
+		{
+			Ok(rows) => rows,
+			Err(err) => {
+				dbx.rollback_txn().await?;
+				return Err(crate::model::Error::Store(err.to_string()));
+			}
+		};
+		dbx.commit_txn().await?;
+		Ok(rows.into_iter().map(|(status,)| status).collect())
 	}
 
 	/// Return the set of all known workflow role identifiers (built-in + active custom).

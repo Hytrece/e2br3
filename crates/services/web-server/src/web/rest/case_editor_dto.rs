@@ -145,6 +145,7 @@ pub struct CaseEditorCiDocumentDto {
 	pub id: Uuid,
 	pub document_description: Option<String>,
 	pub included_document: Option<String>,
+	pub file_name: Option<String>,
 	pub media_type: Option<String>,
 	pub representation: Option<String>,
 	pub compression: Option<String>,

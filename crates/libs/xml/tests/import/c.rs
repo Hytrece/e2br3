@@ -10,7 +10,7 @@ fn import_c_section_all_fields_from_scenario6() {
 		.expect("parse")
 		.expect("section C should exist");
 
-	assert_eq!(report.transmission_date, "20140614151617");
+	assert_eq!(report.transmission_date, "20220614151617");
 	assert_eq!(report.report_type, "1");
 	assert_eq!(report.date_first_received_from_source, date(2022, 6, 14));
 	assert_eq!(report.date_of_most_recent_information, date(2022, 6, 14));
@@ -36,7 +36,7 @@ fn import_settings_update_only_enabled_c1_dates_to_import_date() {
 	let mut report = parse_c_safety_report(&xml)
 		.expect("parse")
 		.expect("section C should exist");
-	let import_date = date(2026, 5, 17);
+	let import_date = date(2022, 6, 14);
 
 	apply_c_safety_report_import_settings(
 		&mut report,
@@ -50,7 +50,7 @@ fn import_settings_update_only_enabled_c1_dates_to_import_date() {
 	)
 	.expect("import date settings should keep required dates valid");
 
-	assert_eq!(report.transmission_date, "20260517000000");
+	assert_eq!(report.transmission_date, "20220614000000");
 	assert_eq!(report.date_first_received_from_source, import_date);
 	assert_eq!(report.date_of_most_recent_information, import_date);
 }

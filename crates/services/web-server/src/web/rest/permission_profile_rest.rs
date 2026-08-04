@@ -99,9 +99,19 @@ pub struct PermissionProfileCreateBody {
 #[derive(Debug, Deserialize)]
 pub struct PermissionProfileUpdateBody {
 	pub name: Option<String>,
+	#[serde(default, deserialize_with = "deserialize_patch_description")]
 	pub description: Option<Option<String>>,
 	pub privileges: Option<Vec<AdminMenuPrivilege>>,
 	pub active: Option<bool>,
+}
+
+fn deserialize_patch_description<'de, D>(
+	deserializer: D,
+) -> std::result::Result<Option<Option<String>>, D::Error>
+where
+	D: serde::Deserializer<'de>,
+{
+	Option::<String>::deserialize(deserializer).map(Some)
 }
 
 fn validate_role_name(name: &str) -> Result<()> {

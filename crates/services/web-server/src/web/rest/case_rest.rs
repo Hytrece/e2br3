@@ -1419,13 +1419,13 @@ pub async fn mark_case_validated_by_validator(
 		CaseMutationKind::Validate,
 		move |ctx, mm| {
 			Box::pin(async move {
-				let report = validate_case_for_authority(
-					ctx,
-					mm,
-					id,
-					RegulatoryAuthority::Fda,
-				)
-				.await?;
+				let authority =
+					crate::web::rest::case_validation_rest::resolve_authority(
+						ctx, mm, id, None,
+					)
+					.await?;
+				let report =
+					validate_case_for_authority(ctx, mm, id, authority).await?;
 				CaseValidationSummaryBmc::upsert_for_reports(
 					ctx,
 					mm,

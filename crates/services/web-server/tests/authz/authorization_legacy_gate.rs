@@ -88,8 +88,8 @@ fn user_administration_has_one_exact_permission_gate() {
 	);
 	assert_eq!(
 		handlers.matches("with_authorized_user_mutation(").count(),
-		2,
-		"update and delete must use the fact-aware user mutation boundary"
+		1,
+		"update must use the fact-aware user mutation boundary"
 	);
 }
 

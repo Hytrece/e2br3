@@ -228,12 +228,13 @@ async fn create_case_with_profile(
 	_org_id: Uuid,
 	_appendix: &str,
 ) -> Result<Uuid> {
+	let initial_report_id = format!("US-SENDER-{}", Uuid::new_v4().simple());
 	let body = json!({
 		"data": {
+			"status": "draft",
 			"safetyReportIdentification": {
-				"safetyReportId": format!("SUB-{}", Uuid::new_v4())
-			},
-			"status": "draft"
+				"safetyReportId": initial_report_id
+			}
 		}
 	});
 	let (status, value) = post_json(app, cookie, "/api/cases", body).await?;
@@ -254,10 +255,11 @@ async fn create_safety_report(
 	let body = json!({
 		"data": {
 			"case_id": case_id,
-			"transmission_date": [2024, 10],
+			"safety_report_id": format!("US-SENDER-{}", case_id.simple()),
+			"transmission_date": [2024, 10, 1],
 				"report_type": "1",
-				"date_first_received_from_source": [2024, 10],
-				"date_of_most_recent_information": [2024, 10],
+				"date_first_received_from_source": [2024, 10, 1],
+				"date_of_most_recent_information": [2024, 10, 1],
 				"fulfil_expedited_criteria": false,
 				"combination_product_report_indicator": "false",
 				"other_case_identifiers_exist": null,
@@ -288,10 +290,10 @@ async fn create_message_header(
 	let body = json!({
 		"data": {
 			"case_id": case_id,
-			"message_number": format!("MSG-{case_id}"),
+			"message_number": format!("US-SENDER-{}", case_id.simple()),
 			"message_sender_identifier": "SENDER01",
 			"message_receiver_identifier": "CDER",
-			"message_date": "20240201010101"
+			"message_date": "20241001000000"
 		}
 	});
 	let (status, value) = post_json(
@@ -318,7 +320,7 @@ async fn create_message_header(
 					"batch_number": format!("BATCH-{case_id}"),
 					"batch_sender_identifier": "BATCH-SENDER",
 					"batch_receiver_identifier": "BATCH-RECEIVER",
-					"batch_transmission_date": [2024, 32, 1, 1, 1, 0, 0, 0, 0]
+					"batch_transmission_date": [2024, 10, 1, 0, 0, 0, 0, 0, 0]
 				}
 			})
 			.to_string(),
@@ -373,7 +375,7 @@ async fn create_primary_source(
 				"case_id": case_id,
 				"sequence_number": 1,
 				"qualification": "1",
-				"country_code_null_flavor": "UNK",
+				"country_code": "US",
 				"email": "reporter@example.com",
 				"primary_source_regulatory": "1"
 		}
@@ -403,7 +405,7 @@ async fn create_primary_source(
 		.header("content-type", "application/json")
 		.body(Body::from(
 			json!({"data": {
-				"country_code_null_flavor": "UNK",
+				"country_code": "US",
 				"email": "reporter@example.com",
 				"primary_source_regulatory": "1"
 			}})
@@ -533,7 +535,8 @@ async fn create_drug(app: &axum::Router, cookie: &str, case_id: Uuid) -> Result<
 			"case_id": case_id,
 			"sequence_number": 1,
 			"drug_characterization": "1",
-			"medicinal_product": "Drug A"
+			"medicinal_product": "Drug A",
+			"mpid": "MPID-TEST"
 		}
 	});
 	let (status, value) =

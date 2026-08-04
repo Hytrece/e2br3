@@ -211,6 +211,7 @@ async fn load_editor_ci_data(
 				id: row.id,
 				document_description: row.title,
 				included_document: row.document_base64,
+				file_name: row.file_name,
 				media_type: row.media_type,
 				representation: row.representation,
 				compression: row.compression,
@@ -321,6 +322,8 @@ struct CiDocumentRowPatch {
 	document_description: Option<String>,
 	#[serde(default)]
 	included_document: Option<String>,
+	#[serde(default)]
+	file_name: Option<String>,
 	#[serde(default)]
 	media_type: Option<String>,
 	#[serde(default)]
@@ -565,6 +568,7 @@ async fn apply_ci_rows_patch(
 					DocumentsHeldBySenderForUpdate {
 						title: patch.document_description,
 						document_base64: patch.included_document,
+						file_name: patch.file_name,
 						media_type: patch.media_type,
 						representation: patch.representation,
 						compression: patch.compression,
@@ -587,6 +591,7 @@ async fn apply_ci_rows_patch(
 						case_id,
 						title: patch.document_description,
 						document_base64: patch.included_document,
+						file_name: patch.file_name,
 						media_type: patch.media_type,
 						representation: patch.representation,
 						compression: patch.compression,

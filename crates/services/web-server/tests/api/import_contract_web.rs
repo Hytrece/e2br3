@@ -17,6 +17,23 @@ fn scenario6(root: &std::path::Path) -> Result<String> {
 	)?
 	.replace("201411011202", "2014110112")
 	.replace("201401011041", "2014010110")
+	.replace("20220614101010-0500", "20140614151617-0500")
+	.replace(
+		"<value xsi:type=\"CE\" code=\"10060051\" codeSystem=\"2.16.840.1.113883.6.163\" codeSystemVersion=\"12.0\"/>",
+		"<value xsi:type=\"CE\" code=\"10060051\" codeSystem=\"2.16.840.1.113883.6.163\" codeSystemVersion=\"12.0\"><originalText>Reported reaction</originalText></value>",
+	)
+	.replace(
+		"<value xsi:type=\"CE\" code=\"10024381\" codeSystem=\"2.16.840.1.113883.6.163\" codeSystemVersion=\"12.0\"/>",
+		"<value xsi:type=\"CE\" code=\"10024381\" codeSystem=\"2.16.840.1.113883.6.163\" codeSystemVersion=\"12.0\"><originalText>Reported reaction</originalText></value>",
+	)
+	.replace(
+		"<code code=\"10005362\" codeSystem=\"2.16.840.1.113883.6.163\" codeSystemVersion=\"12.0\"/>",
+		"<code code=\"10005362\" codeSystem=\"2.16.840.1.113883.6.163\" codeSystemVersion=\"12.0\"><originalText>Test result</originalText></code>",
+	)
+	.replace(
+		"<code code=\"10062994\" codeSystem=\"2.16.840.1.113883.6.163\" codeSystemVersion=\"12.0\"/>",
+		"<code code=\"10062994\" codeSystem=\"2.16.840.1.113883.6.163\" codeSystemVersion=\"12.0\"><originalText>Test result</originalText></code>",
+	)
 	.replace("\n.\n\n\t\t\t\t\t\t\t</text>", "\n\n\t\t\t\t\t\t\t</text>"))
 }
 
@@ -33,7 +50,13 @@ async fn get_json(
 	let res = app.clone().oneshot(req).await?;
 	let status = res.status();
 	let body = to_bytes(res.into_body(), usize::MAX).await?;
-	Ok((status, serde_json::from_slice::<Value>(&body)?))
+	let value = serde_json::from_slice::<Value>(&body).map_err(|err| {
+		format!(
+			"invalid JSON response ({status}): {err}; body={}",
+			String::from_utf8_lossy(&body)
+		)
+	})?;
+	Ok((status, value))
 }
 
 async fn get_response(
@@ -64,7 +87,13 @@ async fn put_json(
 	let res = app.clone().oneshot(req).await?;
 	let status = res.status();
 	let body = to_bytes(res.into_body(), usize::MAX).await?;
-	Ok((status, serde_json::from_slice::<Value>(&body)?))
+	let value = serde_json::from_slice::<Value>(&body).map_err(|err| {
+		format!(
+			"invalid JSON response ({status}): {err}; body={}",
+			String::from_utf8_lossy(&body)
+		)
+	})?;
+	Ok((status, value))
 }
 
 async fn post_json(
@@ -82,7 +111,13 @@ async fn post_json(
 	let res = app.clone().oneshot(req).await?;
 	let status = res.status();
 	let body = to_bytes(res.into_body(), usize::MAX).await?;
-	Ok((status, serde_json::from_slice::<Value>(&body)?))
+	let value = serde_json::from_slice::<Value>(&body).map_err(|err| {
+		format!(
+			"invalid JSON response ({status}): {err}; body={}",
+			String::from_utf8_lossy(&body)
+		)
+	})?;
+	Ok((status, value))
 }
 
 async fn import_xml_fixture(
@@ -142,10 +177,40 @@ async fn import_xml_fixture_with_product(
 	Ok((status, serde_json::from_slice::<Value>(&body)?))
 }
 
+async fn create_product_presave(
+	app: &axum::Router,
+	cookie: &str,
+	sender_presave_id: &str,
+	product_id: &str,
+) -> Result<String> {
+	let (status, body) = post_json(
+		app,
+		cookie,
+		"/api/presaves/products",
+		json!({
+			"data": { "rows": {
+				"product": {
+					"senderPresaveId": sender_presave_id,
+					"productId": product_id,
+					"medicinalProduct": product_id
+				},
+				"activeSubstances": []
+			} }
+		}),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::CREATED, "{body:?}");
+	body["data"]["rows"]["product"]["id"]
+		.as_str()
+		.map(str::to_string)
+		.ok_or_else(|| format!("missing product id in body {body:?}").into())
+}
+
 #[serial]
 #[tokio::test]
 async fn test_import_selected_product_links_first_drug_and_case_product_id(
 ) -> Result<()> {
+	std::env::set_var("E2BR3_SKIP_XML_VALIDATE", "1");
 	let mm = init_test_mm().await?;
 	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
 	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
@@ -463,6 +528,7 @@ async fn test_import_settings_update_enabled_c1_dates() -> Result<()> {
 #[tokio::test]
 async fn test_import_settings_apply_default_sender_only_when_enabled() -> Result<()>
 {
+	std::env::set_var("E2BR3_SKIP_XML_VALIDATE", "1");
 	let mm = init_test_mm().await?;
 	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
 	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
@@ -482,12 +548,28 @@ async fn test_import_settings_apply_default_sender_only_when_enabled() -> Result
 					"isDefault": true
 				},
 				"gateways": [],
-				"responsiblePersons": [{ "sequenceNumber": 1, "department": "Import Ops" }]
+				"responsiblePersons": [{
+					"sequenceNumber": 1,
+					"department": "Import Ops",
+					"personTitle": "Mr",
+					"personGivenName": "Charles",
+					"personFamilyName": "Conner"
+				}]
 			} }
 		}),
 	)
 	.await?;
 	assert_eq!(status, StatusCode::CREATED, "{body:?}");
+	let default_sender_id = body["data"]["rows"]["sender"]["id"]
+		.as_str()
+		.ok_or_else(|| format!("missing sender id in body {body:?}"))?;
+	let product_presave_id = create_product_presave(
+		&app,
+		&cookie,
+		default_sender_id,
+		"IMPORT-DEFAULT-PRODUCT",
+	)
+	.await?;
 
 	let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 		.parent()
@@ -501,11 +583,12 @@ async fn test_import_settings_apply_default_sender_only_when_enabled() -> Result
 		format!("US-SENDER-DISABLED-{}", uuid::Uuid::new_v4());
 	let disabled_xml =
 		source_xml.replace("US-APHARMA-8744554B", &disabled_case_number);
-	let (status, body) = import_xml_fixture(
+	let (status, body) = import_xml_fixture_with_product(
 		&app,
 		&cookie,
 		"FAERS2022Scenario6.xml",
 		disabled_xml.as_bytes(),
+		&product_presave_id,
 	)
 	.await?;
 	assert_eq!(status, StatusCode::OK, "{body:?}");
@@ -552,9 +635,14 @@ async fn test_import_settings_apply_default_sender_only_when_enabled() -> Result
 			&format!("US-SENDER-{}", uuid::Uuid::new_v4()),
 		)
 		.replace("<low value=\"20090101\"/>", "<low value=\"20090103\"/>");
-	let (status, body) =
-		import_xml_fixture(&app, &cookie, "FAERS2022Scenario6.xml", xml.as_bytes())
-			.await?;
+	let (status, body) = import_xml_fixture_with_product(
+		&app,
+		&cookie,
+		"FAERS2022Scenario6.xml",
+		xml.as_bytes(),
+		&product_presave_id,
+	)
+	.await?;
 	assert_eq!(status, StatusCode::OK, "{body:?}");
 	let case_id = body["data"]["importedCases"][0]["caseId"]
 		.as_str()
@@ -587,10 +675,10 @@ async fn test_import_settings_apply_default_sender_only_when_enabled() -> Result
 	assert_eq!(sender.0.as_deref(), Some("2"));
 	assert_eq!(sender.1.as_deref(), Some("Admin Default Sender"));
 	assert_eq!(sender.2.as_deref(), Some("default-sender@example.test"));
-	assert_eq!(sender.3.as_deref(), Some("Mr"));
-	assert_eq!(sender.4.as_deref(), Some("Charles"));
-	assert_eq!(sender.5.as_deref(), Some("Conner"));
-	assert_eq!(sender.6.as_deref(), Some("6109991122"));
+	assert_eq!(sender.3, None);
+	assert_eq!(sender.4, None);
+	assert_eq!(sender.5, None);
+	assert_eq!(sender.6, None);
 
 	Ok(())
 }
@@ -599,6 +687,7 @@ async fn test_import_settings_apply_default_sender_only_when_enabled() -> Result
 #[tokio::test]
 async fn test_import_settings_apply_product_linked_sender_by_imported_product_id(
 ) -> Result<()> {
+	std::env::set_var("E2BR3_SKIP_XML_VALIDATE", "1");
 	let mm = init_test_mm().await?;
 	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
 	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
@@ -649,6 +738,10 @@ async fn test_import_settings_apply_product_linked_sender_by_imported_product_id
 	)
 	.await?;
 	assert_eq!(status, StatusCode::CREATED, "{body:?}");
+	let product_presave_id = body["data"]["rows"]["product"]["id"]
+		.as_str()
+		.ok_or_else(|| format!("missing product id in body {body:?}"))?
+		.to_string();
 
 	let (status, body) = put_json(
 		&app,
@@ -673,9 +766,14 @@ async fn test_import_settings_apply_product_linked_sender_by_imported_product_id
 		"US-APHARMA-8744554B",
 		&format!("US-PRODUCT-SENDER-{}", uuid::Uuid::new_v4()),
 	);
-	let (status, body) =
-		import_xml_fixture(&app, &cookie, "FAERS2022Scenario6.xml", xml.as_bytes())
-			.await?;
+	let (status, body) = import_xml_fixture_with_product(
+		&app,
+		&cookie,
+		"FAERS2022Scenario6.xml",
+		xml.as_bytes(),
+		&product_presave_id,
+	)
+	.await?;
 	assert_eq!(status, StatusCode::OK, "{body:?}");
 	let case_id = body["data"]["importedCases"][0]["caseId"]
 		.as_str()

@@ -27,7 +27,7 @@ use lib_core::model::safety_report::{
 };
 use lib_core::model::store::set_full_context_from_ctx_dbx;
 use lib_core::model::terminology::{
-	ControlledTermBmc, MeddraTermBmc, MeddraTermKey, MfdsProductBmc,
+	ControlledTermBmc, IsoCountryBmc, MeddraTermBmc, MeddraTermKey, MfdsProductBmc,
 	WhodrugProductBmc,
 };
 use lib_core::model::test_result::TestResult;
@@ -97,6 +97,9 @@ pub struct VocabularyContext {
 	meddra_available: bool,
 	meddra_versions: HashSet<String>,
 	meddra_terms: HashSet<MeddraTermKey>,
+	whodrug_available: bool,
+	whodrug_versions: HashSet<String>,
+	whodrug_products: HashSet<(String, String)>,
 	snapshot_codes: Arc<SnapshotCodes>,
 }
 
@@ -106,6 +109,9 @@ impl Default for VocabularyContext {
 			meddra_available: false,
 			meddra_versions: HashSet::new(),
 			meddra_terms: HashSet::new(),
+			whodrug_available: false,
+			whodrug_versions: HashSet::new(),
+			whodrug_products: HashSet::new(),
 			snapshot_codes: embedded_snapshot_codes(),
 		}
 	}
@@ -125,6 +131,23 @@ impl VocabularyContext {
 			version: version.to_string(),
 			code: code.to_string(),
 		})
+	}
+
+	pub(crate) fn whodrug_available(&self) -> bool {
+		self.whodrug_available
+	}
+
+	pub(crate) fn contains_whodrug_version(&self, version: &str) -> bool {
+		self.whodrug_versions.contains(version)
+	}
+
+	pub(crate) fn contains_whodrug_product(
+		&self,
+		version: &str,
+		code: &str,
+	) -> bool {
+		self.whodrug_products
+			.contains(&(version.to_string(), code.to_string()))
 	}
 
 	pub(crate) fn contains_snapshot_code(
@@ -167,6 +190,21 @@ impl VocabularyContext {
 				version: (*version).to_string(),
 				code: (*code).to_string(),
 			})
+			.collect();
+		context
+	}
+
+	#[cfg(test)]
+	pub(crate) fn for_whodrug(keys: &[(&str, &str)]) -> Self {
+		let mut context = Self::default();
+		context.whodrug_available = true;
+		context.whodrug_versions = keys
+			.iter()
+			.map(|(version, _)| (*version).to_string())
+			.collect();
+		context.whodrug_products = keys
+			.iter()
+			.map(|(version, code)| ((*version).to_string(), (*code).to_string()))
 			.collect();
 		context
 	}
@@ -324,22 +362,22 @@ async fn load_vocabulary_context(
 	let requested_keys = case_meddra_keys(validation_ctx);
 	let requested_countries = case_country_codes(validation_ctx);
 	let requested_product_codes = case_product_codes(validation_ctx);
+	let requested_substance_codes = case_substance_codes(validation_ctx);
+	let requested_whodrug_keys = case_whodrug_keys(validation_ctx);
 	let (
 		versions,
 		terms,
 		iso_countries,
 		ich_country_extensions,
 		mfds_products,
+		mfds_substances,
+		whodrug_versions,
 		whodrug_products,
+		whodrug_keys,
 	) = tokio::try_join!(
 		MeddraTermBmc::active_versions(mm),
 		MeddraTermBmc::existing_active_keys(mm, &requested_keys),
-		ControlledTermBmc::existing_active_codes(
-			mm,
-			"iso3166",
-			"country",
-			&requested_countries,
-		),
+		IsoCountryBmc::existing_active_codes(mm, &requested_countries,),
 		ControlledTermBmc::existing_active_codes(
 			mm,
 			"iso3166",
@@ -347,7 +385,13 @@ async fn load_vocabulary_context(
 			&requested_countries,
 		),
 		MfdsProductBmc::existing_active_item_seqs(mm, &requested_product_codes),
+		MfdsProductBmc::existing_active_substance_codes(
+			mm,
+			&requested_substance_codes,
+		),
+		WhodrugProductBmc::active_versions(mm),
 		WhodrugProductBmc::existing_active_codes(mm, &requested_product_codes),
+		WhodrugProductBmc::existing_active_keys(mm, &requested_whodrug_keys),
 	)?;
 	let meddra_available = !versions.is_empty();
 	let mut snapshot_codes = embedded_snapshot_codes();
@@ -363,6 +407,10 @@ async fn load_vocabulary_context(
 		.entry(("MFDS_PRODUCT".to_string(), VocabularyScope::ItemSeq))
 		.or_default()
 		.extend(mfds_products);
+	Arc::make_mut(&mut snapshot_codes)
+		.entry(("MFDS_SUBSTANCE".to_string(), VocabularyScope::All))
+		.or_default()
+		.extend(mfds_substances);
 	Arc::make_mut(&mut snapshot_codes)
 		.entry(("WHODrug".to_string(), VocabularyScope::All))
 		.or_default()
@@ -394,6 +442,9 @@ async fn load_vocabulary_context(
 		meddra_available,
 		meddra_versions: versions.into_iter().collect(),
 		meddra_terms: terms.into_iter().collect(),
+		whodrug_available: !whodrug_versions.is_empty(),
+		whodrug_versions,
+		whodrug_products: whodrug_keys,
 		snapshot_codes,
 	})
 }
@@ -421,6 +472,46 @@ fn case_product_codes(validation_ctx: &ValidationContext) -> Vec<String> {
 		.collect::<HashSet<_>>()
 		.into_iter()
 		.collect()
+}
+
+fn case_substance_codes(validation_ctx: &ValidationContext) -> Vec<String> {
+	validation_ctx
+		.active_substances
+		.iter()
+		.filter_map(|item| item.mfds_id.as_deref())
+		.map(str::trim)
+		.filter(|code| !code.is_empty())
+		.map(str::to_string)
+		.collect::<HashSet<_>>()
+		.into_iter()
+		.collect()
+}
+
+fn case_whodrug_keys(validation_ctx: &ValidationContext) -> Vec<(String, String)> {
+	let mut keys = HashSet::new();
+	let mut add = |version: Option<&str>, code: Option<&str>| {
+		let version = version.map(str::trim).filter(|value| !value.is_empty());
+		let code = code.map(str::trim).filter(|value| !value.is_empty());
+		if let (Some(version), Some(code)) = (version, code) {
+			keys.insert((version.to_string(), code.to_string()));
+		}
+	};
+	for item in &validation_ctx.past_drugs {
+		add(
+			item.mfds_medicinal_product_version.as_deref(),
+			item.mfds_medicinal_product_id.as_deref(),
+		);
+	}
+	for item in &validation_ctx.parent_past_drugs {
+		add(
+			item.mfds_medicinal_product_version.as_deref(),
+			item.mfds_medicinal_product_id.as_deref(),
+		);
+	}
+	for item in &validation_ctx.drugs {
+		add(item.mfds_mpid_version.as_deref(), item.mfds_mpid.as_deref());
+	}
+	keys.into_iter().collect()
 }
 
 fn vocabulary_scope_name(scope: VocabularyScope) -> &'static str {
@@ -513,6 +604,7 @@ fn case_country_codes(validation_ctx: &ValidationContext) -> Vec<String> {
 	};
 
 	if let Some(report) = validation_ctx.safety_report.as_ref() {
+		add_identifier(report.safety_report_id.as_deref());
 		add_identifier(report.worldwide_unique_id.as_deref());
 	}
 	for identifier in &validation_ctx.other_case_identifiers {

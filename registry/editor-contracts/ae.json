@@ -266,7 +266,7 @@
         "owner": "reaction"
       },
       "roundTripValue": true,
-      "projectionValue": "true",
+      "projectionValue": true,
       "constraint": {
         "status": "verified",
         "ruleCode": "FDA.E.i.3.2h.ALLOWED.VALUE",
@@ -336,7 +336,7 @@
       "projectionValue": "1.00",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.E.i.6a.ALLOWED.VALUE",
+        "ruleCode": "ICH.E.i.6a.LENGTH.MAX",
         "invalidValue": "not-a-number"
       },
       "payloadPath": "reactionDuration.value"

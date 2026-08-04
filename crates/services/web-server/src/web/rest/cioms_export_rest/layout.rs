@@ -1,14 +1,39 @@
 use super::*;
 
+pub(super) fn render_cioms_first_page(
+	canvas: &mut PdfCanvas,
+	data: &CiomsCaseData,
+	settings: &CiomsSettings,
+	options: CiomsExportOptions,
+	page_width: i32,
+	page_height: i32,
+) {
+	let template = CIOMS_LANDSCAPE_TEMPLATE;
+	let scale = (page_width as f32 / template.page_width as f32)
+		.min(page_height as f32 / template.page_height as f32);
+	let translate_x = (page_width as f32 - template.page_width as f32 * scale) / 2.0;
+	let translate_y =
+		(page_height as f32 - template.page_height as f32 * scale) / 2.0;
+
+	if settings.orientation.eq_ignore_ascii_case("Portrait") {
+		canvas.save_state();
+		canvas.transform(scale, scale, translate_x, translate_y);
+		render_landscape_cioms(canvas, data, settings, options);
+		canvas.restore_state();
+	} else {
+		render_landscape_cioms(canvas, data, settings, options);
+	}
+}
+
 pub(super) fn render_landscape_cioms(
 	canvas: &mut PdfCanvas,
 	data: &CiomsCaseData,
 	settings: &CiomsSettings,
 	options: CiomsExportOptions,
-	width: i32,
-	height: i32,
 ) {
 	let template = CIOMS_LANDSCAPE_TEMPLATE;
+	let width = template.page_width;
+	let height = template.page_height;
 	let form = CiomsFormData::from_case_data(data, settings);
 	let first_reaction = data.reactions.first();
 	let suspect_drug = data
@@ -21,6 +46,14 @@ pub(super) fn render_landscape_cioms(
 	let source = data.primary_sources.first();
 	let sender = data.senders.first();
 	let reaction_text = &form.reaction_description;
+	let first_reaction_id = first_reaction.map(|reaction| reaction.id);
+	let suspect_assessment = suspect_drug.and_then(|drug| {
+		data.causality_rows.iter().find(|row| {
+			row.drug_id == drug.id
+				&& first_reaction_id
+					.map_or(true, |reaction_id| row.reaction_id == reaction_id)
+		})
+	});
 
 	canvas.text(28, height - 28, 15, "CIOMS FORM");
 	canvas.text(148, height - 28, 13, "SUSPECT ADVERSE REACTION REPORT");
@@ -112,7 +145,7 @@ pub(super) fn render_landscape_cioms(
 		46,
 		"4-6. REACTION ONSET",
 		&reaction_dates(first_reaction),
-		22,
+		24,
 		1,
 	);
 	render_box(
@@ -128,29 +161,56 @@ pub(super) fn render_landscape_cioms(
 	);
 	render_checkbox(
 		canvas,
-		536,
+		532,
 		template.reaction_information.y + 137,
-		"PATIENT DIED",
+		"DIED",
 		first_reaction
 			.and_then(|r| r.criteria_death)
 			.unwrap_or(false),
 	);
 	render_checkbox(
 		canvas,
-		632,
+		620,
 		template.reaction_information.y + 137,
-		"HOSPITALIZATION",
+		"HOSPITALIZED",
 		first_reaction
 			.and_then(|r| r.criteria_hospitalization)
 			.unwrap_or(false),
 	);
 	render_checkbox(
 		canvas,
-		736,
+		724,
 		template.reaction_information.y + 137,
-		"LIFE THREATENING",
+		"LIFE THREAT",
 		first_reaction
 			.and_then(|r| r.criteria_life_threatening)
+			.unwrap_or(false),
+	);
+	render_checkbox(
+		canvas,
+		532,
+		template.reaction_information.y + 125,
+		"DISABLED",
+		first_reaction
+			.and_then(|r| r.criteria_disabling)
+			.unwrap_or(false),
+	);
+	render_checkbox(
+		canvas,
+		620,
+		template.reaction_information.y + 125,
+		"CONGENITAL",
+		first_reaction
+			.and_then(|r| r.criteria_congenital_anomaly)
+			.unwrap_or(false),
+	);
+	render_checkbox(
+		canvas,
+		724,
+		template.reaction_information.y + 125,
+		"MED. IMPORTANT",
+		first_reaction
+			.and_then(|r| r.criteria_other_medically_important)
 			.unwrap_or(false),
 	);
 	render_box(
@@ -213,7 +273,8 @@ pub(super) fn render_landscape_cioms(
 		118,
 		42,
 		"20. DID REACTION ABATE AFTER STOPPING DRUG?",
-		yes_no_na(suspect_drug.and_then(|drug| drug.action_taken.as_deref())),
+		// ponytail: keep blank until an explicit dechallenge field exists; never infer it from G.k.7.
+		"",
 		20,
 		1,
 	);
@@ -224,7 +285,9 @@ pub(super) fn render_landscape_cioms(
 		118,
 		42,
 		"21. DID REACTION REAPPEAR AFTER REINTRODUCTION?",
-		yes_no_na(None),
+		yes_no_unknown(
+			suspect_assessment.and_then(|row| row.reaction_recurred.as_deref()),
+		),
 		20,
 		1,
 	);
@@ -355,297 +418,6 @@ pub(super) fn render_landscape_cioms(
 	render_cioms_notation(canvas, data, options, 34, 26);
 }
 
-pub(super) fn render_portrait_cioms(
-	canvas: &mut PdfCanvas,
-	data: &CiomsCaseData,
-	settings: &CiomsSettings,
-	options: CiomsExportOptions,
-	page_width: i32,
-	page_height: i32,
-) {
-	let form = CiomsFormData::from_case_data(data, settings);
-	let first_reaction = data.reactions.first();
-	let suspect_drug = data
-		.drugs
-		.iter()
-		.find(|drug| drug.drug_characterization == "1")
-		.or_else(|| data.drugs.first());
-	let patient = data.patient.as_ref();
-	let report = data.report.as_ref();
-	let source = data.primary_sources.first();
-	let reaction_text = &form.reaction_description;
-
-	canvas.text(30, page_height - 32, 15, "CIOMS FORM");
-	canvas.text(150, page_height - 32, 12, "SUSPECT ADVERSE REACTION REPORT");
-	canvas.text(390, page_height - 32, 8, "CIOMS layout: Portrait");
-	canvas.text(
-		390,
-		page_height - 44,
-		7,
-		&format!("Data ordering: {}", settings.data_ordering),
-	);
-	canvas.rect(24, 24, page_width - 48, page_height - 70);
-
-	canvas.text(30, 778, 9, "I. REACTION INFORMATION");
-	let y = 728;
-	render_box(
-		canvas,
-		30,
-		y,
-		80,
-		40,
-		"1. PATIENT INITIALS",
-		patient
-			.and_then(|p| p.patient_initials.as_deref())
-			.unwrap_or(""),
-		14,
-		1,
-	);
-	render_box(
-		canvas,
-		110,
-		y,
-		60,
-		40,
-		"1a. COUNTRY",
-		first_reaction
-			.and_then(|r| r.country_code.as_deref())
-			.or_else(|| source.and_then(|s| s.country_code.as_deref()))
-			.unwrap_or(""),
-		12,
-		1,
-	);
-	render_box(
-		canvas,
-		170,
-		y,
-		90,
-		40,
-		"2. DATE OF BIRTH",
-		&date_text(patient.and_then(|p| p.birth_date)),
-		16,
-		1,
-	);
-	render_box(
-		canvas,
-		260,
-		y,
-		70,
-		40,
-		"2a. AGE",
-		&patient_age(patient),
-		12,
-		1,
-	);
-	render_box(
-		canvas,
-		330,
-		y,
-		60,
-		40,
-		"3. SEX",
-		sex_text(patient.and_then(|p| p.sex.as_deref())),
-		10,
-		1,
-	);
-	render_box(
-		canvas,
-		390,
-		y,
-		170,
-		40,
-		"4-6. REACTION ONSET",
-		&reaction_dates(first_reaction),
-		26,
-		1,
-	);
-	render_box(
-		canvas,
-		30,
-		570,
-		530,
-		158,
-		"7 + 13 DESCRIBE REACTION(S) (including relevant tests/lab data)",
-		reaction_text,
-		78,
-		10,
-	);
-
-	canvas.text(30, 548, 9, "II. SUSPECT DRUG(S) INFORMATION");
-	render_box(
-		canvas,
-		30,
-		496,
-		165,
-		42,
-		"14. SUSPECT DRUG 1 of 1 (include generic name)",
-		&drug_name(suspect_drug),
-		24,
-		1,
-	);
-	render_box(
-		canvas,
-		195,
-		496,
-		90,
-		42,
-		"15. DAILY DOSE(S)",
-		&form.suspect_drug_dose,
-		14,
-		1,
-	);
-	render_box(
-		canvas,
-		285,
-		496,
-		80,
-		42,
-		"16. ROUTE(S) OF ADMINISTRATION",
-		&form.suspect_drug_route,
-		12,
-		1,
-	);
-	render_box(
-		canvas,
-		365,
-		496,
-		95,
-		42,
-		"20. DID REACTION ABATE AFTER STOPPING DRUG?",
-		yes_no_na(suspect_drug.and_then(|drug| drug.action_taken.as_deref())),
-		14,
-		1,
-	);
-	render_box(
-		canvas,
-		460,
-		496,
-		100,
-		42,
-		"21. DID REACTION REAPPEAR AFTER REINTRODUCTION?",
-		yes_no_na(None),
-		14,
-		1,
-	);
-	render_box(
-		canvas,
-		30,
-		446,
-		260,
-		50,
-		"17. INDICATION(S) FOR USE",
-		&form.suspect_drug_indication,
-		38,
-		2,
-	);
-	render_box(
-		canvas,
-		290,
-		446,
-		270,
-		50,
-		"18. THERAPY DATES (from/to) / 19. THERAPY DURATION",
-		&join_present(
-			&[
-				Some(form.suspect_drug_therapy_dates.clone()),
-				Some(form.suspect_drug_therapy_duration.clone()),
-			],
-			" / ",
-		),
-		40,
-		1,
-	);
-
-	canvas.text(30, 424, 9, "III. CONCOMITANT DRUGS AND HISTORY");
-	render_box(
-		canvas,
-		30,
-		364,
-		530,
-		60,
-		"22. CONCOMITANT DRUG(S) AND DATES OF ADMINISTRATION",
-		&concomitant_drugs_text(data),
-		78,
-		3,
-	);
-	render_box(
-		canvas,
-		30,
-		294,
-		530,
-		60,
-		"23. OTHER RELEVANT HISTORY",
-		patient
-			.and_then(|p| p.medical_history_text.as_deref())
-			.unwrap_or(""),
-		78,
-		3,
-	);
-
-	canvas.text(30, 272, 9, "IV. MANUFACTURER INFORMATION");
-	render_box(
-		canvas,
-		30,
-		190,
-		260,
-		74,
-		"24a. NAME AND ADDRESS OF MANUFACTURER",
-		&sender_address(data.senders.first()),
-		38,
-		4,
-	);
-	render_box(
-		canvas,
-		290,
-		190,
-		270,
-		74,
-		"24b. MFR CONTROL NO.",
-		&data.case_number,
-		38,
-		2,
-	);
-	render_box(
-		canvas,
-		30,
-		150,
-		175,
-		40,
-		"24c. DATE RECEIVED",
-		&date_text(report.and_then(|r| r.date_first_received_from_source)),
-		24,
-		1,
-	);
-	render_box(
-		canvas,
-		205,
-		150,
-		175,
-		40,
-		"DATE OF THIS REPORT",
-		&e2b_datetime_date_text(report.and_then(|r| r.transmission_date.as_deref())),
-		24,
-		1,
-	);
-	render_box(
-		canvas,
-		380,
-		150,
-		180,
-		40,
-		"25a. REPORT TYPE",
-		report_type_text(report.and_then(|r| r.report_type.as_deref())),
-		24,
-		1,
-	);
-	render_reporter_footer(canvas, 34, 38, source);
-	render_missing_information_legend(canvas, 300, 38);
-	if is_basic_data_ordering(settings) {
-		render_basic_repeated_items_table(canvas, data, 34, 60, page_width - 68);
-	}
-	render_cioms_notation(canvas, data, options, 34, 26);
-}
-
 pub(super) fn collect_cioms_overflow(
 	data: &CiomsCaseData,
 	settings: &CiomsSettings,
@@ -666,20 +438,34 @@ pub(super) fn collect_cioms_overflow(
 		"7 + 13 DESCRIBE REACTION(S)",
 		&form.reaction_description,
 		118,
-		if settings.orientation == "Portrait" {
-			10
-		} else {
-			8
-		},
+		8,
 	);
-	if is_basic_data_ordering(settings) {
-		push_overflow(
-			"BASIC REPEATED ITEM TABLE",
-			&basic_repeated_items_text(data),
-			90,
-			12,
-		);
-	}
+	push_overflow("14. SUSPECT DRUG", &form.suspect_drug_name, 42, 1);
+	push_overflow("15. DAILY DOSE(S)", &form.suspect_drug_dose, 22, 1);
+	push_overflow(
+		"16. ROUTE(S) OF ADMINISTRATION",
+		&form.suspect_drug_route,
+		22,
+		1,
+	);
+	push_overflow(
+		"17. INDICATION(S) FOR USE",
+		&form.suspect_drug_indication,
+		42,
+		2,
+	);
+	push_overflow(
+		"18. THERAPY DATES (from/to)",
+		&form.suspect_drug_therapy_dates,
+		38,
+		1,
+	);
+	push_overflow(
+		"19. THERAPY DURATION",
+		&form.suspect_drug_therapy_duration,
+		34,
+		1,
+	);
 	push_overflow(
 		"22. CONCOMITANT DRUG(S) AND DATES OF ADMINISTRATION",
 		&concomitant_drugs_text(data),
@@ -701,6 +487,26 @@ pub(super) fn collect_cioms_overflow(
 		4,
 	);
 	push_overflow("24b. MFR CONTROL NO.", &data.case_number, 20, 2);
+	push_overflow(
+		"24c. DATE RECEIVED BY MANUFACTURER",
+		&date_text(
+			data.report
+				.as_ref()
+				.and_then(|r| r.date_first_received_from_source),
+		),
+		18,
+		1,
+	);
+	let report_date = e2b_datetime_date_text(
+		data.report
+			.as_ref()
+			.and_then(|r| r.transmission_date.as_deref()),
+	);
+	push_overflow("DATE OF THIS REPORT", &report_date, 16, 1);
+	let report_type = report_type_text(
+		data.report.as_ref().and_then(|r| r.report_type.as_deref()),
+	);
+	push_overflow("25a. REPORT TYPE", report_type, 18, 2);
 	if options.include_notation {
 		push_overflow("CIOMS NOTATION", &cioms_notation_text(data), 90, 1);
 	}
@@ -708,55 +514,605 @@ pub(super) fn collect_cioms_overflow(
 	overflow
 }
 
+pub(super) fn cioms_continuation_required(
+	data: &CiomsCaseData,
+	settings: &CiomsSettings,
+	overflow: &[(String, String)],
+) -> bool {
+	if !overflow.is_empty()
+		|| is_basic_data_ordering(settings)
+		|| data.reactions.len() > 1
+		|| data.drugs.len() > 1
+		|| data.dosages.len() > 1
+		|| data.indications.len() > 1
+		|| !data.test_results.is_empty()
+		|| !data.medical_history_episodes.is_empty()
+		|| !data.past_drug_history.is_empty()
+		|| data.drugs.iter().any(|drug| {
+			drug.action_taken
+				.as_deref()
+				.is_some_and(|value| !value.trim().is_empty())
+		}) {
+		return true;
+	}
+	if data.causality_rows.iter().any(|row| {
+		row.recurrence_action.is_some()
+			|| row.reaction_recurred.is_some()
+			|| row.administration_start_interval_value.is_some()
+			|| row.administration_start_interval_unit.is_some()
+			|| row.last_dose_interval_value.is_some()
+			|| row.last_dose_interval_unit.is_some()
+			|| row.relatedness_source.is_some()
+			|| row.relatedness_method.is_some()
+			|| row.relatedness_method_kr1.is_some()
+			|| row.relatedness_result.is_some()
+			|| row.relatedness_result_kr1.is_some()
+			|| row.relatedness_result_kr2.is_some()
+	}) {
+		return true;
+	}
+	data.narrative.as_ref().is_some_and(|narrative| {
+		[
+			Some(&narrative.case_narrative),
+			narrative.reporter_comments.as_ref(),
+			narrative.sender_comments.as_ref(),
+			narrative.additional_information.as_ref(),
+		]
+		.iter()
+		.flatten()
+		.any(|value| !value.trim().is_empty())
+	})
+}
+
 pub(super) fn render_cioms_continuation_pages(
-	case_number: &str,
+	data: &CiomsCaseData,
+	settings: &CiomsSettings,
+	options: CiomsExportOptions,
 	overflow: &[(String, String)],
 	width: i32,
 	height: i32,
-) -> Vec<String> {
-	let max_chars = if width >= 800 { 118 } else { 82 };
-	let mut pages = Vec::new();
-	let mut canvas = PdfCanvas::new();
-	let mut y = continuation_page_header(&mut canvas, case_number, height);
-	for (label, value) in overflow {
-		if y < 71 {
-			pages.push(canvas.stream);
-			canvas = PdfCanvas::new();
-			y = continuation_page_header(&mut canvas, case_number, height);
-		}
-		canvas.text(28, y, 8, label);
-		y -= 13;
-		for line in wrap_pdf_text(value, max_chars) {
-			if y < 58 {
-				pages.push(canvas.stream);
-				canvas = PdfCanvas::new();
-				y = continuation_page_header(&mut canvas, case_number, height);
-				canvas.text(28, y, 8, label);
-				y -= 13;
+	initial_font_mapping: &[(u16, u32)],
+) -> (Vec<String>, Vec<(u16, u32)>) {
+	let mut sections = Vec::<(String, Vec<(String, String)>)>::new();
+
+	let mut reaction_rows = Vec::new();
+	for reaction in &data.reactions {
+		let mut values = vec![format!(
+			"E.i.1 Reaction/Event as Reported by Primary Source: {}",
+			reaction.primary_source_reaction
+		)];
+		if let Some(translation) =
+			reaction.primary_source_reaction_translation.as_deref()
+		{
+			if !translation.trim().is_empty() {
+				values.push(format!("Translation: {translation}"));
 			}
-			canvas.text(34, y, 8, &line);
-			y -= 12;
 		}
-		y -= 8;
+		let timing = reaction_dates(Some(reaction));
+		if !timing.is_empty() {
+			values.push(format!("E.i.4-6 Reaction onset: {timing}"));
+		}
+		let outcome = reaction_outcome_text(reaction.outcome.as_deref());
+		if !outcome.is_empty() {
+			values.push(format!("E.i.7 Outcome of Reaction/Event: {outcome}"));
+		}
+		let criteria = [
+			("Death", reaction.criteria_death),
+			("Life threatening", reaction.criteria_life_threatening),
+			("Hospitalization", reaction.criteria_hospitalization),
+			("Disabling", reaction.criteria_disabling),
+			("Congenital anomaly", reaction.criteria_congenital_anomaly),
+			(
+				"Other medically important",
+				reaction.criteria_other_medically_important,
+			),
+		];
+		let serious = criteria
+			.iter()
+			.filter_map(|(label, value)| (*value == Some(true)).then_some(*label))
+			.collect::<Vec<_>>();
+		if !serious.is_empty() {
+			values.push(format!(
+				"E.i.3.2 Seriousness criteria: {}",
+				serious.join(", ")
+			));
+		}
+		for row in data
+			.causality_rows
+			.iter()
+			.filter(|row| row.reaction_id == reaction.id)
+		{
+			let drug = data.drugs.iter().find(|drug| drug.id == row.drug_id);
+			let drug_name = drug
+				.map(|drug| drug.medicinal_product.as_str())
+				.unwrap_or("");
+			let action = drug
+				.map(|drug| drug_action_text(drug.action_taken.as_deref()))
+				.unwrap_or_default();
+			let interval = join_present(
+				&[
+					row.administration_start_interval_value.map(|value| {
+						format!("Start interval: {}", decimal_text(Some(value)))
+					}),
+					row.administration_start_interval_unit.clone(),
+					row.last_dose_interval_value.map(|value| {
+						format!("Last dose interval: {}", decimal_text(Some(value)))
+					}),
+					row.last_dose_interval_unit.clone(),
+				],
+				" ",
+			);
+			let relatedness = join_present(
+				&[
+					row.relatedness_source
+						.clone()
+						.map(|value| format!("Source: {value}")),
+					row.relatedness_method
+						.clone()
+						.map(|value| format!("Method: {value}")),
+					row.relatedness_method_kr1
+						.clone()
+						.map(|value| format!("Method KR: {value}")),
+					row.relatedness_result
+						.clone()
+						.map(|value| format!("Result: {value}")),
+					row.relatedness_result_kr1
+						.clone()
+						.map(|value| format!("Result KR1: {value}")),
+					row.relatedness_result_kr2
+						.clone()
+						.map(|value| format!("Result KR2: {value}")),
+				],
+				"; ",
+			);
+			let recurrence = join_present(
+				&[
+					row.recurrence_action.clone().map(|value| {
+						format!(
+							"G.k.9.i.4.r.1 Rechallenge action: {}",
+							rechallenge_action_text(Some(value.as_str()))
+						)
+					}),
+					row.reaction_recurred.clone().map(|value| {
+						format!("Recurred: {}", yes_no_unknown(Some(value.as_str())))
+					}),
+				],
+				"; ",
+			);
+			let causality = join_present(
+				&[
+					(!drug_name.is_empty()).then(|| format!("Drug: {drug_name}")),
+					(!action.is_empty()).then(|| {
+						format!("G.k.8 Action(s) Taken with Drug: {action}")
+					}),
+					(!interval.is_empty()).then(|| interval.clone()),
+					(!recurrence.is_empty()).then(|| recurrence.clone()),
+					(!relatedness.is_empty())
+						.then(|| format!("Relatedness: {relatedness}")),
+				],
+				"; ",
+			);
+			if !causality.is_empty() {
+				values.push(causality);
+			}
+		}
+		reaction_rows.push((
+			format!("Reaction {}", reaction.sequence_number),
+			values.join("; "),
+		));
 	}
-	if canvas.stream.contains("CIOMS CONTINUATION") {
-		pages.push(canvas.stream);
+	if !reaction_rows.is_empty() {
+		sections.push((
+			"I. REACTION INFORMATION (continued)".to_string(),
+			reaction_rows,
+		));
 	}
-	pages
+
+	let mut narrative_rows = Vec::new();
+	if let Some(narrative) = data.narrative.as_ref() {
+		let mut fields =
+			vec![("H.1 Case Narrative", narrative.case_narrative.as_str())];
+		if options.include_notation {
+			fields.extend([
+				(
+					"H.2 Reporter's Comments",
+					narrative.reporter_comments.as_deref().unwrap_or(""),
+				),
+				(
+					"H.4 Sender's Comments",
+					narrative.sender_comments.as_deref().unwrap_or(""),
+				),
+				(
+					"Additional Information",
+					narrative.additional_information.as_deref().unwrap_or(""),
+				),
+			]);
+		}
+		for (label, value) in fields {
+			if !value.trim().is_empty() {
+				narrative_rows.push((label.to_string(), value.to_string()));
+			}
+		}
+	}
+	if !narrative_rows.is_empty() {
+		sections.push((
+			"H. NARRATIVE AND OTHER INFORMATION".to_string(),
+			narrative_rows,
+		));
+	}
+
+	let test_rows = data
+		.test_results
+		.iter()
+		.map(|test| {
+			let value = join_present(
+				&[
+					test.test_date.map(|date| format!("Date: {date}")),
+					Some(format!("F.r.2 Test: {}", test.test_name)),
+					test.test_meddra_code
+						.clone()
+						.map(|code| format!("MedDRA: {code}")),
+					test.test_result_code
+						.clone()
+						.map(|code| format!("Coded result: {code}")),
+					test.test_result_value
+						.clone()
+						.map(|value| format!("Value: {value}")),
+					test.test_result_qualifier
+						.clone()
+						.map(|value| format!("Qualifier: {value}")),
+					test.test_result_unit
+						.clone()
+						.map(|unit| format!("Unit: {unit}")),
+					test.result_unstructured.clone().map(|value| {
+						format!("F.r.3.4 Result Unstructured Data: {value}")
+					}),
+					test.normal_low_value
+						.clone()
+						.zip(test.normal_high_value.clone())
+						.map(|(low, high)| format!("Normal range: {low}-{high}")),
+					test.comments
+						.clone()
+						.map(|value| format!("Comments: {value}")),
+				],
+				"; ",
+			);
+			(format!("Test {}", test.sequence_number), value)
+		})
+		.filter(|(_, value)| !value.is_empty())
+		.collect::<Vec<_>>();
+	if !test_rows.is_empty() {
+		sections.push(("F. TESTS AND PROCEDURES".to_string(), test_rows));
+	}
+
+	let mut drug_rows = Vec::new();
+	for drug in &data.drugs {
+		let role = if drug.drug_characterization == "1" {
+			"Suspect"
+		} else {
+			"Concomitant"
+		};
+		let mut values = vec![format!(
+			"G.k.1 Role: {role} | G.k.2.2 Product: {}",
+			drug.medicinal_product
+		)];
+		if let Some(action) = drug.action_taken.as_deref() {
+			values.push(format!(
+				"G.k.8 Action(s) Taken with Drug: {}",
+				drug_action_text(Some(action))
+			));
+		}
+		for dosage in data
+			.dosages
+			.iter()
+			.filter(|dosage| dosage.drug_id == drug.id)
+		{
+			let dosage_value = join_present(
+				&[
+					dosage.dosage_text.clone(),
+					dosage
+						.dose_value
+						.map(|value| format!("Dose: {}", decimal_text(Some(value)))),
+					dosage.dose_unit.clone(),
+					dosage
+						.route_of_administration
+						.clone()
+						.map(|value| format!("Route: {value}")),
+					(!dosage_therapy_dates(Some(dosage)).is_empty()).then(|| {
+						format!(
+							"Therapy dates: {}",
+							dosage_therapy_dates(Some(dosage))
+						)
+					}),
+					(!dosage_duration(Some(dosage)).is_empty()).then(|| {
+						format!("Duration: {}", dosage_duration(Some(dosage)))
+					}),
+				],
+				"; ",
+			);
+			if !dosage_value.is_empty() {
+				values.push(format!("G.k.4 Dosage: {dosage_value}"));
+			}
+		}
+		for indication in data
+			.indications
+			.iter()
+			.filter(|indication| indication.drug_id == drug.id)
+		{
+			let indication_value = join_present(
+				&[
+					indication.indication_text.clone(),
+					indication
+						.indication_meddra_code
+						.clone()
+						.map(|code| format!("MedDRA: {code}")),
+				],
+				"; ",
+			);
+			if !indication_value.is_empty() {
+				values.push(format!("G.k.6 Indication: {indication_value}"));
+			}
+		}
+		drug_rows
+			.push((format!("Drug {}", drug.sequence_number), values.join("; ")));
+	}
+	if !drug_rows.is_empty() {
+		sections.push((
+			"II. SUSPECT / CONCOMITANT DRUGS (continued)".to_string(),
+			drug_rows,
+		));
+	}
+
+	let mut history_rows = Vec::new();
+	if let Some(patient) = data.patient.as_ref() {
+		if let Some(value) = patient
+			.medical_history_text
+			.as_deref()
+			.filter(|value| !value.trim().is_empty())
+		{
+			history_rows
+				.push(("D.7.2 Medical History".to_string(), value.to_string()));
+		}
+	}
+	for episode in &data.medical_history_episodes {
+		let value = join_present(
+			&[
+				episode
+					.meddra_version
+					.clone()
+					.map(|value| format!("MedDRA version: {value}")),
+				episode
+					.meddra_code
+					.clone()
+					.map(|value| format!("Code: {value}")),
+				episode.start_date.map(|value| format!("Start: {value}")),
+				episode
+					.start_date_null_flavor
+					.clone()
+					.map(|value| format!("Start null flavor: {value}")),
+				episode.end_date.map(|value| format!("End: {value}")),
+				episode
+					.end_date_null_flavor
+					.clone()
+					.map(|value| format!("End null flavor: {value}")),
+				episode
+					.continuing
+					.map(|value| format!("Continuing: {value}")),
+				episode
+					.continuing_null_flavor
+					.clone()
+					.map(|value| format!("Continuing null flavor: {value}")),
+				episode
+					.comments
+					.clone()
+					.map(|value| format!("Comments: {value}")),
+				episode
+					.family_history
+					.map(|value| format!("Family history: {value}")),
+			],
+			"; ",
+		);
+		if !value.is_empty() {
+			history_rows
+				.push((format!("D.7.1 History {}", episode.sequence_number), value));
+		}
+	}
+	for history in &data.past_drug_history {
+		let value = join_present(
+			&[
+				history.drug_name.clone(),
+				history
+					.drug_name_null_flavor
+					.clone()
+					.map(|value| format!("Drug name null flavor: {value}")),
+				history
+					.mfds_medicinal_product_version
+					.clone()
+					.map(|value| format!("MFDS product version: {value}")),
+				history
+					.mfds_medicinal_product_id
+					.clone()
+					.map(|value| format!("MFDS product ID: {value}")),
+				history.mpid.clone().map(|value| format!("MPID: {value}")),
+				history
+					.mpid_version
+					.clone()
+					.map(|value| format!("MPID version: {value}")),
+				history.phpid.clone().map(|value| format!("PHPID: {value}")),
+				history
+					.phpid_version
+					.clone()
+					.map(|value| format!("PHPID version: {value}")),
+				history.start_date.map(|value| format!("Start: {value}")),
+				history
+					.start_date_null_flavor
+					.clone()
+					.map(|value| format!("Start null flavor: {value}")),
+				history.end_date.map(|value| format!("End: {value}")),
+				history
+					.end_date_null_flavor
+					.clone()
+					.map(|value| format!("End null flavor: {value}")),
+				history
+					.indication_meddra_version
+					.clone()
+					.map(|value| format!("Indication MedDRA version: {value}")),
+				history
+					.indication_meddra_code
+					.clone()
+					.map(|value| format!("Indication: {value}")),
+				history
+					.reaction_meddra_version
+					.clone()
+					.map(|value| format!("Reaction MedDRA version: {value}")),
+				history
+					.reaction_meddra_code
+					.clone()
+					.map(|value| format!("Reaction: {value}")),
+			],
+			"; ",
+		);
+		if !value.is_empty() {
+			history_rows.push((
+				format!("D.8 Past Drug History {}", history.sequence_number),
+				value,
+			));
+		}
+	}
+	if !history_rows.is_empty() {
+		sections.push((
+			"III. CONCOMITANT DRUGS AND HISTORY (continued)".to_string(),
+			history_rows,
+		));
+	}
+
+	if !overflow.is_empty() {
+		sections.push((
+			"REMAINING CONTENT FROM FIRST PAGE".to_string(),
+			overflow.to_vec(),
+		));
+	}
+	if is_basic_data_ordering(settings) {
+		let rows = basic_repeated_item_rows(data)
+			.into_iter()
+			.map(|row| ("Repeated item".to_string(), row))
+			.collect::<Vec<_>>();
+		if !rows.is_empty() {
+			sections.push(("BASIC REPEATED ITEM TABLE".to_string(), rows));
+		}
+	}
+	if sections.is_empty() {
+		return (Vec::new(), initial_font_mapping.to_vec());
+	}
+
+	let portrait = settings.orientation.eq_ignore_ascii_case("Portrait");
+	let mut pages = Vec::new();
+	let mut font_mapping = initial_font_mapping.to_vec();
+	let (mut canvas, mut y) =
+		new_continuation_page(data, width, height, portrait, &font_mapping);
+	for (title, rows) in sections {
+		if y < 110 {
+			font_mapping = canvas.font_mapping();
+			pages.push(finish_continuation_page(canvas, portrait));
+			(canvas, y) =
+				new_continuation_page(data, width, height, portrait, &font_mapping);
+		}
+		canvas.text(30, y, 10, &title);
+		y -= 17;
+		for (label, value) in rows {
+			render_continuation_row(
+				&mut pages,
+				&mut canvas,
+				&mut y,
+				data,
+				width,
+				height,
+				portrait,
+				&label,
+				&value,
+			);
+		}
+		y -= 6;
+	}
+	font_mapping = canvas.font_mapping();
+	pages.push(finish_continuation_page(canvas, portrait));
+	(pages, font_mapping)
 }
 
-fn continuation_page_header(
-	canvas: &mut PdfCanvas,
-	case_number: &str,
-	height: i32,
-) -> i32 {
+fn new_continuation_page(
+	data: &CiomsCaseData,
+	page_width: i32,
+	page_height: i32,
+	portrait: bool,
+	font_mapping: &[(u16, u32)],
+) -> (PdfCanvas, i32) {
+	let template = CIOMS_LANDSCAPE_TEMPLATE;
+	let mut canvas = PdfCanvas::with_font_mapping(font_mapping);
 	canvas.stream.push_str("0.8 w\n");
-	canvas.text(28, height - 32, 14, "CIOMS CONTINUATION");
+	if portrait {
+		let scale = (page_width as f32 / template.page_width as f32)
+			.min(page_height as f32 / template.page_height as f32);
+		let translate_x =
+			(page_width as f32 - template.page_width as f32 * scale) / 2.0;
+		let translate_y =
+			(page_height as f32 - template.page_height as f32 * scale) / 2.0;
+		canvas.save_state();
+		canvas.transform(scale, scale, translate_x, translate_y);
+	}
+	canvas.rect(24, 24, template.page_width - 48, template.page_height - 62);
+	canvas.text(28, template.page_height - 32, 14, "CIOMS CONTINUATION");
 	canvas.text(
 		28,
-		height - 48,
+		template.page_height - 48,
 		8,
-		&format!("MFR CONTROL NO.: {case_number}"),
+		&format!("MFR CONTROL NO.: {}", data.case_number),
 	);
-	height - 74
+	(canvas, template.page_height - 74)
+}
+
+fn finish_continuation_page(mut canvas: PdfCanvas, portrait: bool) -> String {
+	if portrait {
+		canvas.restore_state();
+	}
+	canvas.stream
+}
+
+fn render_continuation_row(
+	pages: &mut Vec<String>,
+	canvas: &mut PdfCanvas,
+	y: &mut i32,
+	data: &CiomsCaseData,
+	page_width: i32,
+	page_height: i32,
+	portrait: bool,
+	label: &str,
+	value: &str,
+) {
+	let lines = wrap_pdf_text(&format!("{label}: {value}"), 112);
+	let mut offset = 0;
+	while offset < lines.len() {
+		if *y < 90 {
+			let font_mapping = canvas.font_mapping();
+			pages.push(finish_continuation_page(
+				std::mem::replace(canvas, PdfCanvas::new()),
+				portrait,
+			));
+			(*canvas, *y) = new_continuation_page(
+				data,
+				page_width,
+				page_height,
+				portrait,
+				&font_mapping,
+			);
+		}
+		let available_lines = (((*y - 60).max(28) - 18) / 11).max(1) as usize;
+		let count = available_lines.min(lines.len() - offset);
+		let row_height = 18 + (count as i32 * 11);
+		canvas.rect(28, *y - row_height, 786, row_height);
+		for (index, line) in lines[offset..offset + count].iter().enumerate() {
+			canvas.text(34, *y - 13 - (index as i32 * 11), 8, line);
+		}
+		*y -= row_height + 5;
+		offset += count;
+	}
 }

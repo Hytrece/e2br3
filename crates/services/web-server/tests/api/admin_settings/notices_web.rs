@@ -28,6 +28,18 @@ async fn test_dashboard_notices_are_org_scoped_and_audited() -> Result<()> {
 	let viewer_cookie = cookie_header(&viewer_token.to_string());
 	let other_viewer_cookie = cookie_header(&other_viewer_token.to_string());
 	let app = web_server::app(mm.clone());
+	let (_, runtime) = request_json(
+		&app,
+		&sponsor_admin_cookie,
+		Method::GET,
+		"/api/settings/runtime",
+		None,
+	)
+	.await?;
+	let revision = runtime["notices_revision"]
+		.as_str()
+		.ok_or("missing notice revision")?
+		.to_string();
 
 	let (status, value) = request_json(
 		&app,
@@ -36,6 +48,7 @@ async fn test_dashboard_notices_are_org_scoped_and_audited() -> Result<()> {
 		"/api/admin/notices",
 		Some(json!({
 			"data": {
+				"revision": revision,
 				"notices": [{
 					"id": "notice-1",
 					"title": "System maintenance",
@@ -50,6 +63,10 @@ async fn test_dashboard_notices_are_org_scoped_and_audited() -> Result<()> {
 	assert_eq!(status, StatusCode::OK, "{value:?}");
 	assert_eq!(value["notices"][0]["title"], "System maintenance");
 	assert_eq!(value["notices"][0]["writer"], seed.admin.email);
+	let revision = value["revision"]
+		.as_str()
+		.ok_or("missing notice revision after create")?
+		.to_string();
 
 	let (status, value) = request_json(
 		&app,
@@ -58,6 +75,7 @@ async fn test_dashboard_notices_are_org_scoped_and_audited() -> Result<()> {
 		"/api/admin/notices",
 		Some(json!({
 			"data": {
+				"revision": revision,
 				"notices": [{
 					"id": "notice-1",
 					"title": "Updated maintenance",
@@ -160,6 +178,17 @@ async fn test_dashboard_notices_hidden_without_notice_read() -> Result<()> {
 	let admin_cookie = cookie_header(&admin_token.to_string());
 	let viewer_cookie = cookie_header(&viewer_token.to_string());
 	let app = web_server::app(mm.clone());
+	let (_, runtime) = request_json(
+		&app,
+		&admin_cookie,
+		Method::GET,
+		"/api/settings/runtime",
+		None,
+	)
+	.await?;
+	let revision = runtime["notices_revision"]
+		.as_str()
+		.ok_or("missing notice revision")?;
 
 	// Admin publishes a notice.
 	let (status, value) = request_json(
@@ -169,6 +198,7 @@ async fn test_dashboard_notices_hidden_without_notice_read() -> Result<()> {
 		"/api/admin/notices",
 		Some(json!({
 			"data": {
+				"revision": revision,
 				"notices": [{
 					"id": "notice-1",
 					"title": "Reboot window",

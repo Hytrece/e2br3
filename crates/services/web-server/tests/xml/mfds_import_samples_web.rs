@@ -1,4 +1,7 @@
-use crate::common::{cookie_header, init_test_mm, seed_org_with_users, Result};
+use crate::common::{
+	cookie_header, create_test_import_product, init_test_mm, seed_org_with_users,
+	Result,
+};
 use axum::body::{to_bytes, Body};
 use axum::http::{Request, StatusCode};
 use lib_auth::token::generate_web_token;
@@ -7,6 +10,7 @@ use serial_test::serial;
 use std::fs;
 use std::path::{Path, PathBuf};
 use tower::ServiceExt;
+use uuid::Uuid;
 use xml::import_sections::c_safety_report::parse_c_safety_report;
 use xml::import_sections::d_patient::parse_d_patient;
 use xml::import_sections::e_reaction::parse_e_reactions;
@@ -98,12 +102,16 @@ fn expected_from_xml(xml: &[u8]) -> Result<ExpectedCounts> {
 	})
 }
 
-fn build_multipart(xml: &[u8], filename: &str) -> (String, Vec<u8>) {
+fn build_multipart(
+	xml: &[u8],
+	filename: &str,
+	product_presave_id: Uuid,
+) -> (String, Vec<u8>) {
 	let boundary = "X-BOUNDARY-MFDS-IMPORT";
 	let mut body = Vec::new();
 	body.extend_from_slice(
 		format!(
-			"--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"{filename}\"\r\nContent-Type: application/xml\r\n\r\n"
+			"--{boundary}\r\nContent-Disposition: form-data; name=\"productPresaveId\"\r\n\r\n{product_presave_id}\r\n--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"{filename}\"\r\nContent-Type: application/xml\r\n\r\n"
 		)
 		.as_bytes(),
 	);
@@ -193,6 +201,8 @@ async fn test_mfds_samples_import_and_validate() -> Result<()> {
 
 	let mm = init_test_mm().await?;
 	let seed = seed_org_with_users(&mm, "admin_pwd", "viewer_pwd").await?;
+	let product_presave_id =
+		create_test_import_product(&mm, seed.org_id, seed.admin.id).await?;
 	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
 	let cookie = cookie_header(&token.to_string());
 	let app = web_server::app(mm);
@@ -208,7 +218,8 @@ async fn test_mfds_samples_import_and_validate() -> Result<()> {
 			.to_string();
 		let xml = fs::read(&xml_path)?;
 		let expected = expected_from_xml(&xml)?;
-		let (boundary, multipart) = build_multipart(&xml, &filename);
+		let (boundary, multipart) =
+			build_multipart(&xml, &filename, product_presave_id);
 
 		let (status, body) = request_json(
 			&app,

@@ -728,7 +728,15 @@ fn read_g_k_4_r_4(
 ) -> Result<(Option<sqlx::types::time::Date>, Option<String>)> {
 	date_pair(
 		first_attr(xpath, node, GDrugPaths::DOSAGE_START_DATE),
-		first_attr(xpath, node, GDrugPaths::DOSAGE_START_DATE_NULL_FLAVOR),
+		first_attr(xpath, node, GDrugPaths::DOSAGE_START_DATE_NULL_FLAVOR).or_else(
+			|| {
+				first_attr(
+					xpath,
+					node,
+					GDrugPaths::DOSAGE_EFFECTIVE_TIME_NULL_FLAVOR,
+				)
+			},
+		),
 		"dosageInformation[].firstAdministrationDate",
 		"dosageInformation[].firstAdministrationDateNullFlavor",
 		input_contracts::generated::g::g_k_4_r_4,
@@ -742,7 +750,15 @@ fn read_g_k_4_r_5(
 ) -> Result<(Option<sqlx::types::time::Date>, Option<String>)> {
 	date_pair(
 		first_attr(xpath, node, GDrugPaths::DOSAGE_END_DATE),
-		first_attr(xpath, node, GDrugPaths::DOSAGE_END_DATE_NULL_FLAVOR),
+		first_attr(xpath, node, GDrugPaths::DOSAGE_END_DATE_NULL_FLAVOR).or_else(
+			|| {
+				first_attr(
+					xpath,
+					node,
+					GDrugPaths::DOSAGE_EFFECTIVE_TIME_NULL_FLAVOR,
+				)
+			},
+		),
 		"dosageInformation[].lastAdministrationDate",
 		"dosageInformation[].lastAdministrationDateNullFlavor",
 		input_contracts::generated::g::g_k_4_r_5,

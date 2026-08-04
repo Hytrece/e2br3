@@ -101,6 +101,7 @@ struct WorkflowStatusConfigDoc {
 	editable: bool,
 	description: Option<String>,
 	allowed_roles: Option<Vec<String>>,
+	due_days: Option<i32>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -120,6 +121,7 @@ pub struct WorkflowStatusRule {
 	pub editable: bool,
 	pub description: Option<String>,
 	pub allowed_roles: Vec<String>,
+	pub due_days: i32,
 }
 
 #[derive(Debug, Clone)]
@@ -137,6 +139,7 @@ impl WorkflowRuntimeSettings {
 				editable: true,
 				description: Some("Default authoring state".to_string()),
 				allowed_roles: Vec::new(),
+				due_days: 0,
 			}],
 		}
 	}
@@ -294,6 +297,7 @@ pub async fn load_workflow_runtime_settings(
 						.map(|role| canonical_role(role.trim()))
 						.filter(|role| !role.is_empty())
 						.collect(),
+					due_days: status.due_days.unwrap_or(0),
 				})
 			}
 		})
@@ -305,6 +309,7 @@ pub async fn load_workflow_runtime_settings(
 			editable: true,
 			description: Some("Default authoring state".to_string()),
 			allowed_roles: Vec::new(),
+			due_days: 0,
 		});
 	}
 
@@ -477,7 +482,33 @@ pub async fn routing_profile_for_user(
 ) -> Result<RoutingProfile> {
 	let built_in_role_id = canonical_role(ctx.role());
 	let user: lib_core::model::user::User =
-		UserBmc::get(ctx, mm, ctx.user_id()).await?;
+		match UserBmc::get(ctx, mm, ctx.user_id()).await {
+			Ok(user) => user,
+			Err(original @ lib_core::model::Error::EntityUuidNotFound { .. }) => {
+				let organizations =
+					UserBmc::list_member_organizations(ctx, mm, ctx.user_id())
+						.await?;
+				let mut user = None;
+				for organization in organizations {
+					let candidate_ctx = Ctx::new(
+						ctx.user_id(),
+						organization.id,
+						ctx.role().to_string(),
+					)
+					.map_err(|err| Error::BadRequest {
+						message: err.to_string(),
+					})?;
+					if let Ok(candidate) =
+						UserBmc::get(&candidate_ctx, mm, ctx.user_id()).await
+					{
+						user = Some(candidate);
+						break;
+					}
+				}
+				user.ok_or(Error::Model(original))?
+			}
+			Err(err) => return Err(err.into()),
+		};
 	let sender_scope = parse_scope_values(user.access_sender_ids.as_deref());
 	let product_scope = parse_scope_values(user.access_product_ids.as_deref());
 	let study_scope = parse_scope_values(user.access_study_ids.as_deref());

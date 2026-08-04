@@ -116,6 +116,7 @@ pub fn patch_d_patient(raw_xml: &[u8], patch: &DPatientPatch) -> Result<String> 
 }
 
 /// e2b:D.1
+/// e2b:FDA.D.1
 fn write_d_1(xpath: &mut Context, value: Option<&str>) {
 	if let Some(value) = value {
 		set_text_first(xpath, "//hl7:primaryRole/hl7:player1/hl7:name", value);

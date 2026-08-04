@@ -78,6 +78,7 @@ pub(crate) struct LiteratureImport {
 	pub(crate) reference_text: String,
 	pub(crate) reference_text_null_flavor: Option<String>,
 	pub(crate) document_base64: Option<String>,
+	pub(crate) file_name: Option<String>,
 	pub(crate) media_type: Option<String>,
 	pub(crate) representation: Option<String>,
 	pub(crate) compression: Option<String>,
@@ -87,6 +88,7 @@ pub(crate) struct LiteratureImport {
 pub(crate) struct DocumentHeldImport {
 	pub(crate) title: Option<String>,
 	pub(crate) document_base64: Option<String>,
+	pub(crate) file_name: Option<String>,
 	pub(crate) media_type: Option<String>,
 	pub(crate) representation: Option<String>,
 	pub(crate) compression: Option<String>,
@@ -878,6 +880,7 @@ pub(crate) fn parse_primary_sources(xml: &[u8]) -> Result<Vec<PrimarySourceImpor
 #[cfg(test)]
 mod tests {
 	use super::{
+		parse_documents_held_by_sender, parse_literature_references,
 		parse_primary_sources, parse_receiver_information, parse_sender_information,
 		parse_study_information,
 	};
@@ -918,6 +921,21 @@ mod tests {
   </PORR_IN049016UV>
 </MCCI_IN200100UV01>"#
 		)
+	}
+
+	#[test]
+	fn attachment_import_keeps_reference_file_names() {
+		let xml = br#"<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3">
+  <reference><document><code code="1" codeSystem="2.16.840.1.113883.3.989.2.1.1.27"/><title>Held</title><text mediaType="application/pdf" representation="B64"><reference value="held.pdf"/>QUJD</text></document></reference>
+  <reference><document><code code="2" codeSystem="2.16.840.1.113883.3.989.2.1.1.27"/><bibliographicDesignationText>Paper</bibliographicDesignationText><text mediaType="text/plain" representation="B64"><reference value="paper.txt"/>REVG</text></document></reference>
+</MCCI_IN200100UV01>"#;
+
+		let documents = parse_documents_held_by_sender(xml).expect("documents");
+		let literature = parse_literature_references(xml).expect("literature");
+		assert_eq!(documents[0].file_name.as_deref(), Some("held.pdf"));
+		assert_eq!(documents[0].document_base64.as_deref(), Some("QUJD"));
+		assert_eq!(literature[0].file_name.as_deref(), Some("paper.txt"));
+		assert_eq!(literature[0].document_base64.as_deref(), Some("REVG"));
 	}
 
 	#[test]
@@ -1237,11 +1255,12 @@ pub(crate) fn parse_documents_held_by_sender(
 	let mut items = Vec::new();
 	for node in nodes {
 		let title = read_c_1_6_1_r_1(&mut xpath, &node)?;
-		let (document_base64, media_type, representation, compression) =
+		let (document_base64, file_name, media_type, representation, compression) =
 			read_c_1_6_1_r_2(&mut xpath, &node)?;
 		items.push(DocumentHeldImport {
 			title,
 			document_base64,
+			file_name,
 			media_type,
 			representation,
 			compression,
@@ -1273,6 +1292,7 @@ fn read_c_1_6_1_r_2(
 	xpath: &mut Context,
 	node: &libxml::tree::Node,
 ) -> Result<(
+	Option<String>,
 	Option<String>,
 	Option<String>,
 	Option<String>,
@@ -1311,6 +1331,7 @@ fn read_c_1_6_1_r_2(
 	)?;
 	Ok((
 		document,
+		first_attr(xpath, node, "hl7:text/hl7:reference", "value"),
 		first_attr(xpath, node, "hl7:text", "mediaType"),
 		representation,
 		first_attr(xpath, node, "hl7:text", "compression"),
@@ -1355,12 +1376,13 @@ pub(crate) fn parse_literature_references(
 	for (idx, node) in nodes.into_iter().enumerate() {
 		let (reference_text, reference_text_null_flavor) =
 			read_c_4_r_1(&mut xpath, &node, idx)?;
-		let (document_base64, media_type, representation, compression) =
+		let (document_base64, file_name, media_type, representation, compression) =
 			read_c_4_r_2(&mut xpath, &node)?;
 		items.push(LiteratureImport {
 			reference_text,
 			reference_text_null_flavor,
 			document_base64,
+			file_name,
 			media_type,
 			representation,
 			compression,
@@ -1414,6 +1436,7 @@ fn read_c_4_r_2(
 	xpath: &mut Context,
 	node: &libxml::tree::Node,
 ) -> Result<(
+	Option<String>,
 	Option<String>,
 	Option<String>,
 	Option<String>,

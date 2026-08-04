@@ -1,7 +1,8 @@
 use super::helpers::{
 	max_length, reject_future_date, reject_when, require, valid_code, valid_decimal,
 	valid_dotted_version, valid_identifier, valid_iso3166, valid_meddra_term,
-	valid_meddra_version, valid_mfds_product, valid_ucum, warn_when, DateValues,
+	valid_meddra_version, valid_mfds_product, valid_mfds_substance, valid_ucum,
+	warn_when, DateValues,
 };
 use crate::{
 	has_text, is_fda_ind_message_receiver, is_fda_postmarket_batch_receiver,
@@ -1612,15 +1613,46 @@ fn fda_g_k_12(
 		local_criteria_is_malfunction_only && !has_suspect_malfunction,
 	);
 }
-/// FDA.G.K.1.A.CONDITIONAL
-fn fda_g_k_1_a_conditional(invalid: bool, issues: &mut Vec<ValidationIssue>) {
+
+/// FDA.G.k.12.r.4-6
+fn fda_g_k_12_r_4_6(
+	drug_idx: usize,
+	device_idx: usize,
+	identity: [Option<&str>; 3],
+	required: bool,
+	issues: &mut Vec<ValidationIssue>,
+) {
+	required_when(
+		issues,
+		"FDA.G.k.12.r.4-6.AT_LEAST_ONE",
+		&format!("drugs.{drug_idx}.fdaDevices.{device_idx}.deviceBrandName"),
+		"A required device must have a non-null brand name, common name, or product code.",
+		required,
+		identity.into_iter().any(has_text),
+	);
+}
+
+/// FDA.R0072
+fn fda_g_k_1_a(
+	drug_idx: usize,
+	value: Option<&str>,
+	combination_product: bool,
+	malfunction: bool,
+	drug_characterization: &str,
+	required_when_allowed: bool,
+	issues: &mut Vec<ValidationIssue>,
+) {
+	let allowed_context =
+		combination_product && malfunction && drug_characterization.trim() == "4";
+	let value = value.map(str::trim).filter(|value| !value.is_empty());
 	reject_when(
 		issues,
-		"FDA.G.K.1.A.CONDITIONAL",
-		"drugs.0.deviceCharacteristics.0.valueCode",
+		"FDA.R0072",
+		&format!("drugs.{drug_idx}.fdaOtherCharacterization"),
 		SECTION,
-		"FDA [G.K.1.A]=1 is allowed only when [C.1.12]=true, [G.K.12.r.1]=true, and [G.k.1]=4 for the same product.",
-		invalid,
+		"FDA [G.k.1.a]=1 is required for AEMS, and only allowed for VAERS, when [C.1.12]=true, [G.k.12.r.1]=true, and [G.k.1]=4 for the same product.",
+		(required_when_allowed && allowed_context && value != Some("1"))
+			|| (!allowed_context && value == Some("1")),
 	);
 }
 
@@ -1728,11 +1760,11 @@ fn fda_g_k_10a(
 	let null_flavor = null_flavor.map(str::trim).filter(|value| !value.is_empty());
 	let invalid = !matches!(value, Some("1" | "2")) && null_flavor != Some("NA");
 	if invalid {
-		crate::push_business_issue(
+		crate::push_business_warning(
 			issues,
-			"FDA.G.k.10a.REQUIRED",
+			"FDA.W0006",
 			format!("drugs.{idx}.fdaAdditionalInfoCoded"),
-			"FDA.G.k.10a must be 1 or 2 for an IND-exempt BA/BE study.",
+			"FDA.G.k.10a should be 1, 2, or null flavor NA for an IND-exempt BA/BE study.",
 		);
 	}
 }
@@ -1896,13 +1928,18 @@ pub(crate) async fn collect_fda_issues(
 		.as_ref()
 		.and_then(|header| header.batch_receiver_identifier.as_deref());
 	let postmarket = is_fda_postmarket_batch_receiver(batch_receiver);
+	let vaers = message_receiver.is_some_and(|value| {
+		matches!(
+			value.trim().to_ascii_uppercase().as_str(),
+			"CBER_VAERS" | "CBER VAERS"
+		)
+	});
 	let device_rules_apply = !is_fda_premarket_message_receiver(message_receiver);
 
 	let mut has_malfunction_suspect = false;
 	let mut has_malfunction = false;
-	let mut has_invalid_gk1a = false;
 	let mut first_product_malfunction = false;
-	let mut combination_device_identity_present = false;
+	let mut has_device = false;
 	let pre_anda_present = fda_ctx.is_some_and(|ctx| {
 		ctx.studies
 			.iter()
@@ -1926,20 +1963,20 @@ pub(crate) async fn collect_fda_issues(
 			if !device_rules_apply {
 				continue;
 			}
+			has_device = true;
 			let path = format!("drugs.{drug_idx}.fdaDevices.{device_idx}");
 			let malfunction = device.malfunction == Some(true);
-			let has_identity = has_text(device.device_brand_name.as_deref())
-				|| has_text(device.common_device_name.as_deref())
-				|| has_text(device.device_product_code.as_deref());
-			combination_device_identity_present |= has_identity;
-			if ((postmarket && combination_true) || malfunction) && !has_identity {
-				crate::push_business_issue(
-					issues,
-					"FDA.G.k.12.r.4-6.AT_LEAST_ONE",
-					format!("{path}.deviceBrandName"),
-					"A malfunctioning device requires a non-null brand name, common name, or product code.",
-				);
-			}
+			fda_g_k_12_r_4_6(
+				drug_idx,
+				device_idx,
+				[
+					device.device_brand_name.as_deref(),
+					device.common_device_name.as_deref(),
+					device.device_product_code.as_deref(),
+				],
+				(postmarket && combination_true) || malfunction,
+				issues,
+			);
 			if !malfunction {
 				continue;
 			}
@@ -1983,28 +2020,23 @@ pub(crate) async fn collect_fda_issues(
 			pre_anda_present,
 			issues,
 		);
-		let has_gk1a_one = drug.fda_other_characterization.as_deref() == Some("1");
-		if has_gk1a_one
-			&& !(combination_true
-				&& malfunction_this_drug
-				&& drug.drug_characterization == "4")
-		{
-			has_invalid_gk1a = true;
-		}
-	}
-	if postmarket && combination_true && !combination_device_identity_present {
-		crate::push_business_issue(
+		fda_g_k_1_a(
+			drug_idx,
+			drug.fda_other_characterization.as_deref(),
+			combination_true,
+			malfunction_this_drug,
+			&drug.drug_characterization,
+			!vaers,
 			issues,
-			"FDA.G.k.12.r.4-6.AT_LEAST_ONE",
-			"drugs.0.fdaDevices.0.deviceBrandName",
-			"A combination product requires device brand name, common name, or product code.",
 		);
+	}
+	if postmarket && combination_true && !has_device {
+		fda_g_k_12_r_4_6(0, 0, [None; 3], true, issues);
 	}
 	fda_d_1_malfunction(validation_ctx, combination_true, has_malfunction, issues);
 	fda_g_k_12(local_criteria == Some("5"), has_malfunction_suspect, issues);
 	fda_g_k_1_route(validation_ctx, first_product_malfunction, issues);
 	fda_g_k_9(validation_ctx, ind_number_present, issues);
-	fda_g_k_1_a_conditional(has_invalid_gk1a, issues);
 	Ok(())
 }
 
@@ -2015,6 +2047,7 @@ pub(crate) async fn collect_fda_issues(
 fn mfds_g_k_2_1_kr_1b(
 	idx: usize,
 	value: Option<&str>,
+	version: Option<&str>,
 	receiver: Option<&str>,
 	product_code_required: bool,
 	domestic_product_code_required: bool,
@@ -2052,11 +2085,12 @@ fn mfds_g_k_2_1_kr_1b(
 		issues,
 		"MFDS.G.k.2.1.KR.1b.VOCABULARY",
 		&path,
-		valid_mfds_product(vocabulary_ctx, receiver, value),
+		valid_mfds_product(vocabulary_ctx, receiver, version, value),
 	);
 }
 
 /// MFDS.G.k.2.1.1b.REQUIRED
+/// MFDS.G.k.2.1.1a.REQUIRED
 /// MFDS.G.k.2.1.2a.REQUIRED
 /// MFDS.G.k.2.1.2b.REQUIRED
 fn mfds_g_k_2_1_companions(
@@ -2065,6 +2099,12 @@ fn mfds_g_k_2_1_companions(
 	issues: &mut Vec<ValidationIssue>,
 ) {
 	for (code, field, missing) in [
+		(
+			"MFDS.G.k.2.1.1a.REQUIRED",
+			"mpidVersion",
+			has_text(drug.mpid.as_deref())
+				&& !has_text(drug.mpid_version.as_deref()),
+		),
 		(
 			"MFDS.G.k.2.1.1b.REQUIRED",
 			"mpid",
@@ -2136,8 +2176,11 @@ fn mfds_g_k_2_3_r_1_kr_1b(
 	drug_idx: usize,
 	idx: usize,
 	value: Option<&str>,
+	version: Option<&str>,
+	receiver: Option<&str>,
 	domestic_ingredient_code_required: bool,
 	substance_code_required: bool,
+	vocabulary_ctx: &crate::context::VocabularyContext,
 	issues: &mut Vec<ValidationIssue>,
 ) {
 	let path = format!("drugs.{drug_idx}.activeSubstances.{idx}.mfdsId");
@@ -2156,6 +2199,12 @@ fn mfds_g_k_2_3_r_1_kr_1b(
 		SECTION,
 		"MFDS requires substance code [G.k.2.3.r.1.KR.1b] for KR/FR when product code is not provided.",
 		substance_code_required && !has_text(value),
+	);
+	vocabulary(
+		issues,
+		"MFDS.G.k.2.3.r.1.KR.1b.VOCABULARY",
+		&path,
+		valid_mfds_substance(vocabulary_ctx, receiver, version, value),
 	);
 }
 
@@ -2347,6 +2396,7 @@ pub(crate) fn collect_mfds_issues(
 		mfds_g_k_2_1_kr_1b(
 			idx,
 			drug.mfds_mpid.as_deref(),
+			drug.mfds_mpid_version.as_deref(),
 			vocabulary_receiver,
 			receiver_is_kr || receiver_is_fr,
 			is_domestic_kr,
@@ -2388,8 +2438,11 @@ pub(crate) fn collect_mfds_issues(
 			drug_index,
 			substance_index,
 			substance.mfds_id.as_deref(),
+			substance.mfds_version.as_deref(),
+			vocabulary_receiver,
 			domestic_drug_ids.contains(&substance.drug_id),
 			(receiver_is_kr || receiver_is_fr) && !drug_has_mfds_mpid,
+			&validation_ctx.vocabulary,
 			issues,
 		);
 		mfds_g_k_2_3_r_1_kr_1a(
@@ -2500,6 +2553,7 @@ mod field_rule_tests {
 			mfds_g_k_2_1_kr_1b(
 				index,
 				mpid,
+				mpid_version,
 				None,
 				product_required,
 				domestic_required,
@@ -2545,8 +2599,11 @@ mod field_rule_tests {
 				drug_index,
 				substance_index,
 				id,
+				version,
+				None,
 				domestic_required,
 				code_required,
+				&crate::context::VocabularyContext::default(),
 				&mut issues,
 			);
 			mfds_g_k_2_3_r_1_kr_1a(
@@ -3411,16 +3468,24 @@ mod golden_g_required_tests {
 	#[test]
 	fn mfds_identifier_versions_and_ids_are_paired() {
 		let mut value = drug();
-		value.mpid_version = Some("1".to_string());
+		value.mpid = Some("MPID".to_string());
 		value.phpid = Some("PHPID".to_string());
 		let mut issues = Vec::new();
 		mfds_g_k_2_1_companions(0, &value, &mut issues);
 		assert!(issues
 			.iter()
-			.any(|issue| issue.code == "MFDS.G.k.2.1.1b.REQUIRED"));
+			.any(|issue| issue.code == "MFDS.G.k.2.1.1a.REQUIRED"));
 		assert!(issues
 			.iter()
 			.any(|issue| issue.code == "MFDS.G.k.2.1.2a.REQUIRED"));
+
+		value.mpid = None;
+		value.mpid_version = Some("1".to_string());
+		issues.clear();
+		mfds_g_k_2_1_companions(0, &value, &mut issues);
+		assert!(issues
+			.iter()
+			.any(|issue| issue.code == "MFDS.G.k.2.1.1b.REQUIRED"));
 	}
 
 	#[test]
@@ -3437,6 +3502,41 @@ mod golden_g_required_tests {
 		assert_eq!(issue.path, "drugs.0.fdaDevices.0.malfunction");
 		assert_eq!(issue.section, "drugs");
 		assert!(issue.blocking);
+	}
+
+	#[test]
+	fn fda_device_identity_is_checked_per_repeated_device() {
+		let mut issues = Vec::new();
+		fda_g_k_12_r_4_6(0, 0, [Some("brand"), None, None], true, &mut issues);
+		fda_g_k_12_r_4_6(0, 1, [None; 3], true, &mut issues);
+		assert_eq!(issues.len(), 1);
+		assert_eq!(issues[0].path, "drugs.0.fdaDevices.1.deviceBrandName");
+	}
+
+	#[test]
+	fn fda_g_k_1_a_is_required_for_aems_but_optional_for_vaers() {
+		let mut issues = Vec::new();
+		fda_g_k_1_a(0, None, true, true, "4", true, &mut issues);
+		assert_eq!(issues[0].code, "FDA.R0072");
+
+		issues.clear();
+		fda_g_k_1_a(0, None, true, true, "4", false, &mut issues);
+		assert!(issues.is_empty());
+
+		fda_g_k_1_a(0, Some("1"), false, true, "4", false, &mut issues);
+		assert_eq!(issues[0].code, "FDA.R0072");
+	}
+
+	#[test]
+	fn fda_g_k_10a_uses_the_official_warning_and_accepts_na() {
+		let mut issues = Vec::new();
+		fda_g_k_10a(0, None, None, true, &mut issues);
+		assert_eq!(issues[0].code, "FDA.W0006");
+		assert!(!issues[0].blocking);
+
+		issues.clear();
+		fda_g_k_10a(0, None, Some("NA"), true, &mut issues);
+		assert!(issues.is_empty());
 	}
 
 	#[test]

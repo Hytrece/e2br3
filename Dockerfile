@@ -18,6 +18,7 @@ WORKDIR /app
 COPY Cargo.toml Cargo.lock ./
 COPY crates/ crates/
 COPY registry/ registry/
+COPY assets/ assets/
 
 # Build the application and operational helper binaries.
 RUN cargo build --release --jobs 1 --package web-server --package terminology-loader

@@ -47,6 +47,27 @@ impl RegulatoryAuthority {
 	}
 }
 
+pub fn fda_attachment_media_type(file_name: &str) -> Option<&'static str> {
+	match file_name.rsplit_once('.')?.1.to_ascii_lowercase().as_str() {
+		"pdf" => Some("application/pdf"),
+		"jpeg" | "jpg" => Some("image/jpeg"),
+		"bmp" => Some("image/bmp"),
+		"png" => Some("image/png"),
+		"gif" => Some("image/gif"),
+		"tiff" => Some("image/tiff"),
+		"tif" => Some("image/tif"),
+		"txt" => Some("text/plain"),
+		"xls" => Some("application/vnd.ms-excel"),
+		"xlsx" => Some("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
+		"doc" => Some("application/msword"),
+		"docx" => Some(
+			"application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+		),
+		"wpd" => Some("application/vnd.wordperfect"),
+		_ => None,
+	}
+}
+
 pub const FDA_BATCH_RECEIVER_POSTMARKET: &str = "ZZFDA";
 pub const FDA_BATCH_RECEIVER_PREMARKET: &str = "ZZFDA_PREMKT";
 pub const FDA_MSG_RECEIVER_CDER: &str = "CDER";

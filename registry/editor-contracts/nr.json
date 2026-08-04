@@ -90,7 +90,7 @@
       "roundTripValue": "27.1",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.H.3.r.1a.ALLOWED.VALUE",
+        "ruleCode": "ICH.H.3.r.1a.LENGTH.MAX",
         "invalidValue": "not-a-number"
       },
       "payloadPath": "[].diagnosisMeddraVersion",
@@ -117,7 +117,7 @@
       "roundTripValue": "10019211",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.H.3.r.1b.ALLOWED.VALUE",
+        "ruleCode": "ICH.H.3.r.1b.LENGTH.MAX",
         "invalidValue": "not-a-number"
       },
       "payloadPath": "[].diagnosisMeddraCode",

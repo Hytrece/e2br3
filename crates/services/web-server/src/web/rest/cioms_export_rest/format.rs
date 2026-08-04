@@ -15,8 +15,15 @@ pub(super) fn escape_pdf_text(value: &str) -> String {
 
 pub(super) fn encode_pdf_unicode_text(value: &str) -> String {
 	value
-		.encode_utf16()
-		.map(|unit| format!("{unit:04X}"))
+		.chars()
+		.map(|ch| {
+			let codepoint = ch as u32;
+			if codepoint <= 0xFFFF {
+				format!("{codepoint:04X}")
+			} else {
+				format!("{codepoint:08X}")
+			}
+		})
 		.collect()
 }
 
@@ -78,6 +85,15 @@ pub(super) fn yes_no_na(value: Option<&str>) -> &'static str {
 	}
 }
 
+pub(super) fn yes_no_unknown(value: Option<&str>) -> &'static str {
+	match value.unwrap_or_default() {
+		"1" => "Yes",
+		"2" => "No",
+		"3" => "Unknown",
+		_ => "",
+	}
+}
+
 pub(super) fn report_type_text(value: Option<&str>) -> &'static str {
 	match value.unwrap_or_default() {
 		"1" => "Spontaneous report",
@@ -112,6 +128,16 @@ pub(super) fn drug_action_text(value: Option<&str>) -> String {
 		value => value,
 	}
 	.to_string()
+}
+
+pub(super) fn rechallenge_action_text(value: Option<&str>) -> &'static str {
+	match value.unwrap_or_default() {
+		"1" => "Drug readministered",
+		"2" => "Drug not readministered",
+		"3" => "Unknown",
+		"4" => "Not applicable",
+		_ => "",
+	}
 }
 
 pub(super) fn join_present(values: &[Option<String>], separator: &str) -> String {
@@ -232,7 +258,59 @@ pub(super) fn concomitant_drugs_text(data: &CiomsCaseData) -> String {
 	data.drugs
 		.iter()
 		.filter(|drug| drug.drug_characterization != "1")
-		.map(|drug| drug.medicinal_product.as_str())
+		.map(|drug| {
+			let dosage =
+				data.dosages
+					.iter()
+					.filter(|dosage| dosage.drug_id == drug.id)
+					.map(|dosage| {
+						join_present(
+							&[
+								dosage.dosage_text.clone(),
+								dosage.dose_value.map(|value| {
+									format!("Dose: {}", decimal_text(Some(value)))
+								}),
+								dosage.dose_unit.clone(),
+								dosage
+									.route_of_administration
+									.clone()
+									.map(|value| format!("Route: {value}")),
+								(!dosage_therapy_dates(Some(dosage)).is_empty())
+									.then(|| {
+										format!(
+											"Dates: {}",
+											dosage_therapy_dates(Some(dosage))
+										)
+									}),
+							],
+							" | ",
+						)
+					})
+					.filter(|value| !value.is_empty())
+					.collect::<Vec<_>>()
+					.join("; ");
+			let indications = data
+				.indications
+				.iter()
+				.filter(|indication| indication.drug_id == drug.id)
+				.filter_map(|indication| indication.indication_text.clone())
+				.filter(|value| !value.trim().is_empty())
+				.collect::<Vec<_>>()
+				.join(", ");
+			join_present(
+				&[
+					Some(drug.medicinal_product.clone()),
+					(!dosage.is_empty())
+						.then(|| format!("Dose/route/dates: {dosage}")),
+					(!indications.is_empty())
+						.then(|| format!("Indication: {indications}")),
+					drug.action_taken.as_deref().map(|value| {
+						format!("Action: {}", drug_action_text(Some(value)))
+					}),
+				],
+				" | ",
+			)
+		})
 		.collect::<Vec<_>>()
 		.join("; ")
 }

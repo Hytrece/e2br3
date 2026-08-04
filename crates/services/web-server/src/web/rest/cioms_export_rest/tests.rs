@@ -298,6 +298,9 @@ fn cioms_joins_all_suspect_dosage_texts_in_sequence_order() {
 		senders: Vec::new(),
 		narrative: None,
 		field_notations: Vec::new(),
+		causality_rows: Vec::new(),
+		medical_history_episodes: Vec::new(),
+		past_drug_history: Vec::new(),
 	};
 
 	let form = CiomsFormData::from_case_data(&data, &default_settings());
@@ -324,6 +327,9 @@ fn cioms_form_maps_reaction_outcome_drug_action_and_test_result() {
 		senders: Vec::new(),
 		narrative: None,
 		field_notations: Vec::new(),
+		causality_rows: Vec::new(),
+		medical_history_episodes: Vec::new(),
+		past_drug_history: Vec::new(),
 	};
 
 	let form = CiomsFormData::from_case_data(&data, &default_settings());
@@ -414,6 +420,9 @@ fn cioms_form_data_maps_missing_optional_sections_to_blank_fields() {
 		senders: Vec::new(),
 		narrative: None,
 		field_notations: Vec::new(),
+		causality_rows: Vec::new(),
+		medical_history_episodes: Vec::new(),
+		past_drug_history: Vec::new(),
 	};
 
 	let form = CiomsFormData::from_case_data(&data, &default_settings());
@@ -488,6 +497,9 @@ fn cioms_form_data_maps_primary_source_reporter_name() {
 		senders: Vec::new(),
 		narrative: None,
 		field_notations: Vec::new(),
+		causality_rows: Vec::new(),
+		medical_history_episodes: Vec::new(),
+		past_drug_history: Vec::new(),
 	};
 
 	let form = CiomsFormData::from_case_data(&data, &default_settings());
@@ -537,6 +549,9 @@ fn cioms_pdf_omits_empty_reporter_footer() {
 		senders: Vec::new(),
 		narrative: None,
 		field_notations: Vec::new(),
+		causality_rows: Vec::new(),
+		medical_history_episodes: Vec::new(),
+		past_drug_history: Vec::new(),
 	};
 
 	let pdf = build_cioms_pdf(&data, &default_settings());
@@ -574,6 +589,9 @@ fn cioms_pdf_renders_narrative_notation_when_requested() {
 			updated_by: None,
 		}),
 		field_notations: Vec::new(),
+		causality_rows: Vec::new(),
+		medical_history_episodes: Vec::new(),
+		past_drug_history: Vec::new(),
 	};
 
 	let without_notation =
@@ -634,6 +652,9 @@ fn cioms_pdf_adds_continuation_page_for_long_reaction_text() {
 			updated_by: None,
 		}),
 		field_notations: Vec::new(),
+		causality_rows: Vec::new(),
+		medical_history_episodes: Vec::new(),
+		past_drug_history: Vec::new(),
 	};
 
 	let pdf = build_cioms_pdf(&data, &default_settings());
@@ -760,6 +781,9 @@ fn cioms_form_data_maps_suspect_drug_dosage_and_indication_fields() {
 		senders: Vec::new(),
 		narrative: None,
 		field_notations: Vec::new(),
+		causality_rows: Vec::new(),
+		medical_history_episodes: Vec::new(),
+		past_drug_history: Vec::new(),
 	};
 
 	let form = CiomsFormData::from_case_data(&data, &default_settings());
@@ -922,6 +946,9 @@ fn cioms_pdf_uses_latest_route_and_indication_when_latest_first() {
 		senders: Vec::new(),
 		narrative: None,
 		field_notations: Vec::new(),
+		causality_rows: Vec::new(),
+		medical_history_episodes: Vec::new(),
+		past_drug_history: Vec::new(),
 	};
 
 	let pdf = build_cioms_pdf(&data, &latest_first_settings());
@@ -961,6 +988,9 @@ fn cioms_portrait_pdf_uses_same_official_form_as_landscape() {
 		senders: Vec::new(),
 		narrative: None,
 		field_notations: Vec::new(),
+		causality_rows: Vec::new(),
+		medical_history_episodes: Vec::new(),
+		past_drug_history: Vec::new(),
 	};
 
 	let pdf = build_cioms_pdf(&data, &portrait_settings());
@@ -1013,6 +1043,9 @@ fn cioms_portrait_pdf_renders_suspect_drug_indication() {
 		senders: Vec::new(),
 		narrative: None,
 		field_notations: Vec::new(),
+		causality_rows: Vec::new(),
+		medical_history_episodes: Vec::new(),
+		past_drug_history: Vec::new(),
 	};
 
 	let pdf = build_cioms_pdf(&data, &portrait_settings());
@@ -1037,6 +1070,9 @@ fn cioms_portrait_pdf_renders_suspect_drug_route() {
 		senders: Vec::new(),
 		narrative: None,
 		field_notations: Vec::new(),
+		causality_rows: Vec::new(),
+		medical_history_episodes: Vec::new(),
+		past_drug_history: Vec::new(),
 	};
 
 	let pdf = build_cioms_pdf(&data, &portrait_settings());
@@ -1066,6 +1102,9 @@ fn cioms_portrait_pdf_renders_concomitant_drugs() {
 		senders: Vec::new(),
 		narrative: None,
 		field_notations: Vec::new(),
+		causality_rows: Vec::new(),
+		medical_history_episodes: Vec::new(),
+		past_drug_history: Vec::new(),
 	};
 
 	let pdf = build_cioms_pdf(&data, &portrait_settings());
@@ -1089,6 +1128,9 @@ fn cioms_portrait_pdf_renders_report_dates_and_type() {
 		senders: Vec::new(),
 		narrative: None,
 		field_notations: Vec::new(),
+		causality_rows: Vec::new(),
+		medical_history_episodes: Vec::new(),
+		past_drug_history: Vec::new(),
 	};
 
 	let pdf = build_cioms_pdf(&data, &portrait_settings());
@@ -1118,6 +1160,9 @@ fn cioms_portrait_pdf_renders_reporter_name() {
 		senders: Vec::new(),
 		narrative: None,
 		field_notations: Vec::new(),
+		causality_rows: Vec::new(),
+		medical_history_episodes: Vec::new(),
+		past_drug_history: Vec::new(),
 	};
 
 	let pdf = build_cioms_pdf(&data, &portrait_settings());
@@ -1141,6 +1186,9 @@ fn cioms_portrait_pdf_renders_data_ordering_setting() {
 		senders: Vec::new(),
 		narrative: None,
 		field_notations: Vec::new(),
+		causality_rows: Vec::new(),
+		medical_history_episodes: Vec::new(),
+		past_drug_history: Vec::new(),
 	};
 
 	let pdf = build_cioms_pdf(&data, &portrait_latest_first_settings());
@@ -1164,6 +1212,9 @@ fn cioms_pdf_renders_basic_data_ordering_setting() {
 		senders: Vec::new(),
 		narrative: None,
 		field_notations: Vec::new(),
+		causality_rows: Vec::new(),
+		medical_history_episodes: Vec::new(),
+		past_drug_history: Vec::new(),
 	};
 
 	let pdf = build_cioms_pdf(&data, &basic_settings());
@@ -1224,6 +1275,9 @@ fn cioms_pdf_basic_ordering_renders_repeated_items_as_table() {
 		senders: Vec::new(),
 		narrative: None,
 		field_notations: Vec::new(),
+		causality_rows: Vec::new(),
+		medical_history_episodes: Vec::new(),
+		past_drug_history: Vec::new(),
 	};
 
 	let pdf = build_cioms_pdf(&data, &basic_settings());
@@ -1253,6 +1307,9 @@ fn cioms_portrait_pdf_renders_missing_information_legend() {
 		senders: Vec::new(),
 		narrative: None,
 		field_notations: Vec::new(),
+		causality_rows: Vec::new(),
+		medical_history_episodes: Vec::new(),
+		past_drug_history: Vec::new(),
 	};
 
 	let pdf = build_cioms_pdf(&data, &portrait_settings());
@@ -1277,6 +1334,9 @@ fn cioms_portrait_pdf_renders_reaction_country() {
 		senders: Vec::new(),
 		narrative: None,
 		field_notations: Vec::new(),
+		causality_rows: Vec::new(),
+		medical_history_episodes: Vec::new(),
+		past_drug_history: Vec::new(),
 	};
 
 	let pdf = build_cioms_pdf(&data, &portrait_settings());

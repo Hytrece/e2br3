@@ -12,7 +12,7 @@ use tower::ServiceExt;
 use uuid::Uuid;
 
 #[tokio::test]
-async fn test_admin_settings_appendices_are_supported_and_never_empty() -> Result<()>
+async fn test_admin_settings_appendices_are_supported_and_reject_empty() -> Result<()>
 {
 	let mm = init_test_mm().await?;
 	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
@@ -47,8 +47,7 @@ async fn test_admin_settings_appendices_are_supported_and_never_empty() -> Resul
 		})),
 	)
 	.await?;
-	assert_eq!(status, StatusCode::OK, "{value:?}");
-	assert_eq!(value["appendices"], json!(["ICH"]));
+	assert_eq!(status, StatusCode::BAD_REQUEST, "{value:?}");
 
 	Ok(())
 }

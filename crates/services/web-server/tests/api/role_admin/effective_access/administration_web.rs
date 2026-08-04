@@ -90,7 +90,7 @@ async fn test_admin_matrix_privileges_grant_user_operations_but_not_role_identit
 			("users", "read", false),
 			("users", "create", false),
 			("users", "update", false),
-			("users", "delete", false),
+			// User deletion is not a registered permission.
 			("roles", "read", false),
 			("roles", "create", false),
 			("roles", "update", false),
@@ -132,7 +132,7 @@ async fn test_admin_matrix_privileges_grant_user_operations_but_not_role_identit
 			("users", "read", true),
 			("users", "create", false),
 			("users", "update", false),
-			("users", "delete", false),
+			// User deletion is not a registered permission.
 			("roles", "read", false),
 			("roles", "create", false),
 			("roles", "update", false),
@@ -187,7 +187,7 @@ async fn test_admin_matrix_privileges_grant_user_operations_but_not_role_identit
 			("admin", "update", false),
 			("users", "create", false),
 			("users", "update", false),
-			("users", "delete", false),
+			// User deletion is not a registered permission.
 			("roles", "read", false),
 			("roles", "create", false),
 			("roles", "update", false),
@@ -238,7 +238,7 @@ async fn test_admin_matrix_privileges_grant_user_operations_but_not_role_identit
 			("users", "read", true),
 			("users", "create", true),
 			("users", "update", true),
-			("users", "delete", true),
+			// User deletion is not a registered permission.
 			("roles", "read", false),
 			("roles", "create", false),
 			("roles", "update", false),
@@ -449,7 +449,7 @@ async fn test_pdf_admin_read_and_edit_grant_registered_admin_actions() -> Result
 			("users", "read", true),
 			("users", "create", true),
 			("users", "update", true),
-			("users", "delete", true),
+			// User deletion is not a registered permission.
 			("roles", "read", false),
 			("roles", "create", false),
 			("roles", "update", false),

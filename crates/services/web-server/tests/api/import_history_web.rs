@@ -4,7 +4,7 @@ use crate::common::{
 use axum::body::{to_bytes, Body};
 use axum::http::{Request, StatusCode};
 use lib_auth::token::generate_web_token;
-use serde_json::Value;
+use serde_json::{json, Value};
 use serial_test::serial;
 use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
@@ -28,10 +28,11 @@ async fn import_xml_string(
 	cookie: &str,
 	filename: &str,
 	xml: &str,
+	product_presave_id: &str,
 ) -> Result<()> {
 	let boundary = "X-BOUNDARY-IMPORT-HISTORY";
 	let body = format!(
-		"--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"{filename}\"\r\nContent-Type: application/xml\r\n\r\n{xml}\r\n--{boundary}--\r\n"
+		"--{boundary}\r\nContent-Disposition: form-data; name=\"productPresaveId\"\r\n\r\n{product_presave_id}\r\n--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"{filename}\"\r\nContent-Type: application/xml\r\n\r\n{xml}\r\n--{boundary}--\r\n"
 	);
 	let req = Request::builder()
 		.method("POST")
@@ -83,9 +84,48 @@ async fn test_import_history_uploaded_at_is_rfc3339() -> Result<()> {
 	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
 	let cookie = cookie_header(&token.to_string());
 	let app = web_server::app(mm);
+	let req = Request::builder()
+		.method("POST")
+		.uri("/api/presaves/senders")
+		.header("cookie", &cookie)
+		.header("content-type", "application/json")
+		.body(Body::from(
+			json!({"data": {"rows": {"sender": {
+				"senderType": "2",
+				"organizationName": "Import History Sender",
+				"email": "import-history@example.test"
+			}, "gateways": [], "responsiblePersons": []}}})
+			.to_string(),
+		))?;
+	let res = app.clone().oneshot(req).await?;
+	let body = to_bytes(res.into_body(), usize::MAX).await?;
+	let sender: Value = serde_json::from_slice(&body)?;
+	let sender_id = sender["data"]["rows"]["sender"]["id"]
+		.as_str()
+		.ok_or_else(|| format!("missing sender id: {sender}"))?;
+	let req = Request::builder()
+		.method("POST")
+		.uri("/api/presaves/products")
+		.header("cookie", &cookie)
+		.header("content-type", "application/json")
+		.body(Body::from(
+			json!({"data": {"rows": {"product": {
+				"senderPresaveId": sender_id,
+				"productId": "IMPORT-HISTORY-PRODUCT",
+				"medicinalProduct": "Import History Product"
+			}, "activeSubstances": []}}})
+			.to_string(),
+		))?;
+	let res = app.clone().oneshot(req).await?;
+	let body = to_bytes(res.into_body(), usize::MAX).await?;
+	let product: Value = serde_json::from_slice(&body)?;
+	let product_id = product["data"]["rows"]["product"]["id"]
+		.as_str()
+		.ok_or_else(|| format!("missing product id: {product}"))?;
 
 	let xml = fixture_xml("FAERS2022Scenario1.xml")?;
-	import_xml_string(&app, &cookie, "FAERS2022Scenario1.xml", &xml).await?;
+	import_xml_string(&app, &cookie, "FAERS2022Scenario1.xml", &xml, product_id)
+		.await?;
 
 	let (status, body) = get_json(&app, &cookie, "/api/import/xml/history").await?;
 	assert_eq!(status, StatusCode::OK, "{body:?}");

@@ -1,4 +1,4 @@
-use crate::{Error, Result};
+use crate::{case_write_block_reason_for_case, Error, Result};
 use lib_core::authorization::{
 	authorize_contextual_mutation, authorize_contextual_read, authorize_subject,
 	existing_notice_context, policy_registry, AuditLogResource,
@@ -15,6 +15,7 @@ use lib_core::model::authorization::{
 	AuthorizationFactLoadError, AuthorizationFactLoader, CaseMutationKind,
 	PresaveAuthorizationKind,
 };
+use lib_core::model::case::CaseBmc;
 use lib_core::model::store::set_full_context_from_ctx_dbx;
 use lib_core::model::ModelManager;
 use std::future::Future;
@@ -1378,6 +1379,14 @@ where
 			.map_err(denied)?;
 		let authorized_ctx =
 			rls_ctx_for_authorized_mutation(request_ctx, snapshot, &permit)?;
+		let case = CaseBmc::get(&authorized_ctx, mm, case_id).await?;
+		if let Some(reason) =
+			case_write_block_reason_for_case(&authorized_ctx, mm, &case).await?
+		{
+			return Err(Error::BadRequest {
+				message: reason.message,
+			});
+		}
 		operation(&authorized_ctx, mm).await
 	}
 	.await;

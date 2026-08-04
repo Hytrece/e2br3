@@ -65,7 +65,7 @@ fn import_e_section_all_fields_from_scenario6() {
 				.expect("valid uuid"),
 		)
 	);
-	assert_eq!(second.primary_source_reaction, "");
+	assert_eq!(second.primary_source_reaction, "Reaction 7");
 	assert_eq!(second.primary_source_reaction_translation, None);
 	assert_eq!(second.reaction_language, None);
 	assert_eq!(second.reaction_meddra_version.as_deref(), Some("12.0"));

@@ -78,7 +78,7 @@ async fn create_safety_report(
 	let body = json!({
 		"data": {
 			"case_id": case_id,
-			"safety_report_id": format!("SR-C1-{}", Uuid::new_v4()),
+			"safety_report_id": format!("US-SENDER-{}", case_id.simple()),
 			"transmission_date": [2024, 1],
 			"report_type": "1",
 			"date_first_received_from_source": [2024, 1],
@@ -163,7 +163,7 @@ async fn create_primary_source(
 			"case_id": case_id,
 				"sequence_number": 1,
 				"qualification": "1",
-				"country_code_null_flavor": "UNK",
+				"country_code": "KR",
 				"email": "reporter@example.com",
 				"primary_source_regulatory": "1"
 		}
@@ -194,7 +194,7 @@ async fn create_primary_source(
 	let update = json!({
 		"data": {
 				"qualification": "1",
-				"country_code_null_flavor": "UNK",
+				"country_code": "KR",
 				"email": "reporter@example.com",
 				"primary_source_regulatory": "1"
 		}
@@ -361,7 +361,13 @@ async fn create_reaction(
 				"reaction_meddra_version": "26.0",
 				"reaction_meddra_code": "10000001",
 				"outcome": "1",
-				"reaction_language": "eng"
+				"reaction_language": "eng",
+				"criteria_death_null_flavor": "NI",
+				"criteria_life_threatening_null_flavor": "NI",
+				"criteria_hospitalization_null_flavor": "NI",
+				"criteria_disabling_null_flavor": "NI",
+				"criteria_congenital_anomaly_null_flavor": "NI",
+				"criteria_other_medically_important_null_flavor": "NI"
 		}
 	});
 	let req = Request::builder()
@@ -390,7 +396,8 @@ async fn create_drug(app: &axum::Router, cookie: &str, case_id: Uuid) -> Result<
 			"case_id": case_id,
 			"sequence_number": 1,
 			"drug_characterization": "1",
-			"medicinal_product": "Drug A"
+			"medicinal_product": "Drug A",
+			"mpid": "MPID-TEST"
 		}
 	});
 	let req = Request::builder()
@@ -541,10 +548,10 @@ async fn create_message_header(
 	let body = json!({
 			"data": {
 				"case_id": case_id,
-				"message_number": format!("MSG-{case_id}"),
+			"message_number": format!("US-SENDER-{}", case_id.simple()),
 			"message_sender_identifier": "SENDER01",
 			"message_receiver_identifier": "RECEIVER01",
-			"message_date": "20240201010101"
+			"message_date": "20240101000000"
 		}
 	});
 	let req = Request::builder()
@@ -569,7 +576,7 @@ async fn create_message_header(
 			"batch_number": format!("BATCH-{case_id}"),
 			"batch_sender_identifier": "BATCH-SENDER",
 			"batch_receiver_identifier": "BATCH-RECEIVER",
-			"batch_transmission_date": [2024, 32, 1, 1, 1, 0, 0, 0, 0]
+			"batch_transmission_date": [2024, 1, 1, 0, 0, 0, 0, 0, 0]
 		}
 	});
 	let req = Request::builder()
@@ -1004,6 +1011,8 @@ async fn test_mfds_sender_type_3_requires_kr1() -> Result<()> {
 
 	let case_id = create_case(&app, &cookie, seed.org_id).await?;
 	create_safety_report(&app, &cookie, case_id).await?;
+	create_message_header(&app, &cookie, case_id).await?;
+	update_message_header_message_receiver(&app, &cookie, case_id, "KR").await?;
 	create_sender(&app, &cookie, case_id, "3").await?;
 
 	let (status, body) = get_validation(
@@ -1798,9 +1807,17 @@ async fn test_validation_infers_mfds_profile_from_batch_receiver() -> Result<()>
 	let app = web_server::app(mm);
 
 	let case_id = create_case(&app, &cookie, seed.org_id).await?;
+	let (status, body) = update_admin_settings(
+		&app,
+		&cookie,
+		json!({"data": {"appendices": ["ICH", "MFDS"]}}),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK, "{body:?}");
 	create_safety_report(&app, &cookie, case_id).await?;
 	create_message_header(&app, &cookie, case_id).await?;
 	update_message_header_receiver(&app, &cookie, case_id, "ZZMFDS").await?;
+	update_message_header_message_receiver(&app, &cookie, case_id, "KR").await?;
 	create_sender(&app, &cookie, case_id, "3").await?;
 
 	let (status, body) =
@@ -2581,11 +2598,8 @@ async fn test_qced_case_blocks_content_updates_even_when_workflow_saved_is_edita
 		}),
 	)
 	.await?;
-	assert_eq!(status, StatusCode::BAD_REQUEST, "{body:?}");
-	assert!(
-		body.to_string().contains("QCed cases are read-only"),
-		"{body:?}"
-	);
+	assert_eq!(status, StatusCode::FORBIDDEN, "{body:?}");
+	assert!(body.to_string().contains("PERMISSION_DENIED"), "{body:?}");
 
 	Ok(())
 }
@@ -2637,11 +2651,8 @@ async fn test_validated_case_blocks_content_updates_even_when_workflow_saved_is_
 		}),
 	)
 	.await?;
-	assert_eq!(status, StatusCode::BAD_REQUEST, "{body:?}");
-	assert!(
-		body.to_string().contains("QCed cases are read-only"),
-		"{body:?}"
-	);
+	assert_eq!(status, StatusCode::FORBIDDEN, "{body:?}");
+	assert!(body.to_string().contains("PERMISSION_DENIED"), "{body:?}");
 
 	Ok(())
 }

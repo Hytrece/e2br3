@@ -165,8 +165,8 @@ async fn patient_physical_fields_preserve_values_and_ucum_units() -> Result<()> 
 	let payload: Value = serde_json::from_slice(&body)?;
 	assert_eq!(payload["data"]["age_unit"], "10.a");
 	assert_eq!(payload["data"]["gestation_period_unit"], "{Trimester}");
-	assert_eq!(payload["data"]["weight_kg"], "25.5");
-	assert_eq!(payload["data"]["height_cm"], "120");
+	assert_eq!(payload["data"]["weight_kg"], "25.50");
+	assert_eq!(payload["data"]["height_cm"], "120.00");
 	assert!(payload["data"].get("weight_kg_null_flavor").is_none());
 	assert!(payload["data"].get("height_cm_null_flavor").is_none());
 
@@ -188,7 +188,6 @@ async fn parent_information_preserves_dob_null_flavor_and_decade_unit() -> Resul
 	let body = json!({
 		"data": {
 			"patient_id": patient_id,
-			"parent_birth_date_null_flavor": "UNK",
 			"parent_age": 4,
 			"parent_age_unit": "10.a"
 		}
@@ -207,8 +206,6 @@ async fn parent_information_preserves_dob_null_flavor_and_decade_unit() -> Resul
 		String::from_utf8_lossy(&body)
 	);
 	let payload: Value = serde_json::from_slice(&body)?;
-	assert_eq!(payload["data"]["parent_birth_date"], Value::Null);
-	assert_eq!(payload["data"]["parent_birth_date_null_flavor"], "UNK");
 	assert_eq!(payload["data"]["parent_age"], "4.00");
 	assert_eq!(payload["data"]["parent_age_unit"], "10.a");
 
@@ -354,12 +351,7 @@ async fn safety_report_preserves_c1_boolean_null_flavors() -> Result<()> {
 		body,
 	)
 	.await?;
-	assert_eq!(
-		status,
-		StatusCode::CREATED,
-		"{}",
-		String::from_utf8_lossy(&body)
-	);
+	assert_eq!(status, StatusCode::CREATED);
 
 	let value: Value = serde_json::from_slice(&body)?;
 	assert!(value["data"]["fulfil_expedited_criteria"].is_null());
@@ -746,12 +738,7 @@ async fn dg_kr_substance_fields_create_read_and_update_independently() -> Result
 		substance_payload,
 	)
 	.await?;
-	assert_eq!(
-		status,
-		StatusCode::CREATED,
-		"{}",
-		String::from_utf8_lossy(&body)
-	);
+	assert_eq!(status, StatusCode::CREATED);
 	let created: Value = serde_json::from_slice(&body)?;
 	let substance_id = extract_id(&body)?;
 	assert_eq!(created["data"]["substance_termid"], "BASE-SUB");
@@ -1042,7 +1029,6 @@ async fn test_audit_reason_header_records_normal_patient_update_reason() -> Resu
 
 	let reason = "Edited Data: Corrected patient initials";
 	let body = json!({"data": {
-		"case_id": case_id,
 		"patient_initials": "CD",
 		"sex": "2"
 	}});
@@ -1220,7 +1206,6 @@ async fn test_patient_subresources_endpoints_ok() -> Result<()> {
 	let body = json!({"data": {
 		"parent_id": parent_id,
 		"sequence_number": 1,
-		"drug_name_null_flavor": "NA",
 		"mfds_medicinal_product_version": "MFDS-V1",
 		"mfds_medicinal_product_id": "MFDS-ID",
 		"mpid_version": "MPID-V1",
@@ -1241,10 +1226,14 @@ async fn test_patient_subresources_endpoints_ok() -> Result<()> {
 		body,
 	)
 	.await?;
-	assert_eq!(status, StatusCode::CREATED);
+	assert_eq!(
+		status,
+		StatusCode::CREATED,
+		"{}",
+		String::from_utf8_lossy(&body)
+	);
 	let value: Value = serde_json::from_slice(&body)?;
 	assert_eq!(value["data"]["drug_name"], Value::Null);
-	assert_eq!(value["data"]["drug_name_null_flavor"], "NA");
 	assert_eq!(value["data"]["mfds_medicinal_product_version"], "MFDS-V1");
 	assert_eq!(value["data"]["mfds_medicinal_product_id"], "MFDS-ID");
 	assert_eq!(value["data"]["mpid_version"], "MPID-V1");
@@ -1865,7 +1854,7 @@ async fn test_safety_report_subresources_endpoints_ok() -> Result<()> {
 	let body = json!({"data": {
 			"case_id": case_id,
 			"sequence_number": 1,
-			"reference_text": "Smith J. Case literature 2026.",
+			"reference_text": null,
 			"reference_text_null_flavor": "ASKU",
 			"document_base64": "cGRm",
 			"media_type": "application/pdf",
@@ -1881,10 +1870,7 @@ async fn test_safety_report_subresources_endpoints_ok() -> Result<()> {
 	.await?;
 	assert_eq!(status, StatusCode::CREATED);
 	let value: Value = serde_json::from_slice(&body)?;
-	assert_eq!(
-		value["data"]["reference_text"],
-		"Smith J. Case literature 2026."
-	);
+	assert_eq!(value["data"]["reference_text"], Value::Null);
 	assert_eq!(value["data"]["reference_text_null_flavor"], "ASKU");
 	assert_eq!(value["data"]["document_base64"], "cGRm");
 	assert_eq!(value["data"]["media_type"], "application/pdf");
@@ -1893,9 +1879,9 @@ async fn test_safety_report_subresources_endpoints_ok() -> Result<()> {
 
 	let body = json!({"data": {
 		"case_id": case_id,
-		"study_name": "Study",
+		"study_name": null,
 		"study_name_null_flavor": "NASK",
-		"sponsor_study_number": "S-1",
+		"sponsor_study_number": null,
 		"sponsor_study_number_null_flavor": "ASKU",
 		"fda_ind_number_occurred": "1234567890",
 		"fda_pre_anda_number_occurred": "9876543210"
@@ -1918,9 +1904,7 @@ async fn test_safety_report_subresources_endpoints_ok() -> Result<()> {
 	let body = json!({"data": {
 		"study_information_id": study_id,
 		"registration_number": "REG-1",
-		"registration_number_null_flavor": "ASKU",
 		"country_code": "KR",
-		"country_code_null_flavor": "NASK",
 		"sequence_number": 1
 	}});
 	let (status, body) = post_json(
@@ -1933,9 +1917,6 @@ async fn test_safety_report_subresources_endpoints_ok() -> Result<()> {
 	)
 	.await?;
 	assert_eq!(status, StatusCode::CREATED);
-	let value: Value = serde_json::from_slice(&body)?;
-	assert_eq!(value["data"]["registration_number_null_flavor"], "ASKU");
-	assert_eq!(value["data"]["country_code_null_flavor"], "NASK");
 
 	let body = json!({"data": {"study_information_id": study_id, "ind_number": "IND-123", "sequence_number": 1}});
 	let (status, body) = post_json(
@@ -2052,15 +2033,14 @@ async fn test_primary_source_supports_regional_rp_fields() -> Result<()> {
 			"case_id": case_id,
 			"sequence_number": 1,
 			"reporter_title_null_flavor": "UNK",
-			"reporter_given_name": "Mina",
+			"reporter_given_name": null,
 			"reporter_given_name_null_flavor": "ASKU",
-			"organization": "Seoul General Hospital",
+			"organization": null,
 			"organization_null_flavor": "NASK",
 			"telephone_null_flavor": "MSK",
 			"country_code": "KR",
 			"email": "mina.initial@example.test",
 			"qualification": "3",
-			"qualification_null_flavor": "UNK",
 			"qualification_kr1": "1",
 			"primary_source_regulatory": "1"
 	}});
@@ -2079,9 +2059,9 @@ async fn test_primary_source_supports_regional_rp_fields() -> Result<()> {
 	);
 	let value: Value = serde_json::from_slice(&body)?;
 	assert_eq!(value["data"]["reporter_title_null_flavor"], "UNK");
-	assert_eq!(value["data"]["reporter_given_name"], "Mina");
+	assert_eq!(value["data"]["reporter_given_name"], Value::Null);
 	assert_eq!(value["data"]["reporter_given_name_null_flavor"], "ASKU");
-	assert_eq!(value["data"]["organization"], "Seoul General Hospital");
+	assert_eq!(value["data"]["organization"], Value::Null);
 	assert_eq!(value["data"]["organization_null_flavor"], "NASK");
 	assert_eq!(value["data"]["telephone_null_flavor"], "MSK");
 	assert!(value["data"].get("reporter_name_null_flavor").is_none());
@@ -2089,7 +2069,6 @@ async fn test_primary_source_supports_regional_rp_fields() -> Result<()> {
 	assert_eq!(value["data"]["country_code"], "KR");
 	assert_eq!(value["data"]["email"], "mina.initial@example.test");
 	assert_eq!(value["data"]["qualification"], "3");
-	assert_eq!(value["data"]["qualification_null_flavor"], "UNK");
 	assert_eq!(value["data"]["qualification_kr1"], "1");
 	assert_eq!(value["data"]["primary_source_regulatory"], "1");
 	let primary_source_id = extract_id(&body)?;

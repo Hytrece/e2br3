@@ -55,7 +55,7 @@ CREATE TABLE drug_information (
     gestation_period_exposure_unit VARCHAR(50),
 
     -- G.k.7 - Action(s) Taken with Drug (E2B(R3) codes)
-    action_taken VARCHAR(1) CHECK (action_taken IN ('1', '2', '3', '4', '5', '6')),
+    action_taken VARCHAR(1) CHECK (action_taken IN ('0', '1', '2', '3', '4', '5', '6', '9')),
     -- 1=Withdrawn, 2=Dose reduced, 3=Dose increased, 4=Dose not changed,
     -- 5=Unknown, 6=Not applicable
 

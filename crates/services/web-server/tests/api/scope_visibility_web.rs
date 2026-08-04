@@ -1593,8 +1593,15 @@ async fn test_unset_sender_scope_lists_all_sender_presaves() -> Result<()> {
 	let mm = init_test_mm().await?;
 	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
 	let admin_token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
-	let viewer_token =
-		generate_web_token(&seed.viewer.email, seed.viewer.token_salt)?;
+	let info_user = insert_user(
+		&mm,
+		seed.org_id,
+		TEST_CUSTOM_MANAGER_ROLE,
+		system_user_id(),
+		Some("viewpwd"),
+	)
+	.await?;
+	let viewer_token = generate_web_token(&info_user.email, info_user.token_salt)?;
 	let admin_cookie = cookie_header(&admin_token.to_string());
 	let viewer_cookie = cookie_header(&viewer_token.to_string());
 	let app = web_server::app(mm);
@@ -1616,7 +1623,12 @@ async fn test_unset_sender_scope_lists_all_sender_presaves() -> Result<()> {
 	)
 	.await?;
 	assert_eq!(status, StatusCode::OK, "{value:?}");
-	let rows = value["data"].as_array().ok_or("missing sender rows")?;
+	let rows = value["data"]
+		.as_array()
+		.ok_or("missing sender rows")?
+		.iter()
+		.filter_map(|row| row["rows"]["sender"].as_object())
+		.collect::<Vec<_>>();
 	assert!(
 		rows.iter().any(|row| row["id"] == sender_id.to_string()),
 		"unset sender scope must list all sender presaves: {value:?}"
@@ -1631,8 +1643,15 @@ async fn test_sender_uuid_scope_lists_matching_sender_presave() -> Result<()> {
 	let mm = init_test_mm().await?;
 	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
 	let admin_token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
-	let viewer_token =
-		generate_web_token(&seed.viewer.email, seed.viewer.token_salt)?;
+	let info_user = insert_user(
+		&mm,
+		seed.org_id,
+		TEST_CUSTOM_MANAGER_ROLE,
+		system_user_id(),
+		Some("viewpwd"),
+	)
+	.await?;
+	let viewer_token = generate_web_token(&info_user.email, info_user.token_salt)?;
 	let admin_cookie = cookie_header(&admin_token.to_string());
 	let viewer_cookie = cookie_header(&viewer_token.to_string());
 	let app = web_server::app(mm);
@@ -1654,7 +1673,7 @@ async fn test_sender_uuid_scope_lists_matching_sender_presave() -> Result<()> {
 	update_user_scope(
 		&app,
 		&admin_cookie,
-		seed.viewer.id,
+		info_user.id,
 		json!({ "access_sender_ids": [allowed_id.to_string()] }),
 	)
 	.await?;
@@ -1668,7 +1687,12 @@ async fn test_sender_uuid_scope_lists_matching_sender_presave() -> Result<()> {
 	)
 	.await?;
 	assert_eq!(status, StatusCode::OK, "{value:?}");
-	let rows = value["data"].as_array().ok_or("missing sender rows")?;
+	let rows = value["data"]
+		.as_array()
+		.ok_or("missing sender rows")?
+		.iter()
+		.filter_map(|row| row["rows"]["sender"].as_object())
+		.collect::<Vec<_>>();
 	assert!(rows.iter().any(|row| row["id"] == allowed_id.to_string()));
 	assert!(!rows.iter().any(|row| row["id"] == denied_id.to_string()));
 

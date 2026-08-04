@@ -21,7 +21,7 @@ pub struct ValidationQuery {
 	pub authority: Option<String>,
 }
 
-async fn resolve_authority(
+pub(crate) async fn resolve_authority(
 	ctx: &Ctx,
 	mm: &ModelManager,
 	case_id: Uuid,

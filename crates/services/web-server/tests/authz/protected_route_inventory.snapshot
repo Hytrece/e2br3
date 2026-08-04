@@ -1,6 +1,8 @@
 DELETE /api/admin/permission-profiles/{id}
 DELETE /api/cases/{case_id}/drugs/{drug_id}/active-substances/{id}
 DELETE /api/cases/{case_id}/drugs/{drug_id}/device-characteristics/{id}
+DELETE /api/cases/{case_id}/drugs/{drug_id}/devices/{device_id}/codes/{id}
+DELETE /api/cases/{case_id}/drugs/{drug_id}/devices/{id}
 DELETE /api/cases/{case_id}/drugs/{drug_id}/dosages/{id}
 DELETE /api/cases/{case_id}/drugs/{drug_id}/indications/{id}
 DELETE /api/cases/{case_id}/drugs/{drug_id}/reaction-assessments/{assessment_id}/relatedness/{id}
@@ -10,6 +12,8 @@ DELETE /api/cases/{case_id}/editor/pages/AE/rows/{row_id}
 DELETE /api/cases/{case_id}/editor/pages/DG/rows/{row_id}
 DELETE /api/cases/{case_id}/editor/pages/DH/rows/{row_id}
 DELETE /api/cases/{case_id}/editor/pages/LB/rows/{row_id}
+DELETE /api/cases/{case_id}/editor/pages/LR/rows/{row_id}
+DELETE /api/cases/{case_id}/field-notation
 DELETE /api/cases/{case_id}/linked-reports/{id}
 DELETE /api/cases/{case_id}/message-header
 DELETE /api/cases/{case_id}/narrative
@@ -71,6 +75,10 @@ GET /api/cases/{case_id}/drugs/{drug_id}/active-substances
 GET /api/cases/{case_id}/drugs/{drug_id}/active-substances/{id}
 GET /api/cases/{case_id}/drugs/{drug_id}/device-characteristics
 GET /api/cases/{case_id}/drugs/{drug_id}/device-characteristics/{id}
+GET /api/cases/{case_id}/drugs/{drug_id}/devices
+GET /api/cases/{case_id}/drugs/{drug_id}/devices/{device_id}/codes
+GET /api/cases/{case_id}/drugs/{drug_id}/devices/{device_id}/codes/{id}
+GET /api/cases/{case_id}/drugs/{drug_id}/devices/{id}
 GET /api/cases/{case_id}/drugs/{drug_id}/dosages
 GET /api/cases/{case_id}/drugs/{drug_id}/dosages/{id}
 GET /api/cases/{case_id}/drugs/{drug_id}/indications
@@ -90,7 +98,6 @@ GET /api/cases/{case_id}/editor/DH/{past_drug_id}
 GET /api/cases/{case_id}/editor/DM
 GET /api/cases/{case_id}/editor/LB/list
 GET /api/cases/{case_id}/editor/LB/{test_result_id}
-GET /api/cases/{case_id}/editor/LR
 GET /api/cases/{case_id}/editor/NR
 GET /api/cases/{case_id}/editor/RP
 GET /api/cases/{case_id}/editor/SD
@@ -106,11 +113,13 @@ GET /api/cases/{case_id}/editor/pages/DM
 GET /api/cases/{case_id}/editor/pages/LB
 GET /api/cases/{case_id}/editor/pages/LB/rows/{row_id}
 GET /api/cases/{case_id}/editor/pages/LR
+GET /api/cases/{case_id}/editor/pages/LR/rows/{row_id}
 GET /api/cases/{case_id}/editor/pages/NR
 GET /api/cases/{case_id}/editor/pages/RP
 GET /api/cases/{case_id}/editor/pages/SD
 GET /api/cases/{case_id}/editor/pages/SI
 GET /api/cases/{case_id}/editor/shell
+GET /api/cases/{case_id}/field-notation
 GET /api/cases/{case_id}/linked-reports
 GET /api/cases/{case_id}/linked-reports/{id}
 GET /api/cases/{case_id}/message-header
@@ -162,7 +171,6 @@ GET /api/cases/{case_id}/source-documents
 GET /api/cases/{case_id}/test-results
 GET /api/cases/{case_id}/test-results/{id}
 GET /api/cases/{case_id}/validation
-GET /api/cases/{case_id}/validation/cache
 GET /api/cases/{case_id}/versions
 GET /api/cases/{id}
 GET /api/cases/{id}/export/cioms.pdf
@@ -235,7 +243,7 @@ PATCH /api/cases/{case_id}/editor/pages/DG/rows/{row_id}
 PATCH /api/cases/{case_id}/editor/pages/DH/rows/{row_id}
 PATCH /api/cases/{case_id}/editor/pages/DM
 PATCH /api/cases/{case_id}/editor/pages/LB/rows/{row_id}
-PATCH /api/cases/{case_id}/editor/pages/LR
+PATCH /api/cases/{case_id}/editor/pages/LR/rows/{row_id}
 PATCH /api/cases/{case_id}/editor/pages/NR
 PATCH /api/cases/{case_id}/editor/pages/RP
 PATCH /api/cases/{case_id}/editor/pages/SD
@@ -265,6 +273,10 @@ POST /api/cases/{case_id}/drugs/{drug_id}/active-substances
 POST /api/cases/{case_id}/drugs/{drug_id}/active-substances/{id}/restore
 POST /api/cases/{case_id}/drugs/{drug_id}/device-characteristics
 POST /api/cases/{case_id}/drugs/{drug_id}/device-characteristics/{id}/restore
+POST /api/cases/{case_id}/drugs/{drug_id}/devices
+POST /api/cases/{case_id}/drugs/{drug_id}/devices/{device_id}/codes
+POST /api/cases/{case_id}/drugs/{drug_id}/devices/{device_id}/codes/{id}/restore
+POST /api/cases/{case_id}/drugs/{drug_id}/devices/{id}/restore
 POST /api/cases/{case_id}/drugs/{drug_id}/dosages
 POST /api/cases/{case_id}/drugs/{drug_id}/dosages/{id}/restore
 POST /api/cases/{case_id}/drugs/{drug_id}/indications
@@ -280,6 +292,7 @@ POST /api/cases/{case_id}/editor/pages/DG/rows/{row_id}/restore
 POST /api/cases/{case_id}/editor/pages/DH/rows
 POST /api/cases/{case_id}/editor/pages/LB/rows
 POST /api/cases/{case_id}/editor/pages/LB/rows/{row_id}/restore
+POST /api/cases/{case_id}/editor/pages/LR/rows
 POST /api/cases/{case_id}/linked-reports
 POST /api/cases/{case_id}/linked-reports/{id}/restore
 POST /api/cases/{case_id}/message-header
@@ -364,11 +377,15 @@ PUT /api/admin/permission-profiles/{id}
 PUT /api/admin/settings
 PUT /api/cases/{case_id}/drugs/{drug_id}/active-substances/{id}
 PUT /api/cases/{case_id}/drugs/{drug_id}/device-characteristics/{id}
+PUT /api/cases/{case_id}/drugs/{drug_id}/devices/replace
+PUT /api/cases/{case_id}/drugs/{drug_id}/devices/{device_id}/codes/{id}
+PUT /api/cases/{case_id}/drugs/{drug_id}/devices/{id}
 PUT /api/cases/{case_id}/drugs/{drug_id}/dosages/{id}
 PUT /api/cases/{case_id}/drugs/{drug_id}/indications/{id}
 PUT /api/cases/{case_id}/drugs/{drug_id}/reaction-assessments/{assessment_id}/relatedness/{id}
 PUT /api/cases/{case_id}/drugs/{drug_id}/reaction-assessments/{id}
 PUT /api/cases/{case_id}/drugs/{id}
+PUT /api/cases/{case_id}/field-notation
 PUT /api/cases/{case_id}/linked-reports/{id}
 PUT /api/cases/{case_id}/message-header
 PUT /api/cases/{case_id}/narrative

@@ -1010,8 +1010,9 @@ async fn test_imported_terminology_can_be_used_in_case_generation_flow() -> Resu
 		"/api/cases",
 		json!({
 			"data": {
-				"organization_id": seed.org_id,
-				"safety_report_id": format!("SR-{tag}"),
+				"safetyReportIdentification": {
+					"safetyReportId": format!("SR-{tag}")
+				},
 				"status": "draft"
 			}
 		}),

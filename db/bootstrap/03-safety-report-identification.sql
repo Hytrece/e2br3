@@ -131,6 +131,7 @@ CREATE TABLE literature_references (
     reference_text_null_flavor VARCHAR(4) CHECK (reference_text_null_flavor IN ('ASKU', 'NASK')),
     sequence_number INTEGER NOT NULL,  -- For ordering
     document_base64 TEXT, -- C.4.r.2 Included Documents (base64)
+    file_name TEXT, -- FDA attachment <reference value>
     media_type VARCHAR(100),
     representation VARCHAR(10),
     compression VARCHAR(10),
@@ -158,6 +159,7 @@ CREATE TABLE documents_held_by_sender (
     case_id UUID NOT NULL REFERENCES cases(id) ON DELETE CASCADE,
     title TEXT, -- C.1.6.1.r.1
     document_base64 TEXT, -- C.1.6.1.r.2 Included Documents
+    file_name TEXT, -- FDA attachment <reference value>
     media_type VARCHAR(100),
     representation VARCHAR(10),
     compression VARCHAR(10),

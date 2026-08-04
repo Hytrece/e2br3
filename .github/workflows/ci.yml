@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [main]
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   CARGO_TERM_COLOR: always
 
@@ -16,6 +20,7 @@ jobs:
   registry:
     name: E2BR3 Registry
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
@@ -41,6 +46,7 @@ jobs:
   fmt:
     name: Rustfmt
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
@@ -58,6 +64,7 @@ jobs:
   clippy:
     name: Clippy
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
 
@@ -97,6 +104,7 @@ jobs:
   test:
     name: Test
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     # Spin up PostgreSQL for integration tests
     services:
@@ -191,10 +199,11 @@ jobs:
           E2BR3_MFDS_EXAMPLES_DIR: docs/exporter/mfds
           E2BR3_MFDS_REQUIRE_VALIDATION_OK: "0"
         run: |
-          cargo test -p lib-core --test xml xml_schema_business_ci
-          cargo test -p lib-core --test validation_matrix
-          cargo test -p web-server --test validation -- --test-threads=1
-          cargo test -p web-server --test workflow -- --test-threads=1
+          # Validation and workflow tests now live in the current package targets.
+          cargo test -p xml --test xml -- --test-threads=1
+          cargo test -p xml --test import -- --test-threads=1
+          cargo test -p web-server --test api case_validation_web -- --test-threads=1
+          cargo test -p web-server --test api validation_contract_web -- --test-threads=1
           cargo test -p web-server --test smoke roundtrip_profiles_web -- --nocapture --test-threads=1
           cargo test -p web-server --test smoke mfds_import_samples_web -- --nocapture --test-threads=1
 
@@ -203,6 +212,7 @@ jobs:
     if: ${{ github.event_name == 'push' && github.ref_name == 'dev' }}
     needs: [fmt]
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions:
       contents: read
       packages: write

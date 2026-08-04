@@ -435,6 +435,7 @@ pub(crate) async fn apply_report_relationships_section(
 	mm: &ModelManager,
 	case_id: sqlx::types::Uuid,
 	xpath: &mut Context,
+	authority: lib_core::regulatory::RegulatoryAuthority,
 ) -> Result<()> {
 	let documents = mm.dbx().fetch_all(sqlx::query_as::<_, DocumentsHeldBySender>("SELECT * FROM documents_held_by_sender WHERE case_id = $1 AND deleted = false ORDER BY sequence_number").bind(case_id)).await.map_err(model::Error::from)?;
 	let identifiers = mm.dbx().fetch_all(sqlx::query_as::<_, OtherCaseIdentifier>("SELECT * FROM other_case_identifiers WHERE case_id = $1 AND deleted = false ORDER BY sequence_number").bind(case_id)).await.map_err(model::Error::from)?;
@@ -455,7 +456,7 @@ pub(crate) async fn apply_report_relationships_section(
 		fragment.push_str(&write_c_1_10_r(&value));
 	}
 	for value in documents {
-		fragment.push_str(&format!("<reference typeCode=\"REFR\"><document classCode=\"DOC\" moodCode=\"EVN\"><code code=\"1\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.27\"/>{}{}</document></reference>", write_c_1_6_1_r_1(&value), write_c_1_6_1_r_2(&value)));
+		fragment.push_str(&format!("<reference typeCode=\"REFR\"><document classCode=\"DOC\" moodCode=\"EVN\"><code code=\"1\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.27\"/>{}{}</document></reference>", write_c_1_6_1_r_1(&value), write_c_1_6_1_r_2(&value, authority)?));
 	}
 	if fragment.is_empty() {
 		return Ok(());
@@ -493,37 +494,80 @@ fn write_c_1_6_1_r_1(value: &DocumentsHeldBySender) -> String {
 }
 
 /// e2b:C.1.6.1.r.2
-fn write_c_1_6_1_r_2(value: &DocumentsHeldBySender) -> String {
-	let Some(document) = value
-		.document_base64
-		.as_deref()
-		.filter(|v| !v.trim().is_empty())
-	else {
-		return String::new();
+fn write_c_1_6_1_r_2(
+	value: &DocumentsHeldBySender,
+	authority: lib_core::regulatory::RegulatoryAuthority,
+) -> Result<String> {
+	write_attachment_text(
+		value.document_base64.as_deref(),
+		value.file_name.as_deref(),
+		value.media_type.as_deref(),
+		value.representation.as_deref(),
+		value.compression.as_deref(),
+		authority,
+		"C.1.6.1.r.2",
+	)
+}
+
+fn write_attachment_text(
+	document: Option<&str>,
+	file_name: Option<&str>,
+	media_type: Option<&str>,
+	representation: Option<&str>,
+	compression: Option<&str>,
+	authority: lib_core::regulatory::RegulatoryAuthority,
+	field_code: &str,
+) -> Result<String> {
+	let Some(document) = document.filter(|value| !value.trim().is_empty()) else {
+		return Ok(String::new());
 	};
-	let media_type = value
-		.media_type
-		.as_deref()
-		.filter(|v| !v.trim().is_empty())
+	let file_name = file_name.map(str::trim).filter(|value| !value.is_empty());
+	let media_type = media_type
+		.map(str::trim)
+		.filter(|value| !value.is_empty())
 		.unwrap_or("application/octet-stream");
-	let representation = value
-		.representation
-		.as_deref()
-		.filter(|v| !v.trim().is_empty())
-		.unwrap_or("B64");
-	let compression = value
-		.compression
-		.as_deref()
-		.filter(|v| !v.trim().is_empty())
-		.map(|v| format!(" compression=\"{}\"", xml_escape(v)))
+	if authority == lib_core::regulatory::RegulatoryAuthority::Fda {
+		let file_name = file_name.ok_or_else(|| Error::InvalidXml {
+			message: format!("FDA {field_code} attachment file name is required"),
+			line: None,
+			column: None,
+		})?;
+		let expected = lib_core::regulatory::fda_attachment_media_type(file_name)
+			.ok_or_else(|| Error::InvalidXml {
+				message: format!(
+					"FDA {field_code} attachment file type is not supported: {file_name}"
+				),
+				line: None,
+				column: None,
+			})?;
+		if !media_type.eq_ignore_ascii_case(expected) {
+			return Err(Error::InvalidXml {
+				message: format!("FDA {field_code} attachment media type '{media_type}' does not match file name '{file_name}'"),
+				line: None,
+				column: None,
+			});
+		}
+	}
+	let reference = file_name
+		.map(|value| format!("<reference value=\"{}\"/>", xml_escape(value)))
 		.unwrap_or_default();
-	format!(
-		"<text mediaType=\"{}\" representation=\"{}\"{}>{}</text>",
+	let representation = representation
+		.map(str::trim)
+		.filter(|value| !value.is_empty())
+		.unwrap_or("B64");
+	let compression = compression
+		.map(str::trim)
+		.filter(|value| !value.is_empty())
+		.map(|value| format!(" compression=\"{}\"", xml_escape(value)))
+		.unwrap_or_default();
+	Ok(format!(
+		"<text mediaType=\"{}\" representation=\"{}\"{}>{}{}</text>",
 		xml_escape(media_type),
 		xml_escape(representation),
 		compression,
+		reference,
 		xml_escape(document)
-	)
+	))
 }
 
 /// e2b:C.1.9.1.r.1
@@ -846,6 +890,32 @@ mod primary_source_null_flavor_tests {
 	}
 
 	#[test]
+	fn fda_attachment_keeps_file_name_and_checks_media_type() {
+		let authority = lib_core::regulatory::RegulatoryAuthority::Fda;
+		let xml = write_attachment_text(
+			Some("QUJD"),
+			Some("report.pdf"),
+			Some("application/pdf"),
+			Some("B64"),
+			None,
+			authority,
+			"C.4.r.2",
+		)
+		.expect("valid FDA attachment");
+		assert!(xml.contains("<reference value=\"report.pdf\"/>QUJD"));
+		assert!(write_attachment_text(
+			Some("QUJD"),
+			Some("report.pdf"),
+			Some("text/plain"),
+			Some("B64"),
+			None,
+			authority,
+			"C.4.r.2",
+		)
+		.is_err());
+	}
+
+	#[test]
 	fn section_c_writers_cover_registry_fields() {
 		let registry: serde_json::Value = serde_json::from_str(include_str!(
 			"../../../../../../registry/sections/c-safety-report.json"
@@ -878,6 +948,7 @@ pub(crate) async fn apply_literature_section(
 	mm: &ModelManager,
 	case_id: sqlx::types::Uuid,
 	xpath: &mut Context,
+	authority: lib_core::regulatory::RegulatoryAuthority,
 ) -> Result<()> {
 	let references = fetch_literature_references(mm, case_id).await?;
 	if references.is_empty() {
@@ -892,7 +963,7 @@ pub(crate) async fn apply_literature_section(
 	let mut fragment = String::new();
 	for item in references {
 		let bibliographic = write_c_4_r_1(&item);
-		let attachment = write_c_4_r_2(&item);
+		let attachment = write_c_4_r_2(&item, authority)?;
 		fragment.push_str(&format!(
 			"<reference typeCode=\"REFR\"><document classCode=\"DOC\" moodCode=\"EVN\"><code code=\"2\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.27\"/>{}{}</document></reference>",
 			bibliographic,
@@ -947,36 +1018,18 @@ fn write_c_4_r_1(item: &LiteratureReference) -> String {
 }
 
 /// e2b:C.4.r.2
-fn write_c_4_r_2(item: &LiteratureReference) -> String {
-	let Some(document) = item
-		.document_base64
-		.as_deref()
-		.filter(|v| !v.trim().is_empty())
-	else {
-		return String::new();
-	};
-	let media_type = item
-		.media_type
-		.as_deref()
-		.filter(|v| !v.trim().is_empty())
-		.unwrap_or("application/octet-stream");
-	let representation = item
-		.representation
-		.as_deref()
-		.filter(|v| !v.trim().is_empty())
-		.unwrap_or("B64");
-	let compression = item
-		.compression
-		.as_deref()
-		.filter(|v| !v.trim().is_empty())
-		.map(|value| format!(" compression=\"{}\"", xml_escape(value)))
-		.unwrap_or_default();
-	format!(
-		"<text mediaType=\"{}\" representation=\"{}\"{}>{}</text>",
-		xml_escape(media_type),
-		xml_escape(representation),
-		compression,
-		xml_escape(document)
+fn write_c_4_r_2(
+	item: &LiteratureReference,
+	authority: lib_core::regulatory::RegulatoryAuthority,
+) -> Result<String> {
+	write_attachment_text(
+		item.document_base64.as_deref(),
+		item.file_name.as_deref(),
+		item.media_type.as_deref(),
+		item.representation.as_deref(),
+		item.compression.as_deref(),
+		authority,
+		"C.4.r.2",
 	)
 }
 

@@ -83,15 +83,13 @@ impl RuntimeSettings {
 				.get("apply_sender_info_to_imported_cases")
 				.and_then(Value::as_bool)
 				.unwrap_or(false),
-			orientation: if value
+			orientation: value
 				.get("orientation")
 				.and_then(Value::as_str)
-				.is_some_and(|value| value.eq_ignore_ascii_case("portrait"))
-			{
-				"Portrait".to_string()
-			} else {
-				defaults.orientation
-			},
+				.map(str::trim)
+				.filter(|value| !value.is_empty())
+				.unwrap_or(&defaults.orientation)
+				.to_string(),
 			data_ordering: value
 				.get("data_ordering")
 				.and_then(Value::as_str)
@@ -110,7 +108,7 @@ impl RuntimeSettings {
 		let timezone = self
 			.timezone
 			.parse::<Tz>()
-			.unwrap_or(chrono_tz::Asia::Seoul);
+			.expect("runtime settings timezone is validated when loaded");
 		let now = Utc::now();
 		let local = DateTime::<Utc>::from_timestamp(
 			now.timestamp(),
@@ -128,6 +126,17 @@ impl RuntimeSettings {
 	}
 }
 
+pub fn validate_timezone(value: &str) -> Option<String> {
+	let value = value.trim();
+	if value.is_empty() {
+		return None;
+	}
+	value
+		.parse::<Tz>()
+		.ok()
+		.map(|timezone| timezone.to_string())
+}
+
 pub async fn load(
 	ctx: &lib_core::ctx::Ctx,
 	mm: &ModelManager,
@@ -135,7 +144,18 @@ pub async fn load(
 	let value = AdminSettingsBmc::get(ctx, mm, SETTINGS_KEY)
 		.await
 		.map_err(Error::Model)?;
-	Ok(RuntimeSettings::from_value(value.as_ref()))
+	let settings = RuntimeSettings::from_value(value.as_ref());
+	if validate_timezone(&settings.timezone).is_none() {
+		return Err(Error::BadRequest {
+			message: "stored timezone must be a valid IANA timezone".to_string(),
+		});
+	}
+	if !matches!(settings.orientation.as_str(), "Portrait" | "Landscape") {
+		return Err(Error::BadRequest {
+			message: "stored orientation must be Portrait or Landscape".to_string(),
+		});
+	}
+	Ok(settings)
 }
 
 pub fn normalize_appendices(value: Option<&[String]>) -> Vec<String> {
@@ -149,11 +169,7 @@ pub fn normalize_appendices(value: Option<&[String]>) -> Vec<String> {
 		.filter(|value| selected.contains(*value))
 		.map(str::to_string)
 		.collect::<Vec<_>>();
-	if values.is_empty() {
-		vec!["ICH".to_string()]
-	} else {
-		values
-	}
+	values
 }
 
 fn parse_appendices(value: Option<&Value>) -> Vec<RegulatoryAuthority> {
@@ -167,16 +183,21 @@ fn parse_appendices(value: Option<&Value>) -> Vec<RegulatoryAuthority> {
 				.collect::<Vec<_>>()
 		})
 		.unwrap_or_default();
-	if appendices.is_empty() {
-		vec![RegulatoryAuthority::Ich]
-	} else {
-		appendices
-	}
+	appendices
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
+
+	#[test]
+	fn validates_only_real_iana_timezones() {
+		assert_eq!(
+			validate_timezone(" Asia/Seoul "),
+			Some("Asia/Seoul".to_string())
+		);
+		assert_eq!(validate_timezone("not-a-timezone"), None);
+	}
 
 	#[test]
 	fn resolves_notation_and_appendices_from_admin_settings() {
@@ -189,5 +210,14 @@ mod tests {
 		assert!(settings.resolve_notation(None));
 		assert!(!settings.resolve_notation(Some(false)));
 		assert_eq!(settings.appendices, vec![RegulatoryAuthority::Fda]);
+	}
+
+	#[test]
+	fn does_not_invent_an_appendix_for_empty_settings() {
+		let value = serde_json::json!({"appendices": []});
+		let settings = RuntimeSettings::from_value(Some(&value));
+
+		assert!(settings.appendices.is_empty());
+		assert!(normalize_appendices(Some(&[] as &[String])).is_empty());
 	}
 }

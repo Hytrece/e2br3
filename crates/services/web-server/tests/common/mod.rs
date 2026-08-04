@@ -11,6 +11,10 @@ use lib_core::ctx::{
 	ROLE_USER, SYSTEM_ORG_ID, SYSTEM_USER_ID,
 };
 use lib_core::model::authorization::AuthorizationMigrationService;
+use lib_core::model::presave::{
+	ProductPresaveBmc, ProductPresaveForCreate, SenderPresaveBmc,
+	SenderPresaveForCreate,
+};
 use lib_core::model::store::{
 	set_full_context_dbx, set_org_context, set_user_context,
 };
@@ -22,6 +26,22 @@ use uuid::Uuid;
 
 pub type Result<T> =
 	core::result::Result<T, Box<dyn std::error::Error + Send + Sync>>;
+
+pub fn unique_safety_report_id_xml(xml: String) -> String {
+	let Some(start) = xml.find("extension=\"US-") else {
+		return xml;
+	};
+	let value_start = start + "extension=\"".len();
+	let Some(end_rel) = xml[value_start..].find('"') else {
+		return xml;
+	};
+	let old_id = xml[value_start..value_start + end_rel].to_string();
+	let new_id = format!("US-TEST-{}", Uuid::new_v4());
+	xml.replace(
+		&format!("extension=\"{old_id}\""),
+		&format!("extension=\"{new_id}\""),
+	)
+}
 
 pub const TEST_CUSTOM_MANAGER_ROLE: &str = "11111111-1111-4111-8111-111111111111";
 pub const TEST_CUSTOM_VIEWER_ROLE: &str = "22222222-2222-4222-8222-222222222222";
@@ -238,6 +258,65 @@ pub async fn seed_org_with_users(
 		admin,
 		viewer,
 	})
+}
+
+pub async fn create_test_import_product(
+	mm: &ModelManager,
+	org_id: Uuid,
+	user_id: Uuid,
+) -> Result<Uuid> {
+	let ctx = lib_core::ctx::Ctx::new(
+		user_id,
+		org_id,
+		ROLE_SPONSOR_ADMIN_CRO.to_string(),
+	)?;
+	let sender_id = SenderPresaveBmc::create(
+		&ctx,
+		mm,
+		SenderPresaveForCreate {
+			is_default: None,
+			sender_type: Some("1".into()),
+			organization_name: Some(format!("XML Import Sender {}", Uuid::new_v4())),
+			organization_name_notation: None,
+			street_address: None,
+			city: None,
+			state: None,
+			postcode: None,
+			country_code: None,
+			telephone: None,
+			fax: None,
+			email: None,
+		},
+	)
+	.await?;
+	Ok(ProductPresaveBmc::create(
+		&ctx,
+		mm,
+		ProductPresaveForCreate {
+			receiver_presave_id: None,
+			sender_presave_id: Some(sender_id),
+			product_id: Some(format!("XML-IMPORT-{}", Uuid::new_v4())),
+			medicinal_product: Some("XML Import Product".into()),
+			medicinal_product_notation: None,
+			preapproval_ip_name: None,
+			brand_name: None,
+			original_manufacturer: None,
+			product_description: None,
+			mpid: None,
+			mpid_version: None,
+			mfds_mpid: None,
+			mfds_mpid_version: None,
+			phpid: None,
+			phpid_version: None,
+			investigational_product_blinded: None,
+			obtain_drug_country: None,
+			drug_authorization_number: None,
+			drug_authorization_country: None,
+			drug_authorization_holder: None,
+			holder_applicant_name_notation: None,
+		},
+	)
+	.await?)
 }
 
 pub async fn seed_company_org_with_users(

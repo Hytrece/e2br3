@@ -55,9 +55,12 @@ pub(crate) async fn apply_section_postprocess(
 		&mut doc, &parser, mm, case_id, &mut xpath, authority,
 	)
 	.await?;
-	apply_report_relationships_section(&mut doc, &parser, mm, case_id, &mut xpath)
+	apply_report_relationships_section(
+		&mut doc, &parser, mm, case_id, &mut xpath, authority,
+	)
+	.await?;
+	apply_literature_section(&mut doc, &parser, mm, case_id, &mut xpath, authority)
 		.await?;
-	apply_literature_section(&mut doc, &parser, mm, case_id, &mut xpath).await?;
 	apply_study_section(&mut doc, &parser, mm, case_id, &mut xpath, authority)
 		.await?;
 	apply_sender_diagnosis_section(ctx, &mut doc, &parser, mm, case_id, &mut xpath)
