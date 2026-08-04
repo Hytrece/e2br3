@@ -11,6 +11,8 @@ mod web;
 
 pub use self::error::{Error, Result};
 use lib_core::_dev_utils;
+use lib_core::ctx::Ctx;
+use lib_core::model::user::UserBmc;
 use lib_core::model::ModelManager;
 use tokio::net::TcpListener;
 use tokio::time::{interval, Duration};
@@ -43,6 +45,7 @@ async fn main() -> Result<()> {
 		report.assignments, report.custom_roles
 	);
 	bootstrap::bootstrap_admin_user(&mm).await?;
+	start_user_expiry_worker(mm.clone());
 	start_reconcile_worker(mm.clone());
 
 	// -- Define Routes
@@ -61,6 +64,22 @@ async fn main() -> Result<()> {
 	// endregion: --- Start Server
 
 	Ok(())
+}
+
+fn start_user_expiry_worker(mm: ModelManager) {
+	tokio::spawn(async move {
+		let mut ticker = interval(Duration::from_secs(60));
+		loop {
+			ticker.tick().await;
+			match UserBmc::deactivate_expired(&Ctx::root_ctx(), &mm).await {
+				Ok(count) if count > 0 => {
+					info!("USER EXPIRY - deactivated={count}");
+				}
+				Ok(_) => {}
+				Err(err) => warn!("USER EXPIRY - failed: {err}"),
+			}
+		}
+	});
 }
 
 fn start_reconcile_worker(mm: ModelManager) {

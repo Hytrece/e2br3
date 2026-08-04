@@ -198,7 +198,6 @@ pub(super) async fn assert_profile_access(
 			("users", "read") => &["user.read", "user.list"],
 			("users", "create") => &["user.create"],
 			("users", "update") => &["user.update"],
-			("users", "delete") => &["user.delete"],
 			("settings", "read") => &["settings.read"],
 			("settings", "update") => &["settings.update"],
 			("homeNotice", "read") => &["notice.read"],
@@ -208,16 +207,12 @@ pub(super) async fn assert_profile_access(
 				"user.read",
 				"user.create",
 				"user.update",
-				"user.delete",
 				"settings.read",
 				"settings.update",
 			],
-			("admin", "update") => &[
-				"user.create",
-				"user.update",
-				"user.delete",
-				"settings.update",
-			],
+			("admin", "update") => {
+				&["user.create", "user.update", "settings.update"]
+			}
 			("roles", _) => &[],
 			_ => {
 				return Err(

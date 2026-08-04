@@ -1074,22 +1074,6 @@ fn canonical_actions() -> Vec<ActionPolicyInput> {
 			PrivilegedMutation,
 		),
 		action(
-			"user.delete",
-			DecisionStage::ContextRequired(Existing(ResourceKind::User)),
-			&["admin.edit"],
-			&[],
-			&[SameOrganization],
-			PrivilegedMutation,
-		),
-		action(
-			"user.delete.built_in_administrator",
-			DecisionStage::ContextRequired(Existing(ResourceKind::User)),
-			&["admin.edit"],
-			&[PlatformAdministrator],
-			&[SameOrganization],
-			PrivilegedMutation,
-		),
-		action(
 			"role.list",
 			DecisionStage::ContextRequired(Collection(ResourceKind::Role)),
 			&[],

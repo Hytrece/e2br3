@@ -53,7 +53,6 @@ DELETE /api/presaves/studies/{id}
 DELETE /api/presaves/studies/{study_id}/products/{id}
 DELETE /api/presaves/studies/{study_id}/registration-numbers/{id}
 DELETE /api/presaves/studies/{study_id}/reporters/{id}
-DELETE /api/users/{id}
 GET /api/admin/permission-profiles
 GET /api/admin/permission-profiles/{id}
 GET /api/admin/settings

@@ -132,7 +132,6 @@ pub struct UserForUpdateAdminPayload {
 	pub access_product_ids: Option<ScopeListInput>,
 	pub access_study_ids: Option<ScopeListInput>,
 	pub access_blind_allowed: Option<bool>,
-	pub active: Option<bool>,
 	#[serde(default, with = "time::serde::rfc3339::option")]
 	pub last_login_at: Option<OffsetDateTime>,
 }

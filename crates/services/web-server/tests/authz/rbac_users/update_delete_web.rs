@@ -5,14 +5,16 @@ use crate::common::{
 	cookie_header, init_test_mm, insert_user, seed_org_with_all_roles,
 	seed_org_with_users, seed_two_orgs_users_cases, system_user_id, Result,
 };
-use axum::body::{to_bytes, Body};
+use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use lib_auth::token::generate_web_token;
 use lib_core::ctx::{
-	ROLE_SPONSOR_ADMIN_COMPANY, ROLE_SPONSOR_ADMIN_CRO, ROLE_SYSTEM_ADMIN,
+	Ctx, ROLE_SPONSOR_ADMIN_COMPANY, ROLE_SPONSOR_ADMIN_CRO, ROLE_SYSTEM_ADMIN,
 };
+use lib_core::model::user::{User, UserBmc, UserForUpdate};
 use serde_json::json;
 use serial_test::serial;
+use time::{Duration, OffsetDateTime};
 use tower::ServiceExt;
 use uuid::Uuid;
 
@@ -261,69 +263,40 @@ async fn test_update_user_rejects_overlong_username_and_email() -> Result<()> {
 
 #[serial]
 #[tokio::test]
-async fn test_admin_can_delete_user() -> Result<()> {
+async fn test_expired_user_is_soft_deactivated() -> Result<()> {
 	let mm = init_test_mm().await?;
 	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
-	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
-	let cookie = cookie_header(&token.to_string());
+	let admin_ctx = Ctx::new(
+		seed.admin.id,
+		seed.org_id,
+		ROLE_SPONSOR_ADMIN_CRO.to_string(),
+	)?;
+	UserBmc::update(
+		&admin_ctx,
+		&mm,
+		seed.viewer.id,
+		UserForUpdate {
+			organization_id: None,
+			email: None,
+			username: None,
+			role: None,
+			comments: None,
+			other_information: None,
+			access_start_at: None,
+			access_end_at: Some(OffsetDateTime::now_utc() - Duration::seconds(1)),
+			access_sender_ids: None,
+			access_product_ids: None,
+			access_study_ids: None,
+			access_blind_allowed: None,
+			active_sender_identifier: None,
+			active: Some(true),
+			last_login_at: None,
+		},
+	)
+	.await?;
 
-	let app = web_server::app(mm);
-	let req = Request::builder()
-		.method("DELETE")
-		.uri(format!("/api/users/{}", seed.viewer.id))
-		.header("cookie", cookie.as_str())
-		.body(Body::empty())?;
-	let res = app.clone().oneshot(req).await?;
-	assert_eq!(res.status(), StatusCode::NO_CONTENT);
-
-	let get_req = Request::builder()
-		.method("GET")
-		.uri(format!("/api/users/{}", seed.viewer.id))
-		.header("cookie", cookie.as_str())
-		.body(Body::empty())?;
-	let get_res = app.clone().oneshot(get_req).await?;
-	assert_eq!(get_res.status(), StatusCode::OK);
-	let get_bytes = to_bytes(get_res.into_body(), usize::MAX).await?;
-	let deleted_user: serde_json::Value = serde_json::from_slice(&get_bytes)?;
-	assert_eq!(
-		deleted_user["data"]["active"].as_bool(),
-		Some(false),
-		"deleted user should be retained as inactive: {deleted_user}"
-	);
-
-	let restore_body = json!({ "data": { "active": true } });
-	let restore_req = Request::builder()
-		.method("PUT")
-		.uri(format!("/api/users/{}", seed.viewer.id))
-		.header("cookie", cookie.as_str())
-		.header("content-type", "application/json")
-		.body(Body::from(restore_body.to_string()))?;
-	let restore_res = app.clone().oneshot(restore_req).await?;
-	assert_eq!(restore_res.status(), StatusCode::OK);
-	let restore_bytes = to_bytes(restore_res.into_body(), usize::MAX).await?;
-	let restored_user: serde_json::Value = serde_json::from_slice(&restore_bytes)?;
-	assert_eq!(
-		restored_user["data"]["active"].as_bool(),
-		Some(true),
-		"restored user should be active again: {restored_user}"
-	);
-	Ok(())
-}
-
-#[serial]
-#[tokio::test]
-async fn test_admin_cannot_delete_self() -> Result<()> {
-	let mm = init_test_mm().await?;
-	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
-	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
-
-	let app = web_server::app(mm);
-	let req = Request::builder()
-		.method("DELETE")
-		.uri(format!("/api/users/{}", seed.admin.id))
-		.header("cookie", cookie_header(&token.to_string()))
-		.body(Body::empty())?;
-	let res = app.oneshot(req).await?;
-	assert_eq!(res.status(), StatusCode::FORBIDDEN);
+	assert!(UserBmc::deactivate_expired(&Ctx::root_ctx(), &mm).await? >= 1);
+	let user: User = UserBmc::get(&admin_ctx, &mm, seed.viewer.id).await?;
+	assert!(!user.active);
 	Ok(())
 }

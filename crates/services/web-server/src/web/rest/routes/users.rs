@@ -55,9 +55,7 @@ pub fn routes_users(mm: ModelManager) -> Router {
 		)
 		.route(
 			"/users/{id}",
-			get(user_rest::get_user)
-				.put(user_rest::update_user)
-				.delete(user_rest::delete_user),
+			get(user_rest::get_user).put(user_rest::update_user),
 		)
 		.route(
 			"/settings/runtime",

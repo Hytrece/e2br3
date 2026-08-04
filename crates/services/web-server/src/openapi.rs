@@ -27,7 +27,6 @@ pub fn router() -> Router {
 		create_user,
 		get_user,
 		update_user,
-		delete_user,
 		get_current_user,
 		get_current_user_profile,
 		set_my_password,
@@ -1038,7 +1037,6 @@ struct UserForUpdateDoc {
 	access_product_ids: Option<String>,
 	access_study_ids: Option<String>,
 	access_blind_allowed: Option<bool>,
-	active: Option<bool>,
 	last_login_at: Option<String>,
 }
 
@@ -2214,23 +2212,6 @@ fn get_user() {}
 	)
 )]
 fn update_user() {}
-
-#[utoipa::path(
-	delete,
-	path = "/api/users/{id}",
-	tag = "users",
-	security(
-		("auth_token" = [])
-	),
-	params(
-		("id" = String, Path, description = "User ID")
-	),
-	responses(
-		(status = 204, description = "User deleted"),
-		(status = 404, description = "User not found", body = ErrorResponse)
-	)
-)]
-fn delete_user() {}
 
 #[utoipa::path(
 	get,

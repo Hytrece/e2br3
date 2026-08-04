@@ -386,7 +386,7 @@ pub async fn update_user(
 					access_study_ids: serialize_scope_input(data.access_study_ids),
 					access_blind_allowed: data.access_blind_allowed,
 					active_sender_identifier: data.active_sender_identifier,
-					active: data.active,
+					active: None,
 					last_login_at: data.last_login_at,
 				};
 				UserBmc::update(db_ctx, mm, id, update).await?;
@@ -397,61 +397,6 @@ pub async fn update_user(
 						data: user_view(entity),
 					}),
 				))
-			})
-		},
-	)
-	.await
-}
-
-/// DELETE /api/users/:id
-/// Delete a user
-/// **Requires User.Delete permission (admin only)**
-pub async fn delete_user(
-	State(mm): State<ModelManager>,
-	ctx_w: CtxW,
-	snapshot: AuthorizationSnapshotW,
-	Path(id): Path<Uuid>,
-) -> Result<StatusCode> {
-	let ctx = ctx_w.0;
-	let request_user_id = ctx.user_id();
-	lib_rest_core::with_authorized_user_mutation(
-		&ctx,
-		&snapshot,
-		&mm,
-		id,
-		"user.delete",
-		"user.delete.built_in_administrator",
-		move |db_ctx, mm| {
-			Box::pin(async move {
-				if id == request_user_id {
-					return Err(Error::BadRequest {
-						message: "cannot delete yourself".to_string(),
-					});
-				}
-				UserBmc::update(
-					db_ctx,
-					mm,
-					id,
-					UserForUpdate {
-						organization_id: None,
-						email: None,
-						username: None,
-						role: None,
-						comments: None,
-						other_information: None,
-						access_start_at: None,
-						access_end_at: None,
-						access_sender_ids: None,
-						access_product_ids: None,
-						access_study_ids: None,
-						access_blind_allowed: None,
-						active_sender_identifier: None,
-						active: Some(false),
-						last_login_at: None,
-					},
-				)
-				.await?;
-				Ok(StatusCode::NO_CONTENT)
 			})
 		},
 	)

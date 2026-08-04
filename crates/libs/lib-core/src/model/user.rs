@@ -483,6 +483,37 @@ impl UserBmc {
 		Ok(users)
 	}
 
+	pub async fn deactivate_expired(ctx: &Ctx, mm: &ModelManager) -> Result<u64> {
+		let scoped_mm = mm.new_with_txn()?;
+		let dbx = scoped_mm.dbx();
+		dbx.begin_txn().await.map_err(Error::Dbx)?;
+		if let Err(err) = set_full_context_from_ctx_dbx(dbx, ctx).await {
+			let _ = dbx.rollback_txn().await;
+			return Err(err);
+		}
+		let deactivated = match dbx
+			.execute(
+				query(
+					"UPDATE users
+					 SET active = false, updated_by = $1, updated_at = now()
+					 WHERE active = true
+					   AND access_end_at IS NOT NULL
+					   AND access_end_at < now()",
+				)
+				.bind(ctx.user_id()),
+			)
+			.await
+		{
+			Ok(count) => count,
+			Err(err) => {
+				let _ = dbx.rollback_txn().await;
+				return Err(err.into());
+			}
+		};
+		dbx.commit_txn().await.map_err(Error::Dbx)?;
+		Ok(deactivated)
+	}
+
 	pub async fn update(
 		ctx: &Ctx,
 		mm: &ModelManager,
@@ -671,22 +702,6 @@ impl UserBmc {
 		};
 		dbx.commit_txn().await.map_err(Error::Dbx)?;
 		Ok(selected)
-	}
-
-	pub async fn delete(ctx: &Ctx, mm: &ModelManager, id: Uuid) -> Result<()> {
-		for attempt in 1..=USER_WRITE_MAX_ATTEMPTS {
-			match base_uuid::delete::<Self>(ctx, mm, id).await {
-				Ok(()) => return Ok(()),
-				Err(err)
-					if Self::is_retryable_write_error(&err)
-						&& attempt < USER_WRITE_MAX_ATTEMPTS =>
-				{
-					Self::backoff_after_retryable_error(attempt).await;
-				}
-				Err(err) => return Err(err),
-			}
-		}
-		unreachable!("user delete retry loop exhausted without returning")
 	}
 
 	pub async fn first_by_email<E>(
