@@ -843,7 +843,7 @@ CREATE TABLE if NOT EXISTS xml_import_history (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
     CONSTRAINT xml_import_history_status_valid CHECK (
-        status IN ('success', 'warning', 'error')
+        status IN ('success', 'warning', 'skipped', 'error')
     ),
     CONSTRAINT xml_import_history_authority_valid CHECK (
         validation_authority IS NULL OR validation_authority IN ('ich', 'fda', 'mfds')

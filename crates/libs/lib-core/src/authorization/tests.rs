@@ -293,6 +293,16 @@ fn home_workflow_read_exposes_case_list_without_merging_case_workflow() {
 }
 
 #[test]
+fn home_workflow_action_is_backed_by_the_home_workflow_grant() {
+	let action = policy_registry().action("home.workflow.read").unwrap();
+	assert_eq!(action.decision_stage, DecisionStage::SubjectOnly);
+	assert_eq!(
+		action.required_grants,
+		[GrantId::parse("home.workflow.read").unwrap()]
+	);
+}
+
+#[test]
 fn identifiers_reject_alias_like_or_noncanonical_values() {
 	for invalid in [
 		"",

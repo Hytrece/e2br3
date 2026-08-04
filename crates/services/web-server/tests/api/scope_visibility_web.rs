@@ -842,6 +842,45 @@ async fn test_user_scope_assignment_rejects_cross_sender_product() -> Result<()>
 
 #[serial]
 #[tokio::test]
+async fn test_user_scope_empty_array_clears_existing_assignment() -> Result<()> {
+	let mm = init_test_mm().await?;
+	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
+	let admin_token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
+	let admin_cookie = cookie_header(&admin_token.to_string());
+	let app = web_server::app(mm);
+	let sender_id =
+		create_sender_presave(&app, &admin_cookie, "Clear Sender", "CLEAR").await?;
+
+	update_user_scope(
+		&app,
+		&admin_cookie,
+		seed.viewer.id,
+		json!({ "access_sender_ids": [sender_id.to_string()] }),
+	)
+	.await?;
+	update_user_scope(
+		&app,
+		&admin_cookie,
+		seed.viewer.id,
+		json!({ "access_sender_ids": [] }),
+	)
+	.await?;
+
+	let (status, value) = request_json(
+		&app,
+		"GET",
+		&admin_cookie,
+		format!("/api/users/{}", seed.viewer.id),
+		None,
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK, "{value:?}");
+	assert_eq!(value["data"]["scope"]["assignedSenderIds"], json!([]));
+	Ok(())
+}
+
+#[serial]
+#[tokio::test]
 async fn test_case_get_does_not_match_sender_scope_by_message_header_only(
 ) -> Result<()> {
 	let mm = init_test_mm().await?;

@@ -9,11 +9,45 @@ use crate::ctx::Ctx;
 use crate::model::store::{set_full_context_dbx, set_full_context_dbx_or_rollback};
 use crate::model::ModelManager;
 use crate::model::Result;
+use serde::Serialize;
 use sqlx::types::time::OffsetDateTime;
 use sqlx::FromRow;
 use uuid::Uuid;
 
 // -- Types
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum XmlImportHistoryStatus {
+	Success,
+	Warning,
+	Skipped,
+	Error,
+}
+
+impl XmlImportHistoryStatus {
+	pub const fn as_str(self) -> &'static str {
+		match self {
+			Self::Success => "success",
+			Self::Warning => "warning",
+			Self::Skipped => "skipped",
+			Self::Error => "error",
+		}
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::XmlImportHistoryStatus;
+
+	#[test]
+	fn status_values_match_the_database_contract() {
+		assert_eq!(XmlImportHistoryStatus::Success.as_str(), "success");
+		assert_eq!(XmlImportHistoryStatus::Warning.as_str(), "warning");
+		assert_eq!(XmlImportHistoryStatus::Skipped.as_str(), "skipped");
+		assert_eq!(XmlImportHistoryStatus::Error.as_str(), "error");
+	}
+}
 
 /// Full row returned by the history list query (includes uploader email via JOIN).
 #[derive(Debug, FromRow)]
@@ -51,7 +85,7 @@ impl XmlImportHistoryBmc {
 		source_file_name: &str,
 		case_id: Option<Uuid>,
 		case_number: Option<&str>,
-		status: &str,
+		status: XmlImportHistoryStatus,
 		error_message: Option<&str>,
 	) -> Result<()> {
 		let dbx = mm.dbx();
@@ -79,7 +113,7 @@ impl XmlImportHistoryBmc {
 			.bind(source_file_name)
 			.bind(case_id)
 			.bind(case_number)
-			.bind(status)
+			.bind(status.as_str())
 			.bind(error_message)
 			.bind(ctx.user_id()),
 		)

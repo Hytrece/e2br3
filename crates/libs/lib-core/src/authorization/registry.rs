@@ -753,6 +753,14 @@ fn canonical_actions() -> Vec<ActionPolicyInput> {
 			Read,
 		),
 		action(
+			"home.workflow.read",
+			DecisionStage::SubjectOnly,
+			&["home.workflow.read"],
+			&[],
+			&[],
+			Read,
+		),
+		action(
 			"case.workflow.config.read",
 			DecisionStage::SubjectOnly,
 			&["case.workflow.read"],
