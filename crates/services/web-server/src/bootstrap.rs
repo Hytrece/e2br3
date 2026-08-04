@@ -346,12 +346,20 @@ mod tests {
 			"SERVICE_DB_URL",
 			"postgres://app_user:dev_only_pwd@localhost/app_db",
 		);
+		std::env::set_var(
+			"SERVICE_MIGRATION_DB_URL",
+			"postgres://app_user:dev_only_pwd@localhost/app_db",
+		);
 		std::env::set_var("SERVICE_WEB_FOLDER", "web-folder");
 		std::env::set_var("SERVICE_PWD_KEY", "ZmFrZV9rZXk");
 		std::env::set_var("SERVICE_TOKEN_KEY", "ZmFrZV9rZXk");
 		std::env::set_var("SERVICE_TOKEN_DURATION_SEC", "3600");
 		_dev_utils::init_dev().await;
-		ModelManager::new().await.expect("test model manager")
+		let mm = ModelManager::new().await.expect("test model manager");
+		web_server::initialize_authorization_storage()
+			.await
+			.expect("test authorization storage");
+		mm
 	}
 
 	#[tokio::test]
