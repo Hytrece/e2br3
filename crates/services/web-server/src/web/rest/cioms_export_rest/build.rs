@@ -44,7 +44,16 @@ pub(super) fn build_cioms_pdf_with_options(
 	let mut canvas = PdfCanvas::new();
 	canvas.stream.push_str("0.8 w\n");
 	if settings.orientation == "Portrait" {
-		super::layout::render_portrait_cioms(
+		let template = CIOMS_LANDSCAPE_TEMPLATE;
+		let scale = (width as f32 / template.page_width as f32)
+			.min(height as f32 / template.page_height as f32);
+		let translate_x =
+			(width as f32 - template.page_width as f32 * scale) / 2.0;
+		let translate_y =
+			(height as f32 - template.page_height as f32 * scale) / 2.0;
+		canvas.save_state();
+		canvas.transform(scale, scale, translate_x, translate_y);
+		render_landscape_cioms(
 			&mut canvas,
 			&ordered,
 			settings,
@@ -52,6 +61,7 @@ pub(super) fn build_cioms_pdf_with_options(
 			width,
 			height,
 		);
+		canvas.restore_state();
 	} else {
 		render_landscape_cioms(
 			&mut canvas,
