@@ -52,6 +52,7 @@ pub fn patch_c_safety_report(
 		&parser,
 		&mut xpath,
 		patch.combination_product_indicator,
+		patch.combination_product_indicator_null_flavor,
 	)?;
 	write_c_1_3(&mut doc, &parser, &mut xpath, patch.report_type)?;
 	write_c_1_9_1(&mut doc, &parser, &mut xpath, patch)?;
@@ -642,18 +643,25 @@ fn write_fda_c_1_12(
 	parser: &Parser,
 	xpath: &mut Context,
 	combination_product_indicator: Option<&str>,
+	combination_product_indicator_null_flavor: Option<&str>,
 ) -> Result<()> {
 	let component = "//hl7:component/hl7:observationEvent[hl7:code[@code='C156384' and @codeSystem='2.16.840.1.113883.3.26.1.1']]";
+	if combination_product_indicator.is_none()
+		&& combination_product_indicator_null_flavor.is_none()
+	{
+		remove_nodes(xpath, component);
+		return Ok(());
+	}
+	ensure_observation_event_component(
+		doc,
+		parser,
+		xpath,
+		"C156384",
+		"2.16.840.1.113883.3.26.1.1",
+		"BL",
+	)?;
+	let path = format!("{component}/hl7:value");
 	if let Some(value) = combination_product_indicator {
-		ensure_observation_event_component(
-			doc,
-			parser,
-			xpath,
-			"C156384",
-			"2.16.840.1.113883.3.26.1.1",
-			"BL",
-		)?;
-		let path = format!("{component}/hl7:value");
 		set_attr_first(
 			xpath,
 			&path,
@@ -661,8 +669,9 @@ fn write_fda_c_1_12(
 			normalize_bl_value(value).unwrap_or("false"),
 		);
 		clear_null_flavor_if_export_policy(xpath, "FDA.C.1.12.REQUIRED", &path);
-	} else {
-		remove_nodes(xpath, component);
+	} else if let Some(null_flavor) = combination_product_indicator_null_flavor {
+		remove_attr_first(xpath, &path, "value");
+		set_attr_first(xpath, &path, "nullFlavor", null_flavor);
 	}
 	Ok(())
 }

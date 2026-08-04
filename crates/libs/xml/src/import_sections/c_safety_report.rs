@@ -24,8 +24,11 @@ pub struct CSafetyReportImport {
 	pub additional_documents_available: Option<bool>,
 	pub local_criteria_report_type: Option<String>,
 	pub combination_product_report_indicator: Option<String>,
+	pub combination_product_report_indicator_null_flavor: Option<String>,
 	pub worldwide_unique_id: Option<String>,
 	pub first_sender_type: Option<String>,
+	pub other_case_identifiers_exist: Option<bool>,
+	pub other_case_identifiers_exist_null_flavor: Option<String>,
 	pub nullification_code: Option<String>,
 	pub nullification_reason: Option<String>,
 }
@@ -61,9 +64,14 @@ pub fn parse_c_safety_report(xml: &[u8]) -> Result<Option<CSafetyReportImport>> 
 	let additional_documents_available = read_c_1_6_1(&mut xpath)?;
 	let fulfil_expedited_criteria = read_c_1_7(&mut xpath)?;
 	let local_criteria_report_type = read_fda_c_1_7_1(&mut xpath)?;
-	let combination_product_report_indicator = read_fda_c_1_12(&mut xpath);
+	let (
+		combination_product_report_indicator,
+		combination_product_report_indicator_null_flavor,
+	) = read_fda_c_1_12(&mut xpath)?;
 	let worldwide_unique_id = read_c_1_8_1(&mut xpath)?;
 	let first_sender_type = read_c_1_8_2(&mut xpath)?;
+	let (other_case_identifiers_exist, other_case_identifiers_exist_null_flavor) =
+		read_c_1_9_1(&mut xpath)?;
 	let nullification_code = read_c_1_11_1(&mut xpath)?;
 	let nullification_reason = read_c_1_11_2(&mut xpath)?;
 
@@ -76,8 +84,11 @@ pub fn parse_c_safety_report(xml: &[u8]) -> Result<Option<CSafetyReportImport>> 
 		additional_documents_available,
 		local_criteria_report_type,
 		combination_product_report_indicator,
+		combination_product_report_indicator_null_flavor,
 		worldwide_unique_id,
 		first_sender_type,
+		other_case_identifiers_exist,
+		other_case_identifiers_exist_null_flavor,
 		nullification_code,
 		nullification_reason,
 	}))
@@ -240,11 +251,38 @@ fn read_fda_c_1_7_1(xpath: &mut Context) -> Result<Option<String>> {
 }
 
 /// e2b:FDA.C.1.12
-fn read_fda_c_1_12(xpath: &mut Context) -> Option<String> {
-	normalize_fda_combination_product_indicator(first_value_root(
+fn read_fda_c_1_12(xpath: &mut Context) -> Result<(Option<String>, Option<String>)> {
+	let raw = first_value_root(
 		xpath,
 		CSafetyReportPaths::FDA_COMBINATION_PRODUCT_INDICATOR_VALUE,
-	))
+	);
+	let value = normalize_fda_combination_product_indicator(raw.clone());
+	let null_flavor = first_value_root(
+		xpath,
+		CSafetyReportPaths::FDA_COMBINATION_PRODUCT_INDICATOR_NULL_FLAVOR,
+	);
+	if raw.is_some() && value.is_none() {
+		return Err(Error::InvalidXml {
+			message: "FDA.C.1.12: invalid boolean value".to_string(),
+			line: None,
+			column: None,
+		});
+	}
+	if value.is_some() && null_flavor.is_some() {
+		return Err(Error::InvalidXml {
+			message: "FDA.C.1.12: value and nullFlavor cannot both be set"
+				.to_string(),
+			line: None,
+			column: None,
+		});
+	}
+	import_constraint::boolean(
+		"combinationProductReportIndicator",
+		value.as_deref().and_then(|value| value.parse().ok()),
+		null_flavor.as_deref(),
+		input_contracts::generated::c::fda_c_1_12,
+	)?;
+	Ok((value, null_flavor))
 }
 
 /// e2b:C.1.8.1
@@ -269,6 +307,39 @@ fn read_c_1_8_2(xpath: &mut Context) -> Result<Option<String>> {
 		input_contracts::generated::c::c_1_8_2,
 	)?;
 	Ok(value)
+}
+
+/// e2b:C.1.9.1
+fn read_c_1_9_1(xpath: &mut Context) -> Result<(Option<bool>, Option<String>)> {
+	let raw =
+		first_value_root(xpath, CSafetyReportPaths::OTHER_CASE_IDENTIFIERS_EXIST);
+	let value = parse_bool_value(raw.clone());
+	let null_flavor = first_value_root(
+		xpath,
+		CSafetyReportPaths::OTHER_CASE_IDENTIFIERS_EXIST_NULL_FLAVOR,
+	);
+	if raw.is_some() && value.is_none() {
+		return Err(Error::InvalidXml {
+			message: "ICH.C.1.9.1: invalid boolean value".to_string(),
+			line: None,
+			column: None,
+		});
+	}
+	if value.is_some() && null_flavor.is_some() {
+		return Err(Error::InvalidXml {
+			message: "ICH.C.1.9.1: value and nullFlavor cannot both be set"
+				.to_string(),
+			line: None,
+			column: None,
+		});
+	}
+	import_constraint::boolean(
+		"otherCaseIdentifiersExist",
+		value,
+		null_flavor.as_deref(),
+		input_contracts::generated::c::c_1_9_1,
+	)?;
+	Ok((value, null_flavor))
 }
 
 /// e2b:C.1.11.1

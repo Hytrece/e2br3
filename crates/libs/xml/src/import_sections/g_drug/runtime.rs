@@ -223,7 +223,7 @@ async fn import_drugs(
 					drug_id,
 					sequence_number: (iidx + 1) as i32,
 					indication_text: ind.text,
-					indication_text_null_flavor: None,
+					indication_text_null_flavor: ind.text_null_flavor,
 					indication_meddra_version: ind.version,
 					indication_meddra_code: ind.code,
 				},

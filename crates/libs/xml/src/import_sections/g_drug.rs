@@ -111,6 +111,7 @@ pub struct GDrugDosageImport {
 #[derive(Debug)]
 pub struct GDrugIndicationImport {
 	pub text: Option<String>,
+	pub text_null_flavor: Option<String>,
 	pub version: Option<String>,
 	pub code: Option<String>,
 }
@@ -314,11 +315,12 @@ pub fn parse_g_drugs(xml: &[u8]) -> Result<Vec<GDrugImport>> {
 		let inds = find_nodes(&mut xpath, GDrugPaths::INDICATION_NODE, Some(&node))?;
 		let mut indications = Vec::new();
 		for ind in inds.into_iter() {
-			let text = read_g_k_7_r_1(&mut xpath, &ind)?;
+			let (text, text_null_flavor) = read_g_k_7_r_1(&mut xpath, &ind)?;
 			let code = read_g_k_7_r_2b(&mut xpath, &ind)?;
 			let version = read_g_k_7_r_2a(&mut xpath, &ind)?;
 			indications.push(GDrugIndicationImport {
 				text,
+				text_null_flavor,
 				version,
 				code,
 			});
@@ -905,10 +907,15 @@ fn read_g_k_4_r_11_2b(xpath: &mut Context, node: &Node) -> Result<Option<String>
 }
 
 /// e2b:G.k.7.r.1
-fn read_g_k_7_r_1(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
-	input_string(
+fn read_g_k_7_r_1(
+	xpath: &mut Context,
+	node: &Node,
+) -> Result<(Option<String>, Option<String>)> {
+	input_string_pair(
 		first_text(xpath, node, GDrugPaths::INDICATION_TEXT),
+		first_attr(xpath, node, GDrugPaths::INDICATION_TEXT_NULL_FLAVOR),
 		"indications[].indicationText",
+		"indications[].indicationTextNullFlavor",
 		input_contracts::generated::g::g_k_7_r_1,
 	)
 }

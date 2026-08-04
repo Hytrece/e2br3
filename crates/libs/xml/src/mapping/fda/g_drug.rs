@@ -125,6 +125,8 @@ impl GDrugPaths {
 	pub const INDICATION_NODE: &'static str =
 		"hl7:inboundRelationship[@typeCode='RSON']/hl7:observation/hl7:value";
 	pub const INDICATION_TEXT: &'static str = "hl7:originalText";
+	pub const INDICATION_TEXT_NULL_FLAVOR: &'static str =
+		"hl7:originalText/@nullFlavor";
 	pub const INDICATION_CODE: &'static str = "@code";
 	pub const INDICATION_VERSION: &'static str = "@codeSystemVersion";
 

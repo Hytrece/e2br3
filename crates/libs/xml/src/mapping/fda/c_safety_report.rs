@@ -42,6 +42,12 @@ impl CSafetyReportPaths {
 	pub const FIRST_SENDER_TYPE: &'static str =
 		"//hl7:outboundRelationship[@typeCode='SPRT'][hl7:relatedInvestigation/hl7:code[@code='1']]/hl7:relatedInvestigation/hl7:subjectOf2/hl7:controlActEvent/hl7:author/hl7:assignedEntity/hl7:code/@code";
 
+	// C.1.9.1 Other Case Identifiers in Previous Transmissions
+	pub const OTHER_CASE_IDENTIFIERS_EXIST: &'static str =
+		"//hl7:investigationEvent/hl7:subjectOf2/hl7:investigationCharacteristic[hl7:code[@code='2' and @codeSystem='2.16.840.1.113883.3.989.2.1.1.23']]/hl7:value/@value";
+	pub const OTHER_CASE_IDENTIFIERS_EXIST_NULL_FLAVOR: &'static str =
+		"//hl7:investigationEvent/hl7:subjectOf2/hl7:investigationCharacteristic[hl7:code[@code='2' and @codeSystem='2.16.840.1.113883.3.989.2.1.1.23']]/hl7:value/@nullFlavor";
+
 	// C.1.11.1 Nullification/Amendment Code
 	pub const NULLIFICATION_CODE: &'static str =
 		"//hl7:investigationEvent/hl7:subjectOf2/hl7:investigationCharacteristic[hl7:code[@code='3' and @codeSystem='2.16.840.1.113883.3.989.2.1.1.23']]/hl7:value/@code";
@@ -57,4 +63,6 @@ impl CSafetyReportPaths {
 	// FDA.C.1.12 Combination Product Report Indicator (FDA)
 	pub const FDA_COMBINATION_PRODUCT_INDICATOR_VALUE: &'static str =
 		"//hl7:component/hl7:observationEvent[hl7:code[@code='C156384' and @codeSystem='2.16.840.1.113883.3.26.1.1']]/hl7:value/@value";
+	pub const FDA_COMBINATION_PRODUCT_INDICATOR_NULL_FLAVOR: &'static str =
+		"//hl7:component/hl7:observationEvent[hl7:code[@code='C156384' and @codeSystem='2.16.840.1.113883.3.26.1.1']]/hl7:value/@nullFlavor";
 }

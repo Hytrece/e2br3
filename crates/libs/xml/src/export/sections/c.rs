@@ -642,6 +642,16 @@ pub fn export_c_safety_report_patch(
 		)
 		.then_some(report.combination_product_report_indicator.as_deref())
 		.flatten(),
+		combination_product_indicator_null_flavor: matches!(
+			authority,
+			lib_core::regulatory::RegulatoryAuthority::Fda
+		)
+		.then_some(
+			report
+				.combination_product_report_indicator_null_flavor
+				.as_deref(),
+		)
+		.flatten(),
 		nullification_code: report.nullification_code.as_deref(),
 		nullification_reason: report.nullification_reason.as_deref(),
 		sender_type: sender.and_then(|s| s.sender_type.as_deref()),

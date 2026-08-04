@@ -23,6 +23,7 @@ pub struct CSafetyReportPatch<'a> {
 	pub first_sender_type: Option<&'a str>,
 	pub local_criteria_report_type: Option<&'a str>,
 	pub combination_product_indicator: Option<&'a str>,
+	pub combination_product_indicator_null_flavor: Option<&'a str>,
 	pub nullification_code: Option<&'a str>,
 	pub nullification_reason: Option<&'a str>,
 	// C.3 Sender information (best-effort; patch only when values are provided)

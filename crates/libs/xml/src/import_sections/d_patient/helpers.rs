@@ -59,6 +59,7 @@ pub(crate) struct MedicalHistoryImport {
 #[derive(Debug)]
 pub(crate) struct PastDrugHistoryImport {
 	pub(crate) drug_name: Option<String>,
+	pub(crate) drug_name_null_flavor: Option<String>,
 	pub(crate) mpid: Option<String>,
 	pub(crate) mpid_version: Option<String>,
 	pub(crate) mfds_medicinal_product_version: Option<String>,
@@ -470,7 +471,7 @@ pub(crate) fn parse_past_drug_history(
 
 	let mut items = Vec::new();
 	for node in nodes {
-		let drug_name = read_d_8_r_1(&mut xpath, &node)?;
+		let (drug_name, drug_name_null_flavor) = read_d_8_r_1(&mut xpath, &node)?;
 		let (mfds_medicinal_product_version, mfds_medicinal_product_id) =
 			read_d_8_r_1_kr(&mut xpath, &node)?;
 		let (mpid_version, mpid) = read_d_8_r_2(&mut xpath, &node)?;
@@ -483,6 +484,7 @@ pub(crate) fn parse_past_drug_history(
 			read_d_8_r_7(&mut xpath, &node)?;
 		items.push(PastDrugHistoryImport {
 			drug_name,
+			drug_name_null_flavor,
 			mpid,
 			mpid_version,
 			mfds_medicinal_product_version,
@@ -508,12 +510,25 @@ const PRODUCT: &str = "hl7:consumable/hl7:instanceOfKind/hl7:kindOfProduct";
 fn read_d_8_r_1(
 	xpath: &mut Context,
 	node: &libxml::tree::Node,
-) -> Result<Option<String>> {
-	input_string(
-		first_text(xpath, node, &format!("{PRODUCT}/hl7:name")),
+) -> Result<(Option<String>, Option<String>)> {
+	let path = format!("{PRODUCT}/hl7:name");
+	let value = first_text(xpath, node, &path);
+	let null_flavor = first_attr(xpath, node, &path, "nullFlavor");
+	if value.is_some() && null_flavor.is_some() {
+		return Err(Error::InvalidXml {
+			message: "ICH.D.8.r.1: value and nullFlavor cannot both be set"
+				.to_string(),
+			line: None,
+			column: None,
+		});
+	}
+	import_constraint::string(
 		"drugName",
+		value.as_deref(),
+		null_flavor.as_deref(),
 		input_contracts::generated::d::d_8_r_1,
-	)
+	)?;
+	Ok((value, null_flavor))
 }
 
 /// e2b:D.8.r.1.KR.1a
@@ -1345,6 +1360,7 @@ pub(crate) fn parse_parent_information(xml: &[u8]) -> Result<Option<ParentImport
 		let (phpid_version, phpid) = read_d_10_8_r_3(&mut xpath, &obs)?;
 		past_drugs.push(PastDrugHistoryImport {
 			drug_name,
+			drug_name_null_flavor: None,
 			mpid,
 			mpid_version,
 			mfds_medicinal_product_version,

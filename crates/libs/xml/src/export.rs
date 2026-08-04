@@ -173,6 +173,7 @@ mod tests {
 			first_sender_type: None,
 			local_criteria_report_type: None,
 			combination_product_indicator: None,
+			combination_product_indicator_null_flavor: None,
 			nullification_code: None,
 			nullification_reason: None,
 			sender_type: None,

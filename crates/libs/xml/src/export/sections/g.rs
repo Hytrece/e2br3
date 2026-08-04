@@ -402,13 +402,19 @@ fn write_g_k_4_r_3(value: &DosageInformation) -> Option<&str> {
 }
 
 /// e2b:G.k.4.r.4
-fn write_g_k_4_r_4(value: &DosageInformation) -> Option<Date> {
-	value.first_administration_date
+fn write_g_k_4_r_4(value: &DosageInformation) -> (Option<Date>, Option<&str>) {
+	(
+		value.first_administration_date,
+		value.first_administration_date_null_flavor.as_deref(),
+	)
 }
 
 /// e2b:G.k.4.r.5
-fn write_g_k_4_r_5(value: &DosageInformation) -> Option<Date> {
-	value.last_administration_date
+fn write_g_k_4_r_5(value: &DosageInformation) -> (Option<Date>, Option<&str>) {
+	(
+		value.last_administration_date,
+		value.last_administration_date_null_flavor.as_deref(),
+	)
 }
 
 /// e2b:G.k.4.r.6a
@@ -1034,23 +1040,39 @@ pub(crate) fn drug_fragment(
 			}
 			out.push_str("/></comp></effectiveTime>");
 		}
-		if dose.first_administration_date.is_some()
-			|| dose.last_administration_date.is_some()
+		let (start, start_null_flavor) = write_g_k_4_r_4(dose);
+		let (end, end_null_flavor) = write_g_k_4_r_5(dose);
+		if start.is_some()
+			|| start_null_flavor.is_some()
+			|| end.is_some()
+			|| end_null_flavor.is_some()
 			|| dose.duration_value.is_some()
 		{
 			out.push_str("<effectiveTime xsi:type=\"SXPR_TS\">");
-			if let Some(start) = write_g_k_4_r_4(dose) {
+			if let Some(start) = start {
 				out.push_str(
 					"<comp xsi:type=\"IVL_TS\" operator=\"A\"><low value=\"",
 				);
 				out.push_str(&fmt_ts(start, None));
 				out.push_str("\"/></comp>");
+			} else if let Some(null_flavor) = start_null_flavor {
+				out.push_str(
+					"<comp xsi:type=\"IVL_TS\" operator=\"A\"><low nullFlavor=\"",
+				);
+				out.push_str(&xml_escape(null_flavor));
+				out.push_str("\"/></comp>");
 			}
-			if let Some(end) = write_g_k_4_r_5(dose) {
+			if let Some(end) = end {
 				out.push_str(
 					"<comp xsi:type=\"IVL_TS\" operator=\"A\"><high value=\"",
 				);
 				out.push_str(&fmt_ts(end, None));
+				out.push_str("\"/></comp>");
+			} else if let Some(null_flavor) = end_null_flavor {
+				out.push_str(
+					"<comp xsi:type=\"IVL_TS\" operator=\"A\"><high nullFlavor=\"",
+				);
+				out.push_str(&xml_escape(null_flavor));
 				out.push_str("\"/></comp>");
 			}
 			if let Some(width) = write_g_k_4_r_6a(dose) {
@@ -1209,10 +1231,15 @@ pub(crate) fn drug_fragment(
 			out.push_str("\"");
 		}
 		out.push_str(">");
-		if let Some(text) = write_g_k_7_r_1(ind) {
+		let (text, text_null_flavor) = write_g_k_7_r_1(ind);
+		if let Some(text) = text {
 			out.push_str("<originalText>");
 			out.push_str(&xml_escape(text));
 			out.push_str("</originalText>");
+		} else if let Some(null_flavor) = text_null_flavor {
+			out.push_str("<originalText nullFlavor=\"");
+			out.push_str(&xml_escape(null_flavor));
+			out.push_str("\"/>");
 		}
 		out.push_str("</value></observation></inboundRelationship>");
 	}
@@ -1221,8 +1248,11 @@ pub(crate) fn drug_fragment(
 }
 
 /// e2b:G.k.7.r.1
-fn write_g_k_7_r_1(value: &DrugIndication) -> Option<&str> {
-	value.indication_text.as_deref()
+fn write_g_k_7_r_1(value: &DrugIndication) -> (Option<&str>, Option<&str>) {
+	(
+		value.indication_text.as_deref(),
+		value.indication_text_null_flavor.as_deref(),
+	)
 }
 
 /// e2b:G.k.7.r.2a

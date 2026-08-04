@@ -142,9 +142,12 @@ async fn import_c_1_safety_report(
 					fulfil_expedited_criteria,
 					local_criteria_report_type,
 					combination_product_report_indicator,
+					combination_product_report_indicator_null_flavor,
 					worldwide_unique_id,
 					first_sender_type,
 					additional_documents_available,
+					other_case_identifiers_exist,
+					other_case_identifiers_exist_null_flavor,
 					nullification_code,
 					nullification_reason,
 					receiver_organization,
@@ -152,7 +155,7 @@ async fn import_c_1_safety_report(
 					updated_at,
 					created_by
 				) VALUES (
-					$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,NOW(),NOW(),$17
+					$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,NOW(),NOW(),$20
 				)
 				ON CONFLICT (case_id) DO UPDATE SET
 					safety_report_id = EXCLUDED.safety_report_id,
@@ -164,14 +167,17 @@ async fn import_c_1_safety_report(
 					fulfil_expedited_criteria = EXCLUDED.fulfil_expedited_criteria,
 					local_criteria_report_type = EXCLUDED.local_criteria_report_type,
 					combination_product_report_indicator = EXCLUDED.combination_product_report_indicator,
+					combination_product_report_indicator_null_flavor = EXCLUDED.combination_product_report_indicator_null_flavor,
 					worldwide_unique_id = EXCLUDED.worldwide_unique_id,
 					first_sender_type = EXCLUDED.first_sender_type,
 					additional_documents_available = EXCLUDED.additional_documents_available,
+					other_case_identifiers_exist = EXCLUDED.other_case_identifiers_exist,
+					other_case_identifiers_exist_null_flavor = EXCLUDED.other_case_identifiers_exist_null_flavor,
 					nullification_code = EXCLUDED.nullification_code,
 					nullification_reason = EXCLUDED.nullification_reason,
 					receiver_organization = EXCLUDED.receiver_organization,
 					updated_at = NOW(),
-					updated_by = $17",
+					updated_by = $20",
 			)
 			.bind(case_id)
 			.bind(safety_report_id)
@@ -183,9 +189,12 @@ async fn import_c_1_safety_report(
 			.bind(report.fulfil_expedited_criteria)
 			.bind(report.local_criteria_report_type)
 			.bind(report.combination_product_report_indicator)
+			.bind(report.combination_product_report_indicator_null_flavor)
 			.bind(report.worldwide_unique_id)
 			.bind(report.first_sender_type)
 			.bind(report.additional_documents_available)
+			.bind(report.other_case_identifiers_exist)
+			.bind(report.other_case_identifiers_exist_null_flavor)
 			.bind(report.nullification_code)
 			.bind(report.nullification_reason)
 			.bind(receiver_organization)
@@ -920,8 +929,11 @@ mod tests {
 			additional_documents_available: None,
 			local_criteria_report_type: None,
 			combination_product_report_indicator: None,
+			combination_product_report_indicator_null_flavor: None,
 			worldwide_unique_id: None,
 			first_sender_type: None,
+			other_case_identifiers_exist: None,
+			other_case_identifiers_exist_null_flavor: None,
 			nullification_code: None,
 			nullification_reason: None,
 		}
