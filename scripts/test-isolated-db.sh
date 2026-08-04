@@ -4,6 +4,19 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 maintenance_url="${SERVICE_DB_URL:?SERVICE_DB_URL is required}"
 
+needs_xml_assets=0
+for arg in "$@"; do
+	case "$arg" in
+		--workspace|web-server)
+			needs_xml_assets=1
+			;;
+	esac
+done
+
+if [[ "$needs_xml_assets" -eq 1 ]]; then
+	"$repo_root/scripts/prepare-xml-assets.sh"
+fi
+
 for required_command in createdb psql dropdb cargo; do
 	if ! command -v "$required_command" >/dev/null 2>&1; then
 		printf 'required command not found: %s\n' "$required_command" >&2
