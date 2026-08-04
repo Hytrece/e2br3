@@ -478,11 +478,27 @@ fn identifier_allowed(allowed: &[String], identifier: Uuid) -> bool {
 	allowed.contains(&identifier.to_string().to_ascii_lowercase())
 }
 
+fn product_allowed_by_scope(
+	sender_ids: &[String],
+	product_ids: &[String],
+	product_id: Uuid,
+	product_sender_id: Option<Uuid>,
+) -> bool {
+	identifier_allowed(product_ids, product_id)
+		&& product_sender_id
+			.is_none_or(|sender_id| identifier_allowed(sender_ids, sender_id))
+}
+
 pub(crate) fn product_presave_allowed(
 	scope: &EnforcedScopeFilter,
 	entity: &ProductPresave,
 ) -> bool {
-	identifier_allowed(scope.product_ids(), entity.id)
+	product_allowed_by_scope(
+		scope.sender_ids(),
+		scope.product_ids(),
+		entity.id,
+		entity.sender_presave_id,
+	)
 }
 
 pub(super) fn deny_presave_scope() -> Error {
@@ -739,8 +755,41 @@ pub(super) fn filter_product_presaves_for_scope(
 ) -> Vec<ProductPresave> {
 	entities
 		.into_iter()
-		.filter(|entity| identifier_allowed(scope.product_ids(), entity.id))
+		.filter(|entity| product_presave_allowed(scope, entity))
 		.collect()
+}
+
+#[cfg(test)]
+mod tests {
+	use super::product_allowed_by_scope;
+	use uuid::Uuid;
+
+	#[test]
+	fn product_scope_includes_linked_sender_scope() {
+		let product_id = Uuid::new_v4();
+		let allowed_sender_id = Uuid::new_v4();
+		let blocked_sender_id = Uuid::new_v4();
+		let sender_scope = vec![allowed_sender_id.to_string()];
+
+		assert!(product_allowed_by_scope(
+			&sender_scope,
+			&[],
+			product_id,
+			Some(allowed_sender_id),
+		));
+		assert!(!product_allowed_by_scope(
+			&sender_scope,
+			&[],
+			product_id,
+			Some(blocked_sender_id),
+		));
+		assert!(product_allowed_by_scope(
+			&sender_scope,
+			&[],
+			product_id,
+			None,
+		));
+	}
 }
 
 pub(super) fn filter_study_presaves_for_scope(
