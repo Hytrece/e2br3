@@ -39,7 +39,8 @@ fn export_g_drug_basic() {
 		gestation_period_exposure_value: Some(10.into()),
 		gestation_period_exposure_unit: Some("wk".to_string()),
 		action_taken: Some("5".to_string()),
-		fda_additional_info_coded: Some("1".to_string()),
+		fda_additional_info_coded: None,
+		fda_additional_info_coded_null_flavor: Some("NA".to_string()),
 		drug_additional_info_codes_json: None,
 		drug_additional_information: None,
 		fda_specialized_product_category: None,
@@ -192,4 +193,11 @@ fn export_g_drug_basic() {
 		)
 		.unwrap();
 	assert_eq!(gestation_unit, "wk");
+	let fda_additional_info_null_flavor = xpath
+		.findvalue(
+			"//hl7:outboundRelationship2/hl7:observation[hl7:code[@code='9']]/hl7:value/@nullFlavor",
+			None,
+		)
+		.unwrap();
+	assert_eq!(fda_additional_info_null_flavor, "NA");
 }

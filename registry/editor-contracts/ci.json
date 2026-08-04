@@ -189,8 +189,7 @@
         "status": "verified",
         "issuePath": "safetyReportIdentification.fulfilExpeditedCriteria"
       },
-      "payloadPath": "fulfilExpeditedCriteria",
-      "nullFlavorPartnerCode": "C.1.local.fulfilExpeditedCriteriaNullFlavor"
+      "payloadPath": "fulfilExpeditedCriteria"
     },
     {
       "code": "FDA.C.1.7.1",
@@ -452,28 +451,6 @@
         "reason": "Source document name is app-local and has no business validation rule."
       },
       "payloadPath": "[].sourceDocumentName"
-    },
-    {
-      "code": "C.1.local.fulfilExpeditedCriteriaNullFlavor",
-      "authority": "ICH",
-      "frontendPath": "safetyReportIdentification.fulfilExpeditedCriteriaNullFlavor",
-      "projectionPath": "safetyReportIdentification.fulfilExpeditedCriteriaNullFlavor",
-      "patch": {
-        "kind": "row",
-        "owner": "safetyReportIdentification"
-      },
-      "roundTripValue": "NI",
-      "constraint": {
-        "status": "verified",
-        "ruleCode": "ICH.C.1.7.NULLFLAVOR.ALLOWED",
-        "invalidValue": "MSK"
-      },
-      "businessValidation": {
-        "status": "not_applicable",
-        "reason": "Business validation consumes this companion value but emits issues on fulfilExpeditedCriteria."
-      },
-      "payloadPath": "fulfilExpeditedCriteriaNullFlavor",
-      "nullFlavorPartnerCode": "C.1.7"
     },
     {
       "code": "C.1.local.combinationProductReportIndicatorNullFlavor",

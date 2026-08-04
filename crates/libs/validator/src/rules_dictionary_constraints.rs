@@ -619,7 +619,7 @@ pub const ALLOWED_VALUE_RULES: &[AllowedValueRuleMetadata] = &[
 	AllowedValueRuleMetadata {
 		code: "ICH.D.9.3.ALLOWED.VALUE",
 		authority: Ich,
-		source_hash: 0xd2c9d8fc9913f979,
+		source_hash: 0x3b0d6472dc0d1b30,
 	},
 	AllowedValueRuleMetadata {
 		code: "ICH.D.9.4.r.1a.ALLOWED.VALUE",
@@ -1813,11 +1813,6 @@ pub const NULL_FLAVOR_RULES: &[NullFlavorRuleMetadata] = &[
 		source_hash: 0x709eb6927064a55d,
 	},
 	NullFlavorRuleMetadata {
-		code: "ICH.C.2.r.3.NULLFLAVOR.ALLOWED",
-		authority: Ich,
-		source_hash: 0x1f1bc6ff6e42cd19,
-	},
-	NullFlavorRuleMetadata {
 		code: "ICH.C.2.r.4.NULLFLAVOR.ALLOWED",
 		authority: Ich,
 		source_hash: 0x6249e619db75f1c3,
@@ -1930,7 +1925,7 @@ pub const NULL_FLAVOR_RULES: &[NullFlavorRuleMetadata] = &[
 	NullFlavorRuleMetadata {
 		code: "ICH.D.9.3.NULLFLAVOR.ALLOWED",
 		authority: Ich,
-		source_hash: 0x57c7f602e9152a31,
+		source_hash: 0xf3f5390a37dfb1c8,
 	},
 	NullFlavorRuleMetadata {
 		code: "ICH.D.10.1.NULLFLAVOR.ALLOWED",
@@ -2023,11 +2018,6 @@ pub const NULL_FLAVOR_RULES: &[NullFlavorRuleMetadata] = &[
 		source_hash: 0x6249e619db75f1c3,
 	},
 	NullFlavorRuleMetadata {
-		code: "ICH.F.r.3.2.NULLFLAVOR.ALLOWED",
-		authority: Ich,
-		source_hash: 0x6e15ee267d060fdb,
-	},
-	NullFlavorRuleMetadata {
 		code: "ICH.G.k.4.r.4.NULLFLAVOR.ALLOWED",
 		authority: Ich,
 		source_hash: 0x709eb6927064a55d,
@@ -2071,6 +2061,11 @@ pub const NULL_FLAVOR_RULES: &[NullFlavorRuleMetadata] = &[
 		code: "FDA.C.5.6.r.NULLFLAVOR.ALLOWED",
 		authority: Fda,
 		source_hash: 0x09202b07b5b51eb0,
+	},
+	NullFlavorRuleMetadata {
+		code: "FDA.D.1.NULLFLAVOR.ALLOWED",
+		authority: Fda,
+		source_hash: 0x1e740780ed9c97f6,
 	},
 	NullFlavorRuleMetadata {
 		code: "FDA.D.11.r.1.NULLFLAVOR.ALLOWED",

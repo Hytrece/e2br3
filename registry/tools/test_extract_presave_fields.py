@@ -38,13 +38,13 @@ class PresaveFieldExtractorTests(unittest.TestCase):
     def test_extracts_frontend_fields_from_form_and_type_sources(self):
         source = '''
   reporterGivenName?: string;
-  reporterCountryNullFlavor?: string;
+  reporterGivenNameNullFlavor?: string;
   id?: string;
   <Input {...register("reporterGivenName")} />
-  <Controller name="reporterCountryNullFlavor" />
+  <Controller name="reporterGivenNameNullFlavor" />
 '''
         self.assertEqual(
-            {"reporter.reporterGivenName", "reporter.reporterCountryNullFlavor"},
+            {"reporter.reporterGivenName", "reporter.reporterGivenNameNullFlavor"},
             extractor.extract_presave_frontend_source(source, "reporter"),
         )
 
@@ -77,19 +77,17 @@ pub struct ReporterPresave {
         self.assertIn("reporter.reporterGivenNameNullFlavor", frontend)
         self.assertIn("reporter.reporterOrganizationNullFlavor", frontend)
         self.assertIn("reporter.reporterTelephoneNullFlavor", frontend)
-        self.assertIn("reporter.reporterCountryNullFlavor", frontend)
         self.assertIn("ReporterPresave.reporter_title_null_flavor", backend)
         self.assertIn("ReporterPresave.reporter_given_name_null_flavor", backend)
         self.assertIn("ReporterPresave.organization_null_flavor", backend)
         self.assertIn("ReporterPresave.telephone_null_flavor", backend)
-        self.assertIn("ReporterPresave.country_code_null_flavor", backend)
         self.assertIn("ReporterPresave.qualification_null_flavor", backend)
 
     def test_extracts_reporter_to_primary_source_transfers(self):
         source = '''
 return {
   reporterGivenName: data.reporterGivenName || "",
-  reporterCountryNullFlavor: toNullFlavor(data.reporterCountryNullFlavor),
+  reporterGivenNameNullFlavor: toNullFlavor(data.reporterGivenNameNullFlavor),
 };
 '''
         self.assertEqual(
@@ -99,8 +97,8 @@ return {
                     "PrimarySource.reporter_given_name",
                 ),
                 (
-                    "ReporterPresave.country_code_null_flavor",
-                    "PrimarySource.country_code_null_flavor",
+                    "ReporterPresave.reporter_given_name_null_flavor",
+                    "PrimarySource.reporter_given_name_null_flavor",
                 ),
             },
             extractor.extract_reporter_transfer_source(source),

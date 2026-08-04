@@ -70,11 +70,7 @@ pub(super) fn serialize_scope_input(
 			.map(|value| value.trim().to_string())
 			.filter(|value| !value.is_empty())
 			.collect::<Vec<_>>();
-		if values.is_empty() {
-			None
-		} else {
-			Some(serde_json::json!(values).to_string())
-		}
+		Some(serde_json::json!(values).to_string())
 	})
 }
 
@@ -88,6 +84,86 @@ pub(super) fn validate_uuid_scope(
 		})?;
 	}
 	Ok(())
+}
+
+pub(super) async fn validate_scope_hierarchy(
+	ctx: &Ctx,
+	mm: &ModelManager,
+	organization_id: Uuid,
+	sender_ids: &[String],
+	product_ids: &[String],
+	study_ids: &[String],
+) -> Result<()> {
+	let sender_ids = sender_ids
+		.iter()
+		.map(|value| value.trim().to_ascii_lowercase())
+		.filter(|value| !value.is_empty())
+		.collect::<Vec<_>>();
+	let product_ids = product_ids
+		.iter()
+		.map(|value| value.trim().to_ascii_lowercase())
+		.filter(|value| !value.is_empty())
+		.collect::<Vec<_>>();
+	let study_ids = study_ids
+		.iter()
+		.map(|value| value.trim().to_ascii_lowercase())
+		.filter(|value| !value.is_empty())
+		.collect::<Vec<_>>();
+
+	let violation = lib_rest_core::with_rls_read(mm, ctx, |dbx| {
+		Box::pin(async move {
+			dbx.fetch_one(
+				sqlx::query_as::<_, (Option<String>,)>(
+					"SELECT validate_scope_assignment($1, $2, $3, $4)",
+				)
+				.bind(organization_id)
+				.bind(&sender_ids)
+				.bind(&product_ids)
+				.bind(&study_ids),
+			)
+			.await
+			.map(|row| row.0)
+			.map_err(|error| Error::Model(error.into()))
+		})
+	})
+	.await?;
+
+	match violation.as_deref() {
+		None => Ok(()),
+		Some("sender_not_found") => Err(Error::BadRequest {
+			message: "access_sender_ids must reference active Senders in the organization"
+				.to_string(),
+		}),
+		Some("product_sender_mismatch") => Err(Error::BadRequest {
+			message: "access_product_ids must reference Products belonging to access_sender_ids"
+				.to_string(),
+		}),
+		Some("study_product_mismatch") => Err(Error::BadRequest {
+			message: "access_study_ids must reference Studies belonging to access_product_ids"
+				.to_string(),
+		}),
+		Some("study_sender_mismatch") => Err(Error::BadRequest {
+			message: "access_study_ids must reference Studies belonging to access_sender_ids"
+				.to_string(),
+		}),
+		Some(violation) => Err(Error::BadRequest {
+			message: format!("invalid scope assignment: {violation}"),
+		}),
+	}
+}
+
+pub(super) fn scope_values_for_update(
+	value: Option<&ScopeListInput>,
+	current: Option<&str>,
+) -> Vec<String> {
+	value
+		.and_then(|value| parse_scope_input(Some(value.clone())))
+		.or_else(|| {
+			parse_scope_input(
+				current.map(|value| ScopeListInput::Encoded(value.to_string())),
+			)
+		})
+		.unwrap_or_default()
 }
 
 pub(super) fn validate_optional_uuid_identifier(
@@ -381,5 +457,14 @@ mod uuid_scope_tests {
 			&None,
 			&Some(ScopeListInput::List(vec![Uuid::new_v4().to_string()])),
 		));
+	}
+
+	#[test]
+	fn empty_scope_serializes_as_explicit_clear() {
+		assert_eq!(
+			serialize_scope_input(Some(ScopeListInput::List(Vec::new()))),
+			Some("[]".to_string())
+		);
+		assert_eq!(serialize_scope_input(None), None);
 	}
 }

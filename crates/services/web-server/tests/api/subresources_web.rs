@@ -134,8 +134,7 @@ async fn create_patient(app: &Router, cookie: &str, case_id: Uuid) -> Result<Uui
 
 #[serial]
 #[tokio::test]
-async fn patient_physical_fields_preserve_null_flavors_and_ucum_units() -> Result<()>
-{
+async fn patient_physical_fields_preserve_values_and_ucum_units() -> Result<()> {
 	let mm = init_test_mm().await?;
 	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
 	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
@@ -150,8 +149,8 @@ async fn patient_physical_fields_preserve_null_flavors_and_ucum_units() -> Resul
 			"age_unit": "10.a",
 			"gestation_period": 2,
 			"gestation_period_unit": "{Trimester}",
-			"weight_kg_null_flavor": "NI",
-			"height_cm_null_flavor": "UNK"
+			"weight_kg": 25.5,
+			"height_cm": 120
 		}
 	});
 	let (status, body) =
@@ -166,10 +165,10 @@ async fn patient_physical_fields_preserve_null_flavors_and_ucum_units() -> Resul
 	let payload: Value = serde_json::from_slice(&body)?;
 	assert_eq!(payload["data"]["age_unit"], "10.a");
 	assert_eq!(payload["data"]["gestation_period_unit"], "{Trimester}");
-	assert_eq!(payload["data"]["weight_kg"], Value::Null);
-	assert_eq!(payload["data"]["height_cm"], Value::Null);
-	assert_eq!(payload["data"]["weight_kg_null_flavor"], "NI");
-	assert_eq!(payload["data"]["height_cm_null_flavor"], "UNK");
+	assert_eq!(payload["data"]["weight_kg"], "25.5");
+	assert_eq!(payload["data"]["height_cm"], "120");
+	assert!(payload["data"].get("weight_kg_null_flavor").is_none());
+	assert!(payload["data"].get("height_cm_null_flavor").is_none());
 
 	Ok(())
 }
@@ -1566,28 +1565,6 @@ async fn test_drug_subresources_endpoints_ok() -> Result<()> {
 	assert_eq!(value["data"]["route_termid"], "ROUTE-1");
 	assert_eq!(value["data"]["route_of_administration"], "001");
 	assert_eq!(value["data"]["parent_route_termid"], "PROUTE-1");
-
-	let body = json!({"data": {
-		"drug_id": drug_id,
-		"sequence_number": 2,
-		"batch_lot_number_null_flavor": "ASKU"
-	}});
-	let (status, body) = post_json(
-		&app,
-		&cookie,
-		format!("/api/cases/{case_id}/drugs/{drug_id}/dosages"),
-		body,
-	)
-	.await?;
-	assert_eq!(
-		status,
-		StatusCode::CREATED,
-		"{}",
-		String::from_utf8_lossy(&body)
-	);
-	let value: Value = serde_json::from_slice(&body)?;
-	assert_eq!(value["data"]["batch_lot_number"], Value::Null);
-	assert_eq!(value["data"]["batch_lot_number_null_flavor"], "ASKU");
 
 	let body = json!({"data": {
 		"drug_id": drug_id,

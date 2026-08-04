@@ -1565,7 +1565,6 @@ pub struct ReporterPresave {
 	// MFDS.C.2.r.4.KR.1 - Other health professional type
 	pub qualification_kr1: Option<String>,
 	pub primary_source_regulatory: Option<String>,
-	pub country_code_null_flavor: Option<String>,
 	pub qualification_null_flavor: Option<String>,
 	pub created_at: OffsetDateTime,
 	pub updated_at: OffsetDateTime,
@@ -1603,7 +1602,6 @@ pub struct ReporterPresaveForCreate {
 	// MFDS.C.2.r.4.KR.1 - Other health professional type
 	pub qualification_kr1: Option<String>,
 	pub primary_source_regulatory: Option<String>,
-	pub country_code_null_flavor: Option<String>,
 	pub qualification_null_flavor: Option<String>,
 }
 
@@ -1636,7 +1634,6 @@ struct ReporterPresaveForInsert {
 	qualification: Option<String>,
 	qualification_kr1: Option<String>,
 	primary_source_regulatory: Option<String>,
-	country_code_null_flavor: Option<String>,
 	qualification_null_flavor: Option<String>,
 }
 
@@ -1672,7 +1669,6 @@ impl IntoOrgScopedCreate for ReporterPresaveForCreate {
 			qualification: self.qualification,
 			qualification_kr1: self.qualification_kr1,
 			primary_source_regulatory: self.primary_source_regulatory,
-			country_code_null_flavor: self.country_code_null_flavor,
 			qualification_null_flavor: self.qualification_null_flavor,
 		}
 	}
@@ -1709,7 +1705,6 @@ pub struct ReporterPresaveForUpdate {
 	// MFDS.C.2.r.4.KR.1 - Other health professional type
 	pub qualification_kr1: Option<String>,
 	pub primary_source_regulatory: Option<String>,
-	pub country_code_null_flavor: Option<String>,
 	pub qualification_null_flavor: Option<String>,
 }
 
@@ -1737,7 +1732,6 @@ impl ReporterPresaveBmc {
 			data.state_null_flavor.as_deref(),
 			data.postcode_null_flavor.as_deref(),
 			data.telephone_null_flavor.as_deref(),
-			data.country_code_null_flavor.as_deref(),
 			data.qualification_null_flavor.as_deref(),
 		)?;
 		Self::validate_identity(
@@ -1810,7 +1804,6 @@ impl ReporterPresaveBmc {
 			data.state_null_flavor.as_deref(),
 			data.postcode_null_flavor.as_deref(),
 			data.telephone_null_flavor.as_deref(),
-			data.country_code_null_flavor.as_deref(),
 			data.qualification_null_flavor.as_deref(),
 		)?;
 		if data.deleted != Some(true) {
@@ -1891,19 +1884,11 @@ impl ReporterPresaveBmc {
 		state_null_flavor: Option<&str>,
 		postcode_null_flavor: Option<&str>,
 		telephone_null_flavor: Option<&str>,
-		country_code_null_flavor: Option<&str>,
 		qualification_null_flavor: Option<&str>,
 	) -> Result<()> {
 		const ELEMENT_ALLOWED: &[NullFlavor] =
 			&[NullFlavor::MSK, NullFlavor::ASKU, NullFlavor::NASK];
 		const TITLE_ALLOWED: &[NullFlavor] = &[
-			NullFlavor::MSK,
-			NullFlavor::UNK,
-			NullFlavor::ASKU,
-			NullFlavor::NASK,
-		];
-		// C.2.r.3 country additionally permits UNK per the ICH dictionary.
-		const COUNTRY_ALLOWED: &[NullFlavor] = &[
 			NullFlavor::MSK,
 			NullFlavor::UNK,
 			NullFlavor::ASKU,
@@ -1939,11 +1924,6 @@ impl ReporterPresaveBmc {
 		] {
 			validate_null_flavor_set(field, value, ELEMENT_ALLOWED)?;
 		}
-		validate_null_flavor_set(
-			"country_code_null_flavor",
-			country_code_null_flavor,
-			COUNTRY_ALLOWED,
-		)?;
 		validate_null_flavor_set(
 			"qualification_null_flavor",
 			qualification_null_flavor,

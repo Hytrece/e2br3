@@ -4,11 +4,14 @@ use super::helpers::{
 };
 use crate::allowed_value::{true_marker_value, ConstraintValue};
 use crate::{
-	has_text, should_case_validation_require_required_intervention,
-	FdaValidationContext, RegulatoryAuthority, RuleFacts, ValidationContext,
-	ValidationIssue,
+	has_text, push_business_issue,
+	should_case_validation_require_required_intervention, FdaValidationContext,
+	RegulatoryAuthority, RuleFacts, ValidationContext, ValidationIssue,
 };
 use lib_core::model::reaction::Reaction;
+use lib_core::regulatory::{
+	is_mfds_clinical_trial_receiver, is_mfds_compassionate_use_receiver,
+};
 use sqlx::types::Decimal;
 use std::borrow::Cow;
 
@@ -356,6 +359,84 @@ fn e_i_7(
 	}
 }
 
+/// ICH.E.i.8: medical confirmation is omitted for reports from an HCP.
+fn e_i_8(
+	idx: usize,
+	reaction: &Reaction,
+	reported_by_hcp: bool,
+	issues: &mut Vec<ValidationIssue>,
+) {
+	if reported_by_hcp && reaction.medical_confirmation.is_some() {
+		push_business_issue(
+			issues,
+			"ICH.E.i.8.HCP.OMIT",
+			format!("reactions.{idx}.medicalConfirmation"),
+			"Medical confirmation must be omitted when the report is from a healthcare professional",
+		);
+	}
+}
+
+/// MFDS.E.i.4 / E.i.5: reaction dates are required for CT/CU reports.
+fn mfds_e_i_4_5(idx: usize, reaction: &Reaction, issues: &mut Vec<ValidationIssue>) {
+	if reaction.start_date.is_none()
+		&& !has_text(reaction.start_date_null_flavor.as_deref())
+	{
+		push_business_issue(
+			issues,
+			"MFDS.E.i.4.REQUIRED",
+			format!("reactions.{idx}.startDate"),
+			"Reaction start date is required for CT/CU reports",
+		);
+	}
+	if reaction.end_date.is_none()
+		&& !has_text(reaction.end_date_null_flavor.as_deref())
+	{
+		push_business_issue(
+			issues,
+			"MFDS.E.i.5.REQUIRED",
+			format!("reactions.{idx}.endDate"),
+			"Reaction end date is required for CT/CU reports",
+		);
+	}
+}
+
+fn is_fda_vaers(validation_ctx: &ValidationContext) -> bool {
+	validation_ctx
+		.message_header
+		.as_ref()
+		.is_some_and(|header| {
+			[
+				Some(header.message_receiver_identifier.as_str()),
+				header.batch_receiver_identifier.as_deref(),
+			]
+			.into_iter()
+			.flatten()
+			.any(|value| {
+				matches!(
+					value.trim().to_ascii_uppercase().as_str(),
+					"CBER_VAERS" | "CBER VAERS"
+				)
+			})
+		})
+}
+
+/// FDA.E.i.4-6: VAERS requires a start date, end date, or duration.
+fn fda_e_i_4_6(idx: usize, reaction: &Reaction, issues: &mut Vec<ValidationIssue>) {
+	if reaction.start_date.is_none()
+		&& !has_text(reaction.start_date_null_flavor.as_deref())
+		&& reaction.end_date.is_none()
+		&& !has_text(reaction.end_date_null_flavor.as_deref())
+		&& reaction.duration_value.is_none()
+	{
+		push_business_issue(
+			issues,
+			"FDA.E.i.4-6.REQUIRED",
+			format!("reactions.{idx}.startDate"),
+			"VAERS reports require a reaction start date, end date, or duration",
+		);
+	}
+}
+
 /// ICH.E.i.9.VOCABULARY
 /// ICH.E.i.9.LENGTH.MAX
 fn e_i_9(
@@ -381,12 +462,31 @@ fn e_i_9(
 }
 
 /// FDA.E.i.3.2h.REQUIRED
-fn fda_e_i_3_2h(idx: usize, reaction: &Reaction, issues: &mut Vec<ValidationIssue>) {
+fn fda_e_i_3_2h(
+	idx: usize,
+	reaction: &Reaction,
+	premarket: bool,
+	issues: &mut Vec<ValidationIssue>,
+) {
+	let null_flavor = reaction.required_intervention_null_flavor.as_deref();
+	if premarket {
+		if reaction.required_intervention.is_some()
+			|| null_flavor.map(str::trim) != Some("NI")
+		{
+			push_business_issue(
+				issues,
+				"FDA.E.i.3.2h.PREMARKET.NI.REQUIRED",
+				format!("reactions.{idx}.requiredInterventionNullFlavor"),
+				"FDA premarket reports must use nullFlavor NI for FDA.E.i.3.2h.",
+			);
+		}
+		return;
+	}
 	validate_value(
 		issues,
 		"FDA.E.i.3.2h.REQUIRED",
 		&format!("reactions.{idx}.requiredIntervention"),
-		RuleValue::borrowed(bool_text(reaction.required_intervention), None),
+		RuleValue::borrowed(bool_text(reaction.required_intervention), null_flavor),
 		RuleFacts {
 			fda_reaction_other_medically_important: reaction
 				.criteria_other_medically_important,
@@ -406,12 +506,21 @@ pub(crate) fn collect(
 	if authority == RegulatoryAuthority::Fda {
 		collect_fda_issues(validation_ctx, issues);
 	}
+	if authority == RegulatoryAuthority::Mfds {
+		collect_mfds_issues(validation_ctx, issues);
+	}
 }
 
 pub(crate) fn collect_ich_issues(
 	validation_ctx: &ValidationContext,
 	issues: &mut Vec<ValidationIssue>,
 ) {
+	let reported_by_hcp = validation_ctx.primary_sources.iter().any(|source| {
+		matches!(
+			source.qualification.as_deref().map(str::trim),
+			Some("1" | "2" | "3")
+		)
+	});
 	if validation_ctx.reactions.is_empty() {
 		e_i_1_1a(0, None, issues);
 		e_i_7(0, None, validation_ctx, issues);
@@ -436,6 +545,7 @@ pub(crate) fn collect_ich_issues(
 		e_i_6a(idx, reaction, issues);
 		e_i_6b(idx, reaction, issues);
 		e_i_7(idx, Some(reaction), validation_ctx, issues);
+		e_i_8(idx, reaction, reported_by_hcp, issues);
 		e_i_9(idx, reaction, validation_ctx, issues);
 	}
 }
@@ -444,9 +554,37 @@ pub(crate) fn collect_fda_issues(
 	validation_ctx: &ValidationContext,
 	issues: &mut Vec<ValidationIssue>,
 ) {
+	let premarket = validation_ctx
+		.message_header
+		.as_ref()
+		.and_then(|header| header.batch_receiver_identifier.as_deref())
+		.map(str::trim)
+		== Some(crate::FDA_BATCH_RECEIVER_PREMARKET);
 	if should_case_validation_require_required_intervention() {
 		for (idx, reaction) in validation_ctx.reactions.iter().enumerate() {
-			fda_e_i_3_2h(idx, reaction, issues);
+			fda_e_i_3_2h(idx, reaction, premarket, issues);
+		}
+	}
+	if is_fda_vaers(validation_ctx) {
+		for (idx, reaction) in validation_ctx.reactions.iter().enumerate() {
+			fda_e_i_4_6(idx, reaction, issues);
+		}
+	}
+}
+
+pub(crate) fn collect_mfds_issues(
+	validation_ctx: &ValidationContext,
+	issues: &mut Vec<ValidationIssue>,
+) {
+	let receiver = validation_ctx
+		.message_header
+		.as_ref()
+		.map(|header| header.message_receiver_identifier.as_str());
+	if is_mfds_clinical_trial_receiver(receiver)
+		|| is_mfds_compassionate_use_receiver(receiver)
+	{
+		for (idx, reaction) in validation_ctx.reactions.iter().enumerate() {
+			mfds_e_i_4_5(idx, reaction, issues);
 		}
 	}
 }
@@ -694,7 +832,7 @@ mod tests {
 		let mut reaction = reaction();
 		reaction.criteria_other_medically_important = Some(true);
 		let mut issues = Vec::new();
-		fda_e_i_3_2h(3, &reaction, &mut issues);
+		fda_e_i_3_2h(3, &reaction, false, &mut issues);
 		assert_eq!(issues.len(), 1);
 		assert_eq!(issues[0].code, "FDA.E.i.3.2h.REQUIRED");
 		assert_eq!(
@@ -704,7 +842,20 @@ mod tests {
 
 		issues.clear();
 		reaction.criteria_other_medically_important = Some(false);
-		fda_e_i_3_2h(3, &reaction, &mut issues);
+		fda_e_i_3_2h(3, &reaction, false, &mut issues);
+		assert!(issues.is_empty());
+	}
+
+	#[test]
+	fn fda_premarket_required_intervention_requires_ni() {
+		let mut reaction = reaction();
+		let mut issues = Vec::new();
+		fda_e_i_3_2h(0, &reaction, true, &mut issues);
+		assert_eq!(issues[0].code, "FDA.E.i.3.2h.PREMARKET.NI.REQUIRED");
+
+		issues.clear();
+		reaction.required_intervention_null_flavor = Some("NI".to_string());
+		fda_e_i_3_2h(0, &reaction, true, &mut issues);
 		assert!(issues.is_empty());
 	}
 
@@ -775,5 +926,25 @@ mod tests {
 				length_issue("ICH.E.i.9.LENGTH.MAX", "reactions.0.reactionCountry"),
 			]
 		);
+	}
+
+	#[test]
+	fn hcp_reports_omit_medical_confirmation() {
+		let mut reaction = reaction();
+		reaction.medical_confirmation = Some(true);
+		let mut issues = Vec::new();
+		e_i_8(0, &reaction, true, &mut issues);
+		assert!(issues
+			.iter()
+			.any(|issue| issue.code == "ICH.E.i.8.HCP.OMIT"));
+	}
+
+	#[test]
+	fn vaers_timing_accepts_date_null_flavor() {
+		let mut reaction = reaction();
+		reaction.start_date_null_flavor = Some("UNK".to_string());
+		let mut issues = Vec::new();
+		fda_e_i_4_6(0, &reaction, &mut issues);
+		assert!(issues.is_empty());
 	}
 }

@@ -63,6 +63,7 @@ CREATE TABLE drug_information (
 
     -- FDA.G.k.10a - Additional Information on Drug (coded)
     fda_additional_info_coded VARCHAR(10),
+    fda_additional_info_coded_null_flavor VARCHAR(2) CHECK (fda_additional_info_coded_null_flavor IN ('NA')),
 
     -- G.k.10.r - Additional Information on Drug (coded, repeating)
     drug_additional_info_codes_json JSONB,
@@ -82,7 +83,10 @@ CREATE TABLE drug_information (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     created_by UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
-    updated_by UUID REFERENCES users(id) ON DELETE RESTRICT
+    updated_by UUID REFERENCES users(id) ON DELETE RESTRICT,
+
+    CONSTRAINT ck_pair_fda_drug_additional_info
+        CHECK (NOT (fda_additional_info_coded IS NOT NULL AND fda_additional_info_coded_null_flavor IS NOT NULL))
 );
 
 CREATE INDEX idx_drug_info_case ON drug_information(case_id);
@@ -162,32 +166,31 @@ CREATE TABLE dosage_information (
 
     -- G.k.4.r.7 - Batch/Lot Number
     batch_lot_number VARCHAR(200),
-    batch_lot_number_null_flavor VARCHAR(4) CHECK (batch_lot_number_null_flavor IN ('NI', 'UNK', 'ASKU', 'NASK', 'MSK', 'NA')),
 
     -- G.k.4.r.8 - Dosage Text
     dosage_text TEXT,
 
 	-- G.k.4.r.9.1 - Pharmaceutical Dose Form
 	dose_form VARCHAR(200),
-	dose_form_null_flavor VARCHAR(4),
+	dose_form_null_flavor VARCHAR(4) CHECK (dose_form_null_flavor IN ('UNK', 'ASKU', 'NASK')),
     dose_form_termid VARCHAR(50),
     dose_form_termid_version VARCHAR(10),
 
 	-- G.k.4.r.10 - Route of Administration
 	route_of_administration VARCHAR(200),  -- G.k.4.r.10.1 free text
-	route_of_administration_null_flavor VARCHAR(4),
+	route_of_administration_null_flavor VARCHAR(4) CHECK (route_of_administration_null_flavor IN ('UNK', 'ASKU', 'NASK')),
     route_termid VARCHAR(50),
     route_termid_version VARCHAR(10),
 
 	-- G.k.4.r.11 - Parent Route of Administration
 	parent_route VARCHAR(50),
-	parent_route_null_flavor VARCHAR(4),
+	parent_route_null_flavor VARCHAR(4) CHECK (parent_route_null_flavor IN ('UNK', 'ASKU', 'NASK')),
     parent_route_termid VARCHAR(50),
     parent_route_termid_version VARCHAR(10),
 
     -- Null Flavor Support (E2B(R3) compliant: NI, UNK, ASKU, NASK, MSK)
-    first_administration_date_null_flavor VARCHAR(4) CHECK (first_administration_date_null_flavor IN ('NI', 'UNK', 'ASKU', 'NASK', 'MSK')),
-	last_administration_date_null_flavor VARCHAR(4) CHECK (last_administration_date_null_flavor IN ('NI', 'UNK', 'ASKU', 'NASK', 'MSK')),
+    first_administration_date_null_flavor VARCHAR(4) CHECK (first_administration_date_null_flavor IN ('MSK', 'ASKU', 'NASK')),
+	last_administration_date_null_flavor VARCHAR(4) CHECK (last_administration_date_null_flavor IN ('MSK', 'ASKU', 'NASK')),
 	CONSTRAINT ck_nfv_dosage_information_f3e628bb02f1
 		CHECK (dose_form IS NULL OR dose_form_null_flavor IS NULL),
 	CONSTRAINT ck_nfv_dosage_information_12f028792e1f
@@ -219,7 +222,7 @@ CREATE TABLE drug_indications (
 
     -- G.k.6.r.1 - Indication (free text)
     indication_text VARCHAR(500),
-    indication_text_null_flavor VARCHAR(4) CHECK (indication_text_null_flavor IN ('NI', 'UNK', 'ASKU', 'NASK', 'MSK', 'NA')),
+    indication_text_null_flavor VARCHAR(4) CHECK (indication_text_null_flavor IN ('UNK', 'ASKU', 'NASK')),
 
     -- G.k.6.r.2 - Indication (MedDRA coded)
     indication_meddra_version VARCHAR(10),
@@ -395,7 +398,7 @@ CREATE TABLE relatedness_assessments (
     result_of_assessment VARCHAR(50),
     -- MFDS.G.k.9.i.2.r.3.KR.1 - WHO-UMC coded result
     result_of_assessment_kr1 VARCHAR(10),
-    result_of_assessment_kr1_null_flavor VARCHAR(10),
+    result_of_assessment_kr1_null_flavor VARCHAR(10) CHECK (result_of_assessment_kr1_null_flavor IN ('NA')),
     -- MFDS.G.k.9.i.2.r.3.KR.2 - Additional KR assessment result text
     result_of_assessment_kr2 VARCHAR(2000),
     deleted BOOLEAN NOT NULL DEFAULT false,

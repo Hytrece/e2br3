@@ -4,6 +4,9 @@ use crate::error::Error;
 use crate::import_constraint;
 use crate::mapping::fda::d_patient::DPatientPaths;
 use crate::Result;
+use lib_core::regulatory::{
+	infer_regulatory_authority_from_receivers, RegulatoryAuthority,
+};
 use libxml::parser::Parser;
 use libxml::xpath::Context;
 use rust_decimal::Decimal;
@@ -23,7 +26,6 @@ pub struct DPatientImport {
 	pub sex: Option<String>,
 	pub sex_null_flavor: Option<String>,
 	pub age_at_time_of_onset: Option<Decimal>,
-	pub age_at_time_of_onset_null_flavor: Option<String>,
 	pub age_unit: Option<String>,
 	pub gestation_period: Option<Decimal>,
 	pub gestation_period_unit: Option<String>,
@@ -84,10 +86,15 @@ pub fn parse_d_patient(xml: &[u8]) -> Result<Option<DPatientImport>> {
 	})?;
 	let _ = xpath.register_namespace("hl7", "urn:hl7-org:v3");
 
-	let (patient_initials, patient_initials_null_flavor) = read_d_1(&mut xpath)?;
+	let header = crate::import_sections::shared::extract_message_header(xml)?;
+	let authority = infer_regulatory_authority_from_receivers(
+		header.batch_receiver.as_deref(),
+		header.message_receiver.as_deref(),
+	);
+	let (patient_initials, patient_initials_null_flavor) =
+		read_d_1(&mut xpath, authority)?;
 	let (birth_date, birth_date_null_flavor) = read_d_2_1(&mut xpath)?;
-	let (age_at_time_of_onset, age_at_time_of_onset_null_flavor) =
-		read_d_2_2a(&mut xpath)?;
+	let age_at_time_of_onset = read_d_2_2a(&mut xpath)?;
 	let age_unit = read_d_2_2b(&mut xpath)?;
 	let gestation_period = read_d_2_2_1a(&mut xpath)?;
 	let gestation_period_unit = read_d_2_2_1b(&mut xpath)?;
@@ -111,7 +118,6 @@ pub fn parse_d_patient(xml: &[u8]) -> Result<Option<DPatientImport>> {
 		&& height_cm.is_none()
 		&& patient_initials_null_flavor.is_none()
 		&& birth_date_null_flavor.is_none()
-		&& age_at_time_of_onset_null_flavor.is_none()
 		&& sex_null_flavor.is_none()
 		&& last_menstrual_period_date_null_flavor.is_none()
 		&& race_code_null_flavor.is_none()
@@ -128,7 +134,6 @@ pub fn parse_d_patient(xml: &[u8]) -> Result<Option<DPatientImport>> {
 		sex,
 		sex_null_flavor,
 		age_at_time_of_onset,
-		age_at_time_of_onset_null_flavor,
 		age_unit,
 		gestation_period,
 		gestation_period_unit,
@@ -148,13 +153,21 @@ pub fn parse_d_patient(xml: &[u8]) -> Result<Option<DPatientImport>> {
 }
 
 /// e2b:D.1
-fn read_d_1(xpath: &mut Context) -> Result<(Option<String>, Option<String>)> {
+fn read_d_1(
+	xpath: &mut Context,
+	authority: RegulatoryAuthority,
+) -> Result<(Option<String>, Option<String>)> {
+	let contract = if authority == RegulatoryAuthority::Fda {
+		input_contracts::generated::d::fda_d_1
+	} else {
+		input_contracts::generated::d::d_1
+	};
 	string_pair(
 		first_text_root(xpath, DPatientPaths::PATIENT_NAME),
 		first_value_root(xpath, DPatientPaths::PATIENT_NAME_NULL_FLAVOR),
 		"patientInitials",
 		"patientInitialsNullFlavor",
-		input_contracts::generated::d::d_1,
+		contract,
 	)
 }
 
@@ -170,17 +183,21 @@ fn read_d_2_1(xpath: &mut Context) -> Result<(Option<Date>, Option<String>)> {
 }
 
 /// e2b:D.2.2a
-fn read_d_2_2a(xpath: &mut Context) -> Result<(Option<Decimal>, Option<String>)> {
+fn read_d_2_2a(xpath: &mut Context) -> Result<Option<Decimal>> {
+	if first_value_root(xpath, DPatientPaths::AGE_NULL_FLAVOR).is_some() {
+		return Err(Error::InvalidXml {
+			message: "D.2.2a does not permit nullFlavor".to_string(),
+			line: None,
+			column: None,
+		});
+	}
 	let raw = first_value_root(xpath, DPatientPaths::AGE_VALUE);
 	import_constraint::number_string(
 		"patientAge.value",
 		raw.as_deref(),
 		input_contracts::generated::d::d_2_2a,
 	)?;
-	Ok((
-		raw.and_then(|value| value.parse().ok()),
-		first_value_root(xpath, DPatientPaths::AGE_NULL_FLAVOR),
-	))
+	Ok(raw.and_then(|value| value.parse().ok()))
 }
 
 /// e2b:D.2.2b
@@ -221,6 +238,13 @@ fn read_d_2_3(xpath: &mut Context) -> Result<Option<String>> {
 
 /// e2b:D.3
 fn read_d_3(xpath: &mut Context) -> Result<Option<Decimal>> {
+	if first_value_root(xpath, DPatientPaths::WEIGHT_NULL_FLAVOR).is_some() {
+		return Err(Error::InvalidXml {
+			message: "D.3 does not permit nullFlavor".to_string(),
+			line: None,
+			column: None,
+		});
+	}
 	input_decimal(
 		first_value_root(xpath, DPatientPaths::WEIGHT_VALUE),
 		"patientWeight.value",
@@ -230,6 +254,13 @@ fn read_d_3(xpath: &mut Context) -> Result<Option<Decimal>> {
 
 /// e2b:D.4
 fn read_d_4(xpath: &mut Context) -> Result<Option<Decimal>> {
+	if first_value_root(xpath, DPatientPaths::HEIGHT_NULL_FLAVOR).is_some() {
+		return Err(Error::InvalidXml {
+			message: "D.4 does not permit nullFlavor".to_string(),
+			line: None,
+			column: None,
+		});
+	}
 	input_decimal(
 		first_value_root(xpath, DPatientPaths::HEIGHT_VALUE),
 		"patientHeight.value",
@@ -395,4 +426,35 @@ fn parse_date(value: String) -> Option<Date> {
 	let d: u8 = digits[6..8].parse().ok()?;
 	let month = Month::try_from(m).ok()?;
 	Date::from_calendar_date(y, month, d).ok()
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn rejects_null_flavor_on_numeric_only_fields() {
+		for code in ["3", "7", "17"] {
+			let xml = format!(
+				r#"<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <primaryRole><subjectOf2><observation>
+    <code code="{code}" codeSystem="2.16.840.1.113883.3.989.2.1.1.19"/>
+    <value xsi:type="PQ" nullFlavor="UNK"/>
+  </observation></subjectOf2></primaryRole>
+</MCCI_IN200100UV01>"#
+			);
+
+			assert!(parse_d_patient(xml.as_bytes()).is_err(), "code {code}");
+		}
+	}
+
+	#[test]
+	fn fda_patient_initials_accepts_regional_na() {
+		let xml = r#"<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3">
+  <receiver><device><id extension="ZZFDA"/></device></receiver>
+  <primaryRole><player1><name nullFlavor="NA"/></player1></primaryRole>
+</MCCI_IN200100UV01>"#;
+		let patient = parse_d_patient(xml.as_bytes()).unwrap().unwrap();
+		assert_eq!(patient.patient_initials_null_flavor.as_deref(), Some("NA"));
+	}
 }

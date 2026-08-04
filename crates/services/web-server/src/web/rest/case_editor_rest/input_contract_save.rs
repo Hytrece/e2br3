@@ -178,6 +178,7 @@ fn normalized_direct_object(
 pub(super) fn validate_direct_rows(
 	section: &str,
 	rows: &BTreeMap<String, Value>,
+	fda: bool,
 ) -> Result<()> {
 	let normalized = match section {
 		"CI" => optional_row_object(section, rows, "safetyReportIdentification")?
@@ -210,13 +211,6 @@ pub(super) fn validate_direct_rows(
 							&[
 								"fulfilExpeditedCriteria",
 								"fulfil_expedited_criteria",
-							],
-						),
-						(
-							"fulfilExpeditedCriteriaNullFlavor",
-							&[
-								"fulfilExpeditedCriteriaNullFlavor",
-								"fulfil_expedited_criteria_null_flavor",
 							],
 						),
 						(
@@ -390,13 +384,6 @@ pub(super) fn validate_direct_rows(
 							],
 						),
 						("reporterCountry", &["reporterCountry", "country_code"]),
-						(
-							"reporterCountryNullFlavor",
-							&[
-								"reporterCountryNullFlavor",
-								"country_code_null_flavor",
-							],
-						),
 						("reporterEmail", &["reporterEmail", "email"]),
 						("qualification", &["qualification"]),
 						(
@@ -1160,7 +1147,7 @@ pub(super) fn validate_direct_rows(
 	};
 
 	if let Some(row) = normalized {
-		validate_row_payload(section, section, &row, None)?;
+		validate_section_fields(section, &row, None, &[], fda)?;
 	}
 	Ok(())
 }
@@ -1283,7 +1270,7 @@ fn validate_row_payload_with_indexes(
 	changed_paths: Option<&BTreeSet<String>>,
 	outer_indexes: &[usize],
 ) -> Result<()> {
-	validate_section_fields(section, row, changed_paths, outer_indexes)
+	validate_section_fields(section, row, changed_paths, outer_indexes, false)
 }
 
 #[cfg(test)]
@@ -1407,22 +1394,40 @@ mod input_contract_save_tests {
 			"narrative".to_string(),
 			json!({ "caseNarrative": "X".repeat(100_001) }),
 		)]);
-		let error = validate_direct_rows("NR", &narrative_rows).unwrap_err();
+		let error = validate_direct_rows("NR", &narrative_rows, false).unwrap_err();
 		assert!(error_message(error)
 			.contains("ICH.H.1.LENGTH.MAX at narrative.caseNarrative"));
 		let snake_case_rows = BTreeMap::from([(
 			"narrative".to_string(),
 			json!({ "case_narrative": "X".repeat(100_001) }),
 		)]);
-		validate_direct_rows("NR", &snake_case_rows).unwrap_err();
+		validate_direct_rows("NR", &snake_case_rows, false).unwrap_err();
 
 		let sender_rows = BTreeMap::from([(
 			"senderInformation".to_string(),
 			json!({ "organizationName": "X".repeat(101) }),
 		)]);
-		let error = validate_direct_rows("SD", &sender_rows).unwrap_err();
+		let error = validate_direct_rows("SD", &sender_rows, false).unwrap_err();
 		assert!(error_message(error)
 			.contains("ICH.C.3.2.LENGTH.MAX at senderInformation.organizationName"));
+	}
+
+	#[test]
+	fn dm_patient_initials_na_requires_fda() {
+		let rows = BTreeMap::from([(
+			"patientInformation".to_string(),
+			json!({
+				"patientInitials": null,
+				"patientInitialsNullFlavor": "NA"
+			}),
+		)]);
+
+		validate_direct_rows("DM", &rows, true).unwrap();
+		let detail = constraint_violation(
+			validate_direct_rows("DM", &rows, false).unwrap_err(),
+		);
+		assert_eq!(detail.rule_code, "ICH.D.1.NULLFLAVOR.ALLOWED");
+		assert_eq!(detail.path, "patientInformation.patientInitialsNullFlavor");
 	}
 
 	#[test]
@@ -1438,8 +1443,9 @@ mod input_contract_save_tests {
 				}]),
 			),
 		]);
-		let detail =
-			constraint_violation(validate_direct_rows("DM", &rows).unwrap_err());
+		let detail = constraint_violation(
+			validate_direct_rows("DM", &rows, false).unwrap_err(),
+		);
 		assert_eq!(detail.rule_code, "ICH.D.1.1.1.LENGTH.MAX");
 		assert_eq!(detail.path, "patientInformation.gpMedicalRecordNumber");
 
@@ -1454,8 +1460,9 @@ mod input_contract_save_tests {
 				}]),
 			),
 		]);
-		let detail =
-			constraint_violation(validate_direct_rows("DM", &rows).unwrap_err());
+		let detail = constraint_violation(
+			validate_direct_rows("DM", &rows, false).unwrap_err(),
+		);
 		assert_eq!(detail.rule_code, "ICH.D.1.1.4.NULLFLAVOR.ALLOWED");
 		assert_eq!(
 			detail.path,
@@ -1472,7 +1479,7 @@ mod input_contract_save_tests {
 				json!([{"continuing": null, "continuingNullFlavor": "NASK"}]),
 			),
 		]);
-		validate_direct_rows("DM", &rows).unwrap();
+		validate_direct_rows("DM", &rows, false).unwrap();
 
 		let rows = BTreeMap::from([
 			("patientInformation".to_string(), json!({})),
@@ -1481,8 +1488,9 @@ mod input_contract_save_tests {
 				json!([{"continuing": true, "continuingNullFlavor": "NASK"}]),
 			),
 		]);
-		let detail =
-			constraint_violation(validate_direct_rows("DM", &rows).unwrap_err());
+		let detail = constraint_violation(
+			validate_direct_rows("DM", &rows, false).unwrap_err(),
+		);
 		assert_eq!(detail.rule_code, "ICH.D.10.7.1.r.3.NULLFLAVOR.ALLOWED");
 		assert_eq!(
 			detail.path,
@@ -1500,7 +1508,7 @@ mod input_contract_save_tests {
 			),
 		]);
 		let detail = constraint_violation(
-			validate_direct_rows("SI", &registrations).unwrap_err(),
+			validate_direct_rows("SI", &registrations, false).unwrap_err(),
 		);
 		assert_eq!(detail.rule_code, "ICH.C.5.1.r.1.LENGTH.MAX");
 		assert_eq!(
@@ -1515,7 +1523,7 @@ mod input_contract_save_tests {
 			}),
 		)]);
 		let detail = constraint_violation(
-			validate_direct_rows("SI", &cross_report).unwrap_err(),
+			validate_direct_rows("SI", &cross_report, false).unwrap_err(),
 		);
 		assert_eq!(detail.rule_code, "FDA.C.5.6.r.NULLFLAVOR.ALLOWED");
 		assert_eq!(

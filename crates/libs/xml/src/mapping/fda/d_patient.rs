@@ -41,10 +41,14 @@ impl DPatientPaths {
 	// D.3 Weight
 	pub const WEIGHT_VALUE: &'static str =
 		"//hl7:subjectOf2/hl7:observation[hl7:code[@code='7' and @codeSystem='2.16.840.1.113883.3.989.2.1.1.19']]/hl7:value/@value";
+	pub const WEIGHT_NULL_FLAVOR: &'static str =
+		"//hl7:subjectOf2/hl7:observation[hl7:code[@code='7' and @codeSystem='2.16.840.1.113883.3.989.2.1.1.19']]/hl7:value/@nullFlavor";
 
 	// D.4 Height
 	pub const HEIGHT_VALUE: &'static str =
 		"//hl7:subjectOf2/hl7:observation[hl7:code[@code='17' and @codeSystem='2.16.840.1.113883.3.989.2.1.1.19']]/hl7:value/@value";
+	pub const HEIGHT_NULL_FLAVOR: &'static str =
+		"//hl7:subjectOf2/hl7:observation[hl7:code[@code='17' and @codeSystem='2.16.840.1.113883.3.989.2.1.1.19']]/hl7:value/@nullFlavor";
 
 	// FDA.D.11 Race
 	pub const RACE_CODE: &'static str =

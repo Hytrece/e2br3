@@ -90,7 +90,6 @@ pub fn f_r_3_1(input: crate::FieldInput<'_>) -> Vec<crate::InputIssue> {
 
 /// ICH.F.r.3.2.LENGTH.MAX
 /// ICH.F.r.3.2.ALLOWED.VALUE
-/// ICH.F.r.3.2.NULLFLAVOR.ALLOWED
 pub fn f_r_3_2(input: crate::FieldInput<'_>) -> Vec<crate::InputIssue> {
 	let mut issues = Vec::new();
 	crate::helpers::max_length(
@@ -107,9 +106,9 @@ pub fn f_r_3_2(input: crate::FieldInput<'_>) -> Vec<crate::InputIssue> {
 	);
 	crate::helpers::null_flavor(
 		&mut issues,
-		"ICH.F.r.3.2.NULLFLAVOR.ALLOWED",
+		"ICH.F.r.3.2.NULLFLAVOR.FORBIDDEN",
 		input.null_flavor,
-		&["NINF", "PINF"],
+		&[],
 	);
 	issues
 }

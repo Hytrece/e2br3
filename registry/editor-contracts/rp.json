@@ -263,8 +263,7 @@
         "status": "verified",
         "issuePath": "primarySources.0.reporterCountry"
       },
-      "payloadPath": "[].reporterCountry",
-      "nullFlavorPartnerCode": "C.2.r.local.reporterCountryNullFlavor"
+      "payloadPath": "[].reporterCountry"
     },
     {
       "code": "FDA.C.2.r.2.8",
@@ -593,28 +592,6 @@
       },
       "payloadPath": "[].reporterTelephoneNullFlavor",
       "nullFlavorPartnerCode": "C.2.r.2.7"
-    },
-    {
-      "code": "C.2.r.local.reporterCountryNullFlavor",
-      "authority": "ICH",
-      "frontendPath": "primarySources[].reporterCountryNullFlavor",
-      "projectionPath": "primarySources[].reporterCountryNullFlavor",
-      "patch": {
-        "kind": "rows",
-        "owner": "primarySources"
-      },
-      "roundTripValue": "UNK",
-      "constraint": {
-        "status": "verified",
-        "ruleCode": "ICH.C.2.r.3.NULLFLAVOR.ALLOWED",
-        "invalidValue": "NI"
-      },
-      "businessValidation": {
-        "status": "not_applicable",
-        "reason": "Business validation consumes this companion but emits issues on reporterCountry."
-      },
-      "payloadPath": "[].reporterCountryNullFlavor",
-      "nullFlavorPartnerCode": "C.2.r.3"
     },
     {
       "code": "C.2.r.local.reporterEmailNullFlavor",

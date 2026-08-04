@@ -346,7 +346,6 @@ pub struct PrimarySource {
 
 	// C.2.r.3 - Country Code
 	pub country_code: Option<String>,
-	pub country_code_null_flavor: Option<String>,
 	pub email: Option<String>,
 	pub email_null_flavor: Option<String>,
 
@@ -396,7 +395,6 @@ pub struct PrimarySourceForCreate {
 	pub telephone: Option<String>,
 	pub telephone_null_flavor: Option<String>,
 	pub country_code: Option<String>,
-	pub country_code_null_flavor: Option<String>,
 	pub email: Option<String>,
 	pub email_null_flavor: Option<String>,
 	pub qualification: Option<String>,
@@ -431,7 +429,6 @@ pub struct PrimarySourceForUpdate {
 	pub telephone: Option<String>,
 	pub telephone_null_flavor: Option<String>,
 	pub country_code: Option<String>,
-	pub country_code_null_flavor: Option<String>,
 	pub email: Option<String>,
 	pub email_null_flavor: Option<String>,
 	pub qualification: Option<String>,
@@ -1052,7 +1049,6 @@ impl PrimarySourceBmc {
 			data.state_null_flavor.as_deref(),
 			data.postcode_null_flavor.as_deref(),
 			data.telephone_null_flavor.as_deref(),
-			data.country_code_null_flavor.as_deref(),
 			data.email_null_flavor.as_deref(),
 			data.qualification_null_flavor.as_deref(),
 		)?;
@@ -1101,7 +1097,6 @@ impl PrimarySourceBmc {
 			data.state_null_flavor.as_deref(),
 			data.postcode_null_flavor.as_deref(),
 			data.telephone_null_flavor.as_deref(),
-			data.country_code_null_flavor.as_deref(),
 			data.email_null_flavor.as_deref(),
 			data.qualification_null_flavor.as_deref(),
 		)?;
@@ -1128,19 +1123,12 @@ impl PrimarySourceBmc {
 		state_null_flavor: Option<&str>,
 		postcode_null_flavor: Option<&str>,
 		telephone_null_flavor: Option<&str>,
-		country_code_null_flavor: Option<&str>,
 		email_null_flavor: Option<&str>,
 		qualification_null_flavor: Option<&str>,
 	) -> Result<()> {
 		const ELEMENT_EMAIL_ALLOWED: &[NullFlavor] =
 			&[NullFlavor::MSK, NullFlavor::ASKU, NullFlavor::NASK];
 		const TITLE_ALLOWED: &[NullFlavor] = &[
-			NullFlavor::MSK,
-			NullFlavor::UNK,
-			NullFlavor::ASKU,
-			NullFlavor::NASK,
-		];
-		const COUNTRY_ALLOWED: &[NullFlavor] = &[
 			NullFlavor::MSK,
 			NullFlavor::UNK,
 			NullFlavor::ASKU,
@@ -1180,11 +1168,6 @@ impl PrimarySourceBmc {
 				ELEMENT_EMAIL_ALLOWED,
 			)?;
 		}
-		validate_primary_source_null_flavor_set(
-			"country_code_null_flavor",
-			country_code_null_flavor,
-			COUNTRY_ALLOWED,
-		)?;
 		validate_primary_source_null_flavor_set(
 			"email_null_flavor",
 			email_null_flavor,

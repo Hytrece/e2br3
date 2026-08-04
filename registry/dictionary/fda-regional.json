@@ -132,6 +132,23 @@
       "fda_error_id": "R0026"
     },
     {
+      "code": "FDA.D.1",
+      "name": "Patient (Name or Initials) - FDA regional NullFlavor override",
+      "section": "D",
+      "kind": "element",
+      "null_flavors": [
+        "MSK",
+        "UNK",
+        "ASKU",
+        "NASK",
+        "NA"
+      ],
+      "profiles": {
+        "post_market": "mandatory",
+        "pre_market": "mandatory"
+      }
+    },
+    {
       "code": "FDA.D.11.r.1",
       "name": "Patient Race Code",
       "section": "D",

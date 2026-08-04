@@ -26,24 +26,22 @@ CREATE TABLE patient_information (
 
     -- D.3 - Body Weight (kg)
     weight_kg DECIMAL(6,2),
-    weight_kg_null_flavor VARCHAR(4) CHECK (weight_kg_null_flavor IN ('NI', 'UNK', 'ASKU', 'NASK', 'MSK')),
 
     -- D.4 - Height (cm)
     height_cm DECIMAL(6,2),
-    height_cm_null_flavor VARCHAR(4) CHECK (height_cm_null_flavor IN ('NI', 'UNK', 'ASKU', 'NASK', 'MSK')),
 
     -- D.5 - Sex (E2B(R3) codes)
     sex VARCHAR(1) CHECK (sex IN ('0', '1', '2')),  -- 0=Unknown, 1=Male, 2=Female
 
     -- FDA.D.11 / FDA.D.12 - Race / Ethnicity (FDA)
     race_code VARCHAR(10),
-    race_code_null_flavor VARCHAR(4) CHECK (race_code_null_flavor IN ('NI', 'UNK', 'ASKU', 'NASK', 'MSK')),
+    race_code_null_flavor VARCHAR(4) CHECK (race_code_null_flavor IN ('MSK', 'UNK', 'NA', 'OTH')),
     ethnicity_code VARCHAR(10),
-    ethnicity_code_null_flavor VARCHAR(4) CHECK (ethnicity_code_null_flavor IN ('NI', 'UNK', 'ASKU', 'NASK', 'MSK')),
+    ethnicity_code_null_flavor VARCHAR(4) CHECK (ethnicity_code_null_flavor IN ('NI', 'MSK', 'UNK', 'NA')),
 
     -- D.6 - Last Menstrual Period Date
     last_menstrual_period_date DATE,
-    last_menstrual_period_date_null_flavor VARCHAR(4) CHECK (last_menstrual_period_date_null_flavor IN ('NI', 'UNK', 'ASKU', 'NASK', 'MSK')),
+    last_menstrual_period_date_null_flavor VARCHAR(4) CHECK (last_menstrual_period_date_null_flavor IN ('MSK')),
 
     -- D.7.2 - Text for Relevant Medical History
     medical_history_text TEXT,  -- Max 10000 chars
@@ -53,10 +51,9 @@ CREATE TABLE patient_information (
     concomitant_therapy BOOLEAN,
 
     -- Null Flavor Support (E2B(R3) compliant: NI, UNK, ASKU, NASK, MSK)
-    patient_initials_null_flavor VARCHAR(4) CHECK (patient_initials_null_flavor IN ('NI', 'UNK', 'ASKU', 'NASK', 'MSK')),
-    birth_date_null_flavor VARCHAR(4) CHECK (birth_date_null_flavor IN ('NI', 'UNK', 'ASKU', 'NASK', 'MSK')),
-    age_at_time_of_onset_null_flavor VARCHAR(4) CHECK (age_at_time_of_onset_null_flavor IN ('NI', 'UNK', 'ASKU', 'NASK', 'MSK')),
-    sex_null_flavor VARCHAR(4) CHECK (sex_null_flavor IN ('NI', 'UNK', 'ASKU', 'NASK', 'MSK')),
+    patient_initials_null_flavor VARCHAR(4) CHECK (patient_initials_null_flavor IN ('MSK', 'UNK', 'ASKU', 'NASK', 'NA')),
+    birth_date_null_flavor VARCHAR(4) CHECK (birth_date_null_flavor IN ('MSK')),
+    sex_null_flavor VARCHAR(4) CHECK (sex_null_flavor IN ('MSK', 'UNK', 'ASKU', 'NASK')),
 
     -- Audit fields (standardized UUID-based)
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -111,7 +108,7 @@ CREATE TABLE medical_history_episodes (
 
     -- D.7.1.r.2 - Start Date
     start_date DATE,
-    start_date_null_flavor VARCHAR(4) CHECK (start_date_null_flavor IN ('NI', 'UNK', 'ASKU', 'NASK', 'MSK')),
+    start_date_null_flavor VARCHAR(4) CHECK (start_date_null_flavor IN ('MSK', 'ASKU', 'NASK')),
 
     -- D.7.1.r.3 - Continuing
     continuing BOOLEAN,
@@ -119,7 +116,7 @@ CREATE TABLE medical_history_episodes (
 
     -- D.7.1.r.4 - End Date
     end_date DATE,
-    end_date_null_flavor VARCHAR(4) CHECK (end_date_null_flavor IN ('NI', 'UNK', 'ASKU', 'NASK', 'MSK')),
+    end_date_null_flavor VARCHAR(4) CHECK (end_date_null_flavor IN ('MSK', 'ASKU', 'NASK')),
 
     -- D.7.1.r.5 - Comments
     comments TEXT,
@@ -151,7 +148,7 @@ CREATE TABLE past_drug_history (
 
     -- D.8.r.1 - Drug Name
     drug_name VARCHAR(500),
-    drug_name_null_flavor VARCHAR(4) CHECK (drug_name_null_flavor IN ('NI', 'UNK', 'ASKU', 'NASK', 'MSK')),
+    drug_name_null_flavor VARCHAR(4) CHECK (drug_name_null_flavor IN ('UNK', 'NA')),
 
     -- D.8.r.1.KR.1a/b - MFDS product code fields
     mfds_medicinal_product_version VARCHAR(20),
@@ -167,11 +164,11 @@ CREATE TABLE past_drug_history (
 
     -- D.8.r.4 - Start Date
     start_date DATE,
-    start_date_null_flavor VARCHAR(4) CHECK (start_date_null_flavor IN ('NI', 'UNK', 'ASKU', 'NASK', 'MSK')),
+    start_date_null_flavor VARCHAR(4) CHECK (start_date_null_flavor IN ('MSK', 'ASKU', 'NASK')),
 
     -- D.8.r.5 - End Date
     end_date DATE,
-    end_date_null_flavor VARCHAR(4) CHECK (end_date_null_flavor IN ('NI', 'UNK', 'ASKU', 'NASK', 'MSK')),
+    end_date_null_flavor VARCHAR(4) CHECK (end_date_null_flavor IN ('MSK', 'ASKU', 'NASK')),
 
     -- D.8.r.6a - Indication (MedDRA coded)
     indication_meddra_version VARCHAR(10),
@@ -204,11 +201,11 @@ CREATE TABLE patient_death_information (
 
     -- D.9.1 - Date of Death
     date_of_death DATE,
-    date_of_death_null_flavor VARCHAR(4) CHECK (date_of_death_null_flavor IN ('NI', 'UNK', 'ASKU', 'NASK', 'MSK')),
+    date_of_death_null_flavor VARCHAR(4) CHECK (date_of_death_null_flavor IN ('MSK', 'ASKU', 'NASK')),
 
     -- D.9.3 - Autopsy
     autopsy_performed BOOLEAN,
-    autopsy_performed_null_flavor VARCHAR(4) CHECK (autopsy_performed_null_flavor IN ('MSK', 'UNK', 'ASKU', 'NASK')),
+    autopsy_performed_null_flavor VARCHAR(4) CHECK (autopsy_performed_null_flavor IN ('UNK', 'ASKU', 'NASK')),
 
     -- D.9.4 - Autopsy Determined Cause of Death (handled in repeating table)
 
@@ -279,16 +276,15 @@ CREATE TABLE parent_information (
 
     -- D.10.2.1 - Date of Birth of Parent
     parent_birth_date DATE,
-    parent_birth_date_null_flavor VARCHAR(4) CHECK (parent_birth_date_null_flavor IN ('NI', 'UNK', 'ASKU', 'NASK', 'MSK')),
+    parent_birth_date_null_flavor VARCHAR(4) CHECK (parent_birth_date_null_flavor IN ('MSK', 'ASKU', 'NASK')),
 
     -- D.10.2 - Parent Age
     parent_age DECIMAL(5,2),
-    parent_age_null_flavor VARCHAR(4) CHECK (parent_age_null_flavor IN ('NI', 'UNK', 'ASKU', 'NASK', 'MSK')),
     parent_age_unit VARCHAR(10),  -- UCUM: 10.a/a/mo/wk/d (no hour unit for parents)
 
     -- D.10.3 - Last Menstrual Period Date
     last_menstrual_period_date DATE,
-    last_menstrual_period_date_null_flavor VARCHAR(4) CHECK (last_menstrual_period_date_null_flavor IN ('NI', 'UNK', 'ASKU', 'NASK', 'MSK')),
+    last_menstrual_period_date_null_flavor VARCHAR(4) CHECK (last_menstrual_period_date_null_flavor IN ('MSK', 'ASKU', 'NASK')),
 
     -- D.10.4 - Parent Weight (kg)
     weight_kg DECIMAL(6,2),
@@ -333,7 +329,7 @@ CREATE TABLE parent_medical_history (
 
     -- D.10.7.1.r.2 - Start Date
     start_date DATE,
-    start_date_null_flavor VARCHAR(4) CHECK (start_date_null_flavor IN ('NI', 'UNK', 'ASKU', 'NASK', 'MSK')),
+    start_date_null_flavor VARCHAR(4) CHECK (start_date_null_flavor IN ('MSK', 'ASKU', 'NASK')),
 
     -- D.10.7.1.r.3 - Continuing
     continuing BOOLEAN,
@@ -342,7 +338,7 @@ CREATE TABLE parent_medical_history (
 
     -- D.10.7.1.r.4 - End Date
     end_date DATE,
-    end_date_null_flavor VARCHAR(4) CHECK (end_date_null_flavor IN ('NI', 'UNK', 'ASKU', 'NASK', 'MSK')),
+    end_date_null_flavor VARCHAR(4) CHECK (end_date_null_flavor IN ('MSK', 'ASKU', 'NASK')),
 
     -- D.10.7.1.r.5 - Comments
     comments TEXT,
@@ -369,9 +365,8 @@ CREATE TABLE parent_past_drug_history (
     parent_id UUID NOT NULL REFERENCES parent_information(id) ON DELETE CASCADE,
     sequence_number INTEGER NOT NULL,
 
-    -- D.10.8.r.1 - Drug Name
-    drug_name VARCHAR(500),
-    drug_name_null_flavor VARCHAR(4) CHECK (drug_name_null_flavor IN ('UNK', 'ASKU', 'NASK', 'MSK', 'NA')),
+	-- D.10.8.r.1 - Drug Name
+	drug_name VARCHAR(500),
 
     -- D.10.8.r.2 - MPID (Medicinal Product ID)
     mpid VARCHAR(100),

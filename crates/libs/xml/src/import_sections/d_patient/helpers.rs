@@ -18,7 +18,6 @@ pub(crate) struct PatientImport {
 	pub(crate) sex: Option<String>,
 	pub(crate) sex_null_flavor: Option<String>,
 	pub(crate) age_at_time_of_onset: Option<Decimal>,
-	pub(crate) age_at_time_of_onset_null_flavor: Option<String>,
 	pub(crate) age_unit: Option<String>,
 	pub(crate) gestation_period: Option<Decimal>,
 	pub(crate) gestation_period_unit: Option<String>,
@@ -96,7 +95,6 @@ pub(crate) struct ParentImport {
 	pub(crate) parent_birth_date: Option<Date>,
 	pub(crate) parent_birth_date_null_flavor: Option<String>,
 	pub(crate) parent_age: Option<Decimal>,
-	pub(crate) parent_age_null_flavor: Option<String>,
 	pub(crate) parent_age_unit: Option<String>,
 	pub(crate) last_menstrual_period_date: Option<Date>,
 	pub(crate) last_menstrual_period_date_null_flavor: Option<String>,
@@ -880,16 +878,20 @@ fn read_d_10_2_1(
 fn read_d_10_2_2a(
 	xpath: &mut Context,
 	node: &libxml::tree::Node,
-) -> Result<(Option<Decimal>, Option<String>)> {
+) -> Result<Option<Decimal>> {
 	let path = "hl7:subjectOf2/hl7:observation[hl7:code[@code='3']]/hl7:value";
-	Ok((
-		input_number(
-			first_attr(xpath, node, path, "value"),
-			"parentInformation.parentAge.value",
-			input_contracts::generated::d::d_10_2_2a,
-		)?,
-		first_attr(xpath, node, path, "nullFlavor"),
-	))
+	if first_attr(xpath, node, path, "nullFlavor").is_some() {
+		return Err(Error::InvalidXml {
+			message: "D.10.2.2a does not permit nullFlavor".to_string(),
+			line: None,
+			column: None,
+		});
+	}
+	input_number(
+		first_attr(xpath, node, path, "value"),
+		"parentInformation.parentAge.value",
+		input_contracts::generated::d::d_10_2_2a,
+	)
 }
 
 /// e2b:D.10.2.2b
@@ -1077,8 +1079,16 @@ fn read_d_10_8_r_1(
 	xpath: &mut Context,
 	node: &libxml::tree::Node,
 ) -> Result<Option<String>> {
+	let path = format!("{PRODUCT}/hl7:name");
+	if first_attr(xpath, node, &path, "nullFlavor").is_some() {
+		return Err(Error::InvalidXml {
+			message: "D.10.8.r.1 does not permit nullFlavor".to_string(),
+			line: None,
+			column: None,
+		});
+	}
 	input_string(
-		first_text(xpath, node, &format!("{PRODUCT}/hl7:name")),
+		first_text(xpath, node, &path),
 		"parentInformation.pastDrugHistory[].drugName",
 		input_contracts::generated::d::d_10_8_r_1,
 	)
@@ -1260,7 +1270,7 @@ pub(crate) fn parse_parent_information(xml: &[u8]) -> Result<Option<ParentImport
 		read_d_10_1(&mut xpath, node)?;
 	let (parent_birth_date, parent_birth_date_null_flavor) =
 		read_d_10_2_1(&mut xpath, node)?;
-	let (parent_age, parent_age_null_flavor) = read_d_10_2_2a(&mut xpath, node)?;
+	let parent_age = read_d_10_2_2a(&mut xpath, node)?;
 	let parent_age_unit = read_d_10_2_2b(&mut xpath, node)?;
 	let (last_menstrual_period_date, last_menstrual_period_date_null_flavor) =
 		read_d_10_3(&mut xpath, node)?;
@@ -1350,7 +1360,6 @@ pub(crate) fn parse_parent_information(xml: &[u8]) -> Result<Option<ParentImport
 		parent_birth_date,
 		parent_birth_date_null_flavor,
 		parent_age,
-		parent_age_null_flavor,
 		parent_age_unit,
 		last_menstrual_period_date,
 		last_menstrual_period_date_null_flavor,
@@ -1367,6 +1376,30 @@ pub(crate) fn parse_parent_information(xml: &[u8]) -> Result<Option<ParentImport
 #[cfg(test)]
 mod tests {
 	use super::*;
+
+	#[test]
+	fn parse_parent_rejects_null_flavor_on_age_value() {
+		let xml = br#"<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <primaryRole><player1><role><code code="PRN"/>
+    <subjectOf2><observation><code code="3"/><value xsi:type="PQ" nullFlavor="UNK"/></observation></subjectOf2>
+  </role></player1></primaryRole>
+</MCCI_IN200100UV01>"#;
+
+		assert!(parse_parent_information(xml).is_err());
+	}
+
+	#[test]
+	fn parse_parent_rejects_null_flavor_on_past_drug_name() {
+		let xml = br#"<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <primaryRole><player1><role><code code="PRN"/>
+    <subjectOf2><organizer><code code="2"/><component><substanceAdministration>
+      <consumable><instanceOfKind><kindOfProduct><name nullFlavor="UNK"/></kindOfProduct></instanceOfKind></consumable>
+    </substanceAdministration></component></organizer></subjectOf2>
+  </role></player1></primaryRole>
+</MCCI_IN200100UV01>"#;
+
+		assert!(parse_parent_information(xml).is_err());
+	}
 
 	#[test]
 	fn parse_past_drug_uses_mfds_fields_separate_from_mpid() {

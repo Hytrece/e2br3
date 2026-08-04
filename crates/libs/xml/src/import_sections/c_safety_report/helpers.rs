@@ -8,6 +8,7 @@ use crate::mfds::codes::{KR_C_3_1_1, KR_C_5_4_1};
 use crate::Result;
 use lib_core::model::receiver::ReceiverInformationForUpdate;
 use libxml::parser::Parser;
+use libxml::tree::NodeType;
 use libxml::xpath::Context;
 
 pub(crate) struct SenderImport {
@@ -29,6 +30,7 @@ pub(crate) struct SenderImport {
 	pub(crate) email: Option<String>,
 }
 
+#[derive(Debug)]
 pub(crate) struct PrimarySourceImport {
 	pub(crate) reporter_title: Option<String>,
 	pub(crate) reporter_title_null_flavor: Option<String>,
@@ -53,7 +55,6 @@ pub(crate) struct PrimarySourceImport {
 	pub(crate) telephone: Option<String>,
 	pub(crate) telephone_null_flavor: Option<String>,
 	pub(crate) country_code: Option<String>,
-	pub(crate) country_code_null_flavor: Option<String>,
 	pub(crate) email: Option<String>,
 	pub(crate) email_null_flavor: Option<String>,
 	pub(crate) qualification: Option<String>,
@@ -755,14 +756,13 @@ fn read_c_2_r_3(
 fn read_c_2_r_4(
 	xpath: &mut Context,
 	node: &libxml::tree::Node,
-) -> Result<(Option<String>, Option<String>, Option<String>)> {
+) -> Result<(Option<String>, Option<String>)> {
 	let path = ".//hl7:assignedPerson/hl7:asQualifiedEntity/hl7:code";
-	let raw = first_attr(xpath, node, path, "code");
-	let value = raw.clone().or(Some("1".to_string()));
+	let value = first_attr(xpath, node, path, "code");
 	let null_flavor = first_attr(xpath, node, path, "nullFlavor");
 	import_constraint::string(
 		"qualification",
-		raw.as_deref(),
+		value.as_deref(),
 		null_flavor.as_deref(),
 		input_contracts::generated::c::c_2_r_4,
 	)?;
@@ -772,15 +772,14 @@ fn read_c_2_r_4(
 		None,
 		input_contracts::generated::c::c_2_r_4,
 	)?;
-	Ok((raw.clone(), value, null_flavor))
+	Ok((value, null_flavor))
 }
 
 /// e2b:C.2.r.5
-/// e2b:C.2.r.local.reporterCountryNullFlavor
 fn read_c_2_r_5(
 	xpath: &mut Context,
 	node: &libxml::tree::Node,
-) -> Result<(Option<String>, Option<String>)> {
+) -> Result<Option<String>> {
 	let path = ".//hl7:assignedPerson/hl7:asLocatedEntity/hl7:location/hl7:code";
 	let value = first_attr(xpath, node, path, "code")
 		.map(|value| value.to_ascii_uppercase());
@@ -791,13 +790,7 @@ fn read_c_2_r_5(
 		null_flavor.as_deref(),
 		input_contracts::generated::c::c_2_r_3,
 	)?;
-	import_constraint::string(
-		"reporterCountryNullFlavor",
-		None,
-		None,
-		input_contracts::generated::c::c_2_r_3,
-	)?;
-	Ok((value, null_flavor))
+	Ok(value)
 }
 
 pub(crate) fn parse_primary_sources(xml: &[u8]) -> Result<Vec<PrimarySourceImport>> {
@@ -852,9 +845,8 @@ pub(crate) fn parse_primary_sources(xml: &[u8]) -> Result<Vec<PrimarySourceImpor
 		let (postcode, postcode_null_flavor) = read_c_2_r_2_6(&mut xpath, &node)?;
 		let (telephone, telephone_null_flavor) = read_c_2_r_2_7(&mut xpath, &node)?;
 		let (email, email_null_flavor) = read_fda_c_2_r_2_8(&mut xpath, &node)?;
-		let (country_code, country_code_null_flavor) =
-			read_c_2_r_5(&mut xpath, &node)?;
-		let (qualification_raw, qualification, qualification_null_flavor) =
+		let country_code = read_c_2_r_5(&mut xpath, &node)?;
+		let (qualification, qualification_null_flavor) =
 			read_c_2_r_4(&mut xpath, &node)?;
 		let primary_source_regulatory_raw = read_c_2_r_3(&mut xpath, &node)?;
 		let primary_source_regulatory = primary_source_regulatory_raw
@@ -885,10 +877,9 @@ pub(crate) fn parse_primary_sources(xml: &[u8]) -> Result<Vec<PrimarySourceImpor
 			telephone.as_ref(),
 			telephone_null_flavor.as_ref(),
 			country_code.as_ref(),
-			country_code_null_flavor.as_ref(),
 			email.as_ref(),
 			email_null_flavor.as_ref(),
-			qualification_raw.as_ref(),
+			qualification.as_ref(),
 			qualification_null_flavor.as_ref(),
 			primary_source_regulatory_raw.as_ref(),
 		]
@@ -923,7 +914,6 @@ pub(crate) fn parse_primary_sources(xml: &[u8]) -> Result<Vec<PrimarySourceImpor
 			telephone,
 			telephone_null_flavor,
 			country_code,
-			country_code_null_flavor,
 			email,
 			email_null_flavor,
 			qualification,
@@ -1033,7 +1023,7 @@ mod tests {
 	}
 
 	#[test]
-	fn primary_source_import_keeps_contact_null_flavors() {
+	fn primary_source_import_rejects_country_null_flavor() {
 		let xml = primary_source_xml(
 			r#"<assignedPerson>
   <asQualifiedEntity><code nullFlavor="UNK"/></asQualifiedEntity>
@@ -1041,10 +1031,27 @@ mod tests {
 </assignedPerson>
 <telecom nullFlavor="NASK"/>"#,
 		);
-		let sources = parse_primary_sources(xml.as_bytes()).expect("parse");
-		assert_eq!(sources[0].telephone_null_flavor.as_deref(), Some("NASK"));
-		assert_eq!(sources[0].country_code_null_flavor.as_deref(), Some("NASK"));
-		assert_eq!(sources[0].qualification_null_flavor.as_deref(), Some("UNK"));
+		let error = parse_primary_sources(xml.as_bytes())
+			.expect_err("country nullFlavor must fail");
+		assert!(error.to_string().contains("C.2.r.3.NULLFLAVOR.FORBIDDEN"));
+	}
+
+	#[test]
+	fn primary_source_import_keeps_qualification_null_flavor_without_default_code() {
+		let xml = primary_source_xml(
+			r#"<assignedPerson>
+  <asQualifiedEntity><code nullFlavor="UNK"/></asQualifiedEntity>
+</assignedPerson>"#,
+		);
+
+		let primary_sources = parse_primary_sources(xml.as_bytes()).expect("parse");
+
+		assert_eq!(primary_sources.len(), 1);
+		assert!(primary_sources[0].qualification.is_none());
+		assert_eq!(
+			primary_sources[0].qualification_null_flavor.as_deref(),
+			Some("UNK")
+		);
 	}
 }
 
@@ -1265,7 +1272,26 @@ fn read_c_1_6_1_r_2(
 	Option<String>,
 	Option<String>,
 )> {
-	let document = first_text(xpath, node, "hl7:text");
+	let representation = first_attr(xpath, node, "hl7:text", "representation");
+	let document = xpath
+		.findnodes("hl7:text", Some(node))
+		.ok()
+		.and_then(|nodes| nodes.into_iter().next())
+		.map(|text| {
+			text.get_child_nodes()
+				.into_iter()
+				.filter(|child| child.get_type() == Some(NodeType::TextNode))
+				.map(|child| child.get_content())
+				.collect::<String>()
+		})
+		.filter(|value| !value.trim().is_empty())
+		.map(|value| {
+			if representation.as_deref() == Some("B64") {
+				value.chars().filter(|c| !c.is_ascii_whitespace()).collect()
+			} else {
+				value
+			}
+		});
 	import_constraint::string(
 		"documentsHeldBySender[].includedDocument",
 		document.as_deref(),
@@ -1275,7 +1301,7 @@ fn read_c_1_6_1_r_2(
 	Ok((
 		document,
 		first_attr(xpath, node, "hl7:text", "mediaType"),
-		first_attr(xpath, node, "hl7:text", "representation"),
+		representation,
 		first_attr(xpath, node, "hl7:text", "compression"),
 	))
 }

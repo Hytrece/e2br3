@@ -35,7 +35,7 @@ pub struct TestResult {
 
 	// F.r.3.2 - Test Result (value/finding)
 	pub test_result_value: Option<String>,
-	pub test_result_null_flavor: Option<String>,
+	pub test_result_qualifier: Option<String>,
 
 	// F.r.3.3 - Test Result Unit
 	pub test_result_unit: Option<String>,
@@ -77,7 +77,7 @@ pub struct TestResultForCreate {
 	pub test_meddra_code: Option<String>,
 	pub test_result_code: Option<String>,
 	pub test_result_value: Option<String>,
-	pub test_result_null_flavor: Option<String>,
+	pub test_result_qualifier: Option<String>,
 	pub test_result_unit: Option<String>,
 	pub result_unstructured: Option<String>,
 	pub normal_low_value: Option<String>,
@@ -99,7 +99,7 @@ pub struct TestResultForUpdate {
 	pub test_meddra_code: Option<String>,
 	pub test_result_code: Option<String>,
 	pub test_result_value: Option<String>,
-	pub test_result_null_flavor: Option<String>,
+	pub test_result_qualifier: Option<String>,
 	pub test_result_unit: Option<String>,
 	pub result_unstructured: Option<String>,
 	pub normal_low_value: Option<String>,
@@ -133,12 +133,12 @@ impl TestResultBmc {
 		let sql = format!(
 			"INSERT INTO {} (
 				case_id, sequence_number, test_date, test_date_null_flavor, test_name,
-				test_meddra_version, test_meddra_code, test_result_code, test_result_value, test_result_null_flavor,
+				test_meddra_version, test_meddra_code, test_result_code, test_result_value, test_result_qualifier,
 				test_result_unit, result_unstructured, normal_low_value, normal_high_value,
 				comments, more_info_available, created_at, updated_at, created_by
 			 )
 			 VALUES ($1, $2, $3, CASE WHEN $3 IS NOT NULL THEN NULL ELSE $4 END, $5, $6, $7,
-			         $8, $9, CASE WHEN $9 IS NOT NULL THEN NULL ELSE $10 END, $11, $12, $13, $14, $15, $16, now(), now(), $17)
+			         $8, $9, $10, $11, $12, $13, $14, $15, $16, now(), now(), $17)
 			 RETURNING id",
 			Self::TABLE
 		);
@@ -155,7 +155,7 @@ impl TestResultBmc {
 					.bind(test_c.test_meddra_code)
 					.bind(test_c.test_result_code)
 					.bind(test_c.test_result_value)
-					.bind(test_c.test_result_null_flavor)
+					.bind(test_c.test_result_qualifier)
 					.bind(test_c.test_result_unit)
 					.bind(test_c.result_unstructured)
 					.bind(test_c.normal_low_value)
@@ -209,8 +209,8 @@ impl TestResultBmc {
 				     test_meddra_version = COALESCE($5, test_meddra_version),
 			     test_meddra_code = COALESCE($6, test_meddra_code),
 			     test_result_code = COALESCE($7, test_result_code),
-			     test_result_value = CASE WHEN $8 IS NOT NULL THEN $8 ELSE CASE WHEN $9 IS NOT NULL THEN NULL ELSE test_result_value END END,
-			     test_result_null_flavor = CASE WHEN $8 IS NOT NULL THEN NULL ELSE COALESCE($9, test_result_null_flavor) END,
+			     test_result_value = COALESCE($8, test_result_value),
+			     test_result_qualifier = CASE WHEN $8 IS NOT NULL THEN $9 ELSE test_result_qualifier END,
 			     test_result_unit = COALESCE($10, test_result_unit),
 			     result_unstructured = COALESCE($11, result_unstructured),
 			     normal_low_value = COALESCE($12, normal_low_value),
@@ -234,7 +234,7 @@ impl TestResultBmc {
 					.bind(test_u.test_meddra_code)
 					.bind(test_u.test_result_code)
 					.bind(test_u.test_result_value)
-					.bind(test_u.test_result_null_flavor)
+					.bind(test_u.test_result_qualifier)
 					.bind(test_u.test_result_unit)
 					.bind(test_u.result_unstructured)
 					.bind(test_u.normal_low_value)
@@ -386,8 +386,8 @@ impl TestResultBmc {
 				     test_meddra_version = COALESCE($6, test_meddra_version),
 			     test_meddra_code = COALESCE($7, test_meddra_code),
 			     test_result_code = COALESCE($8, test_result_code),
-			     test_result_value = CASE WHEN $9 IS NOT NULL THEN $9 ELSE CASE WHEN $10 IS NOT NULL THEN NULL ELSE test_result_value END END,
-			     test_result_null_flavor = CASE WHEN $9 IS NOT NULL THEN NULL ELSE COALESCE($10, test_result_null_flavor) END,
+			     test_result_value = COALESCE($9, test_result_value),
+			     test_result_qualifier = CASE WHEN $9 IS NOT NULL THEN $10 ELSE test_result_qualifier END,
 			     test_result_unit = COALESCE($11, test_result_unit),
 			     result_unstructured = COALESCE($12, result_unstructured),
 			     normal_low_value = COALESCE($13, normal_low_value),
@@ -412,7 +412,7 @@ impl TestResultBmc {
 					.bind(test_u.test_meddra_code)
 					.bind(test_u.test_result_code)
 					.bind(test_u.test_result_value)
-					.bind(test_u.test_result_null_flavor)
+					.bind(test_u.test_result_qualifier)
 					.bind(test_u.test_result_unit)
 					.bind(test_u.result_unstructured)
 					.bind(test_u.normal_low_value)

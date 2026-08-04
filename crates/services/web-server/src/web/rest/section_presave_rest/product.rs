@@ -64,16 +64,34 @@ pub struct ProductPresaveCreateRows {
 	pub active_substances: Vec<ProductActiveSubstanceDetailsForUpdate>,
 }
 
+#[derive(Debug, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ProductPresaveListQuery {
+	pub sender_ids: Option<String>,
+}
+
 pub async fn list_product_presaves(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
 	snapshot: AuthorizationSnapshotW,
+	Query(query): Query<ProductPresaveListQuery>,
 ) -> Result<(StatusCode, Json<DataRestResult<Vec<ProductPresave>>>)> {
 	let ctx = ctx_w.0;
+	let sender_ids = parse_scope_filter(query.sender_ids.as_deref(), "senderIds")?;
 	with_authorized_presave_collection(&ctx, &snapshot, &mm, |ctx, mm, scope| {
 		Box::pin(async move {
 			let entities = ProductPresaveBmc::list(ctx, mm, None).await?;
-			Ok(rest_ok(filter_product_presaves_for_scope(scope, entities)))
+			let entities = filter_product_presaves_for_scope(scope, entities)
+				.into_iter()
+				.filter(|product| {
+					sender_ids.as_ref().is_none_or(|ids| {
+						product
+							.sender_presave_id
+							.is_some_and(|id| ids.contains(&id))
+					})
+				})
+				.collect();
+			Ok(rest_ok(entities))
 		})
 	})
 	.await

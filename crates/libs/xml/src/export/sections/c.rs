@@ -87,7 +87,7 @@ fn set_telecom_or_null_flavor(
 				let _ = node.remove_attribute("nullFlavor");
 				let _ = node.set_attribute("value", &telecom_value);
 			} else if let Some(null_flavor) = null_flavor {
-				let _ = node.remove_attribute("value");
+				let _ = node.set_attribute("value", "tel");
 				let _ = node.set_attribute("nullFlavor", null_flavor);
 			}
 		}
@@ -206,6 +206,23 @@ fn apply_primary_source_values(
 		);
 	}
 	write_c_2_r_3(xpath, base, primary);
+	if primary.qualification.is_some() || primary.qualification_null_flavor.is_some()
+	{
+		let path = format!("{base}/hl7:assignedPerson/hl7:asQualifiedEntity");
+		if xpath
+			.findnodes(&path, None)
+			.map(|nodes| nodes.is_empty())
+			.unwrap_or(true)
+		{
+			append_fragment_child(
+				doc,
+				parser,
+				xpath,
+				&format!("{base}/hl7:assignedPerson"),
+				"<asQualifiedEntity><code/></asQualifiedEntity>",
+			)?;
+		}
+	}
 	write_c_2_r_4(xpath, base, primary);
 	if matches!(authority, lib_core::regulatory::RegulatoryAuthority::Mfds) {
 		write_c_2_r_4_kr_1(xpath, base, primary);
@@ -327,20 +344,19 @@ fn write_c_2_r_2_7(xpath: &mut Context, base: &str, value: &PrimarySource) {
 
 /// e2b:FDA.C.2.r.2.8
 fn write_fda_c_2_r_2_8(xpath: &mut Context, base: &str, value: &PrimarySource) {
-	let Some(email) = value.email.as_deref() else {
-		return;
-	};
-	let email = if email.contains(':') {
-		email.to_string()
-	} else {
-		format!("mailto:{email}")
-	};
-	set_attr_first(
-		xpath,
-		&format!("{base}/hl7:telecom[starts-with(@value,'mailto:')]"),
-		"value",
-		&email,
-	);
+	let path = format!("{base}/hl7:telecom[starts-with(@value,'mailto')]");
+	if let Some(email) = value.email.as_deref() {
+		let email = if email.contains(':') {
+			email.to_string()
+		} else {
+			format!("mailto:{email}")
+		};
+		set_attr_first(xpath, &path, "value", &email);
+		remove_attr_first(xpath, &path, "nullFlavor");
+	} else if let Some(null_flavor) = value.email_null_flavor.as_deref() {
+		set_attr_first(xpath, &path, "value", "mailto");
+		set_attr_first(xpath, &path, "nullFlavor", null_flavor);
+	}
 }
 
 /// e2b:C.2.r.3
@@ -353,11 +369,7 @@ fn write_c_2_r_3(xpath: &mut Context, base: &str, value: &PrimarySource) {
 	} else {
 		if let Ok(nodes) = xpath.findnodes(&path, None) {
 			for mut node in nodes.into_iter().take(1) {
-				let _ = node.remove_attribute("codeSystem");
-				if let Some(null_flavor) = value.country_code_null_flavor.as_deref()
-				{
-					let _ = node.set_attribute("nullFlavor", null_flavor);
-				}
+				node.unlink_node();
 			}
 		}
 	}
@@ -365,13 +377,20 @@ fn write_c_2_r_3(xpath: &mut Context, base: &str, value: &PrimarySource) {
 
 /// e2b:C.2.r.4
 fn write_c_2_r_4(xpath: &mut Context, base: &str, value: &PrimarySource) {
-	if let Some(code) = value.qualification.as_deref() {
-		set_attr_first(
-			xpath,
-			&format!("{base}/hl7:assignedPerson/hl7:asQualifiedEntity/hl7:code"),
-			"code",
-			code,
-		);
+	let path = format!("{base}/hl7:assignedPerson/hl7:asQualifiedEntity/hl7:code");
+	match (
+		value.qualification.as_deref(),
+		value.qualification_null_flavor.as_deref(),
+	) {
+		(Some(code), _) => {
+			set_attr_first(xpath, &path, "code", code);
+			remove_attr_first(xpath, &path, "nullFlavor");
+		}
+		(None, Some(null_flavor)) => {
+			set_attr_first(xpath, &path, "nullFlavor", null_flavor);
+			remove_attr_first(xpath, &path, "code");
+		}
+		(None, None) => {}
 	}
 }
 
@@ -530,6 +549,15 @@ pub fn export_c_safety_report_patch(
 	sender: Option<&SenderInformation>,
 	authority: lib_core::regulatory::RegulatoryAuthority,
 ) -> Result<String> {
+	if report.fulfil_expedited_criteria_null_flavor.is_some() {
+		return Err(Error::InvalidXml {
+			message:
+				"ICH.C.1.7 NI export requires verified E2B(R2)-origin provenance"
+					.to_string(),
+			line: None,
+			column: None,
+		});
+	}
 	let combination_true = report
 		.combination_product_report_indicator
 		.as_deref()
@@ -644,7 +672,6 @@ mod primary_source_null_flavor_tests {
 			telephone: None,
 			telephone_null_flavor: None,
 			country_code: None,
-			country_code_null_flavor: None,
 			email: None,
 			email_null_flavor: None,
 			qualification: None,
@@ -715,6 +742,55 @@ mod primary_source_null_flavor_tests {
 	}
 
 	#[test]
+	fn primary_source_export_switches_qualification_value_and_null_flavor() {
+		let xml = br#"<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3"><PORR_IN049016UV><controlActProcess><subject><investigationEvent><outboundRelationship><relatedInvestigation><code code="2"/><subjectOf2><controlActEvent><author><assignedEntity><assignedPerson><name/></assignedPerson><representedOrganization><name/></representedOrganization><addr/></assignedEntity></author></controlActEvent></subjectOf2></relatedInvestigation></outboundRelationship></investigationEvent></subject></controlActProcess></PORR_IN049016UV></MCCI_IN200100UV01>"#;
+		let parser = Parser::default();
+		let mut doc = parser.parse_string(xml).expect("parse");
+		let mut xpath = Context::new(&doc).expect("xpath");
+		xpath.register_namespace("hl7", "urn:hl7-org:v3").unwrap();
+		let mut primary = source();
+		primary.qualification_null_flavor = Some("UNK".to_string());
+
+		apply_primary_source_values(
+			&mut doc,
+			&parser,
+			&mut xpath,
+			&primary,
+			lib_core::regulatory::RegulatoryAuthority::Ich,
+		)
+		.expect("apply null flavor");
+		let path = "//hl7:asQualifiedEntity/hl7:code";
+		assert_eq!(
+			xpath
+				.findvalue(&format!("{path}/@nullFlavor"), None)
+				.unwrap(),
+			"UNK"
+		);
+		assert_eq!(xpath.findvalue(&format!("{path}/@code"), None).unwrap(), "");
+
+		primary.qualification = Some("3".to_string());
+		primary.qualification_null_flavor = None;
+		apply_primary_source_values(
+			&mut doc,
+			&parser,
+			&mut xpath,
+			&primary,
+			lib_core::regulatory::RegulatoryAuthority::Ich,
+		)
+		.expect("apply value");
+		assert_eq!(
+			xpath.findvalue(&format!("{path}/@code"), None).unwrap(),
+			"3"
+		);
+		assert_eq!(
+			xpath
+				.findvalue(&format!("{path}/@nullFlavor"), None)
+				.unwrap(),
+			""
+		);
+	}
+
+	#[test]
 	fn primary_source_email_is_fda_only() {
 		let xml = br#"<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3"><PORR_IN049016UV><controlActProcess><subject><investigationEvent><outboundRelationship><relatedInvestigation><code code="2"/><subjectOf2><controlActEvent><author><assignedEntity><assignedPerson><name/></assignedPerson><representedOrganization><name/></representedOrganization><addr/><telecom value="mailto:old@example.com"/></assignedEntity></author></controlActEvent></subjectOf2></relatedInvestigation></outboundRelationship></investigationEvent></subject></controlActProcess></PORR_IN049016UV></MCCI_IN200100UV01>"#;
 		let parser = Parser::default();
@@ -734,6 +810,39 @@ mod primary_source_null_flavor_tests {
 		.expect("apply primary source");
 
 		assert!(!doc.to_string().contains("mailto:"));
+	}
+
+	#[test]
+	fn fda_telecom_null_flavors_keep_required_discriminators() {
+		let xml = br#"<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3"><PORR_IN049016UV><controlActProcess><subject><investigationEvent><outboundRelationship><relatedInvestigation><code code="2"/><subjectOf2><controlActEvent><author><assignedEntity><assignedPerson><name/></assignedPerson><representedOrganization><name/></representedOrganization><addr/><telecom value="tel:"/><telecom value="mailto:"/></assignedEntity></author></controlActEvent></subjectOf2></relatedInvestigation></outboundRelationship></investigationEvent></subject></controlActProcess></PORR_IN049016UV></MCCI_IN200100UV01>"#;
+		let parser = Parser::default();
+		let mut doc = parser.parse_string(xml).expect("parse");
+		let mut xpath = Context::new(&doc).expect("xpath");
+		xpath.register_namespace("hl7", "urn:hl7-org:v3").unwrap();
+		let mut primary = source();
+		primary.telephone = None;
+		primary.telephone_null_flavor = Some("NASK".to_string());
+		primary.email = None;
+		primary.email_null_flavor = Some("ASKU".to_string());
+
+		apply_primary_source_values(
+			&mut doc,
+			&parser,
+			&mut xpath,
+			&primary,
+			lib_core::regulatory::RegulatoryAuthority::Fda,
+		)
+		.expect("apply primary source");
+
+		let output = doc.to_string();
+		assert!(
+			output.contains("value=\"tel\" nullFlavor=\"NASK\"")
+				|| output.contains("nullFlavor=\"NASK\" value=\"tel\"")
+		);
+		assert!(
+			output.contains("value=\"mailto\" nullFlavor=\"ASKU\"")
+				|| output.contains("nullFlavor=\"ASKU\" value=\"mailto\"")
+		);
 	}
 
 	#[test]

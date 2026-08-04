@@ -16,7 +16,6 @@ fn import_d_section_all_fields_from_scenario6() {
 	assert_eq!(patient.sex.as_deref(), Some("1"));
 	assert_eq!(patient.sex_null_flavor, None);
 	assert_eq!(patient.age_at_time_of_onset, Some(decimal("33")));
-	assert_eq!(patient.age_at_time_of_onset_null_flavor, None);
 	assert_eq!(patient.age_unit.as_deref(), Some("a"));
 	assert_eq!(patient.gestation_period, Some(decimal("10")));
 	assert_eq!(patient.gestation_period_unit.as_deref(), Some("wk"));
@@ -39,12 +38,8 @@ fn import_d_section_all_fields_from_scenario6() {
 #[test]
 fn import_d_section_parses_race_ethnicity_null_flavor() {
 	// FDA.D.11 / FDA.D.12 with nullFlavor instead of a coded value.
-	let race_null =
-		&validator::null_flavors_for_rule("FDA.D.11.r.1.NULLFLAVOR.ALLOWED")
-			.expect("race nullFlavor catalog")[0];
-	let ethnicity_null =
-		&validator::null_flavors_for_rule("FDA.D.12.NULLFLAVOR.ALLOWED")
-			.expect("ethnicity nullFlavor catalog")[0];
+	let race_null = "UNK";
+	let ethnicity_null = "UNK";
 	let xml = format!(
 		r#"<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
   <primaryRole>
@@ -69,13 +64,10 @@ fn import_d_section_parses_race_ethnicity_null_flavor() {
 		.expect("section D should exist when only a null flavor is present");
 
 	assert_eq!(patient.race_code, None);
-	assert_eq!(
-		patient.race_code_null_flavor.as_deref(),
-		Some(race_null.as_str())
-	);
+	assert_eq!(patient.race_code_null_flavor.as_deref(), Some(race_null));
 	assert_eq!(patient.ethnicity_code, None);
 	assert_eq!(
 		patient.ethnicity_code_null_flavor.as_deref(),
-		Some(ethnicity_null.as_str())
+		Some(ethnicity_null)
 	);
 }

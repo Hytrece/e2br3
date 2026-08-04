@@ -7,13 +7,14 @@ pub(super) fn validate_section_fields(
 	row: &Map<String, Value>,
 	changed_paths: Option<&BTreeSet<String>>,
 	outer_indexes: &[usize],
+	fda: bool,
 ) -> Result<()> {
 	match section {
 		"AE" => ae(row, changed_paths, outer_indexes),
 		"CI" => ci(row, changed_paths, outer_indexes),
 		"DG" => dg(row, changed_paths, outer_indexes),
 		"DH" => dh(row, changed_paths, outer_indexes),
-		"DM" => dm(row, changed_paths, outer_indexes),
+		"DM" => dm(row, changed_paths, outer_indexes, fda),
 		"LB" => lb(row, changed_paths, outer_indexes),
 		"LR" => lr(row, changed_paths, outer_indexes),
 		"N" => n(row, changed_paths, outer_indexes),
@@ -383,11 +384,7 @@ fn ci(
 		"fulfilExpeditedCriteria",
 		"safetyReportIdentification.fulfilExpeditedCriteria",
 		InputType::Boolean,
-		Some((
-			"fulfilExpeditedCriteriaNullFlavor",
-			"safetyReportIdentification.fulfilExpeditedCriteriaNullFlavor",
-			"ICH.C.1.7.NULLFLAVOR.ALLOWED",
-		)),
+		None,
 		changed_paths,
 		outer_indexes,
 		input_contracts::generated::c::c_1_7,
@@ -973,7 +970,11 @@ fn dg(
 		"fdaAdditionalInfoCoded",
 		"drugs[].fdaAdditionalInfoCoded",
 		InputType::String,
-		None,
+		Some((
+			"fdaAdditionalInfoCodedNullFlavor",
+			"drugs[].fdaAdditionalInfoCodedNullFlavor",
+			"FDA.G.k.10a.NULLFLAVOR.ALLOWED",
+		)),
 		changed_paths,
 		outer_indexes,
 		input_contracts::generated::g::fda_g_k_10a,
@@ -983,7 +984,11 @@ fn dg(
 		"fdaDevices[].commonDeviceName",
 		"drugs[].fdaDevices[].commonDeviceName",
 		InputType::String,
-		None,
+		Some((
+			"fdaDevices[].commonDeviceNameNullFlavor",
+			"drugs[].fdaDevices[].commonDeviceNameNullFlavor",
+			"FDA.G.k.12.r.5.NULLFLAVOR.ALLOWED",
+		)),
 		changed_paths,
 		outer_indexes,
 		input_contracts::generated::g::fda_g_k_12_r_5,
@@ -993,7 +998,11 @@ fn dg(
 		"fdaDevices[].deviceBrandName",
 		"drugs[].fdaDevices[].deviceBrandName",
 		InputType::String,
-		None,
+		Some((
+			"fdaDevices[].deviceBrandNameNullFlavor",
+			"drugs[].fdaDevices[].deviceBrandNameNullFlavor",
+			"FDA.G.k.12.r.4.NULLFLAVOR.ALLOWED",
+		)),
 		changed_paths,
 		outer_indexes,
 		input_contracts::generated::g::fda_g_k_12_r_4,
@@ -1439,6 +1448,7 @@ fn dm(
 	row: &Map<String, Value>,
 	changed_paths: Option<&BTreeSet<String>>,
 	outer_indexes: &[usize],
+	fda: bool,
 ) -> Result<()> {
 	validate_field(
 		row,
@@ -2094,6 +2104,20 @@ fn dm(
 		outer_indexes,
 		input_contracts::generated::d::d_4,
 	)?;
+	let (patient_initials_rule, patient_initials_check): (
+		&str,
+		fn(FieldInput<'_>) -> Vec<InputIssue>,
+	) = if fda {
+		(
+			"FDA.D.1.NULLFLAVOR.ALLOWED",
+			input_contracts::generated::d::fda_d_1,
+		)
+	} else {
+		(
+			"ICH.D.1.NULLFLAVOR.ALLOWED",
+			input_contracts::generated::d::d_1,
+		)
+	};
 	validate_field(
 		row,
 		"patientInitials",
@@ -2102,11 +2126,11 @@ fn dm(
 		Some((
 			"patientInitialsNullFlavor",
 			"patientInformation.patientInitialsNullFlavor",
-			"ICH.D.1.NULLFLAVOR.ALLOWED",
+			patient_initials_rule,
 		)),
 		changed_paths,
 		outer_indexes,
-		input_contracts::generated::d::d_1,
+		patient_initials_check,
 	)?;
 	validate_field(
 		row,
@@ -2257,11 +2281,7 @@ fn lb(
 		"testResult",
 		"testResults[].testResult",
 		InputType::String,
-		Some((
-			"testResultNullFlavor",
-			"testResults[].testResultNullFlavor",
-			"ICH.F.r.3.2.NULLFLAVOR.ALLOWED",
-		)),
+		None,
 		changed_paths,
 		outer_indexes,
 		input_contracts::generated::f::f_r_3_2,
@@ -2565,11 +2585,7 @@ fn rp(
 		"reporterCountry",
 		"primarySources[].reporterCountry",
 		InputType::String,
-		Some((
-			"reporterCountryNullFlavor",
-			"primarySources[].reporterCountryNullFlavor",
-			"ICH.C.2.r.3.NULLFLAVOR.ALLOWED",
-		)),
+		None,
 		changed_paths,
 		outer_indexes,
 		input_contracts::generated::c::c_2_r_3,

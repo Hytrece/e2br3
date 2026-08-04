@@ -47,8 +47,6 @@ struct CaseEditorRpPrimarySourceDto {
 	telephone_null_flavor: Option<String>,
 	#[serde(rename = "reporterCountry")]
 	country_code: Option<String>,
-	#[serde(rename = "reporterCountryNullFlavor")]
-	country_code_null_flavor: Option<String>,
 	#[serde(rename = "reporterEmail")]
 	email: Option<String>,
 	#[serde(rename = "reporterEmailNullFlavor")]
@@ -90,7 +88,6 @@ impl From<PrimarySource> for CaseEditorRpPrimarySourceDto {
 			telephone: source.telephone,
 			telephone_null_flavor: source.telephone_null_flavor,
 			country_code: source.country_code,
-			country_code_null_flavor: source.country_code_null_flavor,
 			email: source.email,
 			email_null_flavor: source.email_null_flavor,
 			qualification: source.qualification,
@@ -483,10 +480,7 @@ async fn apply_ci_rows_patch(
 					row,
 					"fulfilExpeditedCriteria",
 				)?,
-				fulfil_expedited_criteria_null_flavor: string_field(
-					row,
-					&["fulfilExpeditedCriteriaNullFlavor"],
-				),
+				fulfil_expedited_criteria_null_flavor: None,
 				local_criteria_report_type: patch_string(
 					row,
 					"localCriteriaReportType",
@@ -802,7 +796,13 @@ async fn patch_editor_ci_page_projection_authorized(
 )> {
 	let requested_authorities =
 		validate_request_projection_context(request.authorities.as_deref())?;
-	validate_direct_rows("CI", &request.rows)?;
+	let fda = request
+		.authorities
+		.as_deref()
+		.unwrap_or_default()
+		.iter()
+		.any(|authority| authority.eq_ignore_ascii_case("fda"));
+	validate_direct_rows("CI", &request.rows, fda)?;
 	if !request.rows.is_empty() {
 		apply_ci_rows_patch(&ctx, &mm, case_id, &request.rows).await?;
 		mark_editor_validation_summary_stale(
@@ -929,6 +929,12 @@ async fn patch_direct_page_projection_authorized(
 )> {
 	let requested_authorities =
 		validate_request_projection_context(request.authorities.as_deref())?;
+	let fda = request
+		.authorities
+		.as_deref()
+		.unwrap_or_default()
+		.iter()
+		.any(|authority| authority.eq_ignore_ascii_case("fda"));
 	if page_id == "SI"
 		&& !request
 			.authorities
@@ -946,7 +952,7 @@ async fn patch_direct_page_projection_authorized(
 			study.remove("study_type_reaction_kr1");
 		}
 	}
-	validate_direct_rows(page_id, &request.rows)?;
+	validate_direct_rows(page_id, &request.rows, fda)?;
 
 	if !request.rows.is_empty() {
 		apply_direct_page_rows_patch(ctx, mm, case_id, page_id, &request.rows)
@@ -1128,10 +1134,6 @@ async fn apply_rp_source_patch(
 			&["reporterTelephoneNullFlavor"],
 		),
 		country_code: string_field(source, &["reporterCountry"]),
-		country_code_null_flavor: string_field(
-			source,
-			&["reporterCountryNullFlavor"],
-		),
 		email: string_field(source, &["reporterEmail"]),
 		email_null_flavor: string_field(source, &["reporterEmailNullFlavor"]),
 		qualification: string_field(source, &["qualification"]),
@@ -1181,7 +1183,6 @@ async fn apply_rp_source_patch(
 				telephone: update.telephone,
 				telephone_null_flavor: update.telephone_null_flavor,
 				country_code: update.country_code,
-				country_code_null_flavor: update.country_code_null_flavor,
 				email: update.email,
 				email_null_flavor: update.email_null_flavor,
 				qualification: update.qualification,
@@ -1684,16 +1685,12 @@ async fn apply_dm_page_rows_patch(
 				patient,
 				&["patientBirthDateNullFlavor"],
 			),
-			age_at_time_of_onset: decimal_field(
+			age_at_time_of_onset: Some(decimal_field(
 				page_id,
 				patient,
 				"patientAge.value",
 				age_paths,
-			)?,
-			age_at_time_of_onset_null_flavor: null_flavor_field(
-				patient,
-				&["patientAge.valueNullFlavor"],
-			),
+			)?),
 			age_unit: nested_string_field(patient, &["patientAge.unit"]),
 			gestation_period: decimal_field(
 				page_id,
@@ -1706,26 +1703,18 @@ async fn apply_dm_page_rows_patch(
 				&["gestationPeriod.unit"],
 			),
 			age_group: string_field(patient, &["patientAgeGroup"]),
-			weight_kg: decimal_field(
+			weight_kg: Some(decimal_field(
 				page_id,
 				patient,
 				"patientWeight.value",
 				weight_paths,
-			)?,
-			weight_kg_null_flavor: null_flavor_field(
-				patient,
-				&["patientWeight.valueNullFlavor"],
-			),
-			height_cm: decimal_field(
+			)?),
+			height_cm: Some(decimal_field(
 				page_id,
 				patient,
 				"patientHeight.value",
 				height_paths,
-			)?,
-			height_cm_null_flavor: null_flavor_field(
-				patient,
-				&["patientHeight.valueNullFlavor"],
-			),
+			)?),
 			sex,
 			sex_null_flavor,
 			race_code,
@@ -1763,17 +1752,13 @@ async fn apply_dm_page_rows_patch(
 							.patient_initials_null_flavor,
 						birth_date: update.birth_date,
 						birth_date_null_flavor: update.birth_date_null_flavor,
-						age_at_time_of_onset: update.age_at_time_of_onset,
-						age_at_time_of_onset_null_flavor: update
-							.age_at_time_of_onset_null_flavor,
+						age_at_time_of_onset: update.age_at_time_of_onset.flatten(),
 						age_unit: update.age_unit,
 						gestation_period: update.gestation_period,
 						gestation_period_unit: update.gestation_period_unit,
 						age_group: update.age_group,
-						weight_kg: update.weight_kg,
-						weight_kg_null_flavor: update.weight_kg_null_flavor,
-						height_cm: update.height_cm,
-						height_cm_null_flavor: update.height_cm_null_flavor,
+						weight_kg: update.weight_kg.flatten(),
+						height_cm: update.height_cm.flatten(),
 						sex: update.sex,
 						sex_null_flavor: update.sex_null_flavor,
 						race_code: update.race_code,
@@ -2132,13 +2117,12 @@ async fn apply_dm_page_rows_patch(
 					parent,
 					&["parentBirthDateNullFlavor"],
 				),
-				parent_age: decimal_field(
+				parent_age: Some(decimal_field(
 					page_id,
 					parent,
 					"parentInformation.parentAge.value",
 					&["parentAge.value"],
-				)?,
-				parent_age_null_flavor: None,
+				)?),
 				parent_age_unit: nested_string_field(parent, &["parentAge.unit"]),
 				last_menstrual_period_date: date_field(
 					page_id,
@@ -2180,8 +2164,7 @@ async fn apply_dm_page_rows_patch(
 						parent_birth_date: update.parent_birth_date,
 						parent_birth_date_null_flavor: update
 							.parent_birth_date_null_flavor,
-						parent_age: update.parent_age,
-						parent_age_null_flavor: update.parent_age_null_flavor,
+						parent_age: update.parent_age.flatten(),
 						parent_age_unit: update.parent_age_unit,
 						last_menstrual_period_date: update
 							.last_menstrual_period_date,
@@ -2319,7 +2302,6 @@ async fn apply_dm_page_rows_patch(
 			}
 			let update = ParentPastDrugHistoryForUpdate {
 				drug_name: string_field(drug, &["drugName"]),
-				drug_name_null_flavor: None,
 				mpid: string_field(drug, &["mpid"]),
 				mpid_version: string_field(drug, &["mpidVersion"]),
 				mfds_medicinal_product_version: string_field(
@@ -2379,7 +2361,6 @@ async fn apply_dm_page_rows_patch(
 								i32::try_from(index + 1).unwrap_or(i32::MAX)
 							}),
 						drug_name: update.drug_name,
-						drug_name_null_flavor: update.drug_name_null_flavor,
 						mpid: update.mpid,
 						mpid_version: update.mpid_version,
 						mfds_medicinal_product_version: update

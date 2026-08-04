@@ -77,11 +77,9 @@ const EDITOR_DB_PAIRS: &[EditorDbPair] = &[
 	pair!("DM", "patientInformation.raceCodeNullFlavor", "patient_information", "race_code", "race_code_null_flavor"),
 	pair!("DM", "patientInformation.specialistRecordNumberNullFlavor", "patient_identifiers", "identifier_value", "identifier_value_null_flavor"),
 	pair!("LB", "testResults[].testDateNullFlavor", "test_results", "test_date", "test_date_null_flavor"),
-	pair!("LB", "testResults[].testResultNullFlavor", "test_results", "test_result_value", "test_result_null_flavor"),
 	pair!("LR", "literatureReferences[].referenceTextNullFlavor", "literature_references", "reference_text", "reference_text_null_flavor"),
 	pair!("RP", "primarySources[].qualificationNullFlavor", "primary_sources", "qualification", "qualification_null_flavor"),
 	pair!("RP", "primarySources[].reporterCityNullFlavor", "primary_sources", "city", "city_null_flavor"),
-	pair!("RP", "primarySources[].reporterCountryNullFlavor", "primary_sources", "country_code", "country_code_null_flavor"),
 	pair!("RP", "primarySources[].reporterDepartmentNullFlavor", "primary_sources", "department", "department_null_flavor"),
 	pair!("RP", "primarySources[].reporterEmailNullFlavor", "primary_sources", "email", "email_null_flavor"),
 	pair!("RP", "primarySources[].reporterFamilyNameNullFlavor", "primary_sources", "reporter_family_name", "reporter_family_name_null_flavor"),
@@ -157,30 +155,6 @@ async fn newly_added_pairs_persist_either_member_and_reject_both() -> Result<()>
 	let (status, body) = post_json(
 		&app,
 		&cookie,
-		&format!("/api/cases/{case_id}/test-results"),
-		json!({"data": {"case_id": case_id, "sequence_number": 1, "test_name": "Pair test"}}),
-	)
-	.await?;
-	assert_eq!(status, StatusCode::CREATED, "{body}");
-	let test_result_id = body["data"]["id"]
-		.as_str()
-		.ok_or("missing test result id")?;
-	let lb_uri =
-		format!("/api/cases/{case_id}/editor/pages/LB/rows/{test_result_id}");
-	let (status, body) = patch_json(
-		&app,
-		&cookie,
-		&lb_uri,
-		json!({"authorities": ["ich"], "rows": {"testResult": {
-			"testResult": null, "testResultNullFlavor": "NINF"
-		}}}),
-	)
-	.await?;
-	assert_eq!(status, StatusCode::OK, "{body}");
-
-	let (status, body) = post_json(
-		&app,
-		&cookie,
 		&format!("/api/cases/{case_id}/drugs"),
 		json!({"data": {"case_id": case_id, "sequence_number": 1, "drug_characterization": "1", "medicinal_product": "Pair drug"}}),
 	)
@@ -210,11 +184,6 @@ async fn newly_added_pairs_persist_either_member_and_reject_both() -> Result<()>
 		ROLE_SPONSOR_ADMIN_CRO,
 	)
 	.await?;
-	let lb_pair: (Option<String>, Option<String>) = mm.dbx().fetch_one(
-		sqlx::query_as("SELECT test_result_value, test_result_null_flavor FROM test_results WHERE id = $1")
-			.bind(Uuid::parse_str(test_result_id)?),
-	).await?;
-	assert_eq!(lb_pair, (None, Some("NINF".into())));
 	let (dosage_id, dose_form, dose_form_nf, route, route_nf, parent_route, parent_route_nf): (Uuid, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>) = mm.dbx().fetch_one(
 		sqlx::query_as("SELECT id, dose_form, dose_form_null_flavor, route_of_administration, route_of_administration_null_flavor, parent_route, parent_route_null_flavor FROM dosage_information WHERE drug_id = $1")
 			.bind(Uuid::parse_str(drug_id)?),
@@ -252,17 +221,6 @@ async fn newly_added_pairs_persist_either_member_and_reject_both() -> Result<()>
 	)
 	.await?;
 	assert_eq!(status, StatusCode::OK, "{body}");
-	let (status, body) = patch_json(
-		&app,
-		&cookie,
-		&lb_uri,
-		json!({"authorities": ["ich"], "rows": {"testResult": {
-			"testResult": "1", "testResultNullFlavor": null
-		}}}),
-	)
-	.await?;
-	assert_eq!(status, StatusCode::OK, "{body}");
-
 	mm.dbx().begin_txn().await?;
 	set_full_context_dbx(
 		mm.dbx(),
@@ -271,24 +229,6 @@ async fn newly_added_pairs_persist_either_member_and_reject_both() -> Result<()>
 		ROLE_SPONSOR_ADMIN_CRO,
 	)
 	.await?;
-	let value_only: (Option<String>, Option<String>) = mm.dbx().fetch_one(
-		sqlx::query_as("SELECT test_result_value, test_result_null_flavor FROM test_results WHERE id = $1")
-			.bind(Uuid::parse_str(test_result_id)?),
-	).await?;
-	assert_eq!(value_only, (Some("1".into()), None));
-	let both = mm.dbx().execute(
-		sqlx::query("UPDATE test_results SET test_result_value = 'Positive', test_result_null_flavor = 'NINF' WHERE id = $1")
-			.bind(Uuid::parse_str(test_result_id)?),
-	).await.expect_err("database must reject both pair members");
-	let lib_core::model::store::dbx::Error::Sqlx(both) = both else {
-		panic!("expected database constraint error");
-	};
-	assert_eq!(
-		both.as_database_error()
-			.and_then(|err| err.code())
-			.as_deref(),
-		Some("23514")
-	);
-	mm.dbx().rollback_txn().await?;
+	mm.dbx().commit_txn().await?;
 	Ok(())
 }

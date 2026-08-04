@@ -178,16 +178,33 @@ pub struct StudyPresaveCreateRows {
 	pub fda_cross_reported_inds: Vec<StudyFdaCrossReportedIndNumberDetailsForUpdate>,
 }
 
+#[derive(Debug, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct StudyPresaveListQuery {
+	pub product_ids: Option<String>,
+}
+
 pub async fn list_study_presaves(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
 	snapshot: AuthorizationSnapshotW,
+	Query(query): Query<StudyPresaveListQuery>,
 ) -> Result<(StatusCode, Json<DataRestResult<Vec<StudyPresave>>>)> {
 	let ctx = ctx_w.0;
+	let product_ids =
+		parse_scope_filter(query.product_ids.as_deref(), "productIds")?;
 	with_authorized_presave_collection(&ctx, &snapshot, &mm, |ctx, mm, scope| {
 		Box::pin(async move {
 			let entities = StudyPresaveBmc::list(ctx, mm, None).await?;
-			Ok(rest_ok(filter_study_presaves_for_scope(scope, entities)))
+			let entities = filter_study_presaves_for_scope(scope, entities)
+				.into_iter()
+				.filter(|study| {
+					product_ids.as_ref().is_none_or(|ids| {
+						study.product_presave_id.is_some_and(|id| ids.contains(&id))
+					})
+				})
+				.collect();
+			Ok(rest_ok(entities))
 		})
 	})
 	.await

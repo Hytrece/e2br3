@@ -775,24 +775,21 @@ impl<'tx> AuthorizationFactLoader<'tx> {
 			SELECT c.organization_id,
 			       c.status,
 			       COALESCE(
-			        (SELECT array_agg(DISTINCT s.source_sender_presave_id::text)
-			           FROM sender_information s
-			          WHERE s.case_id = c.id
-			            AND s.source_sender_presave_id IS NOT NULL),
+			        (SELECT array_agg(identifier)
+			           FROM case_scope_identifiers(c.id)
+			          WHERE scope_kind = 'sender'),
 			        ARRAY[]::text[]
 			       ) AS sender_identifiers,
 			       COALESCE(
-			        (SELECT array_agg(DISTINCT d.source_product_presave_id::text)
-			           FROM drug_information d
-			          WHERE d.case_id = c.id
-			            AND d.source_product_presave_id IS NOT NULL),
+			        (SELECT array_agg(identifier)
+			           FROM case_scope_identifiers(c.id)
+			          WHERE scope_kind = 'product'),
 			        ARRAY[]::text[]
 			       ) AS product_identifiers,
 			       COALESCE(
-			        (SELECT array_agg(DISTINCT s.source_study_presave_id::text)
-			           FROM study_information s
-			          WHERE s.case_id = c.id
-			            AND s.source_study_presave_id IS NOT NULL),
+			        (SELECT array_agg(identifier)
+			           FROM case_scope_identifiers(c.id)
+			          WHERE scope_kind = 'study'),
 			        ARRAY[]::text[]
 			       ) AS study_identifiers,
 			       EXISTS(

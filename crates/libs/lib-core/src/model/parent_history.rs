@@ -104,7 +104,6 @@ pub struct ParentPastDrugHistory {
 
 	// D.10.8.r.1 - Drug Name
 	pub drug_name: Option<String>,
-	pub drug_name_null_flavor: Option<String>,
 
 	// D.10.8.r.2 - MPID
 	pub mpid: Option<String>,
@@ -142,11 +141,11 @@ pub struct ParentPastDrugHistory {
 }
 
 #[derive(Fields, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ParentPastDrugHistoryForCreate {
 	pub parent_id: Uuid,
 	pub sequence_number: i32,
 	pub drug_name: Option<String>,
-	pub drug_name_null_flavor: Option<String>,
 	pub mpid: Option<String>,
 	pub mpid_version: Option<String>,
 	pub mfds_medicinal_product_version: Option<String>,
@@ -172,9 +171,9 @@ pub struct ParentPastDrugHistoryForCreate {
 }
 
 #[derive(Fields, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ParentPastDrugHistoryForUpdate {
 	pub drug_name: Option<String>,
-	pub drug_name_null_flavor: Option<String>,
 	pub mpid: Option<String>,
 	pub mpid_version: Option<String>,
 	pub mfds_medicinal_product_version: Option<String>,
@@ -320,25 +319,24 @@ impl ParentPastDrugHistoryBmc {
 
 		let sql = format!(
 			"UPDATE {} SET
-			 drug_name = CASE WHEN $1::varchar IS NOT NULL THEN NULL ELSE COALESCE($2, drug_name) END,
-			 drug_name_null_flavor = CASE WHEN $2::varchar IS NOT NULL THEN NULL ELSE COALESCE($1, drug_name_null_flavor) END,
-			 mpid = COALESCE($3, mpid),
-			 mpid_version = COALESCE($4, mpid_version),
-			 mfds_medicinal_product_version = COALESCE($5, mfds_medicinal_product_version),
-			 mfds_medicinal_product_id = COALESCE($6, mfds_medicinal_product_id),
-			 phpid = COALESCE($7, phpid),
-			 phpid_version = COALESCE($8, phpid_version),
-			 start_date = CASE WHEN $10::varchar IS NOT NULL THEN NULL ELSE COALESCE($9, start_date) END,
-			 start_date_null_flavor = CASE WHEN $9::date IS NOT NULL THEN NULL ELSE COALESCE($10, start_date_null_flavor) END,
-			 end_date = CASE WHEN $12::varchar IS NOT NULL THEN NULL ELSE COALESCE($11, end_date) END,
-			 end_date_null_flavor = CASE WHEN $11::date IS NOT NULL THEN NULL ELSE COALESCE($12, end_date_null_flavor) END,
-			 indication_meddra_version = COALESCE($13, indication_meddra_version),
-			 indication_meddra_code = COALESCE($14, indication_meddra_code),
-			 reaction_meddra_version = COALESCE($15, reaction_meddra_version),
-			 reaction_meddra_code = COALESCE($16, reaction_meddra_code),
+			 drug_name = COALESCE($1, drug_name),
+			 mpid = COALESCE($2, mpid),
+			 mpid_version = COALESCE($3, mpid_version),
+			 mfds_medicinal_product_version = COALESCE($4, mfds_medicinal_product_version),
+			 mfds_medicinal_product_id = COALESCE($5, mfds_medicinal_product_id),
+			 phpid = COALESCE($6, phpid),
+			 phpid_version = COALESCE($7, phpid_version),
+			 start_date = CASE WHEN $9::varchar IS NOT NULL THEN NULL ELSE COALESCE($8, start_date) END,
+			 start_date_null_flavor = CASE WHEN $8::date IS NOT NULL THEN NULL ELSE COALESCE($9, start_date_null_flavor) END,
+			 end_date = CASE WHEN $11::varchar IS NOT NULL THEN NULL ELSE COALESCE($10, end_date) END,
+			 end_date_null_flavor = CASE WHEN $10::date IS NOT NULL THEN NULL ELSE COALESCE($11, end_date_null_flavor) END,
+			 indication_meddra_version = COALESCE($12, indication_meddra_version),
+			 indication_meddra_code = COALESCE($13, indication_meddra_code),
+			 reaction_meddra_version = COALESCE($14, reaction_meddra_version),
+			 reaction_meddra_code = COALESCE($15, reaction_meddra_code),
 			 updated_at = now(),
-			 updated_by = $17
-			 WHERE id = $18",
+			 updated_by = $16
+			 WHERE id = $17",
 			Self::TABLE
 		);
 
@@ -346,7 +344,6 @@ impl ParentPastDrugHistoryBmc {
 			.dbx()
 			.execute(
 				sqlx::query(&sql)
-					.bind(data.drug_name_null_flavor)
 					.bind(data.drug_name)
 					.bind(data.mpid)
 					.bind(data.mpid_version)

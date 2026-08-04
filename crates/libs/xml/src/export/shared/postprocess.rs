@@ -139,9 +139,7 @@ async fn apply_patient_section(
 			null_flavor,
 		);
 	}
-	if patient.age_at_time_of_onset.is_some()
-		|| patient.age_at_time_of_onset_null_flavor.is_some()
-	{
+	if patient.age_at_time_of_onset.is_some() {
 		ensure_patient_observation(xpath, doc, parser, "3", "PQ")?;
 		let age_xpath =
 			"//hl7:primaryRole/hl7:subjectOf2/hl7:observation[hl7:code[@code='3']]/hl7:value";
@@ -151,12 +149,6 @@ async fn apply_patient_section(
 				set_attr_first(xpath, age_xpath, "unit", unit);
 			}
 			remove_attr_first(xpath, age_xpath, "nullFlavor");
-		} else if let Some(null_flavor) =
-			patient.age_at_time_of_onset_null_flavor.as_deref()
-		{
-			remove_attr_first(xpath, age_xpath, "value");
-			remove_attr_first(xpath, age_xpath, "unit");
-			set_attr_first(xpath, age_xpath, "nullFlavor", null_flavor);
 		}
 	}
 	if let Some(v) = patient.sex.as_deref() {
@@ -512,10 +504,7 @@ async fn apply_patient_section(
 			write_d_10_5(xpath, height_xpath, &v.to_string());
 			set_attr_first(xpath, height_xpath, "unit", "cm");
 		}
-		if parent.parent_age.is_some()
-			|| parent.parent_age_unit.is_some()
-			|| parent.parent_age_null_flavor.is_some()
-		{
+		if parent.parent_age.is_some() || parent.parent_age_unit.is_some() {
 			let age_value_xpath = "//hl7:primaryRole/hl7:player1/hl7:role[hl7:code[@code='PRN']]/hl7:subjectOf2/hl7:observation[hl7:code[@code='3']]/hl7:value";
 			if xpath
 				.findnodes(age_value_xpath, None)
@@ -536,15 +525,7 @@ async fn apply_patient_section(
 			if let Some(v) = parent.parent_age_unit.as_deref() {
 				write_d_10_2_2b(xpath, age_value_xpath, v);
 			}
-			if parent.parent_age.is_some() {
-				remove_attr_first(xpath, age_value_xpath, "nullFlavor");
-			} else if let Some(null_flavor) =
-				parent.parent_age_null_flavor.as_deref()
-			{
-				remove_attr_first(xpath, age_value_xpath, "value");
-				remove_attr_first(xpath, age_value_xpath, "unit");
-				set_attr_first(xpath, age_value_xpath, "nullFlavor", null_flavor);
-			}
+			remove_attr_first(xpath, age_value_xpath, "nullFlavor");
 		}
 		apply_parent_past_drug_history_section(
 			doc,
@@ -877,8 +858,6 @@ fn parent_past_drug_history_fragment(
 ) -> String {
 	let name_fragment = if let Some(name) = write_d_10_8_r_1(drug) {
 		format!("<name>{}</name>", xml_escape(name))
-	} else if let Some(null_flavor) = drug.drug_name_null_flavor.as_deref() {
-		format!("<name nullFlavor=\"{}\"/>", xml_escape(null_flavor))
 	} else {
 		"<name/>".to_string()
 	};
@@ -1494,7 +1473,6 @@ mod tests {
 			sequence_number: 1,
 			deleted: false,
 			drug_name: Some("Parent & <drug> \"A\" 'B'".to_string()),
-			drug_name_null_flavor: None,
 			mpid: Some("MP&<>\"'".to_string()),
 			mpid_version: Some("MPV&<>\"'".to_string()),
 			mfds_medicinal_product_version: Some("MFV&<>\"'".to_string()),

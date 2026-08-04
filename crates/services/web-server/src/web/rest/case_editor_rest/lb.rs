@@ -8,7 +8,7 @@ const TEST_RESULT_ROW_ALIASES: &[(&str, &[&str])] = &[
 	("test_meddra_code", &["testMeddraCode"]),
 	("test_result_code", &["testResultCode"]),
 	("test_result_value", &["testResult"]),
-	("test_result_null_flavor", &["testResultNullFlavor"]),
+	("test_result_qualifier", &["testResultQualifier"]),
 	("test_result_unit", &["testUnit"]),
 	("result_unstructured", &["testResultUnstructured"]),
 	("normal_low_value", &["lowRange"]),

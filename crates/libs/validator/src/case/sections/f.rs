@@ -4,8 +4,8 @@ use super::helpers::{
 };
 use crate::allowed_value::ConstraintValue;
 use crate::{
-	has_test_payload, has_text, RegulatoryAuthority, RuleFacts, ValidationContext,
-	ValidationIssue,
+	has_test_payload, has_text, push_business_issue, RegulatoryAuthority, RuleFacts,
+	ValidationContext, ValidationIssue,
 };
 use lib_core::model::test_result::TestResult;
 use std::borrow::Cow;
@@ -282,13 +282,35 @@ fn f_r_6(idx: usize, test: &TestResult, issues: &mut Vec<ValidationIssue>) {
 	);
 }
 
+/// MFDS.F.r.7: more test information means additional documents are available.
+fn f_r_7(validation_ctx: &ValidationContext, issues: &mut Vec<ValidationIssue>) {
+	if validation_ctx
+		.tests
+		.iter()
+		.any(|test| test.more_info_available == Some(true))
+		&& validation_ctx
+			.safety_report
+			.as_ref()
+			.is_none_or(|report| report.additional_documents_available != Some(true))
+	{
+		push_business_issue(
+			issues,
+			"MFDS.F.r.7.C.1.6.1.REQUIRED",
+			"safetyReport.additionalDocumentsAvailable",
+			"Additional documents must be marked available when more test information is available",
+		);
+	}
+}
+
 pub(crate) fn collect(
 	issues: &mut Vec<ValidationIssue>,
 	authority: RegulatoryAuthority,
 	validation_ctx: &ValidationContext,
 ) {
-	let _ = authority;
 	collect_ich_issues(validation_ctx, issues);
+	if authority == RegulatoryAuthority::Mfds {
+		f_r_7(validation_ctx, issues);
+	}
 }
 
 pub(crate) fn collect_ich_issues(
@@ -449,7 +471,7 @@ mod golden_f_required_tests {
 			test_meddra_code: None,
 			test_result_code: None,
 			test_result_value: None,
-			test_result_null_flavor: None,
+			test_result_qualifier: None,
 			test_result_unit: None,
 			result_unstructured: None,
 			normal_low_value: None,
@@ -630,5 +652,18 @@ mod golden_f_required_tests {
 				length_issue("ICH.F.r.6.LENGTH.MAX", "testResults.0.comments"),
 			]
 		);
+	}
+
+	#[test]
+	fn more_information_requires_additional_documents() {
+		let mut ctx = empty_ctx();
+		let mut test = test_result();
+		test.more_info_available = Some(true);
+		ctx.tests = vec![test];
+		let mut issues = Vec::new();
+		f_r_7(&ctx, &mut issues);
+		assert!(issues
+			.iter()
+			.any(|issue| issue.code == "MFDS.F.r.7.C.1.6.1.REQUIRED"));
 	}
 }

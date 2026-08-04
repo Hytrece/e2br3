@@ -24,7 +24,7 @@ pub struct FTestResultImport {
 	pub test_meddra_code: Option<String>,
 	pub test_result_code: Option<String>,
 	pub test_result_value: Option<String>,
-	pub test_result_null_flavor: Option<String>,
+	pub test_result_qualifier: Option<String>,
 	pub test_result_unit: Option<String>,
 	pub result_unstructured: Option<String>,
 	pub normal_low_value: Option<String>,
@@ -67,7 +67,7 @@ pub fn parse_f_test_results(xml: &[u8]) -> Result<Vec<FTestResultImport>> {
 	for (idx, node) in nodes.into_iter().enumerate() {
 		let test_name = read_f_r_2_1(&mut xpath, &node, idx)?;
 		let (test_date, test_date_null_flavor) = read_f_r_1(&mut xpath, &node)?;
-		let (test_result_value, test_result_null_flavor) =
+		let (test_result_value, test_result_qualifier) =
 			read_f_r_3_2(&mut xpath, &node)?;
 
 		items.push(FTestResultImport {
@@ -78,7 +78,7 @@ pub fn parse_f_test_results(xml: &[u8]) -> Result<Vec<FTestResultImport>> {
 			test_meddra_code: read_f_r_2_2b(&mut xpath, &node)?,
 			test_result_code: read_f_r_3_1(&mut xpath, &node)?,
 			test_result_value,
-			test_result_null_flavor,
+			test_result_qualifier,
 			test_result_unit: read_f_r_3_3(&mut xpath, &node)?,
 			result_unstructured: read_f_r_3_4(&mut xpath, &node)?,
 			normal_low_value: read_f_r_4(&mut xpath, &node)?,
@@ -115,7 +115,7 @@ pub(crate) async fn import_section_f(
 				test_meddra_code: entry.test_meddra_code,
 				test_result_code: entry.test_result_code,
 				test_result_value: entry.test_result_value,
-				test_result_null_flavor: entry.test_result_null_flavor,
+				test_result_qualifier: entry.test_result_qualifier,
 				test_result_unit: entry.test_result_unit,
 				result_unstructured: entry.result_unstructured,
 				normal_low_value: entry.normal_low_value,
@@ -213,39 +213,76 @@ fn read_f_r_3_2(
 	xpath: &mut Context,
 	node: &Node,
 ) -> Result<(Option<String>, Option<String>)> {
-	let value =
-		first_attr(xpath, node, FTestResultPaths::RESULT_VALUE).or_else(|| {
-			first_attr(xpath, node, FTestResultPaths::RESULT_VALUE_FALLBACK)
-		});
-	let null_flavor = first_attr(xpath, node, FTestResultPaths::RESULT_NULL_FLAVOR);
-	if value.is_some() && null_flavor.is_some() {
+	if let Some(null_flavor) =
+		first_attr(xpath, node, FTestResultPaths::RESULT_NULL_FLAVOR)
+	{
 		return Err(Error::InvalidXml {
-			message: "F.r.3.2 value and nullFlavor cannot both be set".to_string(),
+			message: format!(
+				"F.r.3.2 does not allow top-level nullFlavor {null_flavor}; NINF/PINF are interval-bound qualifiers"
+			),
 			line: None,
 			column: None,
 		});
 	}
+	let center =
+		first_attr(xpath, node, FTestResultPaths::RESULT_VALUE).or_else(|| {
+			first_attr(xpath, node, FTestResultPaths::RESULT_VALUE_FALLBACK)
+		});
+	let low_value = first_attr(xpath, node, FTestResultPaths::RESULT_LOW_VALUE);
+	let low_null = first_attr(xpath, node, FTestResultPaths::RESULT_LOW_NULL_FLAVOR);
+	let high_value = first_attr(xpath, node, FTestResultPaths::RESULT_HIGH_VALUE);
+	let high_null =
+		first_attr(xpath, node, FTestResultPaths::RESULT_HIGH_NULL_FLAVOR);
+	let (value, qualifier) = if let Some(value) = center {
+		(Some(value), Some("EQ".to_string()))
+	} else if low_null.as_deref() == Some("NINF") && high_value.is_some() {
+		let inclusive =
+			first_attr(xpath, node, FTestResultPaths::RESULT_HIGH_INCLUSIVE)
+				.as_deref() == Some("true");
+		(
+			high_value,
+			Some(if inclusive { "LE" } else { "LT" }.to_string()),
+		)
+	} else if high_null.as_deref() == Some("PINF") && low_value.is_some() {
+		let inclusive =
+			first_attr(xpath, node, FTestResultPaths::RESULT_LOW_INCLUSIVE)
+				.as_deref() == Some("true");
+		(
+			low_value,
+			Some(if inclusive { "GE" } else { "GT" }.to_string()),
+		)
+	} else if low_value.is_some()
+		|| low_null.is_some()
+		|| high_value.is_some()
+		|| high_null.is_some()
+	{
+		return Err(Error::InvalidXml {
+			message: "F.r.3.2 interval must be NINF..value or value..PINF"
+				.to_string(),
+			line: None,
+			column: None,
+		});
+	} else {
+		(None, None)
+	};
 	import_constraint::string(
 		"testResult",
 		value.as_deref(),
-		null_flavor.as_deref(),
-		input_contracts::generated::f::f_r_3_2,
-	)?;
-	import_constraint::string(
-		"testResultNullFlavor",
-		None,
 		None,
 		input_contracts::generated::f::f_r_3_2,
 	)?;
-	Ok((value, null_flavor))
+	Ok((value, qualifier))
 }
 
 /// e2b:F.r.3.3
 fn read_f_r_3_3(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
 	input_string(
-		first_attr(xpath, node, FTestResultPaths::RESULT_UNIT).or_else(|| {
-			first_attr(xpath, node, FTestResultPaths::RESULT_UNIT_FALLBACK)
-		}),
+		first_attr(xpath, node, FTestResultPaths::RESULT_UNIT)
+			.or_else(|| {
+				first_attr(xpath, node, FTestResultPaths::RESULT_UNIT_FALLBACK)
+			})
+			.or_else(|| first_attr(xpath, node, FTestResultPaths::RESULT_LOW_UNIT))
+			.or_else(|| first_attr(xpath, node, FTestResultPaths::RESULT_HIGH_UNIT)),
 		"testUnit",
 		input_contracts::generated::f::f_r_3_3,
 	)
@@ -356,10 +393,19 @@ mod tests {
 	use super::parse_f_test_results;
 
 	#[test]
-	fn imports_test_result_null_flavor_into_companion() {
+	fn rejects_top_level_test_result_null_flavor() {
 		let xml = br#"<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3"><organizer><code code="3" codeSystem="2.16.840.1.113883.3.989.2.1.1.20"/><component><observation><code><originalText>Result</originalText></code><value nullFlavor="NINF"/></observation></component></organizer></MCCI_IN200100UV01>"#;
-		let results = parse_f_test_results(xml).expect("parse");
-		assert_eq!(results[0].test_result_value, None);
-		assert_eq!(results[0].test_result_null_flavor.as_deref(), Some("NINF"));
+		let error =
+			parse_f_test_results(xml).expect_err("top-level nullFlavor must fail");
+		assert!(error.to_string().contains("interval-bound qualifiers"));
+	}
+
+	#[test]
+	fn imports_upper_interval_bound_as_less_than() {
+		let xml = br#"<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3"><organizer><code code="3" codeSystem="2.16.840.1.113883.3.989.2.1.1.20"/><component><observation><code><originalText>Result</originalText></code><value><low nullFlavor="NINF"/><high value="10" unit="mg/dL" inclusive="false"/></value></observation></component></organizer></MCCI_IN200100UV01>"#;
+		let results = parse_f_test_results(xml).expect("parse interval");
+		assert_eq!(results[0].test_result_value.as_deref(), Some("10"));
+		assert_eq!(results[0].test_result_qualifier.as_deref(), Some("LT"));
+		assert_eq!(results[0].test_result_unit.as_deref(), Some("mg/dL"));
 	}
 }

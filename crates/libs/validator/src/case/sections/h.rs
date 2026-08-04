@@ -4,11 +4,14 @@ use super::helpers::{
 };
 use crate::allowed_value::ConstraintValue;
 use crate::{
-	has_text, should_require_case_narrative, RegulatoryAuthority, RuleFacts,
-	ValidationContext, ValidationIssue,
+	has_text, push_business_issue, should_require_case_narrative,
+	RegulatoryAuthority, RuleFacts, ValidationContext, ValidationIssue,
 };
 use lib_core::model::narrative::{
 	CaseSummaryInformation, NarrativeInformation, SenderDiagnosis,
+};
+use lib_core::regulatory::{
+	is_mfds_clinical_trial_receiver, is_mfds_domestic_receiver,
 };
 use std::borrow::Cow;
 
@@ -128,6 +131,29 @@ fn h_4(narrative: &NarrativeInformation, issues: &mut Vec<ValidationIssue>) {
 	);
 }
 
+fn contains_korean(value: &str) -> bool {
+	value.chars().any(|ch| {
+		matches!(ch, '\u{1100}'..='\u{11ff}' | '\u{3130}'..='\u{318f}' | '\u{ac00}'..='\u{d7a3}')
+	})
+}
+
+/// MFDS.H.4: Korean is required for domestic and clinical reports.
+fn mfds_h_4(narrative: &NarrativeInformation, issues: &mut Vec<ValidationIssue>) {
+	if narrative
+		.sender_comments
+		.as_deref()
+		.is_some_and(|comments| {
+			has_text(Some(comments)) && !contains_korean(comments)
+		}) {
+		push_business_issue(
+			issues,
+			"MFDS.H.4.KOREAN.REQUIRED",
+			"narrative.senderComments",
+			"Sender comments must include Korean for domestic and clinical reports",
+		);
+	}
+}
+
 /// ICH.H.5.r.1a.LENGTH.MAX
 fn h_5_r_1a(
 	idx: usize,
@@ -180,8 +206,20 @@ pub(crate) fn collect(
 	authority: RegulatoryAuthority,
 	validation_ctx: &ValidationContext,
 ) {
-	let _ = authority;
 	collect_ich_issues(validation_ctx, issues);
+	if authority == RegulatoryAuthority::Mfds {
+		let receiver = validation_ctx
+			.message_header
+			.as_ref()
+			.map(|header| header.message_receiver_identifier.as_str());
+		if is_mfds_domestic_receiver(receiver)
+			|| is_mfds_clinical_trial_receiver(receiver)
+		{
+			if let Some(narrative) = validation_ctx.narrative.as_ref() {
+				mfds_h_4(narrative, issues);
+			}
+		}
+	}
 }
 
 pub(crate) fn collect_ich_issues(
@@ -441,5 +479,16 @@ mod tests {
 				),
 			]
 		);
+	}
+
+	#[test]
+	fn korean_sender_comments_are_required_for_mfds_routes() {
+		let mut narrative = narrative();
+		narrative.sender_comments = Some("English only".to_string());
+		let mut issues = Vec::new();
+		mfds_h_4(&narrative, &mut issues);
+		assert!(issues
+			.iter()
+			.any(|issue| issue.code == "MFDS.H.4.KOREAN.REQUIRED"));
 	}
 }

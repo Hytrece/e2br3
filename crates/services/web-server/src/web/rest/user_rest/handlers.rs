@@ -58,6 +58,21 @@ pub async fn create_user(
 	validate_uuid_scope("access_sender_ids", &data.access_sender_ids)?;
 	validate_uuid_scope("access_product_ids", &data.access_product_ids)?;
 	validate_uuid_scope("access_study_ids", &data.access_study_ids)?;
+	let sender_ids =
+		parse_scope_input(data.access_sender_ids.clone()).unwrap_or_default();
+	let product_ids =
+		parse_scope_input(data.access_product_ids.clone()).unwrap_or_default();
+	let study_ids =
+		parse_scope_input(data.access_study_ids.clone()).unwrap_or_default();
+	validate_scope_hierarchy(
+		&db_ctx,
+		&mm,
+		organization_id,
+		&sender_ids,
+		&product_ids,
+		&study_ids,
+	)
+	.await?;
 	validate_optional_uuid_identifier(
 		"active_sender_identifier",
 		data.active_sender_identifier.as_deref(),
@@ -308,6 +323,27 @@ pub async fn update_user(
 					return Err(sender_scope_assignment_forbidden());
 				}
 				let existing: User = UserBmc::get(db_ctx, mm, id).await?;
+				let sender_ids = scope_values_for_update(
+					data.access_sender_ids.as_ref(),
+					existing.access_sender_ids.as_deref(),
+				);
+				let product_ids = scope_values_for_update(
+					data.access_product_ids.as_ref(),
+					existing.access_product_ids.as_deref(),
+				);
+				let study_ids = scope_values_for_update(
+					data.access_study_ids.as_ref(),
+					existing.access_study_ids.as_deref(),
+				);
+				validate_scope_hierarchy(
+					db_ctx,
+					mm,
+					existing.organization_id,
+					&sender_ids,
+					&product_ids,
+					&study_ids,
+				)
+				.await?;
 				let role = normalize_user_role(data.role);
 				if role.is_some() {
 					validate_permission_profile_role_for_org(

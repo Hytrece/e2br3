@@ -36,6 +36,7 @@ pub struct GDrugImport {
 	pub gestation_period_exposure_unit: Option<String>,
 	pub action_taken: Option<String>,
 	pub fda_additional_info_coded: Option<String>,
+	pub fda_additional_info_coded_null_flavor: Option<String>,
 	pub fda_specialized_product_category: Option<String>,
 	pub drug_additional_information: Option<String>,
 	pub devices: Vec<GDrugFdaDeviceImport>,
@@ -177,7 +178,8 @@ pub fn parse_g_drugs(xml: &[u8]) -> Result<Vec<GDrugImport>> {
 		let cumulative_dose_first_reaction_unit = read_g_k_5b(&mut xpath, &node)?;
 		let gestation_period_exposure_value = read_g_k_6a(&mut xpath, &node)?;
 		let gestation_period_exposure_unit = read_g_k_6b(&mut xpath, &node)?;
-		let fda_additional_info_coded = read_fda_g_k_10_1(&mut xpath, &node)?;
+		let (fda_additional_info_coded, fda_additional_info_coded_null_flavor) =
+			read_fda_g_k_10_1(&mut xpath, &node)?;
 		let fda_specialized_product_category = read_fda_g_k_10a(&mut xpath, &node)?;
 		let drug_additional_information = read_g_k_11(&mut xpath, &node)?;
 		let mut devices = Vec::new();
@@ -392,6 +394,7 @@ pub fn parse_g_drugs(xml: &[u8]) -> Result<Vec<GDrugImport>> {
 			gestation_period_exposure_unit,
 			action_taken,
 			fda_additional_info_coded,
+			fda_additional_info_coded_null_flavor,
 			fda_specialized_product_category,
 			drug_additional_information,
 			devices,
@@ -616,15 +619,20 @@ fn read_g_k_6b(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
 }
 
 /// e2b:FDA.G.k.10.1
-fn read_fda_g_k_10_1(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
+fn read_fda_g_k_10_1(
+	xpath: &mut Context,
+	node: &Node,
+) -> Result<(Option<String>, Option<String>)> {
 	let value = first_attr(xpath, node, GDrugPaths::FDA_ADDITIONAL_INFO);
+	let null_flavor =
+		first_attr(xpath, node, GDrugPaths::FDA_ADDITIONAL_INFO_NULL_FLAVOR);
 	import_constraint::string(
 		"fdaAdditionalInfoCoded",
 		value.as_deref(),
-		None,
+		null_flavor.as_deref(),
 		input_contracts::generated::g::fda_g_k_10a,
 	)?;
-	Ok(value)
+	Ok((value, null_flavor))
 }
 
 /// e2b:FDA.G.k.10a
@@ -785,6 +793,13 @@ fn read_g_k_4_r_6b(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
 
 /// e2b:G.k.4.r.7
 fn read_g_k_4_r_7(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
+	if first_attr(xpath, node, GDrugPaths::DOSAGE_BATCH_LOT_NULL_FLAVOR).is_some() {
+		return Err(Error::InvalidXml {
+			message: "G.k.4.r.7 does not permit nullFlavor".to_string(),
+			line: None,
+			column: None,
+		});
+	}
 	input_string(
 		first_text(xpath, node, GDrugPaths::DOSAGE_BATCH_LOT),
 		"dosageInformation[].batchNumber",
@@ -1341,6 +1356,19 @@ mod tests {
 		assert_eq!(dosage.route_null_flavor.as_deref(), Some("ASKU"));
 		assert_eq!(dosage.dose_form_null_flavor.as_deref(), Some("UNK"));
 		assert_eq!(dosage.parent_route_null_flavor.as_deref(), Some("NASK"));
+	}
+
+	#[test]
+	fn rejects_batch_lot_null_flavor() {
+		let xml = br#"<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3"><subjectOf2><organizer><code code="4" codeSystem="2.16.840.1.113883.3.989.2.1.1.20"/><component><substanceAdministration><consumable><instanceOfKind><kindOfProduct><name>Drug A</name></kindOfProduct></instanceOfKind></consumable><outboundRelationship2 typeCode="COMP"><substanceAdministration><consumable><instanceOfKind><productInstanceInstance><lotNumberText nullFlavor="UNK"/></productInstanceInstance></instanceOfKind></consumable></substanceAdministration></outboundRelationship2></substanceAdministration></component></organizer></subjectOf2></MCCI_IN200100UV01>"#;
+
+		let err = parse_g_drugs(xml).expect_err("G.k.4.r.7 nullFlavor should fail");
+		match err {
+			Error::InvalidXml { message, .. } => {
+				assert!(message.contains("G.k.4.r.7 does not permit nullFlavor"));
+			}
+			other => panic!("unexpected error type: {other:?}"),
+		}
 	}
 
 	#[test]

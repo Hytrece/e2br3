@@ -998,6 +998,12 @@ pub(crate) fn drug_fragment(
 			out.push_str("<outboundRelationship2 typeCode=\"REFR\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code code=\"9\"/><value xsi:type=\"CE\" code=\"");
 			out.push_str(&xml_escape(code));
 			out.push_str("\"/></observation></outboundRelationship2>");
+		} else if let Some(null_flavor) =
+			drug.fda_additional_info_coded_null_flavor.as_deref()
+		{
+			out.push_str("<outboundRelationship2 typeCode=\"REFR\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code code=\"9\"/><value xsi:type=\"CE\" nullFlavor=\"");
+			out.push_str(&xml_escape(null_flavor));
+			out.push_str("\"/></observation></outboundRelationship2>");
 		}
 	}
 	if let Some(text) = write_g_k_11(drug) {
@@ -1623,6 +1629,7 @@ mod tests {
 			gestation_period_exposure_unit: None,
 			action_taken: None,
 			fda_additional_info_coded: None,
+			fda_additional_info_coded_null_flavor: None,
 			drug_additional_info_codes_json: None,
 			drug_additional_information: None,
 			fda_specialized_product_category: None,
@@ -1669,7 +1676,6 @@ mod tests {
 			duration_unit: None,
 			continuing: None,
 			batch_lot_number: None,
-			batch_lot_number_null_flavor: None,
 			dosage_text: Some("row dosage text".to_string()),
 			dose_form: None,
 			dose_form_null_flavor: None,

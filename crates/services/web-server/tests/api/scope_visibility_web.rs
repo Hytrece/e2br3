@@ -723,6 +723,125 @@ async fn test_case_list_is_filtered_by_sender_scope() -> Result<()> {
 
 #[serial]
 #[tokio::test]
+async fn test_sender_scope_follows_product_relationship() -> Result<()> {
+	let mm = init_test_mm().await?;
+	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
+	let admin_token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
+	let viewer_token =
+		generate_web_token(&seed.viewer.email, seed.viewer.token_salt)?;
+	let admin_cookie = cookie_header(&admin_token.to_string());
+	let viewer_cookie = cookie_header(&viewer_token.to_string());
+	let app = web_server::app(mm.clone());
+	let sender_id = create_sender_presave(
+		&app,
+		&admin_cookie,
+		"Product-linked Sender",
+		"SEND-PRODUCT-LINK",
+	)
+	.await?;
+	let product_id = create_product_presave(
+		&app,
+		&admin_cookie,
+		sender_id,
+		"Product-linked Brand",
+	)
+	.await?;
+	let case_id = create_case(
+		&app,
+		&admin_cookie,
+		&format!("SR-PRODUCT-SENDER-{}", Uuid::new_v4()),
+		Some("PRODUCT-LINK"),
+	)
+	.await?;
+	create_drug_with_brand(&app, &admin_cookie, case_id, "Product-linked Brand")
+		.await?;
+	link_case_presave_sources(
+		&mm,
+		case_id,
+		seed.admin.id,
+		seed.org_id,
+		None,
+		Some(product_id),
+		None,
+	)
+	.await?;
+	update_user_scope(
+		&app,
+		&admin_cookie,
+		seed.viewer.id,
+		json!({ "access_sender_ids": [sender_id.to_string()] }),
+	)
+	.await?;
+
+	let (status, value) = request_json(
+		&app,
+		"GET",
+		&viewer_cookie,
+		format!("/api/cases/{case_id}"),
+		None,
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK, "{value:?}");
+	Ok(())
+}
+
+#[serial]
+#[tokio::test]
+async fn test_user_scope_assignment_rejects_cross_sender_product() -> Result<()> {
+	let mm = init_test_mm().await?;
+	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
+	let admin_token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
+	let admin_cookie = cookie_header(&admin_token.to_string());
+	let app = web_server::app(mm);
+	let sender_a =
+		create_sender_presave(&app, &admin_cookie, "Scope Sender A", "SCOPE-A")
+			.await?;
+	let sender_b =
+		create_sender_presave(&app, &admin_cookie, "Scope Sender B", "SCOPE-B")
+			.await?;
+	let product_b =
+		create_product_presave(&app, &admin_cookie, sender_b, "Scope Product B")
+			.await?;
+	let study_b =
+		create_study_presave(&app, &admin_cookie, product_b, "SCOPE-STUDY-B")
+			.await?;
+
+	let (status, value) = request_json(
+		&app,
+		"PUT",
+		&admin_cookie,
+		format!("/api/users/{}", seed.viewer.id),
+		Some(json!({
+			"data": {
+				"access_sender_ids": [sender_a.to_string()],
+				"access_product_ids": [product_b.to_string()]
+			}
+		})),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::BAD_REQUEST, "{value:?}");
+	assert!(value.to_string().contains("access_product_ids"));
+
+	let (status, value) = request_json(
+		&app,
+		"PUT",
+		&admin_cookie,
+		format!("/api/users/{}", seed.viewer.id),
+		Some(json!({
+			"data": {
+				"access_sender_ids": [sender_a.to_string()],
+				"access_study_ids": [study_b.to_string()]
+			}
+		})),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::BAD_REQUEST, "{value:?}");
+	assert!(value.to_string().contains("access_study_ids"));
+	Ok(())
+}
+
+#[serial]
+#[tokio::test]
 async fn test_case_get_does_not_match_sender_scope_by_message_header_only(
 ) -> Result<()> {
 	let mm = init_test_mm().await?;
@@ -733,6 +852,12 @@ async fn test_case_get_does_not_match_sender_scope_by_message_header_only(
 	let admin_cookie = cookie_header(&admin_token.to_string());
 	let viewer_cookie = cookie_header(&viewer_token.to_string());
 	let app = web_server::app(mm.clone());
+	let scoped_sender =
+		create_sender_presave(&app, &admin_cookie, "Scoped Sender", "SCOPED")
+			.await?;
+	let case_sender =
+		create_sender_presave(&app, &admin_cookie, "Case Sender", "CASE-SENDER")
+			.await?;
 	let case_id = create_case(
 		&app,
 		&admin_cookie,
@@ -742,11 +867,21 @@ async fn test_case_get_does_not_match_sender_scope_by_message_header_only(
 	.await?;
 	create_message_header(&app, &admin_cookie, case_id, "MSG-ONLY").await?;
 	create_sender_information(&app, &admin_cookie, case_id, "Sender Org B").await?;
+	link_case_presave_sources(
+		&mm,
+		case_id,
+		seed.admin.id,
+		seed.org_id,
+		Some(case_sender),
+		None,
+		None,
+	)
+	.await?;
 	update_user_scope(
 		&app,
 		&admin_cookie,
 		seed.viewer.id,
-		json!({ "access_sender_ids": [Uuid::new_v4().to_string()] }),
+		json!({ "access_sender_ids": [scoped_sender.to_string()] }),
 	)
 	.await?;
 
@@ -764,7 +899,7 @@ async fn test_case_get_does_not_match_sender_scope_by_message_header_only(
 
 #[serial]
 #[tokio::test]
-async fn test_case_get_blocks_case_without_source_when_user_has_sender_scope(
+async fn test_case_get_allows_case_without_source_when_user_has_sender_scope(
 ) -> Result<()> {
 	let mm = init_test_mm().await?;
 	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
@@ -774,6 +909,13 @@ async fn test_case_get_blocks_case_without_source_when_user_has_sender_scope(
 	let admin_cookie = cookie_header(&admin_token.to_string());
 	let viewer_cookie = cookie_header(&viewer_token.to_string());
 	let app = web_server::app(mm);
+	let scoped_sender = create_sender_presave(
+		&app,
+		&admin_cookie,
+		"Scoped Sender",
+		"SCOPED-NO-SOURCE",
+	)
+	.await?;
 
 	// Case carries no sender organization (and no product/study/blind data).
 	let case_id = create_case(
@@ -791,7 +933,7 @@ async fn test_case_get_blocks_case_without_source_when_user_has_sender_scope(
 		&app,
 		&admin_cookie,
 		seed.viewer.id,
-		json!({ "access_sender_ids": [Uuid::new_v4().to_string()] }),
+		json!({ "access_sender_ids": [scoped_sender.to_string()] }),
 	)
 	.await?;
 
@@ -803,7 +945,7 @@ async fn test_case_get_blocks_case_without_source_when_user_has_sender_scope(
 		None,
 	)
 	.await?;
-	assert_eq!(status, StatusCode::FORBIDDEN, "{value:?}");
+	assert_eq!(status, StatusCode::OK, "{value:?}");
 	Ok(())
 }
 
@@ -1021,6 +1163,9 @@ async fn test_case_get_allows_empty_product_or_study_scope_but_blocks_mismatch(
 	let study_id =
 		create_study_presave(&app, &admin_cookie, product_id, "STUDY-STRICT")
 			.await?;
+	let other_product_id =
+		create_product_presave(&app, &admin_cookie, sender_id, "Brand Other")
+			.await?;
 
 	let case_id = create_case(
 		&app,
@@ -1073,7 +1218,7 @@ async fn test_case_get_allows_empty_product_or_study_scope_but_blocks_mismatch(
 		seed.viewer.id,
 		json!({
 			"access_sender_ids": [sender_id.to_string()],
-			"access_product_ids": [Uuid::new_v4().to_string()]
+			"access_product_ids": [other_product_id.to_string()]
 		}),
 	)
 	.await?;

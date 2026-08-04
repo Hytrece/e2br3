@@ -4,10 +4,9 @@ use super::helpers::{
 };
 use crate::allowed_value::{true_marker_value, ConstraintValue};
 use crate::{
-	has_any_primary_source_content, has_text, is_fda_ind_message_receiver,
-	is_fda_pre_anda_message_receiver, list_study_registrations,
-	FdaValidationContext, MfdsValidationContext, RegulatoryAuthority, RuleFacts,
-	ValidationContext, ValidationIssue,
+	has_text, is_mfds_clinical_trial_receiver, is_mfds_compassionate_use_receiver,
+	is_mfds_domestic_receiver, FdaValidationContext, MfdsValidationContext,
+	RegulatoryAuthority, RuleFacts, ValidationContext, ValidationIssue,
 };
 use lib_core::ctx::Ctx;
 use lib_core::model::case_identifiers::{LinkedReportNumber, OtherCaseIdentifier};
@@ -32,6 +31,30 @@ fn index_from_sequence(sequence_number: i32, fallback_idx: usize) -> usize {
 		.checked_sub(1)
 		.and_then(|value| usize::try_from(value).ok())
 		.unwrap_or(fallback_idx)
+}
+
+fn trimmed(value: Option<&str>) -> Option<&str> {
+	value.map(str::trim).filter(|value| !value.is_empty())
+}
+
+fn value_or_null_flavor(value: Option<&str>, null_flavor: Option<&str>) -> bool {
+	trimmed(value).is_some() || trimmed(null_flavor).is_some()
+}
+
+fn push_business_violation(
+	issues: &mut Vec<ValidationIssue>,
+	violated: bool,
+	code: &str,
+	path: impl Into<String>,
+	message: &str,
+) {
+	if violated {
+		crate::push_business_issue(issues, code, path, message);
+	}
+}
+
+fn six_digits(value: &str) -> bool {
+	value.len() == 6 && value.bytes().all(|byte| byte.is_ascii_digit())
 }
 
 pub(crate) async fn collect(
@@ -89,6 +112,34 @@ fn c_1_1(report: &SafetyReportIdentification, issues: &mut Vec<ValidationIssue>)
 		"ICH.C.1.1.LENGTH.MAX",
 		"safetyReportIdentification.safetyReportId",
 		report.safety_report_id.as_deref(),
+	);
+}
+
+/// ICH.C.1.1.PROFILE
+fn c_1_1_profile(
+	report: &SafetyReportIdentification,
+	vocabulary: &crate::context::VocabularyContext,
+	issues: &mut Vec<ValidationIssue>,
+) {
+	let Some(value) = trimmed(report.safety_report_id.as_deref()) else {
+		return;
+	};
+	let mut parts = value.splitn(3, '-');
+	let country = parts.next().unwrap_or_default();
+	let sender = parts.next().unwrap_or_default();
+	let report_number = parts.next().unwrap_or_default();
+	let valid = vocabulary.contains_snapshot_code(
+		"ISO3166",
+		crate::VocabularyScope::All,
+		country,
+	) && !sender.is_empty()
+		&& !report_number.is_empty();
+	push_business_violation(
+		issues,
+		!valid,
+		"ICH.C.1.1.PROFILE",
+		"safetyReportIdentification.safetyReportId",
+		"C.1.1 must use the country-sender-report-number profile with a two-letter country code.",
 	);
 }
 
@@ -264,7 +315,7 @@ fn c_1_7(report: &SafetyReportIdentification, issues: &mut Vec<ValidationIssue>)
 			report
 				.fulfil_expedited_criteria
 				.map(|value| if value { "1" } else { "2" }),
-			report.fulfil_expedited_criteria_null_flavor.as_deref(),
+			None,
 		),
 		RuleFacts::default(),
 	);
@@ -439,10 +490,7 @@ fn c_2_r_3(
 			issues,
 			"ICH.C.2.r.3.REQUIRED",
 			&path,
-			RuleValue::borrowed(
-				source.country_code.as_deref(),
-				source.country_code_null_flavor.as_deref(),
-			),
+			RuleValue::borrowed(source.country_code.as_deref(), None),
 			RuleFacts::default(),
 		);
 	}
@@ -652,12 +700,15 @@ fn c_2_r_4(
 	issues: &mut Vec<ValidationIssue>,
 ) {
 	let path = format!("primarySources.{idx}.qualification");
-	if has_any_primary_source_content(source) {
+	if primary_source_regulatory_is_one(source) {
 		validate_value(
 			issues,
 			"ICH.C.2.r.4.REQUIRED",
 			&path,
-			RuleValue::borrowed(source.qualification.as_deref(), None),
+			RuleValue::borrowed(
+				source.qualification.as_deref(),
+				source.qualification_null_flavor.as_deref(),
+			),
 			RuleFacts::default(),
 		);
 	}
@@ -718,6 +769,17 @@ fn c_2_r_5(
 			None,
 		),
 		RuleFacts::default(),
+	);
+	let primary_count = sources
+		.iter()
+		.filter(|source| primary_source_regulatory_is_one(source))
+		.count();
+	push_business_violation(
+		issues,
+		primary_count != 1,
+		"ICH.C.2.r.5.EXACTLY_ONCE",
+		"primarySources.0.primarySourceForRegulatoryPurposes",
+		"C.2.r.5 must be set to 1 once and only once.",
 	);
 }
 
@@ -1210,6 +1272,7 @@ pub(crate) fn collect_ich_issues(
 	c_1(validation_ctx.safety_report.as_ref(), issues);
 	if let Some(report) = validation_ctx.safety_report.as_ref() {
 		c_1_1(report, issues);
+		c_1_1_profile(report, &validation_ctx.vocabulary, issues);
 		c_1_2(report, &validation_ctx.vocabulary, issues);
 		c_1_3(report, &validation_ctx.vocabulary, issues);
 		c_1_4(report, issues);
@@ -1242,7 +1305,6 @@ pub(crate) fn collect_ich_issues(
 		c_2_r_2_5(idx, source, issues);
 		c_2_r_2_6(idx, source, issues);
 		c_2_r_2_7(idx, source, issues);
-		c_2_r_2_8(idx, source, issues);
 	}
 	c_2_r_2_1(
 		&validation_ctx.primary_sources,
@@ -1388,77 +1450,472 @@ fn fda_c_1_7_1(
 /// FDA.C.1.12.RECOMMENDED
 fn fda_c_1_12(
 	value: Option<&str>,
+	null_flavor: Option<&str>,
 	facts: RuleFacts,
 	issues: &mut Vec<ValidationIssue>,
 ) {
 	const PATH: &str =
 		"safetyReportIdentification.combinationProductReportIndicator";
 	for code in ["FDA.C.1.12.REQUIRED", "FDA.C.1.12.RECOMMENDED"] {
-		validate_value(issues, code, PATH, RuleValue::borrowed(value, None), facts);
+		validate_value(
+			issues,
+			code,
+			PATH,
+			RuleValue::borrowed(value, null_flavor),
+			facts,
+		);
 	}
 }
 
-/// FDA.C.2.r.2.EMAIL.REQUIRED
-fn fda_c_2_r_2_email(
-	idx: usize,
-	value: Option<&str>,
+/// FDA.R0011
+/// FDA.R0101
+fn fda_initial_report_rules(
+	report: &SafetyReportIdentification,
+	header: Option<&lib_core::model::message_header::MessageHeader>,
+	has_prior_submission: bool,
 	issues: &mut Vec<ValidationIssue>,
 ) {
-	let path = format!("primarySources.{idx}.reporterEmail");
-	validate_value(
+	if has_prior_submission {
+		return;
+	}
+	let batch = header
+		.and_then(|header| trimmed(header.batch_receiver_identifier.as_deref()));
+	let postmarket = batch == Some(crate::FDA_BATCH_RECEIVER_POSTMARKET);
+	let premarket = batch == Some(crate::FDA_BATCH_RECEIVER_PREMARKET);
+	push_business_violation(
 		issues,
-		"FDA.C.2.r.2.EMAIL.REQUIRED",
-		&path,
-		RuleValue::borrowed(value, None),
-		RuleFacts {
-			fda_primary_source_present: Some(true),
-			..RuleFacts::default()
-		},
+		(postmarket || premarket)
+			&& trimmed(report.fulfil_expedited_criteria_null_flavor.as_deref())
+				== Some("NI"),
+		"FDA.R0011",
+		"safetyReportIdentification.fulfilExpeditedCriteria",
+		"Initial FDA submissions must not use nullFlavor NI for C.1.7.",
+	);
+	push_business_violation(
+		issues,
+		postmarket
+			&& matches!(
+				trimmed(report.nullification_code.as_deref()),
+				Some("1" | "2")
+			),
+		"FDA.R0101",
+		"safetyReportIdentification.nullificationAmendmentCode",
+		"Initial FDA submissions must not be nullification or amendment reports.",
 	);
 }
 
-/// FDA.C.5.5a.REQUIRED
-fn fda_c_5_5a(
-	study_number: Option<&str>,
-	facts: RuleFacts,
+/// FDA.R0009
+/// FDA.R0017
+fn fda_repeating_flag_rules(
+	validation_ctx: &ValidationContext,
 	issues: &mut Vec<ValidationIssue>,
 ) {
-	validate_value(
+	let Some(report) = validation_ctx.safety_report.as_ref() else {
+		return;
+	};
+	push_business_violation(
 		issues,
-		"FDA.C.5.5a.REQUIRED",
-		"studyInformation.sponsorStudyNumber",
-		RuleValue::borrowed(study_number, None),
-		facts,
+		report.additional_documents_available == Some(true)
+			&& validation_ctx.documents_held_by_sender.is_empty(),
+		"FDA.R0009",
+		"documentsHeldBySender.0.documentDescription",
+		"C.1.6.1.r.1 is required when C.1.6.1 is true.",
+	);
+	push_business_violation(
+		issues,
+		report.other_case_identifiers_exist == Some(true)
+			&& validation_ctx.other_case_identifiers.is_empty(),
+		"FDA.R0017",
+		"otherCaseIdentifiers.0.source",
+		"At least one C.1.9.1.r entry is required when C.1.9.1 is true.",
 	);
 }
 
-/// FDA.C.5.5b.REQUIRED
-fn fda_c_5_5b(
-	study_number: Option<&str>,
-	facts: RuleFacts,
+/// FDA.R0012
+/// FDA.R0013
+/// FDA.R0014
+/// FDA.R0015
+/// FDA.R0016
+fn fda_local_criteria_report_type(
+	report: &SafetyReportIdentification,
+	header: Option<&lib_core::model::message_header::MessageHeader>,
 	issues: &mut Vec<ValidationIssue>,
 ) {
-	validate_value(
+	let local = trimmed(report.local_criteria_report_type.as_deref());
+	push_business_violation(
 		issues,
-		"FDA.C.5.5b.REQUIRED",
-		"studyInformation.sponsorStudyNumber",
-		RuleValue::borrowed(study_number, None),
-		facts,
+		local.is_none(),
+		"FDA.C.1.7.1.REQUIRED",
+		"safetyReportIdentification.localCriteriaReportType",
+		"FDA.C.1.7.1 is required for FDA reports.",
+	);
+	let Some(local) = local else { return };
+	let batch = header
+		.and_then(|header| trimmed(header.batch_receiver_identifier.as_deref()));
+	let combination_true = matches!(
+		trimmed(report.combination_product_report_indicator.as_deref()),
+		Some("true" | "1")
+	);
+	let expedited_true = report.fulfil_expedited_criteria == Some(true);
+	let expedited_false_or_ni = report.fulfil_expedited_criteria == Some(false)
+		|| trimmed(report.fulfil_expedited_criteria_null_flavor.as_deref())
+			== Some("NI");
+	let (code, allowed) = if batch == Some(crate::FDA_BATCH_RECEIVER_POSTMARKET) {
+		match (combination_true, expedited_true, expedited_false_or_ni) {
+			(true, true, _) => ("FDA.R0012", matches!(local, "1" | "4")),
+			(true, false, true) => ("FDA.R0013", matches!(local, "2" | "5")),
+			(false, true, _) => ("FDA.R0014", local == "1"),
+			(false, false, true) => ("FDA.R0015", local == "2"),
+			_ => return,
+		}
+	} else if batch == Some(crate::FDA_BATCH_RECEIVER_PREMARKET)
+		&& expedited_true
+		&& matches!(trimmed(report.report_type.as_deref()), Some("1" | "2"))
+	{
+		("FDA.R0016", matches!(local, "1" | "6"))
+	} else {
+		return;
+	};
+	push_business_violation(
+		issues,
+		!allowed,
+		code,
+		"safetyReportIdentification.localCriteriaReportType",
+		"FDA.C.1.7.1 is not allowed for the selected route, C.1.7, and FDA.C.1.12 values.",
 	);
 }
 
-/// FDA.C.5.6.r.REQUIRED
-fn fda_c_5_6_r(
-	has_cross_reported: bool,
-	facts: RuleFacts,
+/// FDA.C.2.PRIMARY.REQUIRED
+/// FDA.C.2.PRIMARY.MSK.FORBIDDEN
+/// FDA.C.2.EMAIL.REQUIRED
+fn fda_primary_reporter_rules(
+	sources: &[PrimarySource],
+	vaers: bool,
 	issues: &mut Vec<ValidationIssue>,
 ) {
-	validate_value(
+	for (idx, source) in sources.iter().enumerate() {
+		let primary = primary_source_regulatory_is_one(source);
+		if !primary {
+			continue;
+		}
+		push_business_violation(
+			issues,
+			!value_or_null_flavor(
+				source.qualification.as_deref(),
+				source.qualification_null_flavor.as_deref(),
+			),
+			"FDA.R0020",
+			format!("primarySources.{idx}.qualification"),
+			"FDA primary reporter qualification is required; nullFlavor UNK is permitted.",
+		);
+		if !vaers {
+			continue;
+		}
+		c_2_r_2_8(idx, source, issues);
+		let us_case = trimmed(source.country_code.as_deref()) == Some("US");
+		for (field, value, null_flavor) in [
+			(
+				"reporterGivenName",
+				source.reporter_given_name.as_deref(),
+				source.reporter_given_name_null_flavor.as_deref(),
+			),
+			(
+				"reporterFamilyName",
+				source.reporter_family_name.as_deref(),
+				source.reporter_family_name_null_flavor.as_deref(),
+			),
+			(
+				"reporterStreet",
+				source.street.as_deref(),
+				source.street_null_flavor.as_deref(),
+			),
+			(
+				"reporterCity",
+				source.city.as_deref(),
+				source.city_null_flavor.as_deref(),
+			),
+			(
+				"reporterState",
+				source.state.as_deref(),
+				source.state_null_flavor.as_deref(),
+			),
+			(
+				"reporterPostcode",
+				source.postcode.as_deref(),
+				source.postcode_null_flavor.as_deref(),
+			),
+			(
+				"reporterTelephone",
+				source.telephone.as_deref(),
+				source.telephone_null_flavor.as_deref(),
+			),
+		] {
+			let path = format!("primarySources.{idx}.{field}");
+			push_business_violation(
+				issues,
+				!value_or_null_flavor(value, null_flavor),
+				"FDA.C.2.PRIMARY.REQUIRED",
+				path.clone(),
+				"FDA primary reporter contact fields require a value or permitted nullFlavor.",
+			);
+			push_business_violation(
+				issues,
+				us_case && trimmed(null_flavor) == Some("MSK"),
+				"FDA.C.2.PRIMARY.MSK.FORBIDDEN",
+				path,
+				"FDA primary reporter fields must not use nullFlavor MSK.",
+			);
+		}
+		push_business_violation(
+			issues,
+			us_case && trimmed(source.email_null_flavor.as_deref()) == Some("MSK"),
+			"FDA.C.2.r.2.8.MSK.FORBIDDEN",
+			format!("primarySources.{idx}.reporterEmail"),
+			"FDA primary reporter email must not use nullFlavor MSK.",
+		);
+	}
+}
+
+/// FDA.C.3.SENDER.REQUIRED
+fn fda_sender_rules(
+	sender: Option<&SenderInformation>,
+	issues: &mut Vec<ValidationIssue>,
+) {
+	let fields = [
+		(
+			"department",
+			sender.and_then(|value| value.department.as_deref()),
+		),
+		(
+			"personTitle",
+			sender.and_then(|value| value.person_title.as_deref()),
+		),
+		(
+			"personGivenName",
+			sender.and_then(|value| value.person_given_name.as_deref()),
+		),
+		(
+			"personFamilyName",
+			sender.and_then(|value| value.person_family_name.as_deref()),
+		),
+		(
+			"streetAddress",
+			sender.and_then(|value| value.street_address.as_deref()),
+		),
+		("city", sender.and_then(|value| value.city.as_deref())),
+		("state", sender.and_then(|value| value.state.as_deref())),
+		(
+			"postcode",
+			sender.and_then(|value| value.postcode.as_deref()),
+		),
+		(
+			"countryCode",
+			sender.and_then(|value| value.country_code.as_deref()),
+		),
+		(
+			"telephone",
+			sender.and_then(|value| value.telephone.as_deref()),
+		),
+		("fax", sender.and_then(|value| value.fax.as_deref())),
+		("email", sender.and_then(|value| value.email.as_deref())),
+	];
+	for (field, value) in fields {
+		push_business_violation(
+			issues,
+			trimmed(value).is_none(),
+			"FDA.C.3.SENDER.REQUIRED",
+			format!("senderInformation.{field}"),
+			"FDA sender contact field is required for all reports.",
+		);
+	}
+}
+
+/// FDA.R0008
+/// FDA.R0110
+/// FDA.R0111
+/// FDA.R0112
+/// FDA.R0102
+/// FDA.R0103
+/// FDA.R0104
+/// FDA.R0113
+/// FDA.R0024
+/// FDA.R0107
+/// FDA.R0025
+/// FDA.R0108
+/// FDA.R0026
+/// FDA.R0109
+fn fda_study_route_rules(
+	validation_ctx: &ValidationContext,
+	fda_ctx: &FdaValidationContext,
+	issues: &mut Vec<ValidationIssue>,
+) {
+	let (Some(header), Some(report)) = (
+		validation_ctx.message_header.as_ref(),
+		validation_ctx.safety_report.as_ref(),
+	) else {
+		return;
+	};
+	let batch = trimmed(header.batch_receiver_identifier.as_deref());
+	let receiver = header.message_receiver_identifier.trim();
+	let report_type = trimmed(report.report_type.as_deref());
+	let premarket = batch == Some(crate::FDA_BATCH_RECEIVER_PREMARKET);
+	let postmarket = batch == Some(crate::FDA_BATCH_RECEIVER_POSTMARKET)
+		&& matches!(
+			receiver,
+			crate::FDA_MSG_RECEIVER_CDER | crate::FDA_MSG_RECEIVER_CBER
+		);
+	let ind_receiver = matches!(
+		receiver,
+		crate::FDA_MSG_RECEIVER_CDER_IND | crate::FDA_MSG_RECEIVER_CBER_IND
+	);
+	let pre_anda_receiver =
+		receiver == crate::FDA_MSG_RECEIVER_CDER_IND_EXEMPT_BA_BE;
+	let study_type = validation_ctx
+		.studies
+		.iter()
+		.find_map(|study| trimmed(study.study_type_reaction.as_deref()));
+	let ind = validation_ctx
+		.studies
+		.iter()
+		.find_map(|study| trimmed(study.fda_ind_number_occurred.as_deref()));
+	let pre_anda = validation_ctx
+		.studies
+		.iter()
+		.find_map(|study| trimmed(study.fda_pre_anda_number_occurred.as_deref()));
+
+	for (violated, code, path, message) in [
+		(
+			premarket && ind_receiver && matches!(report_type, Some("3" | "4")),
+			"FDA.R0112",
+			"safetyReportIdentification.reportType",
+			"FDA IND premarket C.1.3 must not be 3 or 4.",
+		),
+		(
+			premarket && pre_anda_receiver && report_type != Some("2"),
+			"FDA.R0111",
+			"safetyReportIdentification.reportType",
+			"FDA IND-exempt BA/BE C.1.3 must be 2.",
+		),
+		(
+			premarket && ind_receiver && ind.is_some() && study_type.is_none()
+				&& report_type != Some("1"),
+			"FDA.R0110",
+			"safetyReportIdentification.reportType",
+			"FDA IND report with FDA.C.5.5a and no C.5.4 must use C.1.3 value 1.",
+		),
+		(
+			premarket && (ind_receiver || pre_anda_receiver)
+				&& (ind.is_some() || pre_anda.is_some()) && study_type.is_some()
+				&& report_type != Some("2"),
+			"FDA.R0008",
+			"safetyReportIdentification.reportType",
+			"FDA premarket reports with an IND/Pre-ANDA number and C.5.4 must use C.1.3 value 2.",
+		),
+		(
+			premarket && report_type == Some("2") && study_type.is_none(),
+			"FDA.R0102",
+			"studyInformation.0.studyTypeReaction",
+			"FDA premarket study reports require C.5.4 with value 1, 2, or 3.",
+		),
+		(
+			postmarket && report_type == Some("2") && study_type.is_none(),
+			"FDA.R0104",
+			"studyInformation.0.studyTypeReaction",
+			"FDA postmarket study reports require C.5.4 with value 1, 2, or 3.",
+		),
+		(
+			postmarket && report_type == Some("1") && study_type.is_some(),
+			"FDA.R0103",
+			"studyInformation.0.studyTypeReaction",
+			"FDA postmarket spontaneous reports must not provide C.5.4.",
+		),
+		(
+			premarket
+				&& ind_receiver
+				&& report_type == Some("1")
+				&& study_type.is_some(),
+			"FDA.R0113",
+			"studyInformation.0.studyTypeReaction",
+			"FDA premarket spontaneous reports must not provide C.5.4.",
+		),
+		(
+			premarket && ind_receiver && matches!(report_type, Some("1" | "2"))
+				&& ind.is_none(),
+			"FDA.R0024",
+			"studyInformation.0.fdaIndNumberOccurred",
+			"FDA IND reports require FDA.C.5.5a.",
+		),
+		(
+			postmarket && ind.is_some(),
+			"FDA.R0107",
+			"studyInformation.0.fdaIndNumberOccurred",
+			"FDA.C.5.5a must not be provided for postmarket reports.",
+		),
+		(
+			premarket && pre_anda_receiver && report_type == Some("2")
+				&& pre_anda.is_none(),
+			"FDA.R0025",
+			"studyInformation.0.fdaPreAndaNumberOccurred",
+			"FDA IND-exempt BA/BE reports require FDA.C.5.5b.",
+		),
+		(
+			postmarket && pre_anda.is_some(),
+			"FDA.R0108",
+			"studyInformation.0.fdaPreAndaNumberOccurred",
+			"FDA.C.5.5b must not be provided for postmarket reports.",
+		),
+	] {
+		push_business_violation(issues, violated, code, path, message);
+	}
+	push_business_violation(
 		issues,
-		"FDA.C.5.6.r.REQUIRED",
-		"studyInformation.registrations.0.registrationNumber",
-		RuleValue::borrowed(has_cross_reported.then_some("present"), None),
-		facts,
+		ind.is_some_and(|value| !six_digits(value)),
+		"FDA.R0024.FORMAT",
+		"studyInformation.0.fdaIndNumberOccurred",
+		"FDA.C.5.5a must contain exactly six digits.",
+	);
+	push_business_violation(
+		issues,
+		pre_anda.is_some_and(|value| !six_digits(value)),
+		"FDA.R0025.FORMAT",
+		"studyInformation.0.fdaPreAndaNumberOccurred",
+		"FDA.C.5.5b must contain exactly six digits.",
+	);
+	let cross_reported = fda_ctx.cross_reported_inds.iter().any(|row| {
+		has_text(row.ind_number.as_deref())
+			|| trimmed(row.ind_number_null_flavor.as_deref()) == Some("NA")
+	});
+	push_business_violation(
+		issues,
+		ind.is_some() && !cross_reported,
+		"FDA.R0026",
+		"studyInformation.0.fdaCrossReportedIndNumbers.0.indNumber",
+		"FDA.C.5.6.r requires a cross-reported IND or nullFlavor NA when FDA.C.5.5a is present.",
+	);
+	push_business_violation(
+		issues,
+		postmarket && !fda_ctx.cross_reported_inds.is_empty(),
+		"FDA.R0109",
+		"studyInformation.0.fdaCrossReportedIndNumbers.0.indNumber",
+		"FDA.C.5.6.r must not be provided for postmarket reports.",
+	);
+	let aggregate = validation_ctx.patient.as_ref().is_some_and(|patient| {
+		trimmed(patient.patient_initials.as_deref()) == Some("AGGREGATE")
+	});
+	if aggregate && validation_ctx.linked_report_numbers.is_empty() {
+		crate::push_business_warning(
+			issues,
+			"FDA.W0001",
+			"linkedReports.0.linkedReportNumber",
+			"A linked report number should be provided for an aggregate report.",
+		);
+	}
+	push_business_violation(
+		issues,
+		aggregate && study_type != Some("1"),
+		"FDA.W0002",
+		"studyInformation.0.studyTypeReaction",
+		"FDA aggregate reports require C.5.4 value 1.",
 	);
 }
 
@@ -1525,8 +1982,8 @@ fn mfds_c_5_4_kr_1(
 }
 
 pub(crate) async fn collect_fda_issues(
-	ctx: &Ctx,
-	mm: &ModelManager,
+	_ctx: &Ctx,
+	_mm: &ModelManager,
 	validation_ctx: &ValidationContext,
 	fda_ctx: &FdaValidationContext,
 	issues: &mut Vec<ValidationIssue>,
@@ -1545,63 +2002,215 @@ pub(crate) async fn collect_fda_issues(
 		fda_c_1_7_1(report.local_criteria_report_type.as_deref(), facts, issues);
 		fda_c_1_12(
 			report.combination_product_report_indicator.as_deref(),
+			report
+				.combination_product_report_indicator_null_flavor
+				.as_deref(),
 			facts,
 			issues,
 		);
+		fda_initial_report_rules(
+			report,
+			validation_ctx.message_header.as_ref(),
+			fda_ctx.has_prior_submission,
+			issues,
+		);
+		fda_local_criteria_report_type(
+			report,
+			validation_ctx.message_header.as_ref(),
+			issues,
+		);
 	}
-
-	let type_of_report = validation_ctx
-		.safety_report
-		.as_ref()
-		.and_then(|r| r.report_type.as_deref());
-	let message_receiver = validation_ctx
+	let vaers = validation_ctx
 		.message_header
 		.as_ref()
-		.map(|h| h.message_receiver_identifier.as_str());
-	let study_number = fda_ctx
-		.studies
-		.first()
-		.and_then(|s| s.sponsor_study_number.as_deref())
-		.map(str::trim)
-		.filter(|v| !v.is_empty());
-	let has_ind_number = study_number.is_some();
-	let has_cross_reported = if has_ind_number {
-		if let Some(study) = fda_ctx.studies.first() {
-			list_study_registrations(ctx, mm, study.id)
-				.await?
-				.iter()
-				.any(|reg| !reg.registration_number.trim().is_empty())
-		} else {
-			false
-		}
-	} else {
-		false
-	};
-	let facts = RuleFacts {
-		fda_type_of_report_is_one_or_two: Some(matches!(
-			type_of_report,
-			Some("1") | Some("2")
-		)),
-		fda_type_of_report_is_two: Some(type_of_report == Some("2")),
-		fda_msg_receiver_is_cder_ind_or_cber_ind: Some(is_fda_ind_message_receiver(
-			message_receiver,
-		)),
-		fda_msg_receiver_is_cder_ind_exempt_ba_be: Some(
-			is_fda_pre_anda_message_receiver(message_receiver),
-		),
-		fda_has_ind_number: Some(has_ind_number),
-		..RuleFacts::default()
-	};
-	fda_c_5_5a(study_number, facts, issues);
-	fda_c_5_5b(study_number, facts, issues);
-	fda_c_5_6_r(has_cross_reported, facts, issues);
+		.is_some_and(|header| {
+			matches!(
+				header
+					.message_receiver_identifier
+					.trim()
+					.to_ascii_uppercase()
+					.as_str(),
+				"CBER_VAERS" | "CBER VAERS"
+			)
+		});
+	fda_primary_reporter_rules(&validation_ctx.primary_sources, vaers, issues);
+	fda_sender_rules(validation_ctx.sender.as_ref(), issues);
+	fda_study_route_rules(validation_ctx, fda_ctx, issues);
+	fda_repeating_flag_rules(validation_ctx, issues);
+	Ok(())
+}
 
+/// MFDS.C.1.3.RECEIVER
+/// MFDS.C.1.7.RECEIVER
+/// MFDS.C.2.RECEIVER
+/// MFDS.C.2.r.4.REQUIRED
+/// MFDS.C.3.3.3.RECEIVER
+/// MFDS.C.5.RECEIVER
+fn mfds_receiver_rules(
+	validation_ctx: &ValidationContext,
+	issues: &mut Vec<ValidationIssue>,
+) {
+	let receiver = validation_ctx
+		.message_header
+		.as_ref()
+		.map(|header| header.message_receiver_identifier.as_str());
+	let clinical = is_mfds_clinical_trial_receiver(receiver);
+	let compassionate = is_mfds_compassionate_use_receiver(receiver);
+	let ct_or_cu = clinical || compassionate;
+	if let Some(report) = validation_ctx.safety_report.as_ref() {
+		push_business_violation(
+			issues,
+			ct_or_cu && trimmed(report.report_type.as_deref()) != Some("2"),
+			"MFDS.C.1.3.RECEIVER",
+			"safetyReportIdentification.reportType",
+			"MFDS CT/CU reports require C.1.3 value 2.",
+		);
+		push_business_violation(
+			issues,
+			ct_or_cu && report.fulfil_expedited_criteria != Some(true),
+			"MFDS.C.1.7.RECEIVER",
+			"safetyReportIdentification.fulfilExpeditedCriteria",
+			"MFDS CT/CU reports require C.1.7 value true.",
+		);
+		// The model has no verified E2B(R2)-origin provenance, so the narrow
+		// MFDS retransmission exception cannot be established and must fail closed.
+		push_business_violation(
+			issues,
+			trimmed(report.fulfil_expedited_criteria_null_flavor.as_deref())
+				== Some("NI"),
+			"MFDS.C.1.7.NULLFLAVOR.R2.RETRANSMISSION.REQUIRED",
+			"safetyReportIdentification.fulfilExpeditedCriteria",
+			"MFDS C.1.7 nullFlavor NI requires verified E2B(R2)-origin retransmission provenance.",
+		);
+	}
 	for (idx, source) in validation_ctx.primary_sources.iter().enumerate() {
-		if has_any_primary_source_content(source) {
-			fda_c_2_r_2_email(idx, source.email.as_deref(), issues);
+		push_business_violation(
+			issues,
+			!value_or_null_flavor(
+				source.qualification.as_deref(),
+				source.qualification_null_flavor.as_deref(),
+			),
+			"MFDS.C.2.r.4.REQUIRED",
+			format!("primarySources.{idx}.qualification"),
+			"MFDS C.2.r.4 requires a qualification or nullFlavor UNK.",
+		);
+		push_business_violation(
+			issues,
+			ct_or_cu
+				&& trimmed(source.qualification_null_flavor.as_deref()).is_some(),
+			"MFDS.C.2.r.4.NULLFLAVOR.FORBIDDEN.CT_CU",
+			format!("primarySources.{idx}.qualification"),
+			"MFDS clinical-trial and compassionate-use reports must not use a C.2.r.4 nullFlavor.",
+		);
+		if ct_or_cu {
+			for (field, value, null_flavor) in [
+				(
+					"reporterGivenName",
+					source.reporter_given_name.as_deref(),
+					source.reporter_given_name_null_flavor.as_deref(),
+				),
+				(
+					"reporterOrganization",
+					source.organization.as_deref(),
+					source.organization_null_flavor.as_deref(),
+				),
+			] {
+				push_business_violation(
+					issues,
+					!value_or_null_flavor(value, null_flavor),
+					"MFDS.C.2.RECEIVER.REQUIRED",
+					format!("primarySources.{idx}.{field}"),
+					"MFDS CT/CU primary-source identity field is required.",
+				);
+			}
+			let address_present = [
+				(
+					source.street.as_deref(),
+					source.street_null_flavor.as_deref(),
+				),
+				(source.city.as_deref(), source.city_null_flavor.as_deref()),
+				(source.state.as_deref(), source.state_null_flavor.as_deref()),
+			]
+			.into_iter()
+			.any(|(value, null_flavor)| value_or_null_flavor(value, null_flavor));
+			push_business_violation(
+				issues,
+				!address_present,
+				"MFDS.C.2.r.2.3-5.RECEIVER.REQUIRED",
+				format!("primarySources.{idx}.reporterStreet"),
+				"MFDS CT/CU reports require at least one of C.2.r.2.3, C.2.r.2.4, or C.2.r.2.5.",
+			);
 		}
 	}
-	Ok(())
+	push_business_violation(
+		issues,
+		ct_or_cu
+			&& validation_ctx
+				.sender
+				.as_ref()
+				.and_then(|sender| trimmed(sender.person_given_name.as_deref()))
+				.is_none(),
+		"MFDS.C.3.3.3.RECEIVER.REQUIRED",
+		"senderInformation.personGivenName",
+		"MFDS CT/CU reports require C.3.3.3.",
+	);
+	if ct_or_cu {
+		push_business_violation(
+			issues,
+			validation_ctx.study_registrations.is_empty(),
+			"MFDS.C.5.1.r.1.RECEIVER.REQUIRED",
+			"studyInformation.0.registrations.0.registrationNumber",
+			"MFDS CT/CU reports require a study registration number.",
+		);
+		for (idx, registration) in
+			validation_ctx.study_registrations.iter().enumerate()
+		{
+			push_business_violation(
+				issues,
+				trimmed(Some(registration.registration_number.as_str())).is_none()
+					|| trimmed(registration.registration_number_null_flavor.as_deref()).is_some(),
+				"MFDS.C.5.1.r.1.NULLFLAVOR.FORBIDDEN",
+				format!("studyInformation.0.registrations.{idx}.registrationNumber"),
+				"MFDS CT/CU study registration must contain a value and no nullFlavor.",
+			);
+		}
+		push_business_violation(
+			issues,
+			validation_ctx.studies.is_empty(),
+			"MFDS.C.5.RECEIVER.REQUIRED",
+			"studyInformation.0.studyName",
+			"MFDS CT/CU reports require study information.",
+		);
+		for (idx, study) in validation_ctx.studies.iter().enumerate() {
+			push_business_violation(
+				issues,
+				!value_or_null_flavor(
+					study.study_name.as_deref(),
+					study.study_name_null_flavor.as_deref(),
+				),
+				"MFDS.C.5.RECEIVER.REQUIRED",
+				format!("studyInformation.{idx}.studyName"),
+				"MFDS CT/CU C.5.2 requires a value or an allowed nullFlavor.",
+			);
+			push_business_violation(
+				issues,
+				trimmed(study.sponsor_study_number.as_deref()).is_none()
+					|| trimmed(study.sponsor_study_number_null_flavor.as_deref())
+						.is_some(),
+				"MFDS.C.5.RECEIVER.REQUIRED",
+				format!("studyInformation.{idx}.sponsorStudyNumber"),
+				"MFDS CT/CU C.5.3 requires a value and does not allow nullFlavor.",
+			);
+			let expected = if clinical { "1" } else { "2" };
+			push_business_violation(
+				issues,
+				trimmed(study.study_type_reaction.as_deref()) != Some(expected),
+				"MFDS.C.5.4.RECEIVER",
+				format!("studyInformation.{idx}.studyTypeReaction"),
+				"MFDS C.5.4 must be 1 for CT and 2 for CU reports.",
+			);
+		}
+	}
 }
 
 pub(crate) fn collect_mfds_issues(
@@ -1609,6 +2218,16 @@ pub(crate) fn collect_mfds_issues(
 	mfds_ctx: &MfdsValidationContext,
 	issues: &mut Vec<ValidationIssue>,
 ) {
+	mfds_receiver_rules(validation_ctx, issues);
+	let domestic = is_mfds_domestic_receiver(
+		validation_ctx
+			.message_header
+			.as_ref()
+			.map(|header| header.message_receiver_identifier.as_str()),
+	);
+	if !domestic {
+		return;
+	}
 	for (idx, sender) in mfds_ctx.senders.iter().enumerate() {
 		mfds_c_3_1_kr_1(
 			idx,
@@ -1778,7 +2397,7 @@ mod conditioned_catalog_rule_tests {
 		};
 		let mut issues = Vec::new();
 		fda_c_1_7_1(None, facts, &mut issues);
-		fda_c_1_12(None, facts, &mut issues);
+		fda_c_1_12(None, None, facts, &mut issues);
 		assert_eq!(
 			issues
 				.iter()
@@ -1793,7 +2412,7 @@ mod conditioned_catalog_rule_tests {
 
 		issues.clear();
 		fda_c_1_7_1(Some("1"), facts, &mut issues);
-		fda_c_1_12(Some("true"), facts, &mut issues);
+		fda_c_1_12(Some("true"), None, facts, &mut issues);
 		assert!(issues.is_empty());
 	}
 
@@ -1836,10 +2455,12 @@ mod golden_c1_value_tests {
 	use super::*;
 	use lib_core::model::case::Case;
 	use lib_core::model::case_identifiers::OtherCaseIdentifier;
+	use lib_core::model::message_header::MessageHeader;
+	use lib_core::model::patient::PatientInformation;
 	use lib_core::model::safety_report::{
 		DocumentsHeldBySender, LiteratureReference, PrimarySource,
-		SafetyReportIdentification, SenderInformation, StudyInformation,
-		StudyRegistrationNumber,
+		SafetyReportIdentification, SenderInformation, StudyFdaCrossReportedInd,
+		StudyInformation, StudyRegistrationNumber,
 	};
 	use sqlx::types::time::{Date, OffsetDateTime};
 	use sqlx::types::Uuid;
@@ -2129,7 +2750,6 @@ mod golden_c1_value_tests {
 			telephone: None,
 			telephone_null_flavor: None,
 			country_code: None,
-			country_code_null_flavor: None,
 			email: None,
 			email_null_flavor: None,
 			qualification: None,
@@ -2242,6 +2862,380 @@ mod golden_c1_value_tests {
 		report
 	}
 
+	fn fda_context(
+		cross_reported_inds: Vec<StudyFdaCrossReportedInd>,
+		has_prior_submission: bool,
+	) -> FdaValidationContext {
+		FdaValidationContext {
+			studies: Vec::new(),
+			cross_reported_inds,
+			has_prior_submission,
+		}
+	}
+
+	fn cross_reported_ind(value: Option<&str>) -> StudyFdaCrossReportedInd {
+		StudyFdaCrossReportedInd {
+			id: Uuid::nil(),
+			study_information_id: Uuid::nil(),
+			ind_number: value.map(str::to_string),
+			ind_number_null_flavor: None,
+			sequence_number: 1,
+			deleted: false,
+			created_at: OffsetDateTime::UNIX_EPOCH,
+			updated_at: OffsetDateTime::UNIX_EPOCH,
+			created_by: Uuid::nil(),
+			updated_by: None,
+		}
+	}
+
+	fn patient(initials: &str) -> PatientInformation {
+		PatientInformation {
+			id: Uuid::nil(),
+			case_id: Uuid::nil(),
+			patient_initials: Some(initials.to_string()),
+			birth_date: None,
+			age_at_time_of_onset: None,
+			age_unit: None,
+			gestation_period: None,
+			gestation_period_unit: None,
+			age_group: None,
+			weight_kg: None,
+			height_cm: None,
+			sex: None,
+			patient_initials_null_flavor: None,
+			birth_date_null_flavor: None,
+			sex_null_flavor: None,
+			race_code: None,
+			race_code_null_flavor: None,
+			ethnicity_code: None,
+			ethnicity_code_null_flavor: None,
+			last_menstrual_period_date: None,
+			last_menstrual_period_date_null_flavor: None,
+			medical_history_text: None,
+			medical_history_text_null_flavor: None,
+			concomitant_therapy: None,
+			created_at: OffsetDateTime::UNIX_EPOCH,
+			updated_at: OffsetDateTime::UNIX_EPOCH,
+			created_by: Uuid::nil(),
+			updated_by: None,
+		}
+	}
+
+	fn message_header(batch: &str, receiver: &str) -> MessageHeader {
+		MessageHeader {
+			id: Uuid::nil(),
+			case_id: Uuid::nil(),
+			batch_number: Some("batch".to_string()),
+			batch_sender_identifier: Some("sender".to_string()),
+			batch_receiver_identifier: Some(batch.to_string()),
+			batch_transmission_date: None,
+			message_type: "ichicsr".to_string(),
+			message_format_version: "2.1".to_string(),
+			message_format_release: "2.0".to_string(),
+			message_number: "US-SENDER-1".to_string(),
+			message_sender_identifier: "sender".to_string(),
+			message_receiver_identifier: receiver.to_string(),
+			message_date_format: "204".to_string(),
+			message_date: "20200101000000".to_string(),
+			created_at: OffsetDateTime::UNIX_EPOCH,
+			updated_at: OffsetDateTime::UNIX_EPOCH,
+			created_by: Uuid::nil(),
+			updated_by: None,
+		}
+	}
+
+	#[test]
+	fn c_profile_and_primary_marker_are_semantically_checked() {
+		let mut report = base_report();
+		report.safety_report_id = Some("bad-id".to_string());
+		let mut first = primary_source();
+		first.primary_source_regulatory = Some("1".to_string());
+		let mut second = primary_source();
+		second.primary_source_regulatory = Some("1".to_string());
+		let mut issues = Vec::new();
+		c_1_1_profile(&report, &Default::default(), &mut issues);
+		c_2_r_5(&[first, second], &Default::default(), &mut issues);
+
+		assert!(issues.iter().any(|issue| issue.code == "ICH.C.1.1.PROFILE"));
+		assert!(issues
+			.iter()
+			.any(|issue| issue.code == "ICH.C.2.r.5.EXACTLY_ONCE"));
+	}
+
+	#[test]
+	fn c_profile_accepts_active_iso_and_ich_extension_country_codes() {
+		let vocabulary = crate::context::VocabularyContext::for_active_codes(&[
+			("ISO3166", crate::VocabularyScope::All, "US"),
+			("ISO3166", crate::VocabularyScope::All, "EU"),
+		]);
+		for identifier in ["US-SENDER-1", "EU-SENDER-1"] {
+			let mut report = base_report();
+			report.safety_report_id = Some(identifier.to_string());
+			let mut issues = Vec::new();
+			c_1_1_profile(&report, &vocabulary, &mut issues);
+			assert!(issues.is_empty(), "{identifier}: {issues:?}");
+		}
+	}
+
+	#[test]
+	fn fda_true_repeating_flags_require_a_child_row() {
+		let mut report = base_report();
+		report.additional_documents_available = Some(true);
+		report.other_case_identifiers_exist = Some(true);
+		let ctx = ctx_with(report);
+		let mut issues = Vec::new();
+
+		fda_repeating_flag_rules(&ctx, &mut issues);
+
+		assert!(issues.iter().any(|issue| issue.code == "FDA.R0009"));
+		assert!(issues.iter().any(|issue| issue.code == "FDA.R0017"));
+	}
+
+	#[test]
+	fn fda_initial_and_local_criteria_rules_reject_invalid_values() {
+		let mut report = base_report();
+		report.version = 99;
+		report.fulfil_expedited_criteria_null_flavor = Some("NI".to_string());
+		report.nullification_code = Some("1".to_string());
+		report.local_criteria_report_type = Some("2".to_string());
+		report.fulfil_expedited_criteria = Some(true);
+		let header = message_header(crate::FDA_BATCH_RECEIVER_POSTMARKET, "CDER");
+		let mut issues = Vec::new();
+
+		fda_initial_report_rules(&report, Some(&header), false, &mut issues);
+		fda_local_criteria_report_type(&report, Some(&header), &mut issues);
+
+		for code in ["FDA.R0011", "FDA.R0101", "FDA.R0014"] {
+			assert!(issues.iter().any(|issue| issue.code == code), "{code}");
+		}
+	}
+
+	#[test]
+	fn fda_initial_rules_use_persisted_history_and_exact_route_scope() {
+		let mut report = base_report();
+		report.fulfil_expedited_criteria_null_flavor = Some("NI".to_string());
+		report.nullification_code = Some("1".to_string());
+		let premarket = message_header(
+			crate::FDA_BATCH_RECEIVER_PREMARKET,
+			crate::FDA_MSG_RECEIVER_CDER_IND,
+		);
+		let mut issues = Vec::new();
+
+		fda_initial_report_rules(&report, Some(&premarket), false, &mut issues);
+		assert!(issues.iter().any(|issue| issue.code == "FDA.R0011"));
+		assert!(!issues.iter().any(|issue| issue.code == "FDA.R0101"));
+
+		issues.clear();
+		fda_initial_report_rules(&report, Some(&premarket), true, &mut issues);
+		assert!(issues.is_empty());
+	}
+
+	#[test]
+	fn fda_primary_reporter_and_sender_fields_are_required() {
+		let mut source = primary_source();
+		source.primary_source_regulatory = Some("1".to_string());
+		let mut issues = Vec::new();
+
+		fda_primary_reporter_rules(&[source], true, &mut issues);
+		fda_sender_rules(None, &mut issues);
+
+		assert!(issues
+			.iter()
+			.any(|issue| issue.code == "FDA.C.2.PRIMARY.REQUIRED"));
+		assert!(issues.iter().any(|issue| issue.code == "FDA.R0020"));
+		assert_eq!(
+			issues
+				.iter()
+				.filter(|issue| issue.code == "FDA.C.3.SENDER.REQUIRED")
+				.count(),
+			12
+		);
+	}
+
+	#[test]
+	fn fda_vaers_reporter_rules_only_apply_to_primary_us_reporter() {
+		let mut source = primary_source();
+		source.primary_source_regulatory = Some("1".to_string());
+		source.country_code = Some("CA".to_string());
+		source.reporter_given_name_null_flavor = Some("MSK".to_string());
+		source.qualification = Some("1".to_string());
+		let mut issues = Vec::new();
+
+		fda_primary_reporter_rules(&[source.clone()], false, &mut issues);
+		assert!(!issues.iter().any(|issue| {
+			issue.code == "FDA.C.2.PRIMARY.REQUIRED"
+				|| issue.code == "FDA.C.2.PRIMARY.MSK.FORBIDDEN"
+				|| issue.code == "FDA.C.2.r.2.8.REQUIRED"
+		}));
+
+		issues.clear();
+		fda_primary_reporter_rules(&[source], true, &mut issues);
+		assert!(issues
+			.iter()
+			.any(|issue| issue.code == "FDA.C.2.PRIMARY.REQUIRED"));
+		assert!(!issues
+			.iter()
+			.any(|issue| issue.code == "FDA.C.2.PRIMARY.MSK.FORBIDDEN"));
+	}
+
+	#[test]
+	fn fda_study_route_requires_valid_ind_and_cross_report() {
+		let mut report = base_report();
+		report.report_type = Some("2".to_string());
+		let mut ctx = ctx_with(report);
+		ctx.message_header = Some(message_header(
+			crate::FDA_BATCH_RECEIVER_PREMARKET,
+			crate::FDA_MSG_RECEIVER_CDER_IND,
+		));
+		let mut row = study(Some("1"), Some("SPONSOR"));
+		row.fda_ind_number_occurred = Some("123".to_string());
+		ctx.studies = vec![row];
+		let mut issues = Vec::new();
+
+		fda_study_route_rules(&ctx, &fda_context(Vec::new(), false), &mut issues);
+
+		assert!(issues.iter().any(|issue| issue.code == "FDA.R0024.FORMAT"));
+		assert!(issues.iter().any(|issue| issue.code == "FDA.R0026"));
+
+		issues.clear();
+		fda_study_route_rules(
+			&ctx,
+			&fda_context(vec![cross_reported_ind(Some("654321"))], false),
+			&mut issues,
+		);
+		assert!(!issues.iter().any(|issue| issue.code == "FDA.R0026"));
+	}
+
+	#[test]
+	fn fda_aggregate_report_requires_study_type_one() {
+		let mut ctx = ctx_with(base_report());
+		ctx.message_header = Some(message_header(
+			crate::FDA_BATCH_RECEIVER_PREMARKET,
+			crate::FDA_MSG_RECEIVER_CDER_IND,
+		));
+		ctx.patient = Some(patient("AGGREGATE"));
+		ctx.studies = vec![study(Some("2"), Some("SPONSOR"))];
+		let mut issues = Vec::new();
+
+		fda_study_route_rules(&ctx, &fda_context(Vec::new(), false), &mut issues);
+
+		assert!(issues.iter().any(|issue| issue.code == "FDA.W0002"));
+		assert!(issues
+			.iter()
+			.any(|issue| issue.code == "FDA.W0001" && !issue.blocking));
+	}
+
+	#[test]
+	fn mfds_ct_receiver_enforces_reporter_sender_and_study_conditions() {
+		let mut report = base_report();
+		report.report_type = Some("1".to_string());
+		report.fulfil_expedited_criteria = Some(false);
+		let mut ctx = ctx_with(report);
+		ctx.message_header = Some(message_header("MFDS", "CT"));
+		ctx.primary_sources = vec![primary_source()];
+		let mut issues = Vec::new();
+
+		mfds_receiver_rules(&ctx, &mut issues);
+
+		for code in [
+			"MFDS.C.1.3.RECEIVER",
+			"MFDS.C.1.7.RECEIVER",
+			"MFDS.C.2.r.4.REQUIRED",
+			"MFDS.C.2.RECEIVER.REQUIRED",
+			"MFDS.C.2.r.2.3-5.RECEIVER.REQUIRED",
+			"MFDS.C.3.3.3.RECEIVER.REQUIRED",
+			"MFDS.C.5.1.r.1.RECEIVER.REQUIRED",
+			"MFDS.C.5.RECEIVER.REQUIRED",
+		] {
+			assert!(issues.iter().any(|issue| issue.code == code), "{code}");
+		}
+	}
+
+	#[test]
+	fn mfds_c_1_7_ni_requires_verified_r2_origin() {
+		let mut report = base_report();
+		report.fulfil_expedited_criteria_null_flavor = Some("NI".to_string());
+		let mut ctx = ctx_with(report);
+		ctx.message_header = Some(message_header("MFDS", "KR"));
+		let mut issues = Vec::new();
+
+		mfds_receiver_rules(&ctx, &mut issues);
+
+		assert!(issues.iter().any(|issue| {
+			issue.code == "MFDS.C.1.7.NULLFLAVOR.R2.RETRANSMISSION.REQUIRED"
+		}));
+	}
+
+	#[test]
+	fn mfds_cu_forbids_qualification_null_flavor_but_allows_c_5_2_null_flavor() {
+		let mut report = study_report();
+		report.fulfil_expedited_criteria = Some(true);
+		let mut ctx = ctx_with(report);
+		ctx.message_header = Some(message_header("MFDS", "CU"));
+
+		let mut source = primary_source();
+		source.qualification_null_flavor = Some("UNK".to_string());
+		ctx.primary_sources = vec![source];
+
+		let mut study = study(Some("2"), Some("SPONSOR"));
+		study.study_name_null_flavor = Some("ASKU".to_string());
+		ctx.studies = vec![study];
+		ctx.study_registrations = vec![study_registration(
+			Uuid::nil(),
+			"MFDS-APPROVAL".to_string(),
+			Some("KR".to_string()),
+			1,
+		)];
+		let mut issues = Vec::new();
+
+		mfds_receiver_rules(&ctx, &mut issues);
+
+		assert!(issues.iter().any(|issue| {
+			issue.code == "MFDS.C.2.r.4.NULLFLAVOR.FORBIDDEN.CT_CU"
+		}));
+		assert!(!issues.iter().any(|issue| {
+			issue.code == "MFDS.C.5.RECEIVER.REQUIRED"
+				&& issue.path == "studyInformation.0.studyName"
+		}));
+	}
+
+	#[test]
+	fn mfds_kr1_extensions_only_apply_to_domestic_receiver() {
+		let mut source = primary_source();
+		source.qualification = Some("3".to_string());
+		let mut sender = sender();
+		sender.sender_type = Some("3".to_string());
+		let study = study(Some("3"), Some("SPONSOR"));
+		let mfds_ctx = MfdsValidationContext {
+			senders: vec![sender],
+			studies: vec![study],
+			active_substances: Vec::new(),
+			relatedness: Vec::new(),
+			past_drugs: Vec::new(),
+			parent_past_drugs: Vec::new(),
+		};
+		let mut ctx = ctx_with(base_report());
+		ctx.primary_sources = vec![source];
+		ctx.message_header = Some(message_header("MFDS_FR", "FR"));
+		let mut issues = Vec::new();
+
+		collect_mfds_issues(&ctx, &mfds_ctx, &mut issues);
+		assert!(!issues
+			.iter()
+			.any(|issue| issue.code.ends_with("KR.1.REQUIRED")));
+
+		ctx.message_header = Some(message_header("MFDS", "KR"));
+		issues.clear();
+		collect_mfds_issues(&ctx, &mfds_ctx, &mut issues);
+		for code in [
+			"MFDS.C.2.r.4.KR.1.REQUIRED",
+			"MFDS.C.3.1.KR.1.REQUIRED",
+			"MFDS.C.5.4.KR.1.REQUIRED",
+		] {
+			assert!(issues.iter().any(|issue| issue.code == code), "{code}");
+		}
+	}
+
 	#[test]
 	fn all_missing_flags_every_value_rule() {
 		assert_eq!(
@@ -2291,15 +3285,12 @@ mod golden_c1_value_tests {
 	}
 
 	#[test]
-	fn c1_7_nullflavor_only_satisfies_required_value() {
+	fn c1_7_nullflavor_without_r2_provenance_fails_closed() {
 		let mut report = base_report();
 		report.fulfil_expedited_criteria = None;
 		report.fulfil_expedited_criteria_null_flavor = Some("NI".to_string());
 		let snap = snapshot(report);
-		assert!(
-			!snap.iter().any(|(code, _, _)| code == "ICH.C.1.7.REQUIRED"),
-			"expected C.1.7 nullFlavor-only to satisfy required value, got {snap:?}"
-		);
+		assert!(snap.iter().any(|(code, _, _)| code == "ICH.C.1.7.REQUIRED"));
 	}
 
 	#[test]
@@ -2437,11 +3428,19 @@ mod golden_c1_value_tests {
 
 	#[test]
 	fn fda_primary_source_email_rule_emits_once() {
-		let mut ctx = ctx_with(base_report());
-		ctx.primary_sources = vec![primary_source()];
+		let mut issues = Vec::new();
+		let mut source = primary_source();
+		source.primary_source_regulatory = Some("1".to_string());
+		fda_primary_reporter_rules(&[source], true, &mut issues);
+		let mut out = issues
+			.into_iter()
+			.filter(|issue| issue.code == "FDA.C.2.r.2.8.REQUIRED")
+			.map(|issue| (issue.code, issue.path, issue.blocking))
+			.collect::<Vec<_>>();
+		out.sort();
 
 		assert_eq!(
-			filtered(&ctx, &["FDA.C.2.r.2.8.REQUIRED"]),
+			out,
 			vec![issue(
 				"FDA.C.2.r.2.8.REQUIRED",
 				"primarySources.0.reporterEmail",

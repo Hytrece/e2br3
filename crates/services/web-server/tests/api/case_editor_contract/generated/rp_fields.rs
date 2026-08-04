@@ -18,7 +18,6 @@ field_contract_test!(c_2_r_4_kr_1, "C.2.r.4.KR.1");
 field_contract_test!(c_2_r_5, "C.2.r.5");
 field_contract_test!(c_2_r_local_qualificationnullflavor, "C.2.r.local.qualificationNullFlavor");
 field_contract_test!(c_2_r_local_reportercitynullflavor, "C.2.r.local.reporterCityNullFlavor");
-field_contract_test!(c_2_r_local_reportercountrynullflavor, "C.2.r.local.reporterCountryNullFlavor");
 field_contract_test!(c_2_r_local_reporterdepartmentnullflavor, "C.2.r.local.reporterDepartmentNullFlavor");
 field_contract_test!(c_2_r_local_reporteremailnullflavor, "C.2.r.local.reporterEmailNullFlavor");
 field_contract_test!(c_2_r_local_reporterfamilynamenullflavor, "C.2.r.local.reporterFamilyNameNullFlavor");

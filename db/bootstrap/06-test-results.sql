@@ -9,7 +9,7 @@ CREATE TABLE test_results (
 
     -- F.r.1 - Test Date
     test_date DATE,
-    test_date_null_flavor VARCHAR(10),
+    test_date_null_flavor VARCHAR(10) CHECK (test_date_null_flavor IN ('UNK')),
 
     -- F.r.2 - Test Name (free text or MedDRA coded)
     test_name VARCHAR(250) NOT NULL,
@@ -23,7 +23,7 @@ CREATE TABLE test_results (
 
 	-- F.r.3.2 - Test Result (value/finding)
 	test_result_value VARCHAR(20000),  -- Can be numeric or text
-	test_result_null_flavor VARCHAR(4),
+	test_result_qualifier VARCHAR(2) CHECK (test_result_qualifier IN ('EQ', 'LT', 'LE', 'GT', 'GE')),
 
     -- F.r.3.3 - Test Result Unit
     test_result_unit VARCHAR(50),
@@ -44,7 +44,7 @@ CREATE TABLE test_results (
 	more_info_available BOOLEAN,
 
 	CONSTRAINT ck_nfv_test_results_3f503f260cf6
-		CHECK (test_result_value IS NULL OR test_result_null_flavor IS NULL),
+		CHECK (test_result_qualifier IS NULL OR test_result_value IS NOT NULL),
 
     deleted BOOLEAN NOT NULL DEFAULT false,
 

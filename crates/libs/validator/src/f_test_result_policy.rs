@@ -33,7 +33,7 @@ mod tests {
 			test_meddra_code: None,
 			test_result_code: None,
 			test_result_value: None,
-			test_result_null_flavor: None,
+			test_result_qualifier: None,
 			test_result_unit: None,
 			result_unstructured: None,
 			normal_low_value: None,

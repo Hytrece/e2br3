@@ -166,6 +166,11 @@
             "enum": ["NI", "MSK", "UNK", "NA", "ASKU", "NASK", "NINF", "PINF", "OTH"]
           }
         },
+        "null_flavor_condition": { "type": "string" },
+        "interval_bound_null_flavors": {
+          "type": "array",
+          "items": { "enum": ["NINF", "PINF"] }
+        },
         "oid": { "type": "string" },
         "hl7_data_type": { "type": "string" },
         "hl7_component": { "type": "string" },

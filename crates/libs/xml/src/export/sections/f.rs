@@ -28,6 +28,33 @@ async fn fetch_test_results(
 
 use sqlx::types::time::Date;
 
+fn push_result_bound(
+	out: &mut String,
+	name: &str,
+	value: &str,
+	unit: Option<&str>,
+	inclusive: Option<bool>,
+) {
+	out.push('<');
+	out.push_str(name);
+	out.push_str(" value=\"");
+	out.push_str(&xml_escape(value));
+	out.push('"');
+	if let Some(unit) = unit {
+		out.push_str(" unit=\"");
+		out.push_str(&xml_escape(unit));
+		out.push('"');
+	}
+	if let Some(inclusive) = inclusive {
+		out.push_str(if inclusive {
+			" inclusive=\"true\""
+		} else {
+			" inclusive=\"false\""
+		});
+	}
+	out.push_str("/>");
+}
+
 pub(crate) fn test_result_fragment(result: &TestResult) -> Result<String> {
 	let mut out = String::new();
 	out.push_str("<subjectOf2 typeCode=\"SBJ\"><organizer classCode=\"CATEGORY\" moodCode=\"EVN\">");
@@ -59,29 +86,32 @@ pub(crate) fn test_result_fragment(result: &TestResult) -> Result<String> {
 		out.push_str(&xml_escape(code));
 		out.push_str("\"/>");
 	}
-	if result.test_result_value.is_some()
-		|| result.test_result_null_flavor.is_some()
-		|| result.result_unstructured.is_some()
-	{
-		out.push_str("<value");
-		if let Some(null_flavor) = result.test_result_null_flavor.as_deref() {
-			out.push_str(" nullFlavor=\"");
-			out.push_str(&xml_escape(null_flavor));
-			out.push_str("\"");
-		} else if let Some(val) = write_f_r_3_2(result) {
-			out.push_str(" value=\"");
-			out.push_str(&xml_escape(val));
-			out.push_str("\"");
+	if let Some(val) = write_f_r_3_2(result) {
+		let unit = write_f_r_3_3(result);
+		out.push_str("<value xsi:type=\"IVL_PQ\">");
+		match result.test_result_qualifier.as_deref().unwrap_or("EQ") {
+			"LT" => {
+				out.push_str("<low nullFlavor=\"NINF\"/>");
+				push_result_bound(&mut out, "high", val, unit, Some(false));
+			}
+			"LE" => {
+				out.push_str("<low nullFlavor=\"NINF\"/>");
+				push_result_bound(&mut out, "high", val, unit, Some(true));
+			}
+			"GT" => {
+				push_result_bound(&mut out, "low", val, unit, Some(false));
+				out.push_str("<high nullFlavor=\"PINF\"/>");
+			}
+			"GE" => {
+				push_result_bound(&mut out, "low", val, unit, Some(true));
+				out.push_str("<high nullFlavor=\"PINF\"/>");
+			}
+			_ => push_result_bound(&mut out, "center", val, unit, None),
 		}
-		if let Some(unit) = write_f_r_3_3(result) {
-			out.push_str(" unit=\"");
-			out.push_str(&xml_escape(unit));
-			out.push_str("\"");
-		}
-		out.push_str(">");
-		if let Some(text) = write_f_r_3_4(result) {
-			out.push_str(&xml_escape(text));
-		}
+		out.push_str("</value>");
+	} else if let Some(text) = write_f_r_3_4(result) {
+		out.push_str("<value xsi:type=\"ED\">");
+		out.push_str(&xml_escape(text));
 		out.push_str("</value>");
 	}
 	if result.normal_low_value.is_some() || result.normal_high_value.is_some() {
@@ -248,7 +278,7 @@ mod tests {
 	use sqlx::types::Uuid;
 
 	#[test]
-	fn exports_test_result_companion_as_xml_null_flavor_attribute() {
+	fn exports_greater_than_or_equal_as_interval_bounds() {
 		let now = OffsetDateTime::now_utc();
 		let mut result = TestResult {
 			id: Uuid::new_v4(),
@@ -260,9 +290,9 @@ mod tests {
 			test_meddra_version: None,
 			test_meddra_code: None,
 			test_result_code: None,
-			test_result_value: None,
-			test_result_null_flavor: Some("NINF".to_string()),
-			test_result_unit: None,
+			test_result_value: Some("10".to_string()),
+			test_result_qualifier: Some("GE".to_string()),
+			test_result_unit: Some("mg/dL".to_string()),
 			result_unstructured: None,
 			normal_low_value: None,
 			normal_high_value: None,
@@ -275,9 +305,11 @@ mod tests {
 			updated_by: None,
 		};
 		let xml = test_result_fragment(&result).expect("export");
-		assert!(xml.contains("<value nullFlavor=\"NINF\"></value>"));
+		assert!(
+			xml.contains("<low value=\"10\" unit=\"mg/dL\" inclusive=\"true\"/>")
+		);
+		assert!(xml.contains("<high nullFlavor=\"PINF\"/>"));
 
-		result.test_result_null_flavor = None;
 		result.test_date_null_flavor = Some("ASKU".to_string());
 		let xml = test_result_fragment(&result).expect("export date NullFlavor");
 		assert!(xml.contains("<effectiveTime nullFlavor=\"ASKU\"/>"));

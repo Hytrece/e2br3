@@ -128,40 +128,37 @@ impl XmlExportHistoryBmc {
 				 WHERE (
 					cardinality($1::text[]) = 0
 					OR NOT EXISTS (
-						SELECT 1 FROM sender_information s
-						 WHERE s.case_id = c.id
-						   AND s.source_sender_presave_id IS NOT NULL
+						SELECT 1 FROM case_scope_identifiers(c.id)
+						 WHERE scope_kind = 'sender'
 					)
 					OR EXISTS (
-						SELECT 1 FROM sender_information s
-						 WHERE s.case_id = c.id
-						   AND s.source_sender_presave_id::text = ANY($1)
+						SELECT 1 FROM case_scope_identifiers(c.id)
+						 WHERE scope_kind = 'sender'
+						   AND identifier = ANY($1)
 					)
 				 )
 				   AND (
 					cardinality($2::text[]) = 0
 					OR NOT EXISTS (
-						SELECT 1 FROM drug_information d
-						 WHERE d.case_id = c.id
-						   AND d.source_product_presave_id IS NOT NULL
+						SELECT 1 FROM case_scope_identifiers(c.id)
+						 WHERE scope_kind = 'product'
 					)
 					OR EXISTS (
-						SELECT 1 FROM drug_information d
-						 WHERE d.case_id = c.id
-						   AND d.source_product_presave_id::text = ANY($2)
+						SELECT 1 FROM case_scope_identifiers(c.id)
+						 WHERE scope_kind = 'product'
+						   AND identifier = ANY($2)
 					)
 				   )
 				   AND (
 					cardinality($3::text[]) = 0
 					OR NOT EXISTS (
-						SELECT 1 FROM study_information s
-						 WHERE s.case_id = c.id
-						   AND s.source_study_presave_id IS NOT NULL
+						SELECT 1 FROM case_scope_identifiers(c.id)
+						 WHERE scope_kind = 'study'
 					)
 					OR EXISTS (
-						SELECT 1 FROM study_information s
-						 WHERE s.case_id = c.id
-						   AND s.source_study_presave_id::text = ANY($3)
+						SELECT 1 FROM case_scope_identifiers(c.id)
+						 WHERE scope_kind = 'study'
+						   AND identifier = ANY($3)
 					)
 				   )
 				   AND (

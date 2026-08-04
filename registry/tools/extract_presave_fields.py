@@ -215,7 +215,6 @@ REPORTER_FRONTEND_TO_BACKEND = {
     "reporterStateNullFlavor": "state_null_flavor",
     "reporterPostcodeNullFlavor": "postcode_null_flavor",
     "reporterTelephoneNullFlavor": "telephone_null_flavor",
-    "reporterCountryNullFlavor": "country_code_null_flavor",
     "qualificationNullFlavor": "qualification_null_flavor",
 }
 PRIMARY_SOURCE_FRONTEND_TO_BACKEND = dict(REPORTER_FRONTEND_TO_BACKEND)

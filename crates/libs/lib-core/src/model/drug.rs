@@ -66,6 +66,7 @@ pub struct DrugInformation {
 
 	// FDA.G.k.10a - Additional Information on Drug (coded)
 	pub fda_additional_info_coded: Option<String>,
+	pub fda_additional_info_coded_null_flavor: Option<String>,
 	pub drug_additional_info_codes_json: Option<JsonValue>,
 	pub drug_additional_information: Option<String>,
 	pub fda_specialized_product_category: Option<String>,
@@ -107,6 +108,7 @@ pub struct DrugInformationForCreate {
 	pub phpid_version: Option<String>,
 	pub obtain_drug_country: Option<String>,
 	pub fda_additional_info_coded: Option<String>,
+	pub fda_additional_info_coded_null_flavor: Option<String>,
 	pub drug_additional_info_codes_json: Option<JsonValue>,
 	pub drug_additional_information: Option<String>,
 	pub fda_specialized_product_category: Option<String>,
@@ -136,6 +138,7 @@ pub struct DrugInformationForUpdate {
 	pub phpid_version: Option<String>,
 	pub obtain_drug_country: Option<String>,
 	pub fda_additional_info_coded: Option<String>,
+	pub fda_additional_info_coded_null_flavor: Option<String>,
 	pub drug_additional_info_codes_json: Option<JsonValue>,
 	pub drug_additional_information: Option<String>,
 	pub fda_specialized_product_category: Option<String>,
@@ -351,7 +354,6 @@ pub struct DosageInformation {
 
 	// G.k.4.r.7 - Batch/Lot Number
 	pub batch_lot_number: Option<String>,
-	pub batch_lot_number_null_flavor: Option<String>,
 
 	// G.k.4.r.8 - Dosage Text
 	pub dosage_text: Option<String>,
@@ -406,7 +408,6 @@ pub struct DosageInformationForCreate {
 	pub duration_unit: Option<String>,
 	pub continuing: Option<bool>,
 	pub batch_lot_number: Option<String>,
-	pub batch_lot_number_null_flavor: Option<String>,
 	pub dosage_text: Option<String>,
 	pub dose_form: Option<String>,
 	pub dose_form_null_flavor: Option<String>,
@@ -444,7 +445,6 @@ pub struct DosageInformationForUpdate {
 	pub duration_unit: Option<String>,
 	pub continuing: Option<bool>,
 	pub batch_lot_number: Option<String>,
-	pub batch_lot_number_null_flavor: Option<String>,
 	pub dosage_text: Option<String>,
 	pub dose_form: Option<String>,
 	pub dose_form_null_flavor: Option<String>,
@@ -717,7 +717,7 @@ impl DrugInformationBmc {
 				     gestation_period_exposure_value, gestation_period_exposure_unit,
 			     action_taken, investigational_product_blinded, mpid, mpid_version,
 			     mfds_mpid_version, mfds_mpid, phpid, phpid_version, obtain_drug_country,
-			     fda_additional_info_coded,
+			     fda_additional_info_coded, fda_additional_info_coded_null_flavor,
 			     drug_additional_info_codes_json, drug_additional_information, fda_specialized_product_category,
 			     fda_other_characterization,
 			     created_at, updated_at, created_by
@@ -729,10 +729,10 @@ impl DrugInformationBmc {
 				     $14, $15, $17,
 				     $19, $20, $21,
 				     $22, $23, $24, $25, $26,
-				     $28, $29,
-			     $30, $31,
-			     $32,
-			     now(), now(), $33
+			     $28, $29, $30,
+			     $31, $32,
+			     $33,
+			     now(), now(), $34
 				 )
 				 RETURNING id",
 			Self::TABLE
@@ -769,6 +769,7 @@ impl DrugInformationBmc {
 					.bind(drug_c.obtain_drug_country)
 					.bind(Option::<String>::None)
 					.bind(drug_c.fda_additional_info_coded)
+					.bind(drug_c.fda_additional_info_coded_null_flavor)
 					.bind(drug_c.drug_additional_info_codes_json)
 					.bind(drug_c.drug_additional_information)
 					.bind(drug_c.fda_specialized_product_category)
@@ -857,14 +858,15 @@ impl DrugInformationBmc {
 			     phpid = COALESCE($22, phpid),
 			     phpid_version = COALESCE($23, phpid_version),
 			     obtain_drug_country = COALESCE($24, obtain_drug_country),
-			     fda_additional_info_coded = COALESCE($26, fda_additional_info_coded),
-			     drug_additional_info_codes_json = COALESCE($27, drug_additional_info_codes_json),
-			     drug_additional_information = COALESCE($28, drug_additional_information),
-			     fda_specialized_product_category = COALESCE($29, fda_specialized_product_category),
-				     source_product_presave_id = COALESCE($30, source_product_presave_id),
-				     fda_other_characterization = COALESCE($31, fda_other_characterization),
+			     fda_additional_info_coded = CASE WHEN $27 IS NOT NULL THEN NULL ELSE COALESCE($26, fda_additional_info_coded) END,
+			     fda_additional_info_coded_null_flavor = CASE WHEN $26 IS NOT NULL THEN NULL ELSE COALESCE($27, fda_additional_info_coded_null_flavor) END,
+			     drug_additional_info_codes_json = COALESCE($28, drug_additional_info_codes_json),
+			     drug_additional_information = COALESCE($29, drug_additional_information),
+			     fda_specialized_product_category = COALESCE($30, fda_specialized_product_category),
+				     source_product_presave_id = COALESCE($31, source_product_presave_id),
+				     fda_other_characterization = COALESCE($32, fda_other_characterization),
 				     updated_at = now(),
-				     updated_by = $32
+				     updated_by = $33
 				 WHERE id = $1",
 			Self::TABLE
 		);
@@ -898,6 +900,7 @@ impl DrugInformationBmc {
 					.bind(drug_u.obtain_drug_country)
 					.bind(Option::<String>::None)
 					.bind(drug_u.fda_additional_info_coded)
+					.bind(drug_u.fda_additional_info_coded_null_flavor)
 					.bind(drug_u.drug_additional_info_codes_json)
 					.bind(drug_u.drug_additional_information)
 					.bind(drug_u.fda_specialized_product_category)
@@ -1063,13 +1066,14 @@ impl DrugInformationBmc {
 			     phpid = COALESCE($23, phpid),
 			     phpid_version = COALESCE($24, phpid_version),
 			     obtain_drug_country = COALESCE($25, obtain_drug_country),
-			     fda_additional_info_coded = COALESCE($27, fda_additional_info_coded),
-			     drug_additional_info_codes_json = COALESCE($28, drug_additional_info_codes_json),
-			     drug_additional_information = COALESCE($29, drug_additional_information),
-			     fda_specialized_product_category = COALESCE($30, fda_specialized_product_category),
-			     fda_other_characterization = COALESCE($31, fda_other_characterization),
+			     fda_additional_info_coded = CASE WHEN $28 IS NOT NULL THEN NULL ELSE COALESCE($27, fda_additional_info_coded) END,
+			     fda_additional_info_coded_null_flavor = CASE WHEN $27 IS NOT NULL THEN NULL ELSE COALESCE($28, fda_additional_info_coded_null_flavor) END,
+			     drug_additional_info_codes_json = COALESCE($29, drug_additional_info_codes_json),
+			     drug_additional_information = COALESCE($30, drug_additional_information),
+			     fda_specialized_product_category = COALESCE($31, fda_specialized_product_category),
+			     fda_other_characterization = COALESCE($32, fda_other_characterization),
 			     updated_at = now(),
-			     updated_by = $32
+			     updated_by = $33
 			 WHERE id = $1 AND case_id = $2",
 			Self::TABLE
 		);
@@ -1104,6 +1108,7 @@ impl DrugInformationBmc {
 					.bind(drug_u.obtain_drug_country)
 					.bind(Option::<String>::None)
 					.bind(drug_u.fda_additional_info_coded)
+					.bind(drug_u.fda_additional_info_coded_null_flavor)
 					.bind(drug_u.drug_additional_info_codes_json)
 					.bind(drug_u.drug_additional_information)
 					.bind(drug_u.fda_specialized_product_category)

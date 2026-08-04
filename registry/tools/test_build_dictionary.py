@@ -269,6 +269,9 @@ class AllowedValueConstraintTests(unittest.TestCase):
                 encoding="utf-8"
             )
         )
+        build_dictionary.apply_official_2025_null_flavor_overrides(
+            source_entries, []
+        )
         dictionary_entries = json.loads(
             (build_dictionary.DICTIONARY_DIR / "ich-e2br3.json").read_text(
                 encoding="utf-8"
@@ -564,6 +567,27 @@ class ParseXpathCsvTests(unittest.TestCase):
         self.assertEqual("/MCCI_IN200100UV01/id", entries[0]["xpath"])
         self.assertEqual("Instance Identifier  (II)", entries[0]["hl7_data_type"])
         self.assertNotIn("xpath", entries[1])
+
+
+class OfficialNullFlavorOverrideTests(unittest.TestCase):
+    def test_applies_ich_representation_and_fda_profile_overrides(self):
+        ich = [
+            {"code": "C.1.7", "null_flavors": ["NI"]},
+            {"code": "C.2.r.3", "null_flavors": ["MSK"]},
+            {"code": "D.9.3", "null_flavors": ["MSK"]},
+            {"code": "F.r.3.2", "null_flavors": ["NINF", "PINF"]},
+        ]
+        fda = [{"code": "FDA.placeholder"}]
+
+        build_dictionary.apply_official_2025_null_flavor_overrides(ich, fda)
+
+        self.assertIn("E2B(R2)", ich[0]["null_flavor_condition"])
+        self.assertNotIn("null_flavors", ich[1])
+        self.assertEqual(["UNK", "ASKU", "NASK"], ich[2]["null_flavors"])
+        self.assertNotIn("null_flavors", ich[3])
+        self.assertEqual(["NINF", "PINF"], ich[3]["interval_bound_null_flavors"])
+        self.assertEqual("FDA.D.1", fda[-1]["code"])
+        self.assertIn("NA", fda[-1]["null_flavors"])
 
 
 if __name__ == "__main__":

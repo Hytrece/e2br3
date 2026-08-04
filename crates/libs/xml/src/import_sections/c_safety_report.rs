@@ -166,13 +166,42 @@ fn read_c_1_7(xpath: &mut Context) -> Result<bool> {
 		xpath,
 		CSafetyReportPaths::FULFIL_EXPEDITED,
 	));
+	let null_flavor =
+		first_value_root(xpath, CSafetyReportPaths::FULFIL_EXPEDITED_NULL_FLAVOR);
+	if value.is_none() && null_flavor.is_none() {
+		return Err(Error::InvalidXml {
+			message: "ICH.C.1.7.REQUIRED: expedited criteria missing".to_string(),
+			line: None,
+			column: None,
+		});
+	}
 	import_constraint::boolean(
 		"fulfilExpeditedCriteria",
 		value,
-		None,
+		null_flavor.as_deref(),
 		input_contracts::generated::c::c_1_7,
 	)?;
-	Ok(value.unwrap_or(false))
+	value.ok_or_else(|| Error::InvalidXml {
+		message: "ICH.C.1.7: NI requires verified E2B(R2)-origin provenance"
+			.to_string(),
+		line: None,
+		column: None,
+	})
+}
+
+#[cfg(test)]
+mod c_1_7_tests {
+	use super::*;
+
+	#[test]
+	fn rejects_ni_without_verified_r2_provenance() {
+		let xml = r#"<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3"><component><observationEvent><code code="23" codeSystem="2.16.840.1.113883.3.989.2.1.1.19"/><value nullFlavor="NI"/></observationEvent></component></MCCI_IN200100UV01>"#;
+		let parser = Parser::default();
+		let doc = parser.parse_string(xml).unwrap();
+		let mut xpath = Context::new(&doc).unwrap();
+		xpath.register_namespace("hl7", "urn:hl7-org:v3").unwrap();
+		assert!(read_c_1_7(&mut xpath).is_err());
+	}
 }
 
 /// e2b:FDA.C.1.7.1

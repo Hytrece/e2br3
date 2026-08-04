@@ -27,6 +27,8 @@ impl CSafetyReportPaths {
 	// C.1.7 Does This Case Fulfil the Local Criteria for an Expedited Report?
 	pub const FULFIL_EXPEDITED: &'static str =
 		"//hl7:component/hl7:observationEvent[hl7:code[@code='23' and @codeSystem='2.16.840.1.113883.3.989.2.1.1.19']]/hl7:value/@value";
+	pub const FULFIL_EXPEDITED_NULL_FLAVOR: &'static str =
+		"//hl7:component/hl7:observationEvent[hl7:code[@code='23' and @codeSystem='2.16.840.1.113883.3.989.2.1.1.19']]/hl7:value/@nullFlavor";
 
 	// C.1.6.1 Are Additional Documents Available?
 	pub const ADDITIONAL_DOCUMENTS_AVAILABLE: &'static str =

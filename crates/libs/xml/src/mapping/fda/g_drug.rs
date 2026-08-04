@@ -43,6 +43,8 @@ impl GDrugPaths {
 		"hl7:outboundRelationship2[@typeCode='PERT']/hl7:observation[hl7:code[@code='16']]/hl7:value/@unit";
 	pub const FDA_ADDITIONAL_INFO: &'static str =
 		"hl7:outboundRelationship2[@typeCode='REFR']/hl7:observation[hl7:code[@code='9']]/hl7:value/@code";
+	pub const FDA_ADDITIONAL_INFO_NULL_FLAVOR: &'static str =
+		"hl7:outboundRelationship2[@typeCode='REFR']/hl7:observation[hl7:code[@code='9']]/hl7:value/@nullFlavor";
 	pub const FDA_SPECIALIZED_PRODUCT_CATEGORY: &'static str =
 		"hl7:consumable/hl7:instanceOfKind/hl7:kindOfProduct/hl7:asManufacturedProduct/hl7:subjectOf/hl7:characteristic[hl7:code[@displayName='FDA Specialized Product Category']]/hl7:value/@code";
 	pub const DRUG_ADDITIONAL_INFORMATION: &'static str =
@@ -108,6 +110,8 @@ impl GDrugPaths {
 		"hl7:consumable/hl7:instanceOfKind/hl7:kindOfProduct/hl7:formCode/@codeSystemVersion";
 	pub const DOSAGE_BATCH_LOT: &'static str =
 		"hl7:consumable/hl7:instanceOfKind/hl7:productInstanceInstance/hl7:lotNumberText";
+	pub const DOSAGE_BATCH_LOT_NULL_FLAVOR: &'static str =
+		"hl7:consumable/hl7:instanceOfKind/hl7:productInstanceInstance/hl7:lotNumberText/@nullFlavor";
 	pub const DOSAGE_PARENT_ROUTE_TERMID: &'static str =
 		"hl7:outboundRelationship2/hl7:observation[hl7:code[@code='G.k.4.r.11']]/hl7:value/@code";
 	pub const DOSAGE_PARENT_ROUTE_TERMID_VERSION: &'static str =

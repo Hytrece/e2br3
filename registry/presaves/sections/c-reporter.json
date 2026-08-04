@@ -410,31 +410,6 @@
     "notes": "Dedicated local persistence companion for official E2B element C.2.r.1.2."
   },
   {
-    "id": "C.2.r.local.reporterCountryNullFlavor",
-    "e2br3_code": "C.2.r.local.reporterCountryNullFlavor",
-    "label": "Reporter Country NullFlavor",
-    "section": "C",
-    "authority": "ICH",
-    "status": "complete",
-    "local_only": true,
-    "backend": {
-      "status": "mapped",
-      "model": "ReporterPresave",
-      "field": "country_code_null_flavor",
-      "file": "crates/libs/lib-core/src/model/presave.rs",
-      "evidence": "ReporterPresave.country_code_null_flavor stores the reporter presave value."
-    },
-    "frontend": {
-      "status": "mapped",
-      "section": "reporter",
-      "field": "reporterCountryNullFlavor",
-      "file": "../frontend/E2BR3-frontend/components/presave/ReporterForm.tsx",
-      "evidence": "ReporterForm and ReporterPresaveData bind reporter.reporterCountryNullFlavor."
-    },
-    "action": "",
-    "notes": ""
-  },
-  {
     "id": "C.2.r.local.qualificationNullFlavor",
     "e2br3_code": "C.2.r.local.qualificationNullFlavor",
     "label": "Qualification NullFlavor",

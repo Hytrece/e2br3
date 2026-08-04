@@ -362,16 +362,12 @@ CREATE TABLE IF NOT EXISTS reporter_presaves (
     qualification VARCHAR(50),
     qualification_kr1 VARCHAR(50),  -- MFDS.C.2.r.4.KR.1 Other health professional type
     primary_source_regulatory VARCHAR(50),
-    country_code_null_flavor VARCHAR(4),
-    qualification_null_flavor VARCHAR(4),
+    qualification_null_flavor VARCHAR(4) CHECK (qualification_null_flavor IN ('UNK')),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     created_by UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
     updated_by UUID REFERENCES users(id) ON DELETE RESTRICT
 );
-
-ALTER TABLE reporter_presaves
-    ADD COLUMN IF NOT EXISTS country_code_null_flavor VARCHAR(4);
 
 CREATE TABLE IF NOT EXISTS study_presaves (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

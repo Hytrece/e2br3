@@ -20,6 +20,7 @@ pub struct RelatednessWithDrug {
 
 #[derive(Debug, Clone, sqlx::FromRow)]
 pub struct PastDrugByCase {
+	pub drug_name_null_flavor: Option<String>,
 	pub mpid: Option<String>,
 	pub mpid_version: Option<String>,
 	pub mfds_medicinal_product_id: Option<String>,
@@ -71,6 +72,8 @@ SELECT das.*
 FROM drug_active_substances das
 JOIN drug_information di ON di.id = das.drug_id
 WHERE di.case_id = $1
+  AND di.deleted = false
+  AND das.deleted = false
 ORDER BY di.sequence_number, das.sequence_number
 "#;
 	mm.dbx().begin_txn().await?;
@@ -102,6 +105,8 @@ FROM relatedness_assessments ra
 JOIN drug_reaction_assessments dra ON dra.id = ra.drug_reaction_assessment_id
 JOIN drug_information di ON di.id = dra.drug_id
 WHERE di.case_id = $1
+  AND di.deleted = false
+  AND ra.deleted = false
 ORDER BY di.sequence_number, ra.sequence_number
 "#;
 	mm.dbx().begin_txn().await?;
@@ -120,13 +125,15 @@ async fn list_past_drugs_by_case(
 	case_id: Uuid,
 ) -> Result<Vec<PastDrugByCase>> {
 	let sql = r#"
-SELECT pdh.mpid
+SELECT pdh.drug_name_null_flavor
+     , pdh.mpid
      , pdh.mpid_version
      , pdh.mfds_medicinal_product_id
      , pdh.mfds_medicinal_product_version
 FROM past_drug_history pdh
 JOIN patient_information pi ON pi.id = pdh.patient_id
 WHERE pi.case_id = $1
+  AND pdh.deleted = false
 ORDER BY pdh.sequence_number
 "#;
 	mm.dbx().begin_txn().await?;
@@ -155,6 +162,8 @@ FROM parent_past_drug_history pph
 JOIN parent_information parent ON parent.id = pph.parent_id
 JOIN patient_information pi ON pi.id = parent.patient_id
 WHERE pi.case_id = $1
+  AND pph.deleted = false
+  AND parent.deleted = false
 ORDER BY parent.created_at, pph.sequence_number
 "#;
 	mm.dbx().begin_txn().await?;

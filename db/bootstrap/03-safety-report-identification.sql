@@ -25,7 +25,7 @@ CREATE TABLE safety_report_identification (
 
     -- C.1.7 - Fulfils Expedited Criteria (MANDATORY)
     fulfil_expedited_criteria BOOLEAN,
-    fulfil_expedited_criteria_null_flavor VARCHAR(4) CHECK (fulfil_expedited_criteria_null_flavor IN ('NI', 'UNK', 'ASKU', 'NASK', 'MSK')),
+    fulfil_expedited_criteria_null_flavor VARCHAR(4) CHECK (fulfil_expedited_criteria_null_flavor IN ('NI')),
 
     -- FDA.C.1.7.1 - Local Criteria Report Type (FDA)
     local_criteria_report_type VARCHAR(10),
@@ -45,7 +45,7 @@ CREATE TABLE safety_report_identification (
 
     -- C.1.9.1 - Other Case Identifiers in Previous Transmissions
     other_case_identifiers_exist BOOLEAN,
-    other_case_identifiers_exist_null_flavor VARCHAR(4) CHECK (other_case_identifiers_exist_null_flavor IN ('NI', 'UNK', 'ASKU', 'NASK', 'MSK')),
+    other_case_identifiers_exist_null_flavor VARCHAR(4) CHECK (other_case_identifiers_exist_null_flavor IN ('NI')),
 
     -- C.1.10.r - Linked Report Numbers (handled in separate table)
 
@@ -243,7 +243,7 @@ CREATE TABLE study_fda_cross_reported_inds (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     study_information_id UUID NOT NULL REFERENCES study_information(id) ON DELETE CASCADE,
     ind_number VARCHAR(10),
-    ind_number_null_flavor VARCHAR(4) CHECK (ind_number_null_flavor IN ('NI', 'UNK', 'ASKU', 'NASK', 'MSK', 'NA')),
+    ind_number_null_flavor VARCHAR(4) CHECK (ind_number_null_flavor IN ('NA')),
     sequence_number INTEGER NOT NULL,
     deleted BOOLEAN NOT NULL DEFAULT false,
 
@@ -302,15 +302,14 @@ CREATE TABLE primary_sources (
 
     -- C.2.r.3 - Country Code
     country_code VARCHAR(2),  -- ISO 3166-1 alpha-2
-    country_code_null_flavor VARCHAR(4),
 
     -- Email (not in spec but commonly used)
     email VARCHAR(100),
-    email_null_flavor VARCHAR(4),
+    email_null_flavor VARCHAR(4) CHECK (email_null_flavor IN ('MSK', 'ASKU', 'NASK')),
 
     -- C.2.r.4 - Qualification (MANDATORY within primary source - E2B(R3) codes)
     qualification VARCHAR(1) CHECK (qualification IN ('1', '2', '3', '4', '5')),
-    qualification_null_flavor VARCHAR(4),
+    qualification_null_flavor VARCHAR(4) CHECK (qualification_null_flavor IN ('UNK')),
     -- 1=Physician, 2=Pharmacist, 3=Other health professional, 4=Lawyer, 5=Consumer
     -- MFDS.C.2.r.4.KR.1 - Other health professional type (KR extension)
     qualification_kr1 VARCHAR(1) CHECK (qualification_kr1 IN ('1', '2')),
@@ -324,12 +323,14 @@ CREATE TABLE primary_sources (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     created_by UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
-    updated_by UUID REFERENCES users(id) ON DELETE RESTRICT
+    updated_by UUID REFERENCES users(id) ON DELETE RESTRICT,
+
+    CONSTRAINT ck_pair_primary_qualification
+        CHECK (NOT (qualification IS NOT NULL AND qualification_null_flavor IS NOT NULL))
 
 );
 
 ALTER TABLE primary_sources
-    ADD COLUMN IF NOT EXISTS country_code_null_flavor VARCHAR(4),
     ADD COLUMN IF NOT EXISTS email_null_flavor VARCHAR(4);
 
 CREATE INDEX idx_primary_sources_case ON primary_sources(case_id);

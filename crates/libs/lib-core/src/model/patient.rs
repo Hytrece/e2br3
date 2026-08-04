@@ -19,6 +19,15 @@ use sqlx::types::time::{Date, OffsetDateTime};
 use sqlx::types::Uuid;
 use sqlx::FromRow;
 
+fn deserialize_patch_decimal<'de, D>(
+	deserializer: D,
+) -> std::result::Result<Option<Option<Decimal>>, D::Error>
+where
+	D: serde::Deserializer<'de>,
+{
+	Option::<Decimal>::deserialize(deserializer).map(Some)
+}
+
 // -- PatientInformation
 
 #[derive(Debug, Clone, Fields, FromRow, Serialize)]
@@ -39,13 +48,10 @@ pub struct PatientInformation {
 
 	// D.3-5 - Physical
 	pub weight_kg: Option<Decimal>,
-	pub weight_kg_null_flavor: Option<String>,
 	pub height_cm: Option<Decimal>,
-	pub height_cm_null_flavor: Option<String>,
 	pub sex: Option<String>,
 	pub patient_initials_null_flavor: Option<String>,
 	pub birth_date_null_flavor: Option<String>,
-	pub age_at_time_of_onset_null_flavor: Option<String>,
 	pub sex_null_flavor: Option<String>,
 
 	// FDA.D.11 / FDA.D.12 - Race / Ethnicity (FDA)
@@ -72,6 +78,7 @@ pub struct PatientInformation {
 }
 
 #[derive(Fields, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct PatientInformationForCreate {
 	pub case_id: Uuid,
 	pub patient_initials: Option<String>,
@@ -83,15 +90,12 @@ pub struct PatientInformationForCreate {
 	pub birth_date: Option<Date>,
 	pub birth_date_null_flavor: Option<String>,
 	pub age_at_time_of_onset: Option<Decimal>,
-	pub age_at_time_of_onset_null_flavor: Option<String>,
 	pub age_unit: Option<String>,
 	pub gestation_period: Option<Decimal>,
 	pub gestation_period_unit: Option<String>,
 	pub age_group: Option<String>,
 	pub weight_kg: Option<Decimal>,
-	pub weight_kg_null_flavor: Option<String>,
 	pub height_cm: Option<Decimal>,
-	pub height_cm_null_flavor: Option<String>,
 	pub sex: Option<String>,
 	pub sex_null_flavor: Option<String>,
 	pub race_code: Option<String>,
@@ -109,7 +113,8 @@ pub struct PatientInformationForCreate {
 	pub concomitant_therapy: Option<bool>,
 }
 
-#[derive(Fields, Deserialize)]
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct PatientInformationForUpdate {
 	pub patient_initials: Option<String>,
 	pub patient_initials_null_flavor: Option<String>,
@@ -119,16 +124,16 @@ pub struct PatientInformationForUpdate {
 	)]
 	pub birth_date: Option<Date>,
 	pub birth_date_null_flavor: Option<String>,
-	pub age_at_time_of_onset: Option<Decimal>,
-	pub age_at_time_of_onset_null_flavor: Option<String>,
+	#[serde(default, deserialize_with = "deserialize_patch_decimal")]
+	pub age_at_time_of_onset: Option<Option<Decimal>>,
 	pub age_unit: Option<String>,
 	pub gestation_period: Option<Decimal>,
 	pub gestation_period_unit: Option<String>,
 	pub age_group: Option<String>,
-	pub weight_kg: Option<Decimal>,
-	pub weight_kg_null_flavor: Option<String>,
-	pub height_cm: Option<Decimal>,
-	pub height_cm_null_flavor: Option<String>,
+	#[serde(default, deserialize_with = "deserialize_patch_decimal")]
+	pub weight_kg: Option<Option<Decimal>>,
+	#[serde(default, deserialize_with = "deserialize_patch_decimal")]
+	pub height_cm: Option<Option<Decimal>>,
 	pub sex: Option<String>,
 	pub sex_null_flavor: Option<String>,
 	pub race_code: Option<String>,
@@ -517,7 +522,6 @@ pub struct ParentInformation {
 	pub parent_birth_date: Option<Date>,
 	pub parent_birth_date_null_flavor: Option<String>,
 	pub parent_age: Option<Decimal>,
-	pub parent_age_null_flavor: Option<String>,
 	pub parent_age_unit: Option<String>,
 	pub last_menstrual_period_date: Option<Date>,
 	pub last_menstrual_period_date_null_flavor: Option<String>,
@@ -535,6 +539,7 @@ pub struct ParentInformation {
 }
 
 #[derive(Fields, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ParentInformationForCreate {
 	pub patient_id: Uuid,
 	pub parent_identification: Option<String>,
@@ -546,7 +551,6 @@ pub struct ParentInformationForCreate {
 	pub parent_birth_date: Option<Date>,
 	pub parent_birth_date_null_flavor: Option<String>,
 	pub parent_age: Option<Decimal>,
-	pub parent_age_null_flavor: Option<String>,
 	pub parent_age_unit: Option<String>,
 	#[serde(
 		default,
@@ -561,7 +565,8 @@ pub struct ParentInformationForCreate {
 	pub medical_history_text: Option<String>,
 }
 
-#[derive(Fields, Deserialize)]
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ParentInformationForUpdate {
 	pub parent_identification: Option<String>,
 	pub parent_identification_null_flavor: Option<String>,
@@ -571,8 +576,8 @@ pub struct ParentInformationForUpdate {
 	)]
 	pub parent_birth_date: Option<Date>,
 	pub parent_birth_date_null_flavor: Option<String>,
-	pub parent_age: Option<Decimal>,
-	pub parent_age_null_flavor: Option<String>,
+	#[serde(default, deserialize_with = "deserialize_patch_decimal")]
+	pub parent_age: Option<Option<Decimal>>,
 	pub parent_age_unit: Option<String>,
 	#[serde(
 		default,
@@ -624,15 +629,12 @@ impl PatientInformationBmc {
 				birth_date,
 				birth_date_null_flavor,
 				age_at_time_of_onset,
-				age_at_time_of_onset_null_flavor,
 				age_unit,
 				gestation_period,
 				gestation_period_unit,
 				age_group,
 				weight_kg,
-				weight_kg_null_flavor,
 				height_cm,
-				height_cm_null_flavor,
 				sex,
 				sex_null_flavor,
 				race_code,
@@ -649,8 +651,8 @@ impl PatientInformationBmc {
 				created_by
 			)
 			 VALUES (
-			  $1, $2, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15,
-			  $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, now(), now(), $29
+			  $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
+			  $14, $15, $16, $17, $18, $19, $20, $21, $22, now(), now(), $23
 			 )
 			 RETURNING id",
 			Self::TABLE
@@ -661,21 +663,16 @@ impl PatientInformationBmc {
 				sqlx::query_as::<_, (Uuid,)>(&sql)
 					.bind(data.case_id)
 					.bind(data.patient_initials)
-					.bind(Option::<String>::None)
-					.bind(Option::<String>::None)
 					.bind(data.patient_initials_null_flavor)
 					.bind(data.birth_date)
 					.bind(data.birth_date_null_flavor)
 					.bind(data.age_at_time_of_onset)
-					.bind(data.age_at_time_of_onset_null_flavor)
 					.bind(data.age_unit)
 					.bind(data.gestation_period)
 					.bind(data.gestation_period_unit)
 					.bind(data.age_group)
 					.bind(data.weight_kg)
-					.bind(data.weight_kg_null_flavor)
 					.bind(data.height_cm)
-					.bind(data.height_cm_null_flavor)
 					.bind(data.sex)
 					.bind(data.sex_null_flavor)
 					.bind(data.race_code)
@@ -751,36 +748,54 @@ impl PatientInformationBmc {
 			mm.dbx().rollback_txn().await?;
 			return Err(err);
 		}
+		let age_clear = matches!(data.age_at_time_of_onset, Some(None));
+		let weight_clear = matches!(data.weight_kg, Some(None));
+		let height_clear = matches!(data.height_cm, Some(None));
+		let age_at_time_of_onset = data.age_at_time_of_onset.flatten();
+		let weight_kg = data.weight_kg.flatten();
+		let height_cm = data.height_cm.flatten();
+		mm.dbx()
+			.execute(
+				sqlx::query(
+					"UPDATE patient_information SET
+					 age_at_time_of_onset = CASE WHEN $2 THEN NULL ELSE age_at_time_of_onset END,
+					 weight_kg = CASE WHEN $3 THEN NULL ELSE weight_kg END,
+					 height_cm = CASE WHEN $4 THEN NULL ELSE height_cm END
+					 WHERE id = $1",
+				)
+				.bind(id)
+				.bind(age_clear)
+				.bind(weight_clear)
+				.bind(height_clear),
+			)
+			.await?;
 
 		let sql = format!(
 			"UPDATE {}
-			 SET patient_initials = CASE WHEN $5 IS NOT NULL THEN NULL ELSE COALESCE($2, patient_initials) END,
-			     patient_initials_null_flavor = CASE WHEN $2 IS NOT NULL THEN NULL ELSE COALESCE($5, patient_initials_null_flavor) END,
-			     birth_date = CASE WHEN $7 IS NOT NULL THEN NULL ELSE COALESCE($6, birth_date) END,
-			     birth_date_null_flavor = CASE WHEN $6 IS NOT NULL THEN NULL ELSE COALESCE($7, birth_date_null_flavor) END,
-			     age_at_time_of_onset = CASE WHEN $9 IS NOT NULL THEN NULL ELSE COALESCE($8, age_at_time_of_onset) END,
-			     age_at_time_of_onset_null_flavor = CASE WHEN $8 IS NOT NULL THEN NULL ELSE COALESCE($9, age_at_time_of_onset_null_flavor) END,
-			     age_unit = CASE WHEN $9 IS NOT NULL THEN NULL ELSE COALESCE($10, age_unit) END,
-			     gestation_period = COALESCE($11, gestation_period),
-			     gestation_period_unit = COALESCE($12, gestation_period_unit),
-			     age_group = COALESCE($13, age_group),
-			     weight_kg = CASE WHEN $15 IS NOT NULL THEN NULL ELSE COALESCE($14, weight_kg) END,
-			     weight_kg_null_flavor = CASE WHEN $14 IS NOT NULL THEN NULL ELSE COALESCE($15, weight_kg_null_flavor) END,
-			     height_cm = CASE WHEN $17 IS NOT NULL THEN NULL ELSE COALESCE($16, height_cm) END,
-			     height_cm_null_flavor = CASE WHEN $16 IS NOT NULL THEN NULL ELSE COALESCE($17, height_cm_null_flavor) END,
-			     sex = CASE WHEN $19 IS NOT NULL THEN NULL ELSE COALESCE($18, sex) END,
-			     sex_null_flavor = CASE WHEN $18 IS NOT NULL THEN NULL ELSE COALESCE($19, sex_null_flavor) END,
-			     race_code = CASE WHEN $21 IS NOT NULL THEN NULL ELSE COALESCE($20, race_code) END,
-			     race_code_null_flavor = CASE WHEN $20 IS NOT NULL THEN NULL ELSE COALESCE($21, race_code_null_flavor) END,
-			     ethnicity_code = CASE WHEN $23 IS NOT NULL THEN NULL ELSE COALESCE($22, ethnicity_code) END,
-			     ethnicity_code_null_flavor = CASE WHEN $22 IS NOT NULL THEN NULL ELSE COALESCE($23, ethnicity_code_null_flavor) END,
-			     last_menstrual_period_date = CASE WHEN $25 IS NOT NULL THEN NULL ELSE COALESCE($24, last_menstrual_period_date) END,
-			     last_menstrual_period_date_null_flavor = CASE WHEN $24 IS NOT NULL THEN NULL ELSE COALESCE($25, last_menstrual_period_date_null_flavor) END,
-			     medical_history_text = CASE WHEN $27 IS NOT NULL THEN NULL ELSE COALESCE($26, medical_history_text) END,
-			     medical_history_text_null_flavor = CASE WHEN $26 IS NOT NULL THEN NULL ELSE COALESCE($27, medical_history_text_null_flavor) END,
-			     concomitant_therapy = COALESCE($28, concomitant_therapy),
+			 SET patient_initials = CASE WHEN $3 IS NOT NULL THEN NULL ELSE COALESCE($2, patient_initials) END,
+			     patient_initials_null_flavor = CASE WHEN $2 IS NOT NULL THEN NULL ELSE COALESCE($3, patient_initials_null_flavor) END,
+			     birth_date = CASE WHEN $5 IS NOT NULL THEN NULL ELSE COALESCE($4, birth_date) END,
+			     birth_date_null_flavor = CASE WHEN $4 IS NOT NULL THEN NULL ELSE COALESCE($5, birth_date_null_flavor) END,
+			     age_at_time_of_onset = COALESCE($6, age_at_time_of_onset),
+			     age_unit = COALESCE($7, age_unit),
+			     gestation_period = COALESCE($8, gestation_period),
+			     gestation_period_unit = COALESCE($9, gestation_period_unit),
+			     age_group = COALESCE($10, age_group),
+			     weight_kg = COALESCE($11, weight_kg),
+			     height_cm = COALESCE($12, height_cm),
+			     sex = CASE WHEN $14 IS NOT NULL THEN NULL ELSE COALESCE($13, sex) END,
+			     sex_null_flavor = CASE WHEN $13 IS NOT NULL THEN NULL ELSE COALESCE($14, sex_null_flavor) END,
+			     race_code = CASE WHEN $16 IS NOT NULL THEN NULL ELSE COALESCE($15, race_code) END,
+			     race_code_null_flavor = CASE WHEN $15 IS NOT NULL THEN NULL ELSE COALESCE($16, race_code_null_flavor) END,
+			     ethnicity_code = CASE WHEN $18 IS NOT NULL THEN NULL ELSE COALESCE($17, ethnicity_code) END,
+			     ethnicity_code_null_flavor = CASE WHEN $17 IS NOT NULL THEN NULL ELSE COALESCE($18, ethnicity_code_null_flavor) END,
+			     last_menstrual_period_date = CASE WHEN $20 IS NOT NULL THEN NULL ELSE COALESCE($19, last_menstrual_period_date) END,
+			     last_menstrual_period_date_null_flavor = CASE WHEN $19 IS NOT NULL THEN NULL ELSE COALESCE($20, last_menstrual_period_date_null_flavor) END,
+			     medical_history_text = CASE WHEN $22 IS NOT NULL THEN NULL ELSE COALESCE($21, medical_history_text) END,
+			     medical_history_text_null_flavor = CASE WHEN $21 IS NOT NULL THEN NULL ELSE COALESCE($22, medical_history_text_null_flavor) END,
+			     concomitant_therapy = COALESCE($23, concomitant_therapy),
 			     updated_at = now(),
-			     updated_by = $29
+			     updated_by = $24
 			 WHERE id = $1",
 			Self::TABLE
 		);
@@ -790,21 +805,16 @@ impl PatientInformationBmc {
 				sqlx::query(&sql)
 					.bind(id)
 					.bind(data.patient_initials)
-					.bind(Option::<String>::None)
-					.bind(Option::<String>::None)
 					.bind(data.patient_initials_null_flavor)
 					.bind(data.birth_date)
 					.bind(data.birth_date_null_flavor)
-					.bind(data.age_at_time_of_onset)
-					.bind(data.age_at_time_of_onset_null_flavor)
+					.bind(age_at_time_of_onset)
 					.bind(data.age_unit)
 					.bind(data.gestation_period)
 					.bind(data.gestation_period_unit)
 					.bind(data.age_group)
-					.bind(data.weight_kg)
-					.bind(data.weight_kg_null_flavor)
-					.bind(data.height_cm)
-					.bind(data.height_cm_null_flavor)
+					.bind(weight_kg)
+					.bind(height_cm)
 					.bind(data.sex)
 					.bind(data.sex_null_flavor)
 					.bind(data.race_code)
@@ -905,36 +915,54 @@ impl PatientInformationBmc {
 			mm.dbx().rollback_txn().await?;
 			return Err(err);
 		}
+		let age_clear = matches!(data.age_at_time_of_onset, Some(None));
+		let weight_clear = matches!(data.weight_kg, Some(None));
+		let height_clear = matches!(data.height_cm, Some(None));
+		let age_at_time_of_onset = data.age_at_time_of_onset.flatten();
+		let weight_kg = data.weight_kg.flatten();
+		let height_cm = data.height_cm.flatten();
+		mm.dbx()
+			.execute(
+				sqlx::query(
+					"UPDATE patient_information SET
+					 age_at_time_of_onset = CASE WHEN $2 THEN NULL ELSE age_at_time_of_onset END,
+					 weight_kg = CASE WHEN $3 THEN NULL ELSE weight_kg END,
+					 height_cm = CASE WHEN $4 THEN NULL ELSE height_cm END
+					 WHERE case_id = $1",
+				)
+				.bind(case_id)
+				.bind(age_clear)
+				.bind(weight_clear)
+				.bind(height_clear),
+			)
+			.await?;
 
 		let sql = format!(
 			"UPDATE {}
-			 SET patient_initials = CASE WHEN $5 IS NOT NULL THEN NULL ELSE COALESCE($2, patient_initials) END,
-			     patient_initials_null_flavor = CASE WHEN $2 IS NOT NULL THEN NULL ELSE COALESCE($5, patient_initials_null_flavor) END,
-			     birth_date = CASE WHEN $7 IS NOT NULL THEN NULL ELSE COALESCE($6, birth_date) END,
-			     birth_date_null_flavor = CASE WHEN $6 IS NOT NULL THEN NULL ELSE COALESCE($7, birth_date_null_flavor) END,
-			     age_at_time_of_onset = CASE WHEN $9 IS NOT NULL THEN NULL ELSE COALESCE($8, age_at_time_of_onset) END,
-			     age_at_time_of_onset_null_flavor = CASE WHEN $8 IS NOT NULL THEN NULL ELSE COALESCE($9, age_at_time_of_onset_null_flavor) END,
-			     age_unit = CASE WHEN $9 IS NOT NULL THEN NULL ELSE COALESCE($10, age_unit) END,
-			     gestation_period = COALESCE($11, gestation_period),
-			     gestation_period_unit = COALESCE($12, gestation_period_unit),
-			     age_group = COALESCE($13, age_group),
-			     weight_kg = CASE WHEN $15 IS NOT NULL THEN NULL ELSE COALESCE($14, weight_kg) END,
-			     weight_kg_null_flavor = CASE WHEN $14 IS NOT NULL THEN NULL ELSE COALESCE($15, weight_kg_null_flavor) END,
-			     height_cm = CASE WHEN $17 IS NOT NULL THEN NULL ELSE COALESCE($16, height_cm) END,
-			     height_cm_null_flavor = CASE WHEN $16 IS NOT NULL THEN NULL ELSE COALESCE($17, height_cm_null_flavor) END,
-			     sex = CASE WHEN $19 IS NOT NULL THEN NULL ELSE COALESCE($18, sex) END,
-			     sex_null_flavor = CASE WHEN $18 IS NOT NULL THEN NULL ELSE COALESCE($19, sex_null_flavor) END,
-			     race_code = CASE WHEN $21 IS NOT NULL THEN NULL ELSE COALESCE($20, race_code) END,
-			     race_code_null_flavor = CASE WHEN $20 IS NOT NULL THEN NULL ELSE COALESCE($21, race_code_null_flavor) END,
-			     ethnicity_code = CASE WHEN $23 IS NOT NULL THEN NULL ELSE COALESCE($22, ethnicity_code) END,
-			     ethnicity_code_null_flavor = CASE WHEN $22 IS NOT NULL THEN NULL ELSE COALESCE($23, ethnicity_code_null_flavor) END,
-			     last_menstrual_period_date = CASE WHEN $25 IS NOT NULL THEN NULL ELSE COALESCE($24, last_menstrual_period_date) END,
-			     last_menstrual_period_date_null_flavor = CASE WHEN $24 IS NOT NULL THEN NULL ELSE COALESCE($25, last_menstrual_period_date_null_flavor) END,
-			     medical_history_text = CASE WHEN $27 IS NOT NULL THEN NULL ELSE COALESCE($26, medical_history_text) END,
-			     medical_history_text_null_flavor = CASE WHEN $26 IS NOT NULL THEN NULL ELSE COALESCE($27, medical_history_text_null_flavor) END,
-			     concomitant_therapy = COALESCE($28, concomitant_therapy),
+			 SET patient_initials = CASE WHEN $3 IS NOT NULL THEN NULL ELSE COALESCE($2, patient_initials) END,
+			     patient_initials_null_flavor = CASE WHEN $2 IS NOT NULL THEN NULL ELSE COALESCE($3, patient_initials_null_flavor) END,
+			     birth_date = CASE WHEN $5 IS NOT NULL THEN NULL ELSE COALESCE($4, birth_date) END,
+			     birth_date_null_flavor = CASE WHEN $4 IS NOT NULL THEN NULL ELSE COALESCE($5, birth_date_null_flavor) END,
+			     age_at_time_of_onset = COALESCE($6, age_at_time_of_onset),
+			     age_unit = COALESCE($7, age_unit),
+			     gestation_period = COALESCE($8, gestation_period),
+			     gestation_period_unit = COALESCE($9, gestation_period_unit),
+			     age_group = COALESCE($10, age_group),
+			     weight_kg = COALESCE($11, weight_kg),
+			     height_cm = COALESCE($12, height_cm),
+			     sex = CASE WHEN $14 IS NOT NULL THEN NULL ELSE COALESCE($13, sex) END,
+			     sex_null_flavor = CASE WHEN $13 IS NOT NULL THEN NULL ELSE COALESCE($14, sex_null_flavor) END,
+			     race_code = CASE WHEN $16 IS NOT NULL THEN NULL ELSE COALESCE($15, race_code) END,
+			     race_code_null_flavor = CASE WHEN $15 IS NOT NULL THEN NULL ELSE COALESCE($16, race_code_null_flavor) END,
+			     ethnicity_code = CASE WHEN $18 IS NOT NULL THEN NULL ELSE COALESCE($17, ethnicity_code) END,
+			     ethnicity_code_null_flavor = CASE WHEN $17 IS NOT NULL THEN NULL ELSE COALESCE($18, ethnicity_code_null_flavor) END,
+			     last_menstrual_period_date = CASE WHEN $20 IS NOT NULL THEN NULL ELSE COALESCE($19, last_menstrual_period_date) END,
+			     last_menstrual_period_date_null_flavor = CASE WHEN $19 IS NOT NULL THEN NULL ELSE COALESCE($20, last_menstrual_period_date_null_flavor) END,
+			     medical_history_text = CASE WHEN $22 IS NOT NULL THEN NULL ELSE COALESCE($21, medical_history_text) END,
+			     medical_history_text_null_flavor = CASE WHEN $21 IS NOT NULL THEN NULL ELSE COALESCE($22, medical_history_text_null_flavor) END,
+			     concomitant_therapy = COALESCE($23, concomitant_therapy),
 			     updated_at = now(),
-			     updated_by = $29
+			     updated_by = $24
 			 WHERE case_id = $1",
 			Self::TABLE
 		);
@@ -944,21 +972,16 @@ impl PatientInformationBmc {
 				sqlx::query(&sql)
 					.bind(case_id)
 					.bind(data.patient_initials)
-					.bind(Option::<String>::None)
-					.bind(Option::<String>::None)
 					.bind(data.patient_initials_null_flavor)
 					.bind(data.birth_date)
 					.bind(data.birth_date_null_flavor)
-					.bind(data.age_at_time_of_onset)
-					.bind(data.age_at_time_of_onset_null_flavor)
+					.bind(age_at_time_of_onset)
 					.bind(data.age_unit)
 					.bind(data.gestation_period)
 					.bind(data.gestation_period_unit)
 					.bind(data.age_group)
-					.bind(data.weight_kg)
-					.bind(data.weight_kg_null_flavor)
-					.bind(data.height_cm)
-					.bind(data.height_cm_null_flavor)
+					.bind(weight_kg)
+					.bind(height_cm)
 					.bind(data.sex)
 					.bind(data.sex_null_flavor)
 					.bind(data.race_code)
@@ -1554,6 +1577,17 @@ impl ParentInformationBmc {
 			ctx.role(),
 		)
 		.await?;
+		let parent_age_clear = matches!(data.parent_age, Some(None));
+		let parent_age = data.parent_age.flatten();
+		mm.dbx()
+			.execute(
+				sqlx::query(
+					"UPDATE parent_information SET parent_age = CASE WHEN $2 THEN NULL ELSE parent_age END WHERE id = $1",
+				)
+				.bind(id)
+				.bind(parent_age_clear),
+			)
+			.await?;
 
 		let sql = format!(
 			"UPDATE {} SET
@@ -1575,43 +1609,32 @@ impl ParentInformationBmc {
 			   WHEN $4::date IS NOT NULL THEN NULL
 			   ELSE parent_birth_date_null_flavor
 			 END,
-			 parent_age = CASE
-			   WHEN $5::varchar IS NOT NULL THEN NULL
-			   ELSE COALESCE($6, parent_age)
-			 END,
-			 parent_age_null_flavor = CASE
-			   WHEN $5::varchar IS NOT NULL THEN $5
-			   WHEN $6::numeric IS NOT NULL THEN NULL
-			   ELSE parent_age_null_flavor
-			 END,
-			 parent_age_unit = CASE
-			   WHEN $5::varchar IS NOT NULL THEN NULL
-			   ELSE COALESCE($7, parent_age_unit)
-			 END,
+			 parent_age = COALESCE($5, parent_age),
+			 parent_age_unit = COALESCE($6, parent_age_unit),
 			 last_menstrual_period_date = CASE
-			   WHEN $8::varchar IS NOT NULL THEN NULL
-			   ELSE COALESCE($9, last_menstrual_period_date)
+			   WHEN $7::varchar IS NOT NULL THEN NULL
+			   ELSE COALESCE($8, last_menstrual_period_date)
 			 END,
 			 last_menstrual_period_date_null_flavor = CASE
-			   WHEN $8::varchar IS NOT NULL THEN $8
-			   WHEN $9::date IS NOT NULL THEN NULL
+			   WHEN $7::varchar IS NOT NULL THEN $7
+			   WHEN $8::date IS NOT NULL THEN NULL
 			   ELSE last_menstrual_period_date_null_flavor
 			 END,
-			 weight_kg = COALESCE($10, weight_kg),
-			 height_cm = COALESCE($11, height_cm),
+			 weight_kg = COALESCE($9, weight_kg),
+			 height_cm = COALESCE($10, height_cm),
 			 sex = CASE
-			   WHEN $12::varchar IS NOT NULL THEN NULL
-			   ELSE COALESCE($13, sex)
+			   WHEN $11::varchar IS NOT NULL THEN NULL
+			   ELSE COALESCE($12, sex)
 			 END,
 			 sex_null_flavor = CASE
-			   WHEN $12::varchar IS NOT NULL THEN $12
-			   WHEN $13::varchar IS NOT NULL THEN NULL
+			   WHEN $11::varchar IS NOT NULL THEN $11
+			   WHEN $12::varchar IS NOT NULL THEN NULL
 			   ELSE sex_null_flavor
 			 END,
-			 medical_history_text = COALESCE($14, medical_history_text),
+			 medical_history_text = COALESCE($13, medical_history_text),
 			 updated_at = now(),
-			 updated_by = $15
-			 WHERE id = $16",
+			 updated_by = $14
+			 WHERE id = $15",
 			Self::TABLE
 		);
 
@@ -1623,8 +1646,7 @@ impl ParentInformationBmc {
 					.bind(data.parent_identification)
 					.bind(data.parent_birth_date_null_flavor)
 					.bind(data.parent_birth_date)
-					.bind(data.parent_age_null_flavor)
-					.bind(data.parent_age)
+					.bind(parent_age)
 					.bind(data.parent_age_unit)
 					.bind(data.last_menstrual_period_date_null_flavor)
 					.bind(data.last_menstrual_period_date)
@@ -1654,5 +1676,29 @@ impl ParentInformationBmc {
 
 	pub async fn restore(ctx: &Ctx, mm: &ModelManager, id: Uuid) -> Result<()> {
 		base_uuid::restore::<Self>(ctx, mm, id).await
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn numeric_updates_distinguish_omitted_null_and_value() {
+		let omitted: PatientInformationForUpdate =
+			serde_json::from_value(serde_json::json!({})).unwrap();
+		assert_eq!(omitted.weight_kg, None);
+
+		let cleared: PatientInformationForUpdate =
+			serde_json::from_value(serde_json::json!({"weight_kg": null})).unwrap();
+		assert_eq!(cleared.weight_kg, Some(None));
+
+		let set: PatientInformationForUpdate =
+			serde_json::from_value(serde_json::json!({"weight_kg": 42.5})).unwrap();
+		assert_eq!(set.weight_kg, Some(Some(Decimal::new(425, 1))));
+
+		let parent_cleared: ParentInformationForUpdate =
+			serde_json::from_value(serde_json::json!({"parent_age": null})).unwrap();
+		assert_eq!(parent_cleared.parent_age, Some(None));
 	}
 }

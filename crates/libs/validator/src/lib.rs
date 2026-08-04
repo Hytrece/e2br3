@@ -96,6 +96,47 @@ pub fn push_issue_by_code(
 	}
 }
 
+fn push_direct_business_issue(
+	issues: &mut Vec<ValidationIssue>,
+	code: &str,
+	path: impl Into<String>,
+	message: impl Into<String>,
+	blocking: bool,
+) {
+	let path = path.into();
+	let field_path = case::sections::resolve_validation_field_path(Some(&path));
+	let subsection =
+		case::sections::resolve_validation_subsection(code, Some(&path));
+	let section = case::sections::resolve_validation_section(code, Some(&path));
+	issues.push(ValidationIssue {
+		code: code.to_string(),
+		message: message.into(),
+		field_path,
+		path,
+		section,
+		subsection,
+		blocking,
+	});
+}
+
+pub(crate) fn push_business_issue(
+	issues: &mut Vec<ValidationIssue>,
+	code: &str,
+	path: impl Into<String>,
+	message: impl Into<String>,
+) {
+	push_direct_business_issue(issues, code, path, message, true);
+}
+
+pub(crate) fn push_business_warning(
+	issues: &mut Vec<ValidationIssue>,
+	code: &str,
+	path: impl Into<String>,
+	message: impl Into<String>,
+) {
+	push_direct_business_issue(issues, code, path, message, false);
+}
+
 pub fn push_issue_if_rule_invalid(
 	issues: &mut Vec<ValidationIssue>,
 	code: &str,
@@ -206,5 +247,27 @@ pub fn build_report(
 		section_summaries,
 		subsection_summaries,
 		issues,
+	}
+}
+
+#[cfg(test)]
+mod direct_business_issue_tests {
+	use super::*;
+
+	#[test]
+	fn direct_business_issue_is_blocking_without_catalog_metadata() {
+		let mut issues = Vec::new();
+		push_business_issue(
+			&mut issues,
+			"FDA.R0011",
+			"safetyReportIdentification.safetyReportId",
+			"invalid identifier profile",
+		);
+
+		assert_eq!(issues.len(), 1);
+		assert!(issues[0].blocking);
+		assert_eq!(issues[0].section, "C");
+		assert_eq!(issues[0].subsection, "C.1");
+		assert_eq!(issues[0].message, "invalid identifier profile");
 	}
 }

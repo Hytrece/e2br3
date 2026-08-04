@@ -5385,7 +5385,7 @@ mod tests {
 				("allowed_values", 261),
 				("date_time", 23),
 				("max_length", 218),
-				("null_flavors", 72),
+				("null_flavors", 71),
 				("vocabulary", 59),
 			]),
 			"dictionary value-constraint candidate inventory changed"
@@ -5458,7 +5458,7 @@ mod tests {
 				("format", 3),
 				("future_date", 17),
 				("length", 218),
-				("null_flavor", 104),
+				("null_flavor", 103),
 				("vocabulary", 59),
 			]),
 			"catalog value-constraint rule inventory changed"
@@ -5702,7 +5702,7 @@ mod tests {
 		let dictionary_rules = all_null_flavors_dictionary_rules();
 		assert_eq!(
 			dictionary_rules.len(),
-			72,
+			71,
 			"dictionary null_flavors rule count changed"
 		);
 

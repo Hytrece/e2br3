@@ -15,6 +15,7 @@ use lib_core::ctx::Ctx;
 use lib_core::model::{ModelManager, Result};
 #[cfg(test)]
 use std::collections::BTreeSet;
+use std::collections::{HashMap, HashSet};
 
 #[cfg(test)]
 pub(crate) fn implemented_allowed_value_rule_codes() -> BTreeSet<&'static str> {
@@ -87,7 +88,154 @@ pub(crate) async fn collect_section_issues(
 	.await?;
 	h::collect(&mut issues, authority, validation_ctx);
 	n::collect(&mut issues, authority, validation_ctx);
+	collect_meddra_version_issues(validation_ctx, &mut issues);
 	Ok(issues)
+}
+
+fn has_multiple_values<'a>(values: impl IntoIterator<Item = &'a str>) -> bool {
+	values
+		.into_iter()
+		.map(str::trim)
+		.filter(|value| !value.is_empty())
+		.collect::<HashSet<_>>()
+		.len() > 1
+}
+
+fn collect_meddra_version_issues(
+	validation_ctx: &ValidationContext,
+	issues: &mut Vec<ValidationIssue>,
+) {
+	fn row_index(sequence_number: i32, fallback: usize) -> usize {
+		sequence_number
+			.checked_sub(1)
+			.and_then(|value| usize::try_from(value).ok())
+			.unwrap_or(fallback)
+	}
+
+	let mut versions = Vec::new();
+	for (idx, value) in validation_ctx.medical_history.iter().enumerate() {
+		let idx = row_index(value.sequence_number, idx);
+		versions.push((
+			"ICH.D.7.1.r.1a.MEDDRA.VERSION.CONSISTENT",
+			format!("patientInformation.medicalHistory.{idx}.meddraVersion"),
+			value.meddra_version.as_deref(),
+		));
+	}
+	for (idx, value) in validation_ctx.past_drugs.iter().enumerate() {
+		let idx = row_index(value.sequence_number, idx);
+		versions.extend([
+			(
+				"ICH.D.8.r.6a.MEDDRA.VERSION.CONSISTENT",
+				format!("patientInformation.pastDrugHistory.{idx}.indicationMeddraVersion"),
+				value.indication_meddra_version.as_deref(),
+			),
+			(
+				"ICH.D.8.r.7a.MEDDRA.VERSION.CONSISTENT",
+				format!("patientInformation.pastDrugHistory.{idx}.reactionMeddraVersion"),
+				value.reaction_meddra_version.as_deref(),
+			),
+		]);
+	}
+	for (idx, value) in validation_ctx.reported_causes_of_death.iter().enumerate() {
+		let idx = row_index(value.sequence_number, idx);
+		versions.push((
+			"ICH.D.9.2.r.1a.MEDDRA.VERSION.CONSISTENT",
+			format!("patientInformation.death.reportedCauses.{idx}.meddraVersion"),
+			value.meddra_version.as_deref(),
+		));
+	}
+	for (idx, value) in validation_ctx.autopsy_causes_of_death.iter().enumerate() {
+		let idx = row_index(value.sequence_number, idx);
+		versions.push((
+			"ICH.D.9.4.r.1a.MEDDRA.VERSION.CONSISTENT",
+			format!("patientInformation.death.autopsyCauses.{idx}.meddraVersion"),
+			value.meddra_version.as_deref(),
+		));
+	}
+	let parent_indices = validation_ctx
+		.parents
+		.iter()
+		.enumerate()
+		.map(|(idx, parent)| (parent.id, idx))
+		.collect::<HashMap<_, _>>();
+	for (idx, value) in validation_ctx.parent_medical_history.iter().enumerate() {
+		let parent_idx = parent_indices.get(&value.parent_id).copied().unwrap_or(0);
+		let idx = row_index(value.sequence_number, idx);
+		versions.push((
+			"ICH.D.10.7.1.r.1a.MEDDRA.VERSION.CONSISTENT",
+			format!("patientInformation.parents.{parent_idx}.medicalHistory.{idx}.meddraVersion"),
+			value.meddra_version.as_deref(),
+		));
+	}
+	for (idx, value) in validation_ctx.parent_past_drugs.iter().enumerate() {
+		let parent_idx = parent_indices.get(&value.parent_id).copied().unwrap_or(0);
+		let idx = row_index(value.sequence_number, idx);
+		versions.extend([
+			(
+				"ICH.D.10.8.r.6a.MEDDRA.VERSION.CONSISTENT",
+				format!("patientInformation.parents.{parent_idx}.pastDrugs.{idx}.indicationMeddraVersion"),
+				value.indication_meddra_version.as_deref(),
+			),
+			(
+				"ICH.D.10.8.r.7a.MEDDRA.VERSION.CONSISTENT",
+				format!("patientInformation.parents.{parent_idx}.pastDrugs.{idx}.reactionMeddraVersion"),
+				value.reaction_meddra_version.as_deref(),
+			),
+		]);
+	}
+	for (idx, value) in validation_ctx.reactions.iter().enumerate() {
+		let idx = row_index(value.sequence_number, idx);
+		versions.push((
+			"ICH.E.i.2.1a.MEDDRA.VERSION.CONSISTENT",
+			format!("reactions.{idx}.reactionMeddraVersion"),
+			value.reaction_meddra_version.as_deref(),
+		));
+	}
+	for (idx, value) in validation_ctx.tests.iter().enumerate() {
+		let idx = row_index(value.sequence_number, idx);
+		versions.push((
+			"ICH.F.r.2.2a.MEDDRA.VERSION.CONSISTENT",
+			format!("testResults.{idx}.testMeddraVersion"),
+			value.test_meddra_version.as_deref(),
+		));
+	}
+	let drug_indices = validation_ctx
+		.drugs
+		.iter()
+		.enumerate()
+		.map(|(idx, drug)| (drug.id, idx))
+		.collect::<HashMap<_, _>>();
+	for (idx, value) in validation_ctx.indications.iter().enumerate() {
+		let drug_idx = drug_indices.get(&value.drug_id).copied().unwrap_or(0);
+		let idx = row_index(value.sequence_number, idx);
+		versions.push((
+			"ICH.G.k.7.r.2a.MEDDRA.VERSION.CONSISTENT",
+			format!("drugs.{drug_idx}.indications.{idx}.indicationMeddraVersion"),
+			value.indication_meddra_version.as_deref(),
+		));
+	}
+	for (idx, value) in validation_ctx.sender_diagnoses.iter().enumerate() {
+		let idx = row_index(value.sequence_number, idx);
+		versions.push((
+			"ICH.H.3.r.1a.MEDDRA.VERSION.CONSISTENT",
+			format!("narrative.senderDiagnoses.{idx}.diagnosisMeddraVersion"),
+			value.diagnosis_meddra_version.as_deref(),
+		));
+	}
+
+	if !has_multiple_values(versions.iter().filter_map(|(_, _, value)| *value)) {
+		return;
+	}
+	for (code, path, value) in versions {
+		if value.is_some_and(|value| !value.trim().is_empty()) {
+			crate::push_business_issue(
+				issues,
+				code,
+				path,
+				"Only one MedDRA version may be used in an ICSR",
+			);
+		}
+	}
 }
 
 pub(crate) fn normalize_validation_field_path(path: &str) -> String {
@@ -96,6 +244,56 @@ pub(crate) fn normalize_validation_field_path(path: &str) -> String {
 
 pub(crate) fn resolve_validation_field_path(path: Option<&str>) -> Option<String> {
 	path.map(normalize_validation_field_path)
+}
+
+fn section_and_subsection_from_path(path: &str) -> (&'static str, &'static str) {
+	if path.starts_with("messageHeader") {
+		("N", "N")
+	} else if path.starts_with("safetyReportIdentification") {
+		("C", "C.1")
+	} else if path.starts_with("primarySources") {
+		("C", "C.2")
+	} else if path.starts_with("senderInformation") {
+		("C", "C.3")
+	} else if path.starts_with("documentsHeldBySender")
+		|| path.starts_with("literatureReferences")
+	{
+		("C", "C.4")
+	} else if path.starts_with("studyInformation") {
+		("C", "C.5")
+	} else if path.starts_with("patientInformation.parents") {
+		("D", "D.10")
+	} else if path.starts_with("patientInformation.medicalHistory") {
+		("D", "D.7.1.r")
+	} else if path.starts_with("patientInformation.pastDrugHistory") {
+		("D", "D.8.r")
+	} else if path.starts_with("patientInformation") {
+		("D", "D")
+	} else if path.starts_with("reactions") {
+		("E", "E.i")
+	} else if path.starts_with("testResults") || path.starts_with("tests") {
+		("F", "F.r")
+	} else if path.starts_with("drugs") {
+		("G", "G.k")
+	} else if path.starts_with("narrative") {
+		("H", "H")
+	} else {
+		("unknown", "unknown")
+	}
+}
+
+pub(crate) fn resolve_validation_section(code: &str, path: Option<&str>) -> String {
+	code.split('.')
+		.nth(1)
+		.filter(|section| {
+			matches!(*section, "C" | "D" | "E" | "F" | "G" | "H" | "N")
+		})
+		.or_else(|| {
+			path.map(section_and_subsection_from_path)
+				.map(|value| value.0)
+		})
+		.unwrap_or("unknown")
+		.to_string()
 }
 
 pub(crate) fn resolve_validation_subsection(
@@ -168,7 +366,8 @@ pub(crate) fn resolve_validation_subsection(
 		return "N".to_string();
 	}
 
-	path.and_then(|value| value.split('.').next())
+	path.map(section_and_subsection_from_path)
+		.map(|value| value.1)
 		.unwrap_or("unknown")
 		.to_string()
 }
@@ -290,6 +489,12 @@ mod tests {
 	}
 
 	#[test]
+	fn detects_multiple_non_empty_meddra_versions() {
+		assert!(!has_multiple_values(["26.1", " 26.1 ", ""]));
+		assert!(has_multiple_values(["26.1", "27.0"]));
+	}
+
+	#[test]
 	fn resolves_field_path_from_the_issue_path_only() {
 		assert_eq!(resolve_validation_field_path(None), None);
 		assert_eq!(
@@ -380,5 +585,19 @@ mod tests {
 			"G.k"
 		);
 		assert_eq!(resolve_validation_subsection("ICH.N.REQUIRED", None), "N");
+		assert_eq!(
+			resolve_validation_section(
+				"FDA.R0011",
+				Some("safetyReportIdentification.fulfilExpeditedCriteria")
+			),
+			"C"
+		);
+		assert_eq!(
+			resolve_validation_subsection(
+				"FDA.R0011",
+				Some("safetyReportIdentification.fulfilExpeditedCriteria")
+			),
+			"C.1"
+		);
 	}
 }

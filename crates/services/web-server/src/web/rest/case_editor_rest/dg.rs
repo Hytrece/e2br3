@@ -48,6 +48,10 @@ const DRUG_ROW_ALIASES: &[(&str, &[&str])] = &[
 	),
 	("fda_additional_info_coded", &["fdaAdditionalInfoCoded"]),
 	(
+		"fda_additional_info_coded_null_flavor",
+		&["fdaAdditionalInfoCodedNullFlavor"],
+	),
+	(
 		"drug_additional_info_codes_json",
 		&["drugAdditionalInformationCodes"],
 	),
@@ -86,7 +90,6 @@ const DOSAGE_ALIASES: &[(&str, &[&str])] = &[
 	("duration_unit", &["durationUnit"]),
 	("continuing", &["continuing"]),
 	("batch_lot_number", &["batchNumber"]),
-	("batch_lot_number_null_flavor", &["batchNumberNullFlavor"]),
 	("dosage_text", &["dosageText"]),
 	("dose_form", &["doseForm"]),
 	("dose_form_null_flavor", &["doseFormNullFlavor"]),

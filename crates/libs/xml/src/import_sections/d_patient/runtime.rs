@@ -423,7 +423,6 @@ async fn import_parent_information(
 					.parent_birth_date_null_flavor
 					.clone(),
 				parent_age: parent.parent_age,
-				parent_age_null_flavor: parent.parent_age_null_flavor.clone(),
 				parent_age_unit: parent.parent_age_unit.clone(),
 				last_menstrual_period_date: parent.last_menstrual_period_date,
 				last_menstrual_period_date_null_flavor: parent
@@ -449,8 +448,7 @@ async fn import_parent_information(
 				.parent_identification_null_flavor,
 			parent_birth_date: parent.parent_birth_date,
 			parent_birth_date_null_flavor: parent.parent_birth_date_null_flavor,
-			parent_age: parent.parent_age,
-			parent_age_null_flavor: parent.parent_age_null_flavor,
+			parent_age: Some(parent.parent_age),
 			parent_age_unit: parent.parent_age_unit,
 			last_menstrual_period_date: parent.last_menstrual_period_date,
 			last_menstrual_period_date_null_flavor: parent
@@ -552,7 +550,6 @@ async fn import_parent_information(
 				id,
 				ParentPastDrugHistoryForUpdate {
 					drug_name: entry.drug_name,
-					drug_name_null_flavor: None,
 					mpid: entry.mpid,
 					mpid_version: entry.mpid_version,
 					mfds_medicinal_product_version: entry
@@ -580,7 +577,6 @@ async fn import_parent_information(
 					parent_id,
 					sequence_number: seq,
 					drug_name,
-					drug_name_null_flavor: None,
 					mpid: entry.mpid.clone(),
 					mpid_version: entry.mpid_version.clone(),
 					mfds_medicinal_product_version: entry
@@ -610,7 +606,6 @@ async fn import_parent_information(
 				id,
 				ParentPastDrugHistoryForUpdate {
 					drug_name: entry.drug_name,
-					drug_name_null_flavor: None,
 					mpid: entry.mpid,
 					mpid_version: entry.mpid_version,
 					mfds_medicinal_product_version: entry
@@ -650,8 +645,6 @@ async fn import_patient_information(
 			sex: patient.sex,
 			sex_null_flavor: patient.sex_null_flavor,
 			age_at_time_of_onset: patient.age_at_time_of_onset,
-			age_at_time_of_onset_null_flavor: patient
-				.age_at_time_of_onset_null_flavor,
 			age_unit: patient.age_unit,
 			gestation_period: patient.gestation_period,
 			gestation_period_unit: patient.gestation_period_unit,
@@ -701,17 +694,12 @@ async fn import_patient_information(
 				birth_date: patient.birth_date,
 				birth_date_null_flavor: patient.birth_date_null_flavor.clone(),
 				age_at_time_of_onset: patient.age_at_time_of_onset,
-				age_at_time_of_onset_null_flavor: patient
-					.age_at_time_of_onset_null_flavor
-					.clone(),
 				age_unit: patient.age_unit.clone(),
 				gestation_period: patient.gestation_period,
 				gestation_period_unit: patient.gestation_period_unit.clone(),
 				age_group: patient.age_group.clone(),
 				weight_kg: patient.weight_kg,
-				weight_kg_null_flavor: None,
 				height_cm: patient.height_cm,
-				height_cm_null_flavor: None,
 				sex: patient.sex.clone(),
 				sex_null_flavor: patient.sex_null_flavor.clone(),
 				race_code: patient.race_code.clone(),
@@ -744,17 +732,13 @@ async fn import_patient_information(
 				patient_initials_null_flavor: patient.patient_initials_null_flavor,
 				birth_date: patient.birth_date,
 				birth_date_null_flavor: patient.birth_date_null_flavor,
-				age_at_time_of_onset: patient.age_at_time_of_onset,
-				age_at_time_of_onset_null_flavor: patient
-					.age_at_time_of_onset_null_flavor,
+				age_at_time_of_onset: Some(patient.age_at_time_of_onset),
 				age_unit: patient.age_unit,
 				gestation_period: patient.gestation_period,
 				gestation_period_unit: patient.gestation_period_unit,
 				age_group: patient.age_group,
-				weight_kg: patient.weight_kg,
-				weight_kg_null_flavor: None,
-				height_cm: patient.height_cm,
-				height_cm_null_flavor: None,
+				weight_kg: Some(patient.weight_kg),
+				height_cm: Some(patient.height_cm),
 				sex: patient.sex,
 				sex_null_flavor: patient.sex_null_flavor,
 				race_code: patient.race_code,

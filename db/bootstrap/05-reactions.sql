@@ -29,21 +29,21 @@ CREATE TABLE reactions (
 
     -- E.i.3.2 - Seriousness Criteria (at least one if serious=true)
     criteria_death BOOLEAN,
-    criteria_death_null_flavor VARCHAR(4) CHECK (criteria_death_null_flavor IN ('NI', 'UNK', 'ASKU', 'NASK', 'MSK')),
+    criteria_death_null_flavor VARCHAR(4) CHECK (criteria_death_null_flavor IN ('NI')),
     criteria_life_threatening BOOLEAN,
-    criteria_life_threatening_null_flavor VARCHAR(4) CHECK (criteria_life_threatening_null_flavor IN ('NI', 'UNK', 'ASKU', 'NASK', 'MSK')),
+    criteria_life_threatening_null_flavor VARCHAR(4) CHECK (criteria_life_threatening_null_flavor IN ('NI')),
     criteria_hospitalization BOOLEAN,
-    criteria_hospitalization_null_flavor VARCHAR(4) CHECK (criteria_hospitalization_null_flavor IN ('NI', 'UNK', 'ASKU', 'NASK', 'MSK')),
+    criteria_hospitalization_null_flavor VARCHAR(4) CHECK (criteria_hospitalization_null_flavor IN ('NI')),
     criteria_disabling BOOLEAN,
-    criteria_disabling_null_flavor VARCHAR(4) CHECK (criteria_disabling_null_flavor IN ('NI', 'UNK', 'ASKU', 'NASK', 'MSK')),
+    criteria_disabling_null_flavor VARCHAR(4) CHECK (criteria_disabling_null_flavor IN ('NI')),
     criteria_congenital_anomaly BOOLEAN,
-    criteria_congenital_anomaly_null_flavor VARCHAR(4) CHECK (criteria_congenital_anomaly_null_flavor IN ('NI', 'UNK', 'ASKU', 'NASK', 'MSK')),
+    criteria_congenital_anomaly_null_flavor VARCHAR(4) CHECK (criteria_congenital_anomaly_null_flavor IN ('NI')),
     criteria_other_medically_important BOOLEAN,
-    criteria_other_medically_important_null_flavor VARCHAR(4) CHECK (criteria_other_medically_important_null_flavor IN ('NI', 'UNK', 'ASKU', 'NASK', 'MSK')),
+    criteria_other_medically_important_null_flavor VARCHAR(4) CHECK (criteria_other_medically_important_null_flavor IN ('NI')),
 
     -- FDA.E.i.3.2h - Required Intervention (FDA)
     required_intervention BOOLEAN,
-    required_intervention_null_flavor VARCHAR(4) CHECK (required_intervention_null_flavor IN ('NI', 'UNK', 'ASKU', 'NASK', 'MSK')),
+    required_intervention_null_flavor VARCHAR(4) CHECK (required_intervention_null_flavor IN ('NI')),
 
     -- Reference AE common metadata
     expectedness VARCHAR(1) CHECK (expectedness IS NULL OR expectedness IN ('1', '2')),
@@ -90,8 +90,8 @@ CREATE TABLE reactions (
     country_code VARCHAR(2),  -- ISO 3166-1 alpha-2
 
     -- Null Flavor Support (E2B(R3) compliant: NI, UNK, ASKU, NASK, MSK)
-    start_date_null_flavor VARCHAR(4) CHECK (start_date_null_flavor IN ('NI', 'UNK', 'ASKU', 'NASK', 'MSK')),
-    end_date_null_flavor VARCHAR(4) CHECK (end_date_null_flavor IN ('NI', 'UNK', 'ASKU', 'NASK', 'MSK')),
+    start_date_null_flavor VARCHAR(4) CHECK (start_date_null_flavor IN ('MSK', 'ASKU', 'NASK')),
+    end_date_null_flavor VARCHAR(4) CHECK (end_date_null_flavor IN ('MSK', 'ASKU', 'NASK')),
 
     deleted BOOLEAN NOT NULL DEFAULT false,
 

@@ -104,6 +104,8 @@ async fn import_drugs(
 				phpid_version: drug.phpid_version,
 				obtain_drug_country: drug.obtain_drug_country,
 				fda_additional_info_coded: drug.fda_additional_info_coded,
+				fda_additional_info_coded_null_flavor: drug
+					.fda_additional_info_coded_null_flavor,
 				drug_additional_info_codes_json,
 				drug_additional_information: drug.drug_additional_information,
 				fda_specialized_product_category,
@@ -194,7 +196,6 @@ async fn import_drugs(
 					duration_unit: dose.duration_unit,
 					continuing: None,
 					batch_lot_number: dose.batch_lot,
-					batch_lot_number_null_flavor: None,
 					dosage_text: dose.dosage_text,
 					dose_form: dose.dose_form,
 					dose_form_null_flavor: dose.dose_form_null_flavor,

@@ -5,10 +5,12 @@ use super::helpers::{
 };
 use crate::allowed_value::{true_marker_value, ConstraintValue};
 use crate::{
-	has_text, is_mfds_clinical_trial_receiver, is_mfds_compassionate_use_receiver,
-	is_mfds_domestic_receiver, is_mfds_foreign_postmarket_receiver,
-	list_fda_devices, FdaValidationContext, MfdsValidationContext,
-	RegulatoryAuthority, RuleFacts, ValidationContext, ValidationIssue,
+	has_text, is_fda_ind_message_receiver, is_fda_postmarket_batch_receiver,
+	is_fda_premarket_message_receiver, is_mfds_clinical_trial_receiver,
+	is_mfds_compassionate_use_receiver, is_mfds_domestic_receiver,
+	is_mfds_foreign_postmarket_receiver, list_fda_devices, FdaValidationContext,
+	MfdsValidationContext, RegulatoryAuthority, RuleFacts, ValidationContext,
+	ValidationIssue,
 };
 use lib_core::ctx::Ctx;
 use lib_core::model::drug::{
@@ -95,9 +97,22 @@ fn g_k_1(
 			Some(drug.drug_characterization.as_str()),
 		);
 	}
+	if !drugs.is_empty()
+		&& !drugs
+			.iter()
+			.any(|drug| matches!(drug.drug_characterization.trim(), "1" | "3" | "4"))
+	{
+		crate::push_business_issue(
+			issues,
+			"ICH.G.k.1.AGGREGATE.REQUIRED",
+			"drugs.0.drugCharacterization",
+			"At least one drug must be Suspect, Interacting, or Drug Not Administered.",
+		);
+	}
 }
 
 /// ICH.G.k.2.1.1a.LENGTH.MAX
+/// ICH.G.k.2.1.1a.REQUIRED
 fn g_k_2_1_1a(
 	idx: usize,
 	drug: &DrugInformation,
@@ -109,6 +124,12 @@ fn g_k_2_1_1a(
 		"ICH.G.k.2.1.1a.LENGTH.MAX",
 		&path,
 		drug.mpid_version.as_deref(),
+	);
+	validate_violation(
+		issues,
+		"ICH.G.k.2.1.1a.REQUIRED",
+		&path,
+		has_text(drug.mpid.as_deref()) && !has_text(drug.mpid_version.as_deref()),
 	);
 }
 
@@ -173,6 +194,14 @@ fn g_k_2_1_2b(
 		&path,
 		drug.phpid.as_deref(),
 	);
+	if has_text(drug.mpid.as_deref()) && has_text(drug.phpid.as_deref()) {
+		crate::push_business_issue(
+			issues,
+			"ICH.G.k.2.1.MPID_PHPID.EXCLUSIVE",
+			&path,
+			"A drug may contain MPID or PhPID, but not both.",
+		);
+	}
 }
 
 /// ICH.G.k.2.2.REQUIRED
@@ -229,6 +258,7 @@ fn g_k_2_4(
 fn g_k_2_5(
 	idx: usize,
 	drug: &DrugInformation,
+	report_type_is_study: bool,
 	vocabulary: &crate::context::VocabularyContext,
 	issues: &mut Vec<ValidationIssue>,
 ) {
@@ -240,6 +270,37 @@ fn g_k_2_5(
 		true_marker_value(drug.investigational_product_blinded, None),
 		vocabulary,
 	);
+	if drug.investigational_product_blinded.is_some() && !report_type_is_study {
+		crate::push_business_issue(
+			issues,
+			"ICH.G.k.2.5.STUDY.ONLY",
+			&path,
+			"Investigational Product Blinded must only be sent for a clinical-trial report.",
+		);
+	}
+}
+
+/// ICH.G.k.2.3.r.REQUIRED
+fn g_k_2_3_r(
+	drug_idx: usize,
+	drug: &DrugInformation,
+	substances: &[DrugActiveSubstance],
+	issues: &mut Vec<ValidationIssue>,
+) {
+	if !has_text(drug.mpid.as_deref())
+		&& !has_text(drug.phpid.as_deref())
+		&& !substances.iter().any(|substance| {
+			substance.drug_id == drug.id
+				&& (has_text(substance.substance_name.as_deref())
+					|| has_text(substance.substance_termid.as_deref()))
+		}) {
+		crate::push_business_issue(
+			issues,
+			"ICH.G.k.2.3.r.REQUIRED",
+			format!("drugs.{drug_idx}.activeSubstances.0.substanceName"),
+			"At least one active ingredient is required when neither MPID nor PhPID is available.",
+		);
+	}
 }
 
 /// ICH.G.k.3.1.LENGTH.MAX
@@ -1248,12 +1309,11 @@ pub(crate) async fn collect(
 	fda_ctx: Option<&FdaValidationContext>,
 	mfds_ctx: Option<&MfdsValidationContext>,
 ) -> Result<()> {
-	let _ = fda_ctx;
 	collect_ich_issues(validation_ctx, issues);
 	match authority {
 		RegulatoryAuthority::Ich => {}
 		RegulatoryAuthority::Fda => {
-			collect_fda_issues(ctx, mm, validation_ctx, issues).await?
+			collect_fda_issues(ctx, mm, validation_ctx, fda_ctx, issues).await?
 		}
 		RegulatoryAuthority::Mfds => {
 			if let Some(mfds_ctx) = mfds_ctx {
@@ -1268,6 +1328,9 @@ pub(crate) fn collect_ich_issues(
 	validation_ctx: &ValidationContext,
 	issues: &mut Vec<ValidationIssue>,
 ) {
+	let is_clinical_trial = validation_ctx.studies.iter().any(|study| {
+		study.study_type_reaction.as_deref().map(str::trim) == Some("1")
+	});
 	g_k_1(&validation_ctx.drugs, &validation_ctx.vocabulary, issues);
 	g_k_2_2(&validation_ctx.drugs, issues);
 	for (idx, drug) in validation_ctx.drugs.iter().enumerate() {
@@ -1276,7 +1339,14 @@ pub(crate) fn collect_ich_issues(
 		g_k_2_1_2a(idx, drug, issues);
 		g_k_2_1_2b(idx, drug, &validation_ctx.vocabulary, issues);
 		g_k_2_4(idx, drug, &validation_ctx.vocabulary, issues);
-		g_k_2_5(idx, drug, &validation_ctx.vocabulary, issues);
+		g_k_2_5(
+			idx,
+			drug,
+			is_clinical_trial,
+			&validation_ctx.vocabulary,
+			issues,
+		);
+		g_k_2_3_r(idx, drug, &validation_ctx.active_substances, issues);
 		g_k_3_1(idx, drug, issues);
 		g_k_3_2(idx, drug, &validation_ctx.vocabulary, issues);
 		g_k_3_3(idx, drug, issues);
@@ -1431,59 +1501,6 @@ fn fda_g_k_1_a(idx: usize, value: Option<&str>, issues: &mut Vec<ValidationIssue
 		issues,
 	);
 }
-/// FDA.G.k.12.r.1.REQUIRED
-fn fda_g_k_12_r_1(
-	idx: usize,
-	value: Option<&str>,
-	issues: &mut Vec<ValidationIssue>,
-) {
-	fda_required(
-		"FDA.G.k.12.r.1.REQUIRED",
-		&format!("drugs.{idx}.fdaDevices.0.malfunction"),
-		value,
-		issues,
-	);
-}
-/// FDA.G.k.12.r.4.REQUIRED
-fn fda_g_k_12_r_4(
-	idx: usize,
-	value: Option<&str>,
-	issues: &mut Vec<ValidationIssue>,
-) {
-	fda_required(
-		"FDA.G.k.12.r.4.REQUIRED",
-		&format!("drugs.{idx}.fdaDevices.0.deviceBrandName"),
-		value,
-		issues,
-	);
-}
-/// FDA.G.k.12.r.5.REQUIRED
-fn fda_g_k_12_r_5(
-	idx: usize,
-	value: Option<&str>,
-	issues: &mut Vec<ValidationIssue>,
-) {
-	fda_required(
-		"FDA.G.k.12.r.5.REQUIRED",
-		&format!("drugs.{idx}.fdaDevices.0.commonDeviceName"),
-		value,
-		issues,
-	);
-}
-/// FDA.G.k.12.r.6.REQUIRED
-fn fda_g_k_12_r_6(
-	idx: usize,
-	value: Option<&str>,
-	issues: &mut Vec<ValidationIssue>,
-) {
-	fda_required(
-		"FDA.G.k.12.r.6.REQUIRED",
-		&format!("drugs.{idx}.fdaDevices.0.deviceProductCode"),
-		value,
-		issues,
-	);
-}
-
 /// FDA.G.K.12.REQUIRED
 fn fda_g_k_12(value: Option<&str>, issues: &mut Vec<ValidationIssue>) {
 	fda_required(
@@ -1492,30 +1509,6 @@ fn fda_g_k_12(value: Option<&str>, issues: &mut Vec<ValidationIssue>) {
 		value,
 		issues,
 	);
-}
-/// FDA.G.k.12.r.3.r.REQUIRED
-/// FDA.G.K.12.R.3.REQUIRED
-fn fda_g_k_12_r_3(value: Option<&str>, issues: &mut Vec<ValidationIssue>) {
-	for code in ["FDA.G.k.12.r.3.r.REQUIRED", "FDA.G.K.12.R.3.REQUIRED"] {
-		fda_required(
-			code,
-			"drugs.0.fdaDevices.0.deviceProblemCodes.0.valueCode",
-			value,
-			issues,
-		);
-	}
-}
-/// FDA.G.k.12.r.11.r.REQUIRED
-/// FDA.G.K.12.R.11.REQUIRED
-fn fda_g_k_12_r_11(value: Option<&str>, issues: &mut Vec<ValidationIssue>) {
-	for code in ["FDA.G.k.12.r.11.r.REQUIRED", "FDA.G.K.12.R.11.REQUIRED"] {
-		fda_required(
-			code,
-			"drugs.0.fdaDevices.0.remedialActions.0.valueCode",
-			value,
-			issues,
-		);
-	}
 }
 /// FDA.G.K.1.A.CONDITIONAL
 fn fda_g_k_1_a_conditional(invalid: bool, issues: &mut Vec<ValidationIssue>) {
@@ -1527,10 +1520,257 @@ fn fda_g_k_1_a_conditional(invalid: bool, issues: &mut Vec<ValidationIssue>) {
 	);
 }
 
+/// FDA.D.1 R0027: a combination-product malfunction without an adverse event
+/// must identify the unavailable patient with nullFlavor NA.
+fn fda_d_1_malfunction(
+	validation_ctx: &ValidationContext,
+	combination_true: bool,
+	has_malfunction: bool,
+	issues: &mut Vec<ValidationIssue>,
+) {
+	let malfunction_without_event =
+		validation_ctx.reactions.iter().any(|reaction| {
+			reaction.reaction_meddra_code.as_deref().map(str::trim)
+				== Some("10067482")
+		});
+	if combination_true
+		&& has_malfunction
+		&& malfunction_without_event
+		&& validation_ctx.patient.as_ref().is_none_or(|patient| {
+			patient
+				.patient_initials_null_flavor
+				.as_deref()
+				.map(str::trim)
+				!= Some("NA")
+		}) {
+		crate::push_business_issue(
+			issues,
+			"FDA.D.1.R0027",
+			"patientInformation.patientInitialsNullFlavor",
+			"Patient identification must use null flavor NA for a combination-product malfunction without an adverse event.",
+		);
+	}
+}
+
+/// FDA.G.k.1.ROUTE
+fn fda_g_k_1_route(
+	validation_ctx: &ValidationContext,
+	first_product_malfunction: bool,
+	issues: &mut Vec<ValidationIssue>,
+) {
+	let Some(first) = validation_ctx.drugs.first() else {
+		return;
+	};
+	let batch_receiver = validation_ctx
+		.message_header
+		.as_ref()
+		.and_then(|header| header.batch_receiver_identifier.as_deref());
+	let message_receiver = validation_ctx
+		.message_header
+		.as_ref()
+		.map(|header| header.message_receiver_identifier.as_str());
+	let role = first.drug_characterization.trim();
+	if is_fda_ind_message_receiver(message_receiver) {
+		let report_type_is_study = validation_ctx
+			.safety_report
+			.as_ref()
+			.and_then(|report| report.report_type.as_deref())
+			.map(str::trim)
+			== Some("2");
+		if report_type_is_study {
+			for (idx, drug) in validation_ctx.drugs.iter().enumerate() {
+				if !matches!(drug.drug_characterization.trim(), "1" | "2" | "3") {
+					crate::push_business_issue(
+						issues,
+						"FDA.G.k.1.ROUTE",
+						format!("drugs.{idx}.drugCharacterization"),
+						"Drug characterization is not valid for the selected FDA route.",
+					);
+				}
+			}
+		}
+		return;
+	}
+	let vaers = [batch_receiver, message_receiver]
+		.into_iter()
+		.flatten()
+		.any(|receiver| receiver.to_ascii_uppercase().contains("VAERS"));
+	let invalid = (is_fda_postmarket_batch_receiver(batch_receiver)
+		&& !matches!(role, "1" | "3")
+		&& !(first_product_malfunction && role == "4"))
+		|| (vaers && !matches!(role, "1" | "3"));
+	if invalid {
+		crate::push_business_issue(
+			issues,
+			"FDA.G.k.1.ROUTE",
+			"drugs.0.drugCharacterization",
+			"Drug characterization is not valid for the selected FDA route.",
+		);
+	}
+}
+
+/// FDA.G.k.10a.REQUIRED
+fn fda_g_k_10a(
+	idx: usize,
+	value: Option<&str>,
+	null_flavor: Option<&str>,
+	pre_anda_present: bool,
+	issues: &mut Vec<ValidationIssue>,
+) {
+	if !pre_anda_present {
+		return;
+	}
+	let value = value.map(str::trim).filter(|value| !value.is_empty());
+	let null_flavor = null_flavor.map(str::trim).filter(|value| !value.is_empty());
+	let invalid = !matches!(value, Some("1" | "2")) && null_flavor != Some("NA");
+	if invalid {
+		crate::push_business_issue(
+			issues,
+			"FDA.G.k.10a.REQUIRED",
+			format!("drugs.{idx}.fdaAdditionalInfoCoded"),
+			"FDA.G.k.10a must be 1 or 2 for an IND-exempt BA/BE study.",
+		);
+	}
+}
+
+/// FDA.G.k.9.i.2.r.1.REQUIRED
+/// FDA.G.k.9.i.2.r.2.REQUIRED
+/// FDA.G.k.9.i.2.r.3.REQUIRED
+fn fda_g_k_9(
+	validation_ctx: &ValidationContext,
+	ind_number_present: bool,
+	issues: &mut Vec<ValidationIssue>,
+) {
+	let report_type_is_study = validation_ctx
+		.safety_report
+		.as_ref()
+		.and_then(|report| report.report_type.as_deref())
+		.map(str::trim)
+		== Some("2");
+	if !report_type_is_study || !ind_number_present {
+		return;
+	}
+	let drug_indices = validation_ctx
+		.drugs
+		.iter()
+		.enumerate()
+		.map(|(idx, drug)| (drug.id, idx))
+		.collect::<HashMap<_, _>>();
+	let first_suspect_idx = validation_ctx
+		.drugs
+		.iter()
+		.position(|drug| drug.drug_characterization.trim() == "1");
+	if validation_ctx.drug_reaction_assessments.is_empty() {
+		let drug_idx = first_suspect_idx.unwrap_or(0);
+		for (code, field, message) in [
+			(
+				"FDA.G.k.9.i.2.r.1.REQUIRED",
+				"sourceOfAssessment",
+				"Source of Assessment is required for an IND safety report.",
+			),
+			(
+				"FDA.G.k.9.i.2.r.2.REQUIRED",
+				"methodOfAssessment",
+				"Method of Assessment is required for an IND safety report.",
+			),
+			(
+				"FDA.G.k.9.i.2.r.3.REQUIRED",
+				"resultOfAssessment",
+				"A suspect product relatedness result is required for an IND safety report.",
+			),
+		] {
+			crate::push_business_issue(
+				issues,
+				code,
+				format!("drugs.{drug_idx}.reactionAssessments.0.relatednessAssessments.0.{field}"),
+				message,
+			);
+		}
+		return;
+	}
+	let mut assessment_indices = HashMap::new();
+	let mut has_suspect_result = false;
+	for assessment in &validation_ctx.drug_reaction_assessments {
+		let Some(drug_idx) = drug_indices.get(&assessment.drug_id).copied() else {
+			continue;
+		};
+		let is_suspect =
+			validation_ctx.drugs[drug_idx].drug_characterization.trim() == "1";
+		let assessment_idx =
+			assessment_indices.entry(assessment.drug_id).or_insert(0);
+		let rows = validation_ctx
+			.relatedness_assessments
+			.iter()
+			.filter(|row| row.drug_reaction_assessment_id == assessment.id)
+			.collect::<Vec<_>>();
+		for (fallback_idx, row) in rows.iter().enumerate() {
+			let relatedness_idx = sequence_idx(row.sequence_number, fallback_idx);
+			let has_source = row.source_of_assessment.as_deref().map(str::trim)
+				== Some("Sponsor");
+			let has_method =
+				row.method_of_assessment.as_deref().map(str::trim) == Some("FDA");
+			let has_result = matches!(
+				row.result_of_assessment.as_deref().map(str::trim),
+				Some("Suspected" | "Not Suspected")
+			);
+			if is_suspect {
+				has_suspect_result |= has_result;
+			}
+			for (code, field, present, message) in [
+				(
+					"FDA.G.k.9.i.2.r.1.REQUIRED",
+					"sourceOfAssessment",
+					has_source,
+					"Source of Assessment is required for an IND safety report.",
+				),
+				(
+					"FDA.G.k.9.i.2.r.2.REQUIRED",
+					"methodOfAssessment",
+					has_method,
+					"Method of Assessment is required for an IND safety report.",
+				),
+			] {
+				if !present {
+					crate::push_business_issue(
+						issues,
+						code,
+						format!("drugs.{drug_idx}.reactionAssessments.{assessment_idx}.relatednessAssessments.{relatedness_idx}.{field}"),
+						message,
+					);
+				}
+			}
+		}
+		if rows.is_empty() {
+			for (code, field) in [
+				("FDA.G.k.9.i.2.r.1.REQUIRED", "sourceOfAssessment"),
+				("FDA.G.k.9.i.2.r.2.REQUIRED", "methodOfAssessment"),
+			] {
+				crate::push_business_issue(
+					issues,
+					code,
+					format!("drugs.{drug_idx}.reactionAssessments.{assessment_idx}.relatednessAssessments.0.{field}"),
+					"A relatedness assessment value is required for an IND safety report.",
+				);
+			}
+		}
+		*assessment_idx += 1;
+	}
+	if !has_suspect_result {
+		let drug_idx = first_suspect_idx.unwrap_or(0);
+		crate::push_business_issue(
+			issues,
+			"FDA.G.k.9.i.2.r.3.REQUIRED",
+			format!("drugs.{drug_idx}.reactionAssessments.0.relatednessAssessments.0.resultOfAssessment"),
+			"At least one suspect product must have a relatedness result for an IND safety report.",
+		);
+	}
+}
+
 pub(crate) async fn collect_fda_issues(
 	ctx: &Ctx,
 	mm: &ModelManager,
 	validation_ctx: &ValidationContext,
+	fda_ctx: Option<&FdaValidationContext>,
 	issues: &mut Vec<ValidationIssue>,
 ) -> Result<()> {
 	let local_criteria = validation_ctx
@@ -1541,19 +1781,43 @@ pub(crate) async fn collect_fda_issues(
 		.safety_report
 		.as_ref()
 		.and_then(|r| r.combination_product_report_indicator.as_deref())
-		== Some("1");
+		.map(str::trim)
+		.is_some_and(|value| value == "1" || value.eq_ignore_ascii_case("true"));
+	let message_receiver = validation_ctx
+		.message_header
+		.as_ref()
+		.map(|header| header.message_receiver_identifier.as_str());
+	let batch_receiver = validation_ctx
+		.message_header
+		.as_ref()
+		.and_then(|header| header.batch_receiver_identifier.as_deref());
+	let postmarket = is_fda_postmarket_batch_receiver(batch_receiver);
+	let device_rules_apply = !is_fda_premarket_message_receiver(message_receiver);
 
-	let mut has_malfunction_any = false;
 	let mut has_malfunction_suspect = false;
-	let mut has_gk12r3 = false;
-	let mut has_gk12r11 = false;
+	let mut has_malfunction = false;
 	let mut has_invalid_gk1a = false;
+	let mut first_product_malfunction = false;
+	let mut combination_device_identity_present = false;
+	let pre_anda_present = fda_ctx.is_some_and(|ctx| {
+		ctx.studies
+			.iter()
+			.any(|study| has_text(study.fda_pre_anda_number_occurred.as_deref()))
+	});
+	let ind_number_present = fda_ctx.is_some_and(|ctx| {
+		ctx.studies
+			.iter()
+			.any(|study| has_text(study.fda_ind_number_occurred.as_deref()))
+	});
 
 	for (drug_idx, drug) in validation_ctx.drugs.iter().enumerate() {
 		let (devices, device_codes) = list_fda_devices(ctx, mm, drug.id).await?;
 		let malfunction_this_drug = devices
 			.iter()
 			.any(|device| device.malfunction == Some(true));
+		if drug_idx == 0 {
+			first_product_malfunction = malfunction_this_drug;
+		}
 		let gk1a_required = combination_true
 			&& malfunction_this_drug
 			&& drug.drug_characterization == "4";
@@ -1566,69 +1830,67 @@ pub(crate) async fn collect_fda_issues(
 			},
 			issues,
 		);
-		fda_g_k_12_r_1(
-			drug_idx,
-			if local_criteria == Some("5") {
-				malfunction_this_drug.then_some("present")
-			} else {
-				Some("not-applicable")
-			},
-			issues,
-		);
-		let brand = devices.iter().any(|device| {
-			has_text(device.device_brand_name.as_deref())
-				|| device.device_brand_name_null_flavor.as_deref() == Some("NI")
-		});
-		let common = devices.iter().any(|device| {
-			has_text(device.common_device_name.as_deref())
-				|| device.common_device_name_null_flavor.as_deref() == Some("NI")
-		});
-		let product = devices
-			.iter()
-			.any(|device| has_text(device.device_product_code.as_deref()));
-		fda_g_k_12_r_4(
-			drug_idx,
-			if malfunction_this_drug {
-				brand.then_some("present")
-			} else {
-				Some("not-applicable")
-			},
-			issues,
-		);
-		fda_g_k_12_r_5(
-			drug_idx,
-			if malfunction_this_drug {
-				common.then_some("present")
-			} else {
-				Some("not-applicable")
-			},
-			issues,
-		);
-		fda_g_k_12_r_6(
-			drug_idx,
-			if malfunction_this_drug {
-				product.then_some("present")
-			} else {
-				Some("not-applicable")
-			},
-			issues,
-		);
+		for (device_idx, device) in devices.iter().enumerate() {
+			if !device_rules_apply {
+				continue;
+			}
+			let path = format!("drugs.{drug_idx}.fdaDevices.{device_idx}");
+			let malfunction = device.malfunction == Some(true);
+			let has_identity = has_text(device.device_brand_name.as_deref())
+				|| has_text(device.common_device_name.as_deref())
+				|| has_text(device.device_product_code.as_deref());
+			combination_device_identity_present |= has_identity;
+			if ((postmarket && combination_true) || malfunction) && !has_identity {
+				crate::push_business_issue(
+					issues,
+					"FDA.G.k.12.r.4-6.AT_LEAST_ONE",
+					format!("{path}.deviceBrandName"),
+					"A malfunctioning device requires a non-null brand name, common name, or product code.",
+				);
+			}
+			if !malfunction {
+				continue;
+			}
+			let has_problem = device_codes.iter().any(|code| {
+				code.device_id == device.id
+					&& code.element == "device_problem"
+					&& has_text(Some(&code.value_code))
+			});
+			if !has_problem {
+				crate::push_business_issue(
+					issues,
+					"FDA.G.K.12.R.3.REQUIRED",
+					format!("{path}.deviceProblemCodes.0.valueCode"),
+					"A device problem code is required for each malfunctioning device.",
+				);
+			}
+			let has_remedial = device_codes.iter().any(|code| {
+				code.device_id == device.id
+					&& code.element == "remedial_action"
+					&& has_text(Some(&code.value_code))
+			});
+			if local_criteria == Some("4") && !has_remedial {
+				crate::push_business_issue(
+					issues,
+					"FDA.G.K.12.R.11.REQUIRED",
+					format!("{path}.remedialActions.0.valueCode"),
+					"A remedial action is required for each malfunctioning device in a 5-day report.",
+				);
+			}
+		}
 		if malfunction_this_drug {
-			has_malfunction_any = true;
+			has_malfunction = true;
 			if drug.drug_characterization == "1" {
 				has_malfunction_suspect = true;
 			}
 		}
-		if device_codes.iter().any(|code| {
-			code.element == "device_problem" && has_text(Some(&code.value_code))
-		}) {
-			has_gk12r3 = true;
-		}
-		if device_codes.iter().any(|code| {
-			code.element == "remedial_action" && has_text(Some(&code.value_code))
-		}) {
-			has_gk12r11 = true;
-		}
+		fda_g_k_10a(
+			drug_idx,
+			drug.fda_additional_info_coded.as_deref(),
+			drug.fda_additional_info_coded_null_flavor.as_deref(),
+			pre_anda_present,
+			issues,
+		);
 		let has_gk1a_one = drug.fda_other_characterization.as_deref() == Some("1");
 		if has_gk1a_one
 			&& !(combination_true
@@ -1638,6 +1900,15 @@ pub(crate) async fn collect_fda_issues(
 			has_invalid_gk1a = true;
 		}
 	}
+	if postmarket && combination_true && !combination_device_identity_present {
+		crate::push_business_issue(
+			issues,
+			"FDA.G.k.12.r.4-6.AT_LEAST_ONE",
+			"drugs.0.fdaDevices.0.deviceBrandName",
+			"A combination product requires device brand name, common name, or product code.",
+		);
+	}
+	fda_d_1_malfunction(validation_ctx, combination_true, has_malfunction, issues);
 	fda_g_k_12(
 		if local_criteria == Some("5") {
 			has_malfunction_suspect.then_some("present")
@@ -1646,22 +1917,8 @@ pub(crate) async fn collect_fda_issues(
 		},
 		issues,
 	);
-	fda_g_k_12_r_3(
-		if has_malfunction_any {
-			has_gk12r3.then_some("present")
-		} else {
-			Some("not-applicable")
-		},
-		issues,
-	);
-	fda_g_k_12_r_11(
-		if local_criteria == Some("4") && has_malfunction_any {
-			has_gk12r11.then_some("present")
-		} else {
-			Some("not-applicable")
-		},
-		issues,
-	);
+	fda_g_k_1_route(validation_ctx, first_product_malfunction, issues);
+	fda_g_k_9(validation_ctx, ind_number_present, issues);
 	fda_g_k_1_a_conditional(has_invalid_gk1a, issues);
 	Ok(())
 }
@@ -1693,6 +1950,54 @@ fn mfds_g_k_2_1_kr_1b(
 		receiver,
 		value,
 		vocabulary,
+	);
+}
+
+/// MFDS.G.k.2.1.1b.REQUIRED
+/// MFDS.G.k.2.1.2a.REQUIRED
+/// MFDS.G.k.2.1.2b.REQUIRED
+fn mfds_g_k_2_1_companions(
+	idx: usize,
+	drug: &DrugInformation,
+	issues: &mut Vec<ValidationIssue>,
+) {
+	for (code, field, missing) in [
+		(
+			"MFDS.G.k.2.1.1b.REQUIRED",
+			"mpid",
+			has_text(drug.mpid_version.as_deref())
+				&& !has_text(drug.mpid.as_deref()),
+		),
+		(
+			"MFDS.G.k.2.1.2a.REQUIRED",
+			"phpidVersion",
+			has_text(drug.phpid.as_deref())
+				&& !has_text(drug.phpid_version.as_deref()),
+		),
+		(
+			"MFDS.G.k.2.1.2b.REQUIRED",
+			"phpid",
+			has_text(drug.phpid_version.as_deref())
+				&& !has_text(drug.phpid.as_deref()),
+		),
+	] {
+		validate_violation(issues, code, &format!("drugs.{idx}.{field}"), missing);
+	}
+}
+
+/// MFDS.G.k.2.3.r.2b.REQUIRED
+fn mfds_g_k_2_3_r_2b(
+	drug_idx: usize,
+	idx: usize,
+	substance: &DrugActiveSubstance,
+	issues: &mut Vec<ValidationIssue>,
+) {
+	validate_violation(
+		issues,
+		"MFDS.G.k.2.3.r.2b.REQUIRED",
+		&format!("drugs.{drug_idx}.activeSubstances.{idx}.substanceTermId"),
+		has_text(substance.substance_termid_version.as_deref())
+			&& !has_text(substance.substance_termid.as_deref()),
 	);
 }
 
@@ -1828,6 +2133,14 @@ fn mfds_g_k_9_i_2_r_3_kr_1(
 	validate_violation(issues, "MFDS.G.k.9.i.2.r.3.KR.1.REQUIRED", &path, invalid);
 }
 
+fn mfds_kr1_result_required(
+	receiver_is_kr: bool,
+	has_source: bool,
+	method_is_who_umc: bool,
+) -> bool {
+	receiver_is_kr && has_source && method_is_who_umc
+}
+
 /// MFDS.G.k.9.i.2.r.3.KR.2.REQUIRED
 fn mfds_g_k_9_i_2_r_3_kr_2(
 	drug_idx: usize,
@@ -1908,6 +2221,16 @@ pub(crate) fn collect_mfds_issues(
 			issues,
 		);
 		mfds_g_k_2_1_kr_1a(idx, drug.mfds_mpid_version.as_deref(), facts, issues);
+		mfds_g_k_2_1_companions(idx, drug, issues);
+		// MFDS G.k.8: required for clinical-trial and compassionate-use reports.
+		if receiver_is_ct_or_cu && !has_text(drug.action_taken.as_deref()) {
+			crate::push_business_issue(
+				issues,
+				"MFDS.G.k.8.REQUIRED",
+				format!("drugs.{idx}.actionTaken"),
+				"Action Taken with Drug is required for CT and CU reports.",
+			);
+		}
 	}
 
 	for substance in &mfds_ctx.active_substances {
@@ -1948,6 +2271,23 @@ pub(crate) fn collect_mfds_issues(
 			facts,
 			issues,
 		);
+		mfds_g_k_2_3_r_2b(drug_index, substance_index, substance, issues);
+	}
+	if receiver_is_kr || receiver_is_fr {
+		for (drug_idx, drug) in validation_ctx.drugs.iter().enumerate() {
+			if !has_text(drug.mfds_mpid.as_deref())
+				&& !mfds_ctx.active_substances.iter().any(|substance| {
+					substance.drug_id == drug.id
+						&& has_text(substance.mfds_id.as_deref())
+				}) {
+				crate::push_business_issue(
+					issues,
+					"MFDS.G.k.2.3.r.1.KR.1b.REQUIRED",
+					format!("drugs.{drug_idx}.activeSubstances.0.mfdsId"),
+					"An MFDS ingredient code is required when the MFDS product code is unavailable.",
+				);
+			}
+		}
 	}
 
 	for r in &mfds_ctx.relatedness {
@@ -1973,9 +2313,11 @@ pub(crate) fn collect_mfds_issues(
 			&& (report_type_is_study || receiver_is_ct_or_cu);
 		let facts = RuleFacts {
 			mfds_relatedness_method_required_context: Some(method_required_context),
-			mfds_relatedness_kr1_required_context: Some(
-				has_source && method_is_who_umc,
-			),
+			mfds_relatedness_kr1_required_context: Some(mfds_kr1_result_required(
+				receiver_is_kr,
+				has_source,
+				method_is_who_umc,
+			)),
 			mfds_relatedness_kr2_required_context: Some(kr2_required_context),
 			mfds_relatedness_method_present: Some(has_method),
 			mfds_relatedness_result_present: Some(has_any_result),
@@ -2406,6 +2748,15 @@ mod conditioned_catalog_rule_tests {
 			]
 		);
 	}
+
+	#[test]
+	fn mfds_who_umc_kr1_result_is_scoped_to_domestic_reports() {
+		assert!(mfds_kr1_result_required(true, true, true));
+		assert!(!mfds_kr1_result_required(false, true, true));
+		assert!(!mfds_kr1_result_required(true, false, true));
+		assert!(!mfds_kr1_result_required(true, true, false));
+	}
+
 	#[test]
 	fn child_indices_have_no_owner_or_sequence_fallback() {
 		let known_drug = Uuid::new_v4();
@@ -2528,6 +2879,7 @@ mod golden_g_required_tests {
 			gestation_period_exposure_unit: None,
 			action_taken: None,
 			fda_additional_info_coded: None,
+			fda_additional_info_coded_null_flavor: None,
 			drug_additional_info_codes_json: None,
 			drug_additional_information: None,
 			fda_specialized_product_category: None,
@@ -2575,7 +2927,6 @@ mod golden_g_required_tests {
 			duration_unit: None,
 			continuing: None,
 			batch_lot_number: None,
-			batch_lot_number_null_flavor: None,
 			dosage_text: None,
 			dose_form: None,
 			dose_form_null_flavor: None,
@@ -2740,7 +3091,9 @@ mod golden_g_required_tests {
 			codes_for(&ctx),
 			vec![
 				"ICH.G.k.1.REQUIRED".to_string(),
+				"ICH.G.k.1.AGGREGATE.REQUIRED".to_string(),
 				"ICH.G.k.2.2.REQUIRED".to_string(),
+				"ICH.G.k.2.3.r.REQUIRED".to_string(),
 				"ICH.G.k.5a.REQUIRED".to_string(),
 				"ICH.G.k.6b.REQUIRED".to_string(),
 			]
@@ -3048,5 +3401,59 @@ mod golden_g_required_tests {
 			"drugs.0.reactionAssessments.0.relatednessAssessments.0.sourceOfAssessment"
 				.to_string()
 		)));
+	}
+
+	#[test]
+	fn aggregate_identity_rules_cover_drug_and_ingredient_fallbacks() {
+		let mut ctx = empty_ctx();
+		let mut drug = drug();
+		drug.id = Uuid::from_u128(1);
+		drug.drug_characterization = "2".to_string();
+		ctx.drugs.push(drug);
+
+		let codes = codes_for(&ctx);
+		assert!(codes.contains(&"ICH.G.k.1.AGGREGATE.REQUIRED".to_string()));
+		assert!(codes.contains(&"ICH.G.k.2.3.r.REQUIRED".to_string()));
+
+		ctx.drugs[0].drug_characterization = "1".to_string();
+		let mut substance = substance();
+		substance.drug_id = Uuid::from_u128(1);
+		substance.substance_name = Some("ingredient".to_string());
+		ctx.active_substances.push(substance);
+		let codes = codes_for(&ctx);
+		assert!(!codes.contains(&"ICH.G.k.1.AGGREGATE.REQUIRED".to_string()));
+		assert!(!codes.contains(&"ICH.G.k.2.3.r.REQUIRED".to_string()));
+	}
+
+	#[test]
+	fn blinded_product_is_limited_to_clinical_trials() {
+		let mut value = drug();
+		value.investigational_product_blinded = Some(true);
+		let mut issues = Vec::new();
+		g_k_2_5(0, &value, false, &Default::default(), &mut issues);
+		assert!(issues
+			.iter()
+			.any(|issue| issue.code == "ICH.G.k.2.5.STUDY.ONLY"));
+
+		issues.clear();
+		g_k_2_5(0, &value, true, &Default::default(), &mut issues);
+		assert!(!issues
+			.iter()
+			.any(|issue| issue.code == "ICH.G.k.2.5.STUDY.ONLY"));
+	}
+
+	#[test]
+	fn mfds_identifier_versions_and_ids_are_paired() {
+		let mut value = drug();
+		value.mpid_version = Some("1".to_string());
+		value.phpid = Some("PHPID".to_string());
+		let mut issues = Vec::new();
+		mfds_g_k_2_1_companions(0, &value, &mut issues);
+		assert!(issues
+			.iter()
+			.any(|issue| issue.code == "MFDS.G.k.2.1.1b.REQUIRED"));
+		assert!(issues
+			.iter()
+			.any(|issue| issue.code == "MFDS.G.k.2.1.2a.REQUIRED"));
 	}
 }

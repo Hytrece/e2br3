@@ -262,7 +262,6 @@ macro_rules! reporter {
 		check_text!(
 			"countryCode",
 			$data.country_code,
-			$data.country_code_null_flavor,
 			input_contracts::generated::c::c_2_r_3
 		);
 		check_text!(

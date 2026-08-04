@@ -242,11 +242,12 @@ fn write_d_9_3(
 	match autopsy_performed {
 		Some(true) => out.push_str(" value=\"true\""),
 		Some(false) => out.push_str(" value=\"false\""),
-		None => {
+		None if autopsy_performed_null_flavor.is_some() => {
 			out.push_str(" nullFlavor=\"");
-			out.push_str(&xml_escape(autopsy_performed_null_flavor.unwrap_or("NI")));
+			out.push_str(&xml_escape(autopsy_performed_null_flavor.unwrap()));
 			out.push('"');
 		}
+		None => return String::new(),
 	}
 	out.push_str("/>");
 	for cause in causes {

@@ -396,6 +396,7 @@
       "null_flavors": [
         "NI"
       ],
+      "null_flavor_condition": "NI is allowed only for a retransmission first received in E2B(R2) when the equivalent R2 element was absent.",
       "profiles": {
         "mfds": "mandatory"
       },
@@ -886,12 +887,6 @@
       "max_length": "2",
       "allowed_values": "ISO 3166-1 alpha-2, EU",
       "oid": "1.0.3166.1.2.2",
-      "null_flavors": [
-        "MSK",
-        "UNK",
-        "ASKU",
-        "NASK"
-      ],
       "profiles": {
         "mfds": "conditional_mandatory"
       },
@@ -2489,13 +2484,12 @@
       "kind": "element",
       "conformance": "conditional_mandatory",
       "data_type": "Boolean",
-      "allowed_values": "false, true, nullFlavor: MSK, ASKU, NASK, UNK",
+      "allowed_values": "false, true, nullFlavor: ASKU, NASK, UNK",
       "oid": "2.16.840.1.113883.3.989.2.1.1.19",
       "null_flavors": [
         "UNK",
         "ASKU",
-        "NASK",
-        "MSK"
+        "NASK"
       ],
       "profiles": {
         "mfds": "conditional_mandatory"
@@ -3844,7 +3838,7 @@
       "data_type": "N",
       "max_length": "50",
       "allowed_values": "Numeric  nullFlavor: NINF, PINF",
-      "null_flavors": [
+      "interval_bound_null_flavors": [
         "NINF",
         "PINF"
       ],

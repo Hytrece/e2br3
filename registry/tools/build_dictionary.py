@@ -677,6 +677,33 @@ def move_allowed_value_constraints_to_end(entries: list[dict[str, Any]]) -> None
             entry["allowed_value_constraint"] = constraint
 
 
+def apply_official_2025_null_flavor_overrides(
+    ich_entries: list[dict[str, Any]], fda_entries: list[dict[str, Any]]
+) -> None:
+    """Apply later official Q&A/regional rules that supersede source snapshots."""
+    if ich_entries:
+        ich = {entry["code"]: entry for entry in ich_entries}
+        ich["C.1.7"]["null_flavor_condition"] = (
+            "NI is allowed only for a retransmission first received in E2B(R2) "
+            "when the equivalent R2 element was absent."
+        )
+        ich["C.2.r.3"].pop("null_flavors", None)
+        ich["D.9.3"]["allowed_values"] = "false, true, nullFlavor: ASKU, NASK, UNK"
+        ich["D.9.3"]["null_flavors"] = ["UNK", "ASKU", "NASK"]
+        interval_flavors = ich["F.r.3.2"].pop("null_flavors", [])
+        ich["F.r.3.2"]["interval_bound_null_flavors"] = interval_flavors
+
+    if fda_entries:
+        fda_entries.append({
+            "code": "FDA.D.1",
+            "name": "Patient (Name or Initials) - FDA regional NullFlavor override",
+            "section": "D",
+            "kind": "element",
+            "null_flavors": ["MSK", "UNK", "ASKU", "NASK", "NA"],
+            "profiles": {"post_market": "mandatory", "pre_market": "mandatory"},
+        })
+
+
 def refresh_allowed_value_constraints(
     dictionary_entries: list[dict[str, Any]], source_entries: list[dict[str, Any]]
 ) -> None:
@@ -792,6 +819,7 @@ def main() -> int:
     nf_annotated = merge_nullflavors(ich_entries, nullflavor_usage)
     vocab_annotated = merge_vocabulary(ich_entries, vocabulary_usage)
     sev_annotated = merge_fda_severity(ich_entries, fda_severity)
+    apply_official_2025_null_flavor_overrides(ich_entries, [])
     move_allowed_value_constraints_to_end(ich_entries)
     path = write_dictionary("ich-e2br3.json", "ICH", ICH_SOURCE, ich_entries)
     elements = sum(1 for entry in ich_entries if entry["kind"] == "element")
@@ -816,6 +844,7 @@ def main() -> int:
     )
 
     fda_entries = parse_fda_csv(fda_text)
+    apply_official_2025_null_flavor_overrides([], fda_entries)
     fda_sev_annotated = merge_fda_severity(fda_entries, fda_severity)
     path = write_dictionary("fda-regional.json", "FDA", FDA_SOURCE, fda_entries)
     elements = sum(1 for entry in fda_entries if entry["kind"] == "element")

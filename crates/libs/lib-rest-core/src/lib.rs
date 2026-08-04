@@ -400,7 +400,7 @@ fn normalize_values(values: &[String]) -> HashSet<String> {
 /// match. An unset user scope means "allow all"; a case with no value for the
 /// dimension is always allowed. Applied uniformly to sender/product/study.
 fn scope_allows(assigned: &HashSet<String>, available: &[String]) -> bool {
-	if assigned.is_empty() {
+	if assigned.is_empty() || available.is_empty() {
 		return true;
 	}
 	let available = normalize_values(available);
@@ -480,8 +480,8 @@ pub async fn routing_profile_for_user(
 		all_senders
 			.into_iter()
 			.filter(|row| {
-				!assigned_sender_ids.is_empty()
-					&& assigned_sender_ids.iter().any(|assigned| {
+				assigned_sender_ids.is_empty()
+					|| assigned_sender_ids.iter().any(|assigned| {
 						row.scope_identifiers
 							.iter()
 							.any(|scope| assigned.eq_ignore_ascii_case(scope))
@@ -557,28 +557,25 @@ async fn load_case_scope(
 			SELECT
 				COALESCE(
 					(
-						SELECT array_agg(DISTINCT sender.source_sender_presave_id::text)
-						FROM sender_information sender
-						WHERE sender.case_id = c.id
-						  AND sender.source_sender_presave_id IS NOT NULL
+						SELECT array_agg(identifier)
+						FROM case_scope_identifiers(c.id)
+						WHERE scope_kind = 'sender'
 					),
 					ARRAY[]::text[]
 				) AS sender_identifiers,
 				COALESCE(
 					(
-						SELECT array_agg(DISTINCT d.source_product_presave_id::text)
-						FROM drug_information d
-						WHERE d.case_id = c.id
-						  AND d.source_product_presave_id IS NOT NULL
+						SELECT array_agg(identifier)
+						FROM case_scope_identifiers(c.id)
+						WHERE scope_kind = 'product'
 					),
 					ARRAY[]::text[]
 				) AS product_identifiers,
 				COALESCE(
 					(
-						SELECT array_agg(DISTINCT s.source_study_presave_id::text)
-						FROM study_information s
-						WHERE s.case_id = c.id
-						  AND s.source_study_presave_id IS NOT NULL
+						SELECT array_agg(identifier)
+						FROM case_scope_identifiers(c.id)
+						WHERE scope_kind = 'study'
 					),
 					ARRAY[]::text[]
 				) AS study_identifiers,

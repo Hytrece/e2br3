@@ -11,6 +11,14 @@ use serial_test::serial;
 use sqlx::types::time::Date;
 use tower::ServiceExt;
 
+fn scenario6(root: &std::path::Path) -> Result<String> {
+	Ok(std::fs::read_to_string(
+		root.join("docs/exporter/fda/FAERS2022Scenario6.xml"),
+	)?
+	.replace("201411011202", "2014110112")
+	.replace("201401011041", "2014010110"))
+}
+
 async fn get_json(
 	app: &axum::Router,
 	cookie: &str,
@@ -204,10 +212,7 @@ async fn test_import_selected_product_links_first_drug_and_case_product_id(
 		.and_then(|p| p.parent())
 		.expect("workspace root")
 		.to_path_buf();
-	let xml = std::fs::read(
-		root.join("crates/libs/lib-core/src/xml/fixtures/base_export_skeleton.xml"),
-	)?;
-	let xml = String::from_utf8(xml)?.replace(
+	let xml = scenario6(&root)?.replace(
 		"US-APHARMA-8744554B",
 		&format!("US-PRODUCT-LINK-{}", uuid::Uuid::new_v4()),
 	);
@@ -420,8 +425,7 @@ async fn test_import_settings_update_enabled_c1_dates() -> Result<()> {
 		.and_then(|p| p.parent())
 		.expect("workspace root")
 		.to_path_buf();
-	let xml = std::fs::read(root.join("docs/exporter/fda/FAERS2022Scenario6.xml"))?;
-	let xml = String::from_utf8(xml)?.replace(
+	let xml = scenario6(&root)?.replace(
 		"US-APHARMA-8744554B",
 		&format!("US-TEST-{}", uuid::Uuid::new_v4()),
 	);
@@ -454,7 +458,6 @@ async fn test_import_settings_update_enabled_c1_dates() -> Result<()> {
 	Ok(())
 }
 
-#[cfg(any())]
 #[serial]
 #[tokio::test]
 async fn test_import_settings_apply_default_sender_only_when_enabled() -> Result<()>
@@ -491,10 +494,9 @@ async fn test_import_settings_apply_default_sender_only_when_enabled() -> Result
 		.and_then(|p| p.parent())
 		.expect("workspace root")
 		.to_path_buf();
-	let source_xml =
-		std::fs::read(root.join("docs/exporter/fda/FAERS2022Scenario6.xml"))?;
+	let source_xml = scenario6(&root)?;
 
-	let disabled_xml = String::from_utf8(source_xml.clone())?.replace(
+	let disabled_xml = source_xml.clone().replace(
 		"US-APHARMA-8744554B",
 		&format!("US-SENDER-DISABLED-{}", uuid::Uuid::new_v4()),
 	);
@@ -543,7 +545,7 @@ async fn test_import_settings_apply_default_sender_only_when_enabled() -> Result
 	.await?;
 	assert_eq!(status, StatusCode::OK, "{body:?}");
 
-	let xml = String::from_utf8(source_xml)?.replace(
+	let xml = source_xml.replace(
 		"US-APHARMA-8744554B",
 		&format!("US-SENDER-{}", uuid::Uuid::new_v4()),
 	);
@@ -664,9 +666,7 @@ async fn test_import_settings_apply_product_linked_sender_by_imported_product_id
 		.and_then(|p| p.parent())
 		.expect("workspace root")
 		.to_path_buf();
-	let source_xml =
-		std::fs::read(root.join("docs/exporter/fda/FAERS2022Scenario6.xml"))?;
-	let xml = String::from_utf8(source_xml)?.replace(
+	let xml = scenario6(&root)?.replace(
 		"US-APHARMA-8744554B",
 		&format!("US-PRODUCT-SENDER-{}", uuid::Uuid::new_v4()),
 	);

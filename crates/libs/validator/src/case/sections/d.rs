@@ -6,9 +6,9 @@ use super::helpers::{
 use crate::allowed_value::{true_marker_value, ConstraintValue};
 use crate::{
 	has_patient_initials, has_text, is_mfds_domestic_receiver,
-	is_mfds_foreign_postmarket_receiver, should_require_patient_initials,
-	FdaValidationContext, MfdsValidationContext, RegulatoryAuthority, RuleFacts,
-	ValidationContext, ValidationIssue,
+	is_mfds_foreign_postmarket_receiver, push_business_issue,
+	should_require_patient_initials, FdaValidationContext, MfdsValidationContext,
+	RegulatoryAuthority, RuleFacts, ValidationContext, ValidationIssue,
 };
 use lib_core::model::parent_history::{ParentMedicalHistory, ParentPastDrugHistory};
 use lib_core::model::patient::{
@@ -16,12 +16,41 @@ use lib_core::model::patient::{
 	PatientDeathInformation, PatientIdentifier, PatientInformation,
 	ReportedCauseOfDeath,
 };
+use lib_core::regulatory::{
+	is_fda_ind_message_receiver, is_mfds_clinical_trial_receiver,
+	is_mfds_compassionate_use_receiver,
+};
 use sqlx::types::{Decimal, Uuid};
 use std::borrow::Cow;
 use std::collections::HashMap;
 
 fn decimal_text(value: Option<Decimal>) -> Option<String> {
 	value.map(|value| value.to_string())
+}
+
+fn is_integer(value: Decimal) -> bool {
+	value.fract() == Decimal::ZERO
+}
+
+/// ICH.D.2: only one patient age description may be used.
+fn d_2(patient: &PatientInformation, issues: &mut Vec<ValidationIssue>) {
+	let groups = [
+		patient.birth_date.is_some()
+			|| has_text(patient.birth_date_null_flavor.as_deref()),
+		patient.age_at_time_of_onset.is_some()
+			|| has_text(patient.age_unit.as_deref()),
+		patient.gestation_period.is_some()
+			|| has_text(patient.gestation_period_unit.as_deref()),
+		has_text(patient.age_group.as_deref()),
+	];
+	if groups.into_iter().filter(|present| *present).count() > 1 {
+		push_business_issue(
+			issues,
+			"ICH.D.2.EXCLUSIVE",
+			"patientInformation.patientBirthDate",
+			"Only one patient age description may be provided",
+		);
+	}
 }
 
 fn past_drug_has_payload(past_drug: &PastDrugHistory) -> bool {
@@ -352,6 +381,18 @@ patient_decimal_length!(
 	"patientInformation.weightKg",
 	weight_kg
 );
+
+/// ICH.D.4: height is a rounded integer.
+fn d_4_integer(patient: &PatientInformation, issues: &mut Vec<ValidationIssue>) {
+	if patient.height_cm.is_some_and(|value| !is_integer(value)) {
+		push_business_issue(
+			issues,
+			"ICH.D.4.INTEGER",
+			"patientInformation.heightCm",
+			"Patient height must be a whole number",
+		);
+	}
+}
 patient_decimal_length!(
 	d_4,
 	"ICH.D.4.LENGTH.MAX",
@@ -540,6 +581,29 @@ fn d_7_1_r_6(
 		true_marker_value(episode.family_history, None),
 		&validation_ctx.vocabulary,
 	);
+}
+
+/// ICH.D.7.1.r.6: a concept also reported for the parent is not family history.
+fn d_7_1_r_6_parent_duplicate(
+	idx: usize,
+	episode: &MedicalHistoryEpisode,
+	parent_history: &[ParentMedicalHistory],
+	issues: &mut Vec<ValidationIssue>,
+) {
+	let duplicate = episode.family_history == Some(true)
+		&& episode.meddra_code.as_deref().is_some_and(|code| {
+			parent_history
+				.iter()
+				.any(|parent| parent.meddra_code.as_deref() == Some(code))
+		});
+	if duplicate {
+		push_business_issue(
+			issues,
+			"ICH.D.7.1.r.6.PARENT_DUPLICATE",
+			format!("patientInformation.medicalHistory.{idx}.familyHistory"),
+			"Family history must be false when the same concept is reported for the parent",
+		);
+	}
 }
 
 /// ICH.D.8.r.1.REQUIRED
@@ -946,6 +1010,26 @@ fn d_10_2_2b(
 	);
 }
 
+/// ICH.D.10.2: use either the parent's birth date or age, not both.
+fn d_10_2(
+	idx: usize,
+	parent: &ParentInformation,
+	issues: &mut Vec<ValidationIssue>,
+) {
+	let has_birth_date = parent.parent_birth_date.is_some()
+		|| has_text(parent.parent_birth_date_null_flavor.as_deref());
+	let has_age =
+		parent.parent_age.is_some() || has_text(parent.parent_age_unit.as_deref());
+	if has_birth_date && has_age {
+		push_business_issue(
+			issues,
+			"ICH.D.10.2.EXCLUSIVE",
+			format!("patientInformation.parents.{idx}.parentBirthDate"),
+			"Use either the parent's birth date or age, not both",
+		);
+	}
+}
+
 /// ICH.D.10.3.FUTURE_DATE.FORBIDDEN
 fn d_10_3(
 	idx: usize,
@@ -982,12 +1066,29 @@ macro_rules! parent_decimal_length {
 parent_decimal_length!(d_10_4, "ICH.D.10.4.LENGTH.MAX", "weightKg", weight_kg);
 parent_decimal_length!(d_10_5, "ICH.D.10.5.LENGTH.MAX", "heightCm", height_cm);
 
+/// ICH.D.10.5: parent height is a rounded integer.
+fn d_10_5_integer(
+	idx: usize,
+	parent: &ParentInformation,
+	issues: &mut Vec<ValidationIssue>,
+) {
+	if parent.height_cm.is_some_and(|value| !is_integer(value)) {
+		push_business_issue(
+			issues,
+			"ICH.D.10.5.INTEGER",
+			format!("patientInformation.parents.{idx}.heightCm"),
+			"Parent height must be a whole number",
+		);
+	}
+}
+
 /// ICH.D.10.6.REQUIRED
 /// ICH.D.10.6.ALLOWED.VALUE
 /// ICH.D.10.6.LENGTH.MAX
 fn d_10_6(
 	idx: usize,
 	parent: &ParentInformation,
+	has_child_payload: bool,
 	validation_ctx: &ValidationContext,
 	issues: &mut Vec<ValidationIssue>,
 ) {
@@ -999,7 +1100,8 @@ fn d_10_6(
 		|| parent.last_menstrual_period_date.is_some()
 		|| parent.weight_kg.is_some()
 		|| parent.height_cm.is_some()
-		|| has_text(parent.medical_history_text.as_deref());
+		|| has_text(parent.medical_history_text.as_deref())
+		|| has_child_payload;
 	required_when(
 		issues,
 		"ICH.D.10.6.REQUIRED",
@@ -1397,7 +1499,7 @@ fn fda_d_11(patient: &PatientInformation, issues: &mut Vec<ValidationIssue>) {
 		"FDA.D.11.REQUIRED",
 		PATH,
 		patient.race_code.as_deref(),
-		None,
+		patient.race_code_null_flavor.as_deref(),
 		facts,
 	);
 }
@@ -1409,12 +1511,206 @@ fn fda_d_12(patient: &PatientInformation, issues: &mut Vec<ValidationIssue>) {
 		"FDA.D.12.REQUIRED",
 		"patientInformation.ethnicityCode",
 		patient.ethnicity_code.as_deref(),
-		None,
+		patient.ethnicity_code_null_flavor.as_deref(),
 		RuleFacts {
 			fda_patient_payload_present: Some(true),
 			..RuleFacts::default()
 		},
 	);
+}
+
+fn is_fda_vaers(validation_ctx: &ValidationContext) -> bool {
+	validation_ctx
+		.message_header
+		.as_ref()
+		.is_some_and(|header| {
+			[
+				Some(header.message_receiver_identifier.as_str()),
+				header.batch_receiver_identifier.as_deref(),
+			]
+			.into_iter()
+			.flatten()
+			.any(|value| {
+				matches!(
+					value.trim().to_ascii_uppercase().as_str(),
+					"CBER_VAERS" | "CBER VAERS"
+				)
+			})
+		})
+}
+
+/// FDA.D.1: linked IND study reports use the aggregate patient marker.
+fn fda_d_1(
+	validation_ctx: &ValidationContext,
+	fda_ctx: Option<&FdaValidationContext>,
+	issues: &mut Vec<ValidationIssue>,
+) {
+	let receiver = validation_ctx
+		.message_header
+		.as_ref()
+		.map(|header| header.message_receiver_identifier.as_str());
+	let aggregate = validation_ctx.safety_report.as_ref().is_some_and(|report| {
+		report.report_type.as_deref().map(str::trim) == Some("2")
+	}) && is_fda_ind_message_receiver(receiver)
+		&& fda_ctx.is_some_and(|ctx| {
+			ctx.studies
+				.iter()
+				.any(|study| has_text(study.fda_ind_number_occurred.as_deref()))
+		}) && !validation_ctx.linked_report_numbers.is_empty();
+	if aggregate
+		&& validation_ctx.patient.as_ref().is_none_or(|patient| {
+			patient.patient_initials.as_deref().map(str::trim) != Some("AGGREGATE")
+		}) {
+		push_business_issue(
+			issues,
+			"FDA.D.1.AGGREGATE.REQUIRED",
+			"patientInformation.patientInitials",
+			"Linked IND study reports must identify the patient as AGGREGATE",
+		);
+	}
+}
+
+/// FDA.D.2: VAERS reports require one patient age description.
+// FDA.D.2.1 (age at vaccination) is not represented by the current case model.
+fn fda_d_2(patient: Option<&PatientInformation>, issues: &mut Vec<ValidationIssue>) {
+	let present = patient.is_some_and(|patient| {
+		patient.birth_date.is_some()
+			|| has_text(patient.birth_date_null_flavor.as_deref())
+			|| patient.age_at_time_of_onset.is_some()
+			|| patient.gestation_period.is_some()
+			|| has_text(patient.age_group.as_deref())
+	});
+	if !present {
+		push_business_issue(
+			issues,
+			"FDA.D.2.REQUIRED",
+			"patientInformation.patientBirthDate",
+			"VAERS reports require at least one patient age description",
+		);
+	}
+}
+
+fn fda_d_2_required(local_criteria_report_type: Option<&str>) -> bool {
+	local_criteria_report_type.map(str::trim) != Some("5")
+}
+
+fn fda_d_9_1_required(
+	report_type: Option<&str>,
+	receiver: Option<&str>,
+	death_reported: bool,
+	death_date_present: bool,
+) -> bool {
+	report_type.map(str::trim) == Some("2")
+		&& is_fda_ind_message_receiver(receiver)
+		&& death_reported
+		&& !death_date_present
+}
+
+/// FDA.D.9.1: date of death is required when a reaction caused death.
+fn fda_d_9_1(validation_ctx: &ValidationContext, issues: &mut Vec<ValidationIssue>) {
+	let report_type = validation_ctx
+		.safety_report
+		.as_ref()
+		.and_then(|report| report.report_type.as_deref());
+	let receiver = validation_ctx
+		.message_header
+		.as_ref()
+		.map(|header| header.message_receiver_identifier.as_str());
+	let death_reported = validation_ctx
+		.reactions
+		.iter()
+		.any(|reaction| reaction.criteria_death == Some(true));
+	let death_date_present =
+		validation_ctx.death_info.as_ref().is_some_and(|death| {
+			death.date_of_death.is_some()
+				|| has_text(death.date_of_death_null_flavor.as_deref())
+		});
+	if fda_d_9_1_required(report_type, receiver, death_reported, death_date_present)
+	{
+		push_business_issue(
+			issues,
+			"FDA.D.9.1.REQUIRED",
+			"patientInformation.death.dateOfDeath",
+			"Date of death is required when death is reported as a seriousness criterion",
+		);
+	}
+}
+
+/// FDA.D.11 / FDA.D.12: aggregate or unavailable patients use NA.
+fn fda_d_11_d_12_na(
+	patient: &PatientInformation,
+	issues: &mut Vec<ValidationIssue>,
+) {
+	let initials = patient.patient_initials.as_deref().map(str::trim);
+	let null_flavor = patient
+		.patient_initials_null_flavor
+		.as_deref()
+		.map(str::trim);
+	if matches!(initials, Some("AGGREGATE"))
+		|| matches!(null_flavor, Some("NA" | "SUMMARY"))
+	{
+		if patient.race_code_null_flavor.as_deref().map(str::trim) != Some("NA") {
+			push_business_issue(
+				issues,
+				"FDA.D.11.NA.REQUIRED",
+				"patientInformation.raceCodeNullFlavor",
+				"Race must use null flavor NA for aggregate or unavailable patients",
+			);
+		}
+		if patient.ethnicity_code_null_flavor.as_deref().map(str::trim) != Some("NA")
+		{
+			push_business_issue(issues, "FDA.D.12.NA.REQUIRED", "patientInformation.ethnicityCodeNullFlavor", "Ethnicity must use null flavor NA for aggregate or unavailable patients");
+		}
+	}
+}
+
+/// MFDS.D.1.1.4 / D.2.2 / D.5: clinical-trial and compassionate-use fields.
+fn mfds_d_ct_cu(
+	validation_ctx: &ValidationContext,
+	issues: &mut Vec<ValidationIssue>,
+) {
+	let study_number = validation_ctx.patient_identifiers.iter().any(|identifier| {
+		!identifier.deleted
+			&& identifier.identifier_type_code.trim() == "4"
+			&& (has_text(identifier.identifier_value.as_deref())
+				|| has_text(identifier.identifier_value_null_flavor.as_deref()))
+	});
+	if !study_number {
+		push_business_issue(
+			issues,
+			"MFDS.D.1.1.4.REQUIRED",
+			"patientInformation.patientStudyNumber",
+			"Patient study number is required for CT/CU reports",
+		);
+	}
+	let patient = validation_ctx.patient.as_ref();
+	if patient.is_none_or(|patient| patient.age_at_time_of_onset.is_none()) {
+		push_business_issue(
+			issues,
+			"MFDS.D.2.2a.REQUIRED",
+			"patientInformation.ageAtTimeOfOnset",
+			"Patient age is required for CT/CU reports",
+		);
+	}
+	if patient.is_none_or(|patient| !has_text(patient.age_unit.as_deref())) {
+		push_business_issue(
+			issues,
+			"MFDS.D.2.2b.REQUIRED",
+			"patientInformation.ageUnit",
+			"Patient age unit is required for CT/CU reports",
+		);
+	}
+	if patient.is_none_or(|patient| {
+		!has_text(patient.sex.as_deref())
+			&& !has_text(patient.sex_null_flavor.as_deref())
+	}) {
+		push_business_issue(
+			issues,
+			"MFDS.D.5.REQUIRED",
+			"patientInformation.sex",
+			"Patient sex is required for CT/CU reports",
+		);
+	}
 }
 
 /// MFDS.D.8.r.1.KR.1b.VOCABULARY
@@ -1444,7 +1740,10 @@ fn mfds_d_8_r_1_kr_1b(
 		past.mfds_medicinal_product_id.as_deref(),
 		None,
 		RuleFacts {
-			mfds_past_drug_code_required_context: Some(receiver_is_kr_or_fr),
+			mfds_past_drug_code_required_context: Some(
+				receiver_is_kr_or_fr
+					&& !has_text(past.drug_name_null_flavor.as_deref()),
+			),
 			..RuleFacts::default()
 		},
 	);
@@ -1542,10 +1841,24 @@ pub(crate) fn collect(
 	fda_ctx: Option<&FdaValidationContext>,
 	mfds_ctx: Option<&MfdsValidationContext>,
 ) {
-	let _ = fda_ctx;
 	collect_ich_issues(validation_ctx, issues);
+	if authority != RegulatoryAuthority::Fda
+		&& validation_ctx
+			.patient
+			.as_ref()
+			.and_then(|patient| patient.patient_initials_null_flavor.as_deref())
+			.map(str::trim)
+			== Some("NA")
+	{
+		push_business_issue(
+			issues,
+			"ICH.D.1.NULLFLAVOR.ALLOWED",
+			"patientInformation.patientInitialsNullFlavor",
+			"nullFlavor NA for D.1 is an FDA-only regional value",
+		);
+	}
 	if authority == RegulatoryAuthority::Fda {
-		collect_fda_issues(validation_ctx, issues);
+		collect_fda_issues(validation_ctx, fda_ctx, issues);
 	}
 	if authority == RegulatoryAuthority::Mfds {
 		if let Some(mfds_ctx) = mfds_ctx {
@@ -1578,6 +1891,7 @@ pub(crate) fn collect_ich_issues(
 		d_1_1_3(identifier, issues);
 	}
 	if let Some(patient) = validation_ctx.patient.as_ref() {
+		d_2(patient, issues);
 		d_2_1(patient, issues);
 		d_2_2a(patient, issues);
 		d_2_2b(patient, issues);
@@ -1586,6 +1900,7 @@ pub(crate) fn collect_ich_issues(
 		d_2_3(patient, validation_ctx, issues);
 		d_3(patient, issues);
 		d_4(patient, issues);
+		d_4_integer(patient, issues);
 		d_5(patient, validation_ctx, issues);
 		d_6(patient, issues);
 		d_7_2(patient, validation_ctx.medical_history.is_empty(), issues);
@@ -1598,6 +1913,12 @@ pub(crate) fn collect_ich_issues(
 		d_7_1_r(idx, episode, issues);
 		d_7_1_r_5(idx, episode, issues);
 		d_7_1_r_6(idx, episode, validation_ctx, issues);
+		d_7_1_r_6_parent_duplicate(
+			idx,
+			episode,
+			&validation_ctx.parent_medical_history,
+			issues,
+		);
 	}
 	for (idx, drug) in validation_ctx.past_drugs.iter().enumerate() {
 		d_8_r_1(idx, drug, issues);
@@ -1630,10 +1951,20 @@ pub(crate) fn collect_ich_issues(
 		d_10_2_1(idx, parent, issues);
 		d_10_2_2a(idx, parent, issues);
 		d_10_2_2b(idx, parent, issues);
+		d_10_2(idx, parent, issues);
 		d_10_3(idx, parent, issues);
 		d_10_4(idx, parent, issues);
 		d_10_5(idx, parent, issues);
-		d_10_6(idx, parent, validation_ctx, issues);
+		d_10_5_integer(idx, parent, issues);
+		let has_child_payload = validation_ctx
+			.parent_medical_history
+			.iter()
+			.any(|episode| episode.parent_id == parent.id)
+			|| validation_ctx
+				.parent_past_drugs
+				.iter()
+				.any(|drug| drug.parent_id == parent.id);
+		d_10_6(idx, parent, has_child_payload, validation_ctx, issues);
 		d_10_7_2(idx, parent, issues);
 	}
 
@@ -1674,11 +2005,41 @@ pub(crate) fn collect_ich_issues(
 }
 pub(crate) fn collect_fda_issues(
 	validation_ctx: &ValidationContext,
+	fda_ctx: Option<&FdaValidationContext>,
 	issues: &mut Vec<ValidationIssue>,
 ) {
+	fda_d_1(validation_ctx, fda_ctx, issues);
+	fda_d_9_1(validation_ctx, issues);
 	if let Some(patient) = validation_ctx.patient.as_ref() {
-		fda_d_11(patient, issues);
-		fda_d_12(patient, issues);
+		fda_d_11_d_12_na(patient, issues);
+	}
+	if is_fda_vaers(validation_ctx) {
+		let local_criteria = validation_ctx
+			.safety_report
+			.as_ref()
+			.and_then(|report| report.local_criteria_report_type.as_deref());
+		if fda_d_2_required(local_criteria) {
+			fda_d_2(validation_ctx.patient.as_ref(), issues);
+		}
+		if local_criteria.map(str::trim) != Some("5") {
+			if let Some(patient) = validation_ctx.patient.as_ref() {
+				fda_d_11(patient, issues);
+				fda_d_12(patient, issues);
+			} else {
+				push_business_issue(
+					issues,
+					"FDA.D.11.r.1.REQUIRED",
+					"patientInformation.raceCode",
+					"Race or an allowed null flavor is required for VAERS reports",
+				);
+				push_business_issue(
+					issues,
+					"FDA.D.12.REQUIRED",
+					"patientInformation.ethnicityCode",
+					"Ethnicity or an allowed null flavor is required for VAERS reports",
+				);
+			}
+		}
 	}
 }
 pub(crate) fn collect_mfds_issues(
@@ -1692,6 +2053,11 @@ pub(crate) fn collect_mfds_issues(
 		.map(|header| header.message_receiver_identifier.as_str());
 	let receiver_is_kr = is_mfds_domestic_receiver(msg_receiver);
 	let receiver_is_fr = is_mfds_foreign_postmarket_receiver(msg_receiver);
+	let receiver_is_ct_or_cu = is_mfds_clinical_trial_receiver(msg_receiver)
+		|| is_mfds_compassionate_use_receiver(msg_receiver);
+	if receiver_is_ct_or_cu {
+		mfds_d_ct_cu(validation_ctx, issues);
+	}
 	let vocabulary_receiver = receiver_is_kr
 		.then_some("KR")
 		.or_else(|| receiver_is_fr.then_some("FR"));
@@ -2038,7 +2404,6 @@ mod golden_companion_tests {
 			parent_birth_date: None,
 			parent_birth_date_null_flavor: None,
 			parent_age: None,
-			parent_age_null_flavor: None,
 			parent_age_unit: None,
 			last_menstrual_period_date: None,
 			last_menstrual_period_date_null_flavor: None,
@@ -2067,13 +2432,10 @@ mod golden_companion_tests {
 			gestation_period_unit: None,
 			age_group: None,
 			weight_kg: None,
-			weight_kg_null_flavor: None,
 			height_cm: None,
-			height_cm_null_flavor: None,
 			sex: None,
 			patient_initials_null_flavor: None,
 			birth_date_null_flavor: None,
-			age_at_time_of_onset_null_flavor: None,
 			sex_null_flavor: None,
 			race_code: None,
 			race_code_null_flavor: None,
@@ -2190,7 +2552,6 @@ mod golden_companion_tests {
 			parent_id,
 			sequence_number: 1,
 			drug_name: None,
-			drug_name_null_flavor: None,
 			mpid: mpid.map(str::to_string),
 			mpid_version: mpid_version.map(str::to_string),
 			mfds_medicinal_product_version: None,
@@ -2889,8 +3250,100 @@ mod golden_companion_tests {
 	}
 
 	#[test]
+	fn age_descriptions_are_mutually_exclusive() {
+		let mut patient = patient();
+		patient.age_at_time_of_onset = Some(Decimal::ONE);
+		patient.age_group = Some("3".to_string());
+		let mut issues = Vec::new();
+		d_2(&patient, &mut issues);
+		assert!(issues.iter().any(|issue| issue.code == "ICH.D.2.EXCLUSIVE"));
+	}
+
+	#[test]
+	fn heights_must_be_whole_numbers() {
+		let mut patient = patient();
+		patient.height_cm = Some(Decimal::new(1755, 1));
+		let mut issues = Vec::new();
+		d_4_integer(&patient, &mut issues);
+		assert!(issues.iter().any(|issue| issue.code == "ICH.D.4.INTEGER"));
+	}
+
+	#[test]
+	fn parent_birth_date_and_age_are_exclusive() {
+		let mut parent = parent(Uuid::nil());
+		parent.parent_birth_date_null_flavor = Some("UNK".to_string());
+		parent.parent_age = Some(Decimal::ONE);
+		let mut issues = Vec::new();
+		d_10_2(0, &parent, &mut issues);
+		assert!(issues
+			.iter()
+			.any(|issue| issue.code == "ICH.D.10.2.EXCLUSIVE"));
+	}
+
+	#[test]
+	fn fda_age_accepts_birth_date_null_flavor_and_skips_malfunction_only() {
+		let mut patient = patient();
+		patient.birth_date_null_flavor = Some("UNK".to_string());
+		let mut issues = Vec::new();
+		fda_d_2(Some(&patient), &mut issues);
+		assert!(issues.is_empty());
+		assert!(!fda_d_2_required(Some("5")));
+	}
+
+	#[test]
+	fn fda_race_and_ethnicity_accept_null_flavors() {
+		let mut patient = patient();
+		patient.race_code_null_flavor = Some("UNK".to_string());
+		patient.ethnicity_code_null_flavor = Some("UNK".to_string());
+		let mut issues = Vec::new();
+		fda_d_11(&patient, &mut issues);
+		fda_d_12(&patient, &mut issues);
+		assert!(issues.is_empty());
+	}
+
+	#[test]
+	fn fda_death_date_rule_is_ind_study_only_and_accepts_null_flavor() {
+		assert!(fda_d_9_1_required(Some("2"), Some("CDER_IND"), true, false));
+		assert!(!fda_d_9_1_required(
+			Some("1"),
+			Some("CDER_IND"),
+			true,
+			false
+		));
+		assert!(!fda_d_9_1_required(Some("2"), Some("CDER_IND"), true, true));
+	}
+
+	#[test]
+	fn parent_duplicate_uses_meddra_code_across_versions() {
+		let parent_id = Uuid::new_v4();
+		let mut episode = medhist(Some("10000001"), Some("26.0"));
+		episode.family_history = Some(true);
+		let parent_history =
+			parent_medhist(parent_id, Some("10000001"), Some("27.0"));
+		let mut issues = Vec::new();
+		d_7_1_r_6_parent_duplicate(0, &episode, &[parent_history], &mut issues);
+		assert!(issues
+			.iter()
+			.any(|issue| issue.code == "ICH.D.7.1.r.6.PARENT_DUPLICATE"));
+	}
+
+	#[test]
+	fn mfds_study_number_ignores_deleted_identifiers() {
+		let mut ctx = empty_ctx();
+		let mut identifier = patient_identifier("4", "STUDY-1");
+		identifier.deleted = true;
+		ctx.patient_identifiers = vec![identifier];
+		let mut issues = Vec::new();
+		mfds_d_ct_cu(&ctx, &mut issues);
+		assert!(issues
+			.iter()
+			.any(|issue| issue.code == "MFDS.D.1.1.4.REQUIRED"));
+	}
+
+	#[test]
 	fn mfds_past_drug_rules_keep_concrete_indices() {
 		let past = crate::PastDrugByCase {
+			drug_name_null_flavor: None,
 			mpid: None,
 			mpid_version: None,
 			mfds_medicinal_product_id: Some("product".to_string()),
@@ -2907,5 +3360,21 @@ mod golden_companion_tests {
 						"patientInformation.pastDrugHistory.4.mfdsMedicinalProductVersion",
 					)
 		}));
+	}
+
+	#[test]
+	fn mfds_past_drug_product_code_is_optional_with_name_null_flavor() {
+		let past = crate::PastDrugByCase {
+			drug_name_null_flavor: Some("UNK".to_string()),
+			mpid: None,
+			mpid_version: None,
+			mfds_medicinal_product_id: None,
+			mfds_medicinal_product_version: None,
+		};
+		let mut issues = Vec::new();
+		mfds_d_8_r_1_kr_1b(0, &past, true, Some("KR"), &empty_ctx(), &mut issues);
+		assert!(!issues
+			.iter()
+			.any(|issue| issue.code == "MFDS.D.8.r.1.KR.1b.REQUIRED"));
 	}
 }

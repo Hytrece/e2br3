@@ -2247,33 +2247,6 @@
     "notes": "Dedicated local persistence companion for official E2B element C.2.r.1.2."
   },
   {
-    "id": "C.2.r.local.reporterCountryNullFlavor",
-    "e2br3_code": "C.2.r.local.reporterCountryNullFlavor",
-    "label": "Reporter Country NullFlavor",
-    "section": "C",
-    "authority": "ICH",
-    "status": "complete",
-    "editor_page": "RP",
-    "editor_status": "complete",
-    "local_only": true,
-    "backend": {
-      "status": "mapped",
-      "model": "PrimarySource",
-      "field": "country_code_null_flavor",
-      "file": "crates/libs/lib-core/src/model/safety_report.rs",
-      "evidence": "PrimarySource.country_code_null_flavor is a dedicated column storing the C.2.r.3 reporter country nullFlavor."
-    },
-    "frontend": {
-      "status": "mapped",
-      "section": "primarySources",
-      "field": "reporterCountryNullFlavor",
-      "file": "../frontend/E2BR3-frontend/components/case-form/sections/SectionC2.tsx",
-      "evidence": "Strict frontend input inventory extracts primarySources.reporterCountryNullFlavor from the case-form section source."
-    },
-    "action": "",
-    "notes": "nullFlavor companion for the C.2.r.3 reporter country element. Unlike the in-band majority — where the base field carries either a value or the flavor token and the frontend API layer splits them at save time — this element has its own frontend input and its own country_code_null_flavor column, so both sides are mapped."
-  },
-  {
     "id": "C.2.r.local.reporterEmailNullFlavor",
     "e2br3_code": "C.2.r.local.reporterEmailNullFlavor",
     "label": "Reporter Email NullFlavor",

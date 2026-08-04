@@ -1,7 +1,7 @@
 //! Shared imports, scope guards, and parent-scope helpers
 //! used across the presave section entity modules.
 
-pub(super) use axum::extract::{Path, State};
+pub(super) use axum::extract::{Path, Query, State};
 pub(super) use axum::http::StatusCode;
 pub(super) use axum::Json;
 pub(super) use lib_core::authorization::EnforcedScopeFilter;
@@ -49,6 +49,27 @@ pub(super) use lib_web::middleware::mw_authorization_snapshot::AuthorizationSnap
 pub(super) use serde::{Deserialize, Serialize};
 pub(super) use std::collections::HashSet;
 pub(super) use uuid::Uuid;
+
+pub(super) fn parse_scope_filter(
+	raw: Option<&str>,
+	field: &str,
+) -> Result<Option<HashSet<Uuid>>> {
+	let Some(raw) = raw else {
+		return Ok(None);
+	};
+	let mut ids = HashSet::new();
+	for value in raw
+		.split(',')
+		.map(str::trim)
+		.filter(|value| !value.is_empty())
+	{
+		let id = Uuid::parse_str(value).map_err(|_| Error::BadRequest {
+			message: format!("{field} accepts UUID values only"),
+		})?;
+		ids.insert(id);
+	}
+	Ok((!ids.is_empty()).then_some(ids))
+}
 
 #[allow(unused_macros)]
 macro_rules! generate_simple_presave_rest_fns {

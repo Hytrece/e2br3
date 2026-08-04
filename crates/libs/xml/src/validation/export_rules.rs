@@ -450,7 +450,7 @@ fn validate_ich_xml_telecom_format_required(
 		xpath,
 		errors,
 		"ICH.XML.TELECOM.FORMAT.REQUIRED",
-		"//hl7:telecom[@value and not(starts-with(@value, 'tel:') or starts-with(@value, 'fax:') or starts-with(@value, 'mailto:'))]",
+		"//hl7:telecom[@value and not(starts-with(@value, 'tel:') or starts-with(@value, 'fax:') or starts-with(@value, 'mailto:') or (@nullFlavor and (@value='tel' or @value='mailto')))]",
 		"Telecom values must use tel:, fax:, or mailto:.",
 	);
 }
@@ -464,7 +464,7 @@ fn validate_ich_xml_telecom_nullflavor_forbidden(
 		xpath,
 		errors,
 		"ICH.XML.TELECOM.NULLFLAVOR.FORBIDDEN",
-		"//hl7:telecom[@value and @nullFlavor]",
+		"//hl7:telecom[@value and @nullFlavor and not(@value='tel' or @value='mailto')]",
 		"Telecom cannot carry value and nullFlavor together.",
 	);
 }
