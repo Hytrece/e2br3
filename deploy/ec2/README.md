@@ -299,8 +299,7 @@ The web server does not talk AS2 itself. It POSTs to an AS2 submitter over HTTP
 the protocol in both directions — FDA delivers ACK3 and asynchronous MDNs back to
 *our* gateway over AS2, so the submitter has to be reachable from outside.
 
-Implementation: `github.com/donihyun/as2-submitter`. Design and rationale:
-`docs/superpowers/specs/2026-07-27-as2-submitter-fda-design.md`.
+Implementation: `github.com/donihyun/as2-submitter`.
 
 `docker-compose.as2.yml` is an **opt-in overlay**. It changes nothing unless you
 pass it explicitly, and it does not modify `docker-compose.prod.yml`.

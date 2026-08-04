@@ -1,13 +1,5 @@
 use super::*;
 
-pub async fn create_fda_submission(
-	ctx: &Ctx,
-	mm: &ModelManager,
-	case_id: Uuid,
-) -> Result<SubmissionRecord> {
-	create_submission(ctx, mm, case_id, SubmissionAuthority::Fda).await
-}
-
 pub async fn create_submission(
 	ctx: &Ctx,
 	mm: &ModelManager,
@@ -407,15 +399,6 @@ pub(super) async fn wait_for_submission_idempotency(
 		sleep(Duration::from_millis(50)).await;
 	}
 	Ok(None)
-}
-
-pub async fn assert_case_ready_for_fda_submission(
-	ctx: &Ctx,
-	mm: &ModelManager,
-	case_id: Uuid,
-) -> Result<()> {
-	assert_case_ready_for_submission(ctx, mm, case_id, SubmissionAuthority::Fda)
-		.await
 }
 
 pub async fn assert_case_ready_for_submission(
