@@ -81,21 +81,22 @@ impl RuntimeSettings {
 			Ok(value.to_string())
 		};
 		let required_bool = |key: &str| -> Result<bool> {
-			value
-				.get(key)
-				.and_then(Value::as_bool)
-				.ok_or_else(|| Error::BadRequest {
+			value.get(key).and_then(Value::as_bool).ok_or_else(|| {
+				Error::BadRequest {
 					message: format!("admin settings field '{key}' must be boolean"),
-				})
+				}
+			})
 		};
 		let timezone = required_string("timezone")?;
-		let timezone = validate_timezone(&timezone).ok_or_else(|| Error::BadRequest {
-			message: "stored timezone must be a valid IANA timezone".to_string(),
-		})?;
+		let timezone =
+			validate_timezone(&timezone).ok_or_else(|| Error::BadRequest {
+				message: "stored timezone must be a valid IANA timezone".to_string(),
+			})?;
 		let orientation = required_string("orientation")?;
 		if !matches!(orientation.as_str(), "Portrait" | "Landscape") {
 			return Err(Error::BadRequest {
-				message: "stored orientation must be Portrait or Landscape".to_string(),
+				message: "stored orientation must be Portrait or Landscape"
+					.to_string(),
 			});
 		}
 		let import_dates = value
@@ -115,7 +116,9 @@ impl RuntimeSettings {
 		let import_dates = ImportDateSettings {
 			update_date_of_creation: import_bool("date_of_creation")?,
 			update_most_recent_info_date: import_bool("most_recent_info_date")?,
-			update_report_first_received_date: import_bool("report_first_received_date")?,
+			update_report_first_received_date: import_bool(
+				"report_first_received_date",
+			)?,
 		};
 		if !matches!(
 			(
@@ -129,8 +132,9 @@ impl RuntimeSettings {
 				| (true, true, true)
 		) {
 			return Err(Error::BadRequest {
-				message: "import_date_update must be one of the four supported states"
-					.to_string(),
+				message:
+					"import_date_update must be one of the four supported states"
+						.to_string(),
 			});
 		}
 		Ok(Self {
@@ -201,7 +205,8 @@ pub fn normalize_appendices(value: Option<&[String]>) -> Result<Vec<String>> {
 	})?;
 	if values.is_empty() {
 		return Err(Error::BadRequest {
-			message: "appendices must include at least one supported authority".to_string(),
+			message: "appendices must include at least one supported authority"
+				.to_string(),
 		});
 	}
 	let mut normalized = Vec::with_capacity(values.len());
@@ -216,18 +221,26 @@ pub fn normalize_appendices(value: Option<&[String]>) -> Result<Vec<String>> {
 			normalized.push(value);
 		}
 	}
+	normalized.sort_by_key(|value| match value.as_str() {
+		"ICH" => 0,
+		"FDA" => 1,
+		"MFDS" => 2,
+		_ => unreachable!(),
+	});
 	Ok(normalized)
 }
 
 fn parse_appendices(value: Option<&Value>) -> Result<Vec<RegulatoryAuthority>> {
-	let values = value
-		.and_then(Value::as_array)
-		.ok_or_else(|| Error::BadRequest {
-			message: "appendices are required".to_string(),
-		})?;
+	let values =
+		value
+			.and_then(Value::as_array)
+			.ok_or_else(|| Error::BadRequest {
+				message: "appendices are required".to_string(),
+			})?;
 	if values.is_empty() {
 		return Err(Error::BadRequest {
-			message: "appendices must include at least one supported authority".to_string(),
+			message: "appendices must include at least one supported authority"
+				.to_string(),
 		});
 	}
 	values

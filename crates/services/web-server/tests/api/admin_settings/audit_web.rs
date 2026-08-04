@@ -69,7 +69,7 @@ async fn test_admin_settings_audit_trail_records_changed_field() -> Result<()> {
 
 	let (user_id, action, changed_fields, old_values, new_values) =
 		create_audit.ok_or("missing app_settings create audit row")?;
-	assert_eq!(user_id, seed.admin.id);
+	assert_eq!(user_id, crate::common::system_user_id());
 	assert_eq!(action, "CREATE");
 	assert_eq!(changed_fields["timezone"]["old"], serde_json::Value::Null);
 	assert_eq!(changed_fields["timezone"]["new"], json!("Asia/Seoul"));

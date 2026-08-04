@@ -2218,7 +2218,8 @@ async fn test_workflow_settings_reject_unknown_role() -> Result<()> {
 						{
 							"name": "Saved",
 							"editable": true,
-							"allowed_roles": ["not_a_real_role"]
+							"allowed_roles": ["not_a_real_role"],
+							"due_days": 0
 						}
 					]
 				}
@@ -2254,7 +2255,8 @@ async fn test_workflow_settings_reject_system_admin_role() -> Result<()> {
 						{
 							"name": "Saved",
 							"editable": true,
-							"allowed_roles": ["system_admin"]
+							"allowed_roles": ["system_admin"],
+							"due_days": 0
 						}
 					]
 				}
@@ -2325,13 +2327,15 @@ async fn test_workflow_transition_updates_case_and_persists_event() -> Result<()
 							"name": "Saved",
 							"editable": true,
 							"description": "Default authoring state",
-							"allowed_roles": ["PVS", "PVM"]
+							"allowed_roles": ["PVS", "PVM"],
+							"due_days": 0
 						},
 						{
 							"name": "To be reviewed",
 							"editable": false,
 							"description": "Pending internal review",
-							"allowed_roles": ["PVM"]
+							"allowed_roles": ["PVM"],
+							"due_days": 0
 						}
 					]
 				}
@@ -2421,7 +2425,8 @@ async fn test_workflow_assignment_updates_owner_without_changing_status(
 							"name": "Saved",
 							"editable": true,
 							"description": "Initial state",
-							"allowed_roles": ["user"]
+							"allowed_roles": ["user"],
+							"due_days": 0
 						}
 					]
 				}
@@ -2513,13 +2518,15 @@ async fn test_non_editable_workflow_status_blocks_subresource_write() -> Result<
 							"name": "Saved",
 							"editable": true,
 							"description": "Default authoring state",
-							"allowed_roles": ["PVS"]
+							"allowed_roles": ["PVS"],
+							"due_days": 0
 						},
 						{
 							"name": "To be reviewed",
 							"editable": false,
 							"description": "Pending internal review",
-							"allowed_roles": ["PVM"]
+							"allowed_roles": ["PVM"],
+							"due_days": 0
 						}
 					]
 				}
@@ -2589,7 +2596,8 @@ async fn test_qced_case_blocks_content_updates_even_when_workflow_saved_is_edita
 							"name": "Saved",
 							"editable": true,
 							"description": "Default authoring state",
-							"allowed_roles": ["PVS", "PVM"]
+							"allowed_roles": ["PVS", "PVM"],
+							"due_days": 0
 						}
 					]
 				}
@@ -2645,7 +2653,8 @@ async fn test_validated_case_blocks_content_updates_even_when_workflow_saved_is_
 							"name": "Saved",
 							"editable": true,
 							"description": "Default authoring state",
-							"allowed_roles": ["PVS", "PVM"]
+							"allowed_roles": ["PVS", "PVM"],
+							"due_days": 0
 						}
 					]
 				}
@@ -2700,13 +2709,15 @@ async fn test_workflow_transition_rejects_user_outside_current_step_role(
 							"name": "Saved",
 							"editable": true,
 							"description": "Owned by PVS only",
-							"allowed_roles": ["PVS"]
+							"allowed_roles": ["PVS"],
+							"due_days": 0
 						},
 						{
 							"name": "To be reviewed",
 							"editable": false,
 							"description": "Pending internal review",
-							"allowed_roles": ["PVM"]
+							"allowed_roles": ["PVM"],
+							"due_days": 0
 						}
 					]
 				}
@@ -2764,19 +2775,22 @@ async fn test_workflow_transition_rejects_user_outside_current_assignee(
 							"name": "Saved",
 							"editable": true,
 							"description": "Initial state",
-							"allowed_roles": ["user"]
+							"allowed_roles": ["user"],
+							"due_days": 0
 						},
 						{
 							"name": "Assigned",
 							"editable": true,
 							"description": "Owned by one assigned user",
-							"allowed_roles": ["user"]
+							"allowed_roles": ["user"],
+							"due_days": 0
 						},
 						{
 							"name": "To be reviewed",
 							"editable": false,
 							"description": "Pending internal review",
-							"allowed_roles": ["manager"]
+							"allowed_roles": ["manager"],
+							"due_days": 0
 						}
 					]
 				}
@@ -2858,13 +2872,15 @@ async fn test_workflow_admin_override_is_allowed_and_audited() -> Result<()> {
 							"name": "Saved",
 							"editable": true,
 							"description": "Owned by user role",
-							"allowed_roles": ["user"]
+							"allowed_roles": ["user"],
+							"due_days": 0
 						},
 						{
 							"name": "To be reviewed",
 							"editable": false,
 							"description": "Pending manager review",
-							"allowed_roles": ["manager"]
+							"allowed_roles": ["manager"],
+							"due_days": 0
 						}
 					]
 				}
@@ -2933,12 +2949,14 @@ async fn test_locked_case_blocks_workflow_transition_even_for_admin_override(
 						{
 							"name": "Saved",
 							"editable": true,
-							"allowed_roles": ["user"]
+							"allowed_roles": ["user"],
+							"due_days": 0
 						},
 						{
 							"name": "To be reviewed",
 							"editable": false,
-							"allowed_roles": ["manager"]
+							"allowed_roles": ["manager"],
+							"due_days": 0
 						}
 					]
 				}

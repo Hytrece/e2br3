@@ -13,16 +13,10 @@ enum CaseNumberSetting {
 	AeRowNumber,
 }
 
-#[derive(Debug, Clone, Copy)]
-enum SequenceCondition {
-	PerSender,
-}
-
 struct CaseNumberConfig {
 	identifier: String,
 	padding: usize,
 	setting: CaseNumberSetting,
-	sequence_condition: SequenceCondition,
 }
 
 pub struct GeneratedCaseNumber {
@@ -65,11 +59,12 @@ fn identifier_from_settings(settings: &Value) -> Result<String> {
 }
 
 fn load_numbering_config(settings: &Value) -> Result<CaseNumberConfig> {
-	let setting = setting_string(Some(settings), "case_number_setting").ok_or_else(|| {
-		crate::model::Error::Validation {
-			message: "case_number_setting is required".to_string(),
-		}
-	})?;
+	let setting =
+		setting_string(Some(settings), "case_number_setting").ok_or_else(|| {
+			crate::model::Error::Validation {
+				message: "case_number_setting is required".to_string(),
+			}
+		})?;
 	if setting != SUPPORTED_CASE_NUMBER_SETTING {
 		return Err(crate::model::Error::Validation {
 			message: format!(
@@ -79,11 +74,10 @@ fn load_numbering_config(settings: &Value) -> Result<CaseNumberConfig> {
 	}
 	let setting = CaseNumberSetting::AeRowNumber;
 	let sequence_condition =
-		setting_string(Some(settings), "case_number_sequence_condition").ok_or_else(|| {
-			crate::model::Error::Validation {
+		setting_string(Some(settings), "case_number_sequence_condition")
+			.ok_or_else(|| crate::model::Error::Validation {
 				message: "case_number_sequence_condition is required".to_string(),
-			}
-		})?;
+			})?;
 	if sequence_condition != SUPPORTED_CASE_NUMBER_SEQUENCE_CONDITION {
 		return Err(crate::model::Error::Validation {
 			message: format!(
@@ -91,7 +85,6 @@ fn load_numbering_config(settings: &Value) -> Result<CaseNumberConfig> {
 			),
 		});
 	}
-	let sequence_condition = SequenceCondition::PerSender;
 	let format_fields = settings
 		.get("case_number_format_fields")
 		.and_then(Value::as_array)
@@ -99,7 +92,8 @@ fn load_numbering_config(settings: &Value) -> Result<CaseNumberConfig> {
 			message: "case_number_format_fields is required".to_string(),
 		})?;
 	if format_fields.len() != 1
-		|| format_fields[0].as_str().map(str::trim) != Some(SUPPORTED_CASE_NUMBER_SETTING)
+		|| format_fields[0].as_str().map(str::trim)
+			!= Some(SUPPORTED_CASE_NUMBER_SETTING)
 	{
 		return Err(crate::model::Error::Validation {
 			message: format!(
@@ -113,7 +107,6 @@ fn load_numbering_config(settings: &Value) -> Result<CaseNumberConfig> {
 		identifier,
 		padding,
 		setting,
-		sequence_condition,
 	})
 }
 
@@ -135,22 +128,19 @@ pub async fn generate_case_number(
 		return Err(err);
 	}
 
-	let (count,) = match (config.setting, config.sequence_condition) {
-		(CaseNumberSetting::AeRowNumber, SequenceCondition::PerSender) => {
-			dbx.fetch_one(
-				sqlx::query_as::<_, (i64,)>(
-					"SELECT COUNT(*)
-					 FROM safety_report_identification sri
-					 JOIN cases c ON c.id = sri.case_id
-					 WHERE c.organization_id = $1
-					   AND sri.safety_report_id LIKE $2",
-				)
-				.bind(ctx.organization_id())
-				.bind(format!("{}%", config.identifier)),
+	let (count,) = match dbx
+		.fetch_one(
+			sqlx::query_as::<_, (i64,)>(
+				"SELECT COUNT(*)
+				 FROM safety_report_identification sri
+				 JOIN cases c ON c.id = sri.case_id
+				 WHERE c.organization_id = $1
+				   AND sri.safety_report_id LIKE $2",
 			)
-			.await
-		}
-	}
+			.bind(ctx.organization_id())
+			.bind(format!("{}%", config.identifier)),
+		)
+		.await
 	{
 		Ok(row) => row,
 		Err(err) => {
@@ -166,7 +156,8 @@ pub async fn generate_case_number(
 			"{}{}",
 			config.identifier,
 			match config.setting {
-				CaseNumberSetting::AeRowNumber => format!("{sequence:0width$}", width = config.padding),
+				CaseNumberSetting::AeRowNumber =>
+					format!("{sequence:0width$}", width = config.padding),
 			},
 		);
 		if !case_number_exists(ctx, mm, &safety_report_id).await? {

@@ -97,6 +97,21 @@ pub async fn init_test_env() -> Result<()> {
 	std::env::set_var("SERVICE_TOKEN_DURATION_SEC", "3600");
 	std::env::set_var("SERVICE_DB_MAX_CONNECTIONS", "5");
 	std::env::set_var("E2BR3_DEBUG_ERRORS", "1");
+	if std::env::var("E2BR3_DEFAULT_MESSAGE_SENDER").is_err() {
+		std::env::set_var("E2BR3_DEFAULT_MESSAGE_SENDER", "TEST-SENDER");
+	}
+	if std::env::var("E2BR3_DEFAULT_MESSAGE_RECEIVER_FDA").is_err() {
+		std::env::set_var("E2BR3_DEFAULT_MESSAGE_RECEIVER_FDA", "TEST-FDA");
+	}
+	if std::env::var("E2BR3_DEFAULT_MESSAGE_RECEIVER_ICH").is_err() {
+		std::env::set_var("E2BR3_DEFAULT_MESSAGE_RECEIVER_ICH", "TEST-ICH");
+	}
+	if std::env::var("E2BR3_DEFAULT_MESSAGE_RECEIVER_MFDS").is_err() {
+		std::env::set_var("E2BR3_DEFAULT_MESSAGE_RECEIVER_MFDS", "TEST-MFDS");
+	}
+	if std::env::var("E2BR3_EXPORT_VALIDATE").is_err() {
+		std::env::set_var("E2BR3_EXPORT_VALIDATE", "0");
+	}
 
 	// Keep integration tests deterministic even when direnv isn't loaded.
 	if std::env::var("E2BR3_EXAMPLES_DIR").is_err() {
