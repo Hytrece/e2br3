@@ -25,6 +25,24 @@
     "notes": ""
   },
   {
+    "id": "FDA.D.1",
+    "e2br3_code": "FDA.D.1",
+    "label": "Patient (name or initials) - FDA regional NullFlavor override",
+    "section": "D",
+    "authority": "FDA",
+    "status": "not_applicable",
+    "backend": {
+      "status": "not_applicable",
+      "evidence": "FDA.D.1 is a validation-only regional alias of the mapped D.1 PatientInformation.patient_initials field."
+    },
+    "frontend": {
+      "status": "not_applicable",
+      "evidence": "FDA.D.1 shares the D.1 patient initials UI field and has no separate editor contract row."
+    },
+    "action": "",
+    "notes": "Validation-only regional alias; it shares the D.1 UI field and has no separate editor contract row."
+  },
+  {
     "id": "D.local.patientIdentifier.typeCode",
     "e2br3_code": "D.local.patientIdentifier.typeCode",
     "label": "Patient Identifier Type Code",

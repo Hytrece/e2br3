@@ -200,6 +200,7 @@ REPORTER_FRONTEND_TO_BACKEND = {
     "reporterState": "state",
     "reporterPostcode": "postcode",
     "reporterTelephone": "telephone",
+    "reporterEmail": "reporter_email",
     "reporterCountry": "country_code",
     "qualification": "qualification",
     "qualificationKr1": "qualification_kr1",
@@ -218,6 +219,7 @@ REPORTER_FRONTEND_TO_BACKEND = {
     "qualificationNullFlavor": "qualification_null_flavor",
 }
 PRIMARY_SOURCE_FRONTEND_TO_BACKEND = dict(REPORTER_FRONTEND_TO_BACKEND)
+PRIMARY_SOURCE_FRONTEND_TO_BACKEND["reporterEmail"] = "email"
 REPORTER_TRANSFER_FILE = (
     "../frontend/E2BR3-frontend/app/(protected)/[authority]/case/[id]/detail/"
     "RP/model/rpModel.ts"

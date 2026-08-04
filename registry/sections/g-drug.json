@@ -1649,6 +1649,31 @@
     "notes": "Phantom backend field retained only so the strict backend inventory stays complete. Superseded by the G.k.9.i.4 mapping on recurrence_action."
   },
   {
+    "id": "G.k.local.dechallengeResult",
+    "e2br3_code": "G.k.local.dechallengeResult",
+    "label": "CIOMS Dechallenge Result",
+    "section": "G",
+    "authority": "ICH",
+    "status": "not_applicable",
+    "local_only": true,
+    "backend": {
+      "status": "mapped",
+      "model": "DrugReactionAssessment",
+      "field": "dechallenge_result",
+      "file": "crates/libs/lib-core/src/model/drug_reaction_assessment.rs",
+      "evidence": "DrugReactionAssessment.dechallenge_result stores the CIOMS Item 20 export input; it is not an E2B element."
+    },
+    "frontend": {
+      "status": "mapped",
+      "section": "drugs.drugReactionAssessments",
+      "field": "dechallengeResult",
+      "file": "../frontend/E2BR3-frontend/components/case-form/sections/SectionG.tsx",
+      "evidence": "SectionG binds the local dechallenge result used by CIOMS export."
+    },
+    "action": "",
+    "notes": "CIOMS-only field; excluded from E2B XML contracts."
+  },
+  {
     "id": "G.k.9.i.4",
     "e2br3_code": "G.k.9.i.4",
     "label": "Did Reaction Recur on Re-administration?",

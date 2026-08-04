@@ -264,6 +264,30 @@
     "notes": ""
   },
   {
+    "id": "FDA.C.2.r.2.8",
+    "e2br3_code": "FDA.C.2.r.2.8",
+    "label": "Reporter's Email",
+    "section": "C",
+    "authority": "FDA",
+    "status": "complete",
+    "backend": {
+      "status": "mapped",
+      "model": "ReporterPresave",
+      "field": "reporter_email",
+      "file": "crates/libs/lib-core/src/model/presave.rs",
+      "evidence": "ReporterPresave.reporter_email stores the FDA reporter email presave value."
+    },
+    "frontend": {
+      "status": "mapped",
+      "section": "reporter",
+      "field": "reporterEmail",
+      "file": "../frontend/E2BR3-frontend/components/presave/ReporterForm.tsx",
+      "evidence": "ReporterForm and ReporterPresaveData bind reporter.reporterEmail."
+    },
+    "action": "",
+    "notes": "FDA regional reporter email used by the RP case source contract."
+  },
+  {
     "id": "C.2.r.3",
     "e2br3_code": "C.2.r.3",
     "label": "Reporter's Country Code",

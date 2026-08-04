@@ -166,7 +166,7 @@
           "C41219",
           "C41261"
         ],
-        "enforcement": "input_contract"
+        "enforcement": "case_validate"
       },
       "oid": "2.16.840.1.113883.3.26.1.1",
       "hl7_data_type": "Coded With Equivalents (CE)",
