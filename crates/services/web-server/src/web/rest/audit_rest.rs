@@ -117,23 +117,21 @@ fn json_display_value(value: &JsonValue) -> String {
 fn audit_display_value(action: &str, diff: &JsonValue) -> String {
 	let preferred = if action == "DELETE" { "old" } else { "new" };
 	diff.get(preferred)
-		.or_else(|| diff.get("new"))
-		.or_else(|| diff.get("old"))
 		.map(json_display_value)
 		.unwrap_or_default()
 }
 
-fn audit_notation_value(field: &str, diff: &JsonValue) -> String {
+fn audit_notation_value(action: &str, field: &str, diff: &JsonValue) -> String {
 	if field.ends_with("_notation") {
-		audit_display_value("UPDATE", diff)
+		audit_display_value(action, diff)
 	} else {
 		String::new()
 	}
 }
 
-fn audit_null_flavor_value(field: &str, diff: &JsonValue) -> String {
+fn audit_null_flavor_value(action: &str, field: &str, diff: &JsonValue) -> String {
 	if field.ends_with("_null_flavor") {
-		audit_display_value("UPDATE", diff)
+		audit_display_value(action, diff)
 	} else {
 		String::new()
 	}
@@ -254,8 +252,12 @@ pub async fn list_case_audit_trail(
 						row_no2: "0".to_string(),
 						row_no3: "0".to_string(),
 						value: audit_display_value(&log.action, &diff),
-						notation: audit_notation_value(&field, &diff),
-						null_flavor: audit_null_flavor_value(&field, &diff),
+						notation: audit_notation_value(&log.action, &field, &diff),
+						null_flavor: audit_null_flavor_value(
+							&log.action,
+							&field,
+							&diff,
+						),
 						reason: audit_reason_value(
 							&log.action,
 							log.reason_for_change.clone(),
@@ -348,6 +350,12 @@ mod tests {
 		assert_eq!(audit_display_value("UPDATE", &diff), "2");
 		assert_eq!(audit_display_value("CREATE", &diff), "2");
 		assert_eq!(audit_display_value("DELETE", &diff), "1");
+	}
+
+	#[test]
+	fn audit_display_value_does_not_fallback_to_the_other_snapshot() {
+		assert_eq!(audit_display_value("UPDATE", &json!({ "old": "1" })), "");
+		assert_eq!(audit_display_value("DELETE", &json!({ "new": "2" })), "");
 	}
 
 	#[test]
