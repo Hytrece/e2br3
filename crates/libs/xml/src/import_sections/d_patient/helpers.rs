@@ -47,9 +47,11 @@ pub(crate) struct MedicalHistoryImport {
 	pub(crate) meddra_version: Option<String>,
 	pub(crate) meddra_code: Option<String>,
 	pub(crate) start_date: Option<Date>,
+	pub(crate) start_date_null_flavor: Option<String>,
 	pub(crate) continuing: Option<bool>,
 	pub(crate) continuing_null_flavor: Option<String>,
 	pub(crate) end_date: Option<Date>,
+	pub(crate) end_date_null_flavor: Option<String>,
 	pub(crate) comments: Option<String>,
 	pub(crate) family_history: Option<bool>,
 }
@@ -64,7 +66,9 @@ pub(crate) struct PastDrugHistoryImport {
 	pub(crate) phpid: Option<String>,
 	pub(crate) phpid_version: Option<String>,
 	pub(crate) start_date: Option<Date>,
+	pub(crate) start_date_null_flavor: Option<String>,
 	pub(crate) end_date: Option<Date>,
+	pub(crate) end_date_null_flavor: Option<String>,
 	pub(crate) indication_meddra_version: Option<String>,
 	pub(crate) indication_meddra_code: Option<String>,
 	pub(crate) reaction_meddra_version: Option<String>,
@@ -125,14 +129,14 @@ fn input_date(
 	check: impl for<'a> Fn(
 		input_contracts::FieldInput<'a>,
 	) -> Vec<input_contracts::InputIssue>,
-) -> Result<Option<Date>> {
+) -> Result<(Option<Date>, Option<String>)> {
 	import_constraint::string(
 		field,
 		value.as_deref(),
 		null_flavor.as_deref(),
 		check,
 	)?;
-	Ok(value.and_then(parse_date))
+	Ok((value.and_then(parse_date), null_flavor))
 }
 
 fn input_number(
@@ -305,19 +309,22 @@ pub(crate) fn parse_medical_history(
 			continue;
 		}
 		let (meddra_version, meddra_code) = read_d_7_1_r_1(&mut xpath, &node)?;
-		let start_date = read_d_7_1_r_2(&mut xpath, &node)?;
+		let (start_date, start_date_null_flavor) =
+			read_d_7_1_r_2(&mut xpath, &node)?;
 		let (continuing, continuing_null_flavor) =
 			read_d_7_1_r_3(&mut xpath, &node)?;
-		let end_date = read_d_7_1_r_4(&mut xpath, &node)?;
+		let (end_date, end_date_null_flavor) = read_d_7_1_r_4(&mut xpath, &node)?;
 		let comments = read_d_7_1_r_5(&mut xpath, &node)?;
 		let family_history = read_d_7_1_r_6(&mut xpath, &node)?;
 		items.push(MedicalHistoryImport {
 			meddra_version,
 			meddra_code,
 			start_date,
+			start_date_null_flavor,
 			continuing,
 			continuing_null_flavor,
 			end_date,
+			end_date_null_flavor,
 			comments,
 			family_history,
 		});
@@ -349,7 +356,7 @@ fn read_d_7_1_r_1(
 fn read_d_7_1_r_2(
 	xpath: &mut Context,
 	node: &libxml::tree::Node,
-) -> Result<Option<Date>> {
+) -> Result<(Option<Date>, Option<String>)> {
 	input_date(
 		first_attr(xpath, node, "hl7:effectiveTime/hl7:low", "value"),
 		first_attr(xpath, node, "hl7:effectiveTime/hl7:low", "nullFlavor"),
@@ -386,7 +393,7 @@ fn read_d_7_1_r_3(
 fn read_d_7_1_r_4(
 	xpath: &mut Context,
 	node: &libxml::tree::Node,
-) -> Result<Option<Date>> {
+) -> Result<(Option<Date>, Option<String>)> {
 	input_date(
 		first_attr(xpath, node, "hl7:effectiveTime/hl7:high", "value"),
 		first_attr(xpath, node, "hl7:effectiveTime/hl7:high", "nullFlavor"),
@@ -468,8 +475,8 @@ pub(crate) fn parse_past_drug_history(
 			read_d_8_r_1_kr(&mut xpath, &node)?;
 		let (mpid_version, mpid) = read_d_8_r_2(&mut xpath, &node)?;
 		let (phpid_version, phpid) = read_d_8_r_3(&mut xpath, &node)?;
-		let start_date = read_d_8_r_4(&mut xpath, &node)?;
-		let end_date = read_d_8_r_5(&mut xpath, &node)?;
+		let (start_date, start_date_null_flavor) = read_d_8_r_4(&mut xpath, &node)?;
+		let (end_date, end_date_null_flavor) = read_d_8_r_5(&mut xpath, &node)?;
 		let (indication_meddra_version, indication_meddra_code) =
 			read_d_8_r_6(&mut xpath, &node)?;
 		let (reaction_meddra_version, reaction_meddra_code) =
@@ -483,7 +490,9 @@ pub(crate) fn parse_past_drug_history(
 			phpid,
 			phpid_version,
 			start_date,
+			start_date_null_flavor,
 			end_date,
+			end_date_null_flavor,
 			indication_meddra_version,
 			indication_meddra_code,
 			reaction_meddra_version,
@@ -578,7 +587,7 @@ fn read_d_8_r_3(
 fn read_d_8_r_4(
 	xpath: &mut Context,
 	node: &libxml::tree::Node,
-) -> Result<Option<Date>> {
+) -> Result<(Option<Date>, Option<String>)> {
 	input_date(
 		first_attr(xpath, node, "hl7:effectiveTime/hl7:low", "value"),
 		first_attr(xpath, node, "hl7:effectiveTime/hl7:low", "nullFlavor"),
@@ -591,7 +600,7 @@ fn read_d_8_r_4(
 fn read_d_8_r_5(
 	xpath: &mut Context,
 	node: &libxml::tree::Node,
-) -> Result<Option<Date>> {
+) -> Result<(Option<Date>, Option<String>)> {
 	input_date(
 		first_attr(xpath, node, "hl7:effectiveTime/hl7:high", "value"),
 		first_attr(xpath, node, "hl7:effectiveTime/hl7:high", "nullFlavor"),
@@ -747,15 +756,12 @@ pub(crate) fn parse_patient_death(xml: &[u8]) -> Result<Option<DeathImport>> {
 
 /// e2b:D.9.1
 fn read_d_9_1(xpath: &mut Context) -> Result<(Option<Date>, Option<String>)> {
-	let value = first_value_root(xpath, "//hl7:deceasedTime/@value");
-	let null_flavor = first_value_root(xpath, "//hl7:deceasedTime/@nullFlavor");
-	let date = input_date(
-		value,
-		null_flavor.clone(),
+	input_date(
+		first_value_root(xpath, "//hl7:deceasedTime/@value"),
+		first_value_root(xpath, "//hl7:deceasedTime/@nullFlavor"),
 		"patientDeath.dateOfDeath",
 		input_contracts::generated::d::d_9_1,
-	)?;
-	Ok((date, null_flavor))
+	)
 }
 
 /// e2b:D.9.3
@@ -864,14 +870,12 @@ fn read_d_10_2_1(
 	node: &libxml::tree::Node,
 ) -> Result<(Option<Date>, Option<String>)> {
 	let path = "hl7:associatedPerson/hl7:birthTime";
-	let null_flavor = first_attr(xpath, node, path, "nullFlavor");
-	let date = input_date(
+	input_date(
 		first_attr(xpath, node, path, "value"),
-		null_flavor.clone(),
+		first_attr(xpath, node, path, "nullFlavor"),
 		"parentInformation.parentBirthDate",
 		input_contracts::generated::d::d_10_2_1,
-	)?;
-	Ok((date, null_flavor))
+	)
 }
 
 /// e2b:D.10.2.2a
@@ -917,14 +921,12 @@ fn read_d_10_3(
 	node: &libxml::tree::Node,
 ) -> Result<(Option<Date>, Option<String>)> {
 	let path = "hl7:subjectOf2/hl7:observation[hl7:code[@code='22']]/hl7:value";
-	let null_flavor = first_attr(xpath, node, path, "nullFlavor");
-	let date = input_date(
+	input_date(
 		first_attr(xpath, node, path, "value"),
-		null_flavor.clone(),
+		first_attr(xpath, node, path, "nullFlavor"),
 		"parentInformation.parentLastMenstrualPeriodDate",
 		input_contracts::generated::d::d_10_3,
-	)?;
-	Ok((date, null_flavor))
+	)
 }
 
 /// e2b:D.10.4
@@ -1016,7 +1018,7 @@ fn read_d_10_7_1_r_1(
 fn read_d_10_7_1_r_2(
 	xpath: &mut Context,
 	node: &libxml::tree::Node,
-) -> Result<Option<Date>> {
+) -> Result<(Option<Date>, Option<String>)> {
 	input_date(
 		first_attr(xpath, node, "hl7:effectiveTime/hl7:low", "value"),
 		first_attr(xpath, node, "hl7:effectiveTime/hl7:low", "nullFlavor"),
@@ -1053,7 +1055,7 @@ fn read_d_10_7_1_r_3(
 fn read_d_10_7_1_r_4(
 	xpath: &mut Context,
 	node: &libxml::tree::Node,
-) -> Result<Option<Date>> {
+) -> Result<(Option<Date>, Option<String>)> {
 	input_date(
 		first_attr(xpath, node, "hl7:effectiveTime/hl7:high", "value"),
 		first_attr(xpath, node, "hl7:effectiveTime/hl7:high", "nullFlavor"),
@@ -1165,7 +1167,7 @@ fn read_d_10_8_r_3(
 fn read_d_10_8_r_4(
 	xpath: &mut Context,
 	node: &libxml::tree::Node,
-) -> Result<Option<Date>> {
+) -> Result<(Option<Date>, Option<String>)> {
 	input_date(
 		first_attr(xpath, node, "hl7:effectiveTime/hl7:low", "value"),
 		first_attr(xpath, node, "hl7:effectiveTime/hl7:low", "nullFlavor"),
@@ -1178,7 +1180,7 @@ fn read_d_10_8_r_4(
 fn read_d_10_8_r_5(
 	xpath: &mut Context,
 	node: &libxml::tree::Node,
-) -> Result<Option<Date>> {
+) -> Result<(Option<Date>, Option<String>)> {
 	input_date(
 		first_attr(xpath, node, "hl7:effectiveTime/hl7:high", "value"),
 		first_attr(xpath, node, "hl7:effectiveTime/hl7:high", "nullFlavor"),
@@ -1296,19 +1298,22 @@ pub(crate) fn parse_parent_information(xml: &[u8]) -> Result<Option<ParentImport
 			continue;
 		}
 		let (meddra_version, meddra_code) = read_d_10_7_1_r_1(&mut xpath, &obs)?;
-		let start_date = read_d_10_7_1_r_2(&mut xpath, &obs)?;
+		let (start_date, start_date_null_flavor) =
+			read_d_10_7_1_r_2(&mut xpath, &obs)?;
 		let (continuing, continuing_null_flavor) =
 			read_d_10_7_1_r_3(&mut xpath, &obs)?;
-		let end_date = read_d_10_7_1_r_4(&mut xpath, &obs)?;
+		let (end_date, end_date_null_flavor) = read_d_10_7_1_r_4(&mut xpath, &obs)?;
 		let comments = read_d_10_7_1_r_5(&mut xpath, &obs)?;
 		let family_history = None;
 		medical_history.push(MedicalHistoryImport {
 			meddra_version,
 			meddra_code,
 			start_date,
+			start_date_null_flavor,
 			continuing,
 			continuing_null_flavor,
 			end_date,
+			end_date_null_flavor,
 			comments,
 			family_history,
 		});
@@ -1330,8 +1335,9 @@ pub(crate) fn parse_parent_information(xml: &[u8]) -> Result<Option<ParentImport
 		let (mpid_version, mpid) = read_d_10_8_r_2(&mut xpath, &obs)?;
 		let (mfds_medicinal_product_version, mfds_medicinal_product_id) =
 			read_d_10_8_r_1_kr(&mut xpath, &obs)?;
-		let start_date = read_d_10_8_r_4(&mut xpath, &obs)?;
-		let end_date = read_d_10_8_r_5(&mut xpath, &obs)?;
+		let (start_date, start_date_null_flavor) =
+			read_d_10_8_r_4(&mut xpath, &obs)?;
+		let (end_date, end_date_null_flavor) = read_d_10_8_r_5(&mut xpath, &obs)?;
 		let (indication_meddra_version, indication_meddra_code) =
 			read_d_10_8_r_6(&mut xpath, &obs)?;
 		let (reaction_meddra_version, reaction_meddra_code) =
@@ -1346,7 +1352,9 @@ pub(crate) fn parse_parent_information(xml: &[u8]) -> Result<Option<ParentImport
 			phpid,
 			phpid_version,
 			start_date,
+			start_date_null_flavor,
 			end_date,
+			end_date_null_flavor,
 			indication_meddra_version,
 			indication_meddra_code,
 			reaction_meddra_version,

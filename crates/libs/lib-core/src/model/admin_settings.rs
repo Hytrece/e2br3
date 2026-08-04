@@ -465,7 +465,7 @@ impl AdminSettingsBmc {
 					)
 					.bind(organization_id)
 					.bind(&notice_key)
-				.bind(title)
+					.bind(title)
 					.bind(notice_text(notice, "body"))
 					.bind(notice_text(notice, "effective_date"))
 					.bind(notice_text(notice, "expire_date"))
@@ -605,8 +605,9 @@ impl AdminSettingsBmc {
 		}
 		let rows = match dbx
 			.fetch_all(sqlx::query_as::<_, (Uuid,)>(
-				"SELECT id FROM permission_profiles WHERE active = true",
-			))
+				"SELECT id FROM permission_profiles WHERE organization_id = $1 AND active = true AND built_in = false",
+			)
+			.bind(ctx.organization_id()))
 			.await
 		{
 			Ok(rows) => rows,

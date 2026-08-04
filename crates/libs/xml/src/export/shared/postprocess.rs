@@ -336,7 +336,23 @@ async fn apply_patient_section(
 		}
 	}
 
-	if let Some(parent) = parent {
+	if let Some(parent) = parent.filter(|parent| {
+		parent.parent_identification.is_some()
+			|| parent.parent_identification_null_flavor.is_some()
+			|| parent.parent_birth_date.is_some()
+			|| parent.parent_birth_date_null_flavor.is_some()
+			|| parent.parent_age.is_some()
+			|| parent.parent_age_unit.is_some()
+			|| parent.last_menstrual_period_date.is_some()
+			|| parent.last_menstrual_period_date_null_flavor.is_some()
+			|| parent.weight_kg.is_some()
+			|| parent.height_cm.is_some()
+			|| parent.sex.is_some()
+			|| parent.sex_null_flavor.is_some()
+			|| parent.medical_history_text.is_some()
+			|| !parent_past_drugs.is_empty()
+			|| !parent_medical_history.is_empty()
+	}) {
 		ensure_parent_role(xpath, doc, parser)?;
 		if let Some(v) = parent.parent_identification.as_deref() {
 			let name_xpath = "//hl7:primaryRole/hl7:player1/hl7:role[hl7:code[@code='PRN']]/hl7:associatedPerson/hl7:name";
@@ -742,6 +758,9 @@ fn write_d_10_7_1_r_2(
 
 /// e2b:D.10.7.1.r.3
 fn write_d_10_7_1_r_3(value: &ParentMedicalHistory) -> String {
+	if let Some(null_flavor) = value.continuing_null_flavor.as_deref() {
+		return format!("<inboundRelationship typeCode=\"REFR\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code code=\"13\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.19\"/><value xsi:type=\"BL\" nullFlavor=\"{}\"/></observation></inboundRelationship>", xml_escape(null_flavor));
+	}
 	value.continuing.map(|v| format!("<inboundRelationship typeCode=\"REFR\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code code=\"13\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.19\"/><value xsi:type=\"BL\" value=\"{}\"/></observation></inboundRelationship>", if v { "true" } else { "false" })).unwrap_or_default()
 }
 

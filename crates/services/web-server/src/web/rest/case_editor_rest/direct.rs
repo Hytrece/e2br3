@@ -1014,6 +1014,21 @@ async fn apply_direct_page_rows_patch(
 	}
 }
 
+fn patch_value_has_content(value: &Value) -> bool {
+	match value {
+		Value::Null => false,
+		Value::String(value) => !value.trim().is_empty(),
+		Value::Array(values) => values.iter().any(patch_value_has_content),
+		Value::Object(values) => values.iter().any(|(key, value)| {
+			!matches!(
+				key.as_str(),
+				"id" | "deleted" | "_delete" | "sequenceNumber"
+			) && patch_value_has_content(value)
+		}),
+		Value::Bool(_) | Value::Number(_) => true,
+	}
+}
+
 fn datetime_field(
 	page_id: &str,
 	row: &Map<String, Value>,
@@ -2174,7 +2189,14 @@ async fn apply_dm_page_rows_patch(
 			};
 			if let Some(existing) = existing {
 				ParentInformationBmc::update(ctx, mm, existing.id, update).await?;
-			} else {
+			} else if patch_value_has_content(&Value::Object(parent.clone()))
+				|| rows
+					.get("parentMedicalHistory")
+					.is_some_and(patch_value_has_content)
+				|| rows
+					.get("parentPastDrugs")
+					.is_some_and(patch_value_has_content)
+			{
 				ParentInformationBmc::create(
 					ctx,
 					mm,
