@@ -1,3 +1,4 @@
+use crate::runtime_settings;
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::Json;
@@ -52,8 +53,13 @@ async fn resolve_authority(
 			.as_ref()
 			.map(|h| h.message_receiver_identifier.as_str()),
 	);
-
-	Ok(authority)
+	let settings = runtime_settings::load(ctx, mm).await?;
+	Ok(settings
+		.appendices
+		.iter()
+		.copied()
+		.find(|configured| *configured == authority)
+		.unwrap_or(settings.appendices[0]))
 }
 
 pub async fn refresh_case_validation_cache(

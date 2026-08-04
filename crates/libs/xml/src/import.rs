@@ -17,6 +17,7 @@ use lib_core::model::message_header::{
 use lib_core::model::store::set_full_context_dbx;
 use lib_core::model::{self, ModelManager};
 use serde_json::json;
+use sqlx::types::time::Date;
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct CImportSettings {
@@ -26,6 +27,7 @@ pub struct CImportSettings {
 	pub apply_sender_info_to_imported_cases: bool,
 	pub apply_default_values_to_imported_r2_cases: bool,
 	pub selected_sender_presave_id: Option<sqlx::types::Uuid>,
+	pub import_date: Option<Date>,
 }
 
 #[derive(Debug, Clone)]

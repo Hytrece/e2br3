@@ -207,6 +207,33 @@ fn concomitant_drug(drug_id: Uuid, product: &str) -> DrugInformation {
 	}
 }
 
+fn test_result() -> TestResult {
+	TestResult {
+		id: test_uuid(),
+		case_id: test_uuid(),
+		sequence_number: 1,
+		test_date: None,
+		test_date_null_flavor: None,
+		test_name: "ALT".to_string(),
+		test_meddra_version: None,
+		test_meddra_code: None,
+		test_result_code: None,
+		test_result_value: Some("42".to_string()),
+		test_result_qualifier: None,
+		test_result_unit: Some("U/L".to_string()),
+		result_unstructured: Some("Elevated".to_string()),
+		normal_low_value: None,
+		normal_high_value: None,
+		comments: None,
+		more_info_available: None,
+		deleted: false,
+		created_at: test_time(),
+		updated_at: test_time(),
+		created_by: test_uuid(),
+		updated_by: None,
+	}
+}
+
 fn dosage_with_route(drug_id: Uuid, route: &str) -> DosageInformation {
 	DosageInformation {
 		id: test_uuid(),
@@ -276,6 +303,38 @@ fn cioms_joins_all_suspect_dosage_texts_in_sequence_order() {
 	let form = CiomsFormData::from_case_data(&data, &default_settings());
 
 	assert_eq!(form.suspect_drug_dose, "first regimen\nthird regimen");
+}
+
+#[test]
+fn cioms_form_maps_reaction_outcome_drug_action_and_test_result() {
+	let mut reaction = reaction_with_country("KR");
+	reaction.outcome = Some("5".to_string());
+	let mut drug = suspect_drug(test_uuid());
+	drug.action_taken = Some("1".to_string());
+	let data = CiomsCaseData {
+		case_number: "SR-FULL-MAPPING".to_string(),
+		report: None,
+		patient: None,
+		reactions: vec![reaction],
+		drugs: vec![drug],
+		dosages: Vec::new(),
+		indications: Vec::new(),
+		test_results: vec![test_result()],
+		primary_sources: Vec::new(),
+		senders: Vec::new(),
+		narrative: None,
+		field_notations: Vec::new(),
+	};
+
+	let form = CiomsFormData::from_case_data(&data, &default_settings());
+
+	assert!(form.reaction_description.contains("Outcome: Fatal"));
+	assert!(form
+		.reaction_description
+		.contains("Drug 1 action: Drug withdrawn"));
+	assert!(form
+		.reaction_description
+		.contains("Test 1: ALT - Elevated - 42 U/L"));
 }
 
 fn reaction_with_country(country_code: &str) -> Reaction {
@@ -513,7 +572,7 @@ fn cioms_pdf_renders_narrative_notation_when_requested() {
 			updated_at: test_time(),
 			created_by: test_uuid(),
 			updated_by: None,
-			}),
+		}),
 		field_notations: Vec::new(),
 	};
 
@@ -548,7 +607,7 @@ fn cioms_pdf_renders_narrative_notation_when_requested() {
 
 #[test]
 fn cioms_pdf_adds_continuation_page_for_long_reaction_text() {
-	let mut narrative_words = vec!["clinical detail"; 90].join(" ");
+	let mut narrative_words = vec!["clinical detail"; 900].join(" ");
 	narrative_words.push_str(" final overflow marker");
 	let data = CiomsCaseData {
 		case_number: "SR-CONTINUATION".to_string(),
@@ -573,14 +632,27 @@ fn cioms_pdf_adds_continuation_page_for_long_reaction_text() {
 			updated_at: test_time(),
 			created_by: test_uuid(),
 			updated_by: None,
-			}),
+		}),
 		field_notations: Vec::new(),
 	};
 
 	let pdf = build_cioms_pdf(&data, &default_settings());
 	let text = String::from_utf8_lossy(&pdf);
 
-	assert!(text.contains("/Count 2"), "{text}");
+	let page_count = text
+		.lines()
+		.find_map(|line| {
+			line.strip_prefix("<< /Type /Pages ").and_then(|line| {
+				line.split("/Count ")
+					.nth(1)?
+					.split_whitespace()
+					.next()?
+					.parse::<usize>()
+					.ok()
+			})
+		})
+		.expect("page tree count");
+	assert!(page_count > 2, "{text}");
 	assert!(text.contains("CIOMS CONTINUATION"), "{text}");
 	assert!(text.contains("7 + 13 DESCRIBE REACTION\\(S\\)"), "{text}");
 	assert!(text.contains("final overflow marker"), "{text}");

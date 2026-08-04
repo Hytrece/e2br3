@@ -139,7 +139,9 @@ async fn import_c_1_safety_report(
 	apply_c_safety_report_import_settings(
 		&mut report,
 		settings,
-		time::OffsetDateTime::now_utc().date(),
+		settings
+			.import_date
+			.unwrap_or_else(|| time::OffsetDateTime::now_utc().date()),
 	);
 	apply_default_values_to_imported_r2_case(
 		&mut report,
@@ -1129,6 +1131,7 @@ mod tests {
 				apply_sender_info_to_imported_cases: false,
 				apply_default_values_to_imported_r2_cases: false,
 				selected_sender_presave_id: None,
+				import_date: None,
 			},
 			import_date,
 		);
@@ -1165,6 +1168,7 @@ mod tests {
 				apply_sender_info_to_imported_cases: false,
 				apply_default_values_to_imported_r2_cases: false,
 				selected_sender_presave_id: None,
+				import_date: None,
 			},
 			import_date,
 		);

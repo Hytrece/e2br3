@@ -13,6 +13,7 @@ pub(super) fn ordered_cioms_case_data(
 		ordered.drugs.reverse();
 		ordered.dosages.reverse();
 		ordered.indications.reverse();
+		ordered.test_results.reverse();
 		ordered.primary_sources.reverse();
 		ordered.senders.reverse();
 	}
@@ -77,9 +78,7 @@ pub(super) fn build_cioms_pdf_with_options(
 		.collect::<Vec<_>>()
 		.join(" ");
 	let page_count = 1 + continuation_streams.len();
-	let obj2 = format!(
-		"<< /Type /Pages /Kids [{page_refs}] /Count {page_count} >>"
-	);
+	let obj2 = format!("<< /Type /Pages /Kids [{page_refs}] /Count {page_count} >>");
 	let obj3 = format!(
 		"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {width} {height}] /Resources << /Font << /F1 4 0 R /F2 5 0 R >> >> /Contents 7 0 R >>"
 	);
@@ -155,7 +154,9 @@ pub async fn export_case_cioms_pdf(
 					&data,
 					&settings,
 					CiomsExportOptions {
-						include_notation: query.include_notation.unwrap_or(settings.notation),
+						include_notation: query
+							.include_notation
+							.unwrap_or(settings.notation),
 					},
 				);
 				let file_name = format!("{}-cioms.pdf", data.case_number);
