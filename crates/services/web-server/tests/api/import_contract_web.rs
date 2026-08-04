@@ -16,7 +16,8 @@ fn scenario6(root: &std::path::Path) -> Result<String> {
 		root.join("docs/exporter/fda/FAERS2022Scenario6.xml"),
 	)?
 	.replace("201411011202", "2014110112")
-	.replace("201401011041", "2014010110"))
+	.replace("201401011041", "2014010110")
+	.replace("\n.\n\n\t\t\t\t\t\t\t</text>", "\n\n\t\t\t\t\t\t\t</text>"))
 }
 
 async fn get_json(
@@ -496,9 +497,10 @@ async fn test_import_settings_apply_default_sender_only_when_enabled() -> Result
 		.to_path_buf();
 	let source_xml = scenario6(&root)?;
 
-	let disabled_xml = source_xml.clone().replace(
+	let disabled_case_number = format!("US-SENDER-DISABLED-{}", uuid::Uuid::new_v4());
+	let disabled_xml = source_xml.replace(
 		"US-APHARMA-8744554B",
-		&format!("US-SENDER-DISABLED-{}", uuid::Uuid::new_v4()),
+		&disabled_case_number,
 	);
 	let (status, body) = import_xml_fixture(
 		&app,
@@ -545,10 +547,11 @@ async fn test_import_settings_apply_default_sender_only_when_enabled() -> Result
 	.await?;
 	assert_eq!(status, StatusCode::OK, "{body:?}");
 
-	let xml = source_xml.replace(
-		"US-APHARMA-8744554B",
+	let xml = disabled_xml.replace(
+		&disabled_case_number,
 		&format!("US-SENDER-{}", uuid::Uuid::new_v4()),
-	);
+	)
+	.replace("<low value=\"20090101\"/>", "<low value=\"20090103\"/>");
 	let (status, body) =
 		import_xml_fixture(&app, &cookie, "FAERS2022Scenario6.xml", xml.as_bytes())
 			.await?;
