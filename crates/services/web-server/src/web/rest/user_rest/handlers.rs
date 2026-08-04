@@ -134,7 +134,7 @@ pub async fn create_user(
 	Ok((
 		StatusCode::CREATED,
 		Json(DataRestResult {
-			data: user_view(entity),
+			data: user_view(&db_ctx, &mm, entity).await?,
 		}),
 	))
 }
@@ -164,7 +164,7 @@ pub async fn get_user(
 	Ok((
 		StatusCode::OK,
 		Json(DataRestResult {
-			data: user_view(entity),
+			data: user_view(&db_ctx, &mm, entity).await?,
 		}),
 	))
 }
@@ -227,7 +227,7 @@ pub async fn list_users(
 	let db_ctx = rls_ctx_for_authorized_read(&ctx, &snapshot, &permit)?;
 	let entities =
 		UserBmc::list(&db_ctx, &mm, params.filters, params.list_options).await?;
-	let entities = entities.into_iter().map(user_view).collect::<Vec<_>>();
+	let entities = user_views(&db_ctx, &mm, entities).await?;
 	Ok((StatusCode::OK, Json(DataRestResult { data: entities })))
 }
 
@@ -394,7 +394,7 @@ pub async fn update_user(
 				Ok((
 					StatusCode::OK,
 					Json(DataRestResult {
-						data: user_view(entity),
+						data: user_view(db_ctx, mm, entity).await?,
 					}),
 				))
 			})
@@ -415,7 +415,7 @@ pub async fn get_current_user(
 	Ok((
 		StatusCode::OK,
 		Json(DataRestResult {
-			data: user_view(entity),
+			data: user_view(&ctx, &mm, entity).await?,
 		}),
 	))
 }
@@ -439,7 +439,7 @@ pub async fn get_current_user_profile(
 		StatusCode::OK,
 		Json(DataRestResult {
 			data: CurrentUserProfileView {
-				user: user_view(entity),
+				user: user_view(&ctx, &mm, entity).await?,
 				active_organization: organization_selection.active_organization,
 				available_organizations: organization_selection
 					.available_organizations,

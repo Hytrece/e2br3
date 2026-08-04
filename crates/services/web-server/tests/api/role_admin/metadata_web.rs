@@ -2,8 +2,8 @@
 
 use super::helpers::*;
 use crate::common::{
-	cookie_header, init_test_mm, insert_user, seed_org_with_users, system_user_id,
-	Result, TEST_CUSTOM_MANAGER_ROLE,
+	cookie_header, init_test_mm, insert_user, seed_org_with_users, system_org_id,
+	system_user_id, Result, TEST_CUSTOM_MANAGER_ROLE,
 };
 use axum::body::{to_bytes, Body};
 use axum::http::{Method, Request, StatusCode};
@@ -60,6 +60,48 @@ async fn test_role_admin_api_exposes_client_role_metadata() -> Result<()> {
 		!sponsor_privileges.is_empty(),
 		"CRO sponsor admin should expose its fixed Safety DB privileges"
 	);
+	Ok(())
+}
+
+#[serial]
+#[tokio::test]
+async fn test_user_api_role_metadata_uses_authoritative_assignment() -> Result<()> {
+	let mm = init_test_mm().await?;
+	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
+	let admin_token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
+	let admin_cookie = cookie_header(&admin_token.to_string());
+
+	set_full_context_dbx(
+		mm.dbx(),
+		system_user_id(),
+		system_org_id(),
+		ROLE_SYSTEM_ADMIN,
+	)
+	.await?;
+	mm.dbx()
+		.execute(
+			sqlx::query("UPDATE users SET role = $1 WHERE id = $2")
+				.bind(TEST_CUSTOM_MANAGER_ROLE)
+				.bind(seed.admin.id),
+		)
+		.await?;
+
+	let app = web_server::app(mm);
+	let (status, value) = request_json(
+		&app,
+		"GET",
+		&admin_cookie,
+		format!("/api/users/{}", seed.admin.id),
+		None,
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK, "{value:?}");
+	assert_eq!(value["data"]["role"], ROLE_SPONSOR_ADMIN_CRO);
+	assert_eq!(
+		value["data"]["roleMeta"]["canonicalRoleId"],
+		ROLE_SPONSOR_ADMIN_CRO
+	);
+	assert_eq!(value["data"]["roleMeta"]["isEditable"], false);
 	Ok(())
 }
 

@@ -18,6 +18,7 @@ use sqlx::postgres::PgRow;
 use sqlx::types::time::OffsetDateTime;
 use sqlx::types::Uuid;
 use sqlx::{query, FromRow};
+use std::collections::HashMap;
 use tokio::time::{sleep, Duration};
 
 // -- Types
@@ -443,6 +444,61 @@ impl UserBmc {
 		list_options: Option<ListOptions>,
 	) -> Result<Vec<User>> {
 		base_uuid::list::<Self, _, _>(ctx, mm, filters, list_options).await
+	}
+
+	pub async fn role_assignments_for_users(
+		ctx: &Ctx,
+		mm: &ModelManager,
+		user_ids: &[Uuid],
+	) -> Result<HashMap<(Uuid, Uuid), Uuid>> {
+		if user_ids.is_empty() {
+			return Ok(HashMap::new());
+		}
+
+		let scoped_mm = mm.new_with_txn()?;
+		let dbx = scoped_mm.dbx();
+		dbx.begin_txn().await.map_err(Error::Dbx)?;
+		if let Err(err) = set_full_context_from_ctx_dbx(dbx, ctx).await {
+			let _ = dbx.rollback_txn().await;
+			return Err(err);
+		}
+		let rows = match dbx
+			.fetch_all(
+				sqlx::query_as::<_, (Uuid, Uuid, Uuid)>(
+					r#"
+					SELECT a.user_id, a.organization_id, a.role_id
+					FROM user_role_assignments a
+					JOIN user_organization_memberships m
+					  ON m.user_id = a.user_id
+					 AND m.organization_id = a.organization_id
+					JOIN organizations o ON o.id = a.organization_id
+					JOIN authorization_roles r ON r.id = a.role_id
+					WHERE a.user_id = ANY($1)
+					  AND a.active = true
+					  AND m.active = true
+					  AND o.active = true
+					  AND r.active = true
+					  AND r.deleted_at IS NULL
+				"#,
+				)
+				.bind(user_ids.to_vec()),
+			)
+			.await
+		{
+			Ok(rows) => rows,
+			Err(err) => {
+				let _ = dbx.rollback_txn().await;
+				return Err(err.into());
+			}
+		};
+		dbx.commit_txn().await.map_err(Error::Dbx)?;
+
+		Ok(rows
+			.into_iter()
+			.map(|(user_id, organization_id, role_id)| {
+				((user_id, organization_id), role_id)
+			})
+			.collect())
 	}
 
 	pub async fn list_workflow_options(

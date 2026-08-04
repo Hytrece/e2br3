@@ -1,19 +1,50 @@
 use super::*;
 
-pub(super) fn user_view(user: User) -> UserView {
+pub(super) async fn user_view(
+	ctx: &Ctx,
+	mm: &ModelManager,
+	user: User,
+) -> Result<UserView> {
+	let mut views = user_views(ctx, mm, vec![user]).await?;
+	Ok(views.pop().expect("single user view"))
+}
+
+pub(super) async fn user_views(
+	ctx: &Ctx,
+	mm: &ModelManager,
+	users: Vec<User>,
+) -> Result<Vec<UserView>> {
+	let user_ids = users.iter().map(|user| user.id).collect::<Vec<_>>();
+	let role_assignments =
+		UserBmc::role_assignments_for_users(ctx, mm, &user_ids).await?;
+	Ok(users
+		.into_iter()
+		.map(|user| {
+			let role_id = role_assignments
+				.get(&(user.id, user.organization_id))
+				.copied();
+			user_view_with_role(user, role_id)
+		})
+		.collect())
+}
+
+fn user_view_with_role(user: User, assigned_role_id: Option<Uuid>) -> UserView {
 	let active = user_is_effectively_active(&user);
 	let access_sender_ids = user.access_sender_ids.clone();
 	let access_product_ids = user.access_product_ids.clone();
 	let access_study_ids = user.access_study_ids.clone();
 	let access_blind_allowed = user.access_blind_allowed;
 	let active_sender_identifier = user.active_sender_identifier.clone();
+	let role = assigned_role_id
+		.map(role_for_assignment)
+		.unwrap_or_else(|| canonical_role(&user.role));
 	UserView {
 		id: user.id,
 		organization_id: user.organization_id,
 		email: user.email,
 		username: user.username,
-		role: user.role.clone(),
-		role_meta: role_metadata(&user.role, None),
+		role: role.clone(),
+		role_meta: role_metadata(&role, None),
 		comments: user.comments,
 		other_information: user.other_information,
 		scope: UserScopeView {
@@ -38,6 +69,29 @@ pub(super) fn user_view(user: User) -> UserView {
 		updated_at: user.updated_at,
 		created_by: user.created_by,
 		updated_by: user.updated_by,
+	}
+}
+
+fn role_for_assignment(role_id: Uuid) -> String {
+	match policy_registry()
+		.built_in_identities()
+		.iter()
+		.find(|identity| identity.id == role_id)
+		.map(|identity| identity.kind)
+	{
+		Some(BuiltInIdentityKind::PlatformAdministrator) => {
+			ROLE_SYSTEM_ADMIN.to_string()
+		}
+		Some(BuiltInIdentityKind::SponsorCroAdministrator) => {
+			ROLE_SPONSOR_ADMIN_CRO.to_string()
+		}
+		Some(BuiltInIdentityKind::SponsorCompanyAdministrator) => {
+			ROLE_SPONSOR_ADMIN_COMPANY.to_string()
+		}
+		Some(BuiltInIdentityKind::OperationalUser) => ROLE_USER.to_string(),
+		Some(BuiltInIdentityKind::InternalServicePrincipal) | None => {
+			role_id.to_string()
+		}
 	}
 }
 
