@@ -173,6 +173,17 @@ async fn test_role_admin_api_persists_menu_privileges() -> Result<()> {
 	}));
 	assert!(value.get("can_review").is_none());
 	assert!(value.get("can_lock").is_none());
+
+	let (status, value) = request_json(
+		&app,
+		"PUT",
+		&admin_cookie,
+		format!("/api/admin/permission-profiles/{profile_id}"),
+		Some(json!({ "data": { "description": null } })),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK, "{value:?}");
+	assert!(value["description"].is_null());
 	Ok(())
 }
 

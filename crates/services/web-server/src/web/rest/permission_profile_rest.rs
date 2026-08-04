@@ -99,7 +99,7 @@ pub struct PermissionProfileCreateBody {
 #[derive(Debug, Deserialize)]
 pub struct PermissionProfileUpdateBody {
 	pub name: Option<String>,
-	pub description: Option<String>,
+	pub description: Option<Option<String>>,
 	pub privileges: Option<Vec<AdminMenuPrivilege>>,
 	pub active: Option<bool>,
 }
@@ -430,8 +430,10 @@ pub async fn update_permission_profile(
 			message: "role name already exists in this organization".to_string(),
 		});
 	}
-	let next_description = normalize_role_description(data.description)?
-		.or_else(|| current.description.clone());
+	let next_description = match data.description {
+		Some(description) => normalize_role_description(description)?,
+		None => current.description.clone(),
+	};
 	let next_privileges = if data.privileges.is_some() {
 		normalize_admin_privileges(data.privileges)?
 	} else {
