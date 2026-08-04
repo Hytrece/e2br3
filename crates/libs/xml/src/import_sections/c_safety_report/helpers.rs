@@ -927,7 +927,17 @@ pub(crate) fn parse_primary_sources(xml: &[u8]) -> Result<Vec<PrimarySourceImpor
 
 #[cfg(test)]
 mod tests {
-	use super::parse_primary_sources;
+	use super::{
+		parse_primary_sources, parse_receiver_information, parse_sender_information,
+		parse_study_information,
+	};
+
+	fn scenario6_xml() -> Vec<u8> {
+		let root =
+			std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..");
+		std::fs::read(root.join("docs/exporter/fda/FAERS2022Scenario6.xml"))
+			.expect("read scenario 6 fixture")
+	}
 
 	fn primary_source_xml(body: &str) -> String {
 		format!(
@@ -1052,6 +1062,49 @@ mod tests {
 			primary_sources[0].qualification_null_flavor.as_deref(),
 			Some("UNK")
 		);
+	}
+
+	#[test]
+	fn c_sender_study_and_receiver_import_preserve_fixture_fields() {
+		let xml = scenario6_xml();
+
+		let sender = parse_sender_information(&xml, None)
+			.expect("parse sender")
+			.expect("sender should exist");
+		assert_eq!(sender.sender_type, "1");
+		assert_eq!(sender.organization_name, "Big Pharma");
+		assert_eq!(sender.department.as_deref(), Some("Management"));
+		assert_eq!(
+			sender.street_address.as_deref(),
+			Some("49 Main St. Building 2030A")
+		);
+		assert_eq!(sender.city.as_deref(), Some("Anytown"));
+		assert_eq!(sender.state.as_deref(), Some("CT"));
+		assert_eq!(sender.postcode.as_deref(), Some("23456"));
+		assert_eq!(sender.country_code.as_deref(), Some("US"));
+		assert_eq!(sender.person_title.as_deref(), Some("Mr"));
+		assert_eq!(sender.person_given_name.as_deref(), Some("Charles"));
+		assert_eq!(sender.person_middle_name.as_deref(), Some("Castile"));
+		assert_eq!(sender.person_family_name.as_deref(), Some("Conner"));
+		assert_eq!(sender.telephone.as_deref(), Some("8884562344"));
+		assert_eq!(sender.fax.as_deref(), Some("6109991122"));
+		assert_eq!(sender.email.as_deref(), Some("emailAddress@company.com"));
+
+		let study = parse_study_information(&xml)
+			.expect("parse study")
+			.expect("study should exist");
+		assert_eq!(study.study_name.as_deref(), Some("Profound Study"));
+		assert_eq!(study.sponsor_study_number.as_deref(), Some("4555-3"));
+		assert_eq!(study.registrations.len(), 2);
+		assert_eq!(study.registrations[0].registration_number, "23489-34");
+		assert_eq!(study.registrations[0].country_code.as_deref(), Some("US"));
+		assert_eq!(study.registrations[1].registration_number, "876444");
+		assert_eq!(study.registrations[1].country_code.as_deref(), Some("FR"));
+
+		let receiver = parse_receiver_information(&xml)
+			.expect("parse receiver")
+			.expect("receiver should exist");
+		assert_eq!(receiver.organization_name.as_deref(), Some("CDER"));
 	}
 }
 

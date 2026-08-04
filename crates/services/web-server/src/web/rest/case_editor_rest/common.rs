@@ -409,8 +409,7 @@ pub(super) fn direct_page_saved(page_id: &str, data: &Value) -> bool {
 			.unwrap_or(false),
 		"SD" => map
 			.get("senderInformation")
-			.and_then(Value::as_array)
-			.map(|rows| !rows.is_empty())
+			.map(|value| !value.is_null())
 			.unwrap_or(false),
 		"SI" => map
 			.get("studyInformation")
@@ -1008,5 +1007,17 @@ mod canonical_row_persistence_tests {
 		.expect("typed parent history update");
 
 		assert_eq!(model.continuing_null_flavor.as_deref(), Some("NASK"));
+	}
+
+	#[test]
+	fn sd_saved_uses_sender_object_presence() {
+		assert!(direct_page_saved(
+			"SD",
+			&json!({"senderInformation": {"organizationName": "Big Pharma"}}),
+		));
+		assert!(!direct_page_saved(
+			"SD",
+			&json!({"senderInformation": null})
+		));
 	}
 }
