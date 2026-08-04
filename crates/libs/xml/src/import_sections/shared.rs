@@ -179,17 +179,6 @@ pub(crate) fn normalize_iso2(value: Option<String>, field: &str) -> Option<Strin
 	}
 }
 
-pub(crate) fn telecom_first(xpath: &mut Context, prefix: &str) -> Option<String> {
-	let values = xpath.findvalues("//hl7:telecom/@value", None).ok()?;
-	for value in values {
-		let value = value.trim();
-		if value.starts_with(prefix) {
-			return Some(value.trim_start_matches(prefix).to_string());
-		}
-	}
-	None
-}
-
 pub(crate) fn telecom_first_in_node(
 	xpath: &mut Context,
 	node: &Node,
@@ -245,7 +234,6 @@ pub(crate) struct MessageHeaderExtract {
 	pub(crate) batch_number: Option<String>,
 	pub(crate) batch_sender: Option<String>,
 	pub(crate) batch_receiver: Option<String>,
-	pub(crate) batch_transmission: Option<String>,
 }
 
 pub(crate) fn extract_message_header(xml: &[u8]) -> Result<MessageHeaderExtract> {
@@ -269,33 +257,34 @@ pub(crate) fn extract_message_header(xml: &[u8]) -> Result<MessageHeaderExtract>
 	})?;
 	let _ = xpath.register_namespace("hl7", "urn:hl7-org:v3");
 
-	let mut first_value = |expr: &str| -> Option<String> {
-		xpath
+	let mut first_value = |expr: &str| -> Result<Option<String>> {
+		Ok(xpath
 			.findvalues(expr, None)
-			.ok()?
+			.map_err(|_| Error::InvalidXml {
+				message: format!("Failed to query message header path: {expr}"),
+				line: None,
+				column: None,
+			})?
 			.into_iter()
-			.find(|v| !v.trim().is_empty())
+			.find(|v| !v.trim().is_empty()))
 	};
 
 	Ok(MessageHeaderExtract {
-		message_number: first_value("//hl7:PORR_IN049016UV/hl7:id/@extension"),
+		message_number: first_value("//hl7:PORR_IN049016UV/hl7:id/@extension")?,
 		message_sender: first_value(
 			"//hl7:PORR_IN049016UV/hl7:sender/hl7:device/hl7:id/@extension",
-		),
+		)?,
 		message_receiver: first_value(
 			"//hl7:PORR_IN049016UV/hl7:receiver/hl7:device/hl7:id/@extension",
-		),
-		message_date: first_value("//hl7:PORR_IN049016UV/hl7:creationTime/@value"),
-		batch_number: first_value("/hl7:MCCI_IN200100UV01/hl7:id/@extension"),
+		)?,
+		message_date: first_value("//hl7:PORR_IN049016UV/hl7:creationTime/@value")?,
+		batch_number: first_value("/hl7:MCCI_IN200100UV01/hl7:id/@extension")?,
 		batch_sender: first_value(
 			"/hl7:MCCI_IN200100UV01/hl7:sender/hl7:device/hl7:id/@extension",
-		),
+		)?,
 		batch_receiver: first_value(
 			"/hl7:MCCI_IN200100UV01/hl7:receiver/hl7:device/hl7:id/@extension",
-		),
-		batch_transmission: first_value(
-			"/hl7:MCCI_IN200100UV01/hl7:creationTime/@value",
-		),
+		)?,
 	})
 }
 

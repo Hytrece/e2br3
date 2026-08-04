@@ -183,15 +183,13 @@ pub fn parse_g_drugs(xml: &[u8]) -> Result<Vec<GDrugImport>> {
 		let fda_specialized_product_category = read_fda_g_k_10a(&mut xpath, &node)?;
 		let drug_additional_information = read_g_k_11(&mut xpath, &node)?;
 		let mut devices = Vec::new();
-		for device in xpath
-			.findnodes(GDrugPaths::DEVICE_NODE, Some(&node))
-			.unwrap_or_default()
-		{
+		for device in find_nodes(&mut xpath, GDrugPaths::DEVICE_NODE, Some(&node))? {
 			let mut codes = Vec::new();
-			for characteristic in xpath
-				.findnodes(GDrugPaths::DEVICE_CHARACTERISTIC_NODE, Some(&device))
-				.unwrap_or_default()
-			{
+			for characteristic in find_nodes(
+				&mut xpath,
+				GDrugPaths::DEVICE_CHARACTERISTIC_NODE,
+				Some(&device),
+			)? {
 				for (element, value_code) in [
 					(
 						"follow_up_type",
@@ -241,9 +239,7 @@ pub fn parse_g_drugs(xml: &[u8]) -> Result<Vec<GDrugImport>> {
 				codes,
 			});
 		}
-		let subs = xpath
-			.findnodes(GDrugPaths::SUBSTANCE_NODE, Some(&node))
-			.unwrap_or_default();
+		let subs = find_nodes(&mut xpath, GDrugPaths::SUBSTANCE_NODE, Some(&node))?;
 		let mut substances = Vec::new();
 		for sub in subs.into_iter() {
 			let sub_name = read_g_k_2_3_r_1(&mut xpath, &sub)?;
@@ -260,29 +256,16 @@ pub fn parse_g_drugs(xml: &[u8]) -> Result<Vec<GDrugImport>> {
 			});
 		}
 
-		let dosages = xpath
-			.findnodes(GDrugPaths::DOSAGE_NODE, Some(&node))
-			.unwrap_or_default();
+		let dosages = find_nodes(&mut xpath, GDrugPaths::DOSAGE_NODE, Some(&node))?;
 		let mut dosage_list = Vec::new();
 		for dose in dosages.into_iter() {
 			let dosage_text = read_g_k_4_r_8(&mut xpath, &dose)?;
 			let frequency_unit = read_g_k_4_r_3(&mut xpath, &dose)?;
-			let effective_time_null_flavor = first_attr(
-				&mut xpath,
-				&dose,
-				GDrugPaths::DOSAGE_EFFECTIVE_TIME_NULL_FLAVOR,
-			);
 			let number_of_units = read_g_k_4_r_2(&mut xpath, &dose)?;
-			let (start_date, start_date_null_flavor) = read_g_k_4_r_4(
-				&mut xpath,
-				&dose,
-				effective_time_null_flavor.as_deref(),
-			)?;
-			let (end_date, end_date_null_flavor) = read_g_k_4_r_5(
-				&mut xpath,
-				&dose,
-				effective_time_null_flavor.as_deref(),
-			)?;
+			let (start_date, start_date_null_flavor) =
+				read_g_k_4_r_4(&mut xpath, &dose)?;
+			let (end_date, end_date_null_flavor) =
+				read_g_k_4_r_5(&mut xpath, &dose)?;
 			let duration_value = read_g_k_4_r_6a(&mut xpath, &dose)?;
 			let duration_unit = read_g_k_4_r_6b(&mut xpath, &dose)?;
 			let dose_value = read_g_k_4_r_1a(&mut xpath, &dose)?;
@@ -328,9 +311,7 @@ pub fn parse_g_drugs(xml: &[u8]) -> Result<Vec<GDrugImport>> {
 			});
 		}
 
-		let inds = xpath
-			.findnodes(GDrugPaths::INDICATION_NODE, Some(&node))
-			.unwrap_or_default();
+		let inds = find_nodes(&mut xpath, GDrugPaths::INDICATION_NODE, Some(&node))?;
 		let mut indications = Vec::new();
 		for ind in inds.into_iter() {
 			let text = read_g_k_7_r_1(&mut xpath, &ind)?;
@@ -343,9 +324,8 @@ pub fn parse_g_drugs(xml: &[u8]) -> Result<Vec<GDrugImport>> {
 			});
 		}
 
-		let chars = xpath
-			.findnodes(GDrugPaths::DEVICE_CHAR_NODE, Some(&node))
-			.unwrap_or_default();
+		let chars =
+			find_nodes(&mut xpath, GDrugPaths::DEVICE_CHAR_NODE, Some(&node))?;
 		let mut characteristics = Vec::new();
 		for ch in chars.into_iter() {
 			let code = read_device_characteristic_code(&mut xpath, &ch);
@@ -745,12 +725,10 @@ fn read_g_k_4_r_3(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
 fn read_g_k_4_r_4(
 	xpath: &mut Context,
 	node: &Node,
-	effective_null_flavor: Option<&str>,
 ) -> Result<(Option<sqlx::types::time::Date>, Option<String>)> {
 	date_pair(
 		first_attr(xpath, node, GDrugPaths::DOSAGE_START_DATE),
-		first_attr(xpath, node, GDrugPaths::DOSAGE_START_DATE_NULL_FLAVOR)
-			.or_else(|| effective_null_flavor.map(str::to_string)),
+		first_attr(xpath, node, GDrugPaths::DOSAGE_START_DATE_NULL_FLAVOR),
 		"dosageInformation[].firstAdministrationDate",
 		"dosageInformation[].firstAdministrationDateNullFlavor",
 		input_contracts::generated::g::g_k_4_r_4,
@@ -761,12 +739,10 @@ fn read_g_k_4_r_4(
 fn read_g_k_4_r_5(
 	xpath: &mut Context,
 	node: &Node,
-	effective_null_flavor: Option<&str>,
 ) -> Result<(Option<sqlx::types::time::Date>, Option<String>)> {
 	date_pair(
 		first_attr(xpath, node, GDrugPaths::DOSAGE_END_DATE),
-		first_attr(xpath, node, GDrugPaths::DOSAGE_END_DATE_NULL_FLAVOR)
-			.or_else(|| effective_null_flavor.map(str::to_string)),
+		first_attr(xpath, node, GDrugPaths::DOSAGE_END_DATE_NULL_FLAVOR),
 		"dosageInformation[].lastAdministrationDate",
 		"dosageInformation[].lastAdministrationDateNullFlavor",
 		input_contracts::generated::g::g_k_4_r_5,
@@ -969,7 +945,6 @@ fn read_device_characteristic_value_type(
 	node: &Node,
 ) -> Option<String> {
 	first_attr(xpath, node, GDrugPaths::DEVICE_CHAR_VALUE_TYPE)
-		.or_else(|| first_attr(xpath, node, GDrugPaths::DEVICE_CHAR_VALUE_TYPE_ALT))
 }
 
 /// e2b:FDA.G.k.local.deviceCharacteristic.valueValue
@@ -1180,6 +1155,18 @@ fn first_attr(xpath: &mut Context, node: &Node, expr: &str) -> Option<String> {
 		.ok()?
 		.into_iter()
 		.find(|v| !v.trim().is_empty())
+}
+
+fn find_nodes(
+	xpath: &mut Context,
+	expr: &str,
+	node: Option<&Node>,
+) -> Result<Vec<Node>> {
+	xpath.findnodes(expr, node).map_err(|_| Error::InvalidXml {
+		message: format!("Failed to query XML path: {expr}"),
+		line: None,
+		column: None,
+	})
 }
 
 fn first_text(xpath: &mut Context, node: &Node, expr: &str) -> Option<String> {

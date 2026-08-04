@@ -2,7 +2,7 @@ use crate::error::Error;
 use crate::import_constraint;
 use crate::import_sections::shared::{
 	first_attr, first_text, first_text_root, first_value_root, normalize_code,
-	normalize_iso2, telecom_first, telecom_first_in_node, MessageHeaderExtract,
+	normalize_iso2, telecom_first_in_node,
 };
 use crate::mfds::codes::{KR_C_3_1_1, KR_C_5_4_1};
 use crate::Result;
@@ -118,10 +118,8 @@ fn sender_text(
 	xpath: &mut Context,
 	node: Option<&libxml::tree::Node>,
 	relative: &str,
-	global: &str,
 ) -> Option<String> {
 	node.and_then(|node| first_text(xpath, node, relative))
-		.or_else(|| first_text_root(xpath, global))
 }
 
 fn sender_string(
@@ -140,10 +138,14 @@ fn read_c_3_1(
 	xpath: &mut Context,
 	node: Option<&libxml::tree::Node>,
 ) -> Result<String> {
-	let raw = node
-		.and_then(|node| first_attr(xpath, node, "./hl7:code[@codeSystem='2.16.840.1.113883.3.989.2.1.1.7']", "code"))
-		.or_else(|| first_value_root(xpath, "//hl7:sender/hl7:device/hl7:asAgent/hl7:representedOrganization/hl7:code/@code"))
-		.or_else(|| first_value_root(xpath, "//hl7:investigationEvent/hl7:subjectOf1/hl7:controlActEvent/hl7:author/hl7:assignedEntity/hl7:code/@code"));
+	let raw = node.and_then(|node| {
+		first_attr(
+			xpath,
+			node,
+			"./hl7:code[@codeSystem='2.16.840.1.113883.3.989.2.1.1.7']",
+			"code",
+		)
+	});
 	let value = raw.ok_or_else(|| Error::InvalidXml {
 		message: "ICH.C.3.1.REQUIRED: sender type missing".to_string(),
 		line: None,
@@ -163,9 +165,16 @@ fn read_c_3_1_kr_1(
 	xpath: &mut Context,
 	node: Option<&libxml::tree::Node>,
 ) -> Result<Option<String>> {
-	let raw = node
-		.and_then(|node| first_attr(xpath, node, &format!("./hl7:subjectOf2/hl7:observation[hl7:code[@code='{KR_C_3_1_1}']]/hl7:value"), "code"))
-		.or_else(|| first_value_root(xpath, &format!("//hl7:investigationEvent/hl7:subjectOf1/hl7:controlActEvent/hl7:author/hl7:assignedEntity/hl7:subjectOf2/hl7:observation[hl7:code[@code='{KR_C_3_1_1}']]/hl7:value/@code")));
+	let raw = node.and_then(|node| {
+		first_attr(
+			xpath,
+			node,
+			&format!(
+				"./hl7:subjectOf2/hl7:observation[hl7:code[@code='{KR_C_3_1_1}']]/hl7:value"
+			),
+			"code",
+		)
+	});
 	sender_string(
 		raw,
 		"healthProfessionalTypeKr1",
@@ -177,13 +186,8 @@ fn read_c_3_1_kr_1(
 fn read_c_3_2(
 	xpath: &mut Context,
 	node: Option<&libxml::tree::Node>,
-	header: Option<&MessageHeaderExtract>,
 ) -> Result<String> {
 	let value = node.and_then(|node| first_text(xpath, node, "./hl7:representedOrganization/hl7:assignedEntity/hl7:representedOrganization/hl7:name"))
-		.or_else(|| node.and_then(|node| first_text(xpath, node, "./hl7:representedOrganization/hl7:name")))
-		.or_else(|| first_text_root(xpath, "//hl7:sender/hl7:device/hl7:asAgent/hl7:representedOrganization/hl7:name"))
-		.or_else(|| first_text_root(xpath, "//hl7:assignedEntity/hl7:representedOrganization/hl7:name"))
-		.or_else(|| header.and_then(|header| header.message_sender.clone()))
 		.ok_or_else(|| Error::InvalidXml { message: "ICH.C.3.2.REQUIRED: sender organization missing".to_string(), line: None, column: None })?;
 	import_constraint::string(
 		"organizationName",
@@ -200,12 +204,7 @@ fn read_c_3_3_1(
 	node: Option<&libxml::tree::Node>,
 ) -> Result<Option<String>> {
 	sender_string(
-		sender_text(
-			xpath,
-			node,
-			"./hl7:representedOrganization/hl7:name",
-			"//hl7:assignedEntity/hl7:representedOrganization/hl7:desc",
-		),
+		sender_text(xpath, node, "./hl7:representedOrganization/hl7:name"),
 		"department",
 		input_contracts::generated::c::c_3_3_1,
 	)
@@ -217,12 +216,7 @@ fn read_c_3_3_2(
 	node: Option<&libxml::tree::Node>,
 ) -> Result<Option<String>> {
 	sender_string(
-		sender_text(
-			xpath,
-			node,
-			"./hl7:assignedPerson/hl7:name/hl7:prefix",
-			"//hl7:assignedEntity/hl7:assignedPerson/hl7:name/hl7:prefix",
-		),
+		sender_text(xpath, node, "./hl7:assignedPerson/hl7:name/hl7:prefix"),
 		"personTitle",
 		input_contracts::generated::c::c_3_3_2,
 	)
@@ -234,12 +228,7 @@ fn read_c_3_3_3(
 	node: Option<&libxml::tree::Node>,
 ) -> Result<Option<String>> {
 	sender_string(
-		sender_text(
-			xpath,
-			node,
-			"./hl7:assignedPerson/hl7:name/hl7:given[1]",
-			"//hl7:assignedEntity/hl7:assignedPerson/hl7:name/hl7:given[1]",
-		),
+		sender_text(xpath, node, "./hl7:assignedPerson/hl7:name/hl7:given[1]"),
 		"personGivenName",
 		input_contracts::generated::c::c_3_3_3,
 	)
@@ -251,12 +240,7 @@ fn read_c_3_3_4(
 	node: Option<&libxml::tree::Node>,
 ) -> Result<Option<String>> {
 	sender_string(
-		sender_text(
-			xpath,
-			node,
-			"./hl7:assignedPerson/hl7:name/hl7:given[2]",
-			"//hl7:assignedEntity/hl7:assignedPerson/hl7:name/hl7:given[2]",
-		),
+		sender_text(xpath, node, "./hl7:assignedPerson/hl7:name/hl7:given[2]"),
 		"personMiddleName",
 		input_contracts::generated::c::c_3_3_4,
 	)
@@ -268,12 +252,7 @@ fn read_c_3_3_5(
 	node: Option<&libxml::tree::Node>,
 ) -> Result<Option<String>> {
 	sender_string(
-		sender_text(
-			xpath,
-			node,
-			"./hl7:assignedPerson/hl7:name/hl7:family",
-			"//hl7:assignedEntity/hl7:assignedPerson/hl7:name/hl7:family",
-		),
+		sender_text(xpath, node, "./hl7:assignedPerson/hl7:name/hl7:family"),
 		"personFamilyName",
 		input_contracts::generated::c::c_3_3_5,
 	)
@@ -284,12 +263,7 @@ fn read_sender_address(
 	node: Option<&libxml::tree::Node>,
 	element: &str,
 ) -> Option<String> {
-	sender_text(
-		xpath,
-		node,
-		&format!("./hl7:addr/hl7:{element}"),
-		&format!("//hl7:assignedEntity/hl7:addr/hl7:{element}"),
-	)
+	sender_text(xpath, node, &format!("./hl7:addr/hl7:{element}"))
 }
 
 /// e2b:C.3.4.1
@@ -342,26 +316,14 @@ fn read_c_3_4_5(
 	xpath: &mut Context,
 	node: Option<&libxml::tree::Node>,
 ) -> Result<Option<String>> {
-	let raw = node
-		.and_then(|node| {
-			first_attr(
-				xpath,
-				node,
-				"./hl7:assignedPerson/hl7:asLocatedEntity/hl7:location/hl7:code",
-				"code",
-			)
-		})
-		.or_else(|| {
-			node.and_then(|node| {
-				first_attr(xpath, node, "./hl7:addr/hl7:country", "code")
-			})
-		})
-		.or_else(|| {
-			first_value_root(
-				xpath,
-				"//hl7:assignedEntity/hl7:addr/hl7:country/@code",
-			)
-		});
+	let raw = node.and_then(|node| {
+		first_attr(
+			xpath,
+			node,
+			"./hl7:assignedPerson/hl7:asLocatedEntity/hl7:location/hl7:code",
+			"code",
+		)
+	});
 	sender_string(
 		raw.map(|value| value.to_ascii_uppercase()),
 		"countryCode",
@@ -375,7 +337,6 @@ fn read_sender_telecom(
 	prefix: &str,
 ) -> Option<String> {
 	node.and_then(|node| telecom_first_in_node(xpath, node, prefix))
-		.or_else(|| telecom_first(xpath, prefix))
 }
 
 /// e2b:C.3.4.6
@@ -412,10 +373,7 @@ fn read_c_3_4_8(
 	)
 }
 
-pub(crate) fn parse_sender_information(
-	xml: &[u8],
-	header: Option<&MessageHeaderExtract>,
-) -> Result<Option<SenderImport>> {
+pub(crate) fn parse_sender_information(xml: &[u8]) -> Result<Option<SenderImport>> {
 	let xml_str = std::str::from_utf8(xml).map_err(|err| Error::InvalidXml {
 		message: format!("XML not valid UTF-8: {err}"),
 		line: None,
@@ -440,11 +398,16 @@ pub(crate) fn parse_sender_information(
 			"//hl7:investigationEvent/hl7:subjectOf1/hl7:controlActEvent/hl7:author/hl7:assignedEntity[hl7:code[@codeSystem='2.16.840.1.113883.3.989.2.1.1.7']]",
 			None,
 		)
-		.ok()
-		.and_then(|nodes| nodes.into_iter().next());
+		.map_err(|_| Error::InvalidXml {
+			message: "Failed to query sender information".to_string(),
+			line: None,
+			column: None,
+		})?
+		.into_iter()
+		.next();
 
 	let sender_type = read_c_3_1(&mut xpath, sender_node.as_ref())?;
-	let organization_name = read_c_3_2(&mut xpath, sender_node.as_ref(), header)?;
+	let organization_name = read_c_3_2(&mut xpath, sender_node.as_ref())?;
 
 	Ok(Some(SenderImport {
 		sender_type,
@@ -606,17 +569,7 @@ fn read_c_2_r_2_1_2(
 		"reporterDepartment",
 		input_contracts::generated::c::c_2_r_2_2,
 	)?;
-	let has_nested = nested.is_some() || nested_null_flavor.is_some();
-	Ok((
-		nested.or_else(|| direct.clone()),
-		nested_null_flavor.or_else(|| {
-			(!has_nested)
-				.then_some(direct_null_flavor.clone())
-				.flatten()
-		}),
-		has_nested.then_some(direct).flatten(),
-		has_nested.then_some(direct_null_flavor).flatten(),
-	))
+	Ok((nested, nested_null_flavor, direct, direct_null_flavor))
 }
 
 /// e2b:C.2.r.2.3
@@ -848,10 +801,7 @@ pub(crate) fn parse_primary_sources(xml: &[u8]) -> Result<Vec<PrimarySourceImpor
 		let country_code = read_c_2_r_5(&mut xpath, &node)?;
 		let (qualification, qualification_null_flavor) =
 			read_c_2_r_4(&mut xpath, &node)?;
-		let primary_source_regulatory_raw = read_c_2_r_3(&mut xpath, &node)?;
-		let primary_source_regulatory = primary_source_regulatory_raw
-			.clone()
-			.or(Some("2".to_string()));
+		let primary_source_regulatory = read_c_2_r_3(&mut xpath, &node)?;
 
 		let has_importable_content = [
 			reporter_title.as_ref(),
@@ -881,7 +831,7 @@ pub(crate) fn parse_primary_sources(xml: &[u8]) -> Result<Vec<PrimarySourceImpor
 			email_null_flavor.as_ref(),
 			qualification.as_ref(),
 			qualification_null_flavor.as_ref(),
-			primary_source_regulatory_raw.as_ref(),
+			primary_source_regulatory.as_ref(),
 		]
 		.into_iter()
 		.any(|value| value.is_some());
@@ -971,7 +921,7 @@ mod tests {
 	}
 
 	#[test]
-	fn primary_source_import_reads_direct_represented_organization_name() {
+	fn primary_source_import_keeps_direct_department_without_promoting_it() {
 		let xml = primary_source_xml(
 			r#"<representedOrganization>
   <name>Direct Reporter Org</name>
@@ -981,8 +931,9 @@ mod tests {
 		let primary_sources = parse_primary_sources(xml.as_bytes()).expect("parse");
 
 		assert_eq!(primary_sources.len(), 1);
+		assert_eq!(primary_sources[0].organization, None);
 		assert_eq!(
-			primary_sources[0].organization.as_deref(),
+			primary_sources[0].department.as_deref(),
 			Some("Direct Reporter Org")
 		);
 	}
@@ -1068,7 +1019,7 @@ mod tests {
 	fn c_sender_study_and_receiver_import_preserve_fixture_fields() {
 		let xml = scenario6_xml();
 
-		let sender = parse_sender_information(&xml, None)
+		let sender = parse_sender_information(&xml)
 			.expect("parse sender")
 			.expect("sender should exist");
 		assert_eq!(sender.sender_type, "1");
@@ -1101,10 +1052,12 @@ mod tests {
 		assert_eq!(study.registrations[1].registration_number, "876444");
 		assert_eq!(study.registrations[1].country_code.as_deref(), Some("FR"));
 
-		let receiver = parse_receiver_information(&xml)
-			.expect("parse receiver")
-			.expect("receiver should exist");
-		assert_eq!(receiver.organization_name.as_deref(), Some("CDER"));
+		let receiver = parse_receiver_information(&xml).expect("parse receiver");
+		assert_eq!(
+			receiver.and_then(|receiver| receiver.organization_name),
+			None,
+			"receiver ID must not be imported as organization name"
+		);
 	}
 }
 
@@ -1328,8 +1281,13 @@ fn read_c_1_6_1_r_2(
 	let representation = first_attr(xpath, node, "hl7:text", "representation");
 	let document = xpath
 		.findnodes("hl7:text", Some(node))
-		.ok()
-		.and_then(|nodes| nodes.into_iter().next())
+		.map_err(|_| Error::InvalidXml {
+			message: "Failed to query document text".to_string(),
+			line: None,
+			column: None,
+		})?
+		.into_iter()
+		.next()
 		.map(|text| {
 			text.get_child_nodes()
 				.into_iter()
@@ -1691,7 +1649,11 @@ fn read_fda_c_5_6_r(
 			"hl7:id[@root='2.16.840.1.113883.3.989.5.1.2.2.1.2.3']",
 			Some(node),
 		)
-		.unwrap_or_default()
+		.map_err(|_| Error::InvalidXml {
+			message: "Failed to query FDA cross-reported identifiers".to_string(),
+			line: None,
+			column: None,
+		})?
 		.into_iter()
 		.map(|id| {
 			input_pair(
@@ -1728,8 +1690,13 @@ pub(crate) fn parse_receiver_information(
 	let _ = xpath.register_namespace("hl7", "urn:hl7-org:v3");
 	let receiver_node = xpath
 		.findnodes("//hl7:receiver/hl7:device", None)
-		.ok()
-		.and_then(|nodes| nodes.into_iter().next());
+		.map_err(|_| Error::InvalidXml {
+			message: "Failed to query receiver information".to_string(),
+			line: None,
+			column: None,
+		})?
+		.into_iter()
+		.next();
 
 	let organization_name = read_receiver_organization_name(&mut xpath);
 
@@ -1766,7 +1733,10 @@ fn read_receiver_type(xpath: &mut Context) -> Option<String> {
 
 /// e2b:local.receiver.2
 fn read_receiver_organization_name(xpath: &mut Context) -> Option<String> {
-	first_value_root(xpath, "//hl7:receiver/hl7:device/hl7:id/@extension").or_else(|| first_text_root(xpath, "//hl7:receiver/hl7:device/hl7:asAgent/hl7:representedOrganization/hl7:name"))
+	first_text_root(
+		xpath,
+		"//hl7:receiver/hl7:device/hl7:asAgent/hl7:representedOrganization/hl7:name",
+	)
 }
 
 /// e2b:local.receiver.3

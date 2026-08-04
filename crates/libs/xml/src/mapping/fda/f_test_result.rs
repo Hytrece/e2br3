@@ -14,7 +14,6 @@ impl FTestResultPaths {
 	pub const TEST_DATE_NULL_FLAVOR: &'static str = "hl7:effectiveTime/@nullFlavor";
 	pub const RESULT_CODE: &'static str = "hl7:interpretationCode/@code";
 	pub const RESULT_VALUE: &'static str = "hl7:value/hl7:center/@value";
-	pub const RESULT_VALUE_FALLBACK: &'static str = "hl7:value/@value";
 	pub const RESULT_NULL_FLAVOR: &'static str = "hl7:value/@nullFlavor";
 	pub const RESULT_LOW_VALUE: &'static str = "hl7:value/hl7:low/@value";
 	pub const RESULT_LOW_NULL_FLAVOR: &'static str = "hl7:value/hl7:low/@nullFlavor";
@@ -24,7 +23,6 @@ impl FTestResultPaths {
 		"hl7:value/hl7:high/@nullFlavor";
 	pub const RESULT_HIGH_INCLUSIVE: &'static str = "hl7:value/hl7:high/@inclusive";
 	pub const RESULT_UNIT: &'static str = "hl7:value/hl7:center/@unit";
-	pub const RESULT_UNIT_FALLBACK: &'static str = "hl7:value/@unit";
 	pub const RESULT_LOW_UNIT: &'static str = "hl7:value/hl7:low/@unit";
 	pub const RESULT_HIGH_UNIT: &'static str = "hl7:value/hl7:high/@unit";
 	pub const RESULT_UNSTRUCTURED: &'static str = "hl7:value";

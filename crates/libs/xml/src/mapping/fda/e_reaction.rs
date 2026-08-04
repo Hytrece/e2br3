@@ -59,18 +59,12 @@ impl EReactionPaths {
 	// Dates / duration
 	pub const START_DATE: &'static str =
 		"hl7:effectiveTime/hl7:comp[@xsi:type='IVL_TS']/hl7:low/@value";
-	pub const START_DATE_FALLBACK: &'static str = "hl7:effectiveTime/hl7:low/@value";
 	pub const START_DATE_NULL_FLAVOR: &'static str =
 		"hl7:effectiveTime/hl7:comp[@xsi:type='IVL_TS']/hl7:low/@nullFlavor";
-	pub const START_DATE_NULL_FLAVOR_FALLBACK: &'static str =
-		"hl7:effectiveTime/hl7:low/@nullFlavor";
 	pub const END_DATE: &'static str =
 		"hl7:effectiveTime/hl7:comp[@xsi:type='IVL_TS']/hl7:high/@value";
-	pub const END_DATE_FALLBACK: &'static str = "hl7:effectiveTime/hl7:high/@value";
 	pub const END_DATE_NULL_FLAVOR: &'static str =
 		"hl7:effectiveTime/hl7:comp[@xsi:type='IVL_TS']/hl7:high/@nullFlavor";
-	pub const END_DATE_NULL_FLAVOR_FALLBACK: &'static str =
-		"hl7:effectiveTime/hl7:high/@nullFlavor";
 	pub const DURATION_VALUE: &'static str =
 		"hl7:effectiveTime/hl7:comp[@operator='A']/hl7:width/@value";
 	pub const DURATION_UNIT: &'static str =

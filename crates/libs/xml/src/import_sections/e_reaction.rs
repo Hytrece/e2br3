@@ -109,11 +109,11 @@ pub fn parse_e_reactions(xml: &[u8]) -> Result<Vec<EReactionImport>> {
 			EReactionPaths::XML_ID_ROOT,
 		));
 		let translation_text = read_e_i_1_1b(&mut xpath, &node)?;
-		let primary = read_e_i_1_1a(&mut xpath, &node, &translation_text, idx)?;
+		let primary = read_e_i_1_1a(&mut xpath, &node, idx)?;
 		let reaction_meddra_version = read_e_i_2_1a(&mut xpath, &node)?;
 		let reaction_meddra_code = read_e_i_2_1b(&mut xpath, &node)?;
 		let reaction_language = read_e_i_1_2(&mut xpath, &node)?;
-		let (term_highlighted, serious_from_term) = read_e_i_3_1(&mut xpath, &node)?;
+		let term_highlighted = read_e_i_3_1(&mut xpath, &node)?;
 		let (criteria_death, criteria_death_null_flavor) =
 			read_e_i_3_2a(&mut xpath, &node)?;
 		let (criteria_life_threatening, criteria_life_threatening_null_flavor) =
@@ -128,17 +128,14 @@ pub fn parse_e_reactions(xml: &[u8]) -> Result<Vec<EReactionImport>> {
 			criteria_other_medically_important,
 			criteria_other_medically_important_null_flavor,
 		) = read_e_i_3_2f(&mut xpath, &node)?;
-		let serious = read_e_i_serious(
-			[
-				criteria_death,
-				criteria_life_threatening,
-				criteria_hospitalization,
-				criteria_disabling,
-				criteria_congenital_anomaly,
-				criteria_other_medically_important,
-			],
-			serious_from_term,
-		);
+		let serious = read_e_i_serious([
+			criteria_death,
+			criteria_life_threatening,
+			criteria_hospitalization,
+			criteria_disabling,
+			criteria_congenital_anomaly,
+			criteria_other_medically_important,
+		]);
 
 		let (required_intervention, required_intervention_null_flavor) =
 			read_fda_e_i_3_2h(&mut xpath, &node)?;
@@ -244,21 +241,18 @@ pub fn parse_e_reactions(xml: &[u8]) -> Result<Vec<EReactionImport>> {
 }
 
 /// e2b:E.i.1.1a
-fn read_e_i_1_1a(
-	xpath: &mut Context,
-	node: &Node,
-	translation: &Option<String>,
-	index: usize,
-) -> Result<String> {
-	let value = first_text(xpath, node, EReactionPaths::PRIMARY_TEXT)
-		.or_else(|| first_text(xpath, node, EReactionPaths::PRIMARY_TEXT_ALT))
-		.or_else(|| translation.clone())
-		.unwrap_or_else(|| {
-			eprintln!(
-				"[import_e2b_xml] reactions[{index}] missing E.i.1.1a text; importing empty primary_source_reaction for downstream validation"
-			);
-			String::new()
-		});
+fn read_e_i_1_1a(xpath: &mut Context, node: &Node, index: usize) -> Result<String> {
+	let value =
+		first_text(xpath, node, EReactionPaths::PRIMARY_TEXT).ok_or_else(|| {
+			Error::InvalidXml {
+				message: format!(
+					"ICH.E.i.1.1a.REQUIRED: reaction text missing for sequence {}",
+					index + 1
+				),
+				line: None,
+				column: None,
+			}
+		})?;
 	import_constraint::string(
 		"primarySourceReaction",
 		Some(&value),
@@ -305,10 +299,7 @@ fn read_e_i_2_1b(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
 }
 
 /// e2b:E.i.3.1
-fn read_e_i_3_1(
-	xpath: &mut Context,
-	node: &Node,
-) -> Result<(Option<String>, Option<bool>)> {
+fn read_e_i_3_1(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
 	let code = first_attr(xpath, node, EReactionPaths::TERM_HIGHLIGHT_CODE);
 	import_constraint::string(
 		"termHighlighted",
@@ -316,26 +307,13 @@ fn read_e_i_3_1(
 		None,
 		input_contracts::generated::e::e_i_3_1,
 	)?;
-	let highlighted = code.clone();
-	let serious = code.as_deref().and_then(|value| match value {
-		"3" | "4" => Some(true),
-		"1" | "2" => Some(false),
-		_ => None,
-	});
-	Ok((highlighted, serious))
+	Ok(code)
 }
 
 /// e2b:E.i.serious
-fn read_e_i_serious(
-	criteria: [Option<bool>; 6],
-	fallback: Option<bool>,
-) -> Option<bool> {
-	criteria
-		.into_iter()
-		.flatten()
-		.any(|value| value)
-		.then_some(true)
-		.or(fallback)
+fn read_e_i_serious(criteria: [Option<bool>; 6]) -> Option<bool> {
+	let values = criteria.into_iter().flatten().collect::<Vec<_>>();
+	(!values.is_empty()).then_some(values.into_iter().any(|value| value))
 }
 
 fn read_seriousness(
@@ -482,19 +460,15 @@ fn read_date(
 	xpath: &mut Context,
 	node: &Node,
 	value_path: &str,
-	fallback_path: &str,
 	null_flavor_path: &str,
-	null_flavor_fallback_path: &str,
 	field: &str,
 	_null_field: &str,
 	check: impl for<'a> Fn(
 		input_contracts::FieldInput<'a>,
 	) -> Vec<input_contracts::InputIssue>,
 ) -> Result<(Option<Date>, Option<String>)> {
-	let raw = first_attr(xpath, node, value_path)
-		.or_else(|| first_attr(xpath, node, fallback_path));
-	let null_flavor = first_attr(xpath, node, null_flavor_path)
-		.or_else(|| first_attr(xpath, node, null_flavor_fallback_path));
+	let raw = first_attr(xpath, node, value_path);
+	let null_flavor = first_attr(xpath, node, null_flavor_path);
 	import_constraint::string(field, raw.as_deref(), null_flavor.as_deref(), check)?;
 	Ok((raw.and_then(parse_date), null_flavor))
 }
@@ -508,9 +482,7 @@ fn read_e_i_4(
 		xpath,
 		node,
 		EReactionPaths::START_DATE,
-		EReactionPaths::START_DATE_FALLBACK,
 		EReactionPaths::START_DATE_NULL_FLAVOR,
-		EReactionPaths::START_DATE_NULL_FLAVOR_FALLBACK,
 		"reactionStartDate",
 		"reactionStartDateNullFlavor",
 		input_contracts::generated::e::e_i_4,
@@ -526,9 +498,7 @@ fn read_e_i_5(
 		xpath,
 		node,
 		EReactionPaths::END_DATE,
-		EReactionPaths::END_DATE_FALLBACK,
 		EReactionPaths::END_DATE_NULL_FLAVOR,
-		EReactionPaths::END_DATE_NULL_FLAVOR_FALLBACK,
 		"reactionEndDate",
 		"reactionEndDateNullFlavor",
 		input_contracts::generated::e::e_i_5,
@@ -742,8 +712,6 @@ fn extension_bool(xpath: &mut Context, node: &Node, code: &str) -> Option<bool> 
 
 fn extension_code(xpath: &mut Context, node: &Node, code: &str) -> Option<String> {
 	extension_value_attr(xpath, node, code, "code")
-		.or_else(|| extension_value_attr(xpath, node, code, "value"))
-		.or_else(|| extension_text(xpath, node, code))
 }
 
 fn extension_text(xpath: &mut Context, node: &Node, code: &str) -> Option<String> {

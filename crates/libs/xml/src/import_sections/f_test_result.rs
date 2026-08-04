@@ -164,14 +164,17 @@ fn read_f_r_1(
 
 /// e2b:F.r.2.1
 fn read_f_r_2_1(xpath: &mut Context, node: &Node, index: usize) -> Result<String> {
-	let value = first_text(xpath, node, FTestResultPaths::TEST_NAME)
-		.or_else(|| first_attr(xpath, node, FTestResultPaths::TEST_NAME_DISPLAY))
-		.unwrap_or_else(|| {
-			eprintln!(
-				"[import_e2b_xml] test_results[{index}] missing F.r.2.1; importing empty test_name for downstream validation"
-			);
-			String::new()
-		});
+	let value =
+		first_text(xpath, node, FTestResultPaths::TEST_NAME).ok_or_else(|| {
+			Error::InvalidXml {
+				message: format!(
+					"ICH.F.r.2.1.REQUIRED: test name missing for sequence {}",
+					index + 1
+				),
+				line: None,
+				column: None,
+			}
+		})?;
 	import_constraint::string(
 		"testName",
 		Some(&value),
@@ -224,10 +227,7 @@ fn read_f_r_3_2(
 			column: None,
 		});
 	}
-	let center =
-		first_attr(xpath, node, FTestResultPaths::RESULT_VALUE).or_else(|| {
-			first_attr(xpath, node, FTestResultPaths::RESULT_VALUE_FALLBACK)
-		});
+	let center = first_attr(xpath, node, FTestResultPaths::RESULT_VALUE);
 	let low_value = first_attr(xpath, node, FTestResultPaths::RESULT_LOW_VALUE);
 	let low_null = first_attr(xpath, node, FTestResultPaths::RESULT_LOW_NULL_FLAVOR);
 	let high_value = first_attr(xpath, node, FTestResultPaths::RESULT_HIGH_VALUE);
@@ -276,13 +276,20 @@ fn read_f_r_3_2(
 
 /// e2b:F.r.3.3
 fn read_f_r_3_3(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
+	let unit_path = if first_attr(xpath, node, FTestResultPaths::RESULT_VALUE)
+		.is_some()
+	{
+		FTestResultPaths::RESULT_UNIT
+	} else if first_attr(xpath, node, FTestResultPaths::RESULT_HIGH_VALUE).is_some()
+	{
+		FTestResultPaths::RESULT_HIGH_UNIT
+	} else if first_attr(xpath, node, FTestResultPaths::RESULT_LOW_VALUE).is_some() {
+		FTestResultPaths::RESULT_LOW_UNIT
+	} else {
+		FTestResultPaths::RESULT_UNIT
+	};
 	input_string(
-		first_attr(xpath, node, FTestResultPaths::RESULT_UNIT)
-			.or_else(|| {
-				first_attr(xpath, node, FTestResultPaths::RESULT_UNIT_FALLBACK)
-			})
-			.or_else(|| first_attr(xpath, node, FTestResultPaths::RESULT_LOW_UNIT))
-			.or_else(|| first_attr(xpath, node, FTestResultPaths::RESULT_HIGH_UNIT)),
+		first_attr(xpath, node, unit_path),
 		"testUnit",
 		input_contracts::generated::f::f_r_3_3,
 	)

@@ -78,7 +78,6 @@ struct DuplicateScanRow {
 	age_d2_2a: Option<String>,
 	sex_d5: Option<String>,
 	investigation_number: Option<String>,
-	drug_medicinal_product: Option<String>,
 	reaction_meddra_code: Option<String>,
 	reaction_meddra_version: Option<String>,
 	ae_start_date: Option<Date>,
@@ -214,7 +213,6 @@ impl CaseDuplicateBmc {
 				    CAST(p.age_at_time_of_onset AS TEXT)  AS age_d2_2a,
 				    p.sex                                 AS sex_d5,
 				    pi.identifier_value                   AS investigation_number,
-				    d.medicinal_product                   AS drug_medicinal_product,
 				    r.reaction_meddra_code,
 				    r.reaction_meddra_version,
 				    r.start_date                          AS ae_start_date
@@ -248,13 +246,6 @@ impl CaseDuplicateBmc {
 				     LIMIT 1
 				) pi ON true
 				LEFT JOIN LATERAL (
-				    SELECT medicinal_product
-				      FROM drug_information
-				     WHERE case_id = c.id
-				     ORDER BY sequence_number
-				     LIMIT 1
-				) d ON true
-				LEFT JOIN LATERAL (
 				    SELECT reaction_meddra_code,
 				           reaction_meddra_version,
 				           start_date
@@ -275,7 +266,7 @@ impl CaseDuplicateBmc {
 
 		let mut matches = Vec::new();
 		for row in rows {
-			let dg_prd_key = row.dg_prd_key.or(row.drug_medicinal_product);
+			let dg_prd_key = row.dg_prd_key;
 
 			let patient_match = matches_patient_signature(
 				key.patient_initials.as_deref(),

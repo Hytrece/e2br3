@@ -1915,7 +1915,6 @@ async fn test_admin_settings_round_trips_alignment_fields() -> Result<()> {
 				"notation": false,
 				"apply_comments_on_exported_xml": true,
 				"apply_sender_info_to_imported_cases": true,
-				"apply_default_values_to_imported_r2_cases": false,
 				"import_date_update": {
 					"date_of_creation": true,
 					"most_recent_info_date": true,

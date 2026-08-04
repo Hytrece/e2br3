@@ -11,10 +11,8 @@ use time::Month;
 
 mod helpers;
 mod runtime;
+pub use runtime::apply_c_safety_report_import_settings;
 pub(crate) use runtime::import_section_c;
-pub use runtime::{
-	apply_c_safety_report_import_settings, apply_default_values_to_imported_r2_case,
-};
 
 #[derive(Debug)]
 pub struct CSafetyReportImport {
@@ -55,15 +53,11 @@ pub fn parse_c_safety_report(xml: &[u8]) -> Result<Option<CSafetyReportImport>> 
 	let _ = xpath.register_namespace("hl7", "urn:hl7-org:v3");
 
 	let transmission_date = read_c_1_2(&mut xpath)?;
-	let transmission_date_for_defaults = parse_date(transmission_date.clone())
-		.unwrap_or_else(|| time::OffsetDateTime::now_utc().date());
 
 	let report_type = read_c_1_3(&mut xpath)?;
 
-	let date_first_received_from_source =
-		read_c_1_4(&mut xpath, transmission_date_for_defaults)?;
-	let date_of_most_recent_information =
-		read_c_1_5(&mut xpath, transmission_date_for_defaults)?;
+	let date_first_received_from_source = read_c_1_4(&mut xpath)?;
+	let date_of_most_recent_information = read_c_1_5(&mut xpath)?;
 	let additional_documents_available = read_c_1_6_1(&mut xpath)?;
 	let fulfil_expedited_criteria = read_c_1_7(&mut xpath)?;
 	let local_criteria_report_type = read_fda_c_1_7_1(&mut xpath)?;
@@ -91,17 +85,24 @@ pub fn parse_c_safety_report(xml: &[u8]) -> Result<Option<CSafetyReportImport>> 
 
 /// e2b:C.1.2
 fn read_c_1_2(xpath: &mut Context) -> Result<String> {
-	let value = first_value_root(xpath, CSafetyReportPaths::DATE_OF_CREATION)
-		.as_deref()
-		.and_then(normalize_datetime);
+	let raw = first_value_root(xpath, CSafetyReportPaths::DATE_OF_CREATION)
+		.ok_or_else(|| Error::InvalidXml {
+			message: "ICH.C.1.2.REQUIRED: transmission date missing".to_string(),
+			line: None,
+			column: None,
+		})?;
+	let value = normalize_datetime(&raw).ok_or_else(|| Error::InvalidXml {
+		message: "ICH.C.1.2: invalid transmission date".to_string(),
+		line: None,
+		column: None,
+	})?;
 	import_constraint::string(
 		"transmissionDate",
-		value.as_deref(),
+		Some(&value),
 		None,
 		input_contracts::generated::c::c_1_2,
 	)?;
-	Ok(value
-		.unwrap_or_else(|| format_datetime(time::OffsetDateTime::now_utc().date())))
+	Ok(value)
 }
 
 /// e2b:C.1.3
@@ -122,27 +123,46 @@ fn read_c_1_3(xpath: &mut Context) -> Result<String> {
 }
 
 /// e2b:C.1.4
-fn read_c_1_4(xpath: &mut Context, fallback: Date) -> Result<Date> {
-	let value = first_value_root(xpath, CSafetyReportPaths::DATE_FIRST_RECEIVED);
+fn read_c_1_4(xpath: &mut Context) -> Result<Date> {
+	let value = first_value_root(xpath, CSafetyReportPaths::DATE_FIRST_RECEIVED)
+		.ok_or_else(|| Error::InvalidXml {
+			message: "ICH.C.1.4.REQUIRED: first received date missing".to_string(),
+			line: None,
+			column: None,
+		})?;
 	import_constraint::string(
 		"dateFirstReceivedFromSource",
-		value.as_deref(),
+		Some(&value),
 		None,
 		input_contracts::generated::c::c_1_4,
 	)?;
-	Ok(value.and_then(parse_date).unwrap_or(fallback))
+	parse_date(value).ok_or_else(|| Error::InvalidXml {
+		message: "ICH.C.1.4: invalid first received date".to_string(),
+		line: None,
+		column: None,
+	})
 }
 
 /// e2b:C.1.5
-fn read_c_1_5(xpath: &mut Context, fallback: Date) -> Result<Date> {
-	let value = first_value_root(xpath, CSafetyReportPaths::DATE_MOST_RECENT);
+fn read_c_1_5(xpath: &mut Context) -> Result<Date> {
+	let value = first_value_root(xpath, CSafetyReportPaths::DATE_MOST_RECENT)
+		.ok_or_else(|| Error::InvalidXml {
+			message: "ICH.C.1.5.REQUIRED: most recent information date missing"
+				.to_string(),
+			line: None,
+			column: None,
+		})?;
 	import_constraint::string(
 		"dateOfMostRecentInformation",
-		value.as_deref(),
+		Some(&value),
 		None,
 		input_contracts::generated::c::c_1_5,
 	)?;
-	Ok(value.and_then(parse_date).unwrap_or(fallback))
+	parse_date(value).ok_or_else(|| Error::InvalidXml {
+		message: "ICH.C.1.5: invalid most recent information date".to_string(),
+		line: None,
+		column: None,
+	})
 }
 
 /// e2b:C.1.6.1

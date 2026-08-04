@@ -96,7 +96,6 @@ pub(crate) fn import_fda_specialized_product_category(
 		let code_value = characteristic
 			.value_code
 			.as_deref()
-			.or(characteristic.value_value.as_deref())
 			.map(str::trim)
 			.filter(|value| !value.is_empty())
 			.map(str::to_string);
@@ -197,14 +196,6 @@ fn read_g_k_9_i_2_r_2(
 		node,
 		"hl7:causalityAssessment/hl7:methodCode/hl7:originalText",
 	)
-	.or_else(|| {
-		first_attr(
-			xpath,
-			node,
-			"hl7:causalityAssessment/hl7:methodCode",
-			"code",
-		)
-	})
 }
 
 /// e2b:G.k.9.i.2.r.3
@@ -329,32 +320,13 @@ pub(crate) fn parse_drug_observations(
 			let (
 				administration_start_interval_value,
 				administration_start_interval_unit,
-			) = if let Some(id) = reaction_xml_id {
-				administration_start_map
-					.get(&id)
-					.cloned()
-					.unwrap_or((None, None))
-			} else if administration_start_map.len() == 1 {
-				administration_start_map
-					.values()
-					.next()
-					.cloned()
-					.unwrap_or((None, None))
-			} else {
-				(None, None)
-			};
+			) = reaction_xml_id
+				.and_then(|id| administration_start_map.get(&id).cloned())
+				.unwrap_or((None, None));
 			let (last_dose_interval_value, last_dose_interval_unit) =
-				if let Some(id) = reaction_xml_id {
-					last_dose_map.get(&id).cloned().unwrap_or((None, None))
-				} else if last_dose_map.len() == 1 {
-					last_dose_map
-						.values()
-						.next()
-						.cloned()
-						.unwrap_or((None, None))
-				} else {
-					(None, None)
-				};
+				reaction_xml_id
+					.and_then(|id| last_dose_map.get(&id).cloned())
+					.unwrap_or((None, None));
 			let rechallenge_action = read_g_k_9_i_4(&mut xpath, &obs);
 			observations.push(DrugObservationImport {
 				drug_xml_id,

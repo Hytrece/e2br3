@@ -28,7 +28,6 @@ pub struct CImportSettings {
 	pub update_most_recent_info_date: bool,
 	pub update_report_first_received_date: bool,
 	pub apply_sender_info_to_imported_cases: bool,
-	pub apply_default_values_to_imported_r2_cases: bool,
 	pub selected_sender_presave_id: Option<sqlx::types::Uuid>,
 	pub import_date: Option<Date>,
 }
@@ -37,8 +36,8 @@ pub struct CImportSettings {
 pub struct XmlImportRequest {
 	pub xml: Vec<u8>,
 	pub c_settings: CImportSettings,
-	pub product_presave_id: Option<sqlx::types::Uuid>,
-	pub product_id: Option<String>,
+	pub product_presave_id: sqlx::types::Uuid,
+	pub product_id: String,
 }
 
 pub fn extract_safety_report_id_from_xml(xml: &[u8]) -> Result<String> {
@@ -70,25 +69,22 @@ async fn import_e2b_xml_in_txn(
 	mm: &ModelManager,
 	req: XmlImportRequest,
 ) -> Result<XmlImportResult> {
-	let product_presave_id = req.product_presave_id.ok_or_else(|| {
-		Error::InvalidImportRequest {
-			message: "productPresaveId is required for XML import".to_string(),
-		}
-	})?;
-	let product_id = req
-		.product_id
-		.as_deref()
-		.map(str::trim)
-		.filter(|value| !value.is_empty())
-		.ok_or_else(|| Error::InvalidImportRequest {
+	let product_id = req.product_id.trim();
+	if product_id.is_empty() {
+		return Err(Error::InvalidImportRequest {
 			message: "Product ID is required for XML import".to_string(),
-		})?
-		.to_string();
+		});
+	}
+	let product_id = product_id.to_string();
+	let product_presave_id = req.product_presave_id;
 	let parsed = parse_e2b_xml(&req.xml)?;
 	let safety_report_id = shared::extract_safety_report_id(&req.xml)?;
-	let transmission_date =
-		parse_c_safety_report(&req.xml)?.map(|report| report.transmission_date);
-	let header_extract = shared::extract_message_header(&req.xml).ok();
+	let transmission_date = parse_c_safety_report(&req.xml)?
+		.map(|report| report.transmission_date)
+		.ok_or_else(|| Error::InvalidImportRequest {
+			message: "C.1 safety report section missing".to_string(),
+		})?;
+	let header_extract = shared::extract_message_header(&req.xml)?;
 	// Serialize imports for the same organization/report ID. The lock is held
 	// by the outer import transaction, so the recheck below closes the race
 	// between the REST decision query and case creation.
@@ -119,11 +115,10 @@ async fn import_e2b_xml_in_txn(
 			let _ = dbx.rollback_txn().await;
 			return Err(Error::Model(err));
 		}
-		let duplicate_case =
-			if let Some(transmission_date) = transmission_date.as_deref() {
-				dbx.fetch_optional(
-					sqlx::query_as::<_, (Uuid, String, i32)>(
-						r#"
+		let duplicate_case = dbx
+			.fetch_optional(
+				sqlx::query_as::<_, (Uuid, String, i32)>(
+					r#"
 					SELECT c.id, s.safety_report_id, s.version
 					  FROM safety_report_identification s
 					  JOIN cases c ON c.id = s.case_id
@@ -133,16 +128,13 @@ async fn import_e2b_xml_in_txn(
 					 ORDER BY s.version DESC
 					 LIMIT 1
 					"#,
-					)
-					.bind(&safety_report_id)
-					.bind(transmission_date)
-					.bind(ctx.organization_id()),
 				)
-				.await
-				.map_err(model::Error::from)?
-			} else {
-				None
-			};
+				.bind(&safety_report_id)
+				.bind(&transmission_date)
+				.bind(ctx.organization_id()),
+			)
+			.await
+			.map_err(model::Error::from)?;
 		let sql = r#"
 			SELECT MAX(s.version)
 			  FROM safety_report_identification s
@@ -188,76 +180,64 @@ async fn import_e2b_xml_in_txn(
 	)
 	.await?;
 
-	if let Some(ref header) = header_extract {
-		let message_number = header
-			.message_number
-			.clone()
-			.unwrap_or_else(|| safety_report_id.clone());
-		let message_number =
-			shared::make_import_message_number(&message_number, case_id);
-		let message_sender = header
-			.message_sender
-			.clone()
-			.or_else(|| header.batch_sender.clone());
-		let message_receiver = header
-			.message_receiver
-			.clone()
-			.or_else(|| header.batch_receiver.clone());
-		let message_date = header
-			.message_date
-			.clone()
-			.or_else(|| header.batch_transmission.clone())
-			.and_then(shared::normalize_message_date);
-		let (msg_sender, msg_receiver, msg_date) = (
-			message_sender.clone(),
-			message_receiver.clone(),
-			message_date.clone(),
-		);
-		if let (Some(message_sender), Some(message_receiver), Some(message_date)) =
-			(msg_sender, msg_receiver, msg_date)
-		{
-			let has_header = MessageHeaderBmc::get_by_case(ctx, &mm, case_id)
-				.await
-				.is_ok();
-			if !has_header {
-				MessageHeaderBmc::create(
-					ctx,
-					&mm,
-					MessageHeaderForCreate {
-						case_id,
-						message_number,
-						message_sender_identifier: message_sender,
-						message_receiver_identifier: message_receiver,
-						message_date,
-					},
-				)
-				.await?;
-			}
-			MessageHeaderBmc::update_by_case(
-				ctx,
-				&mm,
-				case_id,
-				MessageHeaderForUpdate {
-					batch_number: header.batch_number.clone(),
-					batch_sender_identifier: header.batch_sender.clone(),
-					batch_receiver_identifier: header.batch_receiver.clone(),
-					batch_transmission_date: None,
-					message_number: None,
-					message_sender_identifier: None,
-					message_receiver_identifier: None,
-					message_date: None,
-				},
-			)
-			.await?;
-		} else {
-			tracing::warn!(
-				message_sender = ?message_sender,
-				message_receiver = ?message_receiver,
-				message_date = ?message_date,
-				"message header incomplete; skipping create"
-			);
+	let message_number = header_extract.message_number.clone().ok_or_else(|| {
+		Error::InvalidImportRequest {
+			message: "message header number missing".to_string(),
 		}
+	})?;
+	let message_sender = header_extract.message_sender.clone().ok_or_else(|| {
+		Error::InvalidImportRequest {
+			message: "message header sender missing".to_string(),
+		}
+	})?;
+	let message_receiver =
+		header_extract.message_receiver.clone().ok_or_else(|| {
+			Error::InvalidImportRequest {
+				message: "message header receiver missing".to_string(),
+			}
+		})?;
+	let message_date = header_extract
+		.message_date
+		.clone()
+		.and_then(shared::normalize_message_date)
+		.ok_or_else(|| Error::InvalidImportRequest {
+			message: "message header date missing or invalid".to_string(),
+		})?;
+	let message_number =
+		shared::make_import_message_number(&message_number, case_id);
+	let has_header = MessageHeaderBmc::get_by_case(ctx, &mm, case_id)
+		.await
+		.is_ok();
+	if !has_header {
+		MessageHeaderBmc::create(
+			ctx,
+			&mm,
+			MessageHeaderForCreate {
+				case_id,
+				message_number,
+				message_sender_identifier: message_sender,
+				message_receiver_identifier: message_receiver,
+				message_date,
+			},
+		)
+		.await?;
 	}
+	MessageHeaderBmc::update_by_case(
+		ctx,
+		&mm,
+		case_id,
+		MessageHeaderForUpdate {
+			batch_number: header_extract.batch_number.clone(),
+			batch_sender_identifier: header_extract.batch_sender.clone(),
+			batch_receiver_identifier: header_extract.batch_receiver.clone(),
+			batch_transmission_date: None,
+			message_number: None,
+			message_sender_identifier: None,
+			message_receiver_identifier: None,
+			message_date: None,
+		},
+	)
+	.await?;
 
 	import_section_c(
 		ctx,
@@ -266,7 +246,7 @@ async fn import_e2b_xml_in_txn(
 		case_id,
 		&safety_report_id,
 		next_version,
-		header_extract.as_ref(),
+		Some(&header_extract),
 		&req.c_settings,
 	)
 	.await?;

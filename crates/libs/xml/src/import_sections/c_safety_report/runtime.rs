@@ -10,8 +10,7 @@ use lib_core::model::case_identifiers::{
 	OtherCaseIdentifierForUpdate,
 };
 use lib_core::model::presave::{
-	ProductPresaveBmc, SenderPresave, SenderPresaveBmc,
-	SenderPresaveResponsiblePersonBmc,
+	SenderPresave, SenderPresaveBmc, SenderPresaveResponsiblePersonBmc,
 };
 use lib_core::model::receiver::{
 	ReceiverInformationBmc, ReceiverInformationForCreate,
@@ -25,9 +24,6 @@ use lib_core::model::safety_report::{
 	SenderInformationForCreate, SenderInformationForUpdate,
 };
 use lib_core::model::{self, ModelManager};
-use lib_core::regulatory::{
-	infer_regulatory_authority_from_receivers, RegulatoryAuthority,
-};
 use sqlx::types::time::Date;
 use sqlx::types::Uuid;
 
@@ -35,7 +31,7 @@ pub fn apply_c_safety_report_import_settings(
 	report: &mut CSafetyReportImport,
 	settings: &CImportSettings,
 	import_date: Date,
-) {
+) -> Result<()> {
 	if settings.update_date_of_creation {
 		report.transmission_date = format_e2b_datetime(import_date);
 	}
@@ -45,40 +41,26 @@ pub fn apply_c_safety_report_import_settings(
 	if settings.update_report_first_received_date {
 		report.date_first_received_from_source = import_date;
 	}
-	enforce_c1_date_order(report);
-}
-
-pub fn apply_default_values_to_imported_r2_case(
-	report: &mut CSafetyReportImport,
-	enabled: bool,
-) {
-	if !enabled {
-		return;
-	}
-	if report.additional_documents_available.is_none() {
-		report.additional_documents_available = Some(false);
-	}
-	if report.first_sender_type.is_none() {
-		report.first_sender_type = Some("1".to_string());
-	}
-}
-
-fn enforce_c1_date_order(report: &mut CSafetyReportImport) {
 	if report.date_first_received_from_source
 		> report.date_of_most_recent_information
 	{
-		report.date_of_most_recent_information =
-			report.date_first_received_from_source;
+		return Err(Error::InvalidImportRequest {
+			message: "C.1.4 cannot be later than C.1.5".to_string(),
+		});
 	}
-	if report.date_of_most_recent_information > transmission_date_as_date(report) {
-		report.transmission_date =
-			format_e2b_datetime(report.date_of_most_recent_information);
+	if report.date_of_most_recent_information > transmission_date_as_date(report)? {
+		return Err(Error::InvalidImportRequest {
+			message: "C.1.5 cannot be later than C.1.2".to_string(),
+		});
 	}
+	Ok(())
 }
 
-fn transmission_date_as_date(report: &CSafetyReportImport) -> Date {
+fn transmission_date_as_date(report: &CSafetyReportImport) -> Result<Date> {
 	lib_core::serde::flex_date::e2b_datetime_date(&report.transmission_date)
-		.unwrap_or(report.date_of_most_recent_information)
+		.ok_or_else(|| Error::InvalidImportRequest {
+			message: "C.1.2 has an invalid transmission date".to_string(),
+		})
 }
 
 fn format_e2b_datetime(date: Date) -> String {
@@ -111,7 +93,7 @@ pub(crate) async fn import_section_c(
 		settings,
 	)
 	.await?;
-	import_c_2_sender_information(ctx, mm, xml, case_id, header, settings).await?;
+	import_c_2_sender_information(ctx, mm, xml, case_id, settings).await?;
 	import_c_3_primary_sources(ctx, mm, xml, case_id).await?;
 	import_c_4_case_identifiers(ctx, mm, xml, case_id).await?;
 	import_c_4_documents_held_by_sender(ctx, mm, xml, case_id).await?;
@@ -131,22 +113,18 @@ async fn import_c_1_safety_report(
 	header: Option<&shared::MessageHeaderExtract>,
 	settings: &CImportSettings,
 ) -> Result<()> {
-	let Some(mut report) =
+	let mut report =
 		crate::import_sections::c_safety_report::parse_c_safety_report(xml)?
-	else {
-		return Ok(());
-	};
+			.ok_or_else(|| Error::InvalidImportRequest {
+				message: "C.1 safety report section missing".to_string(),
+			})?;
 	apply_c_safety_report_import_settings(
 		&mut report,
 		settings,
 		settings
 			.import_date
 			.unwrap_or_else(|| time::OffsetDateTime::now_utc().date()),
-	);
-	apply_default_values_to_imported_r2_case(
-		&mut report,
-		settings.apply_default_values_to_imported_r2_cases,
-	);
+	)?;
 
 	let receiver_organization = header.and_then(|h| h.message_receiver.clone());
 
@@ -238,55 +216,34 @@ async fn import_c_2_sender_information(
 	mm: &ModelManager,
 	xml: &[u8],
 	case_id: Uuid,
-	header: Option<&shared::MessageHeaderExtract>,
 	settings: &CImportSettings,
 ) -> Result<()> {
-	let authority = header.map(|header| {
-		infer_regulatory_authority_from_receivers(
-			header.batch_receiver.as_deref(),
-			header.message_receiver.as_deref(),
-		)
-	});
 	let (sender, source_sender_presave_id) = if settings
 		.apply_sender_info_to_imported_cases
 	{
-		let xml_sender = c_helpers::parse_sender_information(xml, header)
-			.ok()
-			.flatten();
-		if let Some(sender_id) = settings.selected_sender_presave_id {
-			let sender_presave = SenderPresaveBmc::get(ctx, mm, sender_id)
-				.await
-				.map_err(Error::Model)?;
-			if sender_presave.deleted {
-				return Err(Error::InvalidXml {
-					message: "selected Product Sender is deleted".to_string(),
-					line: None,
-					column: None,
-				});
+		let sender_id = settings.selected_sender_presave_id.ok_or_else(|| {
+			Error::InvalidImportRequest {
+				message:
+					"selected Sender Presave is required when sender application is enabled"
+						.to_string(),
 			}
-			let sender = sender_import_from_presave(ctx, mm, sender_presave).await?;
-			(
-				Some(merge_sender_import(sender, xml_sender)),
-				Some(sender_id),
-			)
-		} else {
-			match sender_from_product_linked_presave(ctx, mm, xml).await? {
-				Some(sender) => {
-					(Some(merge_sender_import(sender, xml_sender)), None)
-				}
-				None => match default_sender_from_presave(ctx, mm, authority).await?
-				{
-					Some(sender) => {
-						(Some(merge_sender_import(sender, xml_sender)), None)
-					}
-					None => {
-						(c_helpers::parse_sender_information(xml, header)?, None)
-					}
-				},
-			}
+		})?;
+		let sender_presave = SenderPresaveBmc::get(ctx, mm, sender_id)
+			.await
+			.map_err(Error::Model)?;
+		if sender_presave.deleted {
+			return Err(Error::InvalidXml {
+				message: "selected Product Sender is deleted".to_string(),
+				line: None,
+				column: None,
+			});
 		}
+		(
+			Some(sender_import_from_presave(ctx, mm, sender_presave).await?),
+			Some(sender_id),
+		)
 	} else {
-		(c_helpers::parse_sender_information(xml, header)?, None)
+		(c_helpers::parse_sender_information(xml)?, None)
 	};
 	let Some(sender) = sender else {
 		return Ok(());
@@ -363,166 +320,6 @@ async fn import_c_2_sender_information(
 	Ok(())
 }
 
-fn merge_sender_import(
-	presave: c_helpers::SenderImport,
-	xml: Option<c_helpers::SenderImport>,
-) -> c_helpers::SenderImport {
-	let Some(xml) = xml else {
-		return presave;
-	};
-
-	c_helpers::SenderImport {
-		sender_type: prefer_required_presave_value(
-			presave.sender_type,
-			xml.sender_type,
-		),
-		health_professional_type_kr1: prefer_optional_presave_value(
-			presave.health_professional_type_kr1,
-			xml.health_professional_type_kr1,
-		),
-		organization_name: prefer_required_presave_value(
-			presave.organization_name,
-			xml.organization_name,
-		),
-		department: prefer_optional_presave_value(
-			presave.department,
-			xml.department,
-		),
-		street_address: prefer_optional_presave_value(
-			presave.street_address,
-			xml.street_address,
-		),
-		city: prefer_optional_presave_value(presave.city, xml.city),
-		state: prefer_optional_presave_value(presave.state, xml.state),
-		postcode: prefer_optional_presave_value(presave.postcode, xml.postcode),
-		country_code: prefer_optional_presave_value(
-			presave.country_code,
-			xml.country_code,
-		),
-		person_title: prefer_optional_presave_value(
-			presave.person_title,
-			xml.person_title,
-		),
-		person_given_name: prefer_optional_presave_value(
-			presave.person_given_name,
-			xml.person_given_name,
-		),
-		person_middle_name: prefer_optional_presave_value(
-			presave.person_middle_name,
-			xml.person_middle_name,
-		),
-		person_family_name: prefer_optional_presave_value(
-			presave.person_family_name,
-			xml.person_family_name,
-		),
-		telephone: prefer_optional_presave_value(presave.telephone, xml.telephone),
-		fax: prefer_optional_presave_value(presave.fax, xml.fax),
-		email: prefer_optional_presave_value(presave.email, xml.email),
-	}
-}
-
-fn prefer_required_presave_value(presave: String, xml: String) -> String {
-	if presave.trim().is_empty() {
-		xml
-	} else {
-		presave
-	}
-}
-
-fn prefer_optional_presave_value(
-	presave: Option<String>,
-	xml: Option<String>,
-) -> Option<String> {
-	match presave {
-		Some(value) if value.trim().is_empty() => xml,
-		Some(value) => Some(value),
-		None => xml,
-	}
-}
-
-async fn default_sender_from_presave(
-	ctx: &Ctx,
-	mm: &ModelManager,
-	_authority: Option<RegulatoryAuthority>,
-) -> Result<Option<c_helpers::SenderImport>> {
-	let mut senders = SenderPresaveBmc::list(ctx, mm, None)
-		.await
-		.map_err(Error::Model)?;
-	senders.retain(|sender| !sender.deleted && sender.is_default);
-	let Some(sender) = senders.into_iter().next() else {
-		return Ok(None);
-	};
-
-	sender_import_from_presave(ctx, mm, sender).await.map(Some)
-}
-
-async fn sender_from_product_linked_presave(
-	ctx: &Ctx,
-	mm: &ModelManager,
-	xml: &[u8],
-) -> Result<Option<c_helpers::SenderImport>> {
-	let imported_product_keys = imported_product_sender_keys(xml)?;
-	if imported_product_keys.is_empty() {
-		return Ok(None);
-	}
-
-	let products = ProductPresaveBmc::list(ctx, mm, None)
-		.await
-		.map_err(Error::Model)?;
-	let Some(product) = products.into_iter().find(|product| {
-		!product.deleted
-			&& product.sender_presave_id.is_some()
-			&& [
-				product.product_id.as_deref(),
-				product.medicinal_product.as_deref(),
-				product.drug_authorization_number.as_deref(),
-				product.preapproval_ip_name.as_deref(),
-			]
-			.into_iter()
-			.flatten()
-			.any(|value| {
-				imported_product_keys.contains(&normalize_import_key(value))
-			})
-	}) else {
-		return Ok(None);
-	};
-	let Some(sender_id) = product.sender_presave_id else {
-		return Ok(None);
-	};
-	let sender = SenderPresaveBmc::get(ctx, mm, sender_id)
-		.await
-		.map_err(Error::Model)?;
-	if sender.deleted {
-		return Ok(None);
-	}
-	sender_import_from_presave(ctx, mm, sender).await.map(Some)
-}
-
-fn imported_product_sender_keys(xml: &[u8]) -> Result<Vec<String>> {
-	let mut keys = Vec::new();
-	for drug in crate::import_sections::g_drug::parse_g_drugs(xml)? {
-		for value in [
-			Some(drug.medicinal_product.as_str()),
-			drug.drug_authorization_number.as_deref(),
-			drug.mpid.as_deref(),
-			drug.phpid.as_deref(),
-		]
-		.into_iter()
-		.flatten()
-		{
-			let key = normalize_import_key(value);
-			if !key.is_empty() && !keys.contains(&key) {
-				keys.push(key);
-			}
-		}
-	}
-	Ok(keys)
-}
-
-fn normalize_import_key(value: &str) -> String {
-	value.trim().to_lowercase()
-}
-
 async fn sender_import_from_presave(
 	ctx: &Ctx,
 	mm: &ModelManager,
@@ -535,11 +332,20 @@ async fn sender_import_from_presave(
 	let responsible = responsible_people
 		.iter()
 		.filter(|person| !person.deleted)
-		.find(|person| person.is_default)
-		.or_else(|| responsible_people.iter().find(|person| !person.deleted));
+		.find(|person| person.is_default);
 
-	let organization_name = sender.organization_name.unwrap_or_default();
-	let sender_type = sender.sender_type.unwrap_or_else(|| "1".to_string());
+	let organization_name = sender
+		.organization_name
+		.filter(|value| !value.trim().is_empty())
+		.ok_or_else(|| Error::InvalidImportRequest {
+			message: "selected Sender has no organization name".to_string(),
+		})?;
+	let sender_type = sender
+		.sender_type
+		.filter(|value| !value.trim().is_empty())
+		.ok_or_else(|| Error::InvalidImportRequest {
+			message: "selected Sender has no sender type".to_string(),
+		})?;
 
 	Ok(c_helpers::SenderImport {
 		sender_type,
@@ -1118,66 +924,44 @@ mod tests {
 	}
 
 	#[test]
-	fn import_date_settings_keep_c1_dates_in_required_order() {
+	fn import_date_settings_reject_c1_dates_out_of_order() {
 		let import_date = date(2024, Month::February, 1);
 		let mut report = report();
 
-		apply_c_safety_report_import_settings(
+		let result = apply_c_safety_report_import_settings(
 			&mut report,
 			&CImportSettings {
 				update_date_of_creation: false,
 				update_most_recent_info_date: false,
 				update_report_first_received_date: true,
 				apply_sender_info_to_imported_cases: false,
-				apply_default_values_to_imported_r2_cases: false,
 				selected_sender_presave_id: None,
 				import_date: None,
 			},
 			import_date,
 		);
 
-		assert!(
-			report.date_first_received_from_source
-				<= report.date_of_most_recent_information,
-			"C.1.4 must not be after C.1.5"
-		);
-		assert!(
-			report.date_first_received_from_source
-				<= transmission_date_as_date(&report),
-			"C.1.4 must not be after C.1.2"
-		);
-		assert!(
-			report.date_of_most_recent_information
-				<= transmission_date_as_date(&report),
-			"C.1.5 must not be after C.1.2"
-		);
-		assert_eq!(report.date_first_received_from_source, import_date);
+		assert!(result.is_err());
 	}
 
 	#[test]
-	fn import_most_recent_date_setting_keeps_transmission_date_after_it() {
+	fn import_most_recent_date_setting_rejects_invalid_order() {
 		let import_date = date(2024, Month::February, 1);
 		let mut report = report();
 
-		apply_c_safety_report_import_settings(
+		let result = apply_c_safety_report_import_settings(
 			&mut report,
 			&CImportSettings {
 				update_date_of_creation: false,
 				update_most_recent_info_date: true,
 				update_report_first_received_date: false,
 				apply_sender_info_to_imported_cases: false,
-				apply_default_values_to_imported_r2_cases: false,
 				selected_sender_presave_id: None,
 				import_date: None,
 			},
 			import_date,
 		);
 
-		assert_eq!(report.date_of_most_recent_information, import_date);
-		assert!(
-			report.date_of_most_recent_information
-				<= transmission_date_as_date(&report),
-			"C.1.5 must not be after C.1.2"
-		);
+		assert!(result.is_err());
 	}
 }

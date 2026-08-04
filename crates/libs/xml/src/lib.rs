@@ -26,9 +26,7 @@ pub use import::{
 	extract_safety_report_id_from_xml, import_e2b_xml, CImportSettings,
 	XmlImportRequest,
 };
-pub use import_sections::c_safety_report::{
-	apply_c_safety_report_import_settings, apply_default_values_to_imported_r2_case,
-};
+pub use import_sections::c_safety_report::apply_c_safety_report_import_settings;
 pub use parser::parse_e2b_xml;
 pub use types::ParsedE2b;
 pub use types::{XmlImportResult, XmlValidationError, XmlValidationReport};

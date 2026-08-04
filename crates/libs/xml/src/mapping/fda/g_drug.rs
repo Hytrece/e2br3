@@ -143,7 +143,6 @@ impl GDrugPaths {
 	pub const DEVICE_CHAR_CODE_SYSTEM: &'static str = "hl7:code/@codeSystem";
 	pub const DEVICE_CHAR_DISPLAY: &'static str = "hl7:code/@displayName";
 	pub const DEVICE_CHAR_VALUE_TYPE: &'static str = "hl7:value/@xsi:type";
-	pub const DEVICE_CHAR_VALUE_TYPE_ALT: &'static str = "hl7:value/@type";
 	pub const DEVICE_CHAR_VALUE_VALUE: &'static str = "hl7:value/@value";
 	pub const DEVICE_CHAR_VALUE_CODE: &'static str = "hl7:value/@code";
 	pub const DEVICE_CHAR_VALUE_CODE_SYSTEM: &'static str = "hl7:value/@codeSystem";

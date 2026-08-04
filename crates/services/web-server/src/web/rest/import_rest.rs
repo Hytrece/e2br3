@@ -296,8 +296,8 @@ async fn import_single_xml(
 	filename: String,
 	c_settings: CImportSettings,
 	decision: XmlImportDecision,
-	product_presave_id: Option<Uuid>,
-	product_id: Option<String>,
+	product_presave_id: Uuid,
+	product_id: String,
 ) -> Result<ImportedCaseSummary> {
 	let validation_report = validate_e2b_xml(&xml, None);
 	match validation_report {
@@ -535,7 +535,7 @@ fn decimal_string(value: Option<rust_decimal::Decimal>) -> Option<String> {
 
 fn duplicate_key_from_xml(
 	xml: &[u8],
-	product_id: Option<&str>,
+	product_id: &str,
 ) -> Result<(XmlImportIncomingKey, CaseDuplicateKey)> {
 	let safety_report_id =
 		extract_safety_report_id_from_xml(xml).map_err(Error::Xml)?;
@@ -548,10 +548,7 @@ fn duplicate_key_from_xml(
 	let patient = parse_d_patient(xml).map_err(Error::Xml)?;
 	let reactions = parse_e_reactions(xml).map_err(Error::Xml)?;
 	let first_reaction = reactions.first();
-	let dg_prd_key = product_id
-		.map(str::trim)
-		.filter(|value| !value.is_empty())
-		.map(ToOwned::to_owned);
+	let dg_prd_key = Some(product_id.trim().to_owned());
 
 	Ok((
 		XmlImportIncomingKey {
@@ -638,7 +635,7 @@ async fn decide_import_entry(
 	ctx: &Ctx,
 	mm: &ModelManager,
 	xml: &[u8],
-	product_id: Option<&str>,
+	product_id: &str,
 ) -> Result<XmlImportDecision> {
 	let (incoming, duplicate_key) = duplicate_key_from_xml(xml, product_id)?;
 	let same_report_cases =
@@ -677,8 +674,6 @@ async fn load_import_settings(
 			.update_report_first_received_date,
 		apply_sender_info_to_imported_cases: settings
 			.apply_sender_info_to_imported_cases,
-		apply_default_values_to_imported_r2_cases: settings
-			.apply_default_values_to_imported_r2_cases,
 		selected_sender_presave_id: None,
 		import_date: Some(settings.import_date()),
 	})
@@ -848,11 +843,12 @@ async fn import_xml_authorized(
 	multipart: Multipart,
 ) -> Result<(StatusCode, Json<DataRestResult<XmlImportBatchResult>>)> {
 	let payload = read_xml_multipart(multipart).await?;
-	let product_presave_id = payload.product_presave_id.ok_or_else(|| {
-		Error::BadRequest {
-			message: "productPresaveId is required for XML import".to_string(),
-		}
-	})?;
+	let product_presave_id =
+		payload
+			.product_presave_id
+			.ok_or_else(|| Error::BadRequest {
+				message: "productPresaveId is required for XML import".to_string(),
+			})?;
 	let product = ProductPresaveBmc::get(ctx, mm, product_presave_id)
 		.await
 		.map_err(Error::Model)?;
@@ -866,37 +862,32 @@ async fn import_xml_authorized(
 			required_permission: "info.read product scope".to_string(),
 		});
 	}
-	if product
-		.product_id
-		.as_deref()
-		.map(str::trim)
-		.filter(|value| !value.is_empty())
-		.is_none()
-	{
+	let selected_product_id =
+		product.product_id.ok_or_else(|| Error::BadRequest {
+			message: "selected Product has no Product ID".to_string(),
+		})?;
+	let selected_product_id = selected_product_id.trim();
+	if selected_product_id.is_empty() {
 		return Err(Error::BadRequest {
 			message: "selected Product has no Product ID".to_string(),
 		});
 	}
-	let selected_product = Some((
+	let selected_product = (
 		product_presave_id,
-		product.product_id,
+		selected_product_id.to_string(),
 		product.sender_presave_id,
-	));
+	);
 	let entries = extract_xml_entries(&payload.bytes, payload.filename.as_deref())?;
 	let mut imported_cases = Vec::with_capacity(entries.len());
 	let mut c_settings = load_import_settings(ctx, mm).await?;
 	if c_settings.apply_sender_info_to_imported_cases {
-		c_settings.selected_sender_presave_id = selected_product
-			.as_ref()
-			.and_then(|(_, _, sender_presave_id)| *sender_presave_id);
+		c_settings.selected_sender_presave_id = selected_product.2;
 	}
 	let uploaded_file_name = payload
 		.filename
 		.clone()
 		.unwrap_or_else(|| "import.xml".to_string());
-	let effective_product_id = selected_product
-		.as_ref()
-		.and_then(|(_, product_id, _)| product_id.as_deref());
+	let effective_product_id = selected_product.1.as_str();
 
 	for (entry_name, xml) in entries {
 		let decision =
@@ -950,10 +941,8 @@ async fn import_xml_authorized(
 				entry_name,
 				c_settings,
 				decision,
-				selected_product.as_ref().map(|(id, _, _)| *id),
-				selected_product
-					.as_ref()
-					.and_then(|(_, product_id, _)| product_id.clone()),
+				selected_product.0,
+				selected_product.1.clone(),
 			)
 			.await?,
 		);

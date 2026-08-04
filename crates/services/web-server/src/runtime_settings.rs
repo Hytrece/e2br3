@@ -26,7 +26,6 @@ pub struct RuntimeSettings {
 	pub notation: bool,
 	pub import_dates: ImportDateSettings,
 	pub apply_sender_info_to_imported_cases: bool,
-	pub apply_default_values_to_imported_r2_cases: bool,
 	pub orientation: String,
 	pub data_ordering: String,
 }
@@ -39,7 +38,6 @@ impl Default for RuntimeSettings {
 			notation: DEFAULT_NOTATION,
 			import_dates: ImportDateSettings::default(),
 			apply_sender_info_to_imported_cases: false,
-			apply_default_values_to_imported_r2_cases: false,
 			orientation: "Landscape".to_string(),
 			data_ordering: "Primary data will appear first".to_string(),
 		}
@@ -83,10 +81,6 @@ impl RuntimeSettings {
 			},
 			apply_sender_info_to_imported_cases: value
 				.get("apply_sender_info_to_imported_cases")
-				.and_then(Value::as_bool)
-				.unwrap_or(false),
-			apply_default_values_to_imported_r2_cases: value
-				.get("apply_default_values_to_imported_r2_cases")
 				.and_then(Value::as_bool)
 				.unwrap_or(false),
 			orientation: if value

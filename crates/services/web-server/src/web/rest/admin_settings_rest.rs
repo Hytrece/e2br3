@@ -70,7 +70,6 @@ pub struct AdminSettingsPayload {
 	pub notation: Option<bool>,
 	pub apply_comments_on_exported_xml: Option<bool>,
 	pub apply_sender_info_to_imported_cases: Option<bool>,
-	pub apply_default_values_to_imported_r2_cases: Option<bool>,
 	pub import_date_update: Option<ImportDateUpdatePayload>,
 	pub appendices: Option<Vec<String>>,
 	pub case_number_prefix: Option<String>,
@@ -104,7 +103,6 @@ pub struct AdminSettingsUpdateBody {
 	pub notation: Option<bool>,
 	pub apply_comments_on_exported_xml: Option<bool>,
 	pub apply_sender_info_to_imported_cases: Option<bool>,
-	pub apply_default_values_to_imported_r2_cases: Option<bool>,
 	pub import_date_update: Option<ImportDateUpdatePayload>,
 	pub appendices: Option<Vec<String>>,
 	pub case_number_prefix: Option<String>,
@@ -132,7 +130,6 @@ fn default_settings() -> AdminSettingsPayload {
 		notation: Some(runtime_settings::DEFAULT_NOTATION),
 		apply_comments_on_exported_xml: Some(false),
 		apply_sender_info_to_imported_cases: Some(false),
-		apply_default_values_to_imported_r2_cases: Some(false),
 		import_date_update: Some(ImportDateUpdatePayload {
 			date_of_creation: Some(false),
 			most_recent_info_date: Some(false),
