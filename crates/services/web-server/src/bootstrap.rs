@@ -342,14 +342,13 @@ mod tests {
 	use serial_test::serial;
 
 	async fn init_bootstrap_test_mm() -> ModelManager {
-		std::env::set_var(
-			"SERVICE_DB_URL",
-			"postgres://app_user:dev_only_pwd@localhost/app_db",
-		);
-		std::env::set_var(
-			"SERVICE_MIGRATION_DB_URL",
-			"postgres://app_user:dev_only_pwd@localhost/app_db",
-		);
+		let database_url = std::env::var("SERVICE_DB_URL").unwrap_or_else(|_| {
+			"postgres://app_user:dev_only_pwd@localhost/app_db".to_string()
+		});
+		std::env::set_var("SERVICE_DB_URL", &database_url);
+		let migration_database_url = std::env::var("SERVICE_MIGRATION_DB_URL")
+			.unwrap_or_else(|_| database_url.clone());
+		std::env::set_var("SERVICE_MIGRATION_DB_URL", migration_database_url);
 		std::env::set_var("SERVICE_WEB_FOLDER", "web-folder");
 		std::env::set_var("SERVICE_PWD_KEY", "ZmFrZV9rZXk");
 		std::env::set_var("SERVICE_TOKEN_KEY", "ZmFrZV9rZXk");
