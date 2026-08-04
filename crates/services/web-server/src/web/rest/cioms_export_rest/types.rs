@@ -142,10 +142,8 @@ fn cioms_reaction_description(data: &CiomsCaseData) -> String {
 	for drug in &data.drugs {
 		let action = drug_action_text(drug.action_taken.as_deref());
 		if !action.is_empty() {
-			entries.push(format!(
-				"Drug {} action: {}",
-				drug.sequence_number, action
-			));
+			entries
+				.push(format!("Drug {} action: {}", drug.sequence_number, action));
 		}
 	}
 	for test in &data.test_results {
@@ -153,22 +151,14 @@ fn cioms_reaction_description(data: &CiomsCaseData) -> String {
 			&[
 				test.test_date.map(|date| format!("Date: {date}")),
 				Some(test.test_name.clone()),
-				test
-					.test_result_code
+				test.test_result_code
 					.clone()
 					.map(|code| format!("Code: {code}")),
 				test.result_unstructured.clone(),
 				test.test_result_value.clone().map(|value| {
-					join_present(
-						&[
-							Some(value),
-							test.test_result_unit.clone(),
-						],
-						" ",
-					)
+					join_present(&[Some(value), test.test_result_unit.clone()], " ")
 				}),
-				test
-					.normal_low_value
+				test.normal_low_value
 					.clone()
 					.zip(test.normal_high_value.clone())
 					.map(|(low, high)| format!("Normal range: {low}-{high}")),

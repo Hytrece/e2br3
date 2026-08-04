@@ -378,38 +378,266 @@ pub(super) fn render_portrait_cioms(
 	canvas.text(30, page_height - 32, 15, "CIOMS FORM");
 	canvas.text(150, page_height - 32, 12, "SUSPECT ADVERSE REACTION REPORT");
 	canvas.text(390, page_height - 32, 8, "CIOMS layout: Portrait");
-	canvas.text(390, page_height - 44, 7, &format!("Data ordering: {}", settings.data_ordering));
+	canvas.text(
+		390,
+		page_height - 44,
+		7,
+		&format!("Data ordering: {}", settings.data_ordering),
+	);
 	canvas.rect(24, 24, page_width - 48, page_height - 70);
 
 	canvas.text(30, 778, 9, "I. REACTION INFORMATION");
 	let y = 728;
-	render_box(canvas, 30, y, 80, 40, "1. PATIENT INITIALS", patient.and_then(|p| p.patient_initials.as_deref()).unwrap_or(""), 14, 1);
-	render_box(canvas, 110, y, 60, 40, "1a. COUNTRY", first_reaction.and_then(|r| r.country_code.as_deref()).or_else(|| source.and_then(|s| s.country_code.as_deref())).unwrap_or(""), 12, 1);
-	render_box(canvas, 170, y, 90, 40, "2. DATE OF BIRTH", &date_text(patient.and_then(|p| p.birth_date)), 16, 1);
-	render_box(canvas, 260, y, 70, 40, "2a. AGE", &patient_age(patient), 12, 1);
-	render_box(canvas, 330, y, 60, 40, "3. SEX", sex_text(patient.and_then(|p| p.sex.as_deref())), 10, 1);
-	render_box(canvas, 390, y, 170, 40, "4-6. REACTION ONSET", &reaction_dates(first_reaction), 26, 1);
-	render_box(canvas, 30, 570, 530, 158, "7 + 13 DESCRIBE REACTION(S) (including relevant tests/lab data)", reaction_text, 78, 10);
+	render_box(
+		canvas,
+		30,
+		y,
+		80,
+		40,
+		"1. PATIENT INITIALS",
+		patient
+			.and_then(|p| p.patient_initials.as_deref())
+			.unwrap_or(""),
+		14,
+		1,
+	);
+	render_box(
+		canvas,
+		110,
+		y,
+		60,
+		40,
+		"1a. COUNTRY",
+		first_reaction
+			.and_then(|r| r.country_code.as_deref())
+			.or_else(|| source.and_then(|s| s.country_code.as_deref()))
+			.unwrap_or(""),
+		12,
+		1,
+	);
+	render_box(
+		canvas,
+		170,
+		y,
+		90,
+		40,
+		"2. DATE OF BIRTH",
+		&date_text(patient.and_then(|p| p.birth_date)),
+		16,
+		1,
+	);
+	render_box(
+		canvas,
+		260,
+		y,
+		70,
+		40,
+		"2a. AGE",
+		&patient_age(patient),
+		12,
+		1,
+	);
+	render_box(
+		canvas,
+		330,
+		y,
+		60,
+		40,
+		"3. SEX",
+		sex_text(patient.and_then(|p| p.sex.as_deref())),
+		10,
+		1,
+	);
+	render_box(
+		canvas,
+		390,
+		y,
+		170,
+		40,
+		"4-6. REACTION ONSET",
+		&reaction_dates(first_reaction),
+		26,
+		1,
+	);
+	render_box(
+		canvas,
+		30,
+		570,
+		530,
+		158,
+		"7 + 13 DESCRIBE REACTION(S) (including relevant tests/lab data)",
+		reaction_text,
+		78,
+		10,
+	);
 
 	canvas.text(30, 548, 9, "II. SUSPECT DRUG(S) INFORMATION");
-	render_box(canvas, 30, 496, 165, 42, "14. SUSPECT DRUG 1 of 1 (include generic name)", &drug_name(suspect_drug), 24, 1);
-	render_box(canvas, 195, 496, 90, 42, "15. DAILY DOSE(S)", &form.suspect_drug_dose, 14, 1);
-	render_box(canvas, 285, 496, 80, 42, "16. ROUTE(S) OF ADMINISTRATION", &form.suspect_drug_route, 12, 1);
-	render_box(canvas, 365, 496, 95, 42, "20. DID REACTION ABATE AFTER STOPPING DRUG?", yes_no_na(suspect_drug.and_then(|drug| drug.action_taken.as_deref())), 14, 1);
-	render_box(canvas, 460, 496, 100, 42, "21. DID REACTION REAPPEAR AFTER REINTRODUCTION?", yes_no_na(None), 14, 1);
-	render_box(canvas, 30, 446, 260, 50, "17. INDICATION(S) FOR USE", &form.suspect_drug_indication, 38, 2);
-	render_box(canvas, 290, 446, 270, 50, "18. THERAPY DATES (from/to) / 19. THERAPY DURATION", &join_present(&[Some(form.suspect_drug_therapy_dates.clone()), Some(form.suspect_drug_therapy_duration.clone())], " / "), 40, 1);
+	render_box(
+		canvas,
+		30,
+		496,
+		165,
+		42,
+		"14. SUSPECT DRUG 1 of 1 (include generic name)",
+		&drug_name(suspect_drug),
+		24,
+		1,
+	);
+	render_box(
+		canvas,
+		195,
+		496,
+		90,
+		42,
+		"15. DAILY DOSE(S)",
+		&form.suspect_drug_dose,
+		14,
+		1,
+	);
+	render_box(
+		canvas,
+		285,
+		496,
+		80,
+		42,
+		"16. ROUTE(S) OF ADMINISTRATION",
+		&form.suspect_drug_route,
+		12,
+		1,
+	);
+	render_box(
+		canvas,
+		365,
+		496,
+		95,
+		42,
+		"20. DID REACTION ABATE AFTER STOPPING DRUG?",
+		yes_no_na(suspect_drug.and_then(|drug| drug.action_taken.as_deref())),
+		14,
+		1,
+	);
+	render_box(
+		canvas,
+		460,
+		496,
+		100,
+		42,
+		"21. DID REACTION REAPPEAR AFTER REINTRODUCTION?",
+		yes_no_na(None),
+		14,
+		1,
+	);
+	render_box(
+		canvas,
+		30,
+		446,
+		260,
+		50,
+		"17. INDICATION(S) FOR USE",
+		&form.suspect_drug_indication,
+		38,
+		2,
+	);
+	render_box(
+		canvas,
+		290,
+		446,
+		270,
+		50,
+		"18. THERAPY DATES (from/to) / 19. THERAPY DURATION",
+		&join_present(
+			&[
+				Some(form.suspect_drug_therapy_dates.clone()),
+				Some(form.suspect_drug_therapy_duration.clone()),
+			],
+			" / ",
+		),
+		40,
+		1,
+	);
 
 	canvas.text(30, 424, 9, "III. CONCOMITANT DRUGS AND HISTORY");
-	render_box(canvas, 30, 364, 530, 60, "22. CONCOMITANT DRUG(S) AND DATES OF ADMINISTRATION", &concomitant_drugs_text(data), 78, 3);
-	render_box(canvas, 30, 294, 530, 60, "23. OTHER RELEVANT HISTORY", patient.and_then(|p| p.medical_history_text.as_deref()).unwrap_or(""), 78, 3);
+	render_box(
+		canvas,
+		30,
+		364,
+		530,
+		60,
+		"22. CONCOMITANT DRUG(S) AND DATES OF ADMINISTRATION",
+		&concomitant_drugs_text(data),
+		78,
+		3,
+	);
+	render_box(
+		canvas,
+		30,
+		294,
+		530,
+		60,
+		"23. OTHER RELEVANT HISTORY",
+		patient
+			.and_then(|p| p.medical_history_text.as_deref())
+			.unwrap_or(""),
+		78,
+		3,
+	);
 
 	canvas.text(30, 272, 9, "IV. MANUFACTURER INFORMATION");
-	render_box(canvas, 30, 190, 260, 74, "24a. NAME AND ADDRESS OF MANUFACTURER", &sender_address(data.senders.first()), 38, 4);
-	render_box(canvas, 290, 190, 270, 74, "24b. MFR CONTROL NO.", &data.case_number, 38, 2);
-	render_box(canvas, 30, 150, 175, 40, "24c. DATE RECEIVED", &date_text(report.and_then(|r| r.date_first_received_from_source)), 24, 1);
-	render_box(canvas, 205, 150, 175, 40, "DATE OF THIS REPORT", &e2b_datetime_date_text(report.and_then(|r| r.transmission_date.as_deref())), 24, 1);
-	render_box(canvas, 380, 150, 180, 40, "25a. REPORT TYPE", report_type_text(report.and_then(|r| r.report_type.as_deref())), 24, 1);
+	render_box(
+		canvas,
+		30,
+		190,
+		260,
+		74,
+		"24a. NAME AND ADDRESS OF MANUFACTURER",
+		&sender_address(data.senders.first()),
+		38,
+		4,
+	);
+	render_box(
+		canvas,
+		290,
+		190,
+		270,
+		74,
+		"24b. MFR CONTROL NO.",
+		&data.case_number,
+		38,
+		2,
+	);
+	render_box(
+		canvas,
+		30,
+		150,
+		175,
+		40,
+		"24c. DATE RECEIVED",
+		&date_text(report.and_then(|r| r.date_first_received_from_source)),
+		24,
+		1,
+	);
+	render_box(
+		canvas,
+		205,
+		150,
+		175,
+		40,
+		"DATE OF THIS REPORT",
+		&e2b_datetime_date_text(report.and_then(|r| r.transmission_date.as_deref())),
+		24,
+		1,
+	);
+	render_box(
+		canvas,
+		380,
+		150,
+		180,
+		40,
+		"25a. REPORT TYPE",
+		report_type_text(report.and_then(|r| r.report_type.as_deref())),
+		24,
+		1,
+	);
 	render_reporter_footer(canvas, 34, 38, source);
 	render_missing_information_legend(canvas, 300, 38);
 	if is_basic_data_ordering(settings) {
@@ -438,7 +666,11 @@ pub(super) fn collect_cioms_overflow(
 		"7 + 13 DESCRIBE REACTION(S)",
 		&form.reaction_description,
 		118,
-		if settings.orientation == "Portrait" { 10 } else { 8 },
+		if settings.orientation == "Portrait" {
+			10
+		} else {
+			8
+		},
 	);
 	if is_basic_data_ordering(settings) {
 		push_overflow(
@@ -470,12 +702,7 @@ pub(super) fn collect_cioms_overflow(
 	);
 	push_overflow("24b. MFR CONTROL NO.", &data.case_number, 20, 2);
 	if options.include_notation {
-		push_overflow(
-			"CIOMS NOTATION",
-		&cioms_notation_text(data),
-			90,
-			1,
-		);
+		push_overflow("CIOMS NOTATION", &cioms_notation_text(data), 90, 1);
 	}
 
 	overflow

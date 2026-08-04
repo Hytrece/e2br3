@@ -497,11 +497,10 @@ async fn test_import_settings_apply_default_sender_only_when_enabled() -> Result
 		.to_path_buf();
 	let source_xml = scenario6(&root)?;
 
-	let disabled_case_number = format!("US-SENDER-DISABLED-{}", uuid::Uuid::new_v4());
-	let disabled_xml = source_xml.replace(
-		"US-APHARMA-8744554B",
-		&disabled_case_number,
-	);
+	let disabled_case_number =
+		format!("US-SENDER-DISABLED-{}", uuid::Uuid::new_v4());
+	let disabled_xml =
+		source_xml.replace("US-APHARMA-8744554B", &disabled_case_number);
 	let (status, body) = import_xml_fixture(
 		&app,
 		&cookie,
@@ -547,11 +546,12 @@ async fn test_import_settings_apply_default_sender_only_when_enabled() -> Result
 	.await?;
 	assert_eq!(status, StatusCode::OK, "{body:?}");
 
-	let xml = disabled_xml.replace(
-		&disabled_case_number,
-		&format!("US-SENDER-{}", uuid::Uuid::new_v4()),
-	)
-	.replace("<low value=\"20090101\"/>", "<low value=\"20090103\"/>");
+	let xml = disabled_xml
+		.replace(
+			&disabled_case_number,
+			&format!("US-SENDER-{}", uuid::Uuid::new_v4()),
+		)
+		.replace("<low value=\"20090101\"/>", "<low value=\"20090103\"/>");
 	let (status, body) =
 		import_xml_fixture(&app, &cookie, "FAERS2022Scenario6.xml", xml.as_bytes())
 			.await?;

@@ -52,9 +52,8 @@ impl RuntimeSettings {
 		let Some(value) = value else {
 			return defaults;
 		};
-		let import_dates = value
-			.get("import_date_update")
-			.and_then(Value::as_object);
+		let import_dates =
+			value.get("import_date_update").and_then(Value::as_object);
 		Self {
 			timezone: value
 				.get("timezone")

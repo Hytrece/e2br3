@@ -1,9 +1,9 @@
+use crate::runtime_settings;
 use axum::extract::multipart::Field;
 use axum::extract::{Multipart, Path, State};
 use axum::http::{header, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::Json;
-use crate::runtime_settings;
 use lib_core::authorization::BuiltInIdentityKind;
 use lib_core::ctx::Ctx;
 use lib_core::model::case_duplicate::{CaseDuplicateBmc, CaseDuplicateKey};
@@ -634,11 +634,14 @@ async fn load_import_settings(
 	let settings = runtime_settings::load(ctx, mm).await?;
 	Ok(CImportSettings {
 		update_date_of_creation: settings.import_dates.update_date_of_creation,
-		update_most_recent_info_date: settings.import_dates.update_most_recent_info_date,
+		update_most_recent_info_date: settings
+			.import_dates
+			.update_most_recent_info_date,
 		update_report_first_received_date: settings
 			.import_dates
 			.update_report_first_received_date,
-		apply_sender_info_to_imported_cases: settings.apply_sender_info_to_imported_cases,
+		apply_sender_info_to_imported_cases: settings
+			.apply_sender_info_to_imported_cases,
 		apply_default_values_to_imported_r2_cases: settings
 			.apply_default_values_to_imported_r2_cases,
 		selected_sender_presave_id: None,

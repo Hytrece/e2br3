@@ -554,7 +554,6 @@ fn reporter_presave_create(
 		country_code: Some("KR".into()),
 		qualification: Some("1".into()),
 		qualification_kr1: None,
-		country_code_null_flavor: None,
 		qualification_null_flavor: None,
 		primary_source_regulatory: None,
 		..Default::default()
@@ -1450,7 +1449,6 @@ async fn section_presave_parent_bmcs_crud_roundtrip() -> Result<()> {
 			country_code: Some("KR".into()),
 			qualification: Some("1".into()),
 			qualification_kr1: None,
-			country_code_null_flavor: None,
 			qualification_null_flavor: None,
 			primary_source_regulatory: Some("1".into()),
 			..Default::default()
@@ -1682,7 +1680,6 @@ async fn reporter_presave_accepts_field_specific_null_flavors() -> Result<()> {
 			qualification: Some("1".into()),
 			qualification_kr1: None,
 			primary_source_regulatory: None,
-			country_code_null_flavor: None,
 			qualification_null_flavor: Some("UNK".into()),
 		},
 	)
@@ -1740,7 +1737,6 @@ async fn reporter_presave_rejects_invalid_field_specific_null_flavors() -> Resul
 				qualification: Some("1".into()),
 				qualification_kr1: None,
 				primary_source_regulatory: None,
-				country_code_null_flavor: None,
 				qualification_null_flavor: Some("MSK".into()),
 			},
 		)
@@ -1956,7 +1952,6 @@ async fn section_presave_parent_bmcs_enforce_minimal_identity_requirements(
 					country_code: None,
 					qualification: qualification.map(str::to_string),
 					qualification_kr1: None,
-					country_code_null_flavor: None,
 					qualification_null_flavor: None,
 					primary_source_regulatory: None,
 					..Default::default()
@@ -2201,7 +2196,6 @@ async fn section_presave_parent_bmcs_reject_duplicate_identity_within_org(
 			country_code: None,
 			qualification: Some("1".into()),
 			qualification_kr1: None,
-			country_code_null_flavor: None,
 			qualification_null_flavor: None,
 			primary_source_regulatory: None,
 			..Default::default()
@@ -2227,7 +2221,6 @@ async fn section_presave_parent_bmcs_reject_duplicate_identity_within_org(
 				country_code: None,
 				qualification: Some("1".into()),
 				qualification_kr1: None,
-				country_code_null_flavor: None,
 				qualification_null_flavor: None,
 				primary_source_regulatory: None,
 				..Default::default()

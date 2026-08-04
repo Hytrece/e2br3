@@ -1,8 +1,8 @@
+use crate::runtime_settings;
 use axum::extract::{Path, Query, State};
 use axum::http::header;
 use axum::response::Response;
 use axum::Json;
-use crate::runtime_settings;
 use lib_core::model::case::CaseBmc;
 use lib_core::model::safety_report::SafetyReportIdentificationBmc;
 use lib_core::model::xml_export_history::{
@@ -26,7 +26,6 @@ use xml::validation::{validate_e2b_xml, validate_export_rules};
 use xml::{export_case_xml_with_options, ExportXmlOptions};
 use zip::write::SimpleFileOptions;
 use zip::{CompressionMethod, ZipWriter};
-
 
 // -- Types
 
