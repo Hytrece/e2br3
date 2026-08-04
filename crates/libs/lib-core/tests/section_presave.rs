@@ -1656,7 +1656,7 @@ async fn reporter_presave_accepts_field_specific_null_flavors() -> Result<()> {
 		ReporterPresaveForCreate {
 			reporter_title: None,
 			reporter_title_null_flavor: Some("UNK".into()),
-			reporter_given_name: Some(format!("Reporter {suffix}")),
+			reporter_given_name: None,
 			reporter_given_name_null_flavor: Some("ASKU".into()),
 			reporter_middle_name: None,
 			reporter_middle_name_null_flavor: None,
