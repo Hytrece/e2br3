@@ -52,7 +52,7 @@ struct UploadedImportPayload {
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ImportedCaseSummary {
-	case_number: String,
+	case_number: Option<String>,
 	status: XmlImportHistoryStatus,
 	message: Option<String>,
 	case_id: Option<String>,
@@ -184,20 +184,15 @@ async fn read_field_limited(
 
 fn extract_xml_entries(
 	bytes: &[u8],
-	filename: Option<&str>,
+	filename: &str,
 ) -> Result<Vec<(String, Vec<u8>)>> {
-	let looks_like_zip = filename
-		.map(|name| name.to_ascii_lowercase().ends_with(".zip"))
-		.unwrap_or(false);
+	let looks_like_zip = filename.to_ascii_lowercase().ends_with(".zip");
 
 	if !looks_like_zip {
 		if let Ok(zip) = ZipArchive::new(Cursor::new(bytes)) {
 			return extract_xml_entries_from_zip(zip);
 		}
-		return Ok(vec![(
-			filename.unwrap_or("import.xml").to_string(),
-			bytes.to_vec(),
-		)]);
+		return Ok(vec![(filename.to_string(), bytes.to_vec())]);
 	}
 
 	let zip =
@@ -303,11 +298,7 @@ async fn import_single_xml(
 	match validation_report {
 		Ok(report) if report.ok => {}
 		Ok(report) => {
-			let message = report
-				.errors
-				.first()
-				.map(|error| error.message.clone())
-				.unwrap_or_else(|| "XML validation failed".to_string());
+			let message = report.errors.first().map(|error| error.message.clone());
 			record_import_history(
 				ctx,
 				mm,
@@ -316,13 +307,13 @@ async fn import_single_xml(
 				None,
 				None,
 				XmlImportHistoryStatus::Error,
-				Some(&message),
+				message.as_deref(),
 			)
 			.await?;
 			return Ok(ImportedCaseSummary {
-				case_number: filename.clone(),
+				case_number: None,
 				status: XmlImportHistoryStatus::Error,
-				message: Some(message),
+				message,
 				case_id: None,
 				case_version: None,
 				decision: Some("error"),
@@ -346,7 +337,7 @@ async fn import_single_xml(
 			)
 			.await?;
 			return Ok(ImportedCaseSummary {
-				case_number: filename.clone(),
+				case_number: None,
 				status: XmlImportHistoryStatus::Error,
 				message: Some(message),
 				case_id: None,
@@ -373,10 +364,13 @@ async fn import_single_xml(
 	.await;
 	match import_result {
 		Ok(result) => {
-			let case_number = result
-				.case_number
-				.clone()
-				.unwrap_or_else(|| filename.clone());
+			let case_number =
+				result
+					.case_number
+					.clone()
+					.ok_or_else(|| Error::BadRequest {
+						message: "imported case has no case number".to_string(),
+					})?;
 			let case_id = result
 				.case_id
 				.as_deref()
@@ -397,7 +391,7 @@ async fn import_single_xml(
 				)
 				.await?;
 				return Ok(ImportedCaseSummary {
-					case_number,
+					case_number: Some(case_number),
 					status: XmlImportHistoryStatus::Skipped,
 					message: Some(message),
 					case_id: None,
@@ -420,12 +414,9 @@ async fn import_single_xml(
 				XmlImportHistoryStatus::Success
 			};
 			let message = if potential_duplicate {
-				decision
-					.message
-					.clone()
-					.unwrap_or_else(|| "Imported with duplicate warning".to_string())
+				decision.message.clone()
 			} else {
-				"Successfully imported".to_string()
+				Some("Successfully imported".to_string())
 			};
 			record_import_history(
 				ctx,
@@ -435,13 +426,17 @@ async fn import_single_xml(
 				case_id,
 				result.case_number.as_deref(),
 				status,
-				potential_duplicate.then_some(message.as_str()),
+				if potential_duplicate {
+					message.as_deref()
+				} else {
+					None
+				},
 			)
 			.await?;
 			Ok(ImportedCaseSummary {
-				case_number,
+				case_number: Some(case_number),
 				status,
-				message: Some(message),
+				message,
 				case_id: result.case_id,
 				case_version: result.case_version,
 				decision: Some(decision_label(decision.action)),
@@ -465,7 +460,7 @@ async fn import_single_xml(
 			)
 			.await?;
 			Ok(ImportedCaseSummary {
-				case_number: filename.clone(),
+				case_number: None,
 				status: XmlImportHistoryStatus::Error,
 				message: Some(message),
 				case_id: None,
@@ -495,10 +490,7 @@ fn summary_for_skipped_decision(
 	decision: XmlImportDecision,
 ) -> ImportedCaseSummary {
 	ImportedCaseSummary {
-		case_number: decision
-			.matched_case_number
-			.clone()
-			.unwrap_or_else(|| source_file_name.to_string()),
+		case_number: decision.matched_case_number.clone(),
 		status: XmlImportHistoryStatus::Skipped,
 		message: decision.message.clone(),
 		case_id: None,
@@ -516,7 +508,7 @@ fn summary_for_decision_error(
 	message: String,
 ) -> ImportedCaseSummary {
 	ImportedCaseSummary {
-		case_number: source_file_name.to_string(),
+		case_number: None,
 		status: XmlImportHistoryStatus::Error,
 		message: Some(message),
 		case_id: None,
@@ -709,22 +701,29 @@ pub async fn list_import_history(
 				.map_err(Error::Model)?;
 				let items = rows
 					.into_iter()
-					.map(|row| XmlImportHistoryRecord {
-						id: row.id,
-						uploaded_file_name: row.uploaded_file_name,
-						source_file_name: row.source_file_name,
-						case_id: row.case_id,
-						case_number: row.case_number,
-						status: row.status,
-						error_message: row.error_message,
-						uploaded_by: row.uploaded_by,
-						uploader_email: row.uploader_email,
-						uploaded_at: row
-							.uploaded_at
-							.format(&Rfc3339)
-							.unwrap_or_else(|_| row.uploaded_at.to_string()),
+					.map(|row| {
+						let uploaded_at =
+							row.uploaded_at.format(&Rfc3339).map_err(|err| {
+								Error::BadRequest {
+									message: format!(
+										"invalid import history timestamp: {err}"
+									),
+								}
+							})?;
+						Ok(XmlImportHistoryRecord {
+							id: row.id,
+							uploaded_file_name: row.uploaded_file_name,
+							source_file_name: row.source_file_name,
+							case_id: row.case_id,
+							case_number: row.case_number,
+							status: row.status,
+							error_message: row.error_message,
+							uploaded_by: row.uploaded_by,
+							uploader_email: row.uploader_email,
+							uploaded_at,
+						})
 					})
-					.collect();
+					.collect::<Result<Vec<_>>>()?;
 				Ok((
 					StatusCode::OK,
 					Json(DataRestResult {
@@ -877,16 +876,20 @@ async fn import_xml_authorized(
 		selected_product_id.to_string(),
 		product.sender_presave_id,
 	);
-	let entries = extract_xml_entries(&payload.bytes, payload.filename.as_deref())?;
+	let uploaded_file_name = payload.filename.ok_or_else(|| Error::BadRequest {
+		message: "uploaded file name is required for XML import".to_string(),
+	})?;
+	if uploaded_file_name.trim().is_empty() {
+		return Err(Error::BadRequest {
+			message: "uploaded file name is required for XML import".to_string(),
+		});
+	}
+	let entries = extract_xml_entries(&payload.bytes, &uploaded_file_name)?;
 	let mut imported_cases = Vec::with_capacity(entries.len());
 	let mut c_settings = load_import_settings(ctx, mm).await?;
 	if c_settings.apply_sender_info_to_imported_cases {
 		c_settings.selected_sender_presave_id = selected_product.2;
 	}
-	let uploaded_file_name = payload
-		.filename
-		.clone()
-		.unwrap_or_else(|| "import.xml".to_string());
 	let effective_product_id = selected_product.1.as_str();
 
 	for (entry_name, xml) in entries {
@@ -988,7 +991,7 @@ mod tests {
 			},
 		);
 
-		assert_eq!(summary.case_number, "CASE-1");
+		assert_eq!(summary.case_number.as_deref(), Some("CASE-1"));
 		assert_eq!(summary.status, XmlImportHistoryStatus::Skipped);
 		assert_eq!(summary.decision, Some("skip"));
 		assert_eq!(summary.source_file_name.as_deref(), Some("case.xml"));
