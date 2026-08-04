@@ -1,4 +1,3 @@
-use crate::VocabularyScope;
 use lib_core::ctx::Ctx;
 use lib_core::model::case::{Case, CaseBmc};
 use lib_core::model::case_identifiers::{LinkedReportNumber, OtherCaseIdentifier};
@@ -39,6 +38,19 @@ use serde_json::json;
 use sqlx::types::Uuid;
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, OnceLock};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum VocabularyScope {
+	All,
+	Time,
+	Gestation,
+	Dose,
+	Frequency,
+	DoseForm,
+	Route,
+	ItemSeq,
+}
 
 #[derive(Debug, Deserialize)]
 struct EmbeddedVocabularySnapshot {
@@ -85,7 +97,6 @@ pub struct VocabularyContext {
 	meddra_available: bool,
 	meddra_versions: HashSet<String>,
 	meddra_terms: HashSet<MeddraTermKey>,
-	vocabulary_versions: HashMap<String, HashSet<String>>,
 	snapshot_codes: Arc<SnapshotCodes>,
 }
 
@@ -95,7 +106,6 @@ impl Default for VocabularyContext {
 			meddra_available: false,
 			meddra_versions: HashSet::new(),
 			meddra_terms: HashSet::new(),
-			vocabulary_versions: HashMap::new(),
 			snapshot_codes: embedded_snapshot_codes(),
 		}
 	}
@@ -128,16 +138,6 @@ impl VocabularyContext {
 			.is_some_and(|codes| codes.contains(code))
 	}
 
-	pub(crate) fn contains_vocabulary_version(
-		&self,
-		vocabulary: &str,
-		version: &str,
-	) -> bool {
-		self.vocabulary_versions
-			.get(vocabulary)
-			.is_some_and(|versions| versions.contains(version))
-	}
-
 	#[cfg(test)]
 	pub(crate) fn for_active_codes(
 		entries: &[(&str, VocabularyScope, &str)],
@@ -149,19 +149,6 @@ impl VocabularyContext {
 				.entry(((*vocabulary).to_string(), *scope))
 				.or_default()
 				.insert((*code).to_string());
-		}
-		context
-	}
-
-	#[cfg(test)]
-	pub(crate) fn for_active_versions(entries: &[(&str, &str)]) -> Self {
-		let mut context = Self::default();
-		for (vocabulary, version) in entries {
-			context
-				.vocabulary_versions
-				.entry((*vocabulary).to_string())
-				.or_default()
-				.insert((*version).to_string());
 		}
 		context
 	}
@@ -342,7 +329,6 @@ async fn load_vocabulary_context(
 		terms,
 		iso_countries,
 		ich_country_extensions,
-		edqm_versions,
 		mfds_products,
 		whodrug_products,
 	) = tokio::try_join!(
@@ -360,7 +346,6 @@ async fn load_vocabulary_context(
 			"ich_country",
 			&requested_countries,
 		),
-		ControlledTermBmc::active_release_versions(mm, "edqm", "en"),
 		MfdsProductBmc::existing_active_item_seqs(mm, &requested_product_codes),
 		WhodrugProductBmc::existing_active_codes(mm, &requested_product_codes),
 	)?;
@@ -405,13 +390,10 @@ async fn load_vocabulary_context(
 			.or_default()
 			.extend(existing);
 	}
-	let mut vocabulary_versions = HashMap::new();
-	vocabulary_versions.insert("EDQM".to_string(), edqm_versions);
 	Ok(VocabularyContext {
 		meddra_available,
 		meddra_versions: versions.into_iter().collect(),
 		meddra_terms: terms.into_iter().collect(),
-		vocabulary_versions,
 		snapshot_codes,
 	})
 }

@@ -1,4 +1,3 @@
-use super::{is_rule_condition_satisfied, RuleFacts};
 use lib_core::model::patient::PatientInformation;
 
 // Shared Section D policy used by exporter + case validators.
@@ -19,23 +18,11 @@ pub fn has_patient_initials(patient: &PatientInformation) -> bool {
 }
 
 pub fn should_require_fda_race(patient: &PatientInformation) -> bool {
-	is_rule_condition_satisfied(
-		"FDA.D.11.REQUIRED",
-		RuleFacts {
-			fda_patient_payload_present: Some(has_patient_payload(patient)),
-			..RuleFacts::default()
-		},
-	)
+	has_patient_payload(patient)
 }
 
 pub fn should_require_fda_ethnicity(patient: &PatientInformation) -> bool {
-	is_rule_condition_satisfied(
-		"FDA.D.12.REQUIRED",
-		RuleFacts {
-			fda_patient_payload_present: Some(has_patient_payload(patient)),
-			..RuleFacts::default()
-		},
-	)
+	has_patient_payload(patient)
 }
 
 pub fn has_fda_race(patient: &PatientInformation) -> bool {

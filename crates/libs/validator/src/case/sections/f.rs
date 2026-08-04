@@ -1,50 +1,52 @@
 use super::helpers::{
-	validate_constraint, validate_future_date, validate_length, validate_meddra,
-	validate_value, validate_violation, DateValues, RuleValue,
+	max_length, reject_future_date, reject_when, valid_code, valid_decimal,
+	valid_dotted_version, valid_meddra_term, valid_meddra_version, valid_ucum,
+	DateValues,
 };
-use crate::allowed_value::ConstraintValue;
 use crate::{
-	has_test_payload, has_text, push_business_issue, RegulatoryAuthority, RuleFacts,
+	has_test_payload, has_text, push_business_issue, RegulatoryAuthority,
 	ValidationContext, ValidationIssue,
 };
 use lib_core::model::test_result::TestResult;
-use std::borrow::Cow;
 
-fn test_payload_facts(test: &TestResult) -> RuleFacts {
-	RuleFacts {
-		ich_test_payload_present: Some(has_test_payload(test)),
-		..RuleFacts::default()
-	}
-}
+const SECTION: &str = "tests";
+const MAX_LENGTH_MESSAGE: &str = "Dictionary max length exceeded.";
+const ALLOWED_VALUE_MESSAGE: &str = "Dictionary allowed values constraint.";
+const VOCABULARY_MESSAGE: &str = "Dictionary vocabulary constraint.";
 
 /// ICH.F.r.1.REQUIRED
 /// ICH.F.r.1.FUTURE_DATE.FORBIDDEN
 fn f_r_1(idx: usize, test: &TestResult, issues: &mut Vec<ValidationIssue>) {
 	let path = format!("testResults.{idx}.testDate");
-	validate_violation(
+	reject_when(
 		issues,
 		"ICH.F.r.1.REQUIRED",
 		&path,
+		SECTION,
+		"[F.r.1] Test date is required when [F.r.2] is populated.",
 		has_text(Some(test.test_name.as_str()))
 			&& test.test_date.is_none()
 			&& !has_text(test.test_date_null_flavor.as_deref()),
 	);
-	validate_future_date(
+	reject_future_date(
 		issues,
 		"ICH.F.r.1.FUTURE_DATE.FORBIDDEN",
 		&path,
+		SECTION,
+		"[F.r.1] Test date must not be later than today.",
 		DateValues::One(test.test_date),
 	);
 }
 
 /// ICH.F.r.2.REQUIRED
 fn f_r_2(idx: usize, test: &TestResult, issues: &mut Vec<ValidationIssue>) {
-	validate_value(
+	reject_when(
 		issues,
 		"ICH.F.r.2.REQUIRED",
 		&format!("testResults.{idx}.testName"),
-		RuleValue::borrowed(Some(test.test_name.as_str()), None),
-		test_payload_facts(test),
+		SECTION,
+		"[F.r.2] is required when test payload is present.",
+		has_test_payload(test) && !has_text(Some(test.test_name.as_str())),
 	);
 }
 
@@ -52,19 +54,24 @@ fn f_r_2(idx: usize, test: &TestResult, issues: &mut Vec<ValidationIssue>) {
 /// ICH.F.r.2.1.LENGTH.MAX
 fn f_r_2_1(idx: usize, test: &TestResult, issues: &mut Vec<ValidationIssue>) {
 	let path = format!("testResults.{idx}.testName");
-	validate_violation(
+	reject_when(
 		issues,
 		"ICH.F.r.2.1.REQUIRED",
 		&path,
+		SECTION,
+		"[F.r.2.1] Test name (free text) is required when [F.r.1] is populated and [F.r.2.2b] is not populated.",
 		test.test_date.is_some()
 			&& !has_text(test.test_meddra_code.as_deref())
 			&& !has_text(Some(test.test_name.as_str())),
 	);
-	validate_length(
+	max_length(
 		issues,
 		"ICH.F.r.2.1.LENGTH.MAX",
 		&path,
+		SECTION,
+		MAX_LENGTH_MESSAGE,
 		Some(test.test_name.as_str()),
+		250,
 	);
 }
 
@@ -72,18 +79,23 @@ fn f_r_2_1(idx: usize, test: &TestResult, issues: &mut Vec<ValidationIssue>) {
 /// ICH.F.r.2.2a.LENGTH.MAX
 fn f_r_2_2a(idx: usize, test: &TestResult, issues: &mut Vec<ValidationIssue>) {
 	let path = format!("testResults.{idx}.testMeddraVersion");
-	validate_violation(
+	reject_when(
 		issues,
 		"ICH.F.r.2.2a.REQUIRED",
 		&path,
+		SECTION,
+		"[F.r.2.2a] Test name MedDRA version is required when [F.r.2.2b] is populated.",
 		has_text(test.test_meddra_code.as_deref())
 			&& !has_text(test.test_meddra_version.as_deref()),
 	);
-	validate_length(
+	max_length(
 		issues,
 		"ICH.F.r.2.2a.LENGTH.MAX",
 		&path,
+		SECTION,
+		MAX_LENGTH_MESSAGE,
 		test.test_meddra_version.as_deref(),
+		4,
 	);
 }
 
@@ -91,19 +103,24 @@ fn f_r_2_2a(idx: usize, test: &TestResult, issues: &mut Vec<ValidationIssue>) {
 /// ICH.F.r.2.2b.LENGTH.MAX
 fn f_r_2_2b(idx: usize, test: &TestResult, issues: &mut Vec<ValidationIssue>) {
 	let path = format!("testResults.{idx}.testMeddraCode");
-	validate_violation(
+	reject_when(
 		issues,
 		"ICH.F.r.2.2b.REQUIRED",
 		&path,
+		SECTION,
+		"[F.r.2.2b] Test name MedDRA code is required when [F.r.1] is populated and [F.r.2.1] is not populated.",
 		test.test_date.is_some()
 			&& !has_text(Some(test.test_name.as_str()))
 			&& !has_text(test.test_meddra_code.as_deref()),
 	);
-	validate_length(
+	max_length(
 		issues,
 		"ICH.F.r.2.2b.LENGTH.MAX",
 		&path,
+		SECTION,
+		MAX_LENGTH_MESSAGE,
 		test.test_meddra_code.as_deref(),
+		8,
 	);
 }
 
@@ -117,117 +134,144 @@ fn f_r_2_2_meddra(
 	validation_ctx: &ValidationContext,
 	issues: &mut Vec<ValidationIssue>,
 ) {
-	validate_meddra(
+	let version_path = format!("testResults.{idx}.testMeddraVersion");
+	let code_path = format!("testResults.{idx}.testMeddraCode");
+	let version = test.test_meddra_version.as_deref();
+	let code = test.test_meddra_code.as_deref();
+	reject_when(
 		issues,
-		&validation_ctx.vocabulary,
 		"ICH.F.r.2.2a.ALLOWED.VALUE",
+		&version_path,
+		SECTION,
+		ALLOWED_VALUE_MESSAGE,
+		!valid_dotted_version(version),
+	);
+	reject_when(
+		issues,
 		"ICH.F.r.2.2b.ALLOWED.VALUE",
+		&code_path,
+		SECTION,
+		ALLOWED_VALUE_MESSAGE,
+		!valid_decimal(code),
+	);
+	reject_when(
+		issues,
 		"ICH.F.r.2.2a.VOCABULARY",
+		&version_path,
+		SECTION,
+		VOCABULARY_MESSAGE,
+		!valid_meddra_version(&validation_ctx.vocabulary, version),
+	);
+	reject_when(
+		issues,
 		"ICH.F.r.2.2b.VOCABULARY",
-		format!("testResults.{idx}.testMeddraVersion"),
-		format!("testResults.{idx}.testMeddraCode"),
-		test.test_meddra_version.as_deref(),
-		test.test_meddra_code.as_deref(),
+		&code_path,
+		SECTION,
+		VOCABULARY_MESSAGE,
+		!valid_meddra_term(&validation_ctx.vocabulary, version, code),
 	);
 }
 
 /// ICH.F.r.3.1.REQUIRED
 /// ICH.F.r.3.1.ALLOWED.VALUE
 /// ICH.F.r.3.1.LENGTH.MAX
-fn f_r_3_1(
-	idx: usize,
-	test: &TestResult,
-	validation_ctx: &ValidationContext,
-	issues: &mut Vec<ValidationIssue>,
-) {
+fn f_r_3_1(idx: usize, test: &TestResult, issues: &mut Vec<ValidationIssue>) {
 	let path = format!("testResults.{idx}.testResultCode");
-	validate_violation(
+	reject_when(
 		issues,
 		"ICH.F.r.3.1.REQUIRED",
 		&path,
+		SECTION,
+		"[F.r.3.1] Test result (coded) is required when [F.r.2] is populated and neither [F.r.3.2] nor [F.r.3.4] is populated.",
 		has_text(Some(test.test_name.as_str()))
 			&& !has_text(test.test_result_value.as_deref())
 			&& !has_text(test.result_unstructured.as_deref())
 			&& !has_text(test.test_result_code.as_deref()),
 	);
-	validate_constraint(
+	reject_when(
 		issues,
 		"ICH.F.r.3.1.ALLOWED.VALUE",
 		&path,
-		ConstraintValue::Text(test.test_result_code.as_deref().map(Cow::Borrowed)),
-		&validation_ctx.vocabulary,
+		SECTION,
+		ALLOWED_VALUE_MESSAGE,
+		!valid_code(test.test_result_code.as_deref(), &["1", "2", "3", "4"]),
 	);
-	validate_length(
+	max_length(
 		issues,
 		"ICH.F.r.3.1.LENGTH.MAX",
 		&path,
+		SECTION,
+		MAX_LENGTH_MESSAGE,
 		test.test_result_code.as_deref(),
+		1,
 	);
 }
 
 /// ICH.F.r.3.2.REQUIRED
 /// ICH.F.r.3.2.ALLOWED.VALUE
 /// ICH.F.r.3.2.LENGTH.MAX
-fn f_r_3_2(
-	idx: usize,
-	test: &TestResult,
-	validation_ctx: &ValidationContext,
-	issues: &mut Vec<ValidationIssue>,
-) {
+fn f_r_3_2(idx: usize, test: &TestResult, issues: &mut Vec<ValidationIssue>) {
 	let path = format!("testResults.{idx}.testResultValue");
-	validate_violation(
+	reject_when(
 		issues,
 		"ICH.F.r.3.2.REQUIRED",
 		&path,
+		SECTION,
+		"[F.r.3.2] Test result (value/finding) is required when [F.r.2] is populated and [F.r.3.1] and [F.r.3.4] are not populated.",
 		has_text(Some(test.test_name.as_str()))
 			&& !has_text(test.test_result_code.as_deref())
 			&& !has_text(test.result_unstructured.as_deref())
 			&& !has_text(test.test_result_value.as_deref()),
 	);
-	validate_constraint(
+	reject_when(
 		issues,
 		"ICH.F.r.3.2.ALLOWED.VALUE",
 		&path,
-		ConstraintValue::Text(test.test_result_value.as_deref().map(Cow::Borrowed)),
-		&validation_ctx.vocabulary,
+		SECTION,
+		ALLOWED_VALUE_MESSAGE,
+		!valid_decimal(test.test_result_value.as_deref()),
 	);
-	validate_length(
+	max_length(
 		issues,
 		"ICH.F.r.3.2.LENGTH.MAX",
 		&path,
+		SECTION,
+		MAX_LENGTH_MESSAGE,
 		test.test_result_value.as_deref(),
+		50,
 	);
 }
 
 /// ICH.F.r.3.3.REQUIRED
 /// ICH.F.r.3.3.ALLOWED.VALUE
 /// ICH.F.r.3.3.LENGTH.MAX
-fn f_r_3_3(
-	idx: usize,
-	test: &TestResult,
-	validation_ctx: &ValidationContext,
-	issues: &mut Vec<ValidationIssue>,
-) {
+fn f_r_3_3(idx: usize, test: &TestResult, issues: &mut Vec<ValidationIssue>) {
 	let path = format!("testResults.{idx}.testResultUnit");
-	validate_violation(
+	reject_when(
 		issues,
 		"ICH.F.r.3.3.REQUIRED",
 		&path,
+		SECTION,
+		"[F.r.3.3] Test result unit is required when [F.r.3.2] is populated.",
 		has_text(test.test_result_value.as_deref())
 			&& !has_text(test.test_result_unit.as_deref()),
 	);
-	validate_constraint(
+	reject_when(
 		issues,
 		"ICH.F.r.3.3.ALLOWED.VALUE",
 		&path,
-		ConstraintValue::Text(test.test_result_unit.as_deref().map(Cow::Borrowed)),
-		&validation_ctx.vocabulary,
+		SECTION,
+		ALLOWED_VALUE_MESSAGE,
+		!valid_ucum(test.test_result_unit.as_deref()),
 	);
-	validate_length(
+	max_length(
 		issues,
 		"ICH.F.r.3.3.LENGTH.MAX",
 		&path,
+		SECTION,
+		MAX_LENGTH_MESSAGE,
 		test.test_result_unit.as_deref(),
+		50,
 	);
 }
 
@@ -235,50 +279,64 @@ fn f_r_3_3(
 /// ICH.F.r.3.4.LENGTH.MAX
 fn f_r_3_4(idx: usize, test: &TestResult, issues: &mut Vec<ValidationIssue>) {
 	let path = format!("testResults.{idx}.resultUnstructured");
-	validate_violation(
+	reject_when(
 		issues,
 		"ICH.F.r.3.4.REQUIRED",
 		&path,
+		SECTION,
+		"[F.r.3.4] Result unstructured data is required when [F.r.2] is populated and [F.r.3] is not populated.",
 		has_text(Some(test.test_name.as_str()))
 			&& !has_text(test.test_result_code.as_deref())
 			&& !has_text(test.test_result_value.as_deref())
 			&& !has_text(test.result_unstructured.as_deref()),
 	);
-	validate_length(
+	max_length(
 		issues,
 		"ICH.F.r.3.4.LENGTH.MAX",
 		&path,
+		SECTION,
+		MAX_LENGTH_MESSAGE,
 		test.result_unstructured.as_deref(),
+		2000,
 	);
 }
 
 /// ICH.F.r.4.LENGTH.MAX
 fn f_r_4(idx: usize, test: &TestResult, issues: &mut Vec<ValidationIssue>) {
-	validate_length(
+	max_length(
 		issues,
 		"ICH.F.r.4.LENGTH.MAX",
 		&format!("testResults.{idx}.normalLowValue"),
+		SECTION,
+		MAX_LENGTH_MESSAGE,
 		test.normal_low_value.as_deref(),
+		50,
 	);
 }
 
 /// ICH.F.r.5.LENGTH.MAX
 fn f_r_5(idx: usize, test: &TestResult, issues: &mut Vec<ValidationIssue>) {
-	validate_length(
+	max_length(
 		issues,
 		"ICH.F.r.5.LENGTH.MAX",
 		&format!("testResults.{idx}.normalHighValue"),
+		SECTION,
+		MAX_LENGTH_MESSAGE,
 		test.normal_high_value.as_deref(),
+		50,
 	);
 }
 
 /// ICH.F.r.6.LENGTH.MAX
 fn f_r_6(idx: usize, test: &TestResult, issues: &mut Vec<ValidationIssue>) {
-	validate_length(
+	max_length(
 		issues,
 		"ICH.F.r.6.LENGTH.MAX",
 		&format!("testResults.{idx}.comments"),
+		SECTION,
+		MAX_LENGTH_MESSAGE,
 		test.comments.as_deref(),
+		2000,
 	);
 }
 
@@ -323,59 +381,15 @@ pub(crate) fn collect_ich_issues(
 		f_r_2_1(idx, test, issues);
 		f_r_2_2a(idx, test, issues);
 		f_r_2_2b(idx, test, issues);
-		f_r_3_3(idx, test, validation_ctx, issues);
-		f_r_3_1(idx, test, validation_ctx, issues);
-		f_r_3_2(idx, test, validation_ctx, issues);
+		f_r_3_3(idx, test, issues);
+		f_r_3_1(idx, test, issues);
+		f_r_3_2(idx, test, issues);
 		f_r_3_4(idx, test, issues);
 		f_r_4(idx, test, issues);
 		f_r_5(idx, test, issues);
 		f_r_6(idx, test, issues);
 		f_r_2_2_meddra(idx, test, validation_ctx, issues);
 	}
-}
-
-#[cfg(test)]
-pub(super) fn constraint_rule_codes() -> Vec<&'static str> {
-	vec![
-		"ICH.F.r.3.3.ALLOWED.VALUE",
-		"ICH.F.r.3.1.ALLOWED.VALUE",
-		"ICH.F.r.3.2.ALLOWED.VALUE",
-		"ICH.F.r.2.2a.ALLOWED.VALUE",
-		"ICH.F.r.2.2b.ALLOWED.VALUE",
-	]
-}
-
-#[cfg(test)]
-pub(super) fn implemented_rule_codes() -> Vec<&'static str> {
-	vec![
-		"ICH.F.r.2.REQUIRED",
-		"ICH.F.r.1.FUTURE_DATE.FORBIDDEN",
-		"ICH.F.r.3.3.ALLOWED.VALUE",
-		"ICH.F.r.3.1.ALLOWED.VALUE",
-		"ICH.F.r.3.2.ALLOWED.VALUE",
-		"ICH.F.r.2.1.LENGTH.MAX",
-		"ICH.F.r.2.2a.LENGTH.MAX",
-		"ICH.F.r.2.2b.LENGTH.MAX",
-		"ICH.F.r.3.1.LENGTH.MAX",
-		"ICH.F.r.3.2.LENGTH.MAX",
-		"ICH.F.r.3.3.LENGTH.MAX",
-		"ICH.F.r.3.4.LENGTH.MAX",
-		"ICH.F.r.4.LENGTH.MAX",
-		"ICH.F.r.5.LENGTH.MAX",
-		"ICH.F.r.6.LENGTH.MAX",
-		"ICH.F.r.1.REQUIRED",
-		"ICH.F.r.2.1.REQUIRED",
-		"ICH.F.r.2.2a.REQUIRED",
-		"ICH.F.r.2.2b.REQUIRED",
-		"ICH.F.r.3.3.REQUIRED",
-		"ICH.F.r.3.1.REQUIRED",
-		"ICH.F.r.3.2.REQUIRED",
-		"ICH.F.r.3.4.REQUIRED",
-		"ICH.F.r.2.2a.ALLOWED.VALUE",
-		"ICH.F.r.2.2b.ALLOWED.VALUE",
-		"ICH.F.r.2.2a.VOCABULARY",
-		"ICH.F.r.2.2b.VOCABULARY",
-	]
 }
 
 #[cfg(test)]
@@ -665,5 +679,62 @@ mod golden_f_required_tests {
 		assert!(issues
 			.iter()
 			.any(|issue| issue.code == "MFDS.F.r.7.C.1.6.1.REQUIRED"));
+	}
+
+	#[test]
+	fn golden_f_issue_metadata() {
+		let mut test = test_result();
+		test.test_name = "ALT".to_string();
+		test.test_result_code = Some("9".to_string());
+		let mut ctx = empty_ctx();
+		ctx.tests.push(test);
+		let mut issues = Vec::new();
+		collect_ich_issues(&ctx, &mut issues);
+		let mut out = issues
+			.into_iter()
+			.filter(|issue| {
+				matches!(
+					issue.code.as_str(),
+					"ICH.F.r.1.REQUIRED" | "ICH.F.r.3.1.ALLOWED.VALUE"
+				)
+			})
+			.map(|issue| {
+				(
+					issue.code,
+					issue.message,
+					issue.path,
+					issue.field_path,
+					issue.section,
+					issue.subsection,
+					issue.blocking,
+				)
+			})
+			.collect::<Vec<_>>();
+		out.sort_by(|left, right| left.0.cmp(&right.0));
+
+		assert_eq!(
+			out,
+			vec![
+				(
+					"ICH.F.r.1.REQUIRED".to_string(),
+					"[F.r.1] Test date is required when [F.r.2] is populated."
+						.to_string(),
+					"testResults.0.testDate".to_string(),
+					Some("testResults.0.testDate".to_string()),
+					"tests".to_string(),
+					"F.r".to_string(),
+					true,
+				),
+				(
+					"ICH.F.r.3.1.ALLOWED.VALUE".to_string(),
+					"Dictionary allowed values constraint.".to_string(),
+					"testResults.0.testResultCode".to_string(),
+					Some("testResults.0.testResultCode".to_string()),
+					"tests".to_string(),
+					"F.r".to_string(),
+					true,
+				),
+			],
+		);
 	}
 }

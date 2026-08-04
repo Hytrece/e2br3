@@ -1,12 +1,12 @@
 use super::helpers::{
-	e2b_datetime_date, validate_constraint, validate_future_date, validate_length,
-	validate_value, validate_violation, DateValues, RuleValue,
+	e2b_datetime_date, max_length, reject_future_date, reject_when, require,
+	valid_base64, valid_code, valid_e2b_datetime, valid_ich_identifier,
+	valid_iso3166, DateValues,
 };
-use crate::allowed_value::{true_marker_value, ConstraintValue};
 use crate::{
 	has_text, is_mfds_clinical_trial_receiver, is_mfds_compassionate_use_receiver,
 	is_mfds_domestic_receiver, FdaValidationContext, MfdsValidationContext,
-	RegulatoryAuthority, RuleFacts, ValidationContext, ValidationIssue,
+	RegulatoryAuthority, ValidationContext, ValidationIssue,
 };
 use lib_core::ctx::Ctx;
 use lib_core::model::case_identifiers::{LinkedReportNumber, OtherCaseIdentifier};
@@ -16,8 +16,80 @@ use lib_core::model::safety_report::{
 	StudyRegistrationNumber,
 };
 use lib_core::model::{ModelManager, Result};
-use std::borrow::Cow;
 use std::collections::HashMap;
+
+const CONSTRAINT_SECTION: &str = "case-identification";
+const MAX_LENGTH_MESSAGE: &str = "Dictionary max length exceeded.";
+const ALLOWED_VALUE_MESSAGE: &str = "Dictionary allowed values constraint.";
+const VOCABULARY_MESSAGE: &str = "Dictionary vocabulary constraint.";
+
+fn required_field(
+	issues: &mut Vec<ValidationIssue>,
+	code: &str,
+	path: &str,
+	section: &str,
+	message: &str,
+	present: bool,
+) {
+	require(issues, code, path, section, message, present);
+}
+
+fn required_when(
+	issues: &mut Vec<ValidationIssue>,
+	code: &str,
+	path: &str,
+	section: &str,
+	message: &str,
+	trigger: bool,
+	present: bool,
+) {
+	reject_when(issues, code, path, section, message, trigger && !present);
+}
+
+fn length(
+	issues: &mut Vec<ValidationIssue>,
+	code: &str,
+	path: &str,
+	value: Option<&str>,
+	max: usize,
+) {
+	max_length(
+		issues,
+		code,
+		path,
+		CONSTRAINT_SECTION,
+		MAX_LENGTH_MESSAGE,
+		value,
+		max,
+	);
+}
+
+fn allowed(issues: &mut Vec<ValidationIssue>, code: &str, path: &str, valid: bool) {
+	reject_when(
+		issues,
+		code,
+		path,
+		CONSTRAINT_SECTION,
+		ALLOWED_VALUE_MESSAGE,
+		!valid,
+	);
+}
+
+fn vocabulary(
+	issues: &mut Vec<ValidationIssue>,
+	code: &str,
+	path: &str,
+	valid: bool,
+) {
+	reject_when(
+		issues,
+		code,
+		path,
+		CONSTRAINT_SECTION,
+		VOCABULARY_MESSAGE,
+		!valid,
+	);
+}
 
 fn is_later_than(
 	value: Option<sqlx::types::time::Date>,
@@ -83,35 +155,23 @@ pub(crate) async fn collect(
 	Ok(())
 }
 
-/// ICH.C.1.REQUIRED
-fn c_1(
-	report: Option<&SafetyReportIdentification>,
-	issues: &mut Vec<ValidationIssue>,
-) {
-	validate_value(
-		issues,
-		"ICH.C.1.REQUIRED",
-		"safetyReportIdentification",
-		RuleValue::borrowed(report.map(|_| "present"), None),
-		RuleFacts::default(),
-	);
-}
-
 /// ICH.C.1.1.REQUIRED
 /// ICH.C.1.1.LENGTH.MAX
 fn c_1_1(report: &SafetyReportIdentification, issues: &mut Vec<ValidationIssue>) {
-	validate_value(
+	required_field(
 		issues,
 		"ICH.C.1.1.REQUIRED",
 		"safetyReportIdentification.safetyReportId",
-		RuleValue::borrowed(report.safety_report_id.as_deref(), None),
-		RuleFacts::default(),
+		"case-identification",
+		"[C.1.1] is required.",
+		has_text(report.safety_report_id.as_deref()),
 	);
-	validate_length(
+	length(
 		issues,
 		"ICH.C.1.1.LENGTH.MAX",
 		"safetyReportIdentification.safetyReportId",
 		report.safety_report_id.as_deref(),
+		100,
 	);
 }
 
@@ -146,64 +206,62 @@ fn c_1_1_profile(
 /// ICH.C.1.2.REQUIRED
 /// ICH.C.1.2.FUTURE_DATE.FORBIDDEN
 /// ICH.C.1.2.ALLOWED.VALUE
-fn c_1_2(
-	report: &SafetyReportIdentification,
-	vocabulary: &crate::context::VocabularyContext,
-	issues: &mut Vec<ValidationIssue>,
-) {
+fn c_1_2(report: &SafetyReportIdentification, issues: &mut Vec<ValidationIssue>) {
 	const PATH: &str = "safetyReportIdentification.transmissionDate";
-	validate_value(
+	required_field(
 		issues,
 		"ICH.C.1.2.REQUIRED",
 		PATH,
-		RuleValue::borrowed(report.transmission_date.as_deref(), None),
-		RuleFacts::default(),
+		"case-identification",
+		"[C.1.2] is required.",
+		has_text(report.transmission_date.as_deref()),
 	);
-	validate_future_date(
+	reject_future_date(
 		issues,
 		"ICH.C.1.2.FUTURE_DATE.FORBIDDEN",
 		PATH,
+		"case-identification",
+		"[C.1.2] must not be later than today.",
 		DateValues::One(e2b_datetime_date(report.transmission_date.as_deref())),
 	);
-	validate_constraint(
+	allowed(
 		issues,
 		"ICH.C.1.2.ALLOWED.VALUE",
 		PATH,
-		ConstraintValue::Text(
-			report.transmission_date.as_deref().map(Cow::Borrowed),
-		),
-		vocabulary,
+		report
+			.transmission_date
+			.as_deref()
+			.map(str::trim)
+			.filter(|value| !value.is_empty())
+			.is_none_or(valid_e2b_datetime),
 	);
 }
 
 /// ICH.C.1.3.REQUIRED
 /// ICH.C.1.3.ALLOWED.VALUE
 /// ICH.C.1.3.LENGTH.MAX
-fn c_1_3(
-	report: &SafetyReportIdentification,
-	vocabulary: &crate::context::VocabularyContext,
-	issues: &mut Vec<ValidationIssue>,
-) {
+fn c_1_3(report: &SafetyReportIdentification, issues: &mut Vec<ValidationIssue>) {
 	const PATH: &str = "safetyReportIdentification.reportType";
-	validate_value(
+	required_field(
 		issues,
 		"ICH.C.1.3.REQUIRED",
 		PATH,
-		RuleValue::borrowed(report.report_type.as_deref(), None),
-		RuleFacts::default(),
+		"case-identification",
+		"[C.1.3] is required.",
+		has_text(report.report_type.as_deref()),
 	);
-	validate_constraint(
+	allowed(
 		issues,
 		"ICH.C.1.3.ALLOWED.VALUE",
 		PATH,
-		ConstraintValue::Text(report.report_type.as_deref().map(Cow::Borrowed)),
-		vocabulary,
+		valid_code(report.report_type.as_deref(), &["1", "2", "3", "4"]),
 	);
-	validate_length(
+	length(
 		issues,
 		"ICH.C.1.3.LENGTH.MAX",
 		PATH,
 		report.report_type.as_deref(),
+		1,
 	);
 }
 
@@ -213,37 +271,39 @@ fn c_1_3(
 /// ICH.C.1.4.AFTER_C.1.5.FORBIDDEN
 fn c_1_4(report: &SafetyReportIdentification, issues: &mut Vec<ValidationIssue>) {
 	const PATH: &str = "safetyReportIdentification.dateFirstReceivedFromSource";
-	validate_value(
+	required_field(
 		issues,
 		"ICH.C.1.4.REQUIRED",
 		PATH,
-		RuleValue::owned(
-			report
-				.date_first_received_from_source
-				.map(|value| value.to_string()),
-			None,
-		),
-		RuleFacts::default(),
+		"case-identification",
+		"[C.1.4] is required.",
+		report.date_first_received_from_source.is_some(),
 	);
-	validate_future_date(
+	reject_future_date(
 		issues,
 		"ICH.C.1.4.FUTURE_DATE.FORBIDDEN",
 		PATH,
+		"case-identification",
+		"[C.1.4] must not be later than today.",
 		DateValues::One(report.date_first_received_from_source),
 	);
-	validate_violation(
+	reject_when(
 		issues,
 		"ICH.C.1.4.AFTER_C.1.2.FORBIDDEN",
 		PATH,
+		"case-identification",
+		"[C.1.4] cannot be later than [C.1.2].",
 		is_later_than(
 			report.date_first_received_from_source,
 			e2b_datetime_date(report.transmission_date.as_deref()),
 		),
 	);
-	validate_violation(
+	reject_when(
 		issues,
 		"ICH.C.1.4.AFTER_C.1.5.FORBIDDEN",
 		PATH,
+		"case-identification",
+		"[C.1.4] cannot be later than [C.1.5].",
 		is_later_than(
 			report.date_first_received_from_source,
 			report.date_of_most_recent_information,
@@ -256,28 +316,28 @@ fn c_1_4(report: &SafetyReportIdentification, issues: &mut Vec<ValidationIssue>)
 /// ICH.C.1.5.AFTER_C.1.2.FORBIDDEN
 fn c_1_5(report: &SafetyReportIdentification, issues: &mut Vec<ValidationIssue>) {
 	const PATH: &str = "safetyReportIdentification.dateOfMostRecentInformation";
-	validate_value(
+	required_field(
 		issues,
 		"ICH.C.1.5.REQUIRED",
 		PATH,
-		RuleValue::owned(
-			report
-				.date_of_most_recent_information
-				.map(|value| value.to_string()),
-			None,
-		),
-		RuleFacts::default(),
+		"case-identification",
+		"[C.1.5] is required.",
+		report.date_of_most_recent_information.is_some(),
 	);
-	validate_future_date(
+	reject_future_date(
 		issues,
 		"ICH.C.1.5.FUTURE_DATE.FORBIDDEN",
 		PATH,
+		"case-identification",
+		"[C.1.5] must not be later than today.",
 		DateValues::One(report.date_of_most_recent_information),
 	);
-	validate_violation(
+	reject_when(
 		issues,
 		"ICH.C.1.5.AFTER_C.1.2.FORBIDDEN",
 		PATH,
+		"case-identification",
+		"[C.1.5] cannot be later than [C.1.2].",
 		is_later_than(
 			report.date_of_most_recent_information,
 			e2b_datetime_date(report.transmission_date.as_deref()),
@@ -285,43 +345,18 @@ fn c_1_5(report: &SafetyReportIdentification, issues: &mut Vec<ValidationIssue>)
 	);
 }
 
-/// ICH.C.1.6.1.REQUIRED
-fn c_1_6_1(report: &SafetyReportIdentification, issues: &mut Vec<ValidationIssue>) {
-	validate_value(
-		issues,
-		"ICH.C.1.6.1.REQUIRED",
-		"safetyReportIdentification.additionalDocumentsAvailable",
-		RuleValue::borrowed(
-			report.additional_documents_available.map(|value| {
-				if value {
-					"true"
-				} else {
-					"false"
-				}
-			}),
-			None,
-		),
-		RuleFacts::default(),
-	);
-}
-
 /// ICH.C.1.7.REQUIRED
 fn c_1_7(report: &SafetyReportIdentification, issues: &mut Vec<ValidationIssue>) {
-	validate_value(
+	required_field(
 		issues,
 		"ICH.C.1.7.REQUIRED",
 		"safetyReportIdentification.fulfilExpeditedCriteria",
-		RuleValue::borrowed(
-			report
-				.fulfil_expedited_criteria
-				.map(|value| if value { "1" } else { "2" }),
-			None,
-		),
-		RuleFacts::default(),
+		"case-identification",
+		"[C.1.7] is required.",
+		report.fulfil_expedited_criteria.is_some(),
 	);
 }
 
-/// ICH.C.1.8.1.REQUIRED
 /// ICH.C.1.8.1.ALLOWED.VALUE
 /// ICH.C.1.8.1.LENGTH.MAX
 fn c_1_8_1(
@@ -330,144 +365,99 @@ fn c_1_8_1(
 	issues: &mut Vec<ValidationIssue>,
 ) {
 	const PATH: &str = "safetyReportIdentification.worldwideUniqueId";
-	validate_value(
-		issues,
-		"ICH.C.1.8.1.REQUIRED",
-		PATH,
-		RuleValue::borrowed(report.worldwide_unique_id.as_deref(), None),
-		RuleFacts::default(),
-	);
-	validate_constraint(
+	allowed(
 		issues,
 		"ICH.C.1.8.1.ALLOWED.VALUE",
 		PATH,
-		ConstraintValue::Text(
-			report.worldwide_unique_id.as_deref().map(Cow::Borrowed),
-		),
-		vocabulary,
+		valid_ich_identifier(vocabulary, report.worldwide_unique_id.as_deref()),
 	);
-	validate_length(
+	length(
 		issues,
 		"ICH.C.1.8.1.LENGTH.MAX",
 		PATH,
 		report.worldwide_unique_id.as_deref(),
+		100,
 	);
 }
 
-/// ICH.C.1.8.2.REQUIRED
 /// ICH.C.1.8.2.ALLOWED.VALUE
 /// ICH.C.1.8.2.LENGTH.MAX
-fn c_1_8_2(
-	report: &SafetyReportIdentification,
-	vocabulary: &crate::context::VocabularyContext,
-	issues: &mut Vec<ValidationIssue>,
-) {
+fn c_1_8_2(report: &SafetyReportIdentification, issues: &mut Vec<ValidationIssue>) {
 	const PATH: &str = "safetyReportIdentification.firstSenderType";
-	validate_value(
-		issues,
-		"ICH.C.1.8.2.REQUIRED",
-		PATH,
-		RuleValue::borrowed(report.first_sender_type.as_deref(), None),
-		RuleFacts::default(),
-	);
-	validate_constraint(
+	allowed(
 		issues,
 		"ICH.C.1.8.2.ALLOWED.VALUE",
 		PATH,
-		ConstraintValue::Text(
-			report.first_sender_type.as_deref().map(Cow::Borrowed),
-		),
-		vocabulary,
+		valid_code(report.first_sender_type.as_deref(), &["1", "2"]),
 	);
-	validate_length(
+	length(
 		issues,
 		"ICH.C.1.8.2.LENGTH.MAX",
 		PATH,
 		report.first_sender_type.as_deref(),
+		1,
 	);
 }
 
 /// ICH.C.1.9.1.REQUIRED
 /// ICH.C.1.9.1.ALLOWED.VALUE
-fn c_1_9_1(
-	report: &SafetyReportIdentification,
-	vocabulary: &crate::context::VocabularyContext,
-	issues: &mut Vec<ValidationIssue>,
-) {
+fn c_1_9_1(report: &SafetyReportIdentification, issues: &mut Vec<ValidationIssue>) {
 	const PATH: &str = "safetyReportIdentification.otherCaseIdentifiersExist";
-	validate_value(
+	required_field(
 		issues,
 		"ICH.C.1.9.1.REQUIRED",
 		PATH,
-		RuleValue::borrowed(
-			report.other_case_identifiers_exist.map(|value| {
-				if value {
-					"true"
-				} else {
-					"false"
-				}
-			}),
-			report.other_case_identifiers_exist_null_flavor.as_deref(),
-		),
-		RuleFacts::default(),
+		"case-identification",
+		"[C.1.9.1] is required.",
+		report.other_case_identifiers_exist.is_some()
+			|| report.other_case_identifiers_exist_null_flavor.is_some(),
 	);
-	validate_constraint(
+	allowed(
 		issues,
 		"ICH.C.1.9.1.ALLOWED.VALUE",
 		PATH,
-		true_marker_value(
-			report.other_case_identifiers_exist,
-			report.other_case_identifiers_exist_null_flavor.as_deref(),
-		),
-		vocabulary,
+		has_text(report.other_case_identifiers_exist_null_flavor.as_deref())
+			|| report.other_case_identifiers_exist != Some(false),
 	);
 }
 
 /// ICH.C.1.11.1.ALLOWED.VALUE
 /// ICH.C.1.11.1.LENGTH.MAX
-fn c_1_11_1(
-	report: &SafetyReportIdentification,
-	vocabulary: &crate::context::VocabularyContext,
-	issues: &mut Vec<ValidationIssue>,
-) {
+fn c_1_11_1(report: &SafetyReportIdentification, issues: &mut Vec<ValidationIssue>) {
 	const PATH: &str = "safetyReportIdentification.nullificationAmendmentCode";
-	validate_constraint(
+	allowed(
 		issues,
 		"ICH.C.1.11.1.ALLOWED.VALUE",
 		PATH,
-		ConstraintValue::Text(
-			report.nullification_code.as_deref().map(Cow::Borrowed),
-		),
-		vocabulary,
+		valid_code(report.nullification_code.as_deref(), &["1", "2"]),
 	);
-	validate_length(
+	length(
 		issues,
 		"ICH.C.1.11.1.LENGTH.MAX",
 		PATH,
 		report.nullification_code.as_deref(),
+		1,
 	);
 }
 
 /// ICH.C.1.11.2.REQUIRED
 /// ICH.C.1.11.2.LENGTH.MAX
 fn c_1_11_2(report: &SafetyReportIdentification, issues: &mut Vec<ValidationIssue>) {
-	validate_value(
+	required_when(
 		issues,
 		"ICH.C.1.11.2.REQUIRED",
 		"safetyReportIdentification.nullificationReason",
-		RuleValue::borrowed(report.nullification_reason.as_deref(), None),
-		RuleFacts {
-			ich_nullification_code_present: Some(has_text(
-				report.nullification_code.as_deref(),
-			)),
-			..RuleFacts::default()
-		},
+		"case-identification",
+		"[C.1.11.2] Nullification reason is required when [C.1.11.1] is provided.",
+		has_text(report.nullification_code.as_deref()),
+		has_text(report.nullification_reason.as_deref()),
 	);
-	validate_length(
+	length(
 		issues,
 		"ICH.C.1.11.2.LENGTH.MAX",
 		"safetyReportIdentification.nullificationReason",
 		report.nullification_reason.as_deref(),
+		2000,
 	);
 }
 
@@ -481,46 +471,45 @@ fn primary_source_regulatory_is_one(source: &PrimarySource) -> bool {
 fn c_2_r_3(
 	idx: usize,
 	source: &PrimarySource,
-	vocabulary: &crate::context::VocabularyContext,
+	vocabulary_ctx: &crate::context::VocabularyContext,
 	issues: &mut Vec<ValidationIssue>,
 ) {
 	let path = format!("primarySources.{idx}.reporterCountry");
 	if primary_source_regulatory_is_one(source) {
-		validate_value(
+		required_field(
 			issues,
 			"ICH.C.2.r.3.REQUIRED",
 			&path,
-			RuleValue::borrowed(source.country_code.as_deref(), None),
-			RuleFacts::default(),
+			"reporter",
+			"[C.2.r.3] is required.",
+			has_text(source.country_code.as_deref()),
 		);
 	}
-	validate_length(
+	length(
 		issues,
 		"ICH.C.2.r.3.LENGTH.MAX",
 		&path,
 		source.country_code.as_deref(),
+		2,
 	);
-	validate_constraint(
+	vocabulary(
 		issues,
 		"ICH.C.2.r.3.VOCABULARY",
 		&path,
-		ConstraintValue::Text(source.country_code.as_deref().map(Cow::Borrowed)),
-		vocabulary,
+		valid_iso3166(vocabulary_ctx, source.country_code.as_deref()),
 	);
 }
 
 /// FDA.C.2.r.2.8.REQUIRED
 fn c_2_r_2_8(idx: usize, source: &PrimarySource, issues: &mut Vec<ValidationIssue>) {
 	let path = format!("primarySources.{idx}.reporterEmail");
-	validate_value(
+	required_field(
 		issues,
 		"FDA.C.2.r.2.8.REQUIRED",
 		&path,
-		RuleValue::borrowed(
-			source.email.as_deref(),
-			source.email_null_flavor.as_deref(),
-		),
-		RuleFacts::default(),
+		"reporter",
+		"FDA requires [C.2.r.2.8].",
+		has_text(source.email.as_deref()) || source.email_null_flavor.is_some(),
 	);
 }
 
@@ -530,9 +519,10 @@ fn c_2_length(
 	field: &str,
 	value: Option<&str>,
 	issues: &mut Vec<ValidationIssue>,
+	max_length: usize,
 ) {
 	let path = format!("primarySources.{idx}.{field}");
-	validate_length(issues, code, &path, value);
+	length(issues, code, &path, value, max_length);
 }
 
 /// ICH.C.2.r.1.1.LENGTH.MAX
@@ -543,6 +533,7 @@ fn c_2_r_1_1(idx: usize, source: &PrimarySource, issues: &mut Vec<ValidationIssu
 		"reporterTitle",
 		source.reporter_title.as_deref(),
 		issues,
+		50,
 	);
 }
 
@@ -554,6 +545,7 @@ fn c_2_r_1_2(idx: usize, source: &PrimarySource, issues: &mut Vec<ValidationIssu
 		"reporterGivenName",
 		source.reporter_given_name.as_deref(),
 		issues,
+		60,
 	);
 }
 
@@ -565,6 +557,7 @@ fn c_2_r_1_3(idx: usize, source: &PrimarySource, issues: &mut Vec<ValidationIssu
 		"reporterMiddleName",
 		source.reporter_middle_name.as_deref(),
 		issues,
+		60,
 	);
 }
 
@@ -576,6 +569,7 @@ fn c_2_r_1_4(idx: usize, source: &PrimarySource, issues: &mut Vec<ValidationIssu
 		"reporterFamilyName",
 		source.reporter_family_name.as_deref(),
 		issues,
+		60,
 	);
 }
 
@@ -603,15 +597,14 @@ fn c_2_r_2_1(
 				.then_some((value, null_flavor))
 		})
 		.unwrap_or((None, None));
-	validate_value(
+	required_when(
 		issues,
 		"ICH.C.2.r.2.1.REQUIRED",
 		"primarySources.0.reporterOrganization",
-		RuleValue::borrowed(value, null_flavor),
-		RuleFacts {
-			ich_report_type_is_study: Some(report_type_is_study),
-			..RuleFacts::default()
-		},
+		"reporter",
+		"[C.2.r.2.1] Reporter organization is required when report type is study (C.1.3=2).",
+		report_type_is_study,
+		value.is_some() || null_flavor.is_some(),
 	);
 	for (idx, source) in sources.iter().enumerate() {
 		c_2_length(
@@ -620,6 +613,7 @@ fn c_2_r_2_1(
 			"reporterOrganization",
 			source.organization.as_deref(),
 			issues,
+			60,
 		);
 	}
 }
@@ -632,6 +626,7 @@ fn c_2_r_2_2(idx: usize, source: &PrimarySource, issues: &mut Vec<ValidationIssu
 		"reporterDepartment",
 		source.department.as_deref(),
 		issues,
+		60,
 	);
 }
 
@@ -643,6 +638,7 @@ fn c_2_r_2_3(idx: usize, source: &PrimarySource, issues: &mut Vec<ValidationIssu
 		"reporterStreet",
 		source.street.as_deref(),
 		issues,
+		100,
 	);
 }
 
@@ -654,6 +650,7 @@ fn c_2_r_2_4(idx: usize, source: &PrimarySource, issues: &mut Vec<ValidationIssu
 		"reporterCity",
 		source.city.as_deref(),
 		issues,
+		35,
 	);
 }
 
@@ -665,6 +662,7 @@ fn c_2_r_2_5(idx: usize, source: &PrimarySource, issues: &mut Vec<ValidationIssu
 		"reporterState",
 		source.state.as_deref(),
 		issues,
+		40,
 	);
 }
 
@@ -676,6 +674,7 @@ fn c_2_r_2_6(idx: usize, source: &PrimarySource, issues: &mut Vec<ValidationIssu
 		"reporterPostcode",
 		source.postcode.as_deref(),
 		issues,
+		15,
 	);
 }
 
@@ -687,88 +686,70 @@ fn c_2_r_2_7(idx: usize, source: &PrimarySource, issues: &mut Vec<ValidationIssu
 		"reporterTelephone",
 		source.telephone.as_deref(),
 		issues,
+		33,
 	);
 }
 
 /// ICH.C.2.r.4.REQUIRED
 /// ICH.C.2.r.4.ALLOWED.VALUE
 /// ICH.C.2.r.4.LENGTH.MAX
-fn c_2_r_4(
-	idx: usize,
-	source: &PrimarySource,
-	vocabulary: &crate::context::VocabularyContext,
-	issues: &mut Vec<ValidationIssue>,
-) {
+fn c_2_r_4(idx: usize, source: &PrimarySource, issues: &mut Vec<ValidationIssue>) {
 	let path = format!("primarySources.{idx}.qualification");
 	if primary_source_regulatory_is_one(source) {
-		validate_value(
+		required_field(
 			issues,
 			"ICH.C.2.r.4.REQUIRED",
 			&path,
-			RuleValue::borrowed(
-				source.qualification.as_deref(),
-				source.qualification_null_flavor.as_deref(),
-			),
-			RuleFacts::default(),
+			"reporter",
+			"[C.2.r.4] is required.",
+			has_text(source.qualification.as_deref())
+				|| source.qualification_null_flavor.is_some(),
 		);
 	}
-	validate_constraint(
+	allowed(
 		issues,
 		"ICH.C.2.r.4.ALLOWED.VALUE",
 		&path,
-		ConstraintValue::Text(source.qualification.as_deref().map(Cow::Borrowed)),
-		vocabulary,
+		valid_code(source.qualification.as_deref(), &["1", "2", "3", "4", "5"]),
 	);
-	validate_length(
+	length(
 		issues,
 		"ICH.C.2.r.4.LENGTH.MAX",
 		&path,
 		source.qualification.as_deref(),
+		1,
 	);
 }
 
 /// ICH.C.2.r.5.REQUIRED
 /// ICH.C.2.r.5.ALLOWED.VALUE
 /// ICH.C.2.r.5.LENGTH.MAX
-fn c_2_r_5(
-	sources: &[PrimarySource],
-	vocabulary: &crate::context::VocabularyContext,
-	issues: &mut Vec<ValidationIssue>,
-) {
+fn c_2_r_5(sources: &[PrimarySource], issues: &mut Vec<ValidationIssue>) {
 	for (idx, source) in sources.iter().enumerate() {
 		let path =
 			format!("primarySources.{idx}.primarySourceForRegulatoryPurposes");
-		validate_constraint(
+		allowed(
 			issues,
 			"ICH.C.2.r.5.ALLOWED.VALUE",
 			&path,
-			ConstraintValue::Text(
-				source
-					.primary_source_regulatory
-					.as_deref()
-					.map(Cow::Borrowed),
-			),
-			vocabulary,
+			valid_code(source.primary_source_regulatory.as_deref(), &["1"]),
 		);
-		validate_length(
+		length(
 			issues,
 			"ICH.C.2.r.5.LENGTH.MAX",
 			&path,
 			source.primary_source_regulatory.as_deref(),
+			1,
 		);
 	}
-	validate_value(
+	let has_primary = sources.iter().any(primary_source_regulatory_is_one);
+	super::helpers::warn_when(
 		issues,
 		"ICH.C.2.r.5.REQUIRED",
 		"primarySources.0.primarySourceForRegulatoryPurposes",
-		RuleValue::borrowed(
-			sources
-				.iter()
-				.any(primary_source_regulatory_is_one)
-				.then_some("present"),
-			None,
-		),
-		RuleFacts::default(),
+		"reporter",
+		"[C.2.r.5] one primary source for regulatory purposes should be selected.",
+		!has_primary,
 	);
 	let primary_count = sources
 		.iter()
@@ -788,36 +769,33 @@ fn c_3_length(
 	field: &str,
 	value: Option<&str>,
 	issues: &mut Vec<ValidationIssue>,
+	max_length: usize,
 ) {
 	let path = format!("senderInformation.{field}");
-	validate_length(issues, code, &path, value);
+	length(issues, code, &path, value, max_length);
 }
 
 /// ICH.C.3.1.REQUIRED
 /// ICH.C.3.1.ALLOWED.VALUE
 /// ICH.C.3.1.LENGTH.MAX
-fn c_3_1(
-	sender: Option<&SenderInformation>,
-	vocabulary: &crate::context::VocabularyContext,
-	issues: &mut Vec<ValidationIssue>,
-) {
+fn c_3_1(sender: Option<&SenderInformation>, issues: &mut Vec<ValidationIssue>) {
 	const PATH: &str = "senderInformation.senderType";
 	let value = sender.and_then(|sender| sender.sender_type.as_deref());
-	validate_value(
+	required_field(
 		issues,
 		"ICH.C.3.1.REQUIRED",
 		PATH,
-		RuleValue::borrowed(value, None),
-		RuleFacts::default(),
+		"sender",
+		"[C.3.1] is required.",
+		has_text(value),
 	);
-	validate_constraint(
+	allowed(
 		issues,
 		"ICH.C.3.1.ALLOWED.VALUE",
 		PATH,
-		ConstraintValue::Text(value.map(Cow::Borrowed)),
-		vocabulary,
+		valid_code(value, &["1", "2", "3", "4", "5", "6", "7"]),
 	);
-	validate_length(issues, "ICH.C.3.1.LENGTH.MAX", PATH, value);
+	length(issues, "ICH.C.3.1.LENGTH.MAX", PATH, value, 1);
 }
 
 /// ICH.C.3.2.REQUIRED
@@ -825,21 +803,19 @@ fn c_3_1(
 fn c_3_2(sender: Option<&SenderInformation>, issues: &mut Vec<ValidationIssue>) {
 	const PATH: &str = "senderInformation.organizationName";
 	let value = sender.and_then(|sender| sender.organization_name.as_deref());
-	validate_value(
+	required_when(
 		issues,
 		"ICH.C.3.2.REQUIRED",
 		PATH,
-		RuleValue::borrowed(value, None),
-		RuleFacts {
-			ich_sender_organization_required: Some(
-				sender
-					.and_then(|sender| sender.sender_type.as_deref())
-					.map(str::trim) != Some("7"),
-			),
-			..RuleFacts::default()
-		},
+		"sender",
+		"[C.3.2] is required.",
+		sender
+			.and_then(|sender| sender.sender_type.as_deref())
+			.map(str::trim)
+			!= Some("7"),
+		has_text(value),
 	);
-	validate_length(issues, "ICH.C.3.2.LENGTH.MAX", PATH, value);
+	length(issues, "ICH.C.3.2.LENGTH.MAX", PATH, value, 100);
 }
 
 /// ICH.C.3.3.1.LENGTH.MAX
@@ -849,6 +825,7 @@ fn c_3_3_1(sender: &SenderInformation, issues: &mut Vec<ValidationIssue>) {
 		"department",
 		sender.department.as_deref(),
 		issues,
+		60,
 	);
 }
 
@@ -859,6 +836,7 @@ fn c_3_3_2(sender: &SenderInformation, issues: &mut Vec<ValidationIssue>) {
 		"personTitle",
 		sender.person_title.as_deref(),
 		issues,
+		50,
 	);
 }
 
@@ -869,6 +847,7 @@ fn c_3_3_3(sender: &SenderInformation, issues: &mut Vec<ValidationIssue>) {
 		"personGivenName",
 		sender.person_given_name.as_deref(),
 		issues,
+		60,
 	);
 }
 
@@ -879,6 +858,7 @@ fn c_3_3_4(sender: &SenderInformation, issues: &mut Vec<ValidationIssue>) {
 		"personMiddleName",
 		sender.person_middle_name.as_deref(),
 		issues,
+		60,
 	);
 }
 
@@ -889,6 +869,7 @@ fn c_3_3_5(sender: &SenderInformation, issues: &mut Vec<ValidationIssue>) {
 		"personFamilyName",
 		sender.person_family_name.as_deref(),
 		issues,
+		60,
 	);
 }
 
@@ -899,6 +880,7 @@ fn c_3_4_1(sender: &SenderInformation, issues: &mut Vec<ValidationIssue>) {
 		"streetAddress",
 		sender.street_address.as_deref(),
 		issues,
+		100,
 	);
 }
 
@@ -909,6 +891,7 @@ fn c_3_4_2(sender: &SenderInformation, issues: &mut Vec<ValidationIssue>) {
 		"city",
 		sender.city.as_deref(),
 		issues,
+		35,
 	);
 }
 
@@ -919,6 +902,7 @@ fn c_3_4_3(sender: &SenderInformation, issues: &mut Vec<ValidationIssue>) {
 		"state",
 		sender.state.as_deref(),
 		issues,
+		40,
 	);
 }
 
@@ -929,6 +913,7 @@ fn c_3_4_4(sender: &SenderInformation, issues: &mut Vec<ValidationIssue>) {
 		"postcode",
 		sender.postcode.as_deref(),
 		issues,
+		15,
 	);
 }
 
@@ -936,22 +921,22 @@ fn c_3_4_4(sender: &SenderInformation, issues: &mut Vec<ValidationIssue>) {
 /// ICH.C.3.4.5.LENGTH.MAX
 fn c_3_4_5(
 	sender: &SenderInformation,
-	vocabulary: &crate::context::VocabularyContext,
+	vocabulary_ctx: &crate::context::VocabularyContext,
 	issues: &mut Vec<ValidationIssue>,
 ) {
 	const PATH: &str = "senderInformation.countryCode";
-	validate_constraint(
+	vocabulary(
 		issues,
 		"ICH.C.3.4.5.VOCABULARY",
 		PATH,
-		ConstraintValue::Text(sender.country_code.as_deref().map(Cow::Borrowed)),
-		vocabulary,
+		valid_iso3166(vocabulary_ctx, sender.country_code.as_deref()),
 	);
-	validate_length(
+	length(
 		issues,
 		"ICH.C.3.4.5.LENGTH.MAX",
 		PATH,
 		sender.country_code.as_deref(),
+		2,
 	);
 }
 
@@ -962,6 +947,7 @@ fn c_3_4_6(sender: &SenderInformation, issues: &mut Vec<ValidationIssue>) {
 		"telephone",
 		sender.telephone.as_deref(),
 		issues,
+		33,
 	);
 }
 
@@ -972,6 +958,7 @@ fn c_3_4_7(sender: &SenderInformation, issues: &mut Vec<ValidationIssue>) {
 		"fax",
 		sender.fax.as_deref(),
 		issues,
+		33,
 	);
 }
 
@@ -982,6 +969,7 @@ fn c_3_4_8(sender: &SenderInformation, issues: &mut Vec<ValidationIssue>) {
 		"email",
 		sender.email.as_deref(),
 		issues,
+		100,
 	);
 }
 
@@ -993,18 +981,20 @@ fn c_1_6_1_r_1(
 	issues: &mut Vec<ValidationIssue>,
 ) {
 	let path = format!("documentsHeldBySender.{idx}.documentDescription");
-	validate_value(
+	required_field(
 		issues,
 		"ICH.C.1.6.1.r.1.REQUIRED",
 		&path,
-		RuleValue::borrowed(document.title.as_deref(), None),
-		RuleFacts::default(),
+		"case-identification",
+		"[C.1.6.1.r.1] Document description is required when additional documents are available.",
+		has_text(document.title.as_deref()),
 	);
-	validate_length(
+	length(
 		issues,
 		"ICH.C.1.6.1.r.1.LENGTH.MAX",
 		&path,
 		document.title.as_deref(),
+		2000,
 	);
 }
 
@@ -1012,18 +1002,14 @@ fn c_1_6_1_r_1(
 fn c_1_6_1_r_2(
 	idx: usize,
 	document: &DocumentsHeldBySender,
-	vocabulary: &crate::context::VocabularyContext,
 	issues: &mut Vec<ValidationIssue>,
 ) {
 	let path = format!("documentsHeldBySender.{idx}.includedDocument");
-	validate_constraint(
+	allowed(
 		issues,
 		"ICH.C.1.6.1.r.2.ALLOWED.VALUE",
 		&path,
-		ConstraintValue::Text(
-			document.document_base64.as_deref().map(Cow::Borrowed),
-		),
-		vocabulary,
+		valid_base64(document.document_base64.as_deref()),
 	);
 }
 
@@ -1035,18 +1021,20 @@ fn c_1_9_1_r_1(
 	issues: &mut Vec<ValidationIssue>,
 ) {
 	let path = format!("otherCaseIdentifiers.{idx}.source");
-	validate_value(
+	required_field(
 		issues,
 		"ICH.C.1.9.1.r.1.REQUIRED",
 		&path,
-		RuleValue::borrowed(Some(identifier.source_of_identifier.as_str()), None),
-		RuleFacts::default(),
+		"case-identification",
+		"[C.1.9.1.r.1] Source of the case identifier is required when an other case identifier row is present.",
+		has_text(Some(identifier.source_of_identifier.as_str())),
 	);
-	validate_length(
+	length(
 		issues,
 		"ICH.C.1.9.1.r.1.LENGTH.MAX",
 		&path,
 		Some(identifier.source_of_identifier.as_str()),
+		100,
 	);
 }
 
@@ -1061,21 +1049,21 @@ fn c_1_9_1_r_2(
 ) {
 	let path = format!("otherCaseIdentifiers.{idx}.caseIdentifier");
 	let value = Some(identifier.case_identifier.as_str());
-	validate_value(
+	required_field(
 		issues,
 		"ICH.C.1.9.1.r.2.REQUIRED",
 		&path,
-		RuleValue::borrowed(value, None),
-		RuleFacts::default(),
+		"case-identification",
+		"[C.1.9.1.r.2] Case identifier is required when an other case identifier row is present.",
+		has_text(value),
 	);
-	validate_constraint(
+	allowed(
 		issues,
 		"ICH.C.1.9.1.r.2.ALLOWED.VALUE",
 		&path,
-		ConstraintValue::Text(value.map(Cow::Borrowed)),
-		vocabulary,
+		valid_ich_identifier(vocabulary, value),
 	);
-	validate_length(issues, "ICH.C.1.9.1.r.2.LENGTH.MAX", &path, value);
+	length(issues, "ICH.C.1.9.1.r.2.LENGTH.MAX", &path, value, 100);
 }
 
 /// ICH.C.1.10.r.LENGTH.MAX
@@ -1085,11 +1073,12 @@ fn c_1_10_r(
 	issues: &mut Vec<ValidationIssue>,
 ) {
 	let path = format!("linkedReports.{idx}.linkedReportNumber");
-	validate_length(
+	length(
 		issues,
 		"ICH.C.1.10.r.LENGTH.MAX",
 		&path,
 		Some(report.linked_report_number.as_str()),
+		100,
 	);
 }
 
@@ -1100,11 +1089,12 @@ fn c_4_r_1(
 	issues: &mut Vec<ValidationIssue>,
 ) {
 	let path = format!("literatureReferences.{idx}.referenceText");
-	validate_length(
+	length(
 		issues,
 		"ICH.C.4.r.1.LENGTH.MAX",
 		&path,
 		reference.reference_text.as_deref(),
+		500,
 	);
 }
 
@@ -1112,18 +1102,14 @@ fn c_4_r_1(
 fn c_4_r_2(
 	idx: usize,
 	reference: &LiteratureReference,
-	vocabulary: &crate::context::VocabularyContext,
 	issues: &mut Vec<ValidationIssue>,
 ) {
 	let path = format!("literatureReferences.{idx}.documentBase64");
-	validate_constraint(
+	allowed(
 		issues,
 		"ICH.C.4.r.2.ALLOWED.VALUE",
 		&path,
-		ConstraintValue::Text(
-			reference.document_base64.as_deref().map(Cow::Borrowed),
-		),
-		vocabulary,
+		valid_base64(reference.document_base64.as_deref()),
 	);
 }
 
@@ -1137,11 +1123,12 @@ fn c_5_1_r_1(
 	let path = format!(
 		"studyInformation.{study_idx}.registrations.{idx}.registrationNumber"
 	);
-	validate_length(
+	length(
 		issues,
 		"ICH.C.5.1.r.1.LENGTH.MAX",
 		&path,
 		Some(registration.registration_number.as_str()),
+		50,
 	);
 }
 
@@ -1151,37 +1138,36 @@ fn c_5_1_r_2(
 	study_idx: usize,
 	idx: usize,
 	registration: &StudyRegistrationNumber,
-	vocabulary: &crate::context::VocabularyContext,
+	vocabulary_ctx: &crate::context::VocabularyContext,
 	issues: &mut Vec<ValidationIssue>,
 ) {
 	let path = format!(
 		"studyInformation.{study_idx}.registrations.{idx}.registrationCountry"
 	);
-	validate_length(
+	length(
 		issues,
 		"ICH.C.5.1.r.2.LENGTH.MAX",
 		&path,
 		registration.country_code.as_deref(),
+		2,
 	);
-	validate_constraint(
+	vocabulary(
 		issues,
 		"ICH.C.5.1.r.2.VOCABULARY",
 		&path,
-		ConstraintValue::Text(
-			registration.country_code.as_deref().map(Cow::Borrowed),
-		),
-		vocabulary,
+		valid_iso3166(vocabulary_ctx, registration.country_code.as_deref()),
 	);
 }
 
 /// ICH.C.5.2.LENGTH.MAX
 fn c_5_2(idx: usize, study: &StudyInformation, issues: &mut Vec<ValidationIssue>) {
 	let path = format!("studyInformation.{idx}.studyName");
-	validate_length(
+	length(
 		issues,
 		"ICH.C.5.2.LENGTH.MAX",
 		&path,
 		study.study_name.as_deref(),
+		2000,
 	);
 }
 
@@ -1195,22 +1181,21 @@ fn c_5_3(
 ) {
 	let path = format!("studyInformation.{idx}.sponsorStudyNumber");
 	if report_type_is_study {
-		validate_value(
+		required_field(
 			issues,
 			"ICH.C.5.3.REQUIRED",
 			&path,
-			RuleValue::borrowed(study.sponsor_study_number.as_deref(), None),
-			RuleFacts {
-				ich_report_type_is_study: Some(true),
-				..RuleFacts::default()
-			},
+			"study",
+			"[C.5.3] Sponsor study number is required when report type is study (C.1.3=2).",
+			has_text(study.sponsor_study_number.as_deref()),
 		);
 	}
-	validate_length(
+	length(
 		issues,
 		"ICH.C.5.3.LENGTH.MAX",
 		&path,
 		study.sponsor_study_number.as_deref(),
+		50,
 	);
 }
 
@@ -1220,47 +1205,41 @@ fn c_5_3(
 fn c_5_4(
 	studies: &[StudyInformation],
 	report_type_is_study: bool,
-	vocabulary: &crate::context::VocabularyContext,
 	issues: &mut Vec<ValidationIssue>,
 ) {
-	validate_value(
+	required_when(
 		issues,
 		"ICH.C.5.4.REQUIRED",
 		"studyInformation.0.studyTypeReaction",
-		RuleValue::borrowed((!studies.is_empty()).then_some("present"), None),
-		RuleFacts {
-			ich_report_type_is_study: Some(report_type_is_study),
-			..RuleFacts::default()
-		},
+		"study",
+		"[C.5.4] Study type where reaction(s) / event(s) were observed is required when [C.1.3] is report from study (2).",
+		report_type_is_study,
+		!studies.is_empty(),
 	);
 	for (idx, study) in studies.iter().enumerate() {
 		let path = format!("studyInformation.{idx}.studyTypeReaction");
 		if report_type_is_study {
-			validate_value(
+			required_field(
 				issues,
 				"ICH.C.5.4.REQUIRED",
 				&path,
-				RuleValue::borrowed(study.study_type_reaction.as_deref(), None),
-				RuleFacts {
-					ich_report_type_is_study: Some(true),
-					..RuleFacts::default()
-				},
+				"study",
+				"[C.5.4] Study type where reaction(s) / event(s) were observed is required when [C.1.3] is report from study (2).",
+				has_text(study.study_type_reaction.as_deref()),
 			);
 		}
-		validate_constraint(
+		allowed(
 			issues,
 			"ICH.C.5.4.ALLOWED.VALUE",
 			&path,
-			ConstraintValue::Text(
-				study.study_type_reaction.as_deref().map(Cow::Borrowed),
-			),
-			vocabulary,
+			valid_code(study.study_type_reaction.as_deref(), &["1", "2", "3"]),
 		);
-		validate_length(
+		length(
 			issues,
 			"ICH.C.5.4.LENGTH.MAX",
 			&path,
 			study.study_type_reaction.as_deref(),
+			1,
 		);
 	}
 }
@@ -1269,20 +1248,18 @@ pub(crate) fn collect_ich_issues(
 	validation_ctx: &ValidationContext,
 	issues: &mut Vec<ValidationIssue>,
 ) {
-	c_1(validation_ctx.safety_report.as_ref(), issues);
 	if let Some(report) = validation_ctx.safety_report.as_ref() {
 		c_1_1(report, issues);
 		c_1_1_profile(report, &validation_ctx.vocabulary, issues);
-		c_1_2(report, &validation_ctx.vocabulary, issues);
-		c_1_3(report, &validation_ctx.vocabulary, issues);
+		c_1_2(report, issues);
+		c_1_3(report, issues);
 		c_1_4(report, issues);
 		c_1_5(report, issues);
-		c_1_6_1(report, issues);
 		c_1_7(report, issues);
 		c_1_8_1(report, &validation_ctx.vocabulary, issues);
-		c_1_8_2(report, &validation_ctx.vocabulary, issues);
-		c_1_9_1(report, &validation_ctx.vocabulary, issues);
-		c_1_11_1(report, &validation_ctx.vocabulary, issues);
+		c_1_8_2(report, issues);
+		c_1_9_1(report, issues);
+		c_1_11_1(report, issues);
 		c_1_11_2(report, issues);
 	} else {
 		push_missing_safety_report_field_issues(issues);
@@ -1294,7 +1271,7 @@ pub(crate) fn collect_ich_issues(
 		});
 	for (idx, source) in validation_ctx.primary_sources.iter().enumerate() {
 		c_2_r_3(idx, source, &validation_ctx.vocabulary, issues);
-		c_2_r_4(idx, source, &validation_ctx.vocabulary, issues);
+		c_2_r_4(idx, source, issues);
 		c_2_r_1_1(idx, source, issues);
 		c_2_r_1_2(idx, source, issues);
 		c_2_r_1_3(idx, source, issues);
@@ -1311,20 +1288,16 @@ pub(crate) fn collect_ich_issues(
 		report_type_is_study,
 		issues,
 	);
-	c_2_r_5(
-		&validation_ctx.primary_sources,
-		&validation_ctx.vocabulary,
-		issues,
-	);
+	c_2_r_5(&validation_ctx.primary_sources, issues);
 
 	for (idx, document) in validation_ctx.documents_held_by_sender.iter().enumerate()
 	{
 		c_1_6_1_r_1(idx, document, issues);
-		c_1_6_1_r_2(idx, document, &validation_ctx.vocabulary, issues);
+		c_1_6_1_r_2(idx, document, issues);
 	}
 	for (idx, reference) in validation_ctx.literature_references.iter().enumerate() {
 		c_4_r_1(idx, reference, issues);
-		c_4_r_2(idx, reference, &validation_ctx.vocabulary, issues);
+		c_4_r_2(idx, reference, issues);
 	}
 	for (idx, identifier) in validation_ctx.other_case_identifiers.iter().enumerate()
 	{
@@ -1338,12 +1311,7 @@ pub(crate) fn collect_ich_issues(
 		c_5_2(idx, study, issues);
 		c_5_3(idx, study, report_type_is_study, issues);
 	}
-	c_5_4(
-		&validation_ctx.studies,
-		report_type_is_study,
-		&validation_ctx.vocabulary,
-		issues,
-	);
+	c_5_4(&validation_ctx.studies, report_type_is_study, issues);
 	let study_indices = validation_ctx
 		.studies
 		.iter()
@@ -1369,11 +1337,7 @@ pub(crate) fn collect_ich_issues(
 		);
 	}
 
-	c_3_1(
-		validation_ctx.sender.as_ref(),
-		&validation_ctx.vocabulary,
-		issues,
-	);
+	c_3_1(validation_ctx.sender.as_ref(), issues);
 	c_3_2(validation_ctx.sender.as_ref(), issues);
 	if let Some(sender) = validation_ctx.sender.as_ref() {
 		c_3_3_1(sender, issues);
@@ -1392,57 +1356,70 @@ pub(crate) fn collect_ich_issues(
 	}
 
 	if validation_ctx.primary_sources.is_empty() {
-		crate::push_issue_by_code(
+		required_field(
 			issues,
 			"ICH.C.2.r.4.REQUIRED",
 			"primarySources.0.qualification",
+			"reporter",
+			"[C.2.r.4] is required.",
+			false,
 		);
 	}
 }
 
 fn push_missing_safety_report_field_issues(issues: &mut Vec<ValidationIssue>) {
-	for (code, path) in [
+	for (code, path, message) in [
 		(
 			"ICH.C.1.1.REQUIRED",
 			"safetyReportIdentification.safetyReportId",
+			"[C.1.1] is required.",
 		),
 		(
 			"ICH.C.1.2.REQUIRED",
 			"safetyReportIdentification.transmissionDate",
+			"[C.1.2] is required.",
 		),
 		(
 			"ICH.C.1.3.REQUIRED",
 			"safetyReportIdentification.reportType",
+			"[C.1.3] is required.",
 		),
 		(
 			"ICH.C.1.4.REQUIRED",
 			"safetyReportIdentification.dateFirstReceivedFromSource",
+			"[C.1.4] is required.",
 		),
 		(
 			"ICH.C.1.5.REQUIRED",
 			"safetyReportIdentification.dateOfMostRecentInformation",
+			"[C.1.5] is required.",
 		),
 		(
 			"ICH.C.1.7.REQUIRED",
 			"safetyReportIdentification.fulfilExpeditedCriteria",
+			"[C.1.7] is required.",
 		),
 	] {
-		crate::push_issue_by_code(issues, code, path);
+		reject_when(issues, code, path, "case-identification", message, true);
 	}
 }
 
 /// FDA.C.1.7.1.REQUIRED
 fn fda_c_1_7_1(
 	value: Option<&str>,
-	facts: RuleFacts,
+	expedited: bool,
 	issues: &mut Vec<ValidationIssue>,
 ) {
-	validate_value(
+	reject_when(
 		issues,
 		"FDA.C.1.7.1.REQUIRED",
 		"safetyReportIdentification.localCriteriaReportType",
-		RuleValue::borrowed(value, None),
-		facts,
+		"case-identification",
+		"FDA requires [C.1.7.1] when expedited criteria is fulfilled.",
+		expedited
+			&& !value
+				.map(str::trim)
+				.is_some_and(|value| matches!(value, "1" | "2" | "4" | "5" | "6")),
 	);
 }
 
@@ -1451,20 +1428,31 @@ fn fda_c_1_7_1(
 fn fda_c_1_12(
 	value: Option<&str>,
 	null_flavor: Option<&str>,
-	facts: RuleFacts,
 	issues: &mut Vec<ValidationIssue>,
 ) {
 	const PATH: &str =
 		"safetyReportIdentification.combinationProductReportIndicator";
-	for code in ["FDA.C.1.12.REQUIRED", "FDA.C.1.12.RECOMMENDED"] {
-		validate_value(
-			issues,
-			code,
-			PATH,
-			RuleValue::borrowed(value, null_flavor),
-			facts,
-		);
-	}
+	let valid = value
+		.map(str::trim)
+		.filter(|value| !value.is_empty())
+		.is_some_and(|value| matches!(value, "false" | "true"))
+		|| null_flavor.is_some();
+	reject_when(
+		issues,
+		"FDA.C.1.12.REQUIRED",
+		PATH,
+		"case-identification",
+		"FDA requires [C.1.12] combination product report indicator.",
+		!valid,
+	);
+	super::helpers::warn_when(
+		issues,
+		"FDA.C.1.12.RECOMMENDED",
+		PATH,
+		"case-identification",
+		"FDA recommends [C.1.12] combination product report indicator.",
+		!valid,
+	);
 }
 
 /// FDA.R0011
@@ -1927,17 +1915,16 @@ fn mfds_c_3_1_kr_1(
 	issues: &mut Vec<ValidationIssue>,
 ) {
 	let path = format!("senderInformation.{idx}.healthProfessionalTypeKr1");
-	validate_value(
+	required_when(
 		issues,
 		"MFDS.C.3.1.KR.1.REQUIRED",
 		&path,
-		RuleValue::borrowed(value, None),
-		RuleFacts {
-			mfds_sender_type_is_health_professional: Some(
-				sender_is_health_professional,
-			),
-			..RuleFacts::default()
-		},
+		"case-identification",
+		"MFDS requires [C.3.1.KR.1] when sender type [C.3.1] is health professional (3).",
+		sender_is_health_professional,
+		value
+			.map(str::trim)
+			.is_some_and(|value| matches!(value, "1" | "2" | "3" | "4")),
 	);
 }
 
@@ -1949,15 +1936,14 @@ fn mfds_c_2_r_4_kr_1(
 	issues: &mut Vec<ValidationIssue>,
 ) {
 	let path = format!("primarySources.{idx}.qualificationKr1");
-	validate_value(
+	required_when(
 		issues,
 		"MFDS.C.2.r.4.KR.1.REQUIRED",
 		&path,
-		RuleValue::borrowed(value, None),
-		RuleFacts {
-			mfds_primary_source_qualification_is_three: Some(qualification_is_three),
-			..RuleFacts::default()
-		},
+		"reporter",
+		"MFDS requires [C.2.r.4.KR.1] when reporter qualification [C.2.r.4] is other health professional (3).",
+		qualification_is_three,
+		has_text(value),
 	);
 }
 
@@ -1969,15 +1955,14 @@ fn mfds_c_5_4_kr_1(
 	issues: &mut Vec<ValidationIssue>,
 ) {
 	let path = format!("studyInformation.{idx}.studyTypeReactionKr1");
-	validate_value(
+	required_when(
 		issues,
 		"MFDS.C.5.4.KR.1.REQUIRED",
 		&path,
-		RuleValue::borrowed(value, None),
-		RuleFacts {
-			mfds_study_type_reaction_is_three: Some(study_type_is_three),
-			..RuleFacts::default()
-		},
+		"study",
+		"MFDS requires [C.5.4.KR.1] when study type [C.5.4] is other studies (3).",
+		study_type_is_three,
+		has_text(value),
 	);
 }
 
@@ -1989,23 +1974,16 @@ pub(crate) async fn collect_fda_issues(
 	issues: &mut Vec<ValidationIssue>,
 ) -> Result<()> {
 	if let Some(report) = validation_ctx.safety_report.as_ref() {
-		let facts = RuleFacts {
-			fda_fulfil_expedited_criteria: Some(
-				report.fulfil_expedited_criteria.unwrap_or(false),
-			),
-			fda_combination_product_true: Some(
-				report.combination_product_report_indicator.as_deref()
-					== Some("true"),
-			),
-			..RuleFacts::default()
-		};
-		fda_c_1_7_1(report.local_criteria_report_type.as_deref(), facts, issues);
+		fda_c_1_7_1(
+			report.local_criteria_report_type.as_deref(),
+			report.fulfil_expedited_criteria.unwrap_or(false),
+			issues,
+		);
 		fda_c_1_12(
 			report.combination_product_report_indicator.as_deref(),
 			report
 				.combination_product_report_indicator_null_flavor
 				.as_deref(),
-			facts,
 			issues,
 		);
 		fda_initial_report_rules(
@@ -2255,149 +2233,14 @@ pub(crate) fn collect_mfds_issues(
 }
 
 #[cfg(test)]
-pub(super) fn constraint_rule_codes() -> Vec<&'static str> {
-	vec![
-		"ICH.C.1.2.ALLOWED.VALUE",
-		"ICH.C.1.3.ALLOWED.VALUE",
-		"ICH.C.1.8.1.ALLOWED.VALUE",
-		"ICH.C.1.8.2.ALLOWED.VALUE",
-		"ICH.C.1.9.1.ALLOWED.VALUE",
-		"ICH.C.1.11.1.ALLOWED.VALUE",
-		"ICH.C.1.6.1.r.2.ALLOWED.VALUE",
-		"ICH.C.4.r.2.ALLOWED.VALUE",
-		"ICH.C.1.9.1.r.2.ALLOWED.VALUE",
-		"ICH.C.2.r.4.ALLOWED.VALUE",
-		"ICH.C.2.r.5.ALLOWED.VALUE",
-		"ICH.C.2.r.3.VOCABULARY",
-		"ICH.C.3.1.ALLOWED.VALUE",
-		"ICH.C.3.4.5.VOCABULARY",
-		"ICH.C.5.4.ALLOWED.VALUE",
-		"ICH.C.5.1.r.2.VOCABULARY",
-	]
-}
-
-#[cfg(test)]
-pub(super) fn implemented_rule_codes() -> Vec<&'static str> {
-	let codes = vec![
-		"ICH.C.1.1.REQUIRED",
-		"ICH.C.1.2.REQUIRED",
-		"ICH.C.1.3.REQUIRED",
-		"ICH.C.1.4.REQUIRED",
-		"ICH.C.1.5.REQUIRED",
-		"ICH.C.1.6.1.REQUIRED",
-		"ICH.C.1.7.REQUIRED",
-		"ICH.C.1.8.1.REQUIRED",
-		"ICH.C.1.8.2.REQUIRED",
-		"ICH.C.1.9.1.REQUIRED",
-		"ICH.C.1.2.FUTURE_DATE.FORBIDDEN",
-		"ICH.C.1.4.FUTURE_DATE.FORBIDDEN",
-		"ICH.C.1.5.FUTURE_DATE.FORBIDDEN",
-		"ICH.C.1.2.ALLOWED.VALUE",
-		"ICH.C.1.3.ALLOWED.VALUE",
-		"ICH.C.1.8.1.ALLOWED.VALUE",
-		"ICH.C.1.8.2.ALLOWED.VALUE",
-		"ICH.C.1.9.1.ALLOWED.VALUE",
-		"ICH.C.1.11.1.ALLOWED.VALUE",
-		"ICH.C.1.1.LENGTH.MAX",
-		"ICH.C.1.3.LENGTH.MAX",
-		"ICH.C.1.8.1.LENGTH.MAX",
-		"ICH.C.1.8.2.LENGTH.MAX",
-		"ICH.C.1.11.1.LENGTH.MAX",
-		"ICH.C.1.11.2.LENGTH.MAX",
-		"ICH.C.1.4.AFTER_C.1.2.FORBIDDEN",
-		"ICH.C.1.4.AFTER_C.1.5.FORBIDDEN",
-		"ICH.C.1.5.AFTER_C.1.2.FORBIDDEN",
-		"ICH.C.1.11.2.REQUIRED",
-		"ICH.C.2.r.3.REQUIRED",
-		"ICH.C.2.r.3.LENGTH.MAX",
-		"ICH.C.2.r.3.VOCABULARY",
-		"ICH.C.2.r.4.REQUIRED",
-		"ICH.C.2.r.4.ALLOWED.VALUE",
-		"ICH.C.2.r.4.LENGTH.MAX",
-		"ICH.C.2.r.1.1.LENGTH.MAX",
-		"ICH.C.2.r.1.2.LENGTH.MAX",
-		"ICH.C.2.r.1.3.LENGTH.MAX",
-		"ICH.C.2.r.1.4.LENGTH.MAX",
-		"ICH.C.2.r.2.1.LENGTH.MAX",
-		"ICH.C.2.r.2.2.LENGTH.MAX",
-		"ICH.C.2.r.2.3.LENGTH.MAX",
-		"ICH.C.2.r.2.4.LENGTH.MAX",
-		"ICH.C.2.r.2.5.LENGTH.MAX",
-		"ICH.C.2.r.2.6.LENGTH.MAX",
-		"ICH.C.2.r.2.7.LENGTH.MAX",
-		"ICH.C.2.r.5.REQUIRED",
-		"ICH.C.2.r.5.ALLOWED.VALUE",
-		"ICH.C.2.r.5.LENGTH.MAX",
-		"FDA.C.2.r.2.8.REQUIRED",
-		"ICH.C.3.1.REQUIRED",
-		"ICH.C.3.1.ALLOWED.VALUE",
-		"ICH.C.3.1.LENGTH.MAX",
-		"ICH.C.3.2.REQUIRED",
-		"ICH.C.3.2.LENGTH.MAX",
-		"ICH.C.3.3.1.LENGTH.MAX",
-		"ICH.C.3.3.2.LENGTH.MAX",
-		"ICH.C.3.3.3.LENGTH.MAX",
-		"ICH.C.3.3.4.LENGTH.MAX",
-		"ICH.C.3.3.5.LENGTH.MAX",
-		"ICH.C.3.4.1.LENGTH.MAX",
-		"ICH.C.3.4.2.LENGTH.MAX",
-		"ICH.C.3.4.3.LENGTH.MAX",
-		"ICH.C.3.4.4.LENGTH.MAX",
-		"ICH.C.3.4.5.VOCABULARY",
-		"ICH.C.3.4.5.LENGTH.MAX",
-		"ICH.C.3.4.6.LENGTH.MAX",
-		"ICH.C.3.4.7.LENGTH.MAX",
-		"ICH.C.3.4.8.LENGTH.MAX",
-		"ICH.C.1.6.1.r.1.REQUIRED",
-		"ICH.C.1.6.1.r.1.LENGTH.MAX",
-		"ICH.C.1.6.1.r.2.ALLOWED.VALUE",
-		"ICH.C.1.9.1.r.1.REQUIRED",
-		"ICH.C.1.9.1.r.1.LENGTH.MAX",
-		"ICH.C.1.9.1.r.2.REQUIRED",
-		"ICH.C.1.9.1.r.2.ALLOWED.VALUE",
-		"ICH.C.1.9.1.r.2.LENGTH.MAX",
-		"ICH.C.1.10.r.LENGTH.MAX",
-		"ICH.C.4.r.1.LENGTH.MAX",
-		"ICH.C.4.r.2.ALLOWED.VALUE",
-		"ICH.C.5.1.r.1.LENGTH.MAX",
-		"ICH.C.5.1.r.2.LENGTH.MAX",
-		"ICH.C.5.1.r.2.VOCABULARY",
-		"ICH.C.5.2.LENGTH.MAX",
-		"ICH.C.5.3.REQUIRED",
-		"ICH.C.5.3.LENGTH.MAX",
-		"ICH.C.5.4.REQUIRED",
-		"ICH.C.5.4.ALLOWED.VALUE",
-		"ICH.C.5.4.LENGTH.MAX",
-		"FDA.C.1.7.1.REQUIRED",
-		"FDA.C.1.12.REQUIRED",
-		"FDA.C.1.12.RECOMMENDED",
-		"FDA.C.2.r.2.EMAIL.REQUIRED",
-		"FDA.C.5.5a.REQUIRED",
-		"FDA.C.5.5b.REQUIRED",
-		"FDA.C.5.6.r.REQUIRED",
-		"MFDS.C.3.1.KR.1.REQUIRED",
-		"MFDS.C.2.r.4.KR.1.REQUIRED",
-		"MFDS.C.5.4.KR.1.REQUIRED",
-		"ICH.C.1.REQUIRED",
-		"ICH.C.2.r.2.1.REQUIRED",
-	];
-	codes
-}
-
-#[cfg(test)]
-mod conditioned_catalog_rule_tests {
+mod conditioned_field_rule_tests {
 	use super::*;
 
 	#[test]
-	fn fda_report_rules_emit_and_pass_from_catalog() {
-		let facts = RuleFacts {
-			fda_fulfil_expedited_criteria: Some(true),
-			fda_combination_product_true: Some(false),
-			..RuleFacts::default()
-		};
+	fn fda_report_rules_emit_and_pass() {
 		let mut issues = Vec::new();
-		fda_c_1_7_1(None, facts, &mut issues);
-		fda_c_1_12(None, None, facts, &mut issues);
+		fda_c_1_7_1(None, true, &mut issues);
+		fda_c_1_12(None, None, &mut issues);
 		assert_eq!(
 			issues
 				.iter()
@@ -2411,13 +2254,13 @@ mod conditioned_catalog_rule_tests {
 		);
 
 		issues.clear();
-		fda_c_1_7_1(Some("1"), facts, &mut issues);
-		fda_c_1_12(Some("true"), None, facts, &mut issues);
+		fda_c_1_7_1(Some("1"), true, &mut issues);
+		fda_c_1_12(Some("true"), None, &mut issues);
 		assert!(issues.is_empty());
 	}
 
 	#[test]
-	fn mfds_rules_preserve_nonzero_paths_and_catalog_conditions() {
+	fn mfds_rules_preserve_nonzero_paths_and_conditions() {
 		let mut issues = Vec::new();
 		mfds_c_3_1_kr_1(2, None, true, &mut issues);
 		mfds_c_2_r_4_kr_1(3, None, true, &mut issues);
@@ -2954,7 +2797,7 @@ mod golden_c1_value_tests {
 		second.primary_source_regulatory = Some("1".to_string());
 		let mut issues = Vec::new();
 		c_1_1_profile(&report, &Default::default(), &mut issues);
-		c_2_r_5(&[first, second], &Default::default(), &mut issues);
+		c_2_r_5(&[first, second], &mut issues);
 
 		assert!(issues.iter().any(|issue| issue.code == "ICH.C.1.1.PROFILE"));
 		assert!(issues
@@ -3850,6 +3693,99 @@ mod golden_c1_value_tests {
 				issue(
 					"ICH.C.5.1.r.2.LENGTH.MAX",
 					"studyInformation.0.registrations.0.registrationCountry",
+					true,
+				),
+			],
+		);
+	}
+
+	#[test]
+	fn golden_c_issue_metadata() {
+		let mut issues = Vec::new();
+		let mut report = base_report();
+		report.report_type = Some("9".to_string());
+		c_1_3(&report, &mut issues);
+		c_2_r_5(&[], &mut issues);
+		c_3_2(None, &mut issues);
+		c_5_4(&[], true, &mut issues);
+		mfds_c_3_1_kr_1(2, None, true, &mut issues);
+
+		let mut out = issues
+			.into_iter()
+			.filter(|issue| {
+				matches!(
+					issue.code.as_str(),
+					"ICH.C.1.REQUIRED"
+						| "ICH.C.1.3.ALLOWED.VALUE"
+						| "ICH.C.2.r.5.REQUIRED"
+						| "ICH.C.3.2.REQUIRED"
+						| "ICH.C.5.4.REQUIRED"
+						| "MFDS.C.3.1.KR.1.REQUIRED"
+				)
+			})
+			.map(|issue| {
+				(
+					issue.code,
+					issue.message,
+					issue.path,
+					issue.field_path,
+					issue.section,
+					issue.subsection,
+					issue.blocking,
+				)
+			})
+			.collect::<Vec<_>>();
+		out.sort_by(|left, right| left.0.cmp(&right.0));
+
+		assert_eq!(
+			out,
+			vec![
+				(
+					"ICH.C.1.3.ALLOWED.VALUE".to_string(),
+					"Dictionary allowed values constraint.".to_string(),
+					"safetyReportIdentification.reportType".to_string(),
+					Some("safetyReportIdentification.reportType".to_string()),
+					"case-identification".to_string(),
+					"C.1".to_string(),
+					true,
+				),
+				(
+					"ICH.C.2.r.5.REQUIRED".to_string(),
+					"[C.2.r.5] one primary source for regulatory purposes should be selected."
+						.to_string(),
+					"primarySources.0.primarySourceForRegulatoryPurposes".to_string(),
+					Some(
+						"primarySources.0.primarySourceForRegulatoryPurposes".to_string(),
+					),
+					"reporter".to_string(),
+					"C.2".to_string(),
+					false,
+				),
+				(
+					"ICH.C.3.2.REQUIRED".to_string(),
+					"[C.3.2] is required.".to_string(),
+					"senderInformation.organizationName".to_string(),
+					Some("senderInformation.organizationName".to_string()),
+					"sender".to_string(),
+					"C.3".to_string(),
+					true,
+				),
+				(
+					"ICH.C.5.4.REQUIRED".to_string(),
+					"[C.5.4] Study type where reaction(s) / event(s) were observed is required when [C.1.3] is report from study (2).".to_string(),
+					"studyInformation.0.studyTypeReaction".to_string(),
+					Some("studyInformation.0.studyTypeReaction".to_string()),
+					"study".to_string(),
+					"C.5".to_string(),
+					true,
+				),
+				(
+					"MFDS.C.3.1.KR.1.REQUIRED".to_string(),
+					"MFDS requires [C.3.1.KR.1] when sender type [C.3.1] is health professional (3).".to_string(),
+					"senderInformation.2.healthProfessionalTypeKr1".to_string(),
+					Some("senderInformation.2.healthProfessionalTypeKr1".to_string()),
+					"case-identification".to_string(),
+					"C.3".to_string(),
 					true,
 				),
 			],

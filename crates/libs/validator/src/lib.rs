@@ -1,4 +1,3 @@
-mod allowed_value;
 mod c_reporter_policy;
 mod c_safety_report_policy;
 pub mod case;
@@ -10,9 +9,6 @@ mod fda_context;
 mod g_drug_policy;
 mod h_narrative_policy;
 mod mfds_context;
-#[cfg(test)]
-mod rule_source_coverage_tests;
-pub mod rules;
 pub use c_reporter_policy::has_any_primary_source_content;
 pub use c_safety_report_policy::{
 	has_report_type, should_clear_combination_product_null_flavor_on_value,
@@ -21,7 +17,9 @@ pub use c_safety_report_policy::{
 	should_warn_fda_combination_product_indicator_missing,
 };
 pub use case::{validate_case_for_authorities, validate_case_for_authority};
-pub use context::{load_base_validation_context, ValidationContext};
+pub use context::{
+	load_base_validation_context, ValidationContext, VocabularyScope,
+};
 pub use d_patient_policy::{
 	has_fda_ethnicity, has_fda_race, has_patient_initials, has_patient_payload,
 	should_require_fda_ethnicity, should_require_fda_race,
@@ -53,47 +51,11 @@ pub use mfds_context::{
 	load_mfds_validation_context, MfdsValidationContext, ParentPastDrugByCase,
 	PastDrugByCase, RelatednessWithDrug,
 };
-pub use rules::*;
 use sqlx::types::Uuid;
 use std::collections::BTreeMap;
 
 pub fn has_text(value: Option<&str>) -> bool {
 	value.map(|v| !v.trim().is_empty()).unwrap_or(false)
-}
-
-pub fn push_issue_by_code(
-	issues: &mut Vec<ValidationIssue>,
-	code: &str,
-	path: impl Into<String>,
-) {
-	let path = path.into();
-	if let Some(rule) = find_case_validation_rule(code) {
-		let field_path = case::sections::resolve_validation_field_path(Some(&path));
-		let subsection =
-			case::sections::resolve_validation_subsection(code, Some(&path));
-		issues.push(ValidationIssue {
-			code: rule.code.to_string(),
-			message: rule.message.to_string(),
-			field_path,
-			path,
-			section: rule.section.to_string(),
-			subsection,
-			blocking: rule.blocking,
-		});
-	} else {
-		let field_path = case::sections::resolve_validation_field_path(Some(&path));
-		let subsection =
-			case::sections::resolve_validation_subsection(code, Some(&path));
-		issues.push(ValidationIssue {
-			code: code.to_string(),
-			message: code.to_string(),
-			field_path,
-			path,
-			section: "unknown".to_string(),
-			subsection,
-			blocking: false,
-		});
-	}
 }
 
 fn push_direct_business_issue(
@@ -104,16 +66,28 @@ fn push_direct_business_issue(
 	blocking: bool,
 ) {
 	let path = path.into();
+	let section = case::sections::resolve_validation_section(code, Some(&path));
+	push_field_issue(issues, code, path, section, message, blocking);
+}
+
+pub(crate) fn push_field_issue(
+	issues: &mut Vec<ValidationIssue>,
+	code: &str,
+	path: impl Into<String>,
+	section: impl Into<String>,
+	message: impl Into<String>,
+	blocking: bool,
+) {
+	let path = path.into();
 	let field_path = case::sections::resolve_validation_field_path(Some(&path));
 	let subsection =
 		case::sections::resolve_validation_subsection(code, Some(&path));
-	let section = case::sections::resolve_validation_section(code, Some(&path));
 	issues.push(ValidationIssue {
 		code: code.to_string(),
 		message: message.into(),
 		field_path,
 		path,
-		section,
+		section: section.into(),
 		subsection,
 		blocking,
 	});
@@ -135,60 +109,6 @@ pub(crate) fn push_business_warning(
 	message: impl Into<String>,
 ) {
 	push_direct_business_issue(issues, code, path, message, false);
-}
-
-pub fn push_issue_if_rule_invalid(
-	issues: &mut Vec<ValidationIssue>,
-	code: &str,
-	path: impl Into<String>,
-	value_code: Option<&str>,
-	null_flavor: Option<&str>,
-	facts: RuleFacts,
-) -> bool {
-	if is_rule_condition_satisfied(code, facts)
-		&& !is_rule_value_valid(code, value_code, null_flavor, facts)
-	{
-		push_issue_by_code(issues, code, path);
-		return true;
-	}
-	false
-}
-
-pub fn push_issue_if_conditioned_value_invalid(
-	issues: &mut Vec<ValidationIssue>,
-	condition_code: &str,
-	value_rule_code: &str,
-	issue_code: &str,
-	path: impl Into<String>,
-	value_code: Option<&str>,
-	null_flavor: Option<&str>,
-	condition_facts: RuleFacts,
-	value_facts: RuleFacts,
-) -> bool {
-	if is_rule_condition_satisfied(condition_code, condition_facts)
-		&& !is_rule_value_valid(
-			value_rule_code,
-			value_code,
-			null_flavor,
-			value_facts,
-		) {
-		push_issue_by_code(issues, issue_code, path);
-		return true;
-	}
-	false
-}
-
-pub fn push_issue_if_condition_violated(
-	issues: &mut Vec<ValidationIssue>,
-	code: &str,
-	path: impl Into<String>,
-	facts: RuleFacts,
-) -> bool {
-	if is_rule_condition_satisfied(code, facts) {
-		push_issue_by_code(issues, code, path);
-		return true;
-	}
-	false
 }
 
 pub fn build_report(

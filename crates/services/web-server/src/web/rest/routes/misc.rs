@@ -4,7 +4,6 @@ use lib_core::model::ModelManager;
 
 use crate::web::rest::{
 	audit_rest, case_query_catalog_rest, import_rest, terminology_rest,
-	validation_rules_rest,
 };
 
 /// Routes for /api/terminology
@@ -111,17 +110,6 @@ pub fn routes_audit(mm: ModelManager) -> Router {
 		.route(
 			"/audit-logs/by-record/{table_name}/{record_id}",
 			get(audit_rest::list_audit_logs_by_record),
-		)
-		.with_state(mm)
-}
-
-/// Routes for /api/validation
-/// Routes for /api/validation
-pub fn routes_validation(mm: ModelManager) -> Router {
-	Router::new()
-		.route(
-			"/validation/rules",
-			get(validation_rules_rest::list_validation_rules),
 		)
 		.with_state(mm)
 }

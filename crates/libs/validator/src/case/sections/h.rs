@@ -1,11 +1,10 @@
 use super::helpers::{
-	validate_constraint, validate_length, validate_meddra, validate_value,
-	validate_violation, RuleValue,
+	max_length, reject_when, require, valid_decimal, valid_dotted_version,
+	valid_iso639, valid_meddra_term, valid_meddra_version,
 };
-use crate::allowed_value::ConstraintValue;
 use crate::{
 	has_text, push_business_issue, should_require_case_narrative,
-	RegulatoryAuthority, RuleFacts, ValidationContext, ValidationIssue,
+	RegulatoryAuthority, ValidationContext, ValidationIssue,
 };
 use lib_core::model::narrative::{
 	CaseSummaryInformation, NarrativeInformation, SenderDiagnosis,
@@ -13,41 +12,49 @@ use lib_core::model::narrative::{
 use lib_core::regulatory::{
 	is_mfds_clinical_trial_receiver, is_mfds_domestic_receiver,
 };
-use std::borrow::Cow;
+
+const SECTION: &str = "narrative";
+const MAX_LENGTH_MESSAGE: &str = "Dictionary max length exceeded.";
+const ALLOWED_VALUE_MESSAGE: &str = "Dictionary allowed values constraint.";
+const VOCABULARY_MESSAGE: &str = "Dictionary vocabulary constraint.";
 
 /// ICH.H.1.REQUIRED
 /// ICH.H.1.LENGTH.MAX
 fn h_1(narrative: Option<&NarrativeInformation>, issues: &mut Vec<ValidationIssue>) {
 	const PATH: &str = "narrative.caseNarrative";
-	let value = match narrative {
-		Some(narrative) if should_require_case_narrative(narrative) => {
-			Some(narrative.case_narrative.as_str())
-		}
-		Some(_) => Some("present"),
-		None => None,
-	};
-	validate_value(
+	let present = narrative.is_some_and(|narrative| {
+		!should_require_case_narrative(narrative)
+			|| has_text(Some(narrative.case_narrative.as_str()))
+	});
+	require(
 		issues,
 		"ICH.H.1.REQUIRED",
 		PATH,
-		RuleValue::borrowed(value, None),
-		RuleFacts::default(),
+		SECTION,
+		"[H.1] This Element is required.",
+		present,
 	);
-	validate_length(
+	max_length(
 		issues,
 		"ICH.H.1.LENGTH.MAX",
 		PATH,
+		SECTION,
+		MAX_LENGTH_MESSAGE,
 		narrative.map(|narrative| narrative.case_narrative.as_str()),
+		100000,
 	);
 }
 
 /// ICH.H.2.LENGTH.MAX
 fn h_2(narrative: &NarrativeInformation, issues: &mut Vec<ValidationIssue>) {
-	validate_length(
+	max_length(
 		issues,
 		"ICH.H.2.LENGTH.MAX",
 		"narrative.reporterComments",
+		SECTION,
+		MAX_LENGTH_MESSAGE,
 		narrative.reporter_comments.as_deref(),
+		20000,
 	);
 }
 
@@ -59,18 +66,23 @@ fn h_3_r_1a(
 	issues: &mut Vec<ValidationIssue>,
 ) {
 	let path = format!("narrative.senderDiagnoses.{idx}.diagnosisMeddraVersion");
-	validate_violation(
+	reject_when(
 		issues,
 		"ICH.H.3.r.1a.REQUIRED",
 		&path,
+		SECTION,
+		"[H.3.r.1a] Sender diagnosis MedDRA version is required when [H.3.r.1b] is populated.",
 		has_text(diagnosis.diagnosis_meddra_code.as_deref())
 			&& !has_text(diagnosis.diagnosis_meddra_version.as_deref()),
 	);
-	validate_length(
+	max_length(
 		issues,
 		"ICH.H.3.r.1a.LENGTH.MAX",
 		&path,
+		SECTION,
+		MAX_LENGTH_MESSAGE,
 		diagnosis.diagnosis_meddra_version.as_deref(),
+		4,
 	);
 }
 
@@ -82,18 +94,23 @@ fn h_3_r_1b(
 	issues: &mut Vec<ValidationIssue>,
 ) {
 	let path = format!("narrative.senderDiagnoses.{idx}.diagnosisMeddraCode");
-	validate_violation(
+	reject_when(
 		issues,
 		"ICH.H.3.r.1b.REQUIRED",
 		&path,
+		SECTION,
+		"[H.3.r.1b] Sender diagnosis MedDRA code is required when [H.3.r.1a] is populated.",
 		has_text(diagnosis.diagnosis_meddra_version.as_deref())
 			&& !has_text(diagnosis.diagnosis_meddra_code.as_deref()),
 	);
-	validate_length(
+	max_length(
 		issues,
 		"ICH.H.3.r.1b.LENGTH.MAX",
 		&path,
+		SECTION,
+		MAX_LENGTH_MESSAGE,
 		diagnosis.diagnosis_meddra_code.as_deref(),
+		8,
 	);
 }
 
@@ -107,27 +124,55 @@ fn h_3_r_1(
 	vocabulary: &crate::context::VocabularyContext,
 	issues: &mut Vec<ValidationIssue>,
 ) {
-	validate_meddra(
+	let version_path =
+		format!("narrative.senderDiagnoses.{idx}.diagnosisMeddraVersion");
+	let code_path = format!("narrative.senderDiagnoses.{idx}.diagnosisMeddraCode");
+	let version = diagnosis.diagnosis_meddra_version.as_deref();
+	let code = diagnosis.diagnosis_meddra_code.as_deref();
+	reject_when(
 		issues,
-		vocabulary,
 		"ICH.H.3.r.1a.ALLOWED.VALUE",
+		&version_path,
+		SECTION,
+		ALLOWED_VALUE_MESSAGE,
+		!valid_dotted_version(version),
+	);
+	reject_when(
+		issues,
 		"ICH.H.3.r.1b.ALLOWED.VALUE",
+		&code_path,
+		SECTION,
+		ALLOWED_VALUE_MESSAGE,
+		!valid_decimal(code),
+	);
+	reject_when(
+		issues,
 		"ICH.H.3.r.1a.VOCABULARY",
+		&version_path,
+		SECTION,
+		VOCABULARY_MESSAGE,
+		!valid_meddra_version(vocabulary, version),
+	);
+	reject_when(
+		issues,
 		"ICH.H.3.r.1b.VOCABULARY",
-		format!("narrative.senderDiagnoses.{idx}.diagnosisMeddraVersion"),
-		format!("narrative.senderDiagnoses.{idx}.diagnosisMeddraCode"),
-		diagnosis.diagnosis_meddra_version.as_deref(),
-		diagnosis.diagnosis_meddra_code.as_deref(),
+		&code_path,
+		SECTION,
+		VOCABULARY_MESSAGE,
+		!valid_meddra_term(vocabulary, version, code),
 	);
 }
 
 /// ICH.H.4.LENGTH.MAX
 fn h_4(narrative: &NarrativeInformation, issues: &mut Vec<ValidationIssue>) {
-	validate_length(
+	max_length(
 		issues,
 		"ICH.H.4.LENGTH.MAX",
 		"narrative.senderComments",
+		SECTION,
+		MAX_LENGTH_MESSAGE,
 		narrative.sender_comments.as_deref(),
+		20000,
 	);
 }
 
@@ -161,11 +206,14 @@ fn h_5_r_1a(
 	issues: &mut Vec<ValidationIssue>,
 ) {
 	let path = format!("narrative.caseSummaries.{idx}.summaryText");
-	validate_length(
+	max_length(
 		issues,
 		"ICH.H.5.r.1a.LENGTH.MAX",
 		&path,
+		SECTION,
+		MAX_LENGTH_MESSAGE,
 		summary.summary_text.as_deref(),
+		100000,
 	);
 }
 
@@ -179,25 +227,31 @@ fn h_5_r_1b(
 	issues: &mut Vec<ValidationIssue>,
 ) {
 	let path = format!("narrative.caseSummaries.{idx}.languageCode");
-	validate_violation(
+	reject_when(
 		issues,
 		"ICH.H.5.r.1b.REQUIRED",
 		&path,
+		SECTION,
+		"[H.5.r.1b] Case summary language is required when [H.5.r.1a] summary text is populated.",
 		has_text(summary.summary_text.as_deref())
 			&& !has_text(summary.language_code.as_deref()),
 	);
-	validate_length(
+	max_length(
 		issues,
 		"ICH.H.5.r.1b.LENGTH.MAX",
 		&path,
+		SECTION,
+		MAX_LENGTH_MESSAGE,
 		summary.language_code.as_deref(),
+		3,
 	);
-	validate_constraint(
+	reject_when(
 		issues,
 		"ICH.H.5.r.1b.ALLOWED.VALUE",
 		&path,
-		ConstraintValue::Text(summary.language_code.as_deref().map(Cow::Borrowed)),
-		vocabulary,
+		SECTION,
+		ALLOWED_VALUE_MESSAGE,
+		!valid_iso639(vocabulary, summary.language_code.as_deref()),
 	);
 }
 
@@ -240,37 +294,6 @@ pub(crate) fn collect_ich_issues(
 		h_5_r_1a(idx, summary, issues);
 		h_5_r_1b(idx, summary, &validation_ctx.vocabulary, issues);
 	}
-}
-
-#[cfg(test)]
-pub(super) fn constraint_rule_codes() -> Vec<&'static str> {
-	vec![
-		"ICH.H.3.r.1a.ALLOWED.VALUE",
-		"ICH.H.3.r.1b.ALLOWED.VALUE",
-		"ICH.H.5.r.1b.ALLOWED.VALUE",
-	]
-}
-
-#[cfg(test)]
-pub(super) fn implemented_rule_codes() -> Vec<&'static str> {
-	vec![
-		"ICH.H.1.REQUIRED",
-		"ICH.H.1.LENGTH.MAX",
-		"ICH.H.2.LENGTH.MAX",
-		"ICH.H.3.r.1a.REQUIRED",
-		"ICH.H.3.r.1a.LENGTH.MAX",
-		"ICH.H.3.r.1a.ALLOWED.VALUE",
-		"ICH.H.3.r.1a.VOCABULARY",
-		"ICH.H.3.r.1b.REQUIRED",
-		"ICH.H.3.r.1b.LENGTH.MAX",
-		"ICH.H.3.r.1b.ALLOWED.VALUE",
-		"ICH.H.3.r.1b.VOCABULARY",
-		"ICH.H.4.LENGTH.MAX",
-		"ICH.H.5.r.1a.LENGTH.MAX",
-		"ICH.H.5.r.1b.REQUIRED",
-		"ICH.H.5.r.1b.LENGTH.MAX",
-		"ICH.H.5.r.1b.ALLOWED.VALUE",
-	]
 }
 
 #[cfg(test)]
@@ -490,5 +513,81 @@ mod tests {
 		assert!(issues
 			.iter()
 			.any(|issue| issue.code == "MFDS.H.4.KOREAN.REQUIRED"));
+	}
+
+	#[test]
+	fn golden_h_issue_metadata() {
+		let mut ctx = empty_ctx();
+		ctx.vocabulary =
+			crate::context::VocabularyContext::for_meddra(&[("26.1", "10000001")]);
+		let mut diagnosis = sender_diagnosis();
+		diagnosis.diagnosis_meddra_version = Some("bad".to_string());
+		diagnosis.diagnosis_meddra_code = Some("10000001".to_string());
+		ctx.sender_diagnoses = vec![diagnosis];
+
+		let mut issues = Vec::new();
+		collect_ich_issues(&ctx, &mut issues);
+		let mut out = issues
+			.into_iter()
+			.filter(|issue| {
+				matches!(
+					issue.code.as_str(),
+					"ICH.H.1.REQUIRED"
+						| "ICH.H.3.r.1a.ALLOWED.VALUE"
+						| "ICH.H.3.r.1a.VOCABULARY"
+				)
+			})
+			.map(|issue| {
+				(
+					issue.code,
+					issue.message,
+					issue.path,
+					issue.field_path,
+					issue.section,
+					issue.subsection,
+					issue.blocking,
+				)
+			})
+			.collect::<Vec<_>>();
+		out.sort_by(|left, right| left.0.cmp(&right.0));
+
+		assert_eq!(
+			out,
+			vec![
+				(
+					"ICH.H.1.REQUIRED".to_string(),
+					"[H.1] This Element is required.".to_string(),
+					"narrative.caseNarrative".to_string(),
+					Some("narrative.caseNarrative".to_string()),
+					"narrative".to_string(),
+					"H".to_string(),
+					true,
+				),
+				(
+					"ICH.H.3.r.1a.ALLOWED.VALUE".to_string(),
+					"Dictionary allowed values constraint.".to_string(),
+					"narrative.senderDiagnoses.0.diagnosisMeddraVersion".to_string(),
+					Some(
+						"narrative.senderDiagnoses.0.diagnosisMeddraVersion"
+							.to_string()
+					),
+					"narrative".to_string(),
+					"H".to_string(),
+					true,
+				),
+				(
+					"ICH.H.3.r.1a.VOCABULARY".to_string(),
+					"Dictionary vocabulary constraint.".to_string(),
+					"narrative.senderDiagnoses.0.diagnosisMeddraVersion".to_string(),
+					Some(
+						"narrative.senderDiagnoses.0.diagnosisMeddraVersion"
+							.to_string()
+					),
+					"narrative".to_string(),
+					"H".to_string(),
+					true,
+				),
+			],
+		);
 	}
 }

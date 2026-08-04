@@ -1,16 +1,14 @@
 use super::helpers::{
-	validate_constraint, validate_future_date, validate_length, validate_meddra,
-	validate_value, validate_violation, validate_vocabulary_variant, DateValues,
-	RuleValue,
+	max_length, reject_future_date, reject_when, require, valid_code, valid_decimal,
+	valid_dotted_version, valid_identifier, valid_iso3166, valid_meddra_term,
+	valid_meddra_version, valid_mfds_product, valid_ucum, warn_when, DateValues,
 };
-use crate::allowed_value::{true_marker_value, ConstraintValue};
 use crate::{
 	has_text, is_fda_ind_message_receiver, is_fda_postmarket_batch_receiver,
 	is_fda_premarket_message_receiver, is_mfds_clinical_trial_receiver,
 	is_mfds_compassionate_use_receiver, is_mfds_domestic_receiver,
 	is_mfds_foreign_postmarket_receiver, list_fda_devices, FdaValidationContext,
-	MfdsValidationContext, RegulatoryAuthority, RuleFacts, ValidationContext,
-	ValidationIssue,
+	MfdsValidationContext, RegulatoryAuthority, ValidationContext, ValidationIssue,
 };
 use lib_core::ctx::Ctx;
 use lib_core::model::drug::{
@@ -22,8 +20,56 @@ use lib_core::model::drug_reaction_assessment::{
 };
 use lib_core::model::{ModelManager, Result};
 use sqlx::types::Decimal;
-use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
+
+const SECTION: &str = "drugs";
+const MAX_LENGTH_MESSAGE: &str = "Dictionary max length exceeded.";
+const ALLOWED_VALUE_MESSAGE: &str = "Dictionary allowed values constraint.";
+const VOCABULARY_MESSAGE: &str = "Dictionary vocabulary constraint.";
+
+fn required_field(
+	issues: &mut Vec<ValidationIssue>,
+	code: &str,
+	path: &str,
+	message: &str,
+	present: bool,
+) {
+	require(issues, code, path, SECTION, message, present);
+}
+
+fn required_when(
+	issues: &mut Vec<ValidationIssue>,
+	code: &str,
+	path: &str,
+	message: &str,
+	trigger: bool,
+	present: bool,
+) {
+	reject_when(issues, code, path, SECTION, message, trigger && !present);
+}
+
+fn length(
+	issues: &mut Vec<ValidationIssue>,
+	code: &str,
+	path: &str,
+	value: Option<&str>,
+	max: usize,
+) {
+	max_length(issues, code, path, SECTION, MAX_LENGTH_MESSAGE, value, max);
+}
+
+fn allowed(issues: &mut Vec<ValidationIssue>, code: &str, path: &str, valid: bool) {
+	reject_when(issues, code, path, SECTION, ALLOWED_VALUE_MESSAGE, !valid);
+}
+
+fn vocabulary(
+	issues: &mut Vec<ValidationIssue>,
+	code: &str,
+	path: &str,
+	valid: bool,
+) {
+	reject_when(issues, code, path, SECTION, VOCABULARY_MESSAGE, !valid);
+}
 
 fn decimal_text(value: Option<Decimal>) -> Option<String> {
 	value.map(|value| value.to_string())
@@ -60,41 +106,38 @@ fn additional_info_codes(drug: &DrugInformation) -> Vec<String> {
 /// ICH.G.k.1.REQUIRED
 /// ICH.G.k.1.ALLOWED.VALUE
 /// ICH.G.k.1.LENGTH.MAX
-fn g_k_1(
-	drugs: &[DrugInformation],
-	vocabulary: &crate::context::VocabularyContext,
-	issues: &mut Vec<ValidationIssue>,
-) {
-	validate_value(
+fn g_k_1(drugs: &[DrugInformation], issues: &mut Vec<ValidationIssue>) {
+	required_field(
 		issues,
 		"ICH.G.k.1.REQUIRED",
 		"drugs.0.drugCharacterization",
-		RuleValue::borrowed((!drugs.is_empty()).then_some("present"), None),
-		RuleFacts::default(),
+		"[G.k.1] is required.",
+		!drugs.is_empty(),
 	);
 	for (idx, drug) in drugs.iter().enumerate() {
 		let path = format!("drugs.{idx}.drugCharacterization");
-		validate_value(
+		required_field(
 			issues,
 			"ICH.G.k.1.REQUIRED",
 			&path,
-			RuleValue::borrowed(Some(drug.drug_characterization.as_str()), None),
-			RuleFacts::default(),
+			"[G.k.1] is required.",
+			has_text(Some(drug.drug_characterization.as_str())),
 		);
-		validate_constraint(
+		allowed(
 			issues,
 			"ICH.G.k.1.ALLOWED.VALUE",
 			&path,
-			ConstraintValue::Text(Some(Cow::Borrowed(
-				drug.drug_characterization.as_str(),
-			))),
-			vocabulary,
+			valid_code(
+				Some(drug.drug_characterization.as_str()),
+				&["1", "2", "3", "4"],
+			),
 		);
-		validate_length(
+		length(
 			issues,
 			"ICH.G.k.1.LENGTH.MAX",
 			&path,
 			Some(drug.drug_characterization.as_str()),
+			1,
 		);
 	}
 	if !drugs.is_empty()
@@ -112,24 +155,18 @@ fn g_k_1(
 }
 
 /// ICH.G.k.2.1.1a.LENGTH.MAX
-/// ICH.G.k.2.1.1a.REQUIRED
 fn g_k_2_1_1a(
 	idx: usize,
 	drug: &DrugInformation,
 	issues: &mut Vec<ValidationIssue>,
 ) {
 	let path = format!("drugs.{idx}.mpidVersion");
-	validate_length(
+	length(
 		issues,
 		"ICH.G.k.2.1.1a.LENGTH.MAX",
 		&path,
 		drug.mpid_version.as_deref(),
-	);
-	validate_violation(
-		issues,
-		"ICH.G.k.2.1.1a.REQUIRED",
-		&path,
-		has_text(drug.mpid.as_deref()) && !has_text(drug.mpid_version.as_deref()),
+		10,
 	);
 }
 
@@ -138,22 +175,21 @@ fn g_k_2_1_1a(
 fn g_k_2_1_1b(
 	idx: usize,
 	drug: &DrugInformation,
-	vocabulary: &crate::context::VocabularyContext,
 	issues: &mut Vec<ValidationIssue>,
 ) {
 	let path = format!("drugs.{idx}.mpid");
-	validate_constraint(
+	allowed(
 		issues,
 		"ICH.G.k.2.1.1b.ALLOWED.VALUE",
 		&path,
-		ConstraintValue::Text(drug.mpid.as_deref().map(Cow::Borrowed)),
-		vocabulary,
+		valid_identifier(drug.mpid.as_deref(), 1000),
 	);
-	validate_length(
+	length(
 		issues,
 		"ICH.G.k.2.1.1b.LENGTH.MAX",
 		&path,
 		drug.mpid.as_deref(),
+		1000,
 	);
 }
 
@@ -164,11 +200,12 @@ fn g_k_2_1_2a(
 	issues: &mut Vec<ValidationIssue>,
 ) {
 	let path = format!("drugs.{idx}.phpidVersion");
-	validate_length(
+	length(
 		issues,
 		"ICH.G.k.2.1.2a.LENGTH.MAX",
 		&path,
 		drug.phpid_version.as_deref(),
+		10,
 	);
 }
 
@@ -177,22 +214,21 @@ fn g_k_2_1_2a(
 fn g_k_2_1_2b(
 	idx: usize,
 	drug: &DrugInformation,
-	vocabulary: &crate::context::VocabularyContext,
 	issues: &mut Vec<ValidationIssue>,
 ) {
 	let path = format!("drugs.{idx}.phpid");
-	validate_constraint(
+	allowed(
 		issues,
 		"ICH.G.k.2.1.2b.ALLOWED.VALUE",
 		&path,
-		ConstraintValue::Text(drug.phpid.as_deref().map(Cow::Borrowed)),
-		vocabulary,
+		valid_identifier(drug.phpid.as_deref(), 250),
 	);
-	validate_length(
+	length(
 		issues,
 		"ICH.G.k.2.1.2b.LENGTH.MAX",
 		&path,
 		drug.phpid.as_deref(),
+		250,
 	);
 	if has_text(drug.mpid.as_deref()) && has_text(drug.phpid.as_deref()) {
 		crate::push_business_issue(
@@ -207,24 +243,24 @@ fn g_k_2_1_2b(
 /// ICH.G.k.2.2.REQUIRED
 /// ICH.G.k.2.2.LENGTH.MAX
 fn g_k_2_2(drugs: &[DrugInformation], issues: &mut Vec<ValidationIssue>) {
-	validate_value(
+	required_field(
 		issues,
 		"ICH.G.k.2.2.REQUIRED",
 		"drugs.0.medicinalProduct",
-		RuleValue::borrowed((!drugs.is_empty()).then_some("present"), None),
-		RuleFacts::default(),
+		"[G.k.2.2] is required.",
+		!drugs.is_empty(),
 	);
 	for (idx, drug) in drugs.iter().enumerate() {
 		let path = format!("drugs.{idx}.medicinalProduct");
 		let value = Some(drug.medicinal_product.as_str());
-		validate_value(
+		required_field(
 			issues,
 			"ICH.G.k.2.2.REQUIRED",
 			&path,
-			RuleValue::borrowed(value, None),
-			RuleFacts::default(),
+			"[G.k.2.2] is required.",
+			has_text(value),
 		);
-		validate_length(issues, "ICH.G.k.2.2.LENGTH.MAX", &path, value);
+		length(issues, "ICH.G.k.2.2.LENGTH.MAX", &path, value, 250);
 	}
 }
 
@@ -233,24 +269,22 @@ fn g_k_2_2(drugs: &[DrugInformation], issues: &mut Vec<ValidationIssue>) {
 fn g_k_2_4(
 	idx: usize,
 	drug: &DrugInformation,
-	vocabulary: &crate::context::VocabularyContext,
+	vocabulary_ctx: &crate::context::VocabularyContext,
 	issues: &mut Vec<ValidationIssue>,
 ) {
 	let path = format!("drugs.{idx}.obtainDrugCountry");
-	validate_constraint(
+	vocabulary(
 		issues,
 		"ICH.G.k.2.4.VOCABULARY",
 		&path,
-		ConstraintValue::Text(
-			drug.obtain_drug_country.as_deref().map(Cow::Borrowed),
-		),
-		vocabulary,
+		valid_iso3166(vocabulary_ctx, drug.obtain_drug_country.as_deref()),
 	);
-	validate_length(
+	length(
 		issues,
 		"ICH.G.k.2.4.LENGTH.MAX",
 		&path,
 		drug.obtain_drug_country.as_deref(),
+		2,
 	);
 }
 
@@ -259,16 +293,14 @@ fn g_k_2_5(
 	idx: usize,
 	drug: &DrugInformation,
 	report_type_is_study: bool,
-	vocabulary: &crate::context::VocabularyContext,
 	issues: &mut Vec<ValidationIssue>,
 ) {
 	let path = format!("drugs.{idx}.investigationalProductBlinded");
-	validate_constraint(
+	allowed(
 		issues,
 		"ICH.G.k.2.5.ALLOWED.VALUE",
 		&path,
-		true_marker_value(drug.investigational_product_blinded, None),
-		vocabulary,
+		drug.investigational_product_blinded != Some(false),
 	);
 	if drug.investigational_product_blinded.is_some() && !report_type_is_study {
 		crate::push_business_issue(
@@ -306,11 +338,12 @@ fn g_k_2_3_r(
 /// ICH.G.k.3.1.LENGTH.MAX
 fn g_k_3_1(idx: usize, drug: &DrugInformation, issues: &mut Vec<ValidationIssue>) {
 	let path = format!("drugs.{idx}.drugAuthorizationNumber");
-	validate_length(
+	length(
 		issues,
 		"ICH.G.k.3.1.LENGTH.MAX",
 		&path,
 		drug.drug_authorization_number.as_deref(),
+		35,
 	);
 }
 
@@ -320,42 +353,43 @@ fn g_k_3_1(idx: usize, drug: &DrugInformation, issues: &mut Vec<ValidationIssue>
 fn g_k_3_2(
 	idx: usize,
 	drug: &DrugInformation,
-	vocabulary: &crate::context::VocabularyContext,
+	vocabulary_ctx: &crate::context::VocabularyContext,
 	issues: &mut Vec<ValidationIssue>,
 ) {
 	let path = format!("drugs.{idx}.drugAuthorizationCountry");
-	validate_violation(
+	reject_when(
 		issues,
 		"ICH.G.k.3.2.REQUIRED",
 		&path,
+		SECTION,
+		"[G.k.3.2] is required.",
 		has_text(drug.drug_authorization_number.as_deref())
 			&& !has_text(drug.manufacturer_country.as_deref()),
 	);
-	validate_constraint(
+	vocabulary(
 		issues,
 		"ICH.G.k.3.2.VOCABULARY",
 		&path,
-		ConstraintValue::Text(
-			drug.manufacturer_country.as_deref().map(Cow::Borrowed),
-		),
-		vocabulary,
+		valid_iso3166(vocabulary_ctx, drug.manufacturer_country.as_deref()),
 	);
-	validate_length(
+	length(
 		issues,
 		"ICH.G.k.3.2.LENGTH.MAX",
 		&path,
 		drug.manufacturer_country.as_deref(),
+		2,
 	);
 }
 
 /// ICH.G.k.3.3.LENGTH.MAX
 fn g_k_3_3(idx: usize, drug: &DrugInformation, issues: &mut Vec<ValidationIssue>) {
 	let path = format!("drugs.{idx}.manufacturerName");
-	validate_length(
+	length(
 		issues,
 		"ICH.G.k.3.3.LENGTH.MAX",
 		&path,
 		drug.manufacturer_name.as_deref(),
+		60,
 	);
 }
 
@@ -363,33 +397,38 @@ fn g_k_3_3(idx: usize, drug: &DrugInformation, issues: &mut Vec<ValidationIssue>
 /// ICH.G.k.5a.LENGTH.MAX
 fn g_k_5a(idx: usize, drug: &DrugInformation, issues: &mut Vec<ValidationIssue>) {
 	let path = format!("drugs.{idx}.cumulativeDoseFirstReactionValue");
-	validate_violation(
+	reject_when(
 		issues,
 		"ICH.G.k.5a.REQUIRED",
 		&path,
+		SECTION,
+		"[G.k.5a] Cumulative dose to first reaction value is required when [G.k.5b] is provided.",
 		has_text(drug.cumulative_dose_first_reaction_unit.as_deref())
 			&& drug.cumulative_dose_first_reaction_value.is_none(),
 	);
 	let value = decimal_text(drug.cumulative_dose_first_reaction_value);
-	validate_length(issues, "ICH.G.k.5a.LENGTH.MAX", &path, value.as_deref());
+	length(issues, "ICH.G.k.5a.LENGTH.MAX", &path, value.as_deref(), 10);
 }
 
 /// ICH.G.k.5b.REQUIRED
 /// ICH.G.k.5b.LENGTH.MAX
 fn g_k_5b(idx: usize, drug: &DrugInformation, issues: &mut Vec<ValidationIssue>) {
 	let path = format!("drugs.{idx}.cumulativeDoseFirstReactionUnit");
-	validate_violation(
+	reject_when(
 		issues,
 		"ICH.G.k.5b.REQUIRED",
 		&path,
+		SECTION,
+		"[G.k.5b] Cumulative dose to first reaction unit is required when [G.k.5a] is provided.",
 		drug.cumulative_dose_first_reaction_value.is_some()
 			&& !has_text(drug.cumulative_dose_first_reaction_unit.as_deref()),
 	);
-	validate_length(
+	length(
 		issues,
 		"ICH.G.k.5b.LENGTH.MAX",
 		&path,
 		drug.cumulative_dose_first_reaction_unit.as_deref(),
+		50,
 	);
 }
 
@@ -397,99 +436,98 @@ fn g_k_5b(idx: usize, drug: &DrugInformation, issues: &mut Vec<ValidationIssue>)
 /// ICH.G.k.6a.LENGTH.MAX
 fn g_k_6a(idx: usize, drug: &DrugInformation, issues: &mut Vec<ValidationIssue>) {
 	let path = format!("drugs.{idx}.gestationPeriodExposureValue");
-	validate_violation(
+	reject_when(
 		issues,
 		"ICH.G.k.6a.REQUIRED",
 		&path,
+		SECTION,
+		"[G.k.6a] Gestation period at exposure value is required when [G.k.6b] is provided.",
 		has_text(drug.gestation_period_exposure_unit.as_deref())
 			&& drug.gestation_period_exposure_value.is_none(),
 	);
 	let value = decimal_text(drug.gestation_period_exposure_value);
-	validate_length(issues, "ICH.G.k.6a.LENGTH.MAX", &path, value.as_deref());
+	length(issues, "ICH.G.k.6a.LENGTH.MAX", &path, value.as_deref(), 3);
 }
 
 /// ICH.G.k.6b.REQUIRED
 /// ICH.G.k.6b.LENGTH.MAX
 fn g_k_6b(idx: usize, drug: &DrugInformation, issues: &mut Vec<ValidationIssue>) {
 	let path = format!("drugs.{idx}.gestationPeriodExposureUnit");
-	validate_violation(
+	reject_when(
 		issues,
 		"ICH.G.k.6b.REQUIRED",
 		&path,
+		SECTION,
+		"[G.k.6b] Gestation period at exposure unit is required when [G.k.6a] is provided.",
 		drug.gestation_period_exposure_value.is_some()
 			&& !has_text(drug.gestation_period_exposure_unit.as_deref()),
 	);
-	validate_length(
+	length(
 		issues,
 		"ICH.G.k.6b.LENGTH.MAX",
 		&path,
 		drug.gestation_period_exposure_unit.as_deref(),
+		50,
 	);
 }
 
 /// ICH.G.k.8.ALLOWED.VALUE
 /// ICH.G.k.8.LENGTH.MAX
-fn g_k_8(
-	idx: usize,
-	drug: &DrugInformation,
-	vocabulary: &crate::context::VocabularyContext,
-	issues: &mut Vec<ValidationIssue>,
-) {
+fn g_k_8(idx: usize, drug: &DrugInformation, issues: &mut Vec<ValidationIssue>) {
 	let path = format!("drugs.{idx}.actionTaken");
-	validate_constraint(
+	allowed(
 		issues,
 		"ICH.G.k.8.ALLOWED.VALUE",
 		&path,
-		ConstraintValue::Text(drug.action_taken.as_deref().map(Cow::Borrowed)),
-		vocabulary,
+		valid_code(
+			drug.action_taken.as_deref(),
+			&["1", "2", "3", "4", "0", "9"],
+		),
 	);
-	validate_length(
+	length(
 		issues,
 		"ICH.G.k.8.LENGTH.MAX",
 		&path,
 		drug.action_taken.as_deref(),
+		1,
 	);
 }
 
 /// ICH.G.k.10.r.ALLOWED.VALUE
 /// ICH.G.k.10.r.LENGTH.MAX
-fn g_k_10_r(
-	idx: usize,
-	drug: &DrugInformation,
-	vocabulary: &crate::context::VocabularyContext,
-	issues: &mut Vec<ValidationIssue>,
-) {
+fn g_k_10_r(idx: usize, drug: &DrugInformation, issues: &mut Vec<ValidationIssue>) {
 	let path = format!("drugs.{idx}.drugAdditionalInformationCodes");
 	let values = additional_info_codes(drug);
-	validate_constraint(
+	allowed(
 		issues,
 		"ICH.G.k.10.r.ALLOWED.VALUE",
 		&path,
-		ConstraintValue::Texts(
-			values
-				.iter()
-				.map(|value| Cow::Borrowed(value.as_str()))
-				.collect(),
-		),
-		vocabulary,
+		values.iter().all(|value| {
+			matches!(
+				value.trim(),
+				"1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "10" | "11"
+			)
+		}),
 	);
 	let longest = values.iter().max_by_key(|value| value.chars().count());
-	validate_length(
+	length(
 		issues,
 		"ICH.G.k.10.r.LENGTH.MAX",
 		&path,
 		longest.map(String::as_str),
+		2,
 	);
 }
 
 /// ICH.G.k.11.LENGTH.MAX
 fn g_k_11(idx: usize, drug: &DrugInformation, issues: &mut Vec<ValidationIssue>) {
 	let path = format!("drugs.{idx}.drugAdditionalInformation");
-	validate_length(
+	length(
 		issues,
 		"ICH.G.k.11.LENGTH.MAX",
 		&path,
 		drug.drug_additional_information.as_deref(),
+		2000,
 	);
 }
 
@@ -502,20 +540,23 @@ fn g_k_2_3_r_1(
 	issues: &mut Vec<ValidationIssue>,
 ) {
 	let required_path = format!("drugs.0.activeSubstances.{flat_idx}.substanceName");
-	validate_violation(
+	reject_when(
 		issues,
 		"ICH.G.k.2.3.r.1.REQUIRED",
 		&required_path,
+		SECTION,
+		"[G.k.2.3.r.1] Substance name is required when an active substance row has no TermID.",
 		!has_text(substance.substance_termid.as_deref())
 			&& !has_text(substance.substance_name.as_deref()),
 	);
 	if let Some((drug_idx, idx)) = nested {
 		let path = format!("drugs.{drug_idx}.activeSubstances.{idx}.substanceName");
-		validate_length(
+		length(
 			issues,
 			"ICH.G.k.2.3.r.1.LENGTH.MAX",
 			&path,
 			substance.substance_name.as_deref(),
+			250,
 		);
 	}
 }
@@ -530,10 +571,12 @@ fn g_k_2_3_r_2a(
 ) {
 	let required_path =
 		format!("drugs.0.activeSubstances.{flat_idx}.substanceTermIdVersion");
-	validate_violation(
+	reject_when(
 		issues,
 		"ICH.G.k.2.3.r.2a.REQUIRED",
 		&required_path,
+		SECTION,
+		"[G.k.2.3.r.2a] Substance TermID version is required when [G.k.2.3.r.2b] TermID is populated.",
 		has_text(substance.substance_termid.as_deref())
 			&& !has_text(substance.substance_termid_version.as_deref()),
 	);
@@ -541,11 +584,12 @@ fn g_k_2_3_r_2a(
 		let path = format!(
 			"drugs.{drug_idx}.activeSubstances.{idx}.substanceTermIdVersion"
 		);
-		validate_length(
+		length(
 			issues,
 			"ICH.G.k.2.3.r.2a.LENGTH.MAX",
 			&path,
 			substance.substance_termid_version.as_deref(),
+			10,
 		);
 	}
 }
@@ -555,27 +599,24 @@ fn g_k_2_3_r_2a(
 fn g_k_2_3_r_2b(
 	nested: Option<(usize, usize)>,
 	substance: &DrugActiveSubstance,
-	vocabulary: &crate::context::VocabularyContext,
 	issues: &mut Vec<ValidationIssue>,
 ) {
 	let Some((drug_idx, idx)) = nested else {
 		return;
 	};
 	let path = format!("drugs.{drug_idx}.activeSubstances.{idx}.substanceTermId");
-	validate_constraint(
+	allowed(
 		issues,
 		"ICH.G.k.2.3.r.2b.ALLOWED.VALUE",
 		&path,
-		ConstraintValue::Text(
-			substance.substance_termid.as_deref().map(Cow::Borrowed),
-		),
-		vocabulary,
+		valid_identifier(substance.substance_termid.as_deref(), 250),
 	);
-	validate_length(
+	length(
 		issues,
 		"ICH.G.k.2.3.r.2b.LENGTH.MAX",
 		&path,
 		substance.substance_termid.as_deref(),
+		100,
 	);
 }
 
@@ -590,11 +631,12 @@ fn g_k_2_3_r_3a(
 	};
 	let path = format!("drugs.{drug_idx}.activeSubstances.{idx}.strengthValue");
 	let value = decimal_text(substance.strength_value);
-	validate_length(
+	length(
 		issues,
 		"ICH.G.k.2.3.r.3a.LENGTH.MAX",
 		&path,
 		value.as_deref(),
+		10,
 	);
 }
 
@@ -605,33 +647,32 @@ fn g_k_2_3_r_3b(
 	flat_idx: usize,
 	nested: Option<(usize, usize)>,
 	substance: &DrugActiveSubstance,
-	vocabulary: &crate::context::VocabularyContext,
 	issues: &mut Vec<ValidationIssue>,
 ) {
 	let required_path = format!("drugs.0.activeSubstances.{flat_idx}.strengthUnit");
-	validate_violation(
+	reject_when(
 		issues,
 		"ICH.G.k.2.3.r.3b.REQUIRED",
 		&required_path,
+		SECTION,
+		"[G.k.2.3.r.3b] Strength unit is required when [G.k.2.3.r.3a] is populated.",
 		substance.strength_value.is_some()
 			&& !has_text(substance.strength_unit.as_deref()),
 	);
 	if let Some((drug_idx, idx)) = nested {
 		let path = format!("drugs.{drug_idx}.activeSubstances.{idx}.strengthUnit");
-		validate_constraint(
+		allowed(
 			issues,
 			"ICH.G.k.2.3.r.3b.ALLOWED.VALUE",
 			&path,
-			ConstraintValue::Text(
-				substance.strength_unit.as_deref().map(Cow::Borrowed),
-			),
-			vocabulary,
+			valid_ucum(substance.strength_unit.as_deref()),
 		);
-		validate_length(
+		length(
 			issues,
 			"ICH.G.k.2.3.r.3b.LENGTH.MAX",
 			&path,
 			substance.strength_unit.as_deref(),
+			50,
 		);
 	}
 }
@@ -650,7 +691,13 @@ fn g_k_4_r_1a(
 		return;
 	};
 	let value = decimal_text(dosage.dose_value);
-	validate_length(issues, "ICH.G.k.4.r.1a.LENGTH.MAX", &path, value.as_deref());
+	length(
+		issues,
+		"ICH.G.k.4.r.1a.LENGTH.MAX",
+		&path,
+		value.as_deref(),
+		8,
+	);
 }
 
 /// ICH.G.k.4.r.1b.REQUIRED
@@ -662,18 +709,21 @@ fn g_k_4_r_1b(
 	issues: &mut Vec<ValidationIssue>,
 ) {
 	let required_path = format!("drugs.0.dosages.{flat_idx}.doseUnit");
-	validate_violation(
+	reject_when(
 		issues,
 		"ICH.G.k.4.r.1b.REQUIRED",
 		&required_path,
+		SECTION,
+		"[G.k.4.r.1b] Dose unit is required when [G.k.4.r.1a] is populated.",
 		dosage.dose_value.is_some() && !has_text(dosage.dose_unit.as_deref()),
 	);
 	if let Some(path) = dosage_path(nested, "doseUnit") {
-		validate_length(
+		length(
 			issues,
 			"ICH.G.k.4.r.1b.LENGTH.MAX",
 			&path,
 			dosage.dose_unit.as_deref(),
+			50,
 		);
 	}
 }
@@ -688,7 +738,13 @@ fn g_k_4_r_2(
 		return;
 	};
 	let value = decimal_text(dosage.number_of_units);
-	validate_length(issues, "ICH.G.k.4.r.2.LENGTH.MAX", &path, value.as_deref());
+	length(
+		issues,
+		"ICH.G.k.4.r.2.LENGTH.MAX",
+		&path,
+		value.as_deref(),
+		4,
+	);
 }
 
 /// ICH.G.k.4.r.3.REQUIRED
@@ -698,32 +754,43 @@ fn g_k_4_r_3(
 	flat_idx: usize,
 	nested: Option<(usize, usize)>,
 	dosage: &DosageInformation,
-	vocabulary: &crate::context::VocabularyContext,
+	vocabulary_ctx: &crate::context::VocabularyContext,
 	issues: &mut Vec<ValidationIssue>,
 ) {
 	let required_path = format!("drugs.0.dosages.{flat_idx}.frequencyUnit");
-	validate_violation(
+	reject_when(
 		issues,
 		"ICH.G.k.4.r.3.REQUIRED",
 		&required_path,
+		SECTION,
+		"[G.k.4.r.3] Time interval unit is required when [G.k.4.r.2] is populated.",
 		dosage.number_of_units.is_some()
 			&& !has_text(dosage.frequency_unit.as_deref()),
 	);
 	if let Some(path) = dosage_path(nested, "frequencyUnit") {
-		validate_constraint(
+		allowed(
 			issues,
 			"ICH.G.k.4.r.3.ALLOWED.VALUE",
 			&path,
-			ConstraintValue::Text(
-				dosage.frequency_unit.as_deref().map(Cow::Borrowed),
-			),
-			vocabulary,
+			dosage
+				.frequency_unit
+				.as_deref()
+				.map(str::trim)
+				.filter(|value| !value.is_empty())
+				.is_none_or(|value| {
+					vocabulary_ctx.contains_snapshot_code(
+						"ICH-UCUM",
+						crate::VocabularyScope::Frequency,
+						value,
+					)
+				}),
 		);
-		validate_length(
+		length(
 			issues,
 			"ICH.G.k.4.r.3.LENGTH.MAX",
 			&path,
 			dosage.frequency_unit.as_deref(),
+			50,
 		);
 	}
 }
@@ -735,10 +802,12 @@ fn g_k_4_r_4_5(
 	issues: &mut Vec<ValidationIssue>,
 ) {
 	let path = format!("drugs.0.dosageInformation.{flat_idx}.dateRange");
-	validate_future_date(
+	reject_future_date(
 		issues,
 		"ICH.G.k.4.r.4-5.FUTURE_DATE.FORBIDDEN",
 		&path,
+		SECTION,
+		"[G.k.4.r.4/G.k.4.r.5] Drug administration dates must not be later than today.",
 		DateValues::Two(
 			dosage.first_administration_date,
 			dosage.last_administration_date,
@@ -755,19 +824,22 @@ fn g_k_4_r_6a(
 	issues: &mut Vec<ValidationIssue>,
 ) {
 	let required_path = format!("drugs.0.dosages.{flat_idx}.durationValue");
-	validate_violation(
+	reject_when(
 		issues,
 		"ICH.G.k.4.r.6a.REQUIRED",
 		&required_path,
+		SECTION,
+		"[G.k.4.r.6a] Duration value is required when [G.k.4.r.6b] is populated.",
 		has_text(dosage.duration_unit.as_deref()) && dosage.duration_value.is_none(),
 	);
 	if let Some(path) = dosage_path(nested, "durationValue") {
 		let value = decimal_text(dosage.duration_value);
-		validate_length(
+		length(
 			issues,
 			"ICH.G.k.4.r.6a.LENGTH.MAX",
 			&path,
 			value.as_deref(),
+			5,
 		);
 	}
 }
@@ -781,19 +853,22 @@ fn g_k_4_r_6b(
 	issues: &mut Vec<ValidationIssue>,
 ) {
 	let required_path = format!("drugs.0.dosages.{flat_idx}.durationUnit");
-	validate_violation(
+	reject_when(
 		issues,
 		"ICH.G.k.4.r.6b.REQUIRED",
 		&required_path,
+		SECTION,
+		"[G.k.4.r.6b] Duration unit is required when [G.k.4.r.6a] is populated.",
 		dosage.duration_value.is_some()
 			&& !has_text(dosage.duration_unit.as_deref()),
 	);
 	if let Some(path) = dosage_path(nested, "durationUnit") {
-		validate_length(
+		length(
 			issues,
 			"ICH.G.k.4.r.6b.LENGTH.MAX",
 			&path,
 			dosage.duration_unit.as_deref(),
+			50,
 		);
 	}
 }
@@ -805,11 +880,12 @@ fn g_k_4_r_7(
 	issues: &mut Vec<ValidationIssue>,
 ) {
 	if let Some(path) = dosage_path(nested, "batchLotNumber") {
-		validate_length(
+		length(
 			issues,
 			"ICH.G.k.4.r.7.LENGTH.MAX",
 			&path,
 			dosage.batch_lot_number.as_deref(),
+			35,
 		);
 	}
 }
@@ -820,11 +896,12 @@ fn g_k_4_r_8(
 	issues: &mut Vec<ValidationIssue>,
 ) {
 	if let Some(path) = dosage_path(nested, "dosageText") {
-		validate_length(
+		length(
 			issues,
 			"ICH.G.k.4.r.8.LENGTH.MAX",
 			&path,
 			dosage.dosage_text.as_deref(),
+			2000,
 		);
 	}
 }
@@ -835,11 +912,12 @@ fn g_k_4_r_9_1(
 	issues: &mut Vec<ValidationIssue>,
 ) {
 	if let Some(path) = dosage_path(nested, "doseForm") {
-		validate_length(
+		length(
 			issues,
 			"ICH.G.k.4.r.9.1.LENGTH.MAX",
 			&path,
 			dosage.dose_form.as_deref(),
+			60,
 		);
 	}
 }
@@ -853,19 +931,22 @@ fn g_k_4_r_9_2a(
 	issues: &mut Vec<ValidationIssue>,
 ) {
 	let required_path = format!("drugs.0.dosages.{flat_idx}.doseFormTermIdVersion");
-	validate_violation(
+	reject_when(
 		issues,
 		"ICH.G.k.4.r.9.2a.REQUIRED",
 		&required_path,
+		SECTION,
+		"[G.k.4.r.9.2a] Dose form TermID version is required when [G.k.4.r.9.2b] is populated.",
 		has_text(dosage.dose_form_termid.as_deref())
 			&& !has_text(dosage.dose_form_termid_version.as_deref()),
 	);
 	if let Some(path) = dosage_path(nested, "doseFormTermIdVersion") {
-		validate_length(
+		length(
 			issues,
 			"ICH.G.k.4.r.9.2a.LENGTH.MAX",
 			&path,
 			dosage.dose_form_termid_version.as_deref(),
+			10,
 		);
 	}
 }
@@ -876,11 +957,12 @@ fn g_k_4_r_9_2b(
 	issues: &mut Vec<ValidationIssue>,
 ) {
 	if let Some(path) = dosage_path(nested, "doseFormTermId") {
-		validate_length(
+		length(
 			issues,
 			"ICH.G.k.4.r.9.2b.LENGTH.MAX",
 			&path,
 			dosage.dose_form_termid.as_deref(),
+			100,
 		);
 	}
 }
@@ -891,11 +973,12 @@ fn g_k_4_r_10_1(
 	issues: &mut Vec<ValidationIssue>,
 ) {
 	if let Some(path) = dosage_path(nested, "routeOfAdministration") {
-		validate_length(
+		length(
 			issues,
 			"ICH.G.k.4.r.10.1.LENGTH.MAX",
 			&path,
 			dosage.route_of_administration.as_deref(),
+			60,
 		);
 	}
 }
@@ -909,19 +992,22 @@ fn g_k_4_r_10_2a(
 	issues: &mut Vec<ValidationIssue>,
 ) {
 	let required_path = format!("drugs.0.dosages.{flat_idx}.routeTermIdVersion");
-	validate_violation(
+	reject_when(
 		issues,
 		"ICH.G.k.4.r.10.2a.REQUIRED",
 		&required_path,
+		SECTION,
+		"[G.k.4.r.10.2a] Route of administration TermID version is required when [G.k.4.r.10.2b] is populated.",
 		has_text(dosage.route_of_administration.as_deref())
 			&& !has_text(dosage.route_termid_version.as_deref()),
 	);
 	if let Some(path) = dosage_path(nested, "routeTermIdVersion") {
-		validate_length(
+		length(
 			issues,
 			"ICH.G.k.4.r.10.2a.LENGTH.MAX",
 			&path,
 			dosage.route_termid_version.as_deref(),
+			10,
 		);
 	}
 }
@@ -932,11 +1018,12 @@ fn g_k_4_r_10_2b(
 	issues: &mut Vec<ValidationIssue>,
 ) {
 	if let Some(path) = dosage_path(nested, "routeTermId") {
-		validate_length(
+		length(
 			issues,
 			"ICH.G.k.4.r.10.2b.LENGTH.MAX",
 			&path,
 			dosage.route_termid.as_deref(),
+			100,
 		);
 	}
 }
@@ -947,11 +1034,12 @@ fn g_k_4_r_11_1(
 	issues: &mut Vec<ValidationIssue>,
 ) {
 	if let Some(path) = dosage_path(nested, "parentRoute") {
-		validate_length(
+		length(
 			issues,
 			"ICH.G.k.4.r.11.1.LENGTH.MAX",
 			&path,
 			dosage.parent_route.as_deref(),
+			60,
 		);
 	}
 }
@@ -966,19 +1054,22 @@ fn g_k_4_r_11_2a(
 ) {
 	let required_path =
 		format!("drugs.0.dosages.{flat_idx}.parentRouteTermIdVersion");
-	validate_violation(
+	reject_when(
 		issues,
 		"ICH.G.k.4.r.11.2a.REQUIRED",
 		&required_path,
+		SECTION,
+		"[G.k.4.r.11.2a] Parent route TermID version is required when [G.k.4.r.11.2b] is populated.",
 		has_text(dosage.parent_route_termid.as_deref())
 			&& !has_text(dosage.parent_route_termid_version.as_deref()),
 	);
 	if let Some(path) = dosage_path(nested, "parentRouteTermIdVersion") {
-		validate_length(
+		length(
 			issues,
 			"ICH.G.k.4.r.11.2a.LENGTH.MAX",
 			&path,
 			dosage.parent_route_termid_version.as_deref(),
+			10,
 		);
 	}
 }
@@ -989,11 +1080,12 @@ fn g_k_4_r_11_2b(
 	issues: &mut Vec<ValidationIssue>,
 ) {
 	if let Some(path) = dosage_path(nested, "parentRouteTermId") {
-		validate_length(
+		length(
 			issues,
 			"ICH.G.k.4.r.11.2b.LENGTH.MAX",
 			&path,
 			dosage.parent_route_termid.as_deref(),
+			100,
 		);
 	}
 }
@@ -1008,11 +1100,12 @@ fn g_k_7_r_1(
 		return;
 	};
 	let path = format!("drugs.{drug_idx}.indications.{idx}.indicationText");
-	validate_length(
+	length(
 		issues,
 		"ICH.G.k.7.r.1.LENGTH.MAX",
 		&path,
 		indication.indication_text.as_deref(),
+		250,
 	);
 }
 
@@ -1026,21 +1119,24 @@ fn g_k_7_r_2a(
 ) {
 	let required_path =
 		format!("drugs.0.indications.{flat_idx}.indicationMeddraVersion");
-	validate_violation(
+	reject_when(
 		issues,
 		"ICH.G.k.7.r.2a.REQUIRED",
 		&required_path,
+		SECTION,
+		"[G.k.7.r.2a] Indication MedDRA version is required when [G.k.7.r.2b] is provided.",
 		has_text(indication.indication_meddra_code.as_deref())
 			&& !has_text(indication.indication_meddra_version.as_deref()),
 	);
 	if let Some((drug_idx, idx)) = nested {
 		let path =
 			format!("drugs.{drug_idx}.indications.{idx}.indicationMeddraVersion");
-		validate_length(
+		length(
 			issues,
 			"ICH.G.k.7.r.2a.LENGTH.MAX",
 			&path,
 			indication.indication_meddra_version.as_deref(),
+			4,
 		);
 	}
 }
@@ -1055,21 +1151,24 @@ fn g_k_7_r_2b(
 ) {
 	let required_path =
 		format!("drugs.0.indications.{flat_idx}.indicationMeddraCode");
-	validate_violation(
+	reject_when(
 		issues,
 		"ICH.G.k.7.r.2b.REQUIRED",
 		&required_path,
+		SECTION,
+		"[G.k.7.r.2b] Indication MedDRA code is required when [G.k.7.r.2a] is provided.",
 		has_text(indication.indication_meddra_version.as_deref())
 			&& !has_text(indication.indication_meddra_code.as_deref()),
 	);
 	if let Some((drug_idx, idx)) = nested {
 		let path =
 			format!("drugs.{drug_idx}.indications.{idx}.indicationMeddraCode");
-		validate_length(
+		length(
 			issues,
 			"ICH.G.k.7.r.2b.LENGTH.MAX",
 			&path,
 			indication.indication_meddra_code.as_deref(),
+			8,
 		);
 	}
 }
@@ -1081,23 +1180,41 @@ fn g_k_7_r_2b(
 fn g_k_7_r_2(
 	nested: Option<(usize, usize)>,
 	indication: &DrugIndication,
-	vocabulary: &crate::context::VocabularyContext,
+	vocabulary_ctx: &crate::context::VocabularyContext,
 	issues: &mut Vec<ValidationIssue>,
 ) {
 	let Some((drug_idx, idx)) = nested else {
 		return;
 	};
-	validate_meddra(
+	let version_path =
+		format!("drugs.{drug_idx}.indications.{idx}.indicationMeddraVersion");
+	let code_path =
+		format!("drugs.{drug_idx}.indications.{idx}.indicationMeddraCode");
+	let version = indication.indication_meddra_version.as_deref();
+	let code = indication.indication_meddra_code.as_deref();
+	allowed(
 		issues,
-		vocabulary,
 		"ICH.G.k.7.r.2a.ALLOWED.VALUE",
+		&version_path,
+		valid_dotted_version(version),
+	);
+	allowed(
+		issues,
 		"ICH.G.k.7.r.2b.ALLOWED.VALUE",
+		&code_path,
+		valid_decimal(code),
+	);
+	vocabulary(
+		issues,
 		"ICH.G.k.7.r.2a.VOCABULARY",
+		&version_path,
+		valid_meddra_version(vocabulary_ctx, version),
+	);
+	vocabulary(
+		issues,
 		"ICH.G.k.7.r.2b.VOCABULARY",
-		format!("drugs.{drug_idx}.indications.{idx}.indicationMeddraVersion"),
-		format!("drugs.{drug_idx}.indications.{idx}.indicationMeddraCode"),
-		indication.indication_meddra_version.as_deref(),
-		indication.indication_meddra_code.as_deref(),
+		&code_path,
+		valid_meddra_term(vocabulary_ctx, version, code),
 	);
 }
 
@@ -1118,20 +1235,23 @@ fn g_k_9_i_3_1a(
 	let required_path = format!(
 		"drugs.0.reactionAssessments.{flat_idx}.administrationStartIntervalValue"
 	);
-	validate_violation(
+	reject_when(
 		issues,
 		"ICH.G.k.9.i.3.1a.REQUIRED",
 		&required_path,
+		SECTION,
+		"[G.k.9.i.3.1a] Administration start interval value is required when [G.k.9.i.3.1b] is populated.",
 		has_text(assessment.administration_start_interval_unit.as_deref())
 			&& assessment.administration_start_interval_value.is_none(),
 	);
 	if let Some(path) = assessment_path(nested, "administrationStartIntervalValue") {
 		let value = decimal_text(assessment.administration_start_interval_value);
-		validate_length(
+		length(
 			issues,
 			"ICH.G.k.9.i.3.1a.LENGTH.MAX",
 			&path,
 			value.as_deref(),
+			5,
 		);
 	}
 }
@@ -1147,19 +1267,22 @@ fn g_k_9_i_3_1b(
 	let required_path = format!(
 		"drugs.0.reactionAssessments.{flat_idx}.administrationStartIntervalUnit"
 	);
-	validate_violation(
+	reject_when(
 		issues,
 		"ICH.G.k.9.i.3.1b.REQUIRED",
 		&required_path,
+		SECTION,
+		"[G.k.9.i.3.1b] Administration start interval unit is required when [G.k.9.i.3.1a] is populated.",
 		assessment.administration_start_interval_value.is_some()
 			&& !has_text(assessment.administration_start_interval_unit.as_deref()),
 	);
 	if let Some(path) = assessment_path(nested, "administrationStartIntervalUnit") {
-		validate_length(
+		length(
 			issues,
 			"ICH.G.k.9.i.3.1b.LENGTH.MAX",
 			&path,
 			assessment.administration_start_interval_unit.as_deref(),
+			50,
 		);
 	}
 }
@@ -1174,20 +1297,23 @@ fn g_k_9_i_3_2a(
 ) {
 	let required_path =
 		format!("drugs.0.reactionAssessments.{flat_idx}.lastDoseIntervalValue");
-	validate_violation(
+	reject_when(
 		issues,
 		"ICH.G.k.9.i.3.2a.REQUIRED",
 		&required_path,
+		SECTION,
+		"[G.k.9.i.3.2a] Last-dose interval value is required when [G.k.9.i.3.2b] is populated.",
 		has_text(assessment.last_dose_interval_unit.as_deref())
 			&& assessment.last_dose_interval_value.is_none(),
 	);
 	if let Some(path) = assessment_path(nested, "lastDoseIntervalValue") {
 		let value = decimal_text(assessment.last_dose_interval_value);
-		validate_length(
+		length(
 			issues,
 			"ICH.G.k.9.i.3.2a.LENGTH.MAX",
 			&path,
 			value.as_deref(),
+			5,
 		);
 	}
 }
@@ -1202,19 +1328,22 @@ fn g_k_9_i_3_2b(
 ) {
 	let required_path =
 		format!("drugs.0.reactionAssessments.{flat_idx}.lastDoseIntervalUnit");
-	validate_violation(
+	reject_when(
 		issues,
 		"ICH.G.k.9.i.3.2b.REQUIRED",
 		&required_path,
+		SECTION,
+		"[G.k.9.i.3.2b] Last-dose interval unit is required when [G.k.9.i.3.2a] is populated.",
 		assessment.last_dose_interval_value.is_some()
 			&& !has_text(assessment.last_dose_interval_unit.as_deref()),
 	);
 	if let Some(path) = assessment_path(nested, "lastDoseIntervalUnit") {
-		validate_length(
+		length(
 			issues,
 			"ICH.G.k.9.i.3.2b.LENGTH.MAX",
 			&path,
 			assessment.last_dose_interval_unit.as_deref(),
+			50,
 		);
 	}
 }
@@ -1224,26 +1353,26 @@ fn g_k_9_i_3_2b(
 fn g_k_9_i_4(
 	nested: Option<(usize, usize)>,
 	assessment: &DrugReactionAssessment,
-	vocabulary: &crate::context::VocabularyContext,
 	issues: &mut Vec<ValidationIssue>,
 ) {
 	let Some(path) = assessment_path(nested, "reactionRecurred") else {
 		return;
 	};
-	validate_constraint(
+	allowed(
 		issues,
 		"ICH.G.k.9.i.4.ALLOWED.VALUE",
 		&path,
-		ConstraintValue::Text(
-			assessment.reaction_recurred.as_deref().map(Cow::Borrowed),
-		),
-		vocabulary,
+		assessment
+			.reaction_recurred
+			.as_deref()
+			.is_none_or(|value| matches!(value.trim(), "1" | "2" | "3" | "4")),
 	);
-	validate_length(
+	length(
 		issues,
 		"ICH.G.k.9.i.4.LENGTH.MAX",
 		&path,
 		assessment.reaction_recurred.as_deref(),
+		1,
 	);
 }
 
@@ -1261,11 +1390,12 @@ fn g_k_9_i_2_r_1(
 	issues: &mut Vec<ValidationIssue>,
 ) {
 	if let Some(path) = relatedness_path(nested, "sourceOfAssessment") {
-		validate_length(
+		length(
 			issues,
 			"ICH.G.k.9.i.2.r.1.LENGTH.MAX",
 			&path,
 			relatedness.source_of_assessment.as_deref(),
+			60,
 		);
 	}
 }
@@ -1276,11 +1406,12 @@ fn g_k_9_i_2_r_2(
 	issues: &mut Vec<ValidationIssue>,
 ) {
 	if let Some(path) = relatedness_path(nested, "methodOfAssessment") {
-		validate_length(
+		length(
 			issues,
 			"ICH.G.k.9.i.2.r.2.LENGTH.MAX",
 			&path,
 			relatedness.method_of_assessment.as_deref(),
+			60,
 		);
 	}
 }
@@ -1291,11 +1422,12 @@ fn g_k_9_i_2_r_3(
 	issues: &mut Vec<ValidationIssue>,
 ) {
 	if let Some(path) = relatedness_path(nested, "resultOfAssessment") {
-		validate_length(
+		length(
 			issues,
 			"ICH.G.k.9.i.2.r.3.LENGTH.MAX",
 			&path,
 			relatedness.result_of_assessment.as_deref(),
+			60,
 		);
 	}
 }
@@ -1331,21 +1463,15 @@ pub(crate) fn collect_ich_issues(
 	let is_clinical_trial = validation_ctx.studies.iter().any(|study| {
 		study.study_type_reaction.as_deref().map(str::trim) == Some("1")
 	});
-	g_k_1(&validation_ctx.drugs, &validation_ctx.vocabulary, issues);
+	g_k_1(&validation_ctx.drugs, issues);
 	g_k_2_2(&validation_ctx.drugs, issues);
 	for (idx, drug) in validation_ctx.drugs.iter().enumerate() {
 		g_k_2_1_1a(idx, drug, issues);
-		g_k_2_1_1b(idx, drug, &validation_ctx.vocabulary, issues);
+		g_k_2_1_1b(idx, drug, issues);
 		g_k_2_1_2a(idx, drug, issues);
-		g_k_2_1_2b(idx, drug, &validation_ctx.vocabulary, issues);
+		g_k_2_1_2b(idx, drug, issues);
 		g_k_2_4(idx, drug, &validation_ctx.vocabulary, issues);
-		g_k_2_5(
-			idx,
-			drug,
-			is_clinical_trial,
-			&validation_ctx.vocabulary,
-			issues,
-		);
+		g_k_2_5(idx, drug, is_clinical_trial, issues);
 		g_k_2_3_r(idx, drug, &validation_ctx.active_substances, issues);
 		g_k_3_1(idx, drug, issues);
 		g_k_3_2(idx, drug, &validation_ctx.vocabulary, issues);
@@ -1354,8 +1480,8 @@ pub(crate) fn collect_ich_issues(
 		g_k_5b(idx, drug, issues);
 		g_k_6a(idx, drug, issues);
 		g_k_6b(idx, drug, issues);
-		g_k_8(idx, drug, &validation_ctx.vocabulary, issues);
-		g_k_10_r(idx, drug, &validation_ctx.vocabulary, issues);
+		g_k_8(idx, drug, issues);
+		g_k_10_r(idx, drug, issues);
 		g_k_11(idx, drug, issues);
 	}
 
@@ -1379,15 +1505,9 @@ pub(crate) fn collect_ich_issues(
 			});
 		g_k_2_3_r_1(flat_idx, nested, substance, issues);
 		g_k_2_3_r_2a(flat_idx, nested, substance, issues);
-		g_k_2_3_r_2b(nested, substance, &validation_ctx.vocabulary, issues);
+		g_k_2_3_r_2b(nested, substance, issues);
 		g_k_2_3_r_3a(nested, substance, issues);
-		g_k_2_3_r_3b(
-			flat_idx,
-			nested,
-			substance,
-			&validation_ctx.vocabulary,
-			issues,
-		);
+		g_k_2_3_r_3b(flat_idx, nested, substance, issues);
 	}
 
 	let mut fallback = HashMap::new();
@@ -1458,7 +1578,7 @@ pub(crate) fn collect_ich_issues(
 		g_k_9_i_3_1b(flat_idx, nested, assessment, issues);
 		g_k_9_i_3_2a(flat_idx, nested, assessment, issues);
 		g_k_9_i_3_2b(flat_idx, nested, assessment, issues);
-		g_k_9_i_4(nested, assessment, &validation_ctx.vocabulary, issues);
+		g_k_9_i_4(nested, assessment, issues);
 	}
 	let mut fallback = HashMap::new();
 	for relatedness in &validation_ctx.relatedness_assessments {
@@ -1477,45 +1597,29 @@ pub(crate) fn collect_ich_issues(
 	}
 }
 
-fn fda_required(
-	code: &str,
-	path: &str,
-	value: Option<&str>,
+/// FDA.G.K.12.REQUIRED
+fn fda_g_k_12(
+	local_criteria_is_malfunction_only: bool,
+	has_suspect_malfunction: bool,
 	issues: &mut Vec<ValidationIssue>,
 ) {
-	validate_value(
+	reject_when(
 		issues,
-		code,
-		path,
-		RuleValue::borrowed(value, None),
-		RuleFacts::default(),
-	);
-}
-
-/// FDA.G.k.1.a.REQUIRED
-fn fda_g_k_1_a(idx: usize, value: Option<&str>, issues: &mut Vec<ValidationIssue>) {
-	fda_required(
-		"FDA.G.k.1.a.REQUIRED",
-		&format!("drugs.{idx}.fdaOtherCharacterization"),
-		value,
-		issues,
-	);
-}
-/// FDA.G.K.12.REQUIRED
-fn fda_g_k_12(value: Option<&str>, issues: &mut Vec<ValidationIssue>) {
-	fda_required(
 		"FDA.G.K.12.REQUIRED",
 		"drugs.0.fdaDevices.0.malfunction",
-		value,
-		issues,
+		SECTION,
+		"FDA postmarket requires at least one suspect product with [G.K.12.r.1]=true when [C.1.7.1]=5.",
+		local_criteria_is_malfunction_only && !has_suspect_malfunction,
 	);
 }
 /// FDA.G.K.1.A.CONDITIONAL
 fn fda_g_k_1_a_conditional(invalid: bool, issues: &mut Vec<ValidationIssue>) {
-	validate_violation(
+	reject_when(
 		issues,
 		"FDA.G.K.1.A.CONDITIONAL",
 		"drugs.0.deviceCharacteristics.0.valueCode",
+		SECTION,
+		"FDA [G.K.1.A]=1 is allowed only when [C.1.12]=true, [G.K.12.r.1]=true, and [G.k.1]=4 for the same product.",
 		invalid,
 	);
 }
@@ -1818,18 +1922,6 @@ pub(crate) async fn collect_fda_issues(
 		if drug_idx == 0 {
 			first_product_malfunction = malfunction_this_drug;
 		}
-		let gk1a_required = combination_true
-			&& malfunction_this_drug
-			&& drug.drug_characterization == "4";
-		fda_g_k_1_a(
-			drug_idx,
-			if gk1a_required {
-				drug.fda_other_characterization.as_deref()
-			} else {
-				Some("not-applicable")
-			},
-			issues,
-		);
 		for (device_idx, device) in devices.iter().enumerate() {
 			if !device_rules_apply {
 				continue;
@@ -1880,7 +1972,7 @@ pub(crate) async fn collect_fda_issues(
 		}
 		if malfunction_this_drug {
 			has_malfunction = true;
-			if drug.drug_characterization == "1" {
+			if drug.drug_characterization.trim() == "1" {
 				has_malfunction_suspect = true;
 			}
 		}
@@ -1909,14 +2001,7 @@ pub(crate) async fn collect_fda_issues(
 		);
 	}
 	fda_d_1_malfunction(validation_ctx, combination_true, has_malfunction, issues);
-	fda_g_k_12(
-		if local_criteria == Some("5") {
-			has_malfunction_suspect.then_some("present")
-		} else {
-			Some("not-applicable")
-		},
-		issues,
-	);
+	fda_g_k_12(local_criteria == Some("5"), has_malfunction_suspect, issues);
 	fda_g_k_1_route(validation_ctx, first_product_malfunction, issues);
 	fda_g_k_9(validation_ctx, ind_number_present, issues);
 	fda_g_k_1_a_conditional(has_invalid_gk1a, issues);
@@ -1931,25 +2016,43 @@ fn mfds_g_k_2_1_kr_1b(
 	idx: usize,
 	value: Option<&str>,
 	receiver: Option<&str>,
-	facts: RuleFacts,
-	vocabulary: &crate::context::VocabularyContext,
+	product_code_required: bool,
+	domestic_product_code_required: bool,
+	foreign_product_code_required: bool,
+	vocabulary_ctx: &crate::context::VocabularyContext,
 	issues: &mut Vec<ValidationIssue>,
 ) {
 	let path = format!("drugs.{idx}.mfdsMpid");
-	for code in [
+	let present = has_text(value);
+	required_when(
+		issues,
 		"MFDS.G.k.2.1.KR.1b.REQUIRED",
+		&path,
+		"MFDS requires product code [G.k.2.1.KR.1b] for KR/FR receiver authorities.",
+		product_code_required,
+		present,
+	);
+	required_when(
+		issues,
 		"MFDS.KR.DOMESTIC.PRODUCTCODE.REQUIRED",
+		&path,
+		"MFDS domestic cases require KR product coding for the drug.",
+		domestic_product_code_required,
+		present,
+	);
+	required_when(
+		issues,
 		"MFDS.KR.FOREIGN.WHOMPID.REQUIRED",
-	] {
-		validate_value(issues, code, &path, RuleValue::borrowed(value, None), facts);
-	}
-	validate_vocabulary_variant(
+		&path,
+		"MFDS foreign-use products must provide WHO MPID/KR product coding.",
+		foreign_product_code_required,
+		present,
+	);
+	vocabulary(
 		issues,
 		"MFDS.G.k.2.1.KR.1b.VOCABULARY",
 		&path,
-		receiver,
-		value,
-		vocabulary,
+		valid_mfds_product(vocabulary_ctx, receiver, value),
 	);
 }
 
@@ -1981,7 +2084,14 @@ fn mfds_g_k_2_1_companions(
 				&& !has_text(drug.phpid.as_deref()),
 		),
 	] {
-		validate_violation(issues, code, &format!("drugs.{idx}.{field}"), missing);
+		warn_when(
+			issues,
+			code,
+			&format!("drugs.{idx}.{field}"),
+			"unknown",
+			code,
+			missing,
+		);
 	}
 }
 
@@ -1992,10 +2102,12 @@ fn mfds_g_k_2_3_r_2b(
 	substance: &DrugActiveSubstance,
 	issues: &mut Vec<ValidationIssue>,
 ) {
-	validate_violation(
+	warn_when(
 		issues,
 		"MFDS.G.k.2.3.r.2b.REQUIRED",
 		&format!("drugs.{drug_idx}.activeSubstances.{idx}.substanceTermId"),
+		"unknown",
+		"MFDS.G.k.2.3.r.2b.REQUIRED",
 		has_text(substance.substance_termid_version.as_deref())
 			&& !has_text(substance.substance_termid.as_deref()),
 	);
@@ -2005,15 +2117,16 @@ fn mfds_g_k_2_3_r_2b(
 fn mfds_g_k_2_1_kr_1a(
 	idx: usize,
 	value: Option<&str>,
-	facts: RuleFacts,
+	required: bool,
 	issues: &mut Vec<ValidationIssue>,
 ) {
-	validate_value(
+	warn_when(
 		issues,
 		"MFDS.G.k.2.1.KR.1a.REQUIRED",
 		&format!("drugs.{idx}.mfdsMpidVersion"),
-		RuleValue::borrowed(value, None),
-		facts,
+		SECTION,
+		"MFDS requires product code version [G.k.2.1.KR.1a] for FR when product code is provided.",
+		required && !has_text(value),
 	);
 }
 
@@ -2023,16 +2136,27 @@ fn mfds_g_k_2_3_r_1_kr_1b(
 	drug_idx: usize,
 	idx: usize,
 	value: Option<&str>,
-	facts: RuleFacts,
+	domestic_ingredient_code_required: bool,
+	substance_code_required: bool,
 	issues: &mut Vec<ValidationIssue>,
 ) {
 	let path = format!("drugs.{drug_idx}.activeSubstances.{idx}.mfdsId");
-	for code in [
+	warn_when(
+		issues,
 		"MFDS.KR.DOMESTIC.INGREDIENTCODE.REQUIRED",
+		&path,
+		SECTION,
+		"MFDS domestic cases should provide KR ingredient coding for each active substance.",
+		domestic_ingredient_code_required && !has_text(value),
+	);
+	warn_when(
+		issues,
 		"MFDS.G.k.2.3.r.1.KR.1b.REQUIRED",
-	] {
-		validate_value(issues, code, &path, RuleValue::borrowed(value, None), facts);
-	}
+		&path,
+		SECTION,
+		"MFDS requires substance code [G.k.2.3.r.1.KR.1b] for KR/FR when product code is not provided.",
+		substance_code_required && !has_text(value),
+	);
 }
 
 /// MFDS.G.k.2.3.r.1.KR.1a.REQUIRED
@@ -2040,15 +2164,16 @@ fn mfds_g_k_2_3_r_1_kr_1a(
 	drug_idx: usize,
 	idx: usize,
 	value: Option<&str>,
-	facts: RuleFacts,
+	required: bool,
 	issues: &mut Vec<ValidationIssue>,
 ) {
-	validate_value(
+	warn_when(
 		issues,
 		"MFDS.G.k.2.3.r.1.KR.1a.REQUIRED",
 		&format!("drugs.{drug_idx}.activeSubstances.{idx}.mfdsVersion"),
-		RuleValue::borrowed(value, None),
-		facts,
+		SECTION,
+		"MFDS requires substance code version [G.k.2.3.r.1.KR.1a] for FR when substance code is provided.",
+		required && !has_text(value),
 	);
 }
 
@@ -2057,17 +2182,18 @@ fn mfds_g_k_9_i_2_r_1(
 	drug_idx: usize,
 	idx: usize,
 	value: Option<&str>,
-	facts: RuleFacts,
+	required: bool,
 	issues: &mut Vec<ValidationIssue>,
 ) {
-	validate_value(
+	required_when(
 		issues,
 		"MFDS.G.k.9.i.2.r.1.REQUIRED",
 		&format!(
 			"drugs.{drug_idx}.drugReactionAssessments.{idx}.sourceOfAssessment"
 		),
-		RuleValue::borrowed(value, None),
-		facts,
+		"MFDS requires source of assessment when KR method/result values are provided.",
+		required,
+		has_text(value),
 	);
 }
 
@@ -2077,7 +2203,7 @@ fn mfds_g_k_9_i_2_r_2_kr_1(
 	drug_idx: usize,
 	idx: usize,
 	value: Option<&str>,
-	facts: RuleFacts,
+	required: bool,
 	receiver_is_ct_or_cu: bool,
 	receiver_is_kr: bool,
 	receiver_is_fr: bool,
@@ -2086,12 +2212,13 @@ fn mfds_g_k_9_i_2_r_2_kr_1(
 	let path = format!(
 		"drugs.{drug_idx}.drugReactionAssessments.{idx}.methodOfAssessmentKr1"
 	);
-	validate_value(
+	required_when(
 		issues,
 		"MFDS.G.k.9.i.2.r.2.KR.1.REQUIRED",
 		&path,
-		RuleValue::borrowed(value, None),
-		facts,
+		"MFDS requires KR method of assessment when source of assessment is present.",
+		required,
+		has_text(value),
 	);
 	let invalid = value.map(str::trim).is_some_and(|code| {
 		!matches!(code, "1" | "2")
@@ -2103,7 +2230,14 @@ fn mfds_g_k_9_i_2_r_2_kr_1(
 				receiver_is_fr
 			}
 	});
-	validate_violation(issues, "MFDS.G.k.9.i.2.r.2.KR.1.REQUIRED", &path, invalid);
+	reject_when(
+		issues,
+		"MFDS.G.k.9.i.2.r.2.KR.1.REQUIRED",
+		&path,
+		SECTION,
+		"MFDS requires KR method of assessment when source of assessment is present.",
+		invalid,
+	);
 }
 
 /// MFDS.G.k.9.i.2.r.3.KR.1.REQUIRED
@@ -2113,24 +2247,32 @@ fn mfds_g_k_9_i_2_r_3_kr_1(
 	value: Option<&str>,
 	null_flavor: Option<&str>,
 	method: Option<&str>,
-	facts: RuleFacts,
+	required: bool,
 	issues: &mut Vec<ValidationIssue>,
 ) {
 	let path = format!(
 		"drugs.{drug_idx}.drugReactionAssessments.{idx}.resultOfAssessmentKr1"
 	);
-	validate_value(
+	reject_when(
 		issues,
 		"MFDS.G.k.9.i.2.r.3.KR.1.REQUIRED",
 		&path,
-		RuleValue::borrowed(value, null_flavor),
-		facts,
+		SECTION,
+		"MFDS requires WHO-UMC result when source is present and method is WHO-UMC (1).",
+		required && !has_text(value) && null_flavor.is_none(),
 	);
 	let invalid = method.map(str::trim) == Some("1")
 		&& value.map(str::trim).is_some_and(|code| {
 			!code.is_empty() && !matches!(code, "1" | "2" | "3" | "4" | "5" | "6")
 		});
-	validate_violation(issues, "MFDS.G.k.9.i.2.r.3.KR.1.REQUIRED", &path, invalid);
+	reject_when(
+		issues,
+		"MFDS.G.k.9.i.2.r.3.KR.1.REQUIRED",
+		&path,
+		SECTION,
+		"MFDS requires WHO-UMC result when source is present and method is WHO-UMC (1).",
+		invalid,
+	);
 }
 
 fn mfds_kr1_result_required(
@@ -2146,17 +2288,18 @@ fn mfds_g_k_9_i_2_r_3_kr_2(
 	drug_idx: usize,
 	idx: usize,
 	value: Option<&str>,
-	facts: RuleFacts,
+	required: bool,
 	issues: &mut Vec<ValidationIssue>,
 ) {
-	validate_value(
+	warn_when(
 		issues,
 		"MFDS.G.k.9.i.2.r.3.KR.2.REQUIRED",
 		&format!(
 			"drugs.{drug_idx}.drugReactionAssessments.{idx}.resultOfAssessmentKr2"
 		),
-		RuleValue::borrowed(value, None),
-		facts,
+		SECTION,
+		"MFDS requires KRCT result when source is present, method is KRCT (2), and report is clinical (CT/CU).",
+		required && !has_text(value),
 	);
 }
 
@@ -2201,26 +2344,22 @@ pub(crate) fn collect_mfds_issues(
 		if is_domestic_kr {
 			domestic_drug_ids.insert(drug.id);
 		}
-		let facts = RuleFacts {
-			mfds_product_code_required_context: Some(
-				receiver_is_kr || receiver_is_fr,
-			),
-			mfds_product_version_required_context: Some(
-				receiver_is_fr && has_mfds_mpid,
-			),
-			mfds_drug_domestic_kr: Some(is_domestic_kr),
-			mfds_drug_foreign_non_kr: Some(is_foreign_non_kr),
-			..RuleFacts::default()
-		};
 		mfds_g_k_2_1_kr_1b(
 			idx,
 			drug.mfds_mpid.as_deref(),
 			vocabulary_receiver,
-			facts,
+			receiver_is_kr || receiver_is_fr,
+			is_domestic_kr,
+			is_foreign_non_kr,
 			&validation_ctx.vocabulary,
 			issues,
 		);
-		mfds_g_k_2_1_kr_1a(idx, drug.mfds_mpid_version.as_deref(), facts, issues);
+		mfds_g_k_2_1_kr_1a(
+			idx,
+			drug.mfds_mpid_version.as_deref(),
+			receiver_is_fr && has_mfds_mpid,
+			issues,
+		);
 		mfds_g_k_2_1_companions(idx, drug, issues);
 		// MFDS G.k.8: required for clinical-trial and compassionate-use reports.
 		if receiver_is_ct_or_cu && !has_text(drug.action_taken.as_deref()) {
@@ -2245,30 +2384,19 @@ pub(crate) fn collect_mfds_issues(
 			.get(&substance.drug_id)
 			.copied()
 			.unwrap_or(false);
-		let facts = RuleFacts {
-			mfds_drug_domestic_kr: Some(
-				domestic_drug_ids.contains(&substance.drug_id),
-			),
-			mfds_substance_code_required_context: Some(
-				(receiver_is_kr || receiver_is_fr) && !drug_has_mfds_mpid,
-			),
-			mfds_substance_version_required_context: Some(
-				receiver_is_fr && has_text(substance.mfds_id.as_deref()),
-			),
-			..RuleFacts::default()
-		};
 		mfds_g_k_2_3_r_1_kr_1b(
 			drug_index,
 			substance_index,
 			substance.mfds_id.as_deref(),
-			facts,
+			domestic_drug_ids.contains(&substance.drug_id),
+			(receiver_is_kr || receiver_is_fr) && !drug_has_mfds_mpid,
 			issues,
 		);
 		mfds_g_k_2_3_r_1_kr_1a(
 			drug_index,
 			substance_index,
 			substance.mfds_version.as_deref(),
-			facts,
+			receiver_is_fr && has_text(substance.mfds_id.as_deref()),
 			issues,
 		);
 		mfds_g_k_2_3_r_2b(drug_index, substance_index, substance, issues);
@@ -2311,23 +2439,11 @@ pub(crate) fn collect_mfds_issues(
 		let kr2_required_context = has_source
 			&& method_is_krct
 			&& (report_type_is_study || receiver_is_ct_or_cu);
-		let facts = RuleFacts {
-			mfds_relatedness_method_required_context: Some(method_required_context),
-			mfds_relatedness_kr1_required_context: Some(mfds_kr1_result_required(
-				receiver_is_kr,
-				has_source,
-				method_is_who_umc,
-			)),
-			mfds_relatedness_kr2_required_context: Some(kr2_required_context),
-			mfds_relatedness_method_present: Some(has_method),
-			mfds_relatedness_result_present: Some(has_any_result),
-			..RuleFacts::default()
-		};
 		mfds_g_k_9_i_2_r_2_kr_1(
 			drug_index,
 			assessment_index,
 			r.method_of_assessment_kr1.as_deref(),
-			facts,
+			method_required_context,
 			receiver_is_ct_or_cu,
 			receiver_is_kr,
 			receiver_is_fr,
@@ -2339,166 +2455,28 @@ pub(crate) fn collect_mfds_issues(
 			r.result_of_assessment_kr1.as_deref(),
 			r.result_of_assessment_kr1_null_flavor.as_deref(),
 			r.method_of_assessment_kr1.as_deref(),
-			facts,
+			mfds_kr1_result_required(receiver_is_kr, has_source, method_is_who_umc),
 			issues,
 		);
 		mfds_g_k_9_i_2_r_3_kr_2(
 			drug_index,
 			assessment_index,
 			r.result_of_assessment_kr2.as_deref(),
-			facts,
+			kr2_required_context,
 			issues,
 		);
 		mfds_g_k_9_i_2_r_1(
 			drug_index,
 			assessment_index,
 			r.source_of_assessment.as_deref(),
-			facts,
+			has_method || has_any_result,
 			issues,
 		);
 	}
 }
 
 #[cfg(test)]
-pub(super) fn constraint_rule_codes() -> Vec<&'static str> {
-	vec![
-		"ICH.G.k.2.1.1b.ALLOWED.VALUE",
-		"ICH.G.k.2.1.2b.ALLOWED.VALUE",
-		"ICH.G.k.1.ALLOWED.VALUE",
-		"ICH.G.k.8.ALLOWED.VALUE",
-		"ICH.G.k.2.4.VOCABULARY",
-		"ICH.G.k.3.2.VOCABULARY",
-		"ICH.G.k.10.r.ALLOWED.VALUE",
-		"ICH.G.k.2.5.ALLOWED.VALUE",
-		"ICH.G.k.9.i.4.ALLOWED.VALUE",
-		"ICH.G.k.2.3.r.2b.ALLOWED.VALUE",
-		"ICH.G.k.2.3.r.3b.ALLOWED.VALUE",
-		"ICH.G.k.4.r.3.ALLOWED.VALUE",
-		"ICH.G.k.7.r.2a.ALLOWED.VALUE",
-		"ICH.G.k.7.r.2b.ALLOWED.VALUE",
-	]
-}
-
-#[cfg(test)]
-pub(super) fn implemented_rule_codes() -> Vec<&'static str> {
-	vec![
-		"FDA.G.K.1.A.CONDITIONAL",
-		"FDA.G.K.12.R.11.REQUIRED",
-		"FDA.G.K.12.R.3.REQUIRED",
-		"FDA.G.K.12.REQUIRED",
-		"FDA.G.k.1.a.REQUIRED",
-		"FDA.G.k.12.r.1.REQUIRED",
-		"FDA.G.k.12.r.11.r.REQUIRED",
-		"FDA.G.k.12.r.3.r.REQUIRED",
-		"FDA.G.k.12.r.4.REQUIRED",
-		"FDA.G.k.12.r.5.REQUIRED",
-		"FDA.G.k.12.r.6.REQUIRED",
-		"ICH.G.k.1.ALLOWED.VALUE",
-		"ICH.G.k.1.LENGTH.MAX",
-		"ICH.G.k.1.REQUIRED",
-		"ICH.G.k.10.r.ALLOWED.VALUE",
-		"ICH.G.k.10.r.LENGTH.MAX",
-		"ICH.G.k.11.LENGTH.MAX",
-		"ICH.G.k.2.1.1a.LENGTH.MAX",
-		"ICH.G.k.2.1.1b.ALLOWED.VALUE",
-		"ICH.G.k.2.1.1b.LENGTH.MAX",
-		"ICH.G.k.2.1.2a.LENGTH.MAX",
-		"ICH.G.k.2.1.2b.ALLOWED.VALUE",
-		"ICH.G.k.2.1.2b.LENGTH.MAX",
-		"ICH.G.k.2.2.LENGTH.MAX",
-		"ICH.G.k.2.2.REQUIRED",
-		"ICH.G.k.2.3.r.1.LENGTH.MAX",
-		"ICH.G.k.2.3.r.1.REQUIRED",
-		"ICH.G.k.2.3.r.2a.LENGTH.MAX",
-		"ICH.G.k.2.3.r.2a.REQUIRED",
-		"ICH.G.k.2.3.r.2b.ALLOWED.VALUE",
-		"ICH.G.k.2.3.r.2b.LENGTH.MAX",
-		"ICH.G.k.2.3.r.3a.LENGTH.MAX",
-		"ICH.G.k.2.3.r.3b.ALLOWED.VALUE",
-		"ICH.G.k.2.3.r.3b.LENGTH.MAX",
-		"ICH.G.k.2.3.r.3b.REQUIRED",
-		"ICH.G.k.2.4.LENGTH.MAX",
-		"ICH.G.k.2.4.VOCABULARY",
-		"ICH.G.k.2.5.ALLOWED.VALUE",
-		"ICH.G.k.3.1.LENGTH.MAX",
-		"ICH.G.k.3.2.LENGTH.MAX",
-		"ICH.G.k.3.2.REQUIRED",
-		"ICH.G.k.3.2.VOCABULARY",
-		"ICH.G.k.3.3.LENGTH.MAX",
-		"ICH.G.k.4.r.10.1.LENGTH.MAX",
-		"ICH.G.k.4.r.10.2a.LENGTH.MAX",
-		"ICH.G.k.4.r.10.2a.REQUIRED",
-		"ICH.G.k.4.r.10.2b.LENGTH.MAX",
-		"ICH.G.k.4.r.11.1.LENGTH.MAX",
-		"ICH.G.k.4.r.11.2a.LENGTH.MAX",
-		"ICH.G.k.4.r.11.2a.REQUIRED",
-		"ICH.G.k.4.r.11.2b.LENGTH.MAX",
-		"ICH.G.k.4.r.1a.LENGTH.MAX",
-		"ICH.G.k.4.r.1b.LENGTH.MAX",
-		"ICH.G.k.4.r.1b.REQUIRED",
-		"ICH.G.k.4.r.2.LENGTH.MAX",
-		"ICH.G.k.4.r.3.ALLOWED.VALUE",
-		"ICH.G.k.4.r.3.LENGTH.MAX",
-		"ICH.G.k.4.r.3.REQUIRED",
-		"ICH.G.k.4.r.4-5.FUTURE_DATE.FORBIDDEN",
-		"ICH.G.k.4.r.6a.LENGTH.MAX",
-		"ICH.G.k.4.r.6a.REQUIRED",
-		"ICH.G.k.4.r.6b.LENGTH.MAX",
-		"ICH.G.k.4.r.6b.REQUIRED",
-		"ICH.G.k.4.r.7.LENGTH.MAX",
-		"ICH.G.k.4.r.8.LENGTH.MAX",
-		"ICH.G.k.4.r.9.1.LENGTH.MAX",
-		"ICH.G.k.4.r.9.2a.LENGTH.MAX",
-		"ICH.G.k.4.r.9.2a.REQUIRED",
-		"ICH.G.k.4.r.9.2b.LENGTH.MAX",
-		"ICH.G.k.5a.LENGTH.MAX",
-		"ICH.G.k.5a.REQUIRED",
-		"ICH.G.k.5b.LENGTH.MAX",
-		"ICH.G.k.5b.REQUIRED",
-		"ICH.G.k.6a.LENGTH.MAX",
-		"ICH.G.k.6a.REQUIRED",
-		"ICH.G.k.6b.LENGTH.MAX",
-		"ICH.G.k.6b.REQUIRED",
-		"ICH.G.k.7.r.1.LENGTH.MAX",
-		"ICH.G.k.7.r.2a.ALLOWED.VALUE",
-		"ICH.G.k.7.r.2a.LENGTH.MAX",
-		"ICH.G.k.7.r.2a.REQUIRED",
-		"ICH.G.k.7.r.2a.VOCABULARY",
-		"ICH.G.k.7.r.2b.ALLOWED.VALUE",
-		"ICH.G.k.7.r.2b.LENGTH.MAX",
-		"ICH.G.k.7.r.2b.REQUIRED",
-		"ICH.G.k.7.r.2b.VOCABULARY",
-		"ICH.G.k.8.ALLOWED.VALUE",
-		"ICH.G.k.8.LENGTH.MAX",
-		"ICH.G.k.9.i.2.r.1.LENGTH.MAX",
-		"ICH.G.k.9.i.2.r.2.LENGTH.MAX",
-		"ICH.G.k.9.i.2.r.3.LENGTH.MAX",
-		"ICH.G.k.9.i.3.1a.LENGTH.MAX",
-		"ICH.G.k.9.i.3.1a.REQUIRED",
-		"ICH.G.k.9.i.3.1b.LENGTH.MAX",
-		"ICH.G.k.9.i.3.1b.REQUIRED",
-		"ICH.G.k.9.i.3.2a.LENGTH.MAX",
-		"ICH.G.k.9.i.3.2a.REQUIRED",
-		"ICH.G.k.9.i.3.2b.LENGTH.MAX",
-		"ICH.G.k.9.i.3.2b.REQUIRED",
-		"ICH.G.k.9.i.4.ALLOWED.VALUE",
-		"ICH.G.k.9.i.4.LENGTH.MAX",
-		"MFDS.G.k.2.1.KR.1a.REQUIRED",
-		"MFDS.G.k.2.1.KR.1b.REQUIRED",
-		"MFDS.G.k.2.1.KR.1b.VOCABULARY",
-		"MFDS.G.k.2.3.r.1.KR.1a.REQUIRED",
-		"MFDS.G.k.2.3.r.1.KR.1b.REQUIRED",
-		"MFDS.G.k.9.i.2.r.1.REQUIRED",
-		"MFDS.G.k.9.i.2.r.2.KR.1.REQUIRED",
-		"MFDS.G.k.9.i.2.r.3.KR.1.REQUIRED",
-		"MFDS.G.k.9.i.2.r.3.KR.2.REQUIRED",
-		"MFDS.KR.DOMESTIC.INGREDIENTCODE.REQUIRED",
-		"MFDS.KR.DOMESTIC.PRODUCTCODE.REQUIRED",
-		"MFDS.KR.FOREIGN.WHOMPID.REQUIRED",
-	]
-}
-#[cfg(test)]
-mod conditioned_catalog_rule_tests {
+mod field_rule_tests {
 	use super::*;
 	use sqlx::types::Uuid;
 
@@ -2506,35 +2484,30 @@ mod conditioned_catalog_rule_tests {
 	fn drug_rules_cover_domestic_foreign_and_unrelated_contexts() {
 		let mut issues = Vec::new();
 		let vocabulary = crate::context::VocabularyContext::default();
-		for (index, mpid, mpid_version, facts) in [
-			(
-				1,
-				None,
-				None,
-				RuleFacts {
-					mfds_product_code_required_context: Some(true),
-					mfds_product_version_required_context: Some(false),
-					mfds_drug_domestic_kr: Some(true),
-					mfds_drug_foreign_non_kr: Some(false),
-					..RuleFacts::default()
-				},
-			),
-			(
-				2,
-				Some("product"),
-				None,
-				RuleFacts {
-					mfds_product_code_required_context: Some(true),
-					mfds_product_version_required_context: Some(true),
-					mfds_drug_domestic_kr: Some(false),
-					mfds_drug_foreign_non_kr: Some(true),
-					..RuleFacts::default()
-				},
-			),
-			(3, None, None, RuleFacts::default()),
+		for (
+			index,
+			mpid,
+			mpid_version,
+			product_required,
+			version_required,
+			domestic_required,
+			foreign_required,
+		) in [
+			(1, None, None, true, false, true, false),
+			(2, Some("product"), None, true, true, false, true),
+			(3, None, None, false, false, false, false),
 		] {
-			mfds_g_k_2_1_kr_1b(index, mpid, None, facts, &vocabulary, &mut issues);
-			mfds_g_k_2_1_kr_1a(index, mpid_version, facts, &mut issues);
+			mfds_g_k_2_1_kr_1b(
+				index,
+				mpid,
+				None,
+				product_required,
+				domestic_required,
+				foreign_required,
+				&vocabulary,
+				&mut issues,
+			);
+			mfds_g_k_2_1_kr_1a(index, mpid_version, version_required, &mut issues);
 		}
 
 		assert_eq!(
@@ -2556,44 +2529,31 @@ mod conditioned_catalog_rule_tests {
 	#[test]
 	fn substance_rules_preserve_resolved_drug_and_substance_indices() {
 		let mut issues = Vec::new();
-		for (drug_index, substance_index, id, version, facts) in [
-			(
-				1,
-				2,
-				None,
-				None,
-				RuleFacts {
-					mfds_drug_domestic_kr: Some(true),
-					mfds_substance_code_required_context: Some(true),
-					mfds_substance_version_required_context: Some(false),
-					..RuleFacts::default()
-				},
-			),
-			(
-				3,
-				4,
-				Some("ingredient"),
-				None,
-				RuleFacts {
-					mfds_drug_domestic_kr: Some(false),
-					mfds_substance_code_required_context: Some(true),
-					mfds_substance_version_required_context: Some(true),
-					..RuleFacts::default()
-				},
-			),
+		for (
+			drug_index,
+			substance_index,
+			id,
+			version,
+			domestic_required,
+			code_required,
+			version_required,
+		) in [
+			(1, 2, None, None, true, true, false),
+			(3, 4, Some("ingredient"), None, false, true, true),
 		] {
 			mfds_g_k_2_3_r_1_kr_1b(
 				drug_index,
 				substance_index,
 				id,
-				facts,
+				domestic_required,
+				code_required,
 				&mut issues,
 			);
 			mfds_g_k_2_3_r_1_kr_1a(
 				drug_index,
 				substance_index,
 				version,
-				facts,
+				version_required,
 				&mut issues,
 			);
 		}
@@ -2625,7 +2585,10 @@ mod conditioned_catalog_rule_tests {
 			receiver_is_ct_or_cu,
 			receiver_is_kr,
 			receiver_is_fr,
-			facts,
+			method_required,
+			kr1_required,
+			kr2_required,
+			source_required,
 		) in [
 			(
 				2,
@@ -2637,10 +2600,10 @@ mod conditioned_catalog_rule_tests {
 				false,
 				false,
 				false,
-				RuleFacts {
-					mfds_relatedness_method_required_context: Some(true),
-					..RuleFacts::default()
-				},
+				true,
+				false,
+				false,
+				false,
 			),
 			(
 				3,
@@ -2652,11 +2615,10 @@ mod conditioned_catalog_rule_tests {
 				false,
 				false,
 				false,
-				RuleFacts {
-					mfds_relatedness_method_required_context: Some(true),
-					mfds_relatedness_kr1_required_context: Some(true),
-					..RuleFacts::default()
-				},
+				true,
+				true,
+				false,
+				false,
 			),
 			(
 				4,
@@ -2668,11 +2630,10 @@ mod conditioned_catalog_rule_tests {
 				true,
 				false,
 				false,
-				RuleFacts {
-					mfds_relatedness_method_required_context: Some(true),
-					mfds_relatedness_kr2_required_context: Some(true),
-					..RuleFacts::default()
-				},
+				true,
+				false,
+				true,
+				false,
 			),
 			(
 				5,
@@ -2684,11 +2645,10 @@ mod conditioned_catalog_rule_tests {
 				false,
 				true,
 				false,
-				RuleFacts {
-					mfds_relatedness_method_present: Some(true),
-					mfds_relatedness_result_present: Some(false),
-					..RuleFacts::default()
-				},
+				false,
+				false,
+				false,
+				true,
 			),
 			(
 				6,
@@ -2700,17 +2660,17 @@ mod conditioned_catalog_rule_tests {
 				false,
 				false,
 				false,
-				RuleFacts {
-					mfds_relatedness_kr1_required_context: Some(true),
-					..RuleFacts::default()
-				},
+				false,
+				true,
+				false,
+				false,
 			),
 		] {
 			mfds_g_k_9_i_2_r_2_kr_1(
 				1,
 				assessment_index,
 				method,
-				facts,
+				method_required,
 				receiver_is_ct_or_cu,
 				receiver_is_kr,
 				receiver_is_fr,
@@ -2722,17 +2682,23 @@ mod conditioned_catalog_rule_tests {
 				result_kr1,
 				result_kr1_null_flavor,
 				method,
-				facts,
+				kr1_required,
 				&mut issues,
 			);
 			mfds_g_k_9_i_2_r_3_kr_2(
 				1,
 				assessment_index,
 				result_kr2,
-				facts,
+				kr2_required,
 				&mut issues,
 			);
-			mfds_g_k_9_i_2_r_1(1, assessment_index, source, facts, &mut issues);
+			mfds_g_k_9_i_2_r_1(
+				1,
+				assessment_index,
+				source,
+				source_required,
+				&mut issues,
+			);
 		}
 
 		assert_eq!(
@@ -3430,13 +3396,13 @@ mod golden_g_required_tests {
 		let mut value = drug();
 		value.investigational_product_blinded = Some(true);
 		let mut issues = Vec::new();
-		g_k_2_5(0, &value, false, &Default::default(), &mut issues);
+		g_k_2_5(0, &value, false, &mut issues);
 		assert!(issues
 			.iter()
 			.any(|issue| issue.code == "ICH.G.k.2.5.STUDY.ONLY"));
 
 		issues.clear();
-		g_k_2_5(0, &value, true, &Default::default(), &mut issues);
+		g_k_2_5(0, &value, true, &mut issues);
 		assert!(!issues
 			.iter()
 			.any(|issue| issue.code == "ICH.G.k.2.5.STUDY.ONLY"));
@@ -3455,5 +3421,80 @@ mod golden_g_required_tests {
 		assert!(issues
 			.iter()
 			.any(|issue| issue.code == "MFDS.G.k.2.1.2a.REQUIRED"));
+	}
+
+	#[test]
+	fn fda_malfunction_only_requires_a_suspect_malfunction() {
+		let mut issues = Vec::new();
+		fda_g_k_12(false, false, &mut issues);
+		fda_g_k_12(true, true, &mut issues);
+		assert!(issues.is_empty());
+
+		fda_g_k_12(true, false, &mut issues);
+		assert_eq!(issues.len(), 1);
+		let issue = &issues[0];
+		assert_eq!(issue.code, "FDA.G.K.12.REQUIRED");
+		assert_eq!(issue.path, "drugs.0.fdaDevices.0.malfunction");
+		assert_eq!(issue.section, "drugs");
+		assert!(issue.blocking);
+	}
+
+	#[test]
+	fn golden_g_issue_metadata() {
+		let mut issues = Vec::new();
+		g_k_1(&[], &mut issues);
+
+		let mut value = drug();
+		value.drug_characterization = "9".to_string();
+		value.mpid = Some("MPID".to_string());
+		value.mpid_version = None;
+		g_k_1(&[value.clone()], &mut issues);
+		g_k_2_1_1a(3, &value, &mut issues);
+
+		let mut out = issues
+			.into_iter()
+			.filter(|issue| {
+				matches!(
+					issue.code.as_str(),
+					"ICH.G.k.1.REQUIRED" | "ICH.G.k.1.ALLOWED.VALUE"
+				)
+			})
+			.map(|issue| {
+				(
+					issue.code,
+					issue.message,
+					issue.path,
+					issue.field_path,
+					issue.section,
+					issue.subsection,
+					issue.blocking,
+				)
+			})
+			.collect::<Vec<_>>();
+		out.sort_by(|left, right| left.0.cmp(&right.0));
+
+		assert_eq!(
+			out,
+			vec![
+				(
+					"ICH.G.k.1.ALLOWED.VALUE".to_string(),
+					"Dictionary allowed values constraint.".to_string(),
+					"drugs.0.drugCharacterization".to_string(),
+					Some("drugs.0.drugCharacterization".to_string()),
+					"drugs".to_string(),
+					"G.k".to_string(),
+					true,
+				),
+				(
+					"ICH.G.k.1.REQUIRED".to_string(),
+					"[G.k.1] is required.".to_string(),
+					"drugs.0.drugCharacterization".to_string(),
+					Some("drugs.0.drugCharacterization".to_string()),
+					"drugs".to_string(),
+					"G.k".to_string(),
+					true,
+				),
+			],
+		);
 	}
 }

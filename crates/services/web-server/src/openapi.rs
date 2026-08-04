@@ -132,7 +132,6 @@ pub fn router() -> Router {
 		list_audit_logs,
 		verify_audit_log_integrity,
 		list_audit_logs_by_record,
-		list_validation_rules,
 		list_all_submission_history,
 		get_case_submission,
 		list_submission_event_history,
@@ -307,7 +306,6 @@ pub fn router() -> Router {
 		(name = "terminology", description = "Terminology search and release management"),
 		(name = "import", description = "XML validation and import"),
 		(name = "audit", description = "Audit log APIs"),
-		(name = "validation", description = "Validation rule catalog"),
 		(name = "submissions", description = "Submission history and ACK processing"),
 		(name = "internal", description = "Internal machine-to-machine callbacks")
 	)
@@ -3807,17 +3805,6 @@ fn verify_audit_log_integrity() {}
 	responses((status = 200, description = "Audit logs by record", body = GenericDataResponse))
 )]
 fn list_audit_logs_by_record() {}
-
-#[utoipa::path(
-	get,
-	path = "/api/validation/rules",
-	tag = "validation",
-	security(
-		("auth_token" = [])
-	),
-	responses((status = 200, description = "Validation rule catalog", body = GenericDataResponse))
-)]
-fn list_validation_rules() {}
 
 #[utoipa::path(
 	get,

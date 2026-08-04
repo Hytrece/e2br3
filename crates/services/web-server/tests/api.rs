@@ -47,5 +47,3 @@ mod terminology_contract_web;
 mod user_organization_membership_web;
 #[path = "api/validation_contract_web.rs"]
 mod validation_contract_web;
-#[path = "api/validation_rules_web.rs"]
-mod validation_rules_web;

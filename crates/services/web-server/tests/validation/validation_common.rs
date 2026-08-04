@@ -10,7 +10,6 @@ use sqlx::types::Uuid as SqlxUuid;
 use tokio::time::{sleep, Duration};
 use tower::ServiceExt;
 use uuid::Uuid;
-use validator::find_canonical_rule;
 
 fn parse_json_or_raw(body: &[u8]) -> Result<Value> {
 	let raw = String::from_utf8_lossy(body).trim().to_string();
@@ -1156,70 +1155,4 @@ pub fn validation_issue<'a>(validation_body: &'a Value, code: &str) -> &'a Value
 		"expected validation issue {code} exactly once, got duplicates: {validation_body}"
 	);
 	issue
-}
-
-pub fn assert_banner_issue(validation_body: &Value, code: &str) {
-	let issue = validation_issue(validation_body, code);
-	let canonical = find_canonical_rule(code)
-		.unwrap_or_else(|| panic!("missing canonical rule {code}"));
-	assert_eq!(
-		issue.get("code").and_then(Value::as_str),
-		Some(code),
-		"unexpected code payload for {code}: {validation_body}"
-	);
-	assert_eq!(
-		issue.get("message").and_then(Value::as_str),
-		Some(canonical.message),
-		"unexpected message for {code}: {validation_body}"
-	);
-	assert_eq!(
-		issue.get("section").and_then(Value::as_str),
-		Some(canonical.section),
-		"unexpected section for {code}: {validation_body}"
-	);
-	assert_eq!(
-		issue.get("blocking").and_then(Value::as_bool),
-		Some(canonical.blocking),
-		"unexpected blocking flag for {code}: {validation_body}"
-	);
-	let expected_field_path = issue
-		.get("path")
-		.and_then(Value::as_str)
-		.map(normalize_banner_field_path)
-		.unwrap_or_else(|| {
-			panic!("missing issue path for {code}: {validation_body}")
-		});
-	assert_eq!(
-		issue.get("field_path").and_then(Value::as_str),
-		Some(expected_field_path.as_str()),
-		"unexpected field_path for {code}: {validation_body}"
-	);
-}
-
-fn normalize_banner_field_path(path: &str) -> String {
-	path.replace("[]", ".0")
-}
-
-#[cfg(test)]
-mod tests {
-	use super::*;
-	use serde_json::json;
-
-	#[test]
-	fn banner_issue_field_path_comes_from_issue_path_without_code_fallback() {
-		let validation_body = json!({
-			"data": {
-				"issues": [{
-					"code": "ICH.C.3.2.REQUIRED",
-					"message": "[C.3.2] is required.",
-					"section": "sender",
-					"blocking": true,
-					"path": "senderInformation.organizationName",
-					"field_path": "senderInformation.organizationName"
-				}]
-			}
-		});
-
-		assert_banner_issue(&validation_body, "ICH.C.3.2.REQUIRED");
-	}
 }

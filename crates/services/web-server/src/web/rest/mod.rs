@@ -39,7 +39,6 @@ pub mod safety_report_sub_rest;
 pub mod section_presave_rest;
 pub mod submission_rest;
 pub mod terminology_rest;
-pub mod validation_rules_rest;
 
 mod routes;
 pub use routes::*;

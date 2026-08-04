@@ -1,44 +1,10 @@
 //! Shared primitives used by explicit field validators.
 
-use crate::allowed_value::{
-	is_allowed_value_valid, is_named_vocabulary_value_valid, ConstraintValue,
-};
 use crate::context::VocabularyContext;
-use crate::{
-	max_length_for_rule, push_issue_by_code, push_issue_if_rule_invalid,
-	vocabulary_for_rule, vocabulary_variant_for_rule, RuleFacts, ValidationIssue,
-};
+use crate::ValidationIssue;
+use base64::engine::{general_purpose, Engine};
 use sqlx::types::time::{Date, OffsetDateTime};
-use std::borrow::Cow;
-
-pub(crate) enum RuleValue<'a> {
-	Text {
-		value: Option<Cow<'a, str>>,
-		null_flavor: Option<&'a str>,
-	},
-}
-
-impl<'a> RuleValue<'a> {
-	pub(crate) fn borrowed(
-		value: Option<&'a str>,
-		null_flavor: Option<&'a str>,
-	) -> Self {
-		Self::Text {
-			value: value.map(Cow::Borrowed),
-			null_flavor,
-		}
-	}
-
-	pub(crate) fn owned(
-		value: Option<String>,
-		null_flavor: Option<&'a str>,
-	) -> Self {
-		Self::Text {
-			value: value.map(Cow::Owned),
-			null_flavor,
-		}
-	}
-}
+use sqlx::types::Decimal;
 
 pub(crate) enum DateValues {
 	One(Option<Date>),
@@ -58,149 +24,296 @@ fn is_future_date(value: Option<Date>) -> bool {
 	value.is_some_and(|value| value > OffsetDateTime::now_utc().date())
 }
 
+pub(crate) fn reject_when(
+	issues: &mut Vec<ValidationIssue>,
+	code: &str,
+	path: &str,
+	section: &str,
+	message: &str,
+	violated: bool,
+) {
+	if violated {
+		crate::push_field_issue(issues, code, path, section, message, true);
+	}
+}
+
+pub(crate) fn warn_when(
+	issues: &mut Vec<ValidationIssue>,
+	code: &str,
+	path: &str,
+	section: &str,
+	message: &str,
+	violated: bool,
+) {
+	if violated {
+		crate::push_field_issue(issues, code, path, section, message, false);
+	}
+}
+
+pub(crate) fn require(
+	issues: &mut Vec<ValidationIssue>,
+	code: &str,
+	path: &str,
+	section: &str,
+	message: &str,
+	present: bool,
+) {
+	reject_when(issues, code, path, section, message, !present);
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn max_length(
+	issues: &mut Vec<ValidationIssue>,
+	code: &str,
+	path: &str,
+	section: &str,
+	message: &str,
+	value: Option<&str>,
+	max: usize,
+) {
+	reject_when(
+		issues,
+		code,
+		path,
+		section,
+		message,
+		value.is_some_and(|value| value.chars().count() > max),
+	);
+}
+
+pub(crate) fn reject_future_date(
+	issues: &mut Vec<ValidationIssue>,
+	code: &str,
+	path: &str,
+	section: &str,
+	message: &str,
+	dates: DateValues,
+) {
+	reject_when(issues, code, path, section, message, dates.any_future());
+}
+
 pub(crate) fn e2b_datetime_date(value: Option<&str>) -> Option<Date> {
 	value.and_then(lib_core::serde::flex_date::e2b_datetime_date)
 }
 
-pub(crate) fn validate_constraint(
-	issues: &mut Vec<ValidationIssue>,
-	code: &str,
-	path: &str,
-	value: ConstraintValue<'_>,
-	vocabulary: &VocabularyContext,
-) {
-	if !is_allowed_value_valid(code, value, vocabulary) {
-		push_issue_by_code(issues, code, path);
-	}
-}
-
-pub(crate) fn validate_value(
-	issues: &mut Vec<ValidationIssue>,
-	code: &str,
-	path: &str,
-	value: RuleValue<'_>,
-	facts: RuleFacts,
-) {
-	let RuleValue::Text { value, null_flavor } = value;
-	let _ = push_issue_if_rule_invalid(
-		issues,
-		code,
-		path,
-		value.as_deref(),
-		null_flavor,
-		facts,
-	);
-}
-
-pub(crate) fn validate_violation(
-	issues: &mut Vec<ValidationIssue>,
-	code: &str,
-	path: &str,
-	violated: bool,
-) {
-	if violated {
-		push_issue_by_code(issues, code, path);
-	}
-}
-
-pub(crate) fn validate_future_date(
-	issues: &mut Vec<ValidationIssue>,
-	code: &str,
-	path: &str,
-	dates: DateValues,
-) {
-	if dates.any_future() {
-		push_issue_by_code(issues, code, path);
-	}
-}
-
-pub(crate) fn validate_length(
-	issues: &mut Vec<ValidationIssue>,
-	code: &str,
-	path: &str,
-	value: Option<&str>,
-) {
-	let Some(value) = value else {
-		return;
-	};
-	let max_length =
-		max_length_for_rule(code).expect("length rule code should exist in catalog");
-	if value.chars().count() > max_length {
-		push_issue_by_code(issues, code, path);
-	}
-}
-
-pub(crate) fn validate_vocabulary_variant(
-	issues: &mut Vec<ValidationIssue>,
-	code: &str,
-	path: &str,
-	receiver: Option<&str>,
-	value: Option<&str>,
-	vocabulary: &VocabularyContext,
-) {
-	let Some(value) = value.map(str::trim).filter(|value| !value.is_empty()) else {
-		return;
-	};
-	let Some(variant) = receiver
+pub(crate) fn valid_decimal(value: Option<&str>) -> bool {
+	value
 		.map(str::trim)
-		.filter(|receiver| !receiver.is_empty())
-		.and_then(|receiver| vocabulary_variant_for_rule(code, receiver))
-	else {
-		return;
-	};
-	if !is_named_vocabulary_value_valid(
-		variant.vocabulary,
-		variant.scope,
-		value,
-		vocabulary,
-	) {
-		push_issue_by_code(issues, code, path);
-	}
+		.filter(|value| !value.is_empty())
+		.is_none_or(|value| value.parse::<Decimal>().is_ok())
 }
 
-#[allow(clippy::too_many_arguments)]
-pub(crate) fn validate_meddra(
-	issues: &mut Vec<ValidationIssue>,
+pub(crate) fn valid_code(value: Option<&str>, allowed: &[&str]) -> bool {
+	value
+		.map(str::trim)
+		.filter(|value| !value.is_empty())
+		.is_none_or(|value| allowed.contains(&value))
+}
+
+pub(crate) fn valid_identifier(value: Option<&str>, max_length: usize) -> bool {
+	value
+		.map(str::trim)
+		.filter(|value| !value.is_empty())
+		.is_none_or(|value| {
+			value.len() <= max_length && !value.chars().any(char::is_control)
+		})
+}
+
+pub(crate) fn valid_base64(value: Option<&str>) -> bool {
+	value
+		.map(str::trim)
+		.filter(|value| !value.is_empty())
+		.is_none_or(|value| general_purpose::STANDARD.decode(value).is_ok())
+}
+
+pub(crate) fn valid_e2b_datetime(value: &str) -> bool {
+	let (local, offset) = match value
+		.char_indices()
+		.skip(4)
+		.find(|(_, char)| matches!(char, '+' | '-'))
+	{
+		Some((index, _)) => (&value[..index], Some(&value[index..])),
+		None => (value, None),
+	};
+	if let Some(offset) = offset {
+		let bytes = offset.as_bytes();
+		if bytes.len() != 5
+			|| !matches!(bytes[0], b'+' | b'-')
+			|| !bytes[1..].iter().all(u8::is_ascii_digit)
+		{
+			return false;
+		}
+		let hour = offset[1..3].parse::<u8>().ok();
+		let minute = offset[3..5].parse::<u8>().ok();
+		if !matches!((hour, minute), (Some(0..=14), Some(0..=59))) {
+			return false;
+		}
+	}
+
+	let (digits, fraction) = match local.split_once('.') {
+		Some((digits, fraction)) => (digits, Some(fraction)),
+		None => (local, None),
+	};
+	if !matches!(digits.len(), 4 | 6 | 8 | 10 | 12 | 14)
+		|| !digits.bytes().all(|byte| byte.is_ascii_digit())
+	{
+		return false;
+	}
+	if let Some(fraction) = fraction {
+		if digits.len() != 14
+			|| fraction.is_empty()
+			|| fraction.len() > 4
+			|| !fraction.bytes().all(|byte| byte.is_ascii_digit())
+		{
+			return false;
+		}
+	}
+
+	let number = |range: std::ops::Range<usize>| {
+		digits.get(range).and_then(|value| value.parse::<u8>().ok())
+	};
+	if digits.len() >= 6 && !matches!(number(4..6), Some(1..=12)) {
+		return false;
+	}
+	if digits.len() >= 8
+		&& lib_core::serde::flex_date::e2b_datetime_date(digits).is_none()
+	{
+		return false;
+	}
+	if digits.len() >= 10 && !matches!(number(8..10), Some(0..=23)) {
+		return false;
+	}
+	if digits.len() >= 12 && !matches!(number(10..12), Some(0..=59)) {
+		return false;
+	}
+	if digits.len() >= 14 && !matches!(number(12..14), Some(0..=59)) {
+		return false;
+	}
+	true
+}
+
+pub(crate) fn valid_ich_identifier(
 	vocabulary: &VocabularyContext,
-	version_allowed_code: &str,
-	code_allowed_code: &str,
-	version_code: &str,
-	code_code: &str,
-	version_path: String,
-	code_path: String,
+	value: Option<&str>,
+) -> bool {
+	let Some(value) = value.map(str::trim).filter(|value| !value.is_empty()) else {
+		return true;
+	};
+	if value.chars().count() > 100 || value.chars().any(char::is_control) {
+		return false;
+	}
+	let Some((country, remainder)) = value.split_once('-') else {
+		return false;
+	};
+	let Some((organization, report_number)) = remainder.rsplit_once('-') else {
+		return false;
+	};
+	vocabulary.contains_snapshot_code(
+		"ISO3166",
+		crate::VocabularyScope::All,
+		country,
+	) && !organization.trim().is_empty()
+		&& !report_number.trim().is_empty()
+}
+
+pub(crate) fn valid_ucum(value: Option<&str>) -> bool {
+	value
+		.map(str::trim)
+		.filter(|value| !value.is_empty())
+		.is_none_or(|value| octofhir_ucum::validate(value).is_ok())
+}
+
+pub(crate) fn valid_dotted_version(value: Option<&str>) -> bool {
+	value
+		.map(str::trim)
+		.filter(|value| !value.is_empty())
+		.is_none_or(|value| {
+			let mut parts = value.split('.');
+			let valid_part = |part: &str| {
+				!part.is_empty() && part.bytes().all(|byte| byte.is_ascii_digit())
+			};
+			parts.next().is_some_and(valid_part)
+				&& parts.next().is_some_and(valid_part)
+				&& parts.next().is_none()
+		})
+}
+
+pub(crate) fn valid_meddra_version(
+	vocabulary: &VocabularyContext,
+	value: Option<&str>,
+) -> bool {
+	let value = value.map(str::trim).filter(|value| !value.is_empty());
+	!vocabulary.meddra_available()
+		|| value.is_none_or(|value| vocabulary.contains_meddra_version(value))
+}
+
+pub(crate) fn valid_meddra_term(
+	vocabulary: &VocabularyContext,
 	version: Option<&str>,
 	code: Option<&str>,
-) {
-	for (allowed_code, vocabulary_code, path, value) in [
-		(
-			version_allowed_code,
-			version_code,
-			version_path.clone(),
-			version,
-		),
-		(code_allowed_code, code_code, code_path.clone(), code),
-	] {
-		if !is_allowed_value_valid(
-			vocabulary_code,
-			ConstraintValue::Text(value.map(Cow::Borrowed)),
-			vocabulary,
-		) {
-			push_issue_by_code(issues, allowed_code, path);
-		}
-	}
+) -> bool {
 	if !vocabulary.meddra_available() {
-		return;
+		return true;
 	}
-	assert_eq!(vocabulary_for_rule(version_code), Some("MedDRA"));
-	assert_eq!(vocabulary_for_rule(code_code), Some("MedDRA"));
 	let version = version.map(str::trim).filter(|value| !value.is_empty());
 	let code = code.map(str::trim).filter(|value| !value.is_empty());
-	if version.is_some_and(|value| !vocabulary.contains_meddra_version(value)) {
-		push_issue_by_code(issues, version_code, version_path);
-	}
-	if let (Some(version), Some(code)) = (version, code) {
-		if !vocabulary.contains_meddra_term(version, code) {
-			push_issue_by_code(issues, code_code, code_path);
+	match (version, code) {
+		(Some(version), Some(code)) => {
+			vocabulary.contains_meddra_term(version, code)
 		}
+		_ => true,
 	}
+}
+
+pub(crate) fn valid_mfds_product(
+	vocabulary: &VocabularyContext,
+	receiver: Option<&str>,
+	value: Option<&str>,
+) -> bool {
+	let Some(value) = value.map(str::trim).filter(|value| !value.is_empty()) else {
+		return true;
+	};
+	match receiver.map(str::trim) {
+		Some(receiver) if receiver.eq_ignore_ascii_case("KR") => vocabulary
+			.contains_snapshot_code(
+				"MFDS_PRODUCT",
+				crate::VocabularyScope::ItemSeq,
+				value,
+			),
+		Some(receiver) if receiver.eq_ignore_ascii_case("FR") => vocabulary
+			.contains_snapshot_code("WHODrug", crate::VocabularyScope::All, value),
+		_ => true,
+	}
+}
+
+pub(crate) fn valid_iso639(
+	vocabulary: &VocabularyContext,
+	value: Option<&str>,
+) -> bool {
+	value
+		.map(str::trim)
+		.filter(|value| !value.is_empty())
+		.is_none_or(|value| {
+			vocabulary.contains_snapshot_code(
+				"ISO639-2",
+				crate::VocabularyScope::All,
+				value,
+			)
+		})
+}
+
+pub(crate) fn valid_iso3166(
+	vocabulary: &VocabularyContext,
+	value: Option<&str>,
+) -> bool {
+	value
+		.map(str::trim)
+		.filter(|value| !value.is_empty())
+		.is_none_or(|value| {
+			vocabulary.contains_snapshot_code(
+				"ISO3166",
+				crate::VocabularyScope::All,
+				value,
+			)
+		})
 }

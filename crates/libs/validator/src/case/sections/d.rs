@@ -1,14 +1,14 @@
 use super::helpers::{
-	validate_constraint, validate_future_date, validate_length, validate_meddra,
-	validate_value, validate_violation, validate_vocabulary_variant, DateValues,
-	RuleValue,
+	max_length, reject_future_date, reject_when, require, valid_code, valid_decimal,
+	valid_dotted_version, valid_identifier, valid_meddra_term, valid_meddra_version,
+	valid_mfds_product, warn_when, DateValues,
 };
-use crate::allowed_value::{true_marker_value, ConstraintValue};
+use crate::context::VocabularyContext;
 use crate::{
 	has_patient_initials, has_text, is_mfds_domestic_receiver,
 	is_mfds_foreign_postmarket_receiver, push_business_issue,
 	should_require_patient_initials, FdaValidationContext, MfdsValidationContext,
-	RegulatoryAuthority, RuleFacts, ValidationContext, ValidationIssue,
+	RegulatoryAuthority, ValidationContext, ValidationIssue,
 };
 use lib_core::model::parent_history::{ParentMedicalHistory, ParentPastDrugHistory};
 use lib_core::model::patient::{
@@ -21,8 +21,12 @@ use lib_core::regulatory::{
 	is_mfds_compassionate_use_receiver,
 };
 use sqlx::types::{Decimal, Uuid};
-use std::borrow::Cow;
 use std::collections::HashMap;
+
+const SECTION: &str = "patient";
+const MAX_LENGTH_MESSAGE: &str = "Dictionary max length exceeded.";
+const ALLOWED_VALUE_MESSAGE: &str = "Dictionary allowed values constraint.";
+const VOCABULARY_MESSAGE: &str = "Dictionary vocabulary constraint.";
 
 fn decimal_text(value: Option<Decimal>) -> Option<String> {
 	value.map(|value| value.to_string())
@@ -97,46 +101,81 @@ fn parent_index_by_id(parents: &[ParentInformation]) -> HashMap<Uuid, usize> {
 		.collect()
 }
 
-fn required(
+fn required_field(
 	issues: &mut Vec<ValidationIssue>,
 	code: &str,
 	path: &str,
-	value: Option<&str>,
-	null_flavor: Option<&str>,
-	facts: RuleFacts,
+	message: &str,
+	present: bool,
 ) {
-	validate_value(
-		issues,
-		code,
-		path,
-		RuleValue::borrowed(value, null_flavor),
-		facts,
-	);
+	require(issues, code, path, SECTION, message, present);
 }
 
 fn required_when(
 	issues: &mut Vec<ValidationIssue>,
 	code: &str,
 	path: &str,
+	message: &str,
 	trigger: bool,
 	present: bool,
 ) {
-	validate_violation(issues, code, path, trigger && !present);
+	reject_when(issues, code, path, SECTION, message, trigger && !present);
 }
 
-fn text_constraint(
+fn length(
 	issues: &mut Vec<ValidationIssue>,
 	code: &str,
 	path: &str,
 	value: Option<&str>,
-	validation_ctx: &ValidationContext,
+	max: usize,
 ) {
-	validate_constraint(
+	max_length(issues, code, path, SECTION, MAX_LENGTH_MESSAGE, value, max);
+}
+
+fn allowed(issues: &mut Vec<ValidationIssue>, code: &str, path: &str, valid: bool) {
+	reject_when(issues, code, path, SECTION, ALLOWED_VALUE_MESSAGE, !valid);
+}
+
+fn vocabulary(
+	issues: &mut Vec<ValidationIssue>,
+	code: &str,
+	path: &str,
+	valid: bool,
+) {
+	reject_when(issues, code, path, SECTION, VOCABULARY_MESSAGE, !valid);
+}
+
+#[allow(clippy::too_many_arguments)]
+fn meddra(
+	issues: &mut Vec<ValidationIssue>,
+	vocabulary_ctx: &VocabularyContext,
+	version_allowed_code: &str,
+	code_allowed_code: &str,
+	version_code: &str,
+	code_code: &str,
+	version_path: String,
+	code_path: String,
+	version: Option<&str>,
+	code: Option<&str>,
+) {
+	allowed(
 		issues,
-		code,
-		path,
-		ConstraintValue::Text(value.map(Cow::Borrowed)),
-		&validation_ctx.vocabulary,
+		version_allowed_code,
+		&version_path,
+		valid_dotted_version(version),
+	);
+	allowed(issues, code_allowed_code, &code_path, valid_decimal(code));
+	vocabulary(
+		issues,
+		version_code,
+		&version_path,
+		valid_meddra_version(vocabulary_ctx, version),
+	);
+	vocabulary(
+		issues,
+		code_code,
+		&code_path,
+		valid_meddra_term(vocabulary_ctx, version, code),
 	);
 }
 
@@ -153,20 +192,20 @@ fn d_1(
 			!should_require_patient_initials(patient)
 				|| has_patient_initials(patient)
 		});
-		required(
+		required_field(
 			issues,
 			"ICH.D.1.REQUIRED",
 			PATH,
-			present.then_some("present"),
-			None,
-			RuleFacts::default(),
+			"[D.1] This Element is required.",
+			present,
 		);
 	}
-	validate_length(
+	length(
 		issues,
 		"ICH.D.1.LENGTH.MAX",
 		PATH,
 		patient.and_then(|patient| patient.patient_initials.as_deref()),
+		60,
 	);
 }
 
@@ -183,11 +222,12 @@ macro_rules! patient_identifier_length {
 	($name:ident, $code:literal, $type_code:literal, $path:literal) => {
 		#[doc = $code]
 		fn $name(identifier: &PatientIdentifier, issues: &mut Vec<ValidationIssue>) {
-			validate_length(
+			length(
 				issues,
 				$code,
 				$path,
 				patient_identifier_value(identifier, $type_code),
+				20,
 			);
 		}
 	};
@@ -225,33 +265,33 @@ fn d_1_1_4(
 			.map(str::trim)
 			.filter(|value| !value.is_empty())
 	});
-	required(
+	required_when(
 		issues,
 		"ICH.D.1.1.4.REQUIRED",
 		PATH,
-		value,
-		None,
-		RuleFacts {
-			ich_report_type_is_study: Some(report_type_is_study),
-			..RuleFacts::default()
-		},
+		"[D.1.1.4] Patient study number is required when report type is study (C.1.3=2).",
+		report_type_is_study,
+		value.is_some(),
 	);
 	for identifier in identifiers {
-		validate_length(
+		length(
 			issues,
 			"ICH.D.1.1.4.LENGTH.MAX",
 			PATH,
 			patient_identifier_value(identifier, "4"),
+			20,
 		);
 	}
 }
 
 /// ICH.D.2.1.FUTURE_DATE.FORBIDDEN
 fn d_2_1(patient: &PatientInformation, issues: &mut Vec<ValidationIssue>) {
-	validate_future_date(
+	reject_future_date(
 		issues,
 		"ICH.D.2.1.FUTURE_DATE.FORBIDDEN",
 		"patientInformation.patientBirthDate",
+		SECTION,
+		"[D.2.1] Date of birth must not be later than today.",
 		DateValues::One(patient.birth_date),
 	);
 }
@@ -261,40 +301,35 @@ fn d_2_1(patient: &PatientInformation, issues: &mut Vec<ValidationIssue>) {
 fn d_2_2a(patient: &PatientInformation, issues: &mut Vec<ValidationIssue>) {
 	const PATH: &str = "patientInformation.ageAtTimeOfOnset";
 	let value = decimal_text(patient.age_at_time_of_onset);
-	required(
+	required_when(
 		issues,
 		"ICH.D.2.2a.REQUIRED",
 		PATH,
-		value.as_deref(),
-		None,
-		RuleFacts {
-			ich_age_unit_present: Some(has_text(patient.age_unit.as_deref())),
-			..RuleFacts::default()
-		},
+		"[D.2.2a] Age at time of onset is required when [D.2.2b] is provided.",
+		has_text(patient.age_unit.as_deref()),
+		value.is_some(),
 	);
-	validate_length(issues, "ICH.D.2.2a.LENGTH.MAX", PATH, value.as_deref());
+	length(issues, "ICH.D.2.2a.LENGTH.MAX", PATH, value.as_deref(), 5);
 }
 
 /// ICH.D.2.2b.REQUIRED
 /// ICH.D.2.2b.LENGTH.MAX
 fn d_2_2b(patient: &PatientInformation, issues: &mut Vec<ValidationIssue>) {
 	const PATH: &str = "patientInformation.ageUnit";
-	required(
+	required_when(
 		issues,
 		"ICH.D.2.2b.REQUIRED",
 		PATH,
-		patient.age_unit.as_deref(),
-		None,
-		RuleFacts {
-			ich_age_value_present: Some(patient.age_at_time_of_onset.is_some()),
-			..RuleFacts::default()
-		},
+		"[D.2.2b] Age unit is required when [D.2.2a] is provided.",
+		patient.age_at_time_of_onset.is_some(),
+		has_text(patient.age_unit.as_deref()),
 	);
-	validate_length(
+	length(
 		issues,
 		"ICH.D.2.2b.LENGTH.MAX",
 		PATH,
 		patient.age_unit.as_deref(),
+		50,
 	);
 }
 
@@ -303,74 +338,66 @@ fn d_2_2b(patient: &PatientInformation, issues: &mut Vec<ValidationIssue>) {
 fn d_2_2_1a(patient: &PatientInformation, issues: &mut Vec<ValidationIssue>) {
 	const PATH: &str = "patientInformation.gestationPeriod";
 	let value = decimal_text(patient.gestation_period);
-	required(
+	required_when(
 		issues,
 		"ICH.D.2.2.1a.REQUIRED",
 		PATH,
-		value.as_deref(),
-		None,
-		RuleFacts {
-			ich_gestation_unit_present: Some(has_text(
-				patient.gestation_period_unit.as_deref(),
-			)),
-			..RuleFacts::default()
-		},
+		"[D.2.2.1a] Gestation period is required when [D.2.2.1b] is provided.",
+		has_text(patient.gestation_period_unit.as_deref()),
+		value.is_some(),
 	);
-	validate_length(issues, "ICH.D.2.2.1a.LENGTH.MAX", PATH, value.as_deref());
+	length(issues, "ICH.D.2.2.1a.LENGTH.MAX", PATH, value.as_deref(), 3);
 }
 
 /// ICH.D.2.2.1b.REQUIRED
 /// ICH.D.2.2.1b.LENGTH.MAX
 fn d_2_2_1b(patient: &PatientInformation, issues: &mut Vec<ValidationIssue>) {
 	const PATH: &str = "patientInformation.gestationPeriodUnit";
-	required(
+	required_when(
 		issues,
 		"ICH.D.2.2.1b.REQUIRED",
 		PATH,
-		patient.gestation_period_unit.as_deref(),
-		None,
-		RuleFacts {
-			ich_gestation_value_present: Some(patient.gestation_period.is_some()),
-			..RuleFacts::default()
-		},
+		"[D.2.2.1b] Gestation period unit is required when [D.2.2.1a] is provided.",
+		patient.gestation_period.is_some(),
+		has_text(patient.gestation_period_unit.as_deref()),
 	);
-	validate_length(
+	length(
 		issues,
 		"ICH.D.2.2.1b.LENGTH.MAX",
 		PATH,
 		patient.gestation_period_unit.as_deref(),
+		50,
 	);
 }
 
 /// ICH.D.2.3.ALLOWED.VALUE
 /// ICH.D.2.3.LENGTH.MAX
-fn d_2_3(
-	patient: &PatientInformation,
-	validation_ctx: &ValidationContext,
-	issues: &mut Vec<ValidationIssue>,
-) {
+fn d_2_3(patient: &PatientInformation, issues: &mut Vec<ValidationIssue>) {
 	const PATH: &str = "patientInformation.patientAgeGroup";
-	text_constraint(
+	allowed(
 		issues,
 		"ICH.D.2.3.ALLOWED.VALUE",
 		PATH,
-		patient.age_group.as_deref(),
-		validation_ctx,
+		valid_code(
+			patient.age_group.as_deref(),
+			&["0", "1", "2", "3", "4", "5", "6"],
+		),
 	);
-	validate_length(
+	length(
 		issues,
 		"ICH.D.2.3.LENGTH.MAX",
 		PATH,
 		patient.age_group.as_deref(),
+		1,
 	);
 }
 
 macro_rules! patient_decimal_length {
-	($name:ident, $code:literal, $path:literal, $field:ident) => {
+	($name:ident, $code:literal, $path:literal, $field:ident, $max_length:literal) => {
 		#[doc = $code]
 		fn $name(patient: &PatientInformation, issues: &mut Vec<ValidationIssue>) {
 			let value = decimal_text(patient.$field);
-			validate_length(issues, $code, $path, value.as_deref());
+			length(issues, $code, $path, value.as_deref(), $max_length);
 		}
 	};
 }
@@ -379,7 +406,8 @@ patient_decimal_length!(
 	d_3,
 	"ICH.D.3.LENGTH.MAX",
 	"patientInformation.weightKg",
-	weight_kg
+	weight_kg,
+	6
 );
 
 /// ICH.D.4: height is a rounded integer.
@@ -397,33 +425,37 @@ patient_decimal_length!(
 	d_4,
 	"ICH.D.4.LENGTH.MAX",
 	"patientInformation.heightCm",
-	height_cm
+	height_cm,
+	3
 );
 
 /// ICH.D.5.ALLOWED.VALUE
 /// ICH.D.5.LENGTH.MAX
-fn d_5(
-	patient: &PatientInformation,
-	validation_ctx: &ValidationContext,
-	issues: &mut Vec<ValidationIssue>,
-) {
+fn d_5(patient: &PatientInformation, issues: &mut Vec<ValidationIssue>) {
 	const PATH: &str = "patientInformation.sex";
-	text_constraint(
+	allowed(
 		issues,
 		"ICH.D.5.ALLOWED.VALUE",
 		PATH,
-		patient.sex.as_deref(),
-		validation_ctx,
+		valid_code(patient.sex.as_deref(), &["1", "2"]),
 	);
-	validate_length(issues, "ICH.D.5.LENGTH.MAX", PATH, patient.sex.as_deref());
+	length(
+		issues,
+		"ICH.D.5.LENGTH.MAX",
+		PATH,
+		patient.sex.as_deref(),
+		1,
+	);
 }
 
 /// ICH.D.6.FUTURE_DATE.FORBIDDEN
 fn d_6(patient: &PatientInformation, issues: &mut Vec<ValidationIssue>) {
-	validate_future_date(
+	reject_future_date(
 		issues,
 		"ICH.D.6.FUTURE_DATE.FORBIDDEN",
 		"patientInformation.lastMenstrualPeriodDate",
+		SECTION,
+		"[D.6] Last menstrual period date must not be later than today.",
 		DateValues::One(patient.last_menstrual_period_date),
 	);
 }
@@ -437,35 +469,31 @@ fn d_7_2(
 ) {
 	const PATH: &str = "patientInformation.medicalHistoryText";
 	if medical_history_is_empty {
-		required(
+		required_field(
 			issues,
 			"ICH.D.7.2.REQUIRED",
 			PATH,
-			patient.medical_history_text.as_deref(),
-			patient.medical_history_text_null_flavor.as_deref(),
-			RuleFacts::default(),
+			"[D.7.2] is required.",
+			has_text(patient.medical_history_text.as_deref())
+				|| patient.medical_history_text_null_flavor.is_some(),
 		);
 	}
-	validate_length(
+	length(
 		issues,
 		"ICH.D.7.2.LENGTH.MAX",
 		PATH,
 		patient.medical_history_text.as_deref(),
+		10000,
 	);
 }
 
 /// ICH.D.7.3.ALLOWED.VALUE
-fn d_7_3(
-	patient: &PatientInformation,
-	validation_ctx: &ValidationContext,
-	issues: &mut Vec<ValidationIssue>,
-) {
-	validate_constraint(
+fn d_7_3(patient: &PatientInformation, issues: &mut Vec<ValidationIssue>) {
+	allowed(
 		issues,
 		"ICH.D.7.3.ALLOWED.VALUE",
 		"patientInformation.concomitantTherapy",
-		true_marker_value(patient.concomitant_therapy, None),
-		&validation_ctx.vocabulary,
+		patient.concomitant_therapy != Some(false),
 	);
 }
 
@@ -481,14 +509,16 @@ fn d_7_1_r_1a(
 		issues,
 		"ICH.D.7.1.r.1a.REQUIRED",
 		&path,
+		"[D.7.1.r.1a] MedDRA version for medical history is required when [D.7.1.r.1b] is provided.",
 		has_text(episode.meddra_code.as_deref()),
 		has_text(episode.meddra_version.as_deref()),
 	);
-	validate_length(
+	length(
 		issues,
 		"ICH.D.7.1.r.1a.LENGTH.MAX",
 		&path,
 		episode.meddra_version.as_deref(),
+		4,
 	);
 }
 
@@ -504,14 +534,16 @@ fn d_7_1_r_1b(
 		issues,
 		"ICH.D.7.1.r.1b.REQUIRED",
 		&path,
+		"[D.7.1.r.1b] Medical history MedDRA code is required when [D.7.1.r.1a] is provided.",
 		has_text(episode.meddra_version.as_deref()),
 		has_text(episode.meddra_code.as_deref()),
 	);
-	validate_length(
+	length(
 		issues,
 		"ICH.D.7.1.r.1b.LENGTH.MAX",
 		&path,
 		episode.meddra_code.as_deref(),
+		8,
 	);
 }
 
@@ -525,7 +557,7 @@ fn d_7_1_r_1_meddra(
 	validation_ctx: &ValidationContext,
 	issues: &mut Vec<ValidationIssue>,
 ) {
-	validate_meddra(
+	meddra(
 		issues,
 		&validation_ctx.vocabulary,
 		"ICH.D.7.1.r.1a.ALLOWED.VALUE",
@@ -545,10 +577,12 @@ fn d_7_1_r(
 	episode: &MedicalHistoryEpisode,
 	issues: &mut Vec<ValidationIssue>,
 ) {
-	validate_future_date(
+	reject_future_date(
 		issues,
 		"ICH.D.7.1.r.FUTURE_DATE.FORBIDDEN",
 		&format!("patientInformation.medicalHistoryEpisodes.{idx}.dateRange"),
+		SECTION,
+		"[D.7.1.r] Medical history dates must not be later than today.",
 		DateValues::Two(episode.start_date, episode.end_date),
 	);
 }
@@ -559,11 +593,12 @@ fn d_7_1_r_5(
 	episode: &MedicalHistoryEpisode,
 	issues: &mut Vec<ValidationIssue>,
 ) {
-	validate_length(
+	length(
 		issues,
 		"ICH.D.7.1.r.5.LENGTH.MAX",
 		&format!("patientInformation.medicalHistory.{idx}.comments"),
 		episode.comments.as_deref(),
+		2000,
 	);
 }
 
@@ -571,15 +606,13 @@ fn d_7_1_r_5(
 fn d_7_1_r_6(
 	idx: usize,
 	episode: &MedicalHistoryEpisode,
-	validation_ctx: &ValidationContext,
 	issues: &mut Vec<ValidationIssue>,
 ) {
-	validate_constraint(
+	allowed(
 		issues,
 		"ICH.D.7.1.r.6.ALLOWED.VALUE",
 		&format!("patientInformation.medicalHistory.{idx}.familyHistory"),
-		true_marker_value(episode.family_history, None),
-		&validation_ctx.vocabulary,
+		episode.family_history != Some(false),
 	);
 }
 
@@ -611,93 +644,86 @@ fn d_7_1_r_6_parent_duplicate(
 fn d_8_r_1(idx: usize, drug: &PastDrugHistory, issues: &mut Vec<ValidationIssue>) {
 	let path = format!("patientInformation.pastDrugs.{idx}.drugName");
 	if past_drug_has_payload(drug) {
-		required(
+		required_field(
 			issues,
 			"ICH.D.8.r.1.REQUIRED",
 			&path,
-			drug.drug_name.as_deref(),
-			drug.drug_name_null_flavor.as_deref(),
-			RuleFacts::default(),
+			"[D.8.r.1] is required.",
+			has_text(drug.drug_name.as_deref())
+				|| drug.drug_name_null_flavor.is_some(),
 		);
 	}
-	validate_length(
+	length(
 		issues,
 		"ICH.D.8.r.1.LENGTH.MAX",
 		&path,
 		drug.drug_name.as_deref(),
+		250,
 	);
 }
 
 /// ICH.D.8.r.2a.LENGTH.MAX
 fn d_8_r_2a(idx: usize, drug: &PastDrugHistory, issues: &mut Vec<ValidationIssue>) {
-	validate_length(
+	length(
 		issues,
 		"ICH.D.8.r.2a.LENGTH.MAX",
 		&format!("patientInformation.pastDrugs.{idx}.mpidVersion"),
 		drug.mpid_version.as_deref(),
+		10,
 	);
 }
 
 /// ICH.D.8.r.2b.ALLOWED.VALUE
 /// ICH.D.8.r.2b.LENGTH.MAX
-fn d_8_r_2b(
-	idx: usize,
-	drug: &PastDrugHistory,
-	validation_ctx: &ValidationContext,
-	issues: &mut Vec<ValidationIssue>,
-) {
+fn d_8_r_2b(idx: usize, drug: &PastDrugHistory, issues: &mut Vec<ValidationIssue>) {
 	let path = format!("patientInformation.pastDrugs.{idx}.mpid");
-	text_constraint(
+	allowed(
 		issues,
 		"ICH.D.8.r.2b.ALLOWED.VALUE",
 		&path,
-		drug.mpid.as_deref(),
-		validation_ctx,
+		valid_identifier(drug.mpid.as_deref(), 1000),
 	);
-	validate_length(
+	length(
 		issues,
 		"ICH.D.8.r.2b.LENGTH.MAX",
 		&path,
 		drug.mpid.as_deref(),
+		1000,
 	);
 }
 
 /// ICH.D.8.r.3a.LENGTH.MAX
 fn d_8_r_3a(idx: usize, drug: &PastDrugHistory, issues: &mut Vec<ValidationIssue>) {
-	validate_length(
+	length(
 		issues,
 		"ICH.D.8.r.3a.LENGTH.MAX",
 		&format!("patientInformation.pastDrugs.{idx}.phpidVersion"),
 		drug.phpid_version.as_deref(),
+		10,
 	);
 }
 
 /// ICH.D.8.r.3b.ALLOWED.VALUE
 /// ICH.D.8.r.3b.LENGTH.MAX
-fn d_8_r_3b(
-	idx: usize,
-	drug: &PastDrugHistory,
-	validation_ctx: &ValidationContext,
-	issues: &mut Vec<ValidationIssue>,
-) {
+fn d_8_r_3b(idx: usize, drug: &PastDrugHistory, issues: &mut Vec<ValidationIssue>) {
 	let path = format!("patientInformation.pastDrugs.{idx}.phpid");
-	text_constraint(
+	allowed(
 		issues,
 		"ICH.D.8.r.3b.ALLOWED.VALUE",
 		&path,
-		drug.phpid.as_deref(),
-		validation_ctx,
+		valid_identifier(drug.phpid.as_deref(), 250),
 	);
-	validate_length(
+	length(
 		issues,
 		"ICH.D.8.r.3b.LENGTH.MAX",
 		&path,
 		drug.phpid.as_deref(),
+		250,
 	);
 }
 
 macro_rules! past_drug_meddra_field {
-	($name:ident, $suffix:literal, $path:literal, $version:ident, $code:ident) => {
+	($name:ident, $suffix:literal, $label:literal, $path:literal, $version:ident, $code:ident) => {
 		#[doc = concat!("ICH.D.8.r.", $suffix, "a.REQUIRED")]
 		#[doc = concat!("ICH.D.8.r.", $suffix, "a.LENGTH.MAX")]
 		#[doc = concat!("ICH.D.8.r.", $suffix, "b.REQUIRED")]
@@ -720,6 +746,15 @@ macro_rules! past_drug_meddra_field {
 				issues,
 				concat!("ICH.D.8.r.", $suffix, "a.REQUIRED"),
 				&version_path,
+				concat!(
+					"[D.8.r.",
+					$suffix,
+					"a] ",
+					$label,
+					" MedDRA version is required when [D.8.r.",
+					$suffix,
+					"b] is provided."
+				),
 				has_text(drug.$code.as_deref()),
 				has_text(drug.$version.as_deref()),
 			);
@@ -727,22 +762,33 @@ macro_rules! past_drug_meddra_field {
 				issues,
 				concat!("ICH.D.8.r.", $suffix, "b.REQUIRED"),
 				&code_path,
+				concat!(
+					"[D.8.r.",
+					$suffix,
+					"b] ",
+					$label,
+					" MedDRA code is required when [D.8.r.",
+					$suffix,
+					"a] is provided."
+				),
 				has_text(drug.$version.as_deref()),
 				has_text(drug.$code.as_deref()),
 			);
-			validate_length(
+			length(
 				issues,
 				concat!("ICH.D.8.r.", $suffix, "a.LENGTH.MAX"),
 				&version_path,
 				drug.$version.as_deref(),
+				4,
 			);
-			validate_length(
+			length(
 				issues,
 				concat!("ICH.D.8.r.", $suffix, "b.LENGTH.MAX"),
 				&code_path,
 				drug.$code.as_deref(),
+				8,
 			);
-			validate_meddra(
+			meddra(
 				issues,
 				&validation_ctx.vocabulary,
 				concat!("ICH.D.8.r.", $suffix, "a.ALLOWED.VALUE"),
@@ -761,6 +807,7 @@ macro_rules! past_drug_meddra_field {
 past_drug_meddra_field!(
 	d_8_r_6,
 	"6",
+	"Indication",
 	"indication",
 	indication_meddra_version,
 	indication_meddra_code
@@ -768,6 +815,7 @@ past_drug_meddra_field!(
 past_drug_meddra_field!(
 	d_8_r_7,
 	"7",
+	"Reaction",
 	"reaction",
 	reaction_meddra_version,
 	reaction_meddra_code
@@ -776,26 +824,32 @@ past_drug_meddra_field!(
 /// ICH.D.8.r.FUTURE_DATE.FORBIDDEN
 /// ICH.D.8.MPID_PHPID.EXCLUSIVE
 fn d_8_r(idx: usize, drug: &PastDrugHistory, issues: &mut Vec<ValidationIssue>) {
-	validate_future_date(
+	reject_future_date(
 		issues,
 		"ICH.D.8.r.FUTURE_DATE.FORBIDDEN",
 		&format!("patientInformation.pastDrugs.{idx}.dateRange"),
+		SECTION,
+		"[D.8.r.4/D.8.r.5] Past drug dates must not be later than today.",
 		DateValues::Two(drug.start_date, drug.end_date),
 	);
-	validate_violation(
+	reject_when(
 		issues,
 		"ICH.D.8.MPID_PHPID.EXCLUSIVE",
 		&format!("patientInformation.pastDrugs.{idx}.mpid"),
+		SECTION,
+		"[D.8.r.2b/D.8.r.3b] Any given past drug entry may have either MPID or PhPID, but not both.",
 		has_text(drug.mpid.as_deref()) && has_text(drug.phpid.as_deref()),
 	);
 }
 
 /// ICH.D.9.1.FUTURE_DATE.FORBIDDEN
 fn d_9_1(death: &PatientDeathInformation, issues: &mut Vec<ValidationIssue>) {
-	validate_future_date(
+	reject_future_date(
 		issues,
 		"ICH.D.9.1.FUTURE_DATE.FORBIDDEN",
 		"patientInformation.death.dateOfDeath",
+		SECTION,
+		"[D.9.1] Date of death must not be later than today.",
 		DateValues::One(death.date_of_death),
 	);
 }
@@ -808,6 +862,8 @@ macro_rules! death_cause_functions {
 		$comments_fn:ident,
 		$meddra_fn:ident,
 		$prefix:literal,
+		$display_prefix:literal,
+		$subject:literal,
 		$path:literal
 	) => {
 		#[doc = concat!($prefix, ".1a.REQUIRED")]
@@ -823,14 +879,24 @@ macro_rules! death_cause_functions {
 				issues,
 				concat!($prefix, ".1a.REQUIRED"),
 				&path,
+				concat!(
+					"[",
+					$display_prefix,
+					".1a] ",
+					$subject,
+					" MedDRA version is required when [",
+					$display_prefix,
+					".1b] is provided."
+				),
 				has_text(cause.meddra_code.as_deref()),
 				has_text(cause.meddra_version.as_deref()),
 			);
-			validate_length(
+			length(
 				issues,
 				concat!($prefix, ".1a.LENGTH.MAX"),
 				&path,
 				cause.meddra_version.as_deref(),
+				4,
 			);
 		}
 
@@ -843,14 +909,24 @@ macro_rules! death_cause_functions {
 				issues,
 				concat!($prefix, ".1b.REQUIRED"),
 				&path,
+				concat!(
+					"[",
+					$display_prefix,
+					".1b] ",
+					$subject,
+					" MedDRA code is required when [",
+					$display_prefix,
+					".1a] is provided."
+				),
 				has_text(cause.meddra_version.as_deref()),
 				has_text(cause.meddra_code.as_deref()),
 			);
-			validate_length(
+			length(
 				issues,
 				concat!($prefix, ".1b.LENGTH.MAX"),
 				&path,
 				cause.meddra_code.as_deref(),
+				8,
 			);
 		}
 
@@ -866,15 +942,25 @@ macro_rules! death_cause_functions {
 				issues,
 				concat!($prefix, ".2.REQUIRED"),
 				&path,
+				concat!(
+					"[",
+					$display_prefix,
+					".2] ",
+					$subject,
+					" comments are required when [",
+					$display_prefix,
+					".1] is populated."
+				),
 				has_text(cause.meddra_code.as_deref())
 					|| has_text(cause.meddra_version.as_deref()),
 				has_text(cause.comments.as_deref()),
 			);
-			validate_length(
+			length(
 				issues,
 				concat!($prefix, ".2.LENGTH.MAX"),
 				&path,
 				cause.comments.as_deref(),
+				250,
 			);
 		}
 
@@ -888,7 +974,7 @@ macro_rules! death_cause_functions {
 			validation_ctx: &ValidationContext,
 			issues: &mut Vec<ValidationIssue>,
 		) {
-			validate_meddra(
+			meddra(
 				issues,
 				&validation_ctx.vocabulary,
 				concat!($prefix, ".1a.ALLOWED.VALUE"),
@@ -911,6 +997,8 @@ death_cause_functions!(
 	d_9_2_r_2,
 	d_9_2_r_1_meddra,
 	"ICH.D.9.2.r",
+	"D.9.2.r",
+	"Reported cause of death",
 	"reportedCauses"
 );
 death_cause_functions!(
@@ -920,23 +1008,20 @@ death_cause_functions!(
 	d_9_4_r_2,
 	d_9_4_r_1_meddra,
 	"ICH.D.9.4.r",
+	"D.9.4.r",
+	"Autopsy cause of death",
 	"autopsyCauses"
 );
 
 /// ICH.D.9.3.REQUIRED
 fn d_9_3(death: &PatientDeathInformation, issues: &mut Vec<ValidationIssue>) {
-	required(
+	required_when(
 		issues,
 		"ICH.D.9.3.REQUIRED",
 		"patientInformation.death.autopsyPerformed",
-		death
-			.autopsy_performed
-			.map(|value| if value { "true" } else { "false" }),
-		None,
-		RuleFacts {
-			ich_date_of_death_present: Some(death.date_of_death.is_some()),
-			..RuleFacts::default()
-		},
+		"[D.9.3] Autopsy was performed is required when [D.9.1] date of death is provided.",
+		death.date_of_death.is_some(),
+		death.autopsy_performed.is_some(),
 	);
 }
 
@@ -946,11 +1031,12 @@ fn d_10_1(
 	parent: &ParentInformation,
 	issues: &mut Vec<ValidationIssue>,
 ) {
-	validate_length(
+	length(
 		issues,
 		"ICH.D.10.1.LENGTH.MAX",
 		&format!("patientInformation.parents.{idx}.parentIdentification"),
 		parent.parent_identification.as_deref(),
+		60,
 	);
 }
 
@@ -960,10 +1046,12 @@ fn d_10_2_1(
 	parent: &ParentInformation,
 	issues: &mut Vec<ValidationIssue>,
 ) {
-	validate_future_date(
+	reject_future_date(
 		issues,
 		"ICH.D.10.2.1.FUTURE_DATE.FORBIDDEN",
 		&format!("patientInformation.parents.{idx}.parentBirthDate"),
+		SECTION,
+		"[D.10.2.1] Parent date of birth must not be later than today.",
 		DateValues::One(parent.parent_birth_date),
 	);
 }
@@ -980,11 +1068,18 @@ fn d_10_2_2a(
 		issues,
 		"ICH.D.10.2.2a.REQUIRED",
 		&path,
+		"[D.10.2.2a] Parent age is required when [D.10.2.2b] is provided.",
 		has_text(parent.parent_age_unit.as_deref()),
 		parent.parent_age.is_some(),
 	);
 	let value = decimal_text(parent.parent_age);
-	validate_length(issues, "ICH.D.10.2.2a.LENGTH.MAX", &path, value.as_deref());
+	length(
+		issues,
+		"ICH.D.10.2.2a.LENGTH.MAX",
+		&path,
+		value.as_deref(),
+		3,
+	);
 }
 
 /// ICH.D.10.2.2b.REQUIRED
@@ -999,14 +1094,16 @@ fn d_10_2_2b(
 		issues,
 		"ICH.D.10.2.2b.REQUIRED",
 		&path,
+		"[D.10.2.2b] Parent age unit is required when [D.10.2.2a] is provided.",
 		parent.parent_age.is_some(),
 		has_text(parent.parent_age_unit.as_deref()),
 	);
-	validate_length(
+	length(
 		issues,
 		"ICH.D.10.2.2b.LENGTH.MAX",
 		&path,
 		parent.parent_age_unit.as_deref(),
+		50,
 	);
 }
 
@@ -1036,16 +1133,18 @@ fn d_10_3(
 	parent: &ParentInformation,
 	issues: &mut Vec<ValidationIssue>,
 ) {
-	validate_future_date(
+	reject_future_date(
 		issues,
 		"ICH.D.10.3.FUTURE_DATE.FORBIDDEN",
 		&format!("patientInformation.parents.{idx}.lastMenstrualPeriodDate"),
+		SECTION,
+		"[D.10.3] Parent last menstrual period date must not be later than today.",
 		DateValues::One(parent.last_menstrual_period_date),
 	);
 }
 
 macro_rules! parent_decimal_length {
-	($name:ident, $code:literal, $path:literal, $field:ident) => {
+	($name:ident, $code:literal, $path:literal, $field:ident, $max_length:literal) => {
 		#[doc = $code]
 		fn $name(
 			idx: usize,
@@ -1053,18 +1152,19 @@ macro_rules! parent_decimal_length {
 			issues: &mut Vec<ValidationIssue>,
 		) {
 			let value = decimal_text(parent.$field);
-			validate_length(
+			length(
 				issues,
 				$code,
 				&format!("patientInformation.parents.{idx}.{}", $path),
 				value.as_deref(),
+				$max_length,
 			);
 		}
 	};
 }
 
-parent_decimal_length!(d_10_4, "ICH.D.10.4.LENGTH.MAX", "weightKg", weight_kg);
-parent_decimal_length!(d_10_5, "ICH.D.10.5.LENGTH.MAX", "heightCm", height_cm);
+parent_decimal_length!(d_10_4, "ICH.D.10.4.LENGTH.MAX", "weightKg", weight_kg, 6);
+parent_decimal_length!(d_10_5, "ICH.D.10.5.LENGTH.MAX", "heightCm", height_cm, 3);
 
 /// ICH.D.10.5: parent height is a rounded integer.
 fn d_10_5_integer(
@@ -1089,7 +1189,6 @@ fn d_10_6(
 	idx: usize,
 	parent: &ParentInformation,
 	has_child_payload: bool,
-	validation_ctx: &ValidationContext,
 	issues: &mut Vec<ValidationIssue>,
 ) {
 	let path = format!("patientInformation.parents.{idx}.sex");
@@ -1106,21 +1205,22 @@ fn d_10_6(
 		issues,
 		"ICH.D.10.6.REQUIRED",
 		&path,
+		"[D.10.6] Parent sex is required when parent data is populated.",
 		has_payload,
 		has_text(parent.sex.as_deref()),
 	);
-	text_constraint(
+	allowed(
 		issues,
 		"ICH.D.10.6.ALLOWED.VALUE",
 		&path,
-		parent.sex.as_deref(),
-		validation_ctx,
+		valid_code(parent.sex.as_deref(), &["1", "2"]),
 	);
-	validate_length(
+	length(
 		issues,
 		"ICH.D.10.6.LENGTH.MAX",
 		&path,
 		parent.sex.as_deref(),
+		1,
 	);
 }
 
@@ -1130,11 +1230,12 @@ fn d_10_7_2(
 	parent: &ParentInformation,
 	issues: &mut Vec<ValidationIssue>,
 ) {
-	validate_length(
+	length(
 		issues,
 		"ICH.D.10.7.2.LENGTH.MAX",
 		&format!("patientInformation.parents.{idx}.medicalHistoryText"),
 		parent.medical_history_text.as_deref(),
+		10000,
 	);
 }
 
@@ -1153,14 +1254,16 @@ fn d_10_7_1_r_1a(
 		issues,
 		"ICH.D.10.7.1.r.1a.REQUIRED",
 		&path,
+		"[D.10.7.1.r.1a] Parent medical history MedDRA version is required when [D.10.7.1.r.1b] is provided.",
 		has_text(episode.meddra_code.as_deref()),
 		has_text(episode.meddra_version.as_deref()),
 	);
-	validate_length(
+	length(
 		issues,
 		"ICH.D.10.7.1.r.1a.LENGTH.MAX",
 		&path,
 		episode.meddra_version.as_deref(),
+		4,
 	);
 }
 
@@ -1179,14 +1282,16 @@ fn d_10_7_1_r_1b(
 		issues,
 		"ICH.D.10.7.1.r.1b.REQUIRED",
 		&path,
+		"[D.10.7.1.r.1b] Parent medical history MedDRA code is required when [D.10.7.1.r.1a] is provided.",
 		has_text(episode.meddra_version.as_deref()),
 		has_text(episode.meddra_code.as_deref()),
 	);
-	validate_length(
+	length(
 		issues,
 		"ICH.D.10.7.1.r.1b.LENGTH.MAX",
 		&path,
 		episode.meddra_code.as_deref(),
+		8,
 	);
 }
 
@@ -1201,7 +1306,7 @@ fn d_10_7_1_r_1_meddra(
 	validation_ctx: &ValidationContext,
 	issues: &mut Vec<ValidationIssue>,
 ) {
-	validate_meddra(
+	meddra(
 		issues,
 		&validation_ctx.vocabulary,
 		"ICH.D.10.7.1.r.1a.ALLOWED.VALUE",
@@ -1226,12 +1331,14 @@ fn d_10_7_1_r(
 	episode: &ParentMedicalHistory,
 	issues: &mut Vec<ValidationIssue>,
 ) {
-	validate_future_date(
+	reject_future_date(
 		issues,
 		"ICH.D.10.7.1.r.FUTURE_DATE.FORBIDDEN",
 		&format!(
 			"patientInformation.parents.{parent_idx}.medicalHistory.{idx}.dateRange"
 		),
+		SECTION,
+		"[D.10.7.1.r.2/D.10.7.1.r.4] Parent medical history dates must not be later than today.",
 		DateValues::Two(episode.start_date, episode.end_date),
 	);
 }
@@ -1243,13 +1350,14 @@ fn d_10_7_1_r_5(
 	episode: &ParentMedicalHistory,
 	issues: &mut Vec<ValidationIssue>,
 ) {
-	validate_length(
+	length(
 		issues,
 		"ICH.D.10.7.1.r.5.LENGTH.MAX",
 		&format!(
 			"patientInformation.parents.{parent_idx}.medicalHistory.{idx}.comments"
 		),
 		episode.comments.as_deref(),
+		2000,
 	);
 }
 
@@ -1260,11 +1368,12 @@ fn d_10_8_r_1(
 	drug: &ParentPastDrugHistory,
 	issues: &mut Vec<ValidationIssue>,
 ) {
-	validate_length(
+	length(
 		issues,
 		"ICH.D.10.8.r.1.LENGTH.MAX",
 		&format!("patientInformation.parents.{parent_idx}.pastDrugs.{idx}.drugName"),
 		drug.drug_name.as_deref(),
+		250,
 	);
 }
 
@@ -1283,14 +1392,16 @@ fn d_10_8_r_2a(
 		issues,
 		"ICH.D.10.8.r.2a.REQUIRED",
 		&path,
+		"[D.10.8.r.2a] Parent past drug MPID version is required when [D.10.8.r.2b] MPID is populated.",
 		has_text(drug.mpid.as_deref()),
 		has_text(drug.mpid_version.as_deref()),
 	);
-	validate_length(
+	length(
 		issues,
 		"ICH.D.10.8.r.2a.LENGTH.MAX",
 		&path,
 		drug.mpid_version.as_deref(),
+		10,
 	);
 }
 
@@ -1300,23 +1411,22 @@ fn d_10_8_r_2b(
 	parent_idx: usize,
 	idx: usize,
 	drug: &ParentPastDrugHistory,
-	validation_ctx: &ValidationContext,
 	issues: &mut Vec<ValidationIssue>,
 ) {
 	let path =
 		format!("patientInformation.parents.{parent_idx}.pastDrugs.{idx}.mpid");
-	text_constraint(
+	allowed(
 		issues,
 		"ICH.D.10.8.r.2b.ALLOWED.VALUE",
 		&path,
-		drug.mpid.as_deref(),
-		validation_ctx,
+		valid_identifier(drug.mpid.as_deref(), 1000),
 	);
-	validate_length(
+	length(
 		issues,
 		"ICH.D.10.8.r.2b.LENGTH.MAX",
 		&path,
 		drug.mpid.as_deref(),
+		1000,
 	);
 }
 
@@ -1335,14 +1445,16 @@ fn d_10_8_r_3a(
 		issues,
 		"ICH.D.10.8.r.3a.REQUIRED",
 		&path,
+		"[D.10.8.r.3a] Parent past drug PhPID version is required when [D.10.8.r.3b] PhPID is populated.",
 		has_text(drug.phpid.as_deref()),
 		has_text(drug.phpid_version.as_deref()),
 	);
-	validate_length(
+	length(
 		issues,
 		"ICH.D.10.8.r.3a.LENGTH.MAX",
 		&path,
 		drug.phpid_version.as_deref(),
+		10,
 	);
 }
 
@@ -1352,28 +1464,27 @@ fn d_10_8_r_3b(
 	parent_idx: usize,
 	idx: usize,
 	drug: &ParentPastDrugHistory,
-	validation_ctx: &ValidationContext,
 	issues: &mut Vec<ValidationIssue>,
 ) {
 	let path =
 		format!("patientInformation.parents.{parent_idx}.pastDrugs.{idx}.phpid");
-	text_constraint(
+	allowed(
 		issues,
 		"ICH.D.10.8.r.3b.ALLOWED.VALUE",
 		&path,
-		drug.phpid.as_deref(),
-		validation_ctx,
+		valid_identifier(drug.phpid.as_deref(), 250),
 	);
-	validate_length(
+	length(
 		issues,
 		"ICH.D.10.8.r.3b.LENGTH.MAX",
 		&path,
 		drug.phpid.as_deref(),
+		250,
 	);
 }
 
 macro_rules! parent_past_drug_meddra_field {
-	($name:ident, $suffix:literal, $path:literal, $version:ident, $code:ident) => {
+	($name:ident, $suffix:literal, $label:literal, $path:literal, $version:ident, $code:ident) => {
 		#[doc = concat!("ICH.D.10.8.r.", $suffix, "a.REQUIRED")]
 		#[doc = concat!("ICH.D.10.8.r.", $suffix, "a.LENGTH.MAX")]
 		#[doc = concat!("ICH.D.10.8.r.", $suffix, "b.REQUIRED")]
@@ -1401,6 +1512,7 @@ macro_rules! parent_past_drug_meddra_field {
 				issues,
 				concat!("ICH.D.10.8.r.", $suffix, "a.REQUIRED"),
 				&version_path,
+				concat!("[D.10.8.r.", $suffix, "a] ", $label, " MedDRA version is required when [D.10.8.r.", $suffix, "b] is provided."),
 				has_text(drug.$code.as_deref()),
 				has_text(drug.$version.as_deref()),
 			);
@@ -1408,22 +1520,25 @@ macro_rules! parent_past_drug_meddra_field {
 				issues,
 				concat!("ICH.D.10.8.r.", $suffix, "b.REQUIRED"),
 				&code_path,
+				concat!("[D.10.8.r.", $suffix, "b] ", $label, " MedDRA code is required when [D.10.8.r.", $suffix, "a] is provided."),
 				has_text(drug.$version.as_deref()),
 				has_text(drug.$code.as_deref()),
 			);
-			validate_length(
+			length(
 				issues,
 				concat!("ICH.D.10.8.r.", $suffix, "a.LENGTH.MAX"),
 				&version_path,
 				drug.$version.as_deref(),
+				4,
 			);
-			validate_length(
+			length(
 				issues,
 				concat!("ICH.D.10.8.r.", $suffix, "b.LENGTH.MAX"),
 				&code_path,
 				drug.$code.as_deref(),
+				8,
 			);
-			validate_meddra(
+			meddra(
 				issues,
 				&validation_ctx.vocabulary,
 				concat!("ICH.D.10.8.r.", $suffix, "a.ALLOWED.VALUE"),
@@ -1442,6 +1557,7 @@ macro_rules! parent_past_drug_meddra_field {
 parent_past_drug_meddra_field!(
 	d_10_8_r_6,
 	"6",
+	"Parent past drug indication",
 	"indication",
 	indication_meddra_version,
 	indication_meddra_code
@@ -1449,6 +1565,7 @@ parent_past_drug_meddra_field!(
 parent_past_drug_meddra_field!(
 	d_10_8_r_7,
 	"7",
+	"Parent past drug reaction",
 	"reaction",
 	reaction_meddra_version,
 	reaction_meddra_code
@@ -1462,18 +1579,22 @@ fn d_10_8_r(
 	drug: &ParentPastDrugHistory,
 	issues: &mut Vec<ValidationIssue>,
 ) {
-	validate_future_date(
+	reject_future_date(
 		issues,
 		"ICH.D.10.8.r.FUTURE_DATE.FORBIDDEN",
 		&format!(
 			"patientInformation.parents.{parent_idx}.pastDrugs.{idx}.dateRange"
 		),
+		SECTION,
+		"[D.10.8.r.4/D.10.8.r.5] Parent past drug dates must not be later than today.",
 		DateValues::Two(drug.start_date, drug.end_date),
 	);
-	validate_violation(
+	reject_when(
 		issues,
 		"ICH.D.10.8.MPID_PHPID.EXCLUSIVE",
 		&format!("patientInformation.parents.{parent_idx}.pastDrugs.{idx}.mpid"),
+		SECTION,
+		"[D.10.8.r.2b/D.10.8.r.3b] Any given parent past drug entry may have either MPID or PhPID, but not both.",
 		has_text(drug.mpid.as_deref()) && has_text(drug.phpid.as_deref()),
 	);
 }
@@ -1482,40 +1603,38 @@ fn d_10_8_r(
 /// FDA.D.11.REQUIRED
 fn fda_d_11(patient: &PatientInformation, issues: &mut Vec<ValidationIssue>) {
 	const PATH: &str = "patientInformation.raceCode";
-	let facts = RuleFacts {
-		fda_patient_payload_present: Some(true),
-		..RuleFacts::default()
-	};
-	required(
+	let valid = matches!(
+		patient.race_code.as_deref().map(str::trim),
+		Some("C16352" | "C41259" | "C41260" | "C41219" | "C41261")
+	) || patient.race_code_null_flavor.is_some();
+	required_field(
 		issues,
 		"FDA.D.11.r.1.REQUIRED",
 		PATH,
-		patient.race_code.as_deref(),
-		patient.race_code_null_flavor.as_deref(),
-		facts,
+		"FDA requires [D.11.r.1].",
+		valid,
 	);
-	required(
+	required_field(
 		issues,
 		"FDA.D.11.REQUIRED",
 		PATH,
-		patient.race_code.as_deref(),
-		patient.race_code_null_flavor.as_deref(),
-		facts,
+		"FDA requires [D.11] patient race when patient payload is present.",
+		valid,
 	);
 }
 
 /// FDA.D.12.REQUIRED
 fn fda_d_12(patient: &PatientInformation, issues: &mut Vec<ValidationIssue>) {
-	required(
+	let valid = matches!(
+		patient.ethnicity_code.as_deref().map(str::trim),
+		Some("C17459" | "C41222")
+	) || patient.ethnicity_code_null_flavor.is_some();
+	required_field(
 		issues,
 		"FDA.D.12.REQUIRED",
 		"patientInformation.ethnicityCode",
-		patient.ethnicity_code.as_deref(),
-		patient.ethnicity_code_null_flavor.as_deref(),
-		RuleFacts {
-			fda_patient_payload_present: Some(true),
-			..RuleFacts::default()
-		},
+		"FDA requires [D.12] patient ethnicity when patient payload is present.",
+		valid,
 	);
 }
 
@@ -1725,27 +1844,27 @@ fn mfds_d_8_r_1_kr_1b(
 ) {
 	let path =
 		format!("patientInformation.pastDrugHistory.{idx}.mfdsMedicinalProductId");
-	validate_vocabulary_variant(
+	reject_when(
 		issues,
 		"MFDS.D.8.r.1.KR.1b.VOCABULARY",
 		&path,
-		vocabulary_receiver,
-		past.mfds_medicinal_product_id.as_deref(),
-		&validation_ctx.vocabulary,
+		SECTION,
+		"Dictionary receiver-specific vocabulary constraint.",
+		!valid_mfds_product(
+			&validation_ctx.vocabulary,
+			vocabulary_receiver,
+			past.mfds_medicinal_product_id.as_deref(),
+		),
 	);
-	required(
+	warn_when(
 		issues,
 		"MFDS.D.8.r.1.KR.1b.REQUIRED",
 		&path,
-		past.mfds_medicinal_product_id.as_deref(),
-		None,
-		RuleFacts {
-			mfds_past_drug_code_required_context: Some(
-				receiver_is_kr_or_fr
-					&& !has_text(past.drug_name_null_flavor.as_deref()),
-			),
-			..RuleFacts::default()
-		},
+		SECTION,
+		"MFDS requires past drug code [D.8.r.1.KR.1b] for KR/FR receiver authorities.",
+		receiver_is_kr_or_fr
+			&& !has_text(past.drug_name_null_flavor.as_deref())
+			&& !has_text(past.mfds_medicinal_product_id.as_deref()),
 	);
 }
 
@@ -1756,21 +1875,17 @@ fn mfds_d_8_r_1_kr_1a(
 	receiver_is_fr: bool,
 	issues: &mut Vec<ValidationIssue>,
 ) {
-	required(
+	warn_when(
 		issues,
 		"MFDS.D.8.r.1.KR.1a.REQUIRED",
 		&format!(
 			"patientInformation.pastDrugHistory.{idx}.mfdsMedicinalProductVersion"
 		),
-		past.mfds_medicinal_product_version.as_deref(),
-		None,
-		RuleFacts {
-			mfds_past_drug_version_required_context: Some(
-				receiver_is_fr
-					&& has_text(past.mfds_medicinal_product_id.as_deref()),
-			),
-			..RuleFacts::default()
-		},
+		SECTION,
+		"MFDS requires past drug code version [D.8.r.1.KR.1a] for FR when [D.8.r.1.KR.1b] is provided.",
+		receiver_is_fr
+			&& has_text(past.mfds_medicinal_product_id.as_deref())
+			&& !has_text(past.mfds_medicinal_product_version.as_deref()),
 	);
 }
 
@@ -1788,24 +1903,25 @@ fn mfds_d_10_8_r_1_kr_1b(
 	let path = format!(
 		"patientInformation.parents.{parent_idx}.pastDrugs.{idx}.mfdsMedicinalProductId"
 	);
-	validate_vocabulary_variant(
+	reject_when(
 		issues,
 		"MFDS.D.10.8.r.1.KR.1b.VOCABULARY",
 		&path,
-		vocabulary_receiver,
-		past.mfds_medicinal_product_id.as_deref(),
-		&validation_ctx.vocabulary,
+		SECTION,
+		"Dictionary receiver-specific vocabulary constraint.",
+		!valid_mfds_product(
+			&validation_ctx.vocabulary,
+			vocabulary_receiver,
+			past.mfds_medicinal_product_id.as_deref(),
+		),
 	);
-	required(
+	warn_when(
 		issues,
 		"MFDS.D.10.8.r.1.KR.1b.REQUIRED",
 		&path,
-		past.mfds_medicinal_product_id.as_deref(),
-		None,
-		RuleFacts {
-			mfds_parent_past_drug_code_required_context: Some(receiver_is_kr_or_fr),
-			..RuleFacts::default()
-		},
+		SECTION,
+		"MFDS requires parent past drug code [D.10.8.r.1.KR.1b] for KR/FR receiver authorities.",
+		receiver_is_kr_or_fr && !has_text(past.mfds_medicinal_product_id.as_deref()),
 	);
 }
 
@@ -1817,20 +1933,17 @@ fn mfds_d_10_8_r_1_kr_1a(
 	receiver_is_fr: bool,
 	issues: &mut Vec<ValidationIssue>,
 ) {
-	required(
+	warn_when(
 		issues,
 		"MFDS.D.10.8.r.1.KR.1a.REQUIRED",
 		&format!(
 			"patientInformation.parents.{parent_idx}.pastDrugs.{idx}.mfdsMedicinalProductVersion"
 		),
-		past.mfds_medicinal_product_version.as_deref(),
-		None,
-		RuleFacts {
-			mfds_parent_past_drug_version_required_context: Some(
-				receiver_is_fr && has_text(past.mfds_medicinal_product_id.as_deref()),
-			),
-			..RuleFacts::default()
-		},
+		SECTION,
+		"MFDS requires parent past drug code version [D.10.8.r.1.KR.1a] for FR when [D.10.8.r.1.KR.1b] is provided.",
+		receiver_is_fr
+			&& has_text(past.mfds_medicinal_product_id.as_deref())
+			&& !has_text(past.mfds_medicinal_product_version.as_deref()),
 	);
 }
 
@@ -1897,14 +2010,14 @@ pub(crate) fn collect_ich_issues(
 		d_2_2b(patient, issues);
 		d_2_2_1a(patient, issues);
 		d_2_2_1b(patient, issues);
-		d_2_3(patient, validation_ctx, issues);
+		d_2_3(patient, issues);
 		d_3(patient, issues);
 		d_4(patient, issues);
 		d_4_integer(patient, issues);
-		d_5(patient, validation_ctx, issues);
+		d_5(patient, issues);
 		d_6(patient, issues);
 		d_7_2(patient, validation_ctx.medical_history.is_empty(), issues);
-		d_7_3(patient, validation_ctx, issues);
+		d_7_3(patient, issues);
 	}
 	for (idx, episode) in validation_ctx.medical_history.iter().enumerate() {
 		d_7_1_r_1a(idx, episode, issues);
@@ -1912,7 +2025,7 @@ pub(crate) fn collect_ich_issues(
 		d_7_1_r_1_meddra(idx, episode, validation_ctx, issues);
 		d_7_1_r(idx, episode, issues);
 		d_7_1_r_5(idx, episode, issues);
-		d_7_1_r_6(idx, episode, validation_ctx, issues);
+		d_7_1_r_6(idx, episode, issues);
 		d_7_1_r_6_parent_duplicate(
 			idx,
 			episode,
@@ -1923,9 +2036,9 @@ pub(crate) fn collect_ich_issues(
 	for (idx, drug) in validation_ctx.past_drugs.iter().enumerate() {
 		d_8_r_1(idx, drug, issues);
 		d_8_r_2a(idx, drug, issues);
-		d_8_r_2b(idx, drug, validation_ctx, issues);
+		d_8_r_2b(idx, drug, issues);
 		d_8_r_3a(idx, drug, issues);
-		d_8_r_3b(idx, drug, validation_ctx, issues);
+		d_8_r_3b(idx, drug, issues);
 		d_8_r_6(idx, drug, validation_ctx, issues);
 		d_8_r_7(idx, drug, validation_ctx, issues);
 		d_8_r(idx, drug, issues);
@@ -1964,7 +2077,7 @@ pub(crate) fn collect_ich_issues(
 				.parent_past_drugs
 				.iter()
 				.any(|drug| drug.parent_id == parent.id);
-		d_10_6(idx, parent, has_child_payload, validation_ctx, issues);
+		d_10_6(idx, parent, has_child_payload, issues);
 		d_10_7_2(idx, parent, issues);
 	}
 
@@ -1995,9 +2108,9 @@ pub(crate) fn collect_ich_issues(
 		*fallback += 1;
 		d_10_8_r_1(parent_idx, idx, drug, issues);
 		d_10_8_r_2a(parent_idx, idx, drug, issues);
-		d_10_8_r_2b(parent_idx, idx, drug, validation_ctx, issues);
+		d_10_8_r_2b(parent_idx, idx, drug, issues);
 		d_10_8_r_3a(parent_idx, idx, drug, issues);
-		d_10_8_r_3b(parent_idx, idx, drug, validation_ctx, issues);
+		d_10_8_r_3b(parent_idx, idx, drug, issues);
 		d_10_8_r_6(parent_idx, idx, drug, validation_ctx, issues);
 		d_10_8_r_7(parent_idx, idx, drug, validation_ctx, issues);
 		d_10_8_r(parent_idx, idx, drug, issues);
@@ -2094,185 +2207,6 @@ pub(crate) fn collect_mfds_issues(
 		);
 		mfds_d_10_8_r_1_kr_1a(parent_idx, idx, past, receiver_is_fr, issues);
 	}
-}
-#[cfg(test)]
-pub(super) fn constraint_rule_codes() -> Vec<&'static str> {
-	vec![
-		"ICH.D.2.3.ALLOWED.VALUE",
-		"ICH.D.5.ALLOWED.VALUE",
-		"ICH.D.7.3.ALLOWED.VALUE",
-		"ICH.D.7.1.r.6.ALLOWED.VALUE",
-		"ICH.D.10.6.ALLOWED.VALUE",
-		"ICH.D.8.r.2b.ALLOWED.VALUE",
-		"ICH.D.8.r.3b.ALLOWED.VALUE",
-		"ICH.D.10.8.r.2b.ALLOWED.VALUE",
-		"ICH.D.10.8.r.3b.ALLOWED.VALUE",
-		"ICH.D.7.1.r.1a.ALLOWED.VALUE",
-		"ICH.D.7.1.r.1b.ALLOWED.VALUE",
-		"ICH.D.8.r.6a.ALLOWED.VALUE",
-		"ICH.D.8.r.6b.ALLOWED.VALUE",
-		"ICH.D.8.r.7a.ALLOWED.VALUE",
-		"ICH.D.8.r.7b.ALLOWED.VALUE",
-		"ICH.D.9.2.r.1a.ALLOWED.VALUE",
-		"ICH.D.9.2.r.1b.ALLOWED.VALUE",
-		"ICH.D.9.4.r.1a.ALLOWED.VALUE",
-		"ICH.D.9.4.r.1b.ALLOWED.VALUE",
-		"ICH.D.10.7.1.r.1a.ALLOWED.VALUE",
-		"ICH.D.10.7.1.r.1b.ALLOWED.VALUE",
-		"ICH.D.10.8.r.6a.ALLOWED.VALUE",
-		"ICH.D.10.8.r.6b.ALLOWED.VALUE",
-		"ICH.D.10.8.r.7a.ALLOWED.VALUE",
-		"ICH.D.10.8.r.7b.ALLOWED.VALUE",
-	]
-}
-#[cfg(test)]
-pub(super) fn implemented_rule_codes() -> Vec<&'static str> {
-	vec![
-		"FDA.D.11.REQUIRED",
-		"FDA.D.11.r.1.REQUIRED",
-		"FDA.D.12.REQUIRED",
-		"ICH.D.1.1.1.LENGTH.MAX",
-		"ICH.D.1.1.2.LENGTH.MAX",
-		"ICH.D.1.1.3.LENGTH.MAX",
-		"ICH.D.1.1.4.LENGTH.MAX",
-		"ICH.D.1.1.4.REQUIRED",
-		"ICH.D.1.LENGTH.MAX",
-		"ICH.D.1.REQUIRED",
-		"ICH.D.10.1.LENGTH.MAX",
-		"ICH.D.10.2.1.FUTURE_DATE.FORBIDDEN",
-		"ICH.D.10.2.2a.LENGTH.MAX",
-		"ICH.D.10.2.2a.REQUIRED",
-		"ICH.D.10.2.2b.LENGTH.MAX",
-		"ICH.D.10.2.2b.REQUIRED",
-		"ICH.D.10.3.FUTURE_DATE.FORBIDDEN",
-		"ICH.D.10.4.LENGTH.MAX",
-		"ICH.D.10.5.LENGTH.MAX",
-		"ICH.D.10.6.ALLOWED.VALUE",
-		"ICH.D.10.6.LENGTH.MAX",
-		"ICH.D.10.6.REQUIRED",
-		"ICH.D.10.7.1.r.1a.ALLOWED.VALUE",
-		"ICH.D.10.7.1.r.1a.LENGTH.MAX",
-		"ICH.D.10.7.1.r.1a.REQUIRED",
-		"ICH.D.10.7.1.r.1a.VOCABULARY",
-		"ICH.D.10.7.1.r.1b.ALLOWED.VALUE",
-		"ICH.D.10.7.1.r.1b.LENGTH.MAX",
-		"ICH.D.10.7.1.r.1b.REQUIRED",
-		"ICH.D.10.7.1.r.1b.VOCABULARY",
-		"ICH.D.10.7.1.r.5.LENGTH.MAX",
-		"ICH.D.10.7.1.r.FUTURE_DATE.FORBIDDEN",
-		"ICH.D.10.7.2.LENGTH.MAX",
-		"ICH.D.10.8.MPID_PHPID.EXCLUSIVE",
-		"ICH.D.10.8.r.1.LENGTH.MAX",
-		"ICH.D.10.8.r.2a.LENGTH.MAX",
-		"ICH.D.10.8.r.2a.REQUIRED",
-		"ICH.D.10.8.r.2b.ALLOWED.VALUE",
-		"ICH.D.10.8.r.2b.LENGTH.MAX",
-		"ICH.D.10.8.r.3a.LENGTH.MAX",
-		"ICH.D.10.8.r.3a.REQUIRED",
-		"ICH.D.10.8.r.3b.ALLOWED.VALUE",
-		"ICH.D.10.8.r.3b.LENGTH.MAX",
-		"ICH.D.10.8.r.6a.ALLOWED.VALUE",
-		"ICH.D.10.8.r.6a.LENGTH.MAX",
-		"ICH.D.10.8.r.6a.REQUIRED",
-		"ICH.D.10.8.r.6a.VOCABULARY",
-		"ICH.D.10.8.r.6b.ALLOWED.VALUE",
-		"ICH.D.10.8.r.6b.LENGTH.MAX",
-		"ICH.D.10.8.r.6b.REQUIRED",
-		"ICH.D.10.8.r.6b.VOCABULARY",
-		"ICH.D.10.8.r.7a.ALLOWED.VALUE",
-		"ICH.D.10.8.r.7a.LENGTH.MAX",
-		"ICH.D.10.8.r.7a.REQUIRED",
-		"ICH.D.10.8.r.7a.VOCABULARY",
-		"ICH.D.10.8.r.7b.ALLOWED.VALUE",
-		"ICH.D.10.8.r.7b.LENGTH.MAX",
-		"ICH.D.10.8.r.7b.REQUIRED",
-		"ICH.D.10.8.r.7b.VOCABULARY",
-		"ICH.D.10.8.r.FUTURE_DATE.FORBIDDEN",
-		"ICH.D.2.1.FUTURE_DATE.FORBIDDEN",
-		"ICH.D.2.2.1a.LENGTH.MAX",
-		"ICH.D.2.2.1a.REQUIRED",
-		"ICH.D.2.2.1b.LENGTH.MAX",
-		"ICH.D.2.2.1b.REQUIRED",
-		"ICH.D.2.2a.LENGTH.MAX",
-		"ICH.D.2.2a.REQUIRED",
-		"ICH.D.2.2b.LENGTH.MAX",
-		"ICH.D.2.2b.REQUIRED",
-		"ICH.D.2.3.ALLOWED.VALUE",
-		"ICH.D.2.3.LENGTH.MAX",
-		"ICH.D.3.LENGTH.MAX",
-		"ICH.D.4.LENGTH.MAX",
-		"ICH.D.5.ALLOWED.VALUE",
-		"ICH.D.5.LENGTH.MAX",
-		"ICH.D.6.FUTURE_DATE.FORBIDDEN",
-		"ICH.D.7.1.r.1a.ALLOWED.VALUE",
-		"ICH.D.7.1.r.1a.LENGTH.MAX",
-		"ICH.D.7.1.r.1a.REQUIRED",
-		"ICH.D.7.1.r.1a.VOCABULARY",
-		"ICH.D.7.1.r.1b.ALLOWED.VALUE",
-		"ICH.D.7.1.r.1b.LENGTH.MAX",
-		"ICH.D.7.1.r.1b.REQUIRED",
-		"ICH.D.7.1.r.1b.VOCABULARY",
-		"ICH.D.7.1.r.5.LENGTH.MAX",
-		"ICH.D.7.1.r.6.ALLOWED.VALUE",
-		"ICH.D.7.1.r.FUTURE_DATE.FORBIDDEN",
-		"ICH.D.7.2.LENGTH.MAX",
-		"ICH.D.7.2.REQUIRED",
-		"ICH.D.7.3.ALLOWED.VALUE",
-		"ICH.D.8.MPID_PHPID.EXCLUSIVE",
-		"ICH.D.8.r.1.LENGTH.MAX",
-		"ICH.D.8.r.1.REQUIRED",
-		"ICH.D.8.r.2a.LENGTH.MAX",
-		"ICH.D.8.r.2b.ALLOWED.VALUE",
-		"ICH.D.8.r.2b.LENGTH.MAX",
-		"ICH.D.8.r.3a.LENGTH.MAX",
-		"ICH.D.8.r.3b.ALLOWED.VALUE",
-		"ICH.D.8.r.3b.LENGTH.MAX",
-		"ICH.D.8.r.6a.ALLOWED.VALUE",
-		"ICH.D.8.r.6a.LENGTH.MAX",
-		"ICH.D.8.r.6a.REQUIRED",
-		"ICH.D.8.r.6a.VOCABULARY",
-		"ICH.D.8.r.6b.ALLOWED.VALUE",
-		"ICH.D.8.r.6b.LENGTH.MAX",
-		"ICH.D.8.r.6b.REQUIRED",
-		"ICH.D.8.r.6b.VOCABULARY",
-		"ICH.D.8.r.7a.ALLOWED.VALUE",
-		"ICH.D.8.r.7a.LENGTH.MAX",
-		"ICH.D.8.r.7a.REQUIRED",
-		"ICH.D.8.r.7a.VOCABULARY",
-		"ICH.D.8.r.7b.ALLOWED.VALUE",
-		"ICH.D.8.r.7b.LENGTH.MAX",
-		"ICH.D.8.r.7b.REQUIRED",
-		"ICH.D.8.r.7b.VOCABULARY",
-		"ICH.D.8.r.FUTURE_DATE.FORBIDDEN",
-		"ICH.D.9.1.FUTURE_DATE.FORBIDDEN",
-		"ICH.D.9.2.r.1a.ALLOWED.VALUE",
-		"ICH.D.9.2.r.1a.LENGTH.MAX",
-		"ICH.D.9.2.r.1a.REQUIRED",
-		"ICH.D.9.2.r.1a.VOCABULARY",
-		"ICH.D.9.2.r.1b.ALLOWED.VALUE",
-		"ICH.D.9.2.r.1b.LENGTH.MAX",
-		"ICH.D.9.2.r.1b.REQUIRED",
-		"ICH.D.9.2.r.1b.VOCABULARY",
-		"ICH.D.9.2.r.2.LENGTH.MAX",
-		"ICH.D.9.2.r.2.REQUIRED",
-		"ICH.D.9.3.REQUIRED",
-		"ICH.D.9.4.r.1a.ALLOWED.VALUE",
-		"ICH.D.9.4.r.1a.LENGTH.MAX",
-		"ICH.D.9.4.r.1a.REQUIRED",
-		"ICH.D.9.4.r.1a.VOCABULARY",
-		"ICH.D.9.4.r.1b.ALLOWED.VALUE",
-		"ICH.D.9.4.r.1b.LENGTH.MAX",
-		"ICH.D.9.4.r.1b.REQUIRED",
-		"ICH.D.9.4.r.1b.VOCABULARY",
-		"ICH.D.9.4.r.2.LENGTH.MAX",
-		"ICH.D.9.4.r.2.REQUIRED",
-		"MFDS.D.10.8.r.1.KR.1a.REQUIRED",
-		"MFDS.D.10.8.r.1.KR.1b.REQUIRED",
-		"MFDS.D.10.8.r.1.KR.1b.VOCABULARY",
-		"MFDS.D.8.r.1.KR.1a.REQUIRED",
-		"MFDS.D.8.r.1.KR.1b.REQUIRED",
-		"MFDS.D.8.r.1.KR.1b.VOCABULARY",
-	]
 }
 #[cfg(test)]
 mod golden_companion_tests {
@@ -3376,5 +3310,79 @@ mod golden_companion_tests {
 		assert!(!issues
 			.iter()
 			.any(|issue| issue.code == "MFDS.D.8.r.1.KR.1b.REQUIRED"));
+	}
+
+	#[test]
+	fn golden_d_issue_metadata() {
+		let mut issues = Vec::new();
+		d_1(None, false, &mut issues);
+		let mut patient = patient();
+		patient.age_group = Some("9".to_string());
+		d_2_3(&patient, &mut issues);
+		let past = crate::PastDrugByCase {
+			drug_name_null_flavor: None,
+			mpid: None,
+			mpid_version: None,
+			mfds_medicinal_product_id: Some("product".to_string()),
+			mfds_medicinal_product_version: None,
+		};
+		mfds_d_8_r_1_kr_1a(4, &past, true, &mut issues);
+
+		let mut out = issues
+			.into_iter()
+			.filter(|issue| {
+				matches!(
+					issue.code.as_str(),
+					"ICH.D.1.REQUIRED"
+						| "ICH.D.2.3.ALLOWED.VALUE"
+						| "MFDS.D.8.r.1.KR.1a.REQUIRED"
+				)
+			})
+			.map(|issue| {
+				(
+					issue.code,
+					issue.message,
+					issue.path,
+					issue.field_path,
+					issue.section,
+					issue.subsection,
+					issue.blocking,
+				)
+			})
+			.collect::<Vec<_>>();
+		out.sort_by(|left, right| left.0.cmp(&right.0));
+
+		assert_eq!(
+			out,
+			vec![
+				(
+					"ICH.D.1.REQUIRED".to_string(),
+					"[D.1] This Element is required.".to_string(),
+					"patientInformation.patientInitials".to_string(),
+					Some("patientInformation.patientInitials".to_string()),
+					"patient".to_string(),
+					"D.1".to_string(),
+					true,
+				),
+				(
+					"ICH.D.2.3.ALLOWED.VALUE".to_string(),
+					"Dictionary allowed values constraint.".to_string(),
+					"patientInformation.patientAgeGroup".to_string(),
+					Some("patientInformation.patientAgeGroup".to_string()),
+					"patient".to_string(),
+					"D.2".to_string(),
+					true,
+				),
+				(
+					"MFDS.D.8.r.1.KR.1a.REQUIRED".to_string(),
+					"MFDS requires past drug code version [D.8.r.1.KR.1a] for FR when [D.8.r.1.KR.1b] is provided.".to_string(),
+					"patientInformation.pastDrugHistory.4.mfdsMedicinalProductVersion".to_string(),
+					Some("patientInformation.pastDrugHistory.4.mfdsMedicinalProductVersion".to_string()),
+					"patient".to_string(),
+					"D.8.r".to_string(),
+					false,
+				),
+			],
+		);
 	}
 }

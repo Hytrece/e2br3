@@ -47,7 +47,6 @@ fn protected_inventory_covers_every_api_route_family() {
 		"routes_case_query",
 		"routes_import",
 		"routes_audit",
-		"routes_validation",
 		"routes_submissions",
 	];
 	assert_eq!(
