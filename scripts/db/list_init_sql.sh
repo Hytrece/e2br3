@@ -22,7 +22,8 @@ list_group() {
     return
   fi
 
-  LC_ALL=C find "${group_dir}" -maxdepth 1 -type f -name '*.sql' -exec basename {} \; | sort |
+  LC_ALL=C find "${group_dir}" -maxdepth 1 -type f -name '*.sql' -exec basename {} \; |
+    LC_ALL=C sort |
   while IFS= read -r file; do
     printf '%s/%s\n' "${group_name}" "${file}"
   done
