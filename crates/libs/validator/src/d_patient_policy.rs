@@ -26,7 +26,10 @@ pub fn should_require_fda_ethnicity(patient: &PatientInformation) -> bool {
 }
 
 pub fn has_fda_race(patient: &PatientInformation) -> bool {
-	super::has_text(patient.race_code.as_deref())
+	patient
+		.race_codes
+		.iter()
+		.any(|value| super::has_text(Some(value.as_str())))
 }
 
 pub fn has_fda_ethnicity(patient: &PatientInformation) -> bool {
@@ -56,7 +59,7 @@ mod tests {
 			patient_initials_null_flavor: None,
 			birth_date_null_flavor: None,
 			sex_null_flavor: None,
-			race_code: None,
+			race_codes: Vec::new(),
 			race_code_null_flavor: None,
 			ethnicity_code: None,
 			ethnicity_code_null_flavor: None,

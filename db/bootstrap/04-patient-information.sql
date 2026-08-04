@@ -33,8 +33,8 @@ CREATE TABLE patient_information (
     -- D.5 - Sex (E2B(R3) codes)
     sex VARCHAR(1) CHECK (sex IN ('0', '1', '2')),  -- 0=Unknown, 1=Male, 2=Female
 
-    -- FDA.D.11 / FDA.D.12 - Race / Ethnicity (FDA)
-    race_code VARCHAR(10),
+    -- FDA.D.11.r.1 / FDA.D.12 - Race (repeating) / Ethnicity (FDA)
+    race_codes VARCHAR(10)[] NOT NULL DEFAULT '{}',
     race_code_null_flavor VARCHAR(4) CHECK (race_code_null_flavor IN ('MSK', 'UNK', 'NA', 'OTH')),
     ethnicity_code VARCHAR(10),
     ethnicity_code_null_flavor VARCHAR(4) CHECK (ethnicity_code_null_flavor IN ('NI', 'MSK', 'UNK', 'NA')),
@@ -61,7 +61,13 @@ CREATE TABLE patient_information (
     created_by UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
     updated_by UUID REFERENCES users(id) ON DELETE RESTRICT,
 
-    CONSTRAINT unique_patient_per_case UNIQUE (case_id)
+    CONSTRAINT unique_patient_per_case UNIQUE (case_id),
+    CONSTRAINT ck_patient_race_codes CHECK (
+        race_codes <@ ARRAY['C16352', 'C41259', 'C41260', 'C41219', 'C41261']::VARCHAR(10)[]
+    ),
+    CONSTRAINT ck_patient_race_null_flavor_pair CHECK (
+        cardinality(race_codes) = 0 OR race_code_null_flavor IS NULL
+    )
 );
 
 CREATE INDEX idx_patient_info_case ON patient_information(case_id);

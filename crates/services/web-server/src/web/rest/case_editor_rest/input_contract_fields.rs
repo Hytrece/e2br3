@@ -1450,6 +1450,25 @@ fn dm(
 	outer_indexes: &[usize],
 	fda: bool,
 ) -> Result<()> {
+	if fda
+		&& row
+			.get("raceCodes")
+			.and_then(Value::as_array)
+			.is_some_and(|values| {
+				values.iter().any(|value| {
+					value.as_str().is_some_and(|value| !value.trim().is_empty())
+				})
+			}) && row
+		.get("raceCodeNullFlavor")
+		.and_then(Value::as_str)
+		.is_some_and(|value| !value.trim().is_empty())
+	{
+		return Err(violation(
+			"FDA.D.11.r.1.NULLFLAVOR.ALLOWED",
+			"patientInformation.raceCodeNullFlavor",
+			"race codes and NullFlavor cannot both be set",
+		));
+	}
 	validate_field(
 		row,
 		"concomitantTherapies",
@@ -2158,8 +2177,8 @@ fn dm(
 	)?;
 	validate_field(
 		row,
-		"raceCode",
-		"patientInformation.raceCode",
+		"raceCodes[]",
+		"patientInformation.raceCodes[]",
 		InputType::String,
 		Some((
 			"raceCodeNullFlavor",

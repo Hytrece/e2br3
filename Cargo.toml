@@ -32,8 +32,8 @@ serde_with = {version = "3", features = ["time_0_3"] }
 # Note: we lock modql version during rcs
 modql = { version = "0.4.1", features = ["with-sea-query"]}
 sqlx = { version = "0.8", features = [ "macros", "runtime-tokio-rustls", "postgres", "uuid" ] }
-sea-query = { version = "0.32", features = ["with-uuid", "with-time", "with-rust_decimal"] }
-sea-query-binder = { version = "0.7", features = ["sqlx-postgres", "with-uuid", "with-time", "with-rust_decimal"] }
+sea-query = { version = "0.32", features = ["postgres-array", "with-uuid", "with-time", "with-rust_decimal"] }
+sea-query-binder = { version = "0.7", features = ["postgres-array", "sqlx-postgres", "with-uuid", "with-time", "with-rust_decimal"] }
 # -- Web
 axum = {version = "0.8", features = ["macros"]}
 tower-http = { version = "0.6", features = ["fs"] }

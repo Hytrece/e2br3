@@ -551,7 +551,7 @@ pub(super) fn validate_direct_rows(
 			let mut normalized =
 				optional_row_object(section, rows, "patientInformation")?
 					.map(|row| {
-						normalized_direct_object(
+						let mut normalized = normalized_direct_object(
 							row,
 							&[
 								(
@@ -625,7 +625,15 @@ pub(super) fn validate_direct_rows(
 									"patientSexNullFlavor",
 									&["patientSexNullFlavor", "sex_null_flavor"],
 								),
-								("raceCode", &["raceCode", "race_code"]),
+								(
+									"raceCodes",
+									&[
+										"raceCodes",
+										"race_codes",
+										"raceCode",
+										"race_code",
+									],
+								),
 								(
 									"raceCodeNullFlavor",
 									&["raceCodeNullFlavor", "race_code_null_flavor"],
@@ -671,7 +679,16 @@ pub(super) fn validate_direct_rows(
 									&["concomitantTherapies", "concomitant_therapy"],
 								),
 							],
-						)
+						);
+						if let Some(Value::String(value)) =
+							normalized.get("raceCodes").cloned()
+						{
+							normalized.insert(
+								"raceCodes".to_string(),
+								Value::Array(vec![Value::String(value)]),
+							);
+						}
+						normalized
 					})
 					.unwrap_or_default();
 			if let Some(value) = rows.get("patientIdentifiers") {

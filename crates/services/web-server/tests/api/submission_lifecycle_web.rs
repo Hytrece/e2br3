@@ -452,7 +452,7 @@ async fn create_patient(
 		.body(Body::from(
 			json!({
 				"data": {
-					"race_code": "C41260",
+					"race_codes": ["C41260"],
 					"ethnicity_code": "C41222",
 					"medical_history_text": "No relevant medical history."
 				}

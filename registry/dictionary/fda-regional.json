@@ -158,7 +158,15 @@
       "max_length": "10",
       "allowed_values": "<Observation><code>= C17049.  \nC16352=African American\nC41259=American Indian or Alaska Native\nC41260=Asian\nC41219=Native Hawaiian or Other Pacific Islander\nC41261=White\nnullFlavor: UNK, MSK, OTH, NA",
       "allowed_value_constraint": {
-        "kind": "descriptive"
+        "kind": "code_set",
+        "values": [
+          "C16352",
+          "C41259",
+          "C41260",
+          "C41219",
+          "C41261"
+        ],
+        "enforcement": "input_contract"
       },
       "oid": "2.16.840.1.113883.3.26.1.1",
       "hl7_data_type": "Coded With Equivalents (CE)",
@@ -174,7 +182,7 @@
         "NA",
         "OTH"
       ],
-      "xpath": "/MCCI_IN200100UV01/PORR_IN049016UV[r]/controlActProcess[@classCode='CACT'][@moodCode='EVN']/subject[@typeCode='SUBJ'][1]/investigationEvent[@classCode='INVSTG'][@moodCode='EVN']/component[@typeCode='COMP'][adverseEventAssessment][1]/adverseEventAssessment[@classCode='INVSTG'][@moodCode='EVN']/subject1[@typeCode='SBJ'][1]/primaryRole[@classCode='INVSBJ']/player1[@classCode='PSN'][@determinerCode='INSTANCE']/raceCode[@codeSystem='2.16.840.1.113883.3.26.1.1'][r]/@code"
+      "xpath": "/MCCI_IN200100UV01/PORR_IN049016UV[r]/controlActProcess[@classCode='CACT'][@moodCode='EVN']/subject[@typeCode='SUBJ']/investigationEvent[@classCode='INVSTG'][@moodCode='EVN']/component[@typeCode='COMP'][adverseEventAssessment]/adverseEventAssessment[@classCode='INVSTG'][@moodCode='EVN']/subject1[@typeCode='SBJ']/primaryRole[@classCode='INVSBJ']/subjectOf2[@typeCode='SBJ'][observation/code[@code='C17049'][@codeSystem='2.16.840.1.113883.3.26.1.1']][r]/observation[@classCode='OBS'][@moodCode='EVN']/value[@xsi:type='CE'][@codeSystem='2.16.840.1.113883.3.26.1.1']/@code"
     },
     {
       "code": "FDA.D.12",

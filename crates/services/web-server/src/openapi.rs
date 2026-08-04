@@ -1266,7 +1266,8 @@ struct PatientInformationDoc {
 	patient_initials_null_flavor: Option<String>,
 	birth_date_null_flavor: Option<String>,
 	sex_null_flavor: Option<String>,
-	race_code: Option<String>,
+	race_codes: Vec<String>,
+	race_code_null_flavor: Option<String>,
 	ethnicity_code: Option<String>,
 	last_menstrual_period_date: Option<String>,
 	last_menstrual_period_date_null_flavor: Option<String>,
@@ -1283,6 +1284,8 @@ struct PatientInformationForCreateDoc {
 	case_id: String,
 	patient_initials: Option<String>,
 	sex: Option<String>,
+	race_codes: Vec<String>,
+	race_code_null_flavor: Option<String>,
 	concomitant_therapy: Option<bool>,
 }
 
@@ -1301,7 +1304,8 @@ struct PatientInformationForUpdateDoc {
 	height_cm: Option<String>,
 	sex: Option<String>,
 	sex_null_flavor: Option<String>,
-	race_code: Option<String>,
+	race_codes: Option<Vec<String>>,
+	race_code_null_flavor: Option<String>,
 	ethnicity_code: Option<String>,
 	last_menstrual_period_date: Option<String>,
 	last_menstrual_period_date_null_flavor: Option<String>,

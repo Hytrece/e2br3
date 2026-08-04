@@ -22,7 +22,7 @@ fn import_d_section_all_fields_from_scenario6() {
 	assert_eq!(patient.age_group, None);
 	assert_eq!(patient.weight_kg, Some(decimal("50")));
 	assert_eq!(patient.height_cm, Some(decimal("160")));
-	assert_eq!(patient.race_code.as_deref(), Some("C16352"));
+	assert_eq!(patient.race_codes, ["C16352"]);
 	assert_eq!(patient.race_code_null_flavor, None);
 	assert_eq!(patient.ethnicity_code.as_deref(), Some("C17459"));
 	assert_eq!(patient.ethnicity_code_null_flavor, None);
@@ -63,11 +63,27 @@ fn import_d_section_parses_race_ethnicity_null_flavor() {
 		.expect("parse")
 		.expect("section D should exist when only a null flavor is present");
 
-	assert_eq!(patient.race_code, None);
+	assert!(patient.race_codes.is_empty());
 	assert_eq!(patient.race_code_null_flavor.as_deref(), Some(race_null));
 	assert_eq!(patient.ethnicity_code, None);
 	assert_eq!(
 		patient.ethnicity_code_null_flavor.as_deref(),
 		Some(ethnicity_null)
 	);
+}
+
+#[test]
+fn import_d_section_parses_repeated_race_codes() {
+	let xml = br#"<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <primaryRole>
+    <subjectOf2><observation><code code="C17049" codeSystem="2.16.840.1.113883.3.26.1.1"/><value xsi:type="CE" code="C16352"/></observation></subjectOf2>
+    <subjectOf2><observation><code code="C17049" codeSystem="2.16.840.1.113883.3.26.1.1"/><value xsi:type="CE" code="C41259"/></observation></subjectOf2>
+  </primaryRole>
+</MCCI_IN200100UV01>"#;
+
+	let patient = parse_d_patient(xml)
+		.expect("parse")
+		.expect("race codes create a patient section");
+	assert_eq!(patient.race_codes, ["C16352", "C41259"]);
+	assert_eq!(patient.race_code_null_flavor, None);
 }

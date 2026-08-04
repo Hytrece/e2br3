@@ -1781,19 +1781,19 @@
     "backend": {
       "status": "mapped",
       "model": "PatientInformation",
-      "field": "race_code",
+      "field": "race_codes",
       "file": "crates/libs/lib-core/src/model/patient.rs",
-      "evidence": "PatientInformation.race_code stores FDA.D.11.r values."
+      "evidence": "PatientInformation.race_codes stores repeating FDA.D.11.r.1 values."
     },
     "frontend": {
       "status": "mapped",
       "section": "patientInformation",
-      "field": "raceCode",
+      "field": "raceCodes",
       "file": "../frontend/E2BR3-frontend/components/case-form/sections/SectionD.tsx",
-      "evidence": "SectionD binds fieldNumber FDA.D.11.r to patientInformation.raceCode."
+      "evidence": "SectionD binds FDA.D.11.r.1 to patientInformation.raceCodes."
     },
     "action": "",
-    "notes": "Renamed from FDA.D.11.r to match the FDA dictionary (Patient Race Code is FDA.D.11.r.1)."
+    "notes": "FDA.D.11.r.1 is repeating; NullFlavor replaces the complete code list when race is not reportable."
   },
   {
     "id": "FDA.D.12",

@@ -1,6 +1,7 @@
 // Generated once from registry/dictionary/*.json; explicit field functions are maintained here.
 
 /// FDA.D.11.r.1.LENGTH.MAX
+/// FDA.D.11.r.1.ALLOWED.VALUE
 /// FDA.D.11.r.1.NULLFLAVOR.ALLOWED
 pub fn fda_d_11_r_1(input: crate::FieldInput<'_>) -> Vec<crate::InputIssue> {
 	let mut issues = Vec::new();
@@ -9,6 +10,12 @@ pub fn fda_d_11_r_1(input: crate::FieldInput<'_>) -> Vec<crate::InputIssue> {
 		"FDA.D.11.r.1.LENGTH.MAX",
 		input.value,
 		10,
+	);
+	crate::helpers::allowed_values(
+		&mut issues,
+		"FDA.D.11.r.1.ALLOWED.VALUE",
+		input.value,
+		&["C16352", "C41259", "C41260", "C41219", "C41261"],
 	);
 	crate::helpers::null_flavor(
 		&mut issues,

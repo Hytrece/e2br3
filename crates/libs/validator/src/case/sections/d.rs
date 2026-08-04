@@ -1605,14 +1605,17 @@ fn fda_d_11(
 	vaers: bool,
 	issues: &mut Vec<ValidationIssue>,
 ) {
-	const PATH: &str = "patientInformation.raceCode";
+	const PATH: &str = "patientInformation.raceCodes";
 	let null_flavor = patient
 		.and_then(|patient| patient.race_code_null_flavor.as_deref())
 		.map(str::trim)
 		.filter(|value| !value.is_empty());
-	let present = patient
-		.is_some_and(|patient| has_text(patient.race_code.as_deref()))
-		|| null_flavor.is_some();
+	let present = patient.is_some_and(|patient| {
+		patient
+			.race_codes
+			.iter()
+			.any(|value| has_text(Some(value.as_str())))
+	}) || null_flavor.is_some();
 	required_field(
 		issues,
 		if vaers {
@@ -1638,6 +1641,21 @@ fn fda_d_11(
 			}
 		}),
 	);
+	if let Some(patient) = patient {
+		for (index, value) in patient.race_codes.iter().enumerate() {
+			reject_when(
+				issues,
+				"FDA.D.11.r.1.ALLOWED.VALUE",
+				&format!("patientInformation.raceCodes.{index}"),
+				SECTION,
+				"FDA D.11 race code must use the FDA regional terminology.",
+				!matches!(
+					value.trim(),
+					"C16352" | "C41259" | "C41260" | "C41219" | "C41261"
+				),
+			);
+		}
+	}
 }
 
 /// FDA.D.12
@@ -2478,7 +2496,7 @@ mod golden_companion_tests {
 			patient_initials_null_flavor: None,
 			birth_date_null_flavor: None,
 			sex_null_flavor: None,
-			race_code: None,
+			race_codes: Vec::new(),
 			race_code_null_flavor: None,
 			ethnicity_code: None,
 			ethnicity_code_null_flavor: None,
@@ -3280,7 +3298,10 @@ mod golden_companion_tests {
 				.map(|issue| (issue.code.as_str(), issue.field_path.as_deref()))
 				.collect::<Vec<_>>(),
 			[
-				("FDA.D.11.r.1.REQUIRED", Some("patientInformation.raceCode")),
+				(
+					"FDA.D.11.r.1.REQUIRED",
+					Some("patientInformation.raceCodes")
+				),
 				(
 					"FDA.D.12.REQUIRED",
 					Some("patientInformation.ethnicityCode")
@@ -3350,6 +3371,23 @@ mod golden_companion_tests {
 		assert!(issues
 			.iter()
 			.any(|issue| issue.code == "FDA.D.12.NULLFLAVOR.ALLOWED"));
+	}
+
+	#[test]
+	fn fda_race_accepts_repeated_official_codes_only() {
+		let mut patient = patient();
+		patient.race_codes = vec!["C16352".to_string(), "C41259".to_string()];
+		let mut issues = Vec::new();
+		fda_d_11(Some(&patient), false, &mut issues);
+		assert!(issues.is_empty());
+
+		patient.race_codes.push("INVALID".to_string());
+		fda_d_11(Some(&patient), false, &mut issues);
+		assert!(issues.iter().any(|issue| {
+			issue.code == "FDA.D.11.r.1.ALLOWED.VALUE"
+				&& issue.field_path.as_deref()
+					== Some("patientInformation.raceCodes.2")
+		}));
 	}
 
 	#[test]

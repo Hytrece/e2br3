@@ -74,7 +74,6 @@ const EDITOR_DB_PAIRS: &[EditorDbPair] = &[
 	pair!("DM", "patientInformation.patientDeath.dateOfDeathNullFlavor", "patient_death_information", "date_of_death", "date_of_death_null_flavor"),
 	pair!("DM", "patientInformation.patientInitialsNullFlavor", "patient_information", "patient_initials", "patient_initials_null_flavor"),
 	pair!("DM", "patientInformation.patientSexNullFlavor", "patient_information", "sex", "sex_null_flavor"),
-	pair!("DM", "patientInformation.raceCodeNullFlavor", "patient_information", "race_code", "race_code_null_flavor"),
 	pair!("DM", "patientInformation.specialistRecordNumberNullFlavor", "patient_identifiers", "identifier_value", "identifier_value_null_flavor"),
 	pair!("LB", "testResults[].testDateNullFlavor", "test_results", "test_date", "test_date_null_flavor"),
 	pair!("LR", "literatureReferences[].referenceTextNullFlavor", "literature_references", "reference_text", "reference_text_null_flavor"),
@@ -133,6 +132,16 @@ async fn database_has_every_editor_pair_and_mutual_exclusion_check() -> Result<(
 			"missing mutual-exclusion CHECK for {pair:?}"
 		);
 	}
+	let has_race_pair_check: bool = sqlx::query_scalar(
+		"SELECT EXISTS (
+		   SELECT 1 FROM pg_constraint
+		    WHERE conrelid = 'public.patient_information'::regclass
+		      AND conname = 'ck_patient_race_null_flavor_pair'
+		 )",
+	)
+	.fetch_one(mm.dbx().db())
+	.await?;
+	assert!(has_race_pair_check, "missing raceCodes/NullFlavor CHECK");
 	Ok(())
 }
 

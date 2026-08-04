@@ -179,53 +179,13 @@ async fn apply_patient_section(
 			null_flavor,
 		);
 	}
-	if let Some(v) = patient.race_code.as_deref() {
-		set_attr_first(
-			xpath,
-			"//hl7:primaryRole/hl7:subjectOf2/hl7:observation[hl7:code[@code='C17049']]/hl7:value",
-			"xsi:type",
-			"CE",
-		);
-		set_attr_first(
-			xpath,
-			"//hl7:primaryRole/hl7:subjectOf2/hl7:observation[hl7:code[@code='C17049']]/hl7:value",
-			"code",
-			write_fda_d_11_r_1(v),
-		);
-		remove_attr_first(
-			xpath,
-			"//hl7:primaryRole/hl7:subjectOf2/hl7:observation[hl7:code[@code='C17049']]/hl7:value",
-			"nullFlavor",
-		);
-	} else if let Some(null_flavor) = patient.race_code_null_flavor.as_deref() {
-		set_attr_first(
-			xpath,
-			"//hl7:primaryRole/hl7:subjectOf2/hl7:observation[hl7:code[@code='C17049']]/hl7:value",
-			"xsi:type",
-			"CE",
-		);
-		remove_attr_first(
-			xpath,
-			"//hl7:primaryRole/hl7:subjectOf2/hl7:observation[hl7:code[@code='C17049']]/hl7:value",
-			"code",
-		);
-		remove_attr_first(
-			xpath,
-			"//hl7:primaryRole/hl7:subjectOf2/hl7:observation[hl7:code[@code='C17049']]/hl7:value",
-			"displayName",
-		);
-		remove_attr_first(
-			xpath,
-			"//hl7:primaryRole/hl7:subjectOf2/hl7:observation[hl7:code[@code='C17049']]/hl7:value",
-			"codeSystem",
-		);
-		set_attr_first(
-			xpath,
-			"//hl7:primaryRole/hl7:subjectOf2/hl7:observation[hl7:code[@code='C17049']]/hl7:value",
-			"nullFlavor",
-			null_flavor,
-		);
-	}
+	apply_fda_patient_races(
+		doc,
+		parser,
+		xpath,
+		&patient.race_codes,
+		patient.race_code_null_flavor.as_deref(),
+	)?;
 	if let Some(v) = patient.ethnicity_code.as_deref() {
 		set_attr_first(
 			xpath,
@@ -564,8 +524,53 @@ async fn apply_patient_section(
 }
 
 /// e2b:FDA.D.11.r.1
-fn write_fda_d_11_r_1(value: &str) -> &str {
-	value
+fn apply_fda_patient_races(
+	doc: &mut Document,
+	parser: &Parser,
+	xpath: &mut Context,
+	race_codes: &[String],
+	null_flavor: Option<&str>,
+) -> Result<()> {
+	remove_nodes(
+		xpath,
+		"//hl7:primaryRole/hl7:subjectOf2[hl7:observation/hl7:code[@code='C17049' and @codeSystem='2.16.840.1.113883.3.26.1.1']]",
+	);
+	for code in race_codes {
+		let display_name = match code.as_str() {
+			"C16352" => "African American",
+			"C41259" => "American Indian or Alaska Native",
+			"C41260" => "Asian",
+			"C41219" => "Native Hawaiian or Other Pacific Islander",
+			"C41261" => "White",
+			_ => "",
+		};
+		append_fragment_child(
+			doc,
+			parser,
+			xpath,
+			"//hl7:primaryRole",
+			&format!(
+				"<subjectOf2 typeCode=\"SBJ\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code code=\"C17049\" displayName=\"Race\" codeSystem=\"2.16.840.1.113883.3.26.1.1\"/><value xsi:type=\"CE\" code=\"{}\" displayName=\"{}\" codeSystem=\"2.16.840.1.113883.3.26.1.1\"/></observation></subjectOf2>",
+				xml_escape(code),
+				xml_escape(display_name),
+			),
+		)?;
+	}
+	if race_codes.is_empty() {
+		if let Some(null_flavor) = null_flavor {
+			append_fragment_child(
+				doc,
+				parser,
+				xpath,
+				"//hl7:primaryRole",
+				&format!(
+					"<subjectOf2 typeCode=\"SBJ\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code code=\"C17049\" displayName=\"Race\" codeSystem=\"2.16.840.1.113883.3.26.1.1\"/><value xsi:type=\"CE\" nullFlavor=\"{}\"/></observation></subjectOf2>",
+					xml_escape(null_flavor),
+				),
+			)?;
+		}
+	}
+	Ok(())
 }
 
 /// e2b:FDA.D.12
@@ -1514,6 +1519,45 @@ mod tests {
 		assert!(!non_mfds_fragment.contains("MF&amp;"));
 		assert!(name_index < mpid_index);
 		assert!(mpid_index < phpid_index);
+	}
+
+	#[test]
+	fn fda_d_11_r_1_exports_repeated_codes_or_one_null_flavor() {
+		let parser = Parser::default();
+		let mut doc = parser
+			.parse_string(
+				"<MCCI_IN200100UV01 xmlns=\"urn:hl7-org:v3\"><primaryRole/></MCCI_IN200100UV01>",
+			)
+			.expect("doc");
+		let mut xpath = Context::new(&doc).expect("xpath");
+		let _ = xpath.register_namespace("hl7", "urn:hl7-org:v3");
+		apply_fda_patient_races(
+			&mut doc,
+			&parser,
+			&mut xpath,
+			&["C16352".to_string(), "C41259".to_string()],
+			None,
+		)
+		.expect("repeat races");
+		assert_eq!(
+			xpath
+				.findnodes("//hl7:observation[hl7:code[@code='C17049']]", None)
+				.expect("race nodes")
+				.len(),
+			2
+		);
+
+		apply_fda_patient_races(&mut doc, &parser, &mut xpath, &[], Some("UNK"))
+			.expect("race null flavor");
+		assert_eq!(
+			xpath
+				.findvalues(
+					"//hl7:observation[hl7:code[@code='C17049']]/hl7:value/@nullFlavor",
+					None,
+				)
+				.expect("null flavor"),
+			["UNK"]
+		);
 	}
 
 	#[test]

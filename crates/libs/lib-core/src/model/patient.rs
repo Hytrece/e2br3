@@ -28,6 +28,43 @@ where
 	Option::<Decimal>::deserialize(deserializer).map(Some)
 }
 
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum OneOrManyStrings {
+	One(String),
+	Many(Vec<String>),
+}
+
+fn deserialize_string_vec<'de, D>(
+	deserializer: D,
+) -> std::result::Result<Vec<String>, D::Error>
+where
+	D: serde::Deserializer<'de>,
+{
+	Ok(
+		match Option::<OneOrManyStrings>::deserialize(deserializer)? {
+			Some(OneOrManyStrings::One(value)) => vec![value],
+			Some(OneOrManyStrings::Many(values)) => values,
+			None => Vec::new(),
+		},
+	)
+}
+
+fn deserialize_patch_string_vec<'de, D>(
+	deserializer: D,
+) -> std::result::Result<Option<Vec<String>>, D::Error>
+where
+	D: serde::Deserializer<'de>,
+{
+	Ok(
+		match Option::<OneOrManyStrings>::deserialize(deserializer)? {
+			Some(OneOrManyStrings::One(value)) => Some(vec![value]),
+			Some(OneOrManyStrings::Many(values)) => Some(values),
+			None => None,
+		},
+	)
+}
+
 // -- PatientInformation
 
 #[derive(Debug, Clone, Fields, FromRow, Serialize)]
@@ -54,8 +91,8 @@ pub struct PatientInformation {
 	pub birth_date_null_flavor: Option<String>,
 	pub sex_null_flavor: Option<String>,
 
-	// FDA.D.11 / FDA.D.12 - Race / Ethnicity (FDA)
-	pub race_code: Option<String>,
+	// FDA.D.11.r.1 / FDA.D.12 - Race (repeating) / Ethnicity (FDA)
+	pub race_codes: Vec<String>,
 	pub race_code_null_flavor: Option<String>,
 	pub ethnicity_code: Option<String>,
 	pub ethnicity_code_null_flavor: Option<String>,
@@ -98,7 +135,12 @@ pub struct PatientInformationForCreate {
 	pub height_cm: Option<Decimal>,
 	pub sex: Option<String>,
 	pub sex_null_flavor: Option<String>,
-	pub race_code: Option<String>,
+	#[serde(
+		default,
+		alias = "race_code",
+		deserialize_with = "deserialize_string_vec"
+	)]
+	pub race_codes: Vec<String>,
 	pub race_code_null_flavor: Option<String>,
 	pub ethnicity_code: Option<String>,
 	pub ethnicity_code_null_flavor: Option<String>,
@@ -136,7 +178,12 @@ pub struct PatientInformationForUpdate {
 	pub height_cm: Option<Option<Decimal>>,
 	pub sex: Option<String>,
 	pub sex_null_flavor: Option<String>,
-	pub race_code: Option<String>,
+	#[serde(
+		default,
+		alias = "race_code",
+		deserialize_with = "deserialize_patch_string_vec"
+	)]
+	pub race_codes: Option<Vec<String>>,
 	pub race_code_null_flavor: Option<String>,
 	pub ethnicity_code: Option<String>,
 	pub ethnicity_code_null_flavor: Option<String>,
@@ -637,7 +684,7 @@ impl PatientInformationBmc {
 				height_cm,
 				sex,
 				sex_null_flavor,
-				race_code,
+				race_codes,
 				race_code_null_flavor,
 				ethnicity_code,
 				ethnicity_code_null_flavor,
@@ -675,7 +722,7 @@ impl PatientInformationBmc {
 					.bind(data.height_cm)
 					.bind(data.sex)
 					.bind(data.sex_null_flavor)
-					.bind(data.race_code)
+					.bind(data.race_codes)
 					.bind(data.race_code_null_flavor)
 					.bind(data.ethnicity_code)
 					.bind(data.ethnicity_code_null_flavor)
@@ -785,8 +832,8 @@ impl PatientInformationBmc {
 			     height_cm = COALESCE($12, height_cm),
 			     sex = CASE WHEN $14 IS NOT NULL THEN NULL ELSE COALESCE($13, sex) END,
 			     sex_null_flavor = CASE WHEN $13 IS NOT NULL THEN NULL ELSE COALESCE($14, sex_null_flavor) END,
-			     race_code = CASE WHEN $16 IS NOT NULL THEN NULL ELSE COALESCE($15, race_code) END,
-			     race_code_null_flavor = CASE WHEN $15 IS NOT NULL THEN NULL ELSE COALESCE($16, race_code_null_flavor) END,
+			     race_codes = CASE WHEN $16 IS NOT NULL THEN '{{}}'::VARCHAR(10)[] ELSE COALESCE($15, race_codes) END,
+			     race_code_null_flavor = CASE WHEN COALESCE(cardinality($15), 0) > 0 THEN NULL ELSE COALESCE($16, race_code_null_flavor) END,
 			     ethnicity_code = CASE WHEN $18 IS NOT NULL THEN NULL ELSE COALESCE($17, ethnicity_code) END,
 			     ethnicity_code_null_flavor = CASE WHEN $17 IS NOT NULL THEN NULL ELSE COALESCE($18, ethnicity_code_null_flavor) END,
 			     last_menstrual_period_date = CASE WHEN $20 IS NOT NULL THEN NULL ELSE COALESCE($19, last_menstrual_period_date) END,
@@ -817,7 +864,7 @@ impl PatientInformationBmc {
 					.bind(height_cm)
 					.bind(data.sex)
 					.bind(data.sex_null_flavor)
-					.bind(data.race_code)
+					.bind(data.race_codes)
 					.bind(data.race_code_null_flavor)
 					.bind(data.ethnicity_code)
 					.bind(data.ethnicity_code_null_flavor)
@@ -952,8 +999,8 @@ impl PatientInformationBmc {
 			     height_cm = COALESCE($12, height_cm),
 			     sex = CASE WHEN $14 IS NOT NULL THEN NULL ELSE COALESCE($13, sex) END,
 			     sex_null_flavor = CASE WHEN $13 IS NOT NULL THEN NULL ELSE COALESCE($14, sex_null_flavor) END,
-			     race_code = CASE WHEN $16 IS NOT NULL THEN NULL ELSE COALESCE($15, race_code) END,
-			     race_code_null_flavor = CASE WHEN $15 IS NOT NULL THEN NULL ELSE COALESCE($16, race_code_null_flavor) END,
+			     race_codes = CASE WHEN $16 IS NOT NULL THEN '{{}}'::VARCHAR(10)[] ELSE COALESCE($15, race_codes) END,
+			     race_code_null_flavor = CASE WHEN COALESCE(cardinality($15), 0) > 0 THEN NULL ELSE COALESCE($16, race_code_null_flavor) END,
 			     ethnicity_code = CASE WHEN $18 IS NOT NULL THEN NULL ELSE COALESCE($17, ethnicity_code) END,
 			     ethnicity_code_null_flavor = CASE WHEN $17 IS NOT NULL THEN NULL ELSE COALESCE($18, ethnicity_code_null_flavor) END,
 			     last_menstrual_period_date = CASE WHEN $20 IS NOT NULL THEN NULL ELSE COALESCE($19, last_menstrual_period_date) END,
@@ -984,7 +1031,7 @@ impl PatientInformationBmc {
 					.bind(height_cm)
 					.bind(data.sex)
 					.bind(data.sex_null_flavor)
-					.bind(data.race_code)
+					.bind(data.race_codes)
 					.bind(data.race_code_null_flavor)
 					.bind(data.ethnicity_code)
 					.bind(data.ethnicity_code_null_flavor)

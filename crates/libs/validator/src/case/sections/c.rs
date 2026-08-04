@@ -2813,7 +2813,7 @@ mod golden_c1_value_tests {
 			patient_initials_null_flavor: None,
 			birth_date_null_flavor: None,
 			sex_null_flavor: None,
-			race_code: None,
+			race_codes: Vec::new(),
 			race_code_null_flavor: None,
 			ethnicity_code: None,
 			ethnicity_code_null_flavor: None,

@@ -599,7 +599,7 @@ async fn create_case_from_intake_authorized(
 				height_cm: None,
 				sex: non_empty(data.sex_d5.as_deref()),
 				sex_null_flavor: non_empty(data.sex_d5_null_flavor.as_deref()),
-				race_code: None,
+				race_codes: Vec::new(),
 				race_code_null_flavor: None,
 				ethnicity_code: None,
 				ethnicity_code_null_flavor: None,

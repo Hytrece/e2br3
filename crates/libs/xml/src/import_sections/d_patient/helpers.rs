@@ -24,7 +24,7 @@ pub(crate) struct PatientImport {
 	pub(crate) age_group: Option<String>,
 	pub(crate) weight_kg: Option<Decimal>,
 	pub(crate) height_cm: Option<Decimal>,
-	pub(crate) race_code: Option<String>,
+	pub(crate) race_codes: Vec<String>,
 	pub(crate) race_code_null_flavor: Option<String>,
 	pub(crate) ethnicity_code: Option<String>,
 	pub(crate) ethnicity_code_null_flavor: Option<String>,

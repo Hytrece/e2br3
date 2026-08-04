@@ -210,13 +210,13 @@ BEGIN
     INSERT INTO patient_information (
         id, case_id, patient_initials, birth_date,
         age_at_time_of_onset, age_unit, gestation_period, gestation_period_unit, age_group,
-        weight_kg, height_cm, sex, race_code, ethnicity_code, last_menstrual_period_date,
+        weight_kg, height_cm, sex, race_codes, ethnicity_code, last_menstrual_period_date,
         medical_history_text, concomitant_therapy, created_by, updated_by, created_at, updated_at
     )
     VALUES (
         v_patient_id, v_case_id, 'HJ', DATE '1988-05-14',
         37, '801', 0, '804', '5',
-        61.5, 168.0, '2', 'C41260', 'C41222', DATE '2026-03-20',
+        61.5, 168.0, '2', ARRAY['C41260']::VARCHAR(10)[], 'C41222', DATE '2026-03-20',
         'History of migraine, seasonal allergic rhinitis, and intermittent hypertension.',
         true, v_user_id, v_user_id, NOW(), NOW()
     )

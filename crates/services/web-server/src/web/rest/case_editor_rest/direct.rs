@@ -1641,6 +1641,22 @@ async fn apply_dm_page_rows_patch(
 			nested_string_field(row, null_flavor_paths),
 		)
 	}
+	fn string_list_field(
+		row: &Map<String, Value>,
+		paths: &[&str],
+	) -> Option<Vec<String>> {
+		let value = value_at_path(row, paths)?;
+		if let Some(value) = value.as_str() {
+			return Some(vec![value.to_string()]);
+		}
+		value.as_array().map(|values| {
+			values
+				.iter()
+				.filter_map(Value::as_str)
+				.map(ToOwned::to_owned)
+				.collect()
+		})
+	}
 	fn null_flavor_field(
 		row: &Map<String, Value>,
 		paths: &[&str],
@@ -1663,8 +1679,9 @@ async fn apply_dm_page_rows_patch(
 			&["patientSex"],
 			&["patientSexNullFlavor"],
 		);
-		let (race_code, race_code_null_flavor) =
-			canonical_string_field(patient, &["raceCode"], &["raceCodeNullFlavor"]);
+		let race_codes = string_list_field(patient, &["raceCodes", "raceCode"]);
+		let race_code_null_flavor =
+			null_flavor_field(patient, &["raceCodeNullFlavor"]);
 		let (ethnicity_code, ethnicity_code_null_flavor) = canonical_string_field(
 			patient,
 			&["ethnicityCode"],
@@ -1722,7 +1739,7 @@ async fn apply_dm_page_rows_patch(
 			)?),
 			sex,
 			sex_null_flavor,
-			race_code,
+			race_codes,
 			race_code_null_flavor,
 			ethnicity_code,
 			ethnicity_code_null_flavor,
@@ -1766,7 +1783,7 @@ async fn apply_dm_page_rows_patch(
 						height_cm: update.height_cm.flatten(),
 						sex: update.sex,
 						sex_null_flavor: update.sex_null_flavor,
-						race_code: update.race_code,
+						race_codes: update.race_codes.unwrap_or_default(),
 						race_code_null_flavor: update.race_code_null_flavor,
 						ethnicity_code: update.ethnicity_code,
 						ethnicity_code_null_flavor: update

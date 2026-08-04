@@ -1005,8 +1005,8 @@
     {
       "code": "FDA.D.11.r.1",
       "authority": "FDA",
-      "frontendPath": "patientInformation.raceCode",
-      "projectionPath": "patientInformation.race_code",
+      "frontendPath": "patientInformation.raceCodes[]",
+      "projectionPath": "patientInformation.race_codes[]",
       "patch": {
         "kind": "rows",
         "owner": "patientInformation"
@@ -1017,7 +1017,7 @@
         "ruleCode": "FDA.D.11.r.1.LENGTH.MAX",
         "invalidValue": "XXXXXXXXXXX"
       },
-      "payloadPath": "raceCode"
+      "payloadPath": "raceCodes[]"
     },
     {
       "code": "FDA.D.12",

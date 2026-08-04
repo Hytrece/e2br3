@@ -32,7 +32,7 @@ pub struct DPatientImport {
 	pub age_group: Option<String>,
 	pub weight_kg: Option<Decimal>,
 	pub height_cm: Option<Decimal>,
-	pub race_code: Option<String>,
+	pub race_codes: Vec<String>,
 	pub race_code_null_flavor: Option<String>,
 	pub ethnicity_code: Option<String>,
 	pub ethnicity_code_null_flavor: Option<String>,
@@ -107,7 +107,7 @@ pub fn parse_d_patient(xml: &[u8]) -> Result<Option<DPatientImport>> {
 	let (medical_history_text, medical_history_text_null_flavor) =
 		read_d_7_2(&mut xpath)?;
 	let concomitant_therapy = read_d_7_3(&mut xpath)?;
-	let (race_code, race_code_null_flavor) = read_fda_d_11_r_1(&mut xpath)?;
+	let (race_codes, race_code_null_flavor) = read_fda_d_11_r_1(&mut xpath)?;
 	let (ethnicity_code, ethnicity_code_null_flavor) = read_fda_d_12(&mut xpath)?;
 
 	if patient_initials.is_none()
@@ -120,6 +120,7 @@ pub fn parse_d_patient(xml: &[u8]) -> Result<Option<DPatientImport>> {
 		&& birth_date_null_flavor.is_none()
 		&& sex_null_flavor.is_none()
 		&& last_menstrual_period_date_null_flavor.is_none()
+		&& race_codes.is_empty()
 		&& race_code_null_flavor.is_none()
 		&& ethnicity_code_null_flavor.is_none()
 	{
@@ -140,7 +141,7 @@ pub fn parse_d_patient(xml: &[u8]) -> Result<Option<DPatientImport>> {
 		age_group,
 		weight_kg,
 		height_cm,
-		race_code,
+		race_codes,
 		race_code_null_flavor,
 		ethnicity_code,
 		ethnicity_code_null_flavor,
@@ -317,16 +318,42 @@ fn read_d_7_3(xpath: &mut Context) -> Result<Option<bool>> {
 }
 
 /// e2b:FDA.D.11.r.1
-fn read_fda_d_11_r_1(
-	xpath: &mut Context,
-) -> Result<(Option<String>, Option<String>)> {
-	string_pair(
-		first_value_root(xpath, DPatientPaths::RACE_CODE),
-		first_value_root(xpath, DPatientPaths::RACE_CODE_NULL_FLAVOR),
-		"raceCode",
+fn read_fda_d_11_r_1(xpath: &mut Context) -> Result<(Vec<String>, Option<String>)> {
+	let race_codes = xpath
+		.findvalues(DPatientPaths::RACE_CODE, None)
+		.map_err(|_| Error::InvalidXml {
+			message: "Failed to read FDA.D.11.r.1 race codes".to_string(),
+			line: None,
+			column: None,
+		})?
+		.into_iter()
+		.map(|value| value.trim().to_string())
+		.filter(|value| !value.is_empty())
+		.collect::<Vec<_>>();
+	let null_flavor = first_value_root(xpath, DPatientPaths::RACE_CODE_NULL_FLAVOR);
+	if !race_codes.is_empty() && null_flavor.is_some() {
+		return Err(Error::InvalidXml {
+			message: "FDA.D.11.r.1 race codes and NullFlavor cannot both be set"
+				.to_string(),
+			line: None,
+			column: None,
+		});
+	}
+	for (index, value) in race_codes.iter().enumerate() {
+		import_constraint::string(
+			&format!("raceCodes.{index}"),
+			Some(value),
+			None,
+			input_contracts::generated::d::fda_d_11_r_1,
+		)?;
+	}
+	import_constraint::string(
 		"raceCodeNullFlavor",
+		None,
+		null_flavor.as_deref(),
 		input_contracts::generated::d::fda_d_11_r_1,
-	)
+	)?;
+	Ok((race_codes, null_flavor))
 }
 
 /// e2b:FDA.D.12

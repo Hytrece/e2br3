@@ -313,7 +313,7 @@ async fn seed_cioms_case_data(
 			height_cm: None,
 			sex: Some("1".to_string()),
 			sex_null_flavor: None,
-			race_code: None,
+			race_codes: Vec::new(),
 			race_code_null_flavor: None,
 			ethnicity_code: None,
 			ethnicity_code_null_flavor: None,

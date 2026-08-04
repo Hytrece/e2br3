@@ -240,7 +240,7 @@ pub fn export_normalization_spec_for_rule(
 pub fn export_xpath_for_rule(code: &str) -> Option<&'static str> {
 	match code {
 		EXPORT_RULE_RACE_NI_PRUNE => Some("//hl7:observation[hl7:code[@code='C17049' and @codeSystem='2.16.840.1.113883.3.26.1.1']]/hl7:value[@code='NI']"),
-		EXPORT_RULE_RACE_EMPTY_PRUNE => Some("//hl7:observation[hl7:code[@code='C17049' and @codeSystem='2.16.840.1.113883.3.26.1.1']]/hl7:value[not(@code) or @nullFlavor]"),
+		EXPORT_RULE_RACE_EMPTY_PRUNE => Some("//hl7:observation[hl7:code[@code='C17049' and @codeSystem='2.16.840.1.113883.3.26.1.1']]/hl7:value[not(@code) and not(@nullFlavor)]"),
 		EXPORT_RULE_GK11_EMPTY_PRUNE => Some("//hl7:outboundRelationship2[hl7:observation/hl7:code[@code='2'] and (not(hl7:observation/hl7:value) or normalize-space(hl7:observation/hl7:value)='')]"),
 		EXPORT_RULE_DOCUMENT_TEXT_COMPRESSION_FORBIDDEN => {
 			Some("//hl7:document/hl7:text[@compression]")
