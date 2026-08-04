@@ -7,7 +7,7 @@ use lib_core::authorization::{
 	BuiltInIdentityKind,
 };
 use lib_core::ctx::{
-	ROLE_SPONSOR_ADMIN_COMPANY, ROLE_SPONSOR_ADMIN_CRO, ROLE_SYSTEM_ADMIN,
+	Ctx, ROLE_SPONSOR_ADMIN_COMPANY, ROLE_SPONSOR_ADMIN_CRO, ROLE_SYSTEM_ADMIN,
 	ROLE_USER, SYSTEM_ORG_ID, SYSTEM_USER_ID,
 };
 use lib_core::model::authorization::AuthorizationMigrationService;
@@ -514,6 +514,12 @@ async fn insert_org_with_type(
 	.execute(&mut *tx)
 	.await?;
 	tx.commit().await?;
+	lib_core::model::admin_settings::AdminSettingsBmc::ensure_default_for_org(
+		&Ctx::root_ctx(),
+		mm,
+		org_id,
+	)
+	.await?;
 	Ok(org_id)
 }
 

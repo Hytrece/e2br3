@@ -1961,7 +1961,7 @@ async fn test_admin_settings_round_trips_alignment_fields() -> Result<()> {
 				"case_number_identifier": "SAFETY",
 				"case_number_padding": 7,
 				"case_number_sequence_condition": "Per sender",
-				"case_number_format_fields": ["AE Row No.", "Country Code"],
+				"case_number_format_fields": ["AE Row No."],
 				"workflow_enabled": true,
 				"workflow": {
 					"statuses": [
@@ -1989,8 +1989,8 @@ async fn test_admin_settings_round_trips_alignment_fields() -> Result<()> {
 		Some(true)
 	);
 	assert_eq!(
-		data["case_number_format_fields"][1].as_str(),
-		Some("Country Code")
+		data["case_number_format_fields"][0].as_str(),
+		Some("AE Row No.")
 	);
 	assert_eq!(
 		data["workflow"]["statuses"][0]["due_days"].as_i64(),

@@ -68,6 +68,13 @@ BEGIN
     VALUES (v_company_org_id, 'Demo Pharmaceutical Company', 'pharmaceutical_company', '456 Company Ave', 'Seoul', NULL, '04524', 'KR', 'demo-company@example.com', '555-5678', true, '00000000-0000-0000-0000-000000000001'::UUID, NOW(), NOW())
     ON CONFLICT (id) DO NOTHING;
 
+    -- Keep the demo tenants usable with strict runtime settings from a clean DB.
+    INSERT INTO app_settings (organization_id, key, value)
+    VALUES
+        (v_org_id, 'system', app_settings_default_value()),
+        (v_company_org_id, 'system', app_settings_default_value())
+    ON CONFLICT (organization_id, key) DO NOTHING;
+
     -- Insert demo identities without password hashes.
     -- The runtime bootstrap step should set passwords using the current SERVICE_PWD_KEY.
     INSERT INTO users (

@@ -1,6 +1,8 @@
 use crate::ctx::Ctx;
+use crate::model::admin_settings::AdminSettingsBmc;
 use crate::model::base::base_uuid;
 use crate::model::base::DbBmc;
+use crate::model::store::set_full_context_from_ctx_dbx;
 use crate::model::ModelManager;
 use crate::model::Result;
 use modql::field::Fields;
@@ -98,7 +100,33 @@ impl OrganizationBmc {
 		mm: &ModelManager,
 		org_c: OrganizationForCreate,
 	) -> Result<Uuid> {
-		base_uuid::create::<Self, _>(ctx, mm, org_c).await
+		let dbx = mm.dbx();
+		dbx.begin_txn().await?;
+		if let Err(err) = set_full_context_from_ctx_dbx(dbx, ctx).await {
+			dbx.rollback_txn().await?;
+			return Err(err);
+		}
+		let id = match base_uuid::create_in_transaction::<Self, _>(ctx, mm, org_c)
+			.await
+		{
+			Ok(id) => id,
+			Err(err) => {
+				dbx.rollback_txn().await?;
+				return Err(err);
+			}
+		};
+		if let Err(err) = AdminSettingsBmc::ensure_default_for_org_in_transaction(
+			dbx,
+			id,
+			ctx.user_id(),
+		)
+		.await
+		{
+			dbx.rollback_txn().await?;
+			return Err(err);
+		}
+		dbx.commit_txn().await?;
+		Ok(id)
 	}
 
 	pub async fn get(

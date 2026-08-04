@@ -21,6 +21,17 @@ use std::collections::HashSet;
 use uuid::Uuid;
 
 const SETTINGS_KEY: &str = "system";
+const SUPPORTED_CASE_NUMBER_SETTING: &str = "AE Row No.";
+const SUPPORTED_CASE_NUMBER_SEQUENCE_CONDITION: &str = "Per sender";
+const CASE_NUMBER_FORMAT_FIELDS: &[&str] = &[
+	"AE Row No.",
+	"Date of Most Recent Information for This Report (C.1.5)",
+	"Sender's Organisation (C.3.2)",
+	"Sponsor Study Number (C.5.3)",
+	"Country Code",
+	"Patient Name or Initials (D.1)",
+	"Investigation Number (D.1.1.4)",
+];
 
 fn notice_update_allowed(
 	snapshot: &lib_core::authorization::RequestAuthorizationSnapshot,
@@ -208,6 +219,99 @@ fn import_date_update_is_supported(value: &ImportDateUpdatePayload) -> bool {
 			| (Some(true), Some(true), Some(false))
 			| (Some(true), Some(true), Some(true))
 	)
+}
+
+fn validate_case_number_settings(payload: &AdminSettingsPayload) -> Result<()> {
+	if payload
+		.case_number_setting
+		.as_deref()
+		.map(str::trim)
+		.filter(|value| !value.is_empty())
+		.is_none()
+	{
+		return Err(Error::BadRequest {
+			message: "case_number_setting is required".to_string(),
+		});
+	}
+	if payload
+		.case_number_identifier
+		.as_deref()
+		.map(str::trim)
+		.filter(|value| !value.is_empty())
+		.is_none()
+	{
+		return Err(Error::BadRequest {
+			message: "case_number_identifier is required".to_string(),
+		});
+	}
+	if payload
+		.case_number_sequence_condition
+		.as_deref()
+		.map(str::trim)
+		.filter(|value| !value.is_empty())
+		.is_none()
+	{
+		return Err(Error::BadRequest {
+			message: "case_number_sequence_condition is required".to_string(),
+		});
+	}
+	if payload.case_number_setting.as_deref().map(str::trim)
+		!= Some(SUPPORTED_CASE_NUMBER_SETTING)
+	{
+		return Err(Error::BadRequest {
+			message: format!(
+				"case_number_setting must be '{SUPPORTED_CASE_NUMBER_SETTING}'"
+			),
+		});
+	}
+	if payload
+		.case_number_sequence_condition
+		.as_deref()
+		.map(str::trim)
+		!= Some(SUPPORTED_CASE_NUMBER_SEQUENCE_CONDITION)
+	{
+		return Err(Error::BadRequest {
+			message: format!(
+				"case_number_sequence_condition must be '{SUPPORTED_CASE_NUMBER_SEQUENCE_CONDITION}'"
+			),
+		});
+	}
+	if !matches!(payload.case_number_padding, Some(value) if value >= 1) {
+		return Err(Error::BadRequest {
+			message: "case_number_padding must be a positive integer".to_string(),
+		});
+	}
+	let fields = payload
+		.case_number_format_fields
+		.as_deref()
+		.ok_or_else(|| Error::BadRequest {
+			message: "case_number_format_fields is required".to_string(),
+		})?;
+	if fields.is_empty()
+		|| fields.iter().any(|field| {
+			let field = field.trim();
+			field.is_empty() || !CASE_NUMBER_FORMAT_FIELDS.contains(&field)
+		})
+		|| fields
+			.iter()
+			.map(|field| field.trim())
+			.collect::<HashSet<_>>()
+			.len()
+			!= fields.len()
+	{
+		return Err(Error::BadRequest {
+			message: "case_number_format_fields contains an invalid or duplicate field"
+				.to_string(),
+		});
+	}
+	if fields.len() != 1 || fields[0].trim() != SUPPORTED_CASE_NUMBER_SETTING {
+		return Err(Error::BadRequest {
+			message: format!(
+				"case number format is not supported; select only '{SUPPORTED_CASE_NUMBER_SETTING}'"
+			),
+		});
+	}
+	Ok(())
 }
 
 fn normalize_notices(
@@ -550,9 +654,9 @@ async fn payload_to_value(
 	let case_number_padding = payload
 		.case_number_padding
 		.unwrap_or(existing_case_number_padding);
-	if case_number_padding < 0 {
+	if case_number_padding < 1 {
 		return Err(Error::BadRequest {
-			message: "case_number_padding must be zero or greater".to_string(),
+			message: "case_number_padding must be a positive integer".to_string(),
 		});
 	}
 	set_if_present(object, "idle_session_minutes", Some(&idle_session_minutes))?;
@@ -639,6 +743,7 @@ async fn payload_to_value(
 			message: "workflow_enabled is required".to_string(),
 		});
 	}
+	validate_case_number_settings(&validated_payload)?;
 	normalize_workflow_config(ctx, mm, validated_payload.workflow.clone()).await?;
 
 	Ok(merged)
@@ -673,9 +778,9 @@ async fn load_admin_settings_payload(
 				message: "case_number_padding is required".to_string(),
 			}
 		})?;
-		if case_number_padding < 0 {
+		if case_number_padding < 1 {
 			return Err(Error::BadRequest {
-				message: "case_number_padding must be zero or greater".to_string(),
+				message: "case_number_padding must be a positive integer".to_string(),
 			});
 		}
 		normalize_workflow_config(ctx, mm, payload.workflow.clone()).await?;

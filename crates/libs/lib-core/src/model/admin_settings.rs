@@ -127,6 +127,68 @@ async fn insert_notice_audit(
 }
 
 impl AdminSettingsBmc {
+	pub(crate) async fn ensure_default_for_org_in_transaction(
+		dbx: &Dbx,
+		organization_id: Uuid,
+		updated_by: Uuid,
+	) -> Result<()> {
+		let inserted = dbx
+			.fetch_optional(
+				sqlx::query_as::<_, (Uuid, Value)>(
+					"INSERT INTO app_settings (organization_id, key, value, updated_by)
+					 VALUES ($1, 'system', app_settings_default_value(), $2)
+					 ON CONFLICT (organization_id, key) DO NOTHING
+					 RETURNING organization_id, value",
+				)
+				.bind(organization_id)
+				.bind(updated_by),
+			)
+			.await?;
+
+		if let Some((_, value)) = inserted {
+			dbx.execute(
+				sqlx::query(
+					"INSERT INTO audit_logs (
+						table_name, record_id, organization_id, action, user_id,
+						changed_fields, old_values, new_values
+					) VALUES ('app_settings', $1, $1, 'CREATE', $2, $3, NULL, $4)",
+				)
+				.bind(organization_id)
+				.bind(updated_by)
+				.bind(changed_settings_fields(None, &value))
+				.bind(&value),
+			)
+			.await?;
+		}
+
+		Ok(())
+	}
+
+	pub async fn ensure_default_for_org(
+		ctx: &Ctx,
+		mm: &ModelManager,
+		organization_id: Uuid,
+	) -> Result<()> {
+		let dbx = mm.dbx();
+		dbx.begin_txn().await?;
+		if let Err(err) = set_full_context_from_ctx_dbx(dbx, ctx).await {
+			dbx.rollback_txn().await?;
+			return Err(err);
+		}
+		if let Err(err) = Self::ensure_default_for_org_in_transaction(
+			dbx,
+			organization_id,
+			ctx.user_id(),
+		)
+		.await
+		{
+			dbx.rollback_txn().await?;
+			return Err(err);
+		}
+		dbx.commit_txn().await?;
+		Ok(())
+	}
+
 	/// Fetch the JSON value stored for `key`, or `None` if not set.
 	pub async fn get(
 		ctx: &Ctx,
@@ -416,10 +478,11 @@ impl AdminSettingsBmc {
 		let mut retained_keys = HashSet::new();
 
 		for (index, notice) in notices.iter().enumerate() {
-			let notice_key = notice_text(notice, "id")
-				.ok_or_else(|| crate::model::Error::Validation {
+			let notice_key = notice_text(notice, "id").ok_or_else(|| {
+				crate::model::Error::Validation {
 					message: format!("notice at index {index} requires an id"),
-				})?;
+				}
+			})?;
 			let title = notice_text(notice, "title").ok_or_else(|| {
 				crate::model::Error::Validation {
 					message: format!("notice at index {index} requires a title"),
