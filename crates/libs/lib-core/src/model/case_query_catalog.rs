@@ -316,21 +316,21 @@ const AE_ITEMS: &[CatalogItem] = &[
 const DG_ITEMS: &[CatalogItem] = &[
 	item(
 		"medicinal_product",
-		"Medicinal Product (G.k.2.2)",
+		"Medicinal Product Name as Reported by the Primary Source (G.k.2.2)",
 		Text,
 		"medicinal_product",
 		OneToMany("drug_information"),
 	),
 	item(
 		"mpid",
-		"MPID (G.k.2.1.1b)",
+		"Medicinal Product Identifier (MPID) (G.k.2.1.1b)",
 		Code,
 		"mpid",
 		OneToMany("drug_information"),
 	),
 	item(
 		"drug_authorization_number",
-		"Authorization Number (G.k.3.1)",
+		"Authorisation / Application Number (G.k.3.1)",
 		Text,
 		"drug_authorization_number",
 		OneToMany("drug_information"),
@@ -554,57 +554,57 @@ pub const CATALOG: &[CatalogPage] = &[
 	},
 	CatalogPage {
 		id: "CI",
-		label: "Case Identification (C.1)",
+		label: "CI (C.1)",
 		items: CI_ITEMS,
 	},
 	CatalogPage {
 		id: "RP",
-		label: "Reporter (C.2)",
+		label: "RP (C.2.r)",
 		items: RP_ITEMS,
 	},
 	CatalogPage {
 		id: "SD",
-		label: "Sender (C.3)",
+		label: "SD (C.3)",
 		items: SD_ITEMS,
 	},
 	CatalogPage {
 		id: "LR",
-		label: "Literature (C.4)",
+		label: "LR (C.4.r)",
 		items: LR_ITEMS,
 	},
 	CatalogPage {
 		id: "SI",
-		label: "Study (C.5)",
+		label: "SI (C.5)",
 		items: SI_ITEMS,
 	},
 	CatalogPage {
 		id: "DM",
-		label: "Patient (D)",
+		label: "DM (D)",
 		items: DM_ITEMS,
 	},
 	CatalogPage {
 		id: "DH",
-		label: "Past Drug History (D.8)",
+		label: "DH (D.8.r)",
 		items: DH_ITEMS,
 	},
 	CatalogPage {
 		id: "AE",
-		label: "Reaction / Event (E)",
+		label: "AE (E.i)",
 		items: AE_ITEMS,
 	},
 	CatalogPage {
 		id: "LB",
-		label: "Test Results (F)",
+		label: "LB (F.r)",
 		items: LB_ITEMS,
 	},
 	CatalogPage {
 		id: "DG",
-		label: "Drug (G)",
+		label: "DG (G.k)",
 		items: DG_ITEMS,
 	},
 	CatalogPage {
 		id: "NR",
-		label: "Narrative (H)",
+		label: "NR (H)",
 		items: NR_ITEMS,
 	},
 ];
@@ -724,6 +724,25 @@ mod tests {
 			found.source.join,
 			JoinKind::OneToMany("drug_information")
 		));
+	}
+
+	#[test]
+	fn export_labels_match_e2b_section_and_drug_fields() {
+		assert_eq!(find_page("DG").unwrap().label, "DG (G.k)");
+		let labels: Vec<_> = find_page("DG")
+			.unwrap()
+			.items
+			.iter()
+			.map(|item| item.label)
+			.collect();
+		assert_eq!(
+			labels,
+			[
+				"Medicinal Product Name as Reported by the Primary Source (G.k.2.2)",
+				"Medicinal Product Identifier (MPID) (G.k.2.1.1b)",
+				"Authorisation / Application Number (G.k.3.1)",
+			]
+		);
 	}
 
 	#[test]

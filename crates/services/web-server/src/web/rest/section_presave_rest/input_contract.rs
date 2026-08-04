@@ -460,6 +460,11 @@ macro_rules! study_parent {
 			input_contracts::generated::c::c_5_4
 		);
 		check_text!(
+			"studyTypeReactionKr1",
+			$data.study_type_reaction_kr1,
+			input_contracts::generated::c::mfds_c_5_4_kr_1
+		);
+		check_text!(
 			"fdaIndNumberOccurred",
 			$data.fda_ind_number_occurred,
 			input_contracts::generated::c::fda_c_5_5a

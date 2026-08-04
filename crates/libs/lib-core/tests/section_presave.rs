@@ -569,6 +569,7 @@ fn study_presave_create(
 		sponsor_study_number: Some("AUTH-STUDY".into()),
 		sponsor_study_number_kind: None,
 		study_type_reaction: Some("1".into()),
+		study_type_reaction_kr1: None,
 		fda_ind_number_occurred: None,
 		fda_pre_anda_number_occurred: None,
 		edc_sync: None,
@@ -587,6 +588,7 @@ fn study_presave_create_for_product(
 		sponsor_study_number: Some(format!("REL-STUDY-{}", Uuid::new_v4())),
 		sponsor_study_number_kind: None,
 		study_type_reaction: Some("1".into()),
+		study_type_reaction_kr1: None,
 		fda_ind_number_occurred: None,
 		fda_pre_anda_number_occurred: None,
 		edc_sync: None,
@@ -1461,6 +1463,7 @@ async fn section_presave_parent_bmcs_crud_roundtrip() -> Result<()> {
 			sponsor_study_number: Some(format!("ST-001-{suffix}")),
 			sponsor_study_number_kind: Some("PROTOCOL_NO".into()),
 			study_type_reaction: Some("1".into()),
+			study_type_reaction_kr1: None,
 			fda_ind_number_occurred: None,
 			fda_pre_anda_number_occurred: None,
 			edc_sync: Some(true),
@@ -1487,6 +1490,7 @@ async fn section_presave_parent_bmcs_crud_roundtrip() -> Result<()> {
 		&ctx,
 		&mm,
 		NarrativePresaveForCreate {
+			template_title: Some("Case narrative template".into()),
 			case_narrative: Some("Case narrative text".into()),
 			case_narrative_notation: Some("Case narrative notation".into()),
 			additional_information: Some("Sponsor additional information".into()),
@@ -1494,6 +1498,10 @@ async fn section_presave_parent_bmcs_crud_roundtrip() -> Result<()> {
 	)
 	.await?;
 	let narrative = NarrativePresaveBmc::get(&ctx, &mm, narrative_id).await?;
+	assert_eq!(
+		narrative.template_title.as_deref(),
+		Some("Case narrative template")
+	);
 	assert_eq!(
 		narrative.case_narrative.as_deref(),
 		Some("Case narrative text")
@@ -1669,6 +1677,7 @@ async fn reporter_presave_accepts_field_specific_null_flavors() -> Result<()> {
 			postcode_null_flavor: None,
 			telephone: None,
 			telephone_null_flavor: Some("MSK".into()),
+			reporter_email: None,
 			country_code: None,
 			qualification: None,
 			qualification_kr1: None,
@@ -1726,6 +1735,7 @@ async fn reporter_presave_rejects_invalid_field_specific_null_flavors() -> Resul
 				postcode_null_flavor: None,
 				telephone: None,
 				telephone_null_flavor: None,
+				reporter_email: None,
 				country_code: None,
 				qualification: Some("1".into()),
 				qualification_kr1: None,
@@ -1963,7 +1973,8 @@ async fn section_presave_parent_bmcs_enforce_minimal_identity_requirements(
 				study_name_notation: None,
 				sponsor_study_number: Some("INVALID-STUDY".into()),
 				sponsor_study_number_kind: None,
-				study_type_reaction: None,
+			study_type_reaction: None,
+			study_type_reaction_kr1: None,
 				fda_ind_number_occurred: None,
 				fda_pre_anda_number_occurred: None,
 				edc_sync: None,
@@ -1997,6 +2008,7 @@ async fn section_presave_parent_bmcs_enforce_minimal_identity_requirements(
 		&ctx,
 		&mm,
 		NarrativePresaveForCreate {
+			template_title: None,
 			case_narrative: Some(format!("Minimal narrative {suffix}")),
 			case_narrative_notation: None,
 			additional_information: None,
@@ -2230,6 +2242,7 @@ async fn section_presave_parent_bmcs_reject_duplicate_identity_within_org(
 			sponsor_study_number: Some(format!("DUP-STUDY-{suffix}")),
 			sponsor_study_number_kind: None,
 			study_type_reaction: Some("1".into()),
+			study_type_reaction_kr1: None,
 			fda_ind_number_occurred: None,
 			fda_pre_anda_number_occurred: None,
 			edc_sync: None,
@@ -2248,6 +2261,7 @@ async fn section_presave_parent_bmcs_reject_duplicate_identity_within_org(
 				sponsor_study_number: Some(format!(" dup-study-{suffix} ")),
 				sponsor_study_number_kind: None,
 				study_type_reaction: Some("2".into()),
+				study_type_reaction_kr1: None,
 				fda_ind_number_occurred: None,
 				fda_pre_anda_number_occurred: None,
 				edc_sync: None,
@@ -2262,6 +2276,7 @@ async fn section_presave_parent_bmcs_reject_duplicate_identity_within_org(
 		&ctx,
 		&mm,
 		NarrativePresaveForCreate {
+			template_title: None,
 			case_narrative: Some(format!("Duplicate narrative body {suffix}")),
 			case_narrative_notation: None,
 			additional_information: None,
@@ -2273,6 +2288,7 @@ async fn section_presave_parent_bmcs_reject_duplicate_identity_within_org(
 			&ctx,
 			&mm,
 			NarrativePresaveForCreate {
+				template_title: None,
 				case_narrative: Some(format!(" duplicate narrative body {suffix} ")),
 				case_narrative_notation: None,
 				additional_information: None,
@@ -2602,6 +2618,7 @@ async fn section_presave_child_bmcs_crud_roundtrip() -> Result<()> {
 			sponsor_study_number: Some(format!("CHILD-STUDY-{suffix}")),
 			sponsor_study_number_kind: None,
 			study_type_reaction: Some("1".into()),
+			study_type_reaction_kr1: None,
 			fda_ind_number_occurred: None,
 			fda_pre_anda_number_occurred: None,
 			edc_sync: None,
@@ -2613,6 +2630,7 @@ async fn section_presave_child_bmcs_crud_roundtrip() -> Result<()> {
 		&ctx,
 		&mm,
 		NarrativePresaveForCreate {
+			template_title: None,
 			case_narrative: Some(format!("Child narrative {suffix}")),
 			case_narrative_notation: None,
 			additional_information: None,
