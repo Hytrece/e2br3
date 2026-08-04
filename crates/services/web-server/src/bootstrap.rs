@@ -18,6 +18,7 @@ const INITIAL_PASSWORD: &str = "welcome";
 const LEGACY_DEMO_EMAIL: &str = "demo.user@example.com";
 const DEMO_CRO_ORG_ID: &str = "00000000-0000-0000-0000-000000000001";
 const DEMO_COMPANY_ORG_ID: &str = "00000000-0000-0000-0000-000000000002";
+const DEMO_CRO_SENDER_ID: &str = "00000000-0000-0000-0000-000000000003";
 const DEMO_CRO_ADMIN_EMAIL: &str = "demo.cro.admin@example.com";
 const DEMO_CRO_ADMIN_USERNAME: &str = "demo_cro_admin";
 const DEMO_COMPANY_ADMIN_EMAIL: &str = "demo.company.admin@example.com";
@@ -44,6 +45,12 @@ pub async fn bootstrap_admin_user(mm: &ModelManager) -> Result<()> {
 		"Demo Pharmaceutical Company",
 		"pharmaceutical_company",
 		"demo-company@example.com",
+	)
+	.await?;
+	sync_sender_presave(
+		mm,
+		cro_org_id,
+		Uuid::parse_str(DEMO_CRO_SENDER_ID).expect("invalid CRO sender id"),
 	)
 	.await?;
 	sync_user(
@@ -77,6 +84,63 @@ pub async fn bootstrap_admin_user(mm: &ModelManager) -> Result<()> {
 	)
 	.await?;
 
+	Ok(())
+}
+
+async fn sync_sender_presave(
+	mm: &ModelManager,
+	organization_id: Uuid,
+	sender_id: Uuid,
+) -> Result<()> {
+	let root_ctx = Ctx::root_ctx();
+	mm.dbx().begin_txn().await.map_err(dbx_into_web)?;
+	set_full_context_dbx(
+		mm.dbx(),
+		root_ctx.user_id(),
+		root_ctx.organization_id(),
+		root_ctx.role(),
+	)
+	.await
+	.map_err(dbx_into_web)?;
+	let result = mm
+		.dbx()
+		.execute(
+			query(
+				r#"
+				INSERT INTO sender_presaves (
+					id, organization_id, deleted, is_default, sender_type,
+					organization_name, created_by, updated_by
+				) VALUES (
+					$1, $2, false, true, '1', 'Demo Sender Organization', $3, $3
+				)
+				ON CONFLICT (id) DO UPDATE
+				SET organization_id = EXCLUDED.organization_id,
+					deleted = false,
+					is_default = true,
+					sender_type = EXCLUDED.sender_type,
+					organization_name = EXCLUDED.organization_name,
+					updated_by = EXCLUDED.updated_by,
+					updated_at = NOW()
+				"#,
+			)
+			.bind(sender_id)
+			.bind(organization_id)
+			.bind(root_ctx.user_id()),
+		)
+		.await;
+	match result {
+		Ok(_) => {
+			mm.dbx().commit_txn().await.map_err(dbx_into_web)?;
+			info!(
+				"BOOTSTRAP - synced demo sender {} with id {}",
+				"Demo Sender Organization", sender_id
+			);
+		}
+		Err(err) => {
+			mm.dbx().rollback_txn().await.map_err(dbx_into_web)?;
+			return Err(dbx_into_web(err));
+		}
+	}
 	Ok(())
 }
 
@@ -443,6 +507,33 @@ mod tests {
 					&& org_type == "pharmaceutical_company"
 			}),
 			"{rows:?}"
+		);
+
+		mm.dbx().begin_txn().await.expect("begin sender query");
+		set_full_context_dbx(
+			mm.dbx(),
+			root_ctx.user_id(),
+			root_ctx.organization_id(),
+			root_ctx.role(),
+		)
+		.await
+		.expect("set sender query context");
+		let sender = mm
+			.dbx()
+			.fetch_optional(sqlx::query_as::<_, (Uuid, Uuid, String)>(
+				"SELECT id, organization_id, organization_name FROM sender_presaves WHERE id = $1",
+			)
+			.bind(Uuid::parse_str(DEMO_CRO_SENDER_ID).expect("invalid CRO sender id")))
+			.await
+			.expect("query bootstrapped sender");
+		mm.dbx().commit_txn().await.expect("commit sender query");
+		assert_eq!(
+			sender,
+			Some((
+				Uuid::parse_str(DEMO_CRO_SENDER_ID).expect("invalid CRO sender id"),
+				Uuid::parse_str(DEMO_CRO_ORG_ID).expect("invalid CRO org id"),
+				"Demo Sender Organization".to_string(),
+			))
 		);
 	}
 }

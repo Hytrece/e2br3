@@ -143,6 +143,12 @@ pub struct RoutingSelectionBody {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RoutingProfileQuery {
+	pub organization_id: Option<Uuid>,
+}
+
+#[derive(Debug, Deserialize)]
 pub struct OrganizationSelectionBody {
 	#[serde(alias = "organizationId")]
 	pub organization_id: Uuid,

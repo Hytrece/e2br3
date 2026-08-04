@@ -118,3 +118,45 @@ async fn current_user_can_switch_active_database_to_member_org_only() -> Result<
 
 	Ok(())
 }
+
+#[serial]
+#[tokio::test]
+async fn routing_preview_allows_member_org_without_switching_active_database(
+) -> Result<()> {
+	let mm = init_test_mm().await?;
+	let seed = seed_two_orgs_users_cases(&mm).await?;
+	insert_user_organization_membership(&mm, seed.user1.id, seed.org2_id).await?;
+	let token = generate_web_token(&seed.user1.email, seed.user1.token_salt)?;
+	let cookie = cookie_header(&token.to_string());
+	let app = web_server::app(mm.clone());
+
+	let (status, preview) = request_json(
+		&app,
+		"GET",
+		&cookie,
+		&format!("/api/users/me/routing?organizationId={}", seed.org2_id),
+		None,
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK, "{preview:?}");
+
+	let (status, rejected) = request_json(
+		&app,
+		"GET",
+		&cookie,
+		&format!("/api/users/me/routing?organizationId={}", seed.user2.id),
+		None,
+	)
+	.await?;
+	assert_eq!(status, StatusCode::FORBIDDEN, "{rejected:?}");
+
+	let (status, profile) =
+		request_json(&app, "GET", &cookie, "/api/users/me/profile", None).await?;
+	assert_eq!(status, StatusCode::OK, "{profile:?}");
+	assert_eq!(
+		profile["data"]["activeOrganization"]["id"].as_str(),
+		Some(seed.org1_id.to_string().as_str())
+	);
+
+	Ok(())
+}

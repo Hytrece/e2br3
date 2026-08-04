@@ -512,12 +512,37 @@ pub async fn update_current_user_organization(
 pub async fn get_current_user_routing(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	axum::extract::Query(query): axum::extract::Query<RoutingProfileQuery>,
 ) -> Result<(
 	StatusCode,
 	Json<DataRestResult<lib_rest_core::RoutingProfile>>,
 )> {
 	let ctx = ctx_w.0;
-	let routing = routing_profile_for_user(&ctx, &mm).await?;
+	let organization_id = query
+		.organization_id
+		.unwrap_or_else(|| ctx.organization_id());
+	let routing_ctx = if organization_id == ctx.organization_id() {
+		ctx
+	} else {
+		let is_member = UserBmc::user_has_organization_membership(
+			&ctx,
+			&mm,
+			ctx.user_id(),
+			organization_id,
+		)
+		.await?;
+		if !is_member {
+			return Err(Error::AccessDenied {
+				required_role: "organization_membership".to_string(),
+			});
+		}
+		Ctx::new(ctx.user_id(), organization_id, ctx.role().to_string()).map_err(
+			|_| Error::BadRequest {
+				message: "valid organization context required".to_string(),
+			},
+		)?
+	};
+	let routing = routing_profile_for_user(&routing_ctx, &mm).await?;
 	Ok((StatusCode::OK, Json(DataRestResult { data: routing })))
 }
 
