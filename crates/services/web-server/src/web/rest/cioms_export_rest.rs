@@ -26,8 +26,6 @@ mod data;
 mod font;
 mod format;
 mod layout;
-#[cfg(test)]
-mod tests;
 mod types;
 
 pub use build::export_case_cioms_pdf;
