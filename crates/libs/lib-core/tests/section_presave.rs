@@ -1416,7 +1416,7 @@ async fn section_presave_parent_bmcs_crud_roundtrip() -> Result<()> {
 			mfds_mpid_version: None,
 			phpid: None,
 			phpid_version: None,
-			investigational_product_blinded: Some(false),
+			investigational_product_blinded: None,
 			obtain_drug_country: Some("KR".into()),
 			drug_authorization_number: Some("AUTH-1".into()),
 			drug_authorization_country: Some("KR".into()),
@@ -1602,7 +1602,7 @@ async fn authorityless_union_fields_are_allowed() -> Result<()> {
 		&mm,
 		reporter_id,
 		ReporterPresaveForUpdate {
-			primary_source_regulatory: Some("2".into()),
+			primary_source_regulatory: Some("1".into()),
 			..Default::default()
 		},
 	)
@@ -1662,7 +1662,7 @@ async fn reporter_presave_accepts_field_specific_null_flavors() -> Result<()> {
 			reporter_middle_name_null_flavor: None,
 			reporter_family_name: None,
 			reporter_family_name_null_flavor: None,
-			organization: Some(format!("Reporter Org {suffix}")),
+			organization: None,
 			organization_null_flavor: Some("NASK".into()),
 			department: None,
 			department_null_flavor: None,
