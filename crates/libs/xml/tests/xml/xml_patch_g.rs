@@ -209,6 +209,7 @@ fn patch_g_drug_emits_relatedness_assessment_values() {
 		last_dose_interval_unit: None,
 		recurrence_action: None,
 		reaction_recurred: None,
+		dechallenge_result: None,
 		created_at: OffsetDateTime::now_utc(),
 		updated_at: OffsetDateTime::now_utc(),
 		created_by: Uuid::new_v4(),

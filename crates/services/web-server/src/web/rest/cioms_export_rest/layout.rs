@@ -1,5 +1,78 @@
 use super::*;
 
+fn selected_suspect_drug(data: &CiomsCaseData) -> Option<&DrugInformation> {
+	data.drugs
+		.iter()
+		.find(|drug| drug.drug_characterization == "1")
+}
+
+fn cioms_item_20_result<'a>(
+	case_number: &str,
+	drug_id: Uuid,
+	values: impl IntoIterator<Item = Option<&'a str>>,
+) -> Result<&'static str> {
+	let mut values = values.into_iter();
+	let first_value = values.next().ok_or_else(|| Error::BadRequest {
+		message: format!(
+			"CIOMS Item 20 validation failed for case {}: suspect drug {} has no drug-reaction assessment",
+			case_number, drug_id
+		),
+	})?;
+	let first_value = first_value.ok_or_else(|| {
+		Error::BadRequest {
+			message: format!(
+				"CIOMS Item 20 validation failed for case {}: suspect drug {} has a missing dechallenge result",
+				case_number, drug_id
+			),
+		}
+	})?;
+	for value in values {
+		let value = value.ok_or_else(|| {
+			Error::BadRequest {
+				message: format!(
+					"CIOMS Item 20 validation failed for case {}: suspect drug {} has a missing dechallenge result",
+					case_number, drug_id
+				),
+			}
+		})?;
+		if value != first_value {
+			return Err(Error::BadRequest {
+				message: format!(
+					"CIOMS Item 20 validation failed for case {}: suspect drug {} has conflicting dechallenge results",
+					case_number, drug_id
+				),
+			});
+		}
+	}
+
+	if matches!(first_value, "1" | "2" | "3") {
+		return Ok(yes_no_na(Some(first_value)));
+	}
+	Err(Error::BadRequest {
+		message: format!(
+			"CIOMS Item 20 validation failed for case {}: suspect drug {} has invalid dechallenge result '{}'",
+			case_number, drug_id, first_value
+		),
+	})
+}
+
+fn cioms_item_20_value(data: &CiomsCaseData) -> Result<&'static str> {
+	let drug = selected_suspect_drug(data).ok_or_else(|| Error::BadRequest {
+		message: format!(
+			"CIOMS Item 20 validation failed for case {}: no suspect drug",
+			data.case_number
+		),
+	})?;
+	cioms_item_20_result(
+		&data.case_number,
+		drug.id,
+		data.causality_rows
+			.iter()
+			.filter(|row| row.drug_id == drug.id)
+			.map(|row| row.dechallenge_result.as_deref()),
+	)
+}
+
 pub(super) fn render_cioms_first_page(
 	canvas: &mut PdfCanvas,
 	data: &CiomsCaseData,
@@ -7,7 +80,7 @@ pub(super) fn render_cioms_first_page(
 	options: CiomsExportOptions,
 	page_width: i32,
 	page_height: i32,
-) {
+) -> Result<()> {
 	if settings.orientation.eq_ignore_ascii_case("Portrait") {
 		render_portrait_cioms(
 			canvas,
@@ -16,10 +89,11 @@ pub(super) fn render_cioms_first_page(
 			options,
 			page_width,
 			page_height,
-		);
+		)?;
 	} else {
-		render_landscape_cioms(canvas, data, settings, options);
+		render_landscape_cioms(canvas, data, settings, options)?;
 	}
+	Ok(())
 }
 
 pub(super) fn render_landscape_cioms(
@@ -27,7 +101,7 @@ pub(super) fn render_landscape_cioms(
 	data: &CiomsCaseData,
 	settings: &CiomsSettings,
 	options: CiomsExportOptions,
-) {
+) -> Result<()> {
 	let template = CIOMS_LANDSCAPE_TEMPLATE;
 	let width = template.page_width;
 	let height = template.page_height;
@@ -57,6 +131,7 @@ pub(super) fn render_landscape_cioms(
 					.map_or(true, |reaction_id| row.reaction_id == reaction_id)
 		})
 	});
+	let dechallenge_result = cioms_item_20_value(data)?;
 
 	canvas.text(28, height - 28, 15, "CIOMS FORM");
 	canvas.text(148, height - 28, 13, "SUSPECT ADVERSE REACTION REPORT");
@@ -265,8 +340,7 @@ pub(super) fn render_landscape_cioms(
 		118,
 		42,
 		"20. DID REACTION ABATE AFTER STOPPING DRUG?",
-		// ponytail: keep blank until an explicit dechallenge field exists; never infer it from G.k.7.
-		"",
+		dechallenge_result,
 		20,
 		1,
 	);
@@ -405,6 +479,7 @@ pub(super) fn render_landscape_cioms(
 	render_reporter_footer(canvas, 34, 38, source);
 	render_missing_information_legend(canvas, 300, 38);
 	render_cioms_notation(canvas, data, options, 34, 26);
+	Ok(())
 }
 
 fn render_portrait_cioms(
@@ -414,7 +489,7 @@ fn render_portrait_cioms(
 	options: CiomsExportOptions,
 	page_width: i32,
 	page_height: i32,
-) {
+) -> Result<()> {
 	let form = CiomsFormData::from_case_data(data, settings);
 	let first_reaction = data.reactions.first();
 	let first_reaction_id = first_reaction.map(|reaction| reaction.id);
@@ -436,6 +511,7 @@ fn render_portrait_cioms(
 					.map_or(true, |reaction_id| row.reaction_id == reaction_id)
 		})
 	});
+	let dechallenge_result = cioms_item_20_value(data)?;
 	let patient = data.patient.as_ref();
 	let report = data.report.as_ref();
 	let source = data.primary_sources.first();
@@ -636,8 +712,7 @@ fn render_portrait_cioms(
 		95,
 		42,
 		"20. DID REACTION ABATE AFTER STOPPING DRUG?",
-		// ponytail: keep blank until an explicit dechallenge field exists; never infer it from G.k.7.
-		"",
+		dechallenge_result,
 		14,
 		1,
 	);
@@ -773,6 +848,7 @@ fn render_portrait_cioms(
 	render_reporter_footer(canvas, 34, 58, source);
 	render_missing_information_legend(canvas, 34, 46);
 	render_portrait_cioms_notation(canvas, data, options, 34, 26);
+	Ok(())
 }
 
 fn render_portrait_cioms_notation(
@@ -1519,5 +1595,34 @@ fn render_continuation_row(
 		}
 		*y -= row_height + 5;
 		offset += count;
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn cioms_item_20_rolls_up_identical_values() {
+		assert_eq!(
+			cioms_item_20_result("CASE-1", Uuid::nil(), [Some("1"), Some("1")],)
+				.unwrap(),
+			"Yes"
+		);
+		assert_eq!(
+			cioms_item_20_result("CASE-1", Uuid::nil(), [Some("3")]).unwrap(),
+			"NA"
+		);
+	}
+
+	#[test]
+	fn cioms_item_20_rejects_missing_conflicting_and_invalid_values() {
+		assert!(cioms_item_20_result("CASE-1", Uuid::nil(), []).is_err());
+		assert!(cioms_item_20_result("CASE-1", Uuid::nil(), [None]).is_err());
+		assert!(
+			cioms_item_20_result("CASE-1", Uuid::nil(), [Some("1"), Some("2")])
+				.is_err()
+		);
+		assert!(cioms_item_20_result("CASE-1", Uuid::nil(), [Some("9")]).is_err());
 	}
 }

@@ -29,6 +29,7 @@ pub(super) struct CiomsDrugReactionCausalityRow {
 	pub(super) last_dose_interval_unit: Option<String>,
 	pub(super) recurrence_action: Option<String>,
 	pub(super) reaction_recurred: Option<String>,
+	pub(super) dechallenge_result: Option<String>,
 	pub(super) relatedness_sequence_number: Option<i32>,
 	pub(super) relatedness_source: Option<String>,
 	pub(super) relatedness_method: Option<String>,

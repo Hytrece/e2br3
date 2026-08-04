@@ -363,6 +363,10 @@ CREATE TABLE drug_reaction_assessments (
     reaction_recurred VARCHAR(1) CHECK (reaction_recurred IN ('1', '2', '3')),
     -- 1=Yes, 2=No, 3=Unknown
 
+    -- CIOMS Item 20 - Did reaction abate after stopping drug?
+    dechallenge_result VARCHAR(1) CHECK (dechallenge_result IN ('1', '2', '3')),
+    -- 1=Yes, 2=No, 3=Not applicable
+
     -- Audit fields (standardized UUID-based)
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),

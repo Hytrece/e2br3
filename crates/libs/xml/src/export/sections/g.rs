@@ -2085,6 +2085,7 @@ mod tests {
 			last_dose_interval_unit: None,
 			recurrence_action: Some("1".to_string()),
 			reaction_recurred: Some("1".to_string()),
+			dechallenge_result: None,
 			created_at: OffsetDateTime::now_utc(),
 			updated_at: OffsetDateTime::now_utc(),
 			created_by: Uuid::new_v4(),

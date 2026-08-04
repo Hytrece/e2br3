@@ -419,11 +419,12 @@ BEGIN
     INSERT INTO drug_reaction_assessments (
         id, drug_id, reaction_id, administration_start_interval_value, administration_start_interval_unit,
         last_dose_interval_value, last_dose_interval_unit, recurrence_action, reaction_recurred,
+        dechallenge_result,
         created_by, updated_by, created_at, updated_at
     )
     VALUES (
         v_drug_assessment_id, v_drug_info_id, v_reaction_id, 1, '801',
-        6, '804', '1', '1',
+        6, '804', '1', '1', '3',
         v_user_id, v_user_id, NOW(), NOW()
     )
     ON CONFLICT (id) DO NOTHING;

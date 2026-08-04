@@ -1154,12 +1154,12 @@ pub struct ProductPresave {
 	pub original_manufacturer: Option<String>,
 	pub product_description: Option<String>,
 	pub mpid: Option<String>,
-	#[serde(rename = "mpidVersionDateNumber")]
+	#[serde(rename = "mpidVersion", alias = "mpidVersionDateNumber")]
 	pub mpid_version: Option<String>,
 	pub mfds_mpid: Option<String>,
 	pub mfds_mpid_version: Option<String>,
 	pub phpid: Option<String>,
-	#[serde(rename = "phpidVersionDateNumber")]
+	#[serde(rename = "phpidVersion", alias = "phpidVersionDateNumber")]
 	pub phpid_version: Option<String>,
 	pub investigational_product_blinded: Option<bool>,
 	pub obtain_drug_country: Option<String>,
@@ -1188,12 +1188,12 @@ pub struct ProductPresaveForCreate {
 	pub original_manufacturer: Option<String>,
 	pub product_description: Option<String>,
 	pub mpid: Option<String>,
-	#[serde(rename = "mpidVersionDateNumber")]
+	#[serde(rename = "mpidVersion", alias = "mpidVersionDateNumber")]
 	pub mpid_version: Option<String>,
 	pub mfds_mpid: Option<String>,
 	pub mfds_mpid_version: Option<String>,
 	pub phpid: Option<String>,
-	#[serde(rename = "phpidVersionDateNumber")]
+	#[serde(rename = "phpidVersion", alias = "phpidVersionDateNumber")]
 	pub phpid_version: Option<String>,
 	pub investigational_product_blinded: Option<bool>,
 	pub obtain_drug_country: Option<String>,
@@ -1555,6 +1555,7 @@ pub struct ReporterPresave {
 	pub postcode_null_flavor: Option<String>,
 	pub telephone: Option<String>,
 	pub telephone_null_flavor: Option<String>,
+	pub reporter_email: Option<String>,
 	pub country_code: Option<String>,
 	pub qualification: Option<String>,
 	// MFDS.C.2.r.4.KR.1 - Other health professional type
@@ -1592,6 +1593,7 @@ pub struct ReporterPresaveForCreate {
 	pub postcode_null_flavor: Option<String>,
 	pub telephone: Option<String>,
 	pub telephone_null_flavor: Option<String>,
+	pub reporter_email: Option<String>,
 	pub country_code: Option<String>,
 	pub qualification: Option<String>,
 	// MFDS.C.2.r.4.KR.1 - Other health professional type
@@ -1625,6 +1627,7 @@ struct ReporterPresaveForInsert {
 	postcode_null_flavor: Option<String>,
 	telephone: Option<String>,
 	telephone_null_flavor: Option<String>,
+	reporter_email: Option<String>,
 	country_code: Option<String>,
 	qualification: Option<String>,
 	qualification_kr1: Option<String>,
@@ -1660,6 +1663,7 @@ impl IntoOrgScopedCreate for ReporterPresaveForCreate {
 			postcode_null_flavor: self.postcode_null_flavor,
 			telephone: self.telephone,
 			telephone_null_flavor: self.telephone_null_flavor,
+			reporter_email: self.reporter_email,
 			country_code: self.country_code,
 			qualification: self.qualification,
 			qualification_kr1: self.qualification_kr1,
@@ -1695,6 +1699,7 @@ pub struct ReporterPresaveForUpdate {
 	pub postcode_null_flavor: Option<String>,
 	pub telephone: Option<String>,
 	pub telephone_null_flavor: Option<String>,
+	pub reporter_email: Option<String>,
 	pub country_code: Option<String>,
 	pub qualification: Option<String>,
 	// MFDS.C.2.r.4.KR.1 - Other health professional type

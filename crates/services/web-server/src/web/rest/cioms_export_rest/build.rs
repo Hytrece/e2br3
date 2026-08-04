@@ -26,7 +26,7 @@ pub(super) fn ordered_cioms_case_data(
 pub(super) fn build_cioms_pdf(
 	data: &CiomsCaseData,
 	settings: &CiomsSettings,
-) -> Vec<u8> {
+) -> Result<Vec<u8>> {
 	build_cioms_pdf_with_options(data, settings, CiomsExportOptions::default())
 }
 
@@ -34,7 +34,7 @@ pub(super) fn build_cioms_pdf_with_options(
 	data: &CiomsCaseData,
 	settings: &CiomsSettings,
 	options: CiomsExportOptions,
-) -> Vec<u8> {
+) -> Result<Vec<u8>> {
 	let (width, height) = if settings.orientation.eq_ignore_ascii_case("Portrait") {
 		(595, 842)
 	} else {
@@ -46,7 +46,14 @@ pub(super) fn build_cioms_pdf_with_options(
 	let ordered = ordered_cioms_case_data(data, settings);
 	let mut canvas = PdfCanvas::with_font_mapping(&[]);
 	canvas.stream.push_str("0.8 w\n");
-	render_cioms_first_page(&mut canvas, &ordered, settings, options, width, height);
+	render_cioms_first_page(
+		&mut canvas,
+		&ordered,
+		settings,
+		options,
+		width,
+		height,
+	)?;
 	let mut font_mapping = canvas.font_mapping();
 	let first_stream = canvas.stream;
 	let overflow = collect_cioms_overflow(&ordered, settings, options);
@@ -169,7 +176,7 @@ pub(super) fn build_cioms_pdf_with_options(
 		)
 		.as_bytes(),
 	);
-	pdf
+	Ok(pdf)
 }
 
 pub async fn export_case_cioms_pdf(
@@ -197,7 +204,7 @@ pub async fn export_case_cioms_pdf(
 							.include_notation
 							.unwrap_or(settings.notation),
 					},
-				);
+				)?;
 				let file_name = format!("{}-cioms.pdf", data.case_number);
 
 				let mut response = (StatusCode::OK, pdf).into_response();

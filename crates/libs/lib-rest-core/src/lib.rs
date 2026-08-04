@@ -256,11 +256,12 @@ pub async fn load_workflow_runtime_settings(
 	let value = value.ok_or_else(|| Error::BadRequest {
 		message: "admin settings record is missing".to_string(),
 	})?;
-	let parsed = serde_json::from_value::<WorkflowSettingsDoc>(value).map_err(|err| {
-		Error::BadRequest {
-			message: format!("stored workflow settings are invalid: {err}"),
-		}
-	})?;
+	let parsed =
+		serde_json::from_value::<WorkflowSettingsDoc>(value).map_err(|err| {
+			Error::BadRequest {
+				message: format!("stored workflow settings are invalid: {err}"),
+			}
+		})?;
 	let enabled = parsed.workflow_enabled.ok_or_else(|| Error::BadRequest {
 		message: "workflow_enabled is required".to_string(),
 	})?;
@@ -288,9 +289,7 @@ pub async fn load_workflow_runtime_settings(
 				});
 			}
 			let due_days = status.due_days.ok_or_else(|| Error::BadRequest {
-				message: format!(
-					"workflow status '{name}' due_days is required"
-				),
+				message: format!("workflow status '{name}' due_days is required"),
 			})?;
 			if due_days < 0 {
 				return Err(Error::BadRequest {
@@ -299,11 +298,12 @@ pub async fn load_workflow_runtime_settings(
 					),
 				});
 			}
-			let allowed_roles = status.allowed_roles.ok_or_else(|| Error::BadRequest {
-				message: format!(
-					"workflow status '{name}' allowed_roles is required"
-				),
-			})?;
+			let allowed_roles =
+				status.allowed_roles.ok_or_else(|| Error::BadRequest {
+					message: format!(
+						"workflow status '{name}' allowed_roles is required"
+					),
+				})?;
 			let allowed_roles = allowed_roles
 				.into_iter()
 				.map(|role| canonical_role(role.trim()))
@@ -327,10 +327,7 @@ pub async fn load_workflow_runtime_settings(
 		})
 		.collect::<Result<Vec<_>>>()?;
 
-	Ok(WorkflowRuntimeSettings {
-		enabled,
-		statuses,
-	})
+	Ok(WorkflowRuntimeSettings { enabled, statuses })
 }
 
 #[derive(Debug, FromRow)]

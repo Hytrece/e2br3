@@ -357,6 +357,7 @@ CREATE TABLE IF NOT EXISTS reporter_presaves (
     postcode_null_flavor VARCHAR(4) CHECK (postcode_null_flavor IN ('MSK', 'ASKU', 'NASK')),
     telephone VARCHAR(50),
     telephone_null_flavor VARCHAR(4) CHECK (telephone_null_flavor IN ('MSK', 'ASKU', 'NASK')),
+    reporter_email VARCHAR(100),
     country_code VARCHAR(2),
     qualification VARCHAR(50),
     qualification_kr1 VARCHAR(50),  -- MFDS.C.2.r.4.KR.1 Other health professional type

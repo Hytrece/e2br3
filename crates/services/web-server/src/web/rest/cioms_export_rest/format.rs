@@ -80,7 +80,7 @@ pub(super) fn yes_no_na(value: Option<&str>) -> &'static str {
 	match value.unwrap_or_default() {
 		"1" => "Yes",
 		"2" => "No",
-		"3" => "N/A",
+		"3" => "NA",
 		_ => "",
 	}
 }

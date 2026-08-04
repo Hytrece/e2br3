@@ -30,8 +30,6 @@ mod types;
 
 pub use build::export_case_cioms_pdf;
 
-#[cfg(test)]
-use build::*;
 use canvas::*;
 use data::*;
 use font::*;

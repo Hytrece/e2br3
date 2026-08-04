@@ -258,6 +258,11 @@ macro_rules! reporter {
 			$data.telephone_null_flavor,
 			input_contracts::generated::c::c_2_r_2_7
 		);
+		check_text!(
+			"reporterEmail",
+			$data.reporter_email,
+			input_contracts::generated::c::fda_c_2_r_2_8
+		);
 		// ICH.C.2.r.3-4 / MFDS.C.2.r.4.KR.1
 		check_text!(
 			"countryCode",
@@ -573,6 +578,18 @@ mod tests {
 		};
 		let error = reporter_create(&data).unwrap_err();
 		assert!(matches!(error, Error::ConstraintViolation(_)));
+	}
+
+	#[test]
+	fn reporter_rejects_overlong_email() {
+		let data = ReporterPresaveForCreate {
+			reporter_email: Some("x".repeat(101)),
+			..Default::default()
+		};
+		assert!(matches!(
+			reporter_create(&data),
+			Err(Error::ConstraintViolation(_))
+		));
 	}
 
 	#[test]

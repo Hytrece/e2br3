@@ -204,6 +204,7 @@ async fn load_causality_rows_by_case(
 				        dra.last_dose_interval_unit,
 				        dra.recurrence_action,
 				        dra.reaction_recurred,
+				        dra.dechallenge_result,
 				        ra.sequence_number AS relatedness_sequence_number,
 				        ra.source_of_assessment AS relatedness_source,
 				        ra.method_of_assessment AS relatedness_method,

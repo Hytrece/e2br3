@@ -4,9 +4,7 @@ use axum::http::StatusCode;
 use axum::Json;
 use chrono::{NaiveDate, Utc};
 use lib_core::authorization::eligible_action_ids;
-use lib_core::ctx::{
-	canonical_role, Ctx,
-};
+use lib_core::ctx::{canonical_role, Ctx};
 use lib_core::model::admin_settings::AdminSettingsBmc;
 use lib_core::model::ModelManager;
 use lib_rest_core::{
@@ -291,17 +289,16 @@ fn validate_case_number_settings(payload: &AdminSettingsPayload) -> Result<()> {
 		|| fields.iter().any(|field| {
 			let field = field.trim();
 			field.is_empty() || !CASE_NUMBER_FORMAT_FIELDS.contains(&field)
-		})
-		|| fields
-			.iter()
-			.map(|field| field.trim())
-			.collect::<HashSet<_>>()
-			.len()
-			!= fields.len()
+		}) || fields
+		.iter()
+		.map(|field| field.trim())
+		.collect::<HashSet<_>>()
+		.len() != fields.len()
 	{
 		return Err(Error::BadRequest {
-			message: "case_number_format_fields contains an invalid or duplicate field"
-				.to_string(),
+			message:
+				"case_number_format_fields contains an invalid or duplicate field"
+					.to_string(),
 		});
 	}
 	if fields.len() != 1 || fields[0].trim() != SUPPORTED_CASE_NUMBER_SETTING {
@@ -396,12 +393,23 @@ async fn normalize_workflow_config(
 					name,
 					editable: status.editable,
 					description: status.description.map(|v| v.trim().to_string()),
-					due_days: Some(status.due_days.ok_or_else(|| Error::BadRequest {
-						message: "workflow status due_days is required".to_string(),
+					due_days: Some(status.due_days.ok_or_else(|| {
+						Error::BadRequest {
+							message: "workflow status due_days is required"
+								.to_string(),
+						}
 					})?),
-					allowed_roles: Some(status.allowed_roles.ok_or_else(|| Error::BadRequest {
-						message: "workflow status allowed_roles is required".to_string(),
-					})?.into_iter().map(|role| canonical_role(role.trim())).collect()),
+					allowed_roles: Some(
+						status
+							.allowed_roles
+							.ok_or_else(|| Error::BadRequest {
+								message: "workflow status allowed_roles is required"
+									.to_string(),
+							})?
+							.into_iter()
+							.map(|role| canonical_role(role.trim()))
+							.collect(),
+					),
 				})
 			}
 		})
@@ -440,8 +448,12 @@ async fn normalize_workflow_config(
 
 	for status in &statuses {
 		if status.due_days.ok_or_else(|| Error::BadRequest {
-			message: format!("workflow status '{}' due_days is required", status.name),
-		})? < 0 {
+			message: format!(
+				"workflow status '{}' due_days is required",
+				status.name
+			),
+		})? < 0
+		{
 			return Err(Error::BadRequest {
 				message: format!(
 					"workflow status '{}' due_days must be zero or greater",
@@ -449,9 +461,16 @@ async fn normalize_workflow_config(
 				),
 			});
 		}
-		for role in status.allowed_roles.as_deref().ok_or_else(|| Error::BadRequest {
-			message: format!("workflow status '{}' allowed_roles is required", status.name),
-		})? {
+		for role in
+			status
+				.allowed_roles
+				.as_deref()
+				.ok_or_else(|| Error::BadRequest {
+					message: format!(
+						"workflow status '{}' allowed_roles is required",
+						status.name
+					),
+				})? {
 			if role.is_empty() || !known_roles.contains(role) {
 				return Err(Error::BadRequest {
 					message: format!(
@@ -555,7 +574,9 @@ async fn payload_to_value(
 	if let Some(data_ordering) = payload.data_ordering.as_deref() {
 		object.insert(
 			"data_ordering".to_string(),
-			json!(runtime_settings::normalize_data_ordering(Some(data_ordering))?),
+			json!(runtime_settings::normalize_data_ordering(Some(
+				data_ordering
+			))?),
 		);
 	}
 	set_if_present(
@@ -713,7 +734,8 @@ async fn payload_to_value(
 	);
 
 	if payload.workflow.is_some() {
-		let workflow = normalize_workflow_config(ctx, mm, payload.workflow.clone()).await?;
+		let workflow =
+			normalize_workflow_config(ctx, mm, payload.workflow.clone()).await?;
 		object.insert("workflow".to_string(), serde_json::to_value(workflow)?);
 	}
 
@@ -732,7 +754,7 @@ async fn payload_to_value(
 			.as_deref()
 			.map(str::trim)
 			.filter(|value| !value.is_empty())
-		.is_none()
+			.is_none()
 	{
 		return Err(Error::BadRequest {
 			message: "MedDRA language and version are required".to_string(),
@@ -761,8 +783,18 @@ async fn load_admin_settings_payload(
 		let mut payload = serde_json::from_value::<AdminSettingsPayload>(value)?;
 		let runtime_payload =
 			runtime_settings_payload(payload.clone(), Vec::new(), String::new())?;
-		if payload.meddra_language.as_deref().map(str::trim).filter(|value| !value.is_empty()).is_none()
-			|| payload.meddra_version.as_deref().map(str::trim).filter(|value| !value.is_empty()).is_none()
+		if payload
+			.meddra_language
+			.as_deref()
+			.map(str::trim)
+			.filter(|value| !value.is_empty())
+			.is_none()
+			|| payload
+				.meddra_version
+				.as_deref()
+				.map(str::trim)
+				.filter(|value| !value.is_empty())
+				.is_none()
 		{
 			return Err(Error::BadRequest {
 				message: "MedDRA language and version are required".to_string(),
@@ -773,14 +805,16 @@ async fn load_admin_settings_payload(
 				message: "workflow_enabled is required".to_string(),
 			});
 		}
-		let case_number_padding = payload.case_number_padding.ok_or_else(|| {
-			Error::BadRequest {
-				message: "case_number_padding is required".to_string(),
-			}
-		})?;
+		let case_number_padding =
+			payload
+				.case_number_padding
+				.ok_or_else(|| Error::BadRequest {
+					message: "case_number_padding is required".to_string(),
+				})?;
 		if case_number_padding < 1 {
 			return Err(Error::BadRequest {
-				message: "case_number_padding must be a positive integer".to_string(),
+				message: "case_number_padding must be a positive integer"
+					.to_string(),
 			});
 		}
 		normalize_workflow_config(ctx, mm, payload.workflow.clone()).await?;
@@ -860,11 +894,12 @@ fn runtime_settings_payload(
 	let timezone = payload.timezone.ok_or_else(|| Error::BadRequest {
 		message: "timezone is required".to_string(),
 	})?;
-	let timezone = runtime_settings::validate_timezone(&timezone).ok_or_else(|| {
-		Error::BadRequest {
-			message: "stored timezone must be a valid IANA timezone".to_string(),
-		}
-	})?;
+	let timezone =
+		runtime_settings::validate_timezone(&timezone).ok_or_else(|| {
+			Error::BadRequest {
+				message: "stored timezone must be a valid IANA timezone".to_string(),
+			}
+		})?;
 	let orientation = payload.orientation.ok_or_else(|| Error::BadRequest {
 		message: "orientation is required".to_string(),
 	})?;
@@ -873,9 +908,8 @@ fn runtime_settings_payload(
 			message: "stored orientation must be Portrait or Landscape".to_string(),
 		});
 	}
-	let data_ordering = runtime_settings::normalize_data_ordering(
-		payload.data_ordering.as_deref(),
-	)?;
+	let data_ordering =
+		runtime_settings::normalize_data_ordering(payload.data_ordering.as_deref())?;
 	let notation = payload.notation.ok_or_else(|| Error::BadRequest {
 		message: "notation is required".to_string(),
 	})?;
@@ -884,27 +918,31 @@ fn runtime_settings_payload(
 		.ok_or_else(|| Error::BadRequest {
 			message: "apply_sender_info_to_imported_cases is required".to_string(),
 		})?;
-	let import_date_update = payload.import_date_update.ok_or_else(|| {
-		Error::BadRequest {
-			message: "import_date_update is required".to_string(),
-		}
-	})?;
+	let import_date_update =
+		payload
+			.import_date_update
+			.ok_or_else(|| Error::BadRequest {
+				message: "import_date_update is required".to_string(),
+			})?;
 	if !import_date_update_is_supported(&import_date_update) {
 		return Err(Error::BadRequest {
-			message: "import_date_update must contain supported boolean values".to_string(),
+			message: "import_date_update must contain supported boolean values"
+				.to_string(),
 		});
 	}
 	let appendices = normalize_appendices(payload.appendices.as_deref())?;
-	let idle_session_minutes = payload.idle_session_minutes.ok_or_else(|| {
-		Error::BadRequest {
-			message: "idle_session_minutes is required".to_string(),
-		}
-	})?;
-	let session_warning_minutes = payload.session_warning_minutes.ok_or_else(|| {
-		Error::BadRequest {
-			message: "session_warning_minutes is required".to_string(),
-		}
-	})?;
+	let idle_session_minutes =
+		payload
+			.idle_session_minutes
+			.ok_or_else(|| Error::BadRequest {
+				message: "idle_session_minutes is required".to_string(),
+			})?;
+	let session_warning_minutes =
+		payload
+			.session_warning_minutes
+			.ok_or_else(|| Error::BadRequest {
+				message: "session_warning_minutes is required".to_string(),
+			})?;
 	if idle_session_minutes < 5 {
 		return Err(Error::BadRequest {
 			message: "idle_session_minutes must be at least 5".to_string(),
@@ -917,8 +955,9 @@ fn runtime_settings_payload(
 	}
 	if session_warning_minutes >= idle_session_minutes {
 		return Err(Error::BadRequest {
-			message: "session_warning_minutes must be less than idle_session_minutes"
-				.to_string(),
+			message:
+				"session_warning_minutes must be less than idle_session_minutes"
+					.to_string(),
 		});
 	}
 	Ok(RuntimeSettingsPayload {
@@ -950,9 +989,12 @@ pub async fn get_runtime_settings(
 		if notice_read_allowed(&snapshot) || notice_update_allowed(&snapshot) {
 			active_notices(
 				load_notices(&ctx, &mm).await?,
-				payload.timezone.as_deref().ok_or_else(|| Error::BadRequest {
-					message: "timezone is required".to_string(),
-				})?,
+				payload
+					.timezone
+					.as_deref()
+					.ok_or_else(|| Error::BadRequest {
+						message: "timezone is required".to_string(),
+					})?,
 			)?
 		} else {
 			Vec::new()
@@ -962,7 +1004,11 @@ pub async fn get_runtime_settings(
 		.map_err(Error::Model)?;
 	Ok((
 		StatusCode::OK,
-		Json(runtime_settings_payload(payload, notices, notices_revision)?),
+		Json(runtime_settings_payload(
+			payload,
+			notices,
+			notices_revision,
+		)?),
 	))
 }
 

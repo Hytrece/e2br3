@@ -140,6 +140,7 @@ const ASSESSMENT_ALIASES: &[(&str, &[&str])] = &[
 	("last_dose_interval_unit", &["lastDoseIntervalUnit"]),
 	("recurrence_action", &["recurrenceAction"]),
 	("reaction_recurred", &["reactionRecurred"]),
+	("dechallenge_result", &["dechallengeResult"]),
 ];
 
 const RELATEDNESS_ALIASES: &[(&str, &[&str])] = &[
@@ -745,6 +746,7 @@ async fn load_editor_dg_row_detail(
 			"lastDoseIntervalUnit": assessment.last_dose_interval_unit,
 			"recurrenceAction": assessment.recurrence_action,
 			"reactionRecurred": assessment.reaction_recurred,
+			"dechallengeResult": assessment.dechallenge_result,
 		});
 		if relatedness.is_empty() {
 			drug_reaction_assessments.push(base);

@@ -38,6 +38,9 @@ pub struct DrugReactionAssessment {
 	// G.k.9.i.4.r.3 - Did Reaction Recur on Readministration
 	pub reaction_recurred: Option<String>, // 1-3
 
+	// CIOMS Item 20 - Did reaction abate after stopping drug?
+	pub dechallenge_result: Option<String>, // 1=Yes, 2=No, 3=Not applicable
+
 	// Timestamps
 	pub created_at: OffsetDateTime,
 	pub updated_at: OffsetDateTime,
@@ -55,6 +58,7 @@ pub struct DrugReactionAssessmentForCreate {
 	pub last_dose_interval_unit: Option<String>,
 	pub recurrence_action: Option<String>,
 	pub reaction_recurred: Option<String>,
+	pub dechallenge_result: Option<String>,
 }
 
 #[derive(Fields, Deserialize)]
@@ -65,6 +69,7 @@ pub struct DrugReactionAssessmentForUpdate {
 	pub last_dose_interval_unit: Option<String>,
 	pub recurrence_action: Option<String>,
 	pub reaction_recurred: Option<String>,
+	pub dechallenge_result: Option<String>,
 }
 
 #[derive(FilterNodes, Deserialize, Default)]
@@ -168,9 +173,9 @@ impl DrugReactionAssessmentBmc {
 			 drug_id, reaction_id, administration_start_interval_value,
 			 administration_start_interval_unit, last_dose_interval_value,
 			 last_dose_interval_unit, recurrence_action,
-			 reaction_recurred, created_at, updated_at, created_by
+			 dechallenge_result, reaction_recurred, created_at, updated_at, created_by
 			)
-			 VALUES ($1, $2, $3, $4, $5, $6, $7, $10, now(), now(), $11)
+			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $10, now(), now(), $11)
 			 ON CONFLICT (drug_id, reaction_id)
 			 DO UPDATE SET
 			  administration_start_interval_value = COALESCE(EXCLUDED.administration_start_interval_value, drug_reaction_assessments.administration_start_interval_value),
@@ -178,6 +183,7 @@ impl DrugReactionAssessmentBmc {
 			  last_dose_interval_value = COALESCE(EXCLUDED.last_dose_interval_value, drug_reaction_assessments.last_dose_interval_value),
 			  last_dose_interval_unit = COALESCE(EXCLUDED.last_dose_interval_unit, drug_reaction_assessments.last_dose_interval_unit),
 			  recurrence_action = COALESCE(EXCLUDED.recurrence_action, drug_reaction_assessments.recurrence_action),
+			  dechallenge_result = COALESCE(EXCLUDED.dechallenge_result, drug_reaction_assessments.dechallenge_result),
 			  reaction_recurred = COALESCE(EXCLUDED.reaction_recurred, drug_reaction_assessments.reaction_recurred),
 			  updated_at = now(),
 			  updated_by = EXCLUDED.created_by
@@ -195,7 +201,7 @@ impl DrugReactionAssessmentBmc {
 					.bind(data.last_dose_interval_value)
 					.bind(data.last_dose_interval_unit)
 					.bind(data.recurrence_action)
-					.bind(Option::<String>::None)
+					.bind(data.dechallenge_result)
 					.bind(Option::<String>::None)
 					.bind(data.reaction_recurred)
 					.bind(ctx.user_id()),
@@ -300,12 +306,13 @@ impl DrugReactionAssessmentBmc {
 
 		let sql = format!(
 			"UPDATE {}
-			 SET administration_start_interval_value = COALESCE($2, administration_start_interval_value),
-			     administration_start_interval_unit = COALESCE($3, administration_start_interval_unit),
-			     last_dose_interval_value = COALESCE($4, last_dose_interval_value),
-			     last_dose_interval_unit = COALESCE($5, last_dose_interval_unit),
-			     recurrence_action = COALESCE($6, recurrence_action),
-			     reaction_recurred = COALESCE($9, reaction_recurred),
+				 SET administration_start_interval_value = COALESCE($2, administration_start_interval_value),
+				     administration_start_interval_unit = COALESCE($3, administration_start_interval_unit),
+				     last_dose_interval_value = COALESCE($4, last_dose_interval_value),
+				     last_dose_interval_unit = COALESCE($5, last_dose_interval_unit),
+				     recurrence_action = COALESCE($6, recurrence_action),
+				     dechallenge_result = COALESCE($7, dechallenge_result),
+				     reaction_recurred = COALESCE($9, reaction_recurred),
 			     updated_at = now(),
 			     updated_by = $10
 			 WHERE id = $1",
@@ -321,7 +328,7 @@ impl DrugReactionAssessmentBmc {
 					.bind(data.last_dose_interval_value)
 					.bind(data.last_dose_interval_unit)
 					.bind(data.recurrence_action)
-					.bind(Option::<String>::None)
+					.bind(data.dechallenge_result)
 					.bind(Option::<String>::None)
 					.bind(data.reaction_recurred)
 					.bind(ctx.user_id()),

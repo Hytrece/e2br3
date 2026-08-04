@@ -2,6 +2,24 @@
 
 use super::*;
 
+fn cioms_dechallenge_result(input: FieldInput<'_>) -> Vec<InputIssue> {
+	let valid = match input.value {
+		input_contracts::InputValue::Missing => true,
+		input_contracts::InputValue::String(value) => {
+			matches!(value.trim(), "1" | "2" | "3")
+		}
+		_ => false,
+	};
+	if valid {
+		Vec::new()
+	} else {
+		vec![InputIssue {
+			code: "CIOMS.ITEM20.ALLOWED.VALUE",
+			message: "must be one of: 1, 2, 3".to_string(),
+		}]
+	}
+}
+
 pub(super) fn validate_section_fields(
 	section: &str,
 	row: &Map<String, Value>,
@@ -920,6 +938,16 @@ fn dg(
 		changed_paths,
 		outer_indexes,
 		input_contracts::generated::g::g_k_9_i_4,
+	)?;
+	validate_field(
+		row,
+		"drugReactionAssessments[].dechallengeResult",
+		"drugs[].drugReactionAssessments[].dechallengeResult",
+		InputType::String,
+		None,
+		changed_paths,
+		outer_indexes,
+		cioms_dechallenge_result,
 	)?;
 	validate_field(
 		row,

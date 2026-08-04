@@ -91,7 +91,9 @@ pub fn message_sender_identifier() -> Result<String> {
 	required_env_identifier("E2BR3_DEFAULT_MESSAGE_SENDER")
 }
 
-pub fn message_receiver_identifier(authority: RegulatoryAuthority) -> Result<String> {
+pub fn message_receiver_identifier(
+	authority: RegulatoryAuthority,
+) -> Result<String> {
 	let env_name = match authority {
 		RegulatoryAuthority::Fda => "E2BR3_DEFAULT_MESSAGE_RECEIVER_FDA",
 		RegulatoryAuthority::Ich => "E2BR3_DEFAULT_MESSAGE_RECEIVER_ICH",
@@ -105,8 +107,11 @@ fn should_validate_export_xml(authority: RegulatoryAuthority) -> Result<bool> {
 		match std::env::var("E2BR3_EXPORT_VALIDATE_FDA") {
 			Ok(value) => value,
 			Err(std::env::VarError::NotPresent) => {
-				std::env::var("E2BR3_EXPORT_VALIDATE").map_err(|_| Error::BadRequest {
-					message: "E2BR3_EXPORT_VALIDATE must be configured".to_string(),
+				std::env::var("E2BR3_EXPORT_VALIDATE").map_err(|_| {
+					Error::BadRequest {
+						message: "E2BR3_EXPORT_VALIDATE must be configured"
+							.to_string(),
+					}
 				})?
 			}
 			Err(err) => {

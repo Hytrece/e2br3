@@ -326,6 +326,7 @@ async fn import_drug_reaction_assessments(
 					last_dose_interval_unit: obs.last_dose_interval_unit.clone(),
 					recurrence_action: obs.rechallenge_action.clone(),
 					reaction_recurred: obs.reaction_recurred.clone(),
+					dechallenge_result: None,
 				},
 			)
 			.await?;
@@ -370,6 +371,7 @@ async fn import_drug_reaction_assessments(
 					last_dose_interval_unit: None,
 					recurrence_action: None,
 					reaction_recurred: None,
+					dechallenge_result: None,
 				},
 			)
 			.await?;

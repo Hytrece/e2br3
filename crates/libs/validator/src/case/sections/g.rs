@@ -1377,6 +1377,23 @@ fn g_k_9_i_4(
 	);
 }
 
+/// CIOMS Item 20.ALLOWED.VALUE
+fn cioms_item_20(
+	nested: Option<(usize, usize)>,
+	assessment: &DrugReactionAssessment,
+	issues: &mut Vec<ValidationIssue>,
+) {
+	let Some(path) = assessment_path(nested, "dechallengeResult") else {
+		return;
+	};
+	allowed(
+		issues,
+		"CIOMS.ITEM20.ALLOWED.VALUE",
+		&path,
+		valid_code(assessment.dechallenge_result.as_deref(), &["1", "2", "3"]),
+	);
+}
+
 fn relatedness_path(
 	nested: Option<(usize, usize, usize)>,
 	field: &str,
@@ -1580,6 +1597,7 @@ pub(crate) fn collect_ich_issues(
 		g_k_9_i_3_2a(flat_idx, nested, assessment, issues);
 		g_k_9_i_3_2b(flat_idx, nested, assessment, issues);
 		g_k_9_i_4(nested, assessment, issues);
+		cioms_item_20(nested, assessment, issues);
 	}
 	let mut fallback = HashMap::new();
 	for relatedness in &validation_ctx.relatedness_assessments {
@@ -3001,6 +3019,7 @@ mod golden_g_required_tests {
 			last_dose_interval_unit: None,
 			recurrence_action: None,
 			reaction_recurred: None,
+			dechallenge_result: None,
 			created_at: OffsetDateTime::UNIX_EPOCH,
 			updated_at: OffsetDateTime::UNIX_EPOCH,
 			created_by: Uuid::nil(),
@@ -3060,6 +3079,7 @@ mod golden_g_required_tests {
 		let mut assessment = assessment();
 		assessment.drug_id = Uuid::from_u128(1);
 		assessment.reaction_recurred = Some("9".to_string());
+		assessment.dechallenge_result = Some("9".to_string());
 		ctx.drug_reaction_assessments.push(assessment);
 
 		let codes = codes_for(&ctx);
@@ -3067,6 +3087,7 @@ mod golden_g_required_tests {
 		assert!(codes.contains(&"ICH.G.k.2.5.ALLOWED.VALUE".to_string()));
 		assert!(codes.contains(&"ICH.G.k.8.ALLOWED.VALUE".to_string()));
 		assert!(codes.contains(&"ICH.G.k.9.i.4.ALLOWED.VALUE".to_string()));
+		assert!(codes.contains(&"CIOMS.ITEM20.ALLOWED.VALUE".to_string()));
 		assert!(codes.contains(&"ICH.G.k.10.r.ALLOWED.VALUE".to_string()));
 	}
 

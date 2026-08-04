@@ -290,6 +290,11 @@ INSERT INTO e2b_code_lists (list_name, code, display_name, sort_order) VALUES
 ('reaction_recurred', '2', 'No', 2),
 ('reaction_recurred', '3', 'Unknown', 3),
 
+-- CIOMS Item 20 - Dechallenge result
+('dechallenge_result', '1', 'Yes', 1),
+('dechallenge_result', '2', 'No', 2),
+('dechallenge_result', '3', 'Not applicable', 3),
+
 -- Null Flavor Codes (E2B(R3) compliant)
 ('null_flavor', 'NI', 'No Information', 1),
 ('null_flavor', 'UNK', 'Unknown', 2),
