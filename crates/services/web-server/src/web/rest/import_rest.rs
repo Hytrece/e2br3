@@ -3,9 +3,9 @@ use axum::extract::{Multipart, Path, State};
 use axum::http::{header, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::Json;
+use crate::runtime_settings;
 use lib_core::authorization::BuiltInIdentityKind;
 use lib_core::ctx::Ctx;
-use lib_core::model::admin_settings::AdminSettingsBmc;
 use lib_core::model::case_duplicate::{CaseDuplicateBmc, CaseDuplicateKey};
 use lib_core::model::presave::ProductPresaveBmc;
 use lib_core::model::store::set_full_context_dbx;
@@ -42,7 +42,6 @@ use zip::ZipArchive;
 
 const MAX_XML_UPLOAD_BYTES: usize = 50 * 1024 * 1024;
 const MAX_XML_ZIP_ENTRY_BYTES: usize = 25 * 1024 * 1024;
-const SETTINGS_KEY: &str = "system";
 
 struct UploadedImportPayload {
 	bytes: Vec<u8>,
@@ -612,16 +611,6 @@ async fn decide_import_entry(
 		CaseDuplicateBmc::list_potential_matches(ctx, mm, &duplicate_key)
 			.await
 			.map_err(Error::Model)?;
-	eprintln!(
-		"IMPORT_DECISION org={} incoming={} same_report={} duplicate_matches={:?}",
-		ctx.organization_id(),
-		incoming.safety_report_id,
-		same_report_cases.len(),
-		duplicate_matches
-			.iter()
-			.map(|item| (item.case_id, item.safety_report_id.clone(), item.date_of_most_recent_information))
-			.collect::<Vec<_>>()
-	);
 	let duplicate_matches = duplicate_matches
 		.into_iter()
 		.map(|item| XmlImportDuplicateMatch {
@@ -642,36 +631,18 @@ async fn load_import_settings(
 	ctx: &Ctx,
 	mm: &ModelManager,
 ) -> Result<CImportSettings> {
-	let Some(value) = AdminSettingsBmc::get(ctx, mm, SETTINGS_KEY)
-		.await
-		.map_err(Error::Model)?
-	else {
-		return Ok(CImportSettings::default());
-	};
-	let import_date_update =
-		value.get("import_date_update").and_then(|v| v.as_object());
+	let settings = runtime_settings::load(ctx, mm).await?;
 	Ok(CImportSettings {
-		update_date_of_creation: import_date_update
-			.and_then(|v| v.get("date_of_creation"))
-			.and_then(|v| v.as_bool())
-			.unwrap_or(false),
-		update_most_recent_info_date: import_date_update
-			.and_then(|v| v.get("most_recent_info_date"))
-			.and_then(|v| v.as_bool())
-			.unwrap_or(false),
-		update_report_first_received_date: import_date_update
-			.and_then(|v| v.get("report_first_received_date"))
-			.and_then(|v| v.as_bool())
-			.unwrap_or(false),
-		apply_sender_info_to_imported_cases: value
-			.get("apply_sender_info_to_imported_cases")
-			.and_then(|v| v.as_bool())
-			.unwrap_or(false),
-		apply_default_values_to_imported_r2_cases: value
-			.get("apply_default_values_to_imported_r2_cases")
-			.and_then(|v| v.as_bool())
-			.unwrap_or(false),
+		update_date_of_creation: settings.import_dates.update_date_of_creation,
+		update_most_recent_info_date: settings.import_dates.update_most_recent_info_date,
+		update_report_first_received_date: settings
+			.import_dates
+			.update_report_first_received_date,
+		apply_sender_info_to_imported_cases: settings.apply_sender_info_to_imported_cases,
+		apply_default_values_to_imported_r2_cases: settings
+			.apply_default_values_to_imported_r2_cases,
 		selected_sender_presave_id: None,
+		import_date: Some(settings.import_date()),
 	})
 }
 

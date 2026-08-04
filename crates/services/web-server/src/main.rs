@@ -5,6 +5,7 @@
 mod bootstrap;
 mod config;
 mod error;
+mod runtime_settings;
 mod submission;
 mod web;
 

@@ -43,7 +43,7 @@ pub(super) fn build_cioms_pdf_with_options(
 	let mut canvas = PdfCanvas::new();
 	canvas.stream.push_str("0.8 w\n");
 	if settings.orientation == "Portrait" {
-		render_landscape_cioms_on_portrait_page(
+		super::layout::render_portrait_cioms(
 			&mut canvas,
 			&ordered,
 			settings,
@@ -63,47 +63,55 @@ pub(super) fn build_cioms_pdf_with_options(
 	}
 	let first_stream = canvas.stream;
 	let overflow = collect_cioms_overflow(&ordered, settings, options);
-	let continuation_stream = if overflow.is_empty() {
-		None
-	} else {
-		let mut continuation = PdfCanvas::new();
-		render_cioms_continuation_page(
-			&mut continuation,
-			&ordered.case_number,
-			&overflow,
-			width,
-			height,
-		);
-		Some(continuation.stream)
-	};
+	let continuation_streams = render_cioms_continuation_pages(
+		&ordered.case_number,
+		&overflow,
+		width,
+		height,
+	);
 
 	let obj1 = "<< /Type /Catalog /Pages 2 0 R >>";
-	let page_count = if continuation_stream.is_some() { 2 } else { 1 };
-	let page_kids = if continuation_stream.is_some() {
-		"[3 0 R 6 0 R]"
-	} else {
-		"[3 0 R]"
-	};
-	let obj2 = format!("<< /Type /Pages /Kids {page_kids} /Count {page_count} >>");
+	let page_refs = std::iter::once(3)
+		.chain((0..continuation_streams.len()).map(|index| 8 + (index * 2)))
+		.map(|page| format!("{page} 0 R"))
+		.collect::<Vec<_>>()
+		.join(" ");
+	let page_count = 1 + continuation_streams.len();
+	let obj2 = format!(
+		"<< /Type /Pages /Kids [{page_refs}] /Count {page_count} >>"
+	);
 	let obj3 = format!(
-		"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {width} {height}] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>"
+		"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {width} {height}] /Resources << /Font << /F1 4 0 R /F2 5 0 R >> >> /Contents 7 0 R >>"
 	);
 	let obj4 = "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>";
-	let obj5 = format!(
+	let obj5 = "<< /Type /Font /Subtype /Type0 /BaseFont /HYSMyeongJo-Medium /Encoding /UniKS-UCS2-H /DescendantFonts [6 0 R] >>";
+	let obj6 = "<< /Type /Font /Subtype /CIDFontType0 /BaseFont /HYSMyeongJo-Medium /CIDSystemInfo << /Registry (Adobe) /Ordering (Korea1) /Supplement 2 >> /DW 1000 >>";
+	let obj7 = format!(
 		"<< /Length {} >>\nstream\n{}endstream",
 		first_stream.len(),
 		first_stream
 	);
-	let mut objects = vec![obj1.to_string(), obj2, obj3, obj4.to_string(), obj5];
-	if let Some(stream) = continuation_stream {
+	let mut objects = vec![
+		obj1.to_string(),
+		obj2,
+		obj3,
+		obj4.to_string(),
+		obj5.to_string(),
+		obj6.to_string(),
+		obj7,
+	];
+	let mut page_object = 8;
+	for stream in continuation_streams {
 		objects.push(format!(
-			"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {width} {height}] /Resources << /Font << /F1 4 0 R >> >> /Contents 7 0 R >>"
+			"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {width} {height}] /Resources << /Font << /F1 4 0 R /F2 5 0 R >> >> /Contents {} 0 R >>",
+			page_object + 1
 		));
 		objects.push(format!(
 			"<< /Length {} >>\nstream\n{}endstream",
 			stream.len(),
 			stream
 		));
+		page_object += 2;
 	}
 
 	let mut pdf = String::from("%PDF-1.4\n");
@@ -147,7 +155,7 @@ pub async fn export_case_cioms_pdf(
 					&data,
 					&settings,
 					CiomsExportOptions {
-						include_notation: query.include_notation.unwrap_or(false),
+						include_notation: query.include_notation.unwrap_or(settings.notation),
 					},
 				);
 				let file_name = format!("{}-cioms.pdf", data.case_number);

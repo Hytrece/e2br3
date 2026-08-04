@@ -2,7 +2,7 @@ use axum::extract::{Path, Query, State};
 use axum::http::header;
 use axum::response::Response;
 use axum::Json;
-use lib_core::model::admin_settings::AdminSettingsBmc;
+use crate::runtime_settings;
 use lib_core::model::case::CaseBmc;
 use lib_core::model::safety_report::SafetyReportIdentificationBmc;
 use lib_core::model::xml_export_history::{
@@ -27,7 +27,6 @@ use xml::{export_case_xml_with_options, ExportXmlOptions};
 use zip::write::SimpleFileOptions;
 use zip::{CompressionMethod, ZipWriter};
 
-const SETTINGS_KEY: &str = "system";
 
 // -- Types
 
@@ -141,20 +140,9 @@ async fn export_xml_options(
 	include_notation: Option<bool>,
 	authority: RegulatoryAuthority,
 ) -> Result<ExportXmlOptions> {
-	if let Some(apply_comments) = include_notation {
-		return Ok(ExportXmlOptions {
-			apply_comments,
-			authority,
-		});
-	}
-	let value = AdminSettingsBmc::get(ctx, mm, SETTINGS_KEY)
-		.await
-		.map_err(Error::Model)?;
-	let apply_comments = value
-		.as_ref()
-		.and_then(|value| value.get("apply_comments_on_exported_xml"))
-		.and_then(|value| value.as_bool())
-		.unwrap_or(false);
+	let apply_comments = runtime_settings::load(ctx, mm)
+		.await?
+		.resolve_notation(include_notation);
 	Ok(ExportXmlOptions {
 		apply_comments,
 		authority,

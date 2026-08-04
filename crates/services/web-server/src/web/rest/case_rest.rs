@@ -1,12 +1,12 @@
 use crate::web::rest::compliance::{
 	capture_e_signature, ComplianceActionInput, ESignatureInput,
 };
+use crate::runtime_settings;
 use axum::extract::{Path, State};
 use axum::Json;
 use chrono::{DateTime, Utc};
 use chrono_tz::Tz;
 use lib_core::ctx::Ctx;
-use lib_core::model::admin_settings::AdminSettingsBmc;
 use lib_core::model::authorization::CaseMutationKind;
 use lib_core::model::case::{
 	is_allowed_case_status_transition, is_valid_case_status,
@@ -45,7 +45,6 @@ const SYSTEM_VALIDATION_REASON_VALIDATOR: &str =
 	"system validation: validator mark-validated endpoint";
 const FDA_REPORT_TYPE_VALUES: &[&str] = &["1", "2", "3", "4"];
 const REVIEW_RECEIVER_MAX_LEN: usize = 128;
-const SETTINGS_KEY: &str = "system";
 const REVIEW_RECEIVER_ROW_FIELDS: &[&str] = &[
 	"receiver",
 	"receiverName",
@@ -938,11 +937,7 @@ async fn create_case_authorized(
 	let data = to_internal_case_for_create(ctx, data);
 	validate_case_create_payload(&data)?;
 
-	let timezone = AdminSettingsBmc::get(ctx, mm, SETTINGS_KEY)
-		.await
-		.map_err(Error::Model)?
-		.and_then(|settings| settings.get("timezone")?.as_str().map(str::to_owned))
-		.unwrap_or_else(|| "Asia/Seoul".to_string());
+	let timezone = runtime_settings::load(ctx, mm).await?.timezone;
 	let id = CaseBmc::create(ctx, mm, data).await?;
 	let creation_timestamp =
 		format_case_creation_timestamp(OffsetDateTime::now_utc(), &timezone);

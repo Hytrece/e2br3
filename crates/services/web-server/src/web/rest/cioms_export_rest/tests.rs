@@ -18,6 +18,7 @@ fn default_settings() -> CiomsSettings {
 	CiomsSettings {
 		orientation: "Landscape".to_string(),
 		data_ordering: "Primary data will appear first".to_string(),
+		notation: false,
 	}
 }
 
@@ -25,6 +26,7 @@ fn latest_first_settings() -> CiomsSettings {
 	CiomsSettings {
 		orientation: "Landscape".to_string(),
 		data_ordering: "Latest data will appear first".to_string(),
+		notation: false,
 	}
 }
 
@@ -32,6 +34,7 @@ fn basic_settings() -> CiomsSettings {
 	CiomsSettings {
 		orientation: "Landscape".to_string(),
 		data_ordering: "Basic".to_string(),
+		notation: false,
 	}
 }
 
@@ -39,6 +42,7 @@ fn portrait_settings() -> CiomsSettings {
 	CiomsSettings {
 		orientation: "Portrait".to_string(),
 		data_ordering: "Primary data will appear first".to_string(),
+		notation: false,
 	}
 }
 
@@ -46,6 +50,7 @@ fn portrait_latest_first_settings() -> CiomsSettings {
 	CiomsSettings {
 		orientation: "Portrait".to_string(),
 		data_ordering: "Latest data will appear first".to_string(),
+		notation: false,
 	}
 }
 
@@ -261,9 +266,11 @@ fn cioms_joins_all_suspect_dosage_texts_in_sequence_order() {
 		drugs: vec![suspect_drug(drug_id)],
 		dosages: vec![third, blank, first],
 		indications: Vec::new(),
+		test_results: Vec::new(),
 		primary_sources: Vec::new(),
 		senders: Vec::new(),
 		narrative: None,
+		field_notations: Vec::new(),
 	};
 
 	let form = CiomsFormData::from_case_data(&data, &default_settings());
@@ -343,9 +350,11 @@ fn cioms_form_data_maps_missing_optional_sections_to_blank_fields() {
 		drugs: Vec::new(),
 		dosages: Vec::new(),
 		indications: Vec::new(),
+		test_results: Vec::new(),
 		primary_sources: Vec::new(),
 		senders: Vec::new(),
 		narrative: None,
+		field_notations: Vec::new(),
 	};
 
 	let form = CiomsFormData::from_case_data(&data, &default_settings());
@@ -376,6 +385,7 @@ fn cioms_form_data_maps_primary_source_reporter_name() {
 		drugs: Vec::new(),
 		dosages: Vec::new(),
 		indications: Vec::new(),
+		test_results: Vec::new(),
 		primary_sources: vec![PrimarySource {
 			id: test_uuid(),
 			case_id: test_uuid(),
@@ -418,6 +428,7 @@ fn cioms_form_data_maps_primary_source_reporter_name() {
 		}],
 		senders: Vec::new(),
 		narrative: None,
+		field_notations: Vec::new(),
 	};
 
 	let form = CiomsFormData::from_case_data(&data, &default_settings());
@@ -443,6 +454,16 @@ fn cioms_pdf_text_escape_normalizes_control_whitespace() {
 }
 
 #[test]
+fn cioms_pdf_encodes_non_ascii_text_with_unicode_font() {
+	let mut canvas = PdfCanvas::new();
+	canvas.text(10, 20, 9, "한글");
+
+	assert_eq!(encode_pdf_unicode_text("한글"), "D55CAE00");
+	assert!(canvas.stream.contains("/F2 9 Tf"));
+	assert!(canvas.stream.contains("<D55CAE00>"));
+}
+
+#[test]
 fn cioms_pdf_omits_empty_reporter_footer() {
 	let data = CiomsCaseData {
 		case_number: "SR-NO-REPORTER".to_string(),
@@ -452,9 +473,11 @@ fn cioms_pdf_omits_empty_reporter_footer() {
 		drugs: Vec::new(),
 		dosages: Vec::new(),
 		indications: Vec::new(),
+		test_results: Vec::new(),
 		primary_sources: Vec::new(),
 		senders: Vec::new(),
 		narrative: None,
+		field_notations: Vec::new(),
 	};
 
 	let pdf = build_cioms_pdf(&data, &default_settings());
@@ -473,6 +496,7 @@ fn cioms_pdf_renders_narrative_notation_when_requested() {
 		drugs: Vec::new(),
 		dosages: Vec::new(),
 		indications: Vec::new(),
+		test_results: Vec::new(),
 		primary_sources: Vec::new(),
 		senders: Vec::new(),
 		narrative: Some(NarrativeInformation {
@@ -489,7 +513,8 @@ fn cioms_pdf_renders_narrative_notation_when_requested() {
 			updated_at: test_time(),
 			created_by: test_uuid(),
 			updated_by: None,
-		}),
+			}),
+		field_notations: Vec::new(),
 	};
 
 	let without_notation =
@@ -533,6 +558,7 @@ fn cioms_pdf_adds_continuation_page_for_long_reaction_text() {
 		drugs: Vec::new(),
 		dosages: Vec::new(),
 		indications: Vec::new(),
+		test_results: Vec::new(),
 		primary_sources: Vec::new(),
 		senders: Vec::new(),
 		narrative: Some(NarrativeInformation {
@@ -547,7 +573,8 @@ fn cioms_pdf_adds_continuation_page_for_long_reaction_text() {
 			updated_at: test_time(),
 			created_by: test_uuid(),
 			updated_by: None,
-		}),
+			}),
+		field_notations: Vec::new(),
 	};
 
 	let pdf = build_cioms_pdf(&data, &default_settings());
@@ -656,9 +683,11 @@ fn cioms_form_data_maps_suspect_drug_dosage_and_indication_fields() {
 			created_by: test_uuid(),
 			updated_by: None,
 		}],
+		test_results: Vec::new(),
 		primary_sources: Vec::new(),
 		senders: Vec::new(),
 		narrative: None,
+		field_notations: Vec::new(),
 	};
 
 	let form = CiomsFormData::from_case_data(&data, &default_settings());
@@ -816,9 +845,11 @@ fn cioms_pdf_uses_latest_route_and_indication_when_latest_first() {
 				updated_by: None,
 			},
 		],
+		test_results: Vec::new(),
 		primary_sources: Vec::new(),
 		senders: Vec::new(),
 		narrative: None,
+		field_notations: Vec::new(),
 	};
 
 	let pdf = build_cioms_pdf(&data, &latest_first_settings());
@@ -853,9 +884,11 @@ fn cioms_portrait_pdf_uses_same_official_form_as_landscape() {
 			created_by: test_uuid(),
 			updated_by: None,
 		}],
+		test_results: Vec::new(),
 		primary_sources: vec![primary_source()],
 		senders: Vec::new(),
 		narrative: None,
+		field_notations: Vec::new(),
 	};
 
 	let pdf = build_cioms_pdf(&data, &portrait_settings());
@@ -903,9 +936,11 @@ fn cioms_portrait_pdf_renders_suspect_drug_indication() {
 			created_by: test_uuid(),
 			updated_by: None,
 		}],
+		test_results: Vec::new(),
 		primary_sources: Vec::new(),
 		senders: Vec::new(),
 		narrative: None,
+		field_notations: Vec::new(),
 	};
 
 	let pdf = build_cioms_pdf(&data, &portrait_settings());
@@ -925,9 +960,11 @@ fn cioms_portrait_pdf_renders_suspect_drug_route() {
 		drugs: vec![suspect_drug(drug_id)],
 		dosages: vec![dosage_with_route(drug_id, "Oral")],
 		indications: Vec::new(),
+		test_results: Vec::new(),
 		primary_sources: Vec::new(),
 		senders: Vec::new(),
 		narrative: None,
+		field_notations: Vec::new(),
 	};
 
 	let pdf = build_cioms_pdf(&data, &portrait_settings());
@@ -952,9 +989,11 @@ fn cioms_portrait_pdf_renders_concomitant_drugs() {
 		],
 		dosages: Vec::new(),
 		indications: Vec::new(),
+		test_results: Vec::new(),
 		primary_sources: Vec::new(),
 		senders: Vec::new(),
 		narrative: None,
+		field_notations: Vec::new(),
 	};
 
 	let pdf = build_cioms_pdf(&data, &portrait_settings());
@@ -973,9 +1012,11 @@ fn cioms_portrait_pdf_renders_report_dates_and_type() {
 		drugs: Vec::new(),
 		dosages: Vec::new(),
 		indications: Vec::new(),
+		test_results: Vec::new(),
 		primary_sources: Vec::new(),
 		senders: Vec::new(),
 		narrative: None,
+		field_notations: Vec::new(),
 	};
 
 	let pdf = build_cioms_pdf(&data, &portrait_settings());
@@ -1000,9 +1041,11 @@ fn cioms_portrait_pdf_renders_reporter_name() {
 		drugs: Vec::new(),
 		dosages: Vec::new(),
 		indications: Vec::new(),
+		test_results: Vec::new(),
 		primary_sources: vec![primary_source()],
 		senders: Vec::new(),
 		narrative: None,
+		field_notations: Vec::new(),
 	};
 
 	let pdf = build_cioms_pdf(&data, &portrait_settings());
@@ -1021,9 +1064,11 @@ fn cioms_portrait_pdf_renders_data_ordering_setting() {
 		drugs: Vec::new(),
 		dosages: Vec::new(),
 		indications: Vec::new(),
+		test_results: Vec::new(),
 		primary_sources: Vec::new(),
 		senders: Vec::new(),
 		narrative: None,
+		field_notations: Vec::new(),
 	};
 
 	let pdf = build_cioms_pdf(&data, &portrait_latest_first_settings());
@@ -1042,9 +1087,11 @@ fn cioms_pdf_renders_basic_data_ordering_setting() {
 		drugs: Vec::new(),
 		dosages: Vec::new(),
 		indications: Vec::new(),
+		test_results: Vec::new(),
 		primary_sources: Vec::new(),
 		senders: Vec::new(),
 		narrative: None,
+		field_notations: Vec::new(),
 	};
 
 	let pdf = build_cioms_pdf(&data, &basic_settings());
@@ -1100,9 +1147,11 @@ fn cioms_pdf_basic_ordering_renders_repeated_items_as_table() {
 				updated_by: None,
 			},
 		],
+		test_results: Vec::new(),
 		primary_sources: Vec::new(),
 		senders: Vec::new(),
 		narrative: None,
+		field_notations: Vec::new(),
 	};
 
 	let pdf = build_cioms_pdf(&data, &basic_settings());
@@ -1127,9 +1176,11 @@ fn cioms_portrait_pdf_renders_missing_information_legend() {
 		drugs: Vec::new(),
 		dosages: Vec::new(),
 		indications: Vec::new(),
+		test_results: Vec::new(),
 		primary_sources: Vec::new(),
 		senders: Vec::new(),
 		narrative: None,
+		field_notations: Vec::new(),
 	};
 
 	let pdf = build_cioms_pdf(&data, &portrait_settings());
@@ -1149,9 +1200,11 @@ fn cioms_portrait_pdf_renders_reaction_country() {
 		drugs: Vec::new(),
 		dosages: Vec::new(),
 		indications: Vec::new(),
+		test_results: Vec::new(),
 		primary_sources: Vec::new(),
 		senders: Vec::new(),
 		narrative: None,
+		field_notations: Vec::new(),
 	};
 
 	let pdf = build_cioms_pdf(&data, &portrait_settings());

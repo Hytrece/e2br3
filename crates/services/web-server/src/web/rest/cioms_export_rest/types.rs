@@ -1,11 +1,10 @@
 use super::*;
 
-pub(super) const SETTINGS_KEY: &str = "system";
-
 #[derive(Debug, Clone)]
 pub(super) struct CiomsSettings {
 	pub(super) orientation: String,
 	pub(super) data_ordering: String,
+	pub(super) notation: bool,
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -27,9 +26,17 @@ pub(super) struct CiomsCaseData {
 	pub(super) drugs: Vec<DrugInformation>,
 	pub(super) dosages: Vec<DosageInformation>,
 	pub(super) indications: Vec<DrugIndication>,
+	pub(super) test_results: Vec<TestResult>,
 	pub(super) primary_sources: Vec<PrimarySource>,
 	pub(super) senders: Vec<SenderInformation>,
 	pub(super) narrative: Option<NarrativeInformation>,
+	pub(super) field_notations: Vec<CiomsFieldNotation>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct CiomsFieldNotation {
+	pub(super) field_path: String,
+	pub(super) notation: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -117,6 +124,70 @@ fn dosage_texts_for_drug(data: &CiomsCaseData, drug_id: Uuid) -> String {
 		.join("\n")
 }
 
+fn cioms_reaction_description(data: &CiomsCaseData) -> String {
+	let mut entries = Vec::new();
+	for reaction in &data.reactions {
+		let outcome = reaction_outcome_text(reaction.outcome.as_deref());
+		entries.push(join_present(
+			&[
+				Some(format!(
+					"Reaction {}: {}",
+					reaction.sequence_number, reaction.primary_source_reaction
+				)),
+				(!outcome.is_empty()).then(|| format!("Outcome: {outcome}")),
+			],
+			" | ",
+		));
+	}
+	for drug in &data.drugs {
+		let action = drug_action_text(drug.action_taken.as_deref());
+		if !action.is_empty() {
+			entries.push(format!(
+				"Drug {} action: {}",
+				drug.sequence_number, action
+			));
+		}
+	}
+	for test in &data.test_results {
+		let result = join_present(
+			&[
+				test.test_date.map(|date| format!("Date: {date}")),
+				Some(test.test_name.clone()),
+				test
+					.test_result_code
+					.clone()
+					.map(|code| format!("Code: {code}")),
+				test.result_unstructured.clone(),
+				test.test_result_value.clone().map(|value| {
+					join_present(
+						&[
+							Some(value),
+							test.test_result_unit.clone(),
+						],
+						" ",
+					)
+				}),
+				test
+					.normal_low_value
+					.clone()
+					.zip(test.normal_high_value.clone())
+					.map(|(low, high)| format!("Normal range: {low}-{high}")),
+				test.comments.clone(),
+			],
+			" - ",
+		);
+		if !result.is_empty() {
+			entries.push(format!("Test {}: {result}", test.sequence_number));
+		}
+	}
+	if let Some(narrative) = data.narrative.as_ref() {
+		if !narrative.case_narrative.trim().is_empty() {
+			entries.push(format!("Case narrative: {}", narrative.case_narrative));
+		}
+	}
+	entries.join("\n")
+}
+
 impl CiomsFormData {
 	pub(super) fn from_case_data(
 		data: &CiomsCaseData,
@@ -139,7 +210,6 @@ impl CiomsFormData {
 				.iter()
 				.find(|indication| indication.drug_id == drug_id)
 		});
-		let narrative = data.narrative.as_ref();
 		let report = data.report.as_ref();
 
 		Self {
@@ -160,14 +230,7 @@ impl CiomsFormData {
 				.or_else(|| source.and_then(|source| source.country_code.clone()))
 				.unwrap_or_default(),
 			reaction_dates: reaction_dates(first_reaction),
-			reaction_description: join_present(
-				&[
-					first_reaction
-						.map(|reaction| reaction.primary_source_reaction.clone()),
-					narrative.map(|narrative| narrative.case_narrative.clone()),
-				],
-				" - ",
-			),
+			reaction_description: cioms_reaction_description(data),
 			suspect_drug_name: drug_name(suspect_drug),
 			suspect_drug_dose: suspect_drug_id
 				.map(|drug_id| dosage_texts_for_drug(data, drug_id))

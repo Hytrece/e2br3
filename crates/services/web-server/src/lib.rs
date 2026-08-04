@@ -2,6 +2,7 @@
 
 pub mod config;
 pub mod openapi;
+pub mod runtime_settings;
 pub mod submission;
 pub mod web;
 

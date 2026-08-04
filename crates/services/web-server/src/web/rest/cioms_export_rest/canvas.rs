@@ -23,11 +23,19 @@ impl PdfCanvas {
 		if value.trim().is_empty() {
 			return;
 		}
-		let _ = writeln!(
-			self.stream,
-			"BT /F1 {size} Tf {x} {y} Td ({}) Tj ET",
-			escape_pdf_text(value)
-		);
+		if value.is_ascii() {
+			let _ = writeln!(
+				self.stream,
+				"BT /F1 {size} Tf {x} {y} Td ({}) Tj ET",
+				escape_pdf_text(value)
+			);
+		} else {
+			let _ = writeln!(
+				self.stream,
+				"BT /F2 {size} Tf {x} {y} Td <{}> Tj ET",
+				encode_pdf_unicode_text(value)
+			);
+		}
 	}
 
 	pub(super) fn wrapped_text(
@@ -91,9 +99,9 @@ pub(super) fn wrap_pdf_text(value: &str, max_chars: usize) -> Vec<String> {
 			continue;
 		}
 		let next_len = if line.is_empty() {
-			word.len()
+			word.chars().count()
 		} else {
-			line.len() + 1 + word.len()
+			line.chars().count() + 1 + word.chars().count()
 		};
 		if next_len > max_chars && !line.is_empty() {
 			lines.push(line);
@@ -158,13 +166,7 @@ pub(super) fn is_basic_data_ordering(settings: &CiomsSettings) -> bool {
 	settings.data_ordering.eq_ignore_ascii_case("Basic")
 }
 
-pub(super) fn render_basic_repeated_items_table(
-	canvas: &mut PdfCanvas,
-	data: &CiomsCaseData,
-	x: i32,
-	y: i32,
-	w: i32,
-) {
+fn basic_repeated_item_rows(data: &CiomsCaseData) -> Vec<String> {
 	let mut rows = Vec::new();
 	for reaction in &data.reactions {
 		rows.push(format!(
@@ -211,6 +213,21 @@ pub(super) fn render_basic_repeated_items_table(
 			sender.organization_name.as_deref().unwrap_or("")
 		));
 	}
+	rows
+}
+
+pub(super) fn basic_repeated_items_text(data: &CiomsCaseData) -> String {
+	basic_repeated_item_rows(data).join("\n")
+}
+
+pub(super) fn render_basic_repeated_items_table(
+	canvas: &mut PdfCanvas,
+	data: &CiomsCaseData,
+	x: i32,
+	y: i32,
+	w: i32,
+) {
+	let rows = basic_repeated_item_rows(data);
 	if rows.is_empty() {
 		return;
 	}
@@ -250,14 +267,10 @@ pub(super) fn render_missing_information_legend(
 	);
 }
 
-pub(super) fn cioms_notation_text(
-	narrative: Option<&NarrativeInformation>,
-) -> String {
-	let Some(narrative) = narrative else {
-		return String::new();
-	};
-	join_present(
-		&[
+pub(super) fn cioms_notation_text(data: &CiomsCaseData) -> String {
+	let mut values = Vec::new();
+	if let Some(narrative) = data.narrative.as_ref() {
+		values.extend([
 			narrative
 				.reporter_comments
 				.as_ref()
@@ -270,9 +283,12 @@ pub(super) fn cioms_notation_text(
 				.additional_information
 				.as_ref()
 				.map(|value| format!("Additional: {value}")),
-		],
-		" | ",
-	)
+		]);
+	}
+	values.extend(data.field_notations.iter().map(|notation| {
+		Some(format!("{}: {}", notation.field_path, notation.notation))
+	}));
+	values.into_iter().flatten().collect::<Vec<_>>().join(" | ")
 }
 
 pub(super) fn render_cioms_notation(
@@ -285,7 +301,7 @@ pub(super) fn render_cioms_notation(
 	if !options.include_notation {
 		return;
 	}
-	let notation = cioms_notation_text(data.narrative.as_ref());
+	let notation = cioms_notation_text(data);
 	if notation.is_empty() {
 		return;
 	}

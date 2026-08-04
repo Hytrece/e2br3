@@ -1,6 +1,7 @@
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::Json;
+use crate::runtime_settings::{self, normalize_appendices};
 use lib_core::ctx::{
 	canonical_role, Ctx, ROLE_SPONSOR_ADMIN_COMPANY, ROLE_SPONSOR_ADMIN_CRO,
 	ROLE_USER,
@@ -19,7 +20,6 @@ use std::collections::HashSet;
 use uuid::Uuid;
 
 const SETTINGS_KEY: &str = "system";
-const SUPPORTED_APPENDICES: [&str; 3] = ["ICH", "FDA", "MFDS"];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DashboardNoticePayload {
@@ -121,7 +121,7 @@ pub struct AdminSettingsUpdateBody {
 
 fn default_settings() -> AdminSettingsPayload {
 	AdminSettingsPayload {
-		timezone: Some("Asia/Seoul".to_string()),
+		timezone: Some(runtime_settings::DEFAULT_TIMEZONE.to_string()),
 		meddra_language: Some("English".to_string()),
 		meddra_version: Some(String::new()),
 		idf_version: Some(String::new()),
@@ -129,7 +129,7 @@ fn default_settings() -> AdminSettingsPayload {
 		orientation: Some("Landscape".to_string()),
 		data_ordering: Some("Primary data will appear first".to_string()),
 		upload_excel_template_without_element_label: Some(false),
-		notation: Some(false),
+		notation: Some(runtime_settings::DEFAULT_NOTATION),
 		apply_comments_on_exported_xml: Some(false),
 		apply_sender_info_to_imported_cases: Some(false),
 		apply_default_values_to_imported_r2_cases: Some(false),
@@ -254,24 +254,6 @@ fn default_workflow_config() -> WorkflowConfigPayload {
 				]),
 			},
 		]),
-	}
-}
-
-fn normalize_appendices(appendices: Option<&[String]>) -> Vec<String> {
-	let selected = appendices
-		.unwrap_or(&[])
-		.iter()
-		.map(|appendix| appendix.trim().to_ascii_uppercase())
-		.collect::<HashSet<_>>();
-	let supported = SUPPORTED_APPENDICES
-		.iter()
-		.filter(|appendix| selected.contains(**appendix))
-		.map(|appendix| (*appendix).to_string())
-		.collect::<Vec<_>>();
-	if supported.is_empty() {
-		vec!["ICH".to_string()]
-	} else {
-		supported
 	}
 }
 
@@ -404,7 +386,7 @@ async fn payload_to_value(
 		});
 	}
 	Ok(json!({
-		"timezone": payload.timezone.clone().unwrap_or_else(|| "Asia/Seoul".to_string()),
+		"timezone": payload.timezone.clone().unwrap_or_else(|| runtime_settings::DEFAULT_TIMEZONE.to_string()),
 		"meddra_language": payload.meddra_language.clone().unwrap_or_else(|| "English".to_string()),
 		"meddra_version": payload.meddra_version.clone().unwrap_or_default(),
 		"idf_version": payload.idf_version.clone().unwrap_or_default(),
@@ -412,7 +394,7 @@ async fn payload_to_value(
 		"orientation": payload.orientation.clone().unwrap_or_else(|| "Landscape".to_string()),
 		"data_ordering": payload.data_ordering.clone().unwrap_or_else(|| "Primary data will appear first".to_string()),
 		"upload_excel_template_without_element_label": payload.upload_excel_template_without_element_label.unwrap_or(false),
-		"notation": payload.notation.unwrap_or(false),
+		"notation": payload.notation.unwrap_or(runtime_settings::DEFAULT_NOTATION),
 		"apply_comments_on_exported_xml": payload.apply_comments_on_exported_xml.unwrap_or(false),
 		"apply_sender_info_to_imported_cases": payload.apply_sender_info_to_imported_cases.unwrap_or(false),
 		"apply_default_values_to_imported_r2_cases": payload.apply_default_values_to_imported_r2_cases.unwrap_or(false),

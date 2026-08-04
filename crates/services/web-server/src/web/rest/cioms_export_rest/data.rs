@@ -1,4 +1,11 @@
 use super::*;
+use crate::runtime_settings;
+
+#[derive(Debug, sqlx::FromRow)]
+struct CiomsFieldNotationRow {
+	field_path: String,
+	notation: String,
+}
 
 #[derive(Clone, Copy)]
 enum CiomsCaseTable {
@@ -25,30 +32,11 @@ pub(super) async fn load_cioms_settings(
 	ctx: &lib_core::ctx::Ctx,
 	mm: &ModelManager,
 ) -> Result<CiomsSettings> {
-	let value = AdminSettingsBmc::get(ctx, mm, SETTINGS_KEY)
-		.await
-		.map_err(Error::Model)?;
-	let orientation = value
-		.as_ref()
-		.and_then(|value| value.get("orientation"))
-		.and_then(|value| value.as_str())
-		.unwrap_or("Landscape")
-		.trim()
-		.to_string();
-	let data_ordering = value
-		.as_ref()
-		.and_then(|value| value.get("data_ordering"))
-		.and_then(|value| value.as_str())
-		.unwrap_or("Primary data will appear first")
-		.trim()
-		.to_string();
+	let settings = runtime_settings::load(ctx, mm).await?;
 	Ok(CiomsSettings {
-		orientation: if orientation.eq_ignore_ascii_case("portrait") {
-			"Portrait".to_string()
-		} else {
-			"Landscape".to_string()
-		},
-		data_ordering,
+		orientation: settings.orientation,
+		data_ordering: settings.data_ordering,
+		notation: settings.notation,
 	})
 }
 
@@ -213,6 +201,27 @@ pub(super) async fn load_cioms_case_data(
 		.map_err(Error::Model)?;
 	let dosages = load_dosages_by_case(ctx, mm, case_id).await?;
 	let indications = load_indications_by_case(ctx, mm, case_id).await?;
+	let test_results = TestResultBmc::list_by_case(ctx, mm, case_id)
+		.await
+		.map_err(Error::Model)?;
+	let field_notations = lib_rest_core::with_rls_read(mm, ctx, |dbx| {
+		Box::pin(async move {
+			dbx.fetch_all(sqlx::query_as::<_, CiomsFieldNotationRow>(
+				"SELECT field_path, notation FROM case_field_notations WHERE case_id = $1 ORDER BY field_path, record_id",
+			)
+			.bind(case_id))
+			.await
+			.map_err(ModelError::Dbx)
+			.map_err(Error::Model)
+		})
+	})
+	.await?
+	.into_iter()
+	.map(|row| CiomsFieldNotation {
+		field_path: row.field_path,
+		notation: row.notation,
+	})
+	.collect();
 	let primary_sources = load_list_by_case::<PrimarySource>(
 		ctx,
 		mm,
@@ -235,8 +244,10 @@ pub(super) async fn load_cioms_case_data(
 		drugs,
 		dosages,
 		indications,
+		test_results,
 		primary_sources,
 		senders,
 		narrative,
+		field_notations,
 	})
 }

@@ -8,9 +8,15 @@ pub(super) fn escape_pdf_text(value: &str) -> String {
 			')' => "\\)".chars().collect::<Vec<_>>(),
 			'\\' => "\\\\".chars().collect::<Vec<_>>(),
 			ch if ch.is_ascii_control() => " ".chars().collect::<Vec<_>>(),
-			ch if !ch.is_ascii() => "?".chars().collect::<Vec<_>>(),
 			_ => vec![ch],
 		})
+		.collect()
+}
+
+pub(super) fn encode_pdf_unicode_text(value: &str) -> String {
+	value
+		.encode_utf16()
+		.map(|unit| format!("{unit:04X}"))
 		.collect()
 }
 
@@ -80,6 +86,32 @@ pub(super) fn report_type_text(value: Option<&str>) -> &'static str {
 		"4" => "Not available",
 		_ => "",
 	}
+}
+
+pub(super) fn reaction_outcome_text(value: Option<&str>) -> String {
+	match value.unwrap_or_default() {
+		"1" => "Recovered/resolved",
+		"2" => "Recovering/resolving",
+		"3" => "Not recovered/not resolved",
+		"4" => "Recovered/resolved with sequelae",
+		"5" => "Fatal",
+		"6" => "Unknown",
+		value => value,
+	}
+	.to_string()
+}
+
+pub(super) fn drug_action_text(value: Option<&str>) -> String {
+	match value.unwrap_or_default() {
+		"1" => "Drug withdrawn",
+		"2" => "Dose reduced",
+		"3" => "Dose increased",
+		"4" => "Dose not changed",
+		"5" => "Unknown",
+		"6" => "Not applicable",
+		value => value,
+	}
+	.to_string()
 }
 
 pub(super) fn join_present(values: &[Option<String>], separator: &str) -> String {
