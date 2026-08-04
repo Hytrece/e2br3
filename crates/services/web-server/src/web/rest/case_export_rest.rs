@@ -75,46 +75,57 @@ pub fn format_message_timestamp_utc_pub(now: OffsetDateTime) -> String {
 	)
 }
 
-pub fn message_sender_identifier() -> String {
-	std::env::var("E2BR3_DEFAULT_MESSAGE_SENDER")
-		.unwrap_or_else(|_| "DSJP".to_string())
+fn required_env_identifier(name: &str) -> Result<String> {
+	let value = std::env::var(name).map_err(|_| Error::BadRequest {
+		message: format!("{name} must be configured"),
+	})?;
+	if value.trim().is_empty() {
+		return Err(Error::BadRequest {
+			message: format!("{name} must not be empty"),
+		});
+	}
+	Ok(value)
 }
 
-pub fn message_receiver_identifier(authority: RegulatoryAuthority) -> String {
+pub fn message_sender_identifier() -> Result<String> {
+	required_env_identifier("E2BR3_DEFAULT_MESSAGE_SENDER")
+}
+
+pub fn message_receiver_identifier(authority: RegulatoryAuthority) -> Result<String> {
 	let env_name = match authority {
 		RegulatoryAuthority::Fda => "E2BR3_DEFAULT_MESSAGE_RECEIVER_FDA",
 		RegulatoryAuthority::Ich => "E2BR3_DEFAULT_MESSAGE_RECEIVER_ICH",
 		RegulatoryAuthority::Mfds => "E2BR3_DEFAULT_MESSAGE_RECEIVER_MFDS",
 	};
-	std::env::var(env_name).unwrap_or_else(|_| {
-		authority.default_message_receiver_identifier().to_string()
-	})
+	required_env_identifier(env_name)
 }
 
-fn should_validate_export_xml(authority: RegulatoryAuthority) -> bool {
-	if let Ok(value) = std::env::var("E2BR3_EXPORT_VALIDATE_FDA") {
-		if matches!(
-			value.trim().to_ascii_lowercase().as_str(),
-			"0" | "false" | "no"
-		) {
-			return false;
+fn should_validate_export_xml(authority: RegulatoryAuthority) -> Result<bool> {
+	let value = if matches!(authority, RegulatoryAuthority::Fda) {
+		match std::env::var("E2BR3_EXPORT_VALIDATE_FDA") {
+			Ok(value) => value,
+			Err(std::env::VarError::NotPresent) => {
+				std::env::var("E2BR3_EXPORT_VALIDATE").map_err(|_| Error::BadRequest {
+					message: "E2BR3_EXPORT_VALIDATE must be configured".to_string(),
+				})?
+			}
+			Err(err) => {
+				return Err(Error::BadRequest {
+					message: format!("E2BR3_EXPORT_VALIDATE_FDA is invalid: {err}"),
+				});
+			}
 		}
-		if matches!(
-			value.trim().to_ascii_lowercase().as_str(),
-			"1" | "true" | "yes"
-		) {
-			return true;
-		}
-	}
-	if matches!(authority, RegulatoryAuthority::Fda) {
-		return true;
-	}
-	match std::env::var("E2BR3_EXPORT_VALIDATE") {
-		Ok(value) => matches!(
-			value.trim().to_ascii_lowercase().as_str(),
-			"1" | "true" | "yes"
-		),
-		Err(_) => false,
+	} else {
+		std::env::var("E2BR3_EXPORT_VALIDATE").map_err(|_| Error::BadRequest {
+			message: "E2BR3_EXPORT_VALIDATE must be configured".to_string(),
+		})?
+	};
+	match value.trim().to_ascii_lowercase().as_str() {
+		"0" | "false" | "no" => Ok(false),
+		"1" | "true" | "yes" => Ok(true),
+		_ => Err(Error::BadRequest {
+			message: "E2BR3_EXPORT_VALIDATE must be a boolean".to_string(),
+		}),
 	}
 }
 
@@ -153,11 +164,14 @@ async fn safety_report_id_for_case(
 	mm: &lib_core::model::ModelManager,
 	case_id: Uuid,
 ) -> Result<String> {
-	Ok(SafetyReportIdentificationBmc::get_by_case(ctx, mm, case_id)
+	SafetyReportIdentificationBmc::get_by_case(ctx, mm, case_id)
 		.await
 		.map_err(Error::Model)?
 		.safety_report_id
-		.unwrap_or_else(|| case_id.to_string()))
+		.filter(|value| !value.trim().is_empty())
+		.ok_or_else(|| Error::BadRequest {
+			message: format!("case {case_id} has no safety report ID"),
+		})
 }
 
 fn export_file_name(
@@ -212,7 +226,7 @@ async fn generate_validated_case_xml_for_authority_with_notation(
 		message: format!("export task failed: {err}"),
 	})??;
 
-	if should_validate_export_xml(authority) {
+	if should_validate_export_xml(authority)? {
 		let schema_report =
 			validate_e2b_xml(xml.as_bytes(), None).map_err(|err| {
 				Error::BadRequest {

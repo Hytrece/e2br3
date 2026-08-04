@@ -406,6 +406,8 @@ async fn import_whodrug_authorized(
 	let bytes = read_upload_bytes(multipart).await?;
 	let rows =
 		terminology_import::parse_whodrug_upload(&bytes).map_err(map_import_err)?;
+	let cas_numbers = terminology_import::parse_whodrug_cas_numbers(&bytes)
+		.map_err(map_import_err)?;
 
 	if !params.dry_run {
 		let checksum = terminology_import::sha256_hex(&bytes);
@@ -413,6 +415,7 @@ async fn import_whodrug_authorized(
 			mm,
 			ctx.user_id(),
 			&rows,
+			&cas_numbers,
 			&params.version,
 			&language,
 			&checksum,

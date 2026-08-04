@@ -5,42 +5,48 @@ use lib_core::model::ModelManager;
 use lib_core::regulatory::RegulatoryAuthority;
 use lib_rest_core::{Error, Result};
 use serde_json::Value;
-use std::collections::HashSet;
 use time::{Date, Month};
 
 pub const SETTINGS_KEY: &str = "system";
-pub const DEFAULT_TIMEZONE: &str = "Asia/Seoul";
-pub const DEFAULT_NOTATION: bool = false;
 pub const DATA_ORDERING_BASIC: &str = "Basic";
 pub const DATA_ORDERING_PRIMARY: &str = "Primary data will appear first";
 pub const DATA_ORDERING_LATEST: &str = "Latest data will appear first";
-pub const DEFAULT_DATA_ORDERING: &str = DATA_ORDERING_PRIMARY;
 
 /// Resolve stored/UI aliases to the values consumed by runtime and export code.
-/// Invalid or missing values intentionally use the existing primary-order default.
-pub fn normalize_data_ordering(value: Option<&str>) -> String {
+/// Missing or unsupported values are configuration errors.
+pub fn normalize_data_ordering(value: Option<&str>) -> Result<String> {
+	let value = value.ok_or_else(|| Error::BadRequest {
+		message: "data_ordering is required".to_string(),
+	})?;
+	let value = value.trim();
+	if value.is_empty() {
+		return Err(Error::BadRequest {
+			message: "data_ordering must not be empty".to_string(),
+		});
+	}
 	let compact = value
-		.unwrap_or_default()
 		.chars()
 		.filter(|character| character.is_ascii_alphanumeric())
 		.collect::<String>()
 		.to_ascii_lowercase();
 
 	match compact.as_str() {
-		"basic" | "basicdata" => DATA_ORDERING_BASIC.to_string(),
+		"basic" | "basicdata" => Ok(DATA_ORDERING_BASIC.to_string()),
 		"primary"
 		| "primarydata"
 		| "primarydatafirst"
-		| "primarydatawillappearfirst" => DATA_ORDERING_PRIMARY.to_string(),
+		| "primarydatawillappearfirst" => Ok(DATA_ORDERING_PRIMARY.to_string()),
 		"latest"
 		| "latestdata"
 		| "latestdatafirst"
-		| "latestdatawillappearfirst" => DATA_ORDERING_LATEST.to_string(),
-		_ => DEFAULT_DATA_ORDERING.to_string(),
+		| "latestdatawillappearfirst" => Ok(DATA_ORDERING_LATEST.to_string()),
+		_ => Err(Error::BadRequest {
+			message: format!("unsupported data_ordering '{value}'"),
+		}),
 	}
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ImportDateSettings {
 	pub update_date_of_creation: bool,
 	pub update_most_recent_info_date: bool,
@@ -58,70 +64,88 @@ pub struct RuntimeSettings {
 	pub data_ordering: String,
 }
 
-impl Default for RuntimeSettings {
-	fn default() -> Self {
-		Self {
-			timezone: DEFAULT_TIMEZONE.to_string(),
-			appendices: vec![RegulatoryAuthority::Ich],
-			notation: DEFAULT_NOTATION,
-			import_dates: ImportDateSettings::default(),
-			apply_sender_info_to_imported_cases: false,
-			orientation: "Landscape".to_string(),
-			data_ordering: DEFAULT_DATA_ORDERING.to_string(),
-		}
-	}
-}
-
 impl RuntimeSettings {
-	fn from_value(value: Option<&Value>) -> Self {
-		let defaults = Self::default();
-		let Some(value) = value else {
-			return defaults;
+	pub(crate) fn from_value(value: Option<&Value>) -> Result<Self> {
+		let value = value.ok_or_else(|| Error::BadRequest {
+			message: "admin settings record is missing".to_string(),
+		})?;
+		let required_string = |key: &str| -> Result<String> {
+			let value = value
+				.get(key)
+				.and_then(Value::as_str)
+				.map(str::trim)
+				.filter(|value| !value.is_empty())
+				.ok_or_else(|| Error::BadRequest {
+					message: format!("admin settings field '{key}' is required"),
+				})?;
+			Ok(value.to_string())
 		};
-		let import_dates =
-			value.get("import_date_update").and_then(Value::as_object);
-		Self {
-			timezone: value
-				.get("timezone")
-				.and_then(Value::as_str)
-				.map(str::trim)
-				.filter(|value| !value.is_empty())
-				.unwrap_or(DEFAULT_TIMEZONE)
-				.to_string(),
-			appendices: parse_appendices(value.get("appendices")),
-			notation: value
-				.get("notation")
+		let required_bool = |key: &str| -> Result<bool> {
+			value
+				.get(key)
 				.and_then(Value::as_bool)
-				.unwrap_or(DEFAULT_NOTATION),
-			import_dates: ImportDateSettings {
-				update_date_of_creation: import_dates
-					.and_then(|value| value.get("date_of_creation"))
-					.and_then(Value::as_bool)
-					.unwrap_or(false),
-				update_most_recent_info_date: import_dates
-					.and_then(|value| value.get("most_recent_info_date"))
-					.and_then(Value::as_bool)
-					.unwrap_or(false),
-				update_report_first_received_date: import_dates
-					.and_then(|value| value.get("report_first_received_date"))
-					.and_then(Value::as_bool)
-					.unwrap_or(false),
-			},
-			apply_sender_info_to_imported_cases: value
-				.get("apply_sender_info_to_imported_cases")
+				.ok_or_else(|| Error::BadRequest {
+					message: format!("admin settings field '{key}' must be boolean"),
+				})
+		};
+		let timezone = required_string("timezone")?;
+		let timezone = validate_timezone(&timezone).ok_or_else(|| Error::BadRequest {
+			message: "stored timezone must be a valid IANA timezone".to_string(),
+		})?;
+		let orientation = required_string("orientation")?;
+		if !matches!(orientation.as_str(), "Portrait" | "Landscape") {
+			return Err(Error::BadRequest {
+				message: "stored orientation must be Portrait or Landscape".to_string(),
+			});
+		}
+		let import_dates = value
+			.get("import_date_update")
+			.and_then(Value::as_object)
+			.ok_or_else(|| Error::BadRequest {
+				message: "import_date_update is required".to_string(),
+			})?;
+		let import_bool = |key: &str| -> Result<bool> {
+			import_dates
+				.get(key)
 				.and_then(Value::as_bool)
-				.unwrap_or(false),
-			orientation: value
-				.get("orientation")
-				.and_then(Value::as_str)
-				.map(str::trim)
-				.filter(|value| !value.is_empty())
-				.unwrap_or(&defaults.orientation)
-				.to_string(),
+				.ok_or_else(|| Error::BadRequest {
+					message: format!("import_date_update.{key} must be boolean"),
+				})
+		};
+		let import_dates = ImportDateSettings {
+			update_date_of_creation: import_bool("date_of_creation")?,
+			update_most_recent_info_date: import_bool("most_recent_info_date")?,
+			update_report_first_received_date: import_bool("report_first_received_date")?,
+		};
+		if !matches!(
+			(
+				import_dates.update_date_of_creation,
+				import_dates.update_most_recent_info_date,
+				import_dates.update_report_first_received_date,
+			),
+			(false, false, false)
+				| (true, false, true)
+				| (true, true, false)
+				| (true, true, true)
+		) {
+			return Err(Error::BadRequest {
+				message: "import_date_update must be one of the four supported states"
+					.to_string(),
+			});
+		}
+		Ok(Self {
+			timezone,
+			appendices: parse_appendices(value.get("appendices"))?,
+			notation: required_bool("notation")?,
+			import_dates,
+			apply_sender_info_to_imported_cases: required_bool(
+				"apply_sender_info_to_imported_cases",
+			)?,
+			orientation,
 			data_ordering: normalize_data_ordering(
 				value.get("data_ordering").and_then(Value::as_str),
-			),
-		}
+			)?,
+		})
 	}
 
 	pub fn resolve_notation(&self, requested: Option<bool>) -> bool {
@@ -168,46 +192,55 @@ pub async fn load(
 	let value = AdminSettingsBmc::get(ctx, mm, SETTINGS_KEY)
 		.await
 		.map_err(Error::Model)?;
-	let settings = RuntimeSettings::from_value(value.as_ref());
-	if validate_timezone(&settings.timezone).is_none() {
-		return Err(Error::BadRequest {
-			message: "stored timezone must be a valid IANA timezone".to_string(),
-		});
-	}
-	if !matches!(settings.orientation.as_str(), "Portrait" | "Landscape") {
-		return Err(Error::BadRequest {
-			message: "stored orientation must be Portrait or Landscape".to_string(),
-		});
-	}
-	Ok(settings)
+	RuntimeSettings::from_value(value.as_ref())
 }
 
-pub fn normalize_appendices(value: Option<&[String]>) -> Vec<String> {
-	let selected = value
-		.unwrap_or(&[])
-		.iter()
-		.map(|value| value.trim().to_ascii_uppercase())
-		.collect::<HashSet<_>>();
-	let values = ["ICH", "FDA", "MFDS"]
-		.into_iter()
-		.filter(|value| selected.contains(*value))
-		.map(str::to_string)
-		.collect::<Vec<_>>();
-	values
+pub fn normalize_appendices(value: Option<&[String]>) -> Result<Vec<String>> {
+	let values = value.ok_or_else(|| Error::BadRequest {
+		message: "appendices are required".to_string(),
+	})?;
+	if values.is_empty() {
+		return Err(Error::BadRequest {
+			message: "appendices must include at least one supported authority".to_string(),
+		});
+	}
+	let mut normalized = Vec::with_capacity(values.len());
+	for value in values {
+		let value = value.trim().to_ascii_uppercase();
+		if !matches!(value.as_str(), "ICH" | "FDA" | "MFDS") {
+			return Err(Error::BadRequest {
+				message: format!("unsupported appendix '{value}'"),
+			});
+		}
+		if !normalized.contains(&value) {
+			normalized.push(value);
+		}
+	}
+	Ok(normalized)
 }
 
-fn parse_appendices(value: Option<&Value>) -> Vec<RegulatoryAuthority> {
-	let appendices = value
+fn parse_appendices(value: Option<&Value>) -> Result<Vec<RegulatoryAuthority>> {
+	let values = value
 		.and_then(Value::as_array)
-		.map(|values| {
-			values
-				.iter()
-				.filter_map(Value::as_str)
-				.filter_map(RegulatoryAuthority::parse)
-				.collect::<Vec<_>>()
+		.ok_or_else(|| Error::BadRequest {
+			message: "appendices are required".to_string(),
+		})?;
+	if values.is_empty() {
+		return Err(Error::BadRequest {
+			message: "appendices must include at least one supported authority".to_string(),
+		});
+	}
+	values
+		.iter()
+		.map(|value| {
+			let value = value.as_str().ok_or_else(|| Error::BadRequest {
+				message: "appendices must contain strings".to_string(),
+			})?;
+			RegulatoryAuthority::parse(value).ok_or_else(|| Error::BadRequest {
+				message: format!("unsupported appendix '{value}'"),
+			})
 		})
-		.unwrap_or_default();
-	appendices
+		.collect()
 }
 
 #[cfg(test)]
@@ -226,10 +259,19 @@ mod tests {
 	#[test]
 	fn resolves_notation_and_appendices_from_admin_settings() {
 		let value = serde_json::json!({
+			"timezone": "Asia/Seoul",
 			"notation": true,
+			"import_date_update": {
+				"date_of_creation": false,
+				"most_recent_info_date": false,
+				"report_first_received_date": false,
+			},
+			"apply_sender_info_to_imported_cases": false,
+			"orientation": "Landscape",
+			"data_ordering": "Basic",
 			"appendices": ["FDA"],
 		});
-		let settings = RuntimeSettings::from_value(Some(&value));
+		let settings = RuntimeSettings::from_value(Some(&value)).unwrap();
 
 		assert!(settings.resolve_notation(None));
 		assert!(!settings.resolve_notation(Some(false)));
@@ -238,10 +280,22 @@ mod tests {
 
 	#[test]
 	fn does_not_invent_an_appendix_for_empty_settings() {
-		let value = serde_json::json!({"appendices": []});
+		let value = serde_json::json!({
+			"timezone": "Asia/Seoul",
+			"notation": false,
+			"import_date_update": {
+				"date_of_creation": false,
+				"most_recent_info_date": false,
+				"report_first_received_date": false,
+			},
+			"apply_sender_info_to_imported_cases": false,
+			"orientation": "Landscape",
+			"data_ordering": "Basic",
+			"appendices": [],
+		});
 		let settings = RuntimeSettings::from_value(Some(&value));
 
-		assert!(settings.appendices.is_empty());
-		assert!(normalize_appendices(Some(&[] as &[String])).is_empty());
+		assert!(settings.is_err());
+		assert!(normalize_appendices(Some(&[] as &[String])).is_err());
 	}
 }

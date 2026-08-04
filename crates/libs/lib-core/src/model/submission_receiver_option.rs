@@ -107,11 +107,11 @@ impl SubmissionReceiverOptionBmc {
 						('fda', 2, 'FDA(CDER IND-exempt BA/BE)', 'FDA_REPORT_TYPE', '2', 'CDER IND-exempt BA/BE', 'ZZFDA_PREMKT', 'CDER_IND_EXEMPT_BA_BE'),
 						('fda', 3, 'FDA(CBER IND)', 'FDA_REPORT_TYPE', '3', 'CBER IND', 'ZZFDA_PREMKT', 'CBER_IND'),
 						('fda', 4, 'FDA(Postmarket)', 'FDA_REPORT_TYPE', '4', 'Postmarket', 'ZZFDA', 'CDER'),
-						('mfds', 1, 'MFDS(CT)', 'MFDS_REPORT_TYPE', '1', '임상시험계획의 승인을 받은 자', 'MFDS_CT', 'CT'),
-						('mfds', 2, 'MFDS(CU)', 'MFDS_REPORT_TYPE', '2', '임상시험용의약품의 치료목적 사용승인을 받은 자', 'MFDS_CU', 'CU'),
-						('mfds', 3, 'MFDS(KR)', 'MFDS_REPORT_TYPE', '3', '시판 후 이상사례 국내보고', 'MFDS', 'KR'),
-						('mfds', 4, 'MFDS(FR)', 'MFDS_REPORT_TYPE', '4', '시판 후 이상사례 국외보고', 'MFDS_FR', 'FR'),
-						('mfds', 5, 'MFDS(CF)', 'MFDS_REPORT_TYPE', '5', '임상시험계획의 승인을 받은 자 (국외)', 'MFDS_CF', 'CF')
+						('mfds', 1, 'MFDS(CT)', 'MFDS_REPORT_TYPE', '1', '임상시험계획의 승인을 받은 자', 'MFDS-O-CT', 'MFDS-O-CT'),
+						('mfds', 2, 'MFDS(CU)', 'MFDS_REPORT_TYPE', '2', '임상시험용의약품의 치료목적 사용승인을 받은 자', 'MFDS-O-CU', 'MFDS-O-CU'),
+						('mfds', 3, 'MFDS(KR)', 'MFDS_REPORT_TYPE', '3', '시판 후 이상사례 국내보고', 'MFDS-O-KR', 'MFDS-O-KR'),
+						('mfds', 4, 'MFDS(FR)', 'MFDS_REPORT_TYPE', '4', '시판 후 이상사례 국외보고', 'MFDS-O-FR', 'MFDS-O-FR'),
+						('mfds', 5, 'MFDS(CF)', 'MFDS_REPORT_TYPE', '5', '임상시험계획의 승인을 받은 자 (국외)', 'MFDS-O-CF', 'MFDS-O-CF')
 					) AS v(authority, sequence_number, receiver_label, condition_field_code, condition_value_code, condition_value_label, batch_receiver_identifier, message_receiver_identifier)
 					ON CONFLICT DO NOTHING
 					"#,

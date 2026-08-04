@@ -95,7 +95,7 @@ pub fn is_unique_violation(err: &lib_core::model::Error) -> bool {
 	}
 }
 
-#[derive(Debug, Clone, Default, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 struct WorkflowStatusConfigDoc {
 	name: String,
 	editable: bool,
@@ -104,12 +104,12 @@ struct WorkflowStatusConfigDoc {
 	due_days: Option<i32>,
 }
 
-#[derive(Debug, Clone, Default, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 struct WorkflowConfigDoc {
 	statuses: Option<Vec<WorkflowStatusConfigDoc>>,
 }
 
-#[derive(Debug, Clone, Default, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 struct WorkflowSettingsDoc {
 	workflow_enabled: Option<bool>,
 	workflow: Option<WorkflowConfigDoc>,
@@ -131,19 +131,6 @@ pub struct WorkflowRuntimeSettings {
 }
 
 impl WorkflowRuntimeSettings {
-	fn default_disabled() -> Self {
-		Self {
-			enabled: false,
-			statuses: vec![WorkflowStatusRule {
-				name: "Saved".to_string(),
-				editable: true,
-				description: Some("Default authoring state".to_string()),
-				allowed_roles: Vec::new(),
-				due_days: 0,
-			}],
-		}
-	}
-
 	pub fn find_status(&self, value: &str) -> Option<&WorkflowStatusRule> {
 		self.statuses
 			.iter()
@@ -266,55 +253,82 @@ pub async fn load_workflow_runtime_settings(
 	let value = AdminSettingsBmc::get(ctx, mm, "system")
 		.await
 		.map_err(Error::Model)?;
-
-	let Some(value) = value else {
-		return Ok(WorkflowRuntimeSettings::default_disabled());
-	};
-
-	let parsed =
-		serde_json::from_value::<WorkflowSettingsDoc>(value).unwrap_or_default();
-
-	let mut statuses = parsed
+	let value = value.ok_or_else(|| Error::BadRequest {
+		message: "admin settings record is missing".to_string(),
+	})?;
+	let parsed = serde_json::from_value::<WorkflowSettingsDoc>(value).map_err(|err| {
+		Error::BadRequest {
+			message: format!("stored workflow settings are invalid: {err}"),
+		}
+	})?;
+	let enabled = parsed.workflow_enabled.ok_or_else(|| Error::BadRequest {
+		message: "workflow_enabled is required".to_string(),
+	})?;
+	let statuses = parsed
 		.workflow
-		.and_then(|workflow| workflow.statuses)
-		.unwrap_or_default()
-		.into_iter()
-		.filter_map(|status| {
-			let name = status.name.trim().to_string();
-			if name.is_empty() {
-				None
-			} else {
-				Some(WorkflowStatusRule {
-					name,
-					editable: status.editable,
-					description: status
-						.description
-						.map(|value| value.trim().to_string()),
-					allowed_roles: status
-						.allowed_roles
-						.unwrap_or_default()
-						.into_iter()
-						.map(|role| canonical_role(role.trim()))
-						.filter(|role| !role.is_empty())
-						.collect(),
-					due_days: status.due_days.unwrap_or(0),
-				})
-			}
-		})
-		.collect::<Vec<_>>();
-
+		.ok_or_else(|| Error::BadRequest {
+			message: "workflow configuration is required".to_string(),
+		})?
+		.statuses
+		.ok_or_else(|| Error::BadRequest {
+			message: "workflow statuses are required".to_string(),
+		})?;
 	if statuses.is_empty() {
-		statuses.push(WorkflowStatusRule {
-			name: "Saved".to_string(),
-			editable: true,
-			description: Some("Default authoring state".to_string()),
-			allowed_roles: Vec::new(),
-			due_days: 0,
+		return Err(Error::BadRequest {
+			message: "workflow must define at least one status".to_string(),
 		});
 	}
+	let statuses = statuses
+		.into_iter()
+		.map(|status| {
+			let name = status.name.trim().to_string();
+			if name.is_empty() {
+				return Err(Error::BadRequest {
+					message: "workflow status name is required".to_string(),
+				});
+			}
+			let due_days = status.due_days.ok_or_else(|| Error::BadRequest {
+				message: format!(
+					"workflow status '{name}' due_days is required"
+				),
+			})?;
+			if due_days < 0 {
+				return Err(Error::BadRequest {
+					message: format!(
+						"workflow status '{name}' due_days must be zero or greater"
+					),
+				});
+			}
+			let allowed_roles = status.allowed_roles.ok_or_else(|| Error::BadRequest {
+				message: format!(
+					"workflow status '{name}' allowed_roles is required"
+				),
+			})?;
+			let allowed_roles = allowed_roles
+				.into_iter()
+				.map(|role| canonical_role(role.trim()))
+				.collect::<Vec<_>>();
+			if allowed_roles.iter().any(String::is_empty) {
+				return Err(Error::BadRequest {
+					message: format!(
+						"workflow status '{name}' contains an empty role"
+					),
+				});
+			}
+			Ok(WorkflowStatusRule {
+				name,
+				editable: status.editable,
+				description: status
+					.description
+					.map(|value| value.trim().to_string()),
+				allowed_roles,
+				due_days,
+			})
+		})
+		.collect::<Result<Vec<_>>>()?;
 
 	Ok(WorkflowRuntimeSettings {
-		enabled: parsed.workflow_enabled.unwrap_or(false),
+		enabled,
 		statuses,
 	})
 }

@@ -3039,7 +3039,7 @@ mod golden_c1_value_tests {
 		report.report_type = Some("1".to_string());
 		report.fulfil_expedited_criteria = Some(false);
 		let mut ctx = ctx_with(report);
-		ctx.message_header = Some(message_header("MFDS", "CT"));
+		ctx.message_header = Some(message_header("MFDS-O-CT", "MFDS-O-CT"));
 		ctx.primary_sources = vec![primary_source()];
 		let mut issues = Vec::new();
 
@@ -3064,7 +3064,7 @@ mod golden_c1_value_tests {
 		let mut report = base_report();
 		report.fulfil_expedited_criteria_null_flavor = Some("NI".to_string());
 		let mut ctx = ctx_with(report);
-		ctx.message_header = Some(message_header("MFDS", "KR"));
+		ctx.message_header = Some(message_header("MFDS-O-KR", "MFDS-O-KR"));
 		let mut issues = Vec::new();
 
 		mfds_receiver_rules(&ctx, &mut issues);
@@ -3079,7 +3079,7 @@ mod golden_c1_value_tests {
 		let mut report = study_report();
 		report.fulfil_expedited_criteria = Some(true);
 		let mut ctx = ctx_with(report);
-		ctx.message_header = Some(message_header("MFDS", "CU"));
+		ctx.message_header = Some(message_header("MFDS-O-CU", "MFDS-O-CU"));
 
 		let mut source = primary_source();
 		source.qualification_null_flavor = Some("UNK".to_string());
@@ -3124,7 +3124,7 @@ mod golden_c1_value_tests {
 		};
 		let mut ctx = ctx_with(base_report());
 		ctx.primary_sources = vec![source];
-		ctx.message_header = Some(message_header("MFDS_FR", "FR"));
+		ctx.message_header = Some(message_header("MFDS-O-FR", "MFDS-O-FR"));
 		let mut issues = Vec::new();
 
 		collect_mfds_issues(&ctx, &mfds_ctx, &mut issues);
@@ -3132,7 +3132,7 @@ mod golden_c1_value_tests {
 			.iter()
 			.any(|issue| issue.code.ends_with("KR.1.REQUIRED")));
 
-		ctx.message_header = Some(message_header("MFDS", "KR"));
+		ctx.message_header = Some(message_header("MFDS-O-KR", "MFDS-O-KR"));
 		issues.clear();
 		collect_mfds_issues(&ctx, &mfds_ctx, &mut issues);
 		for code in [

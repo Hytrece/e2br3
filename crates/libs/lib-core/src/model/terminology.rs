@@ -477,6 +477,38 @@ impl ControlledTermBmc {
 		let rows = mm.dbx().fetch_all(qb.build_query_as::<(String,)>()).await?;
 		Ok(rows.into_iter().map(|(code,)| code).collect())
 	}
+
+	pub async fn existing_active_keys(
+		mm: &ModelManager,
+		dictionary: &str,
+		scope: &str,
+		keys: &[(String, String)],
+	) -> Result<HashSet<(String, String)>> {
+		if keys.is_empty() {
+			return Ok(HashSet::new());
+		}
+		let mut qb: QueryBuilder<Postgres> =
+			QueryBuilder::new("WITH requested(version, code) AS (");
+		qb.push_values(keys, |mut row, (version, code)| {
+			row.push_bind(version).push_bind(code);
+		});
+		qb.push(
+			") SELECT DISTINCT terms.version, terms.code
+			 FROM controlled_terminology_terms terms
+			 JOIN requested ON requested.version = terms.version
+			  AND requested.code = terms.code
+			 WHERE terms.active = true AND terms.dictionary = ",
+		)
+		.push_bind(dictionary)
+		.push(" AND terms.scope = ")
+		.push_bind(scope);
+		Ok(mm
+			.dbx()
+			.fetch_all(qb.build_query_as::<(String, String)>())
+			.await?
+			.into_iter()
+			.collect())
+	}
 }
 
 pub struct MfdsProductBmc;

@@ -467,6 +467,8 @@ async fn create_case_from_intake_authorized(
 	}
 
 	let profile_enum = RegulatoryAuthority::Fda;
+	let message_sender_identifier = message_sender_identifier()?;
+	let message_receiver_identifier = message_receiver_identifier(profile_enum)?;
 
 	let generated_case_number = if safety_report_id.trim().is_empty() {
 		let generated = generate_case_number(ctx, mm).await.map_err(Error::Model)?;
@@ -503,8 +505,8 @@ async fn create_case_from_intake_authorized(
 		MessageHeaderForCreate {
 			case_id,
 			message_number: format!("MSG-{case_id}"),
-			message_sender_identifier: message_sender_identifier(),
-			message_receiver_identifier: message_receiver_identifier(profile_enum),
+			message_sender_identifier,
+			message_receiver_identifier,
 			message_date:
 				crate::web::rest::case_export_rest::format_message_timestamp_utc_pub(
 					now,

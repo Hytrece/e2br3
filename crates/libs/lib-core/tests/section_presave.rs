@@ -3112,8 +3112,8 @@ async fn test_seeded_receiver_presave_routes_match_reference_labels() -> Result<
 			"MFDS_REPORT_TYPE".to_string(),
 			"1".to_string(),
 			"임상시험계획의 승인을 받은 자".to_string(),
-			Some("MFDS_CT".to_string()),
-			"CT".to_string(),
+			Some("MFDS-O-CT".to_string()),
+			"MFDS-O-CT".to_string(),
 		)
 	);
 
@@ -3133,8 +3133,8 @@ async fn test_seeded_receiver_presave_routes_match_reference_labels() -> Result<
 			"MFDS_REPORT_TYPE".to_string(),
 			"3".to_string(),
 			"시판 후 이상사례 국내보고".to_string(),
-			Some("MFDS".to_string()),
-			"KR".to_string(),
+			Some("MFDS-O-KR".to_string()),
+			"MFDS-O-KR".to_string(),
 		)
 	);
 

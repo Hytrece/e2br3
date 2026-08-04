@@ -249,7 +249,9 @@ pub(super) async fn load_cioms_case_data(
 		.as_ref()
 		.and_then(|report| report.safety_report_id.clone())
 		.filter(|value| !value.trim().is_empty())
-		.unwrap_or_else(|| case_id.to_string());
+		.ok_or_else(|| Error::BadRequest {
+			message: format!("case {case_id} has no safety report ID"),
+		})?;
 	let patient = load_optional_by_case::<PatientInformation>(
 		ctx,
 		mm,

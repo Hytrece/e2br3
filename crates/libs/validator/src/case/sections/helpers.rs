@@ -281,23 +281,12 @@ pub(crate) fn valid_mfds_product(
 				crate::VocabularyScope::ItemSeq,
 				value,
 			),
-		Some(receiver) if receiver.eq_ignore_ascii_case("FR") => {
-			if !vocabulary.whodrug_available() {
-				return true;
-			}
-			let version = version.map(str::trim).filter(|value| !value.is_empty());
-			match version {
-				Some(version) => {
-					vocabulary.contains_whodrug_version(version)
-						&& vocabulary.contains_whodrug_product(version, value)
-				}
-				None => vocabulary.contains_snapshot_code(
-					"WHODrug",
-					crate::VocabularyScope::All,
-					value,
-				),
-			}
-		}
+		Some(receiver) if receiver.eq_ignore_ascii_case("FR") => version
+			.map(str::trim)
+			.filter(|version| !version.is_empty())
+			.is_some_and(|version| {
+				vocabulary.contains_whodrug_product(version, value)
+			}),
 		_ => true,
 	}
 }
@@ -318,15 +307,10 @@ pub(crate) fn valid_mfds_substance(
 				crate::VocabularyScope::All,
 				value,
 			),
-		Some(receiver) if receiver.eq_ignore_ascii_case("FR") => {
-			!vocabulary.whodrug_available()
-				|| version
-					.map(str::trim)
-					.filter(|version| !version.is_empty())
-					.is_none_or(|version| {
-						vocabulary.contains_whodrug_version(version)
-					})
-		}
+		Some(receiver) if receiver.eq_ignore_ascii_case("FR") => version
+			.map(str::trim)
+			.filter(|version| !version.is_empty())
+			.is_some_and(|version| vocabulary.contains_whodrug_cas(version, value)),
 		_ => true,
 	}
 }
@@ -402,6 +386,24 @@ mod tests {
 			Some("KR"),
 			None,
 			Some("missing")
+		));
+	}
+
+	#[test]
+	fn mfds_foreign_substance_requires_the_active_whodrug_cas() {
+		let vocabulary =
+			VocabularyContext::for_whodrug_cas(&[("2026.03", "0000050000")]);
+		assert!(valid_mfds_substance(
+			&vocabulary,
+			Some("FR"),
+			Some("2026.03"),
+			Some("0000050000")
+		));
+		assert!(!valid_mfds_substance(
+			&VocabularyContext::default(),
+			Some("FR"),
+			Some("2026.03"),
+			Some("0000050000")
 		));
 	}
 }

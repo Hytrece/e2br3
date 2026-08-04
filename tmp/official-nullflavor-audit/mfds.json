@@ -1,0 +1,276 @@
+{
+  "audit": {
+    "authority": "MFDS",
+    "scope": "Every NullFlavor statement in the latest publicly available Korean MFDS E2B(R3) implementation guide, checked against repository MFDS rules and implementation layers",
+    "audited_at": "2026-08-03",
+    "result": "fail",
+    "direct_official_element_rules": 19,
+    "confirmed_implementation_mismatches": 4,
+    "source_limitations": 2
+  },
+  "official_sources": [
+    {
+      "title_ko": "약물이상반응 및 이상사례 전자보고 가이드라인(민원인 안내서)",
+      "title_en": "Republic of Korea Implementation Guide: Electronic Transmission of Individual Case Safety Reports E2B(R3) Data Elements and Message Specification",
+      "registration_number": "안내서-0925-03",
+      "published": "2021-07-08",
+      "status": "Latest version returned by the official MFDS guide listing as of 2026-08-03",
+      "landing_page": "https://www.mfds.go.kr/brd/m_1060/view.do?seq=14869",
+      "download_url": "https://www.mfds.go.kr/brd/m_1060/down.do?brd_id=data0011&seq=14869&data_tp=A&file_seq=1",
+      "sha256": "8908eca3288ce6577c37e1ccabefb321d659883658211cff1e226943093e624b",
+      "locations_reviewed": [
+        "printed page 20: G.k.9.i.2.r.3.KR.1 allowed values and nullFlavor NA",
+        "printed page 22: section 5, NullFlavor flag precautions",
+        "printed page 23: section VI.1, MFDS CT/CU field validation table",
+        "printed page 36: G.k.9.i.2.r.3.KR.1 business rule",
+        "printed page 54: reporting-form notes 2 and 3 for patient name and age"
+      ]
+    },
+    {
+      "title": "Repository copy: MFDS Safety R3 business-rule workbook",
+      "path": "registry/sources/mfds-safety-r3-business-rules.xlsx",
+      "sha256": "86e06c3422ae9a82c3a72c3b595df108dc042078b86fdc98209938136fee19d0",
+      "workbook_created": "2019-09-24T01:26:09Z",
+      "workbook_modified": "2020-04-18T14:52:07Z",
+      "nullflavor_sheet_rows": 62,
+      "authority_status": "unverified",
+      "reason": "The workbook contains no MFDS publication number or source URL, and repository history only shows a local force-add commit. It cannot independently prove an official MFDS rule."
+    }
+  ],
+  "confirmed_mismatches": [
+    {
+      "severity": "high",
+      "element": "C.1.7",
+      "official_rule": "NI is allowed only when retransmitting a case first received in E2B(R2) whose equivalent C.1.7 value was absent; otherwise only false or true may be used.",
+      "official_location": "안내서-0925-03, section 5, printed page 22",
+      "repository_state": "Registry, generated contracts, frontend map, and DB allow NI structurally. MFDS validation only forces true for CT/CU and does not establish the R2-retransmission precondition for postmarket MFDS reports.",
+      "evidence": [
+        "registry/dictionary/rules/mfds.json:C.1.7",
+        "crates/libs/input-contracts/src/generated/c.rs:232-243",
+        "crates/libs/validator/src/case/sections/c.rs:2063-2077",
+        "db/bootstrap/03-safety-report-identification.sql:26-28",
+        "../frontend/E2BR3-frontend/lib/e2b/nullFlavors.ts:14"
+      ],
+      "status": "mismatch"
+    },
+    {
+      "severity": "high",
+      "element": "C.2.r.4",
+      "official_rule": "NullFlavor is forbidden for both MFDS-approved clinical-trial SUSAR and compassionate-use approval SUSAR reports.",
+      "official_location": "안내서-0925-03, section 5, printed page 22",
+      "repository_state": "Validator forbids NullFlavor only when clinical is true; compassionate-use reports are omitted from the prohibition.",
+      "evidence": [
+        "crates/libs/validator/src/case/sections/c.rs:2060-2062",
+        "crates/libs/validator/src/case/sections/c.rs:2090-2097"
+      ],
+      "status": "mismatch"
+    },
+    {
+      "severity": "high",
+      "element": "C.5.2",
+      "official_rule": "For domestic CT/CU reporting, the protocol/study title is mandatory but NullFlavor is explicitly allowed.",
+      "official_location": "안내서-0925-03, section VI.1 table row 6, printed page 23",
+      "repository_state": "Registry, contract, frontend and DB correctly retain ASKU/NASK, but MFDS receiver validation rejects any study_name NullFlavor and requires a concrete value.",
+      "evidence": [
+        "registry/dictionary/rules/mfds.json:C.5.2",
+        "../frontend/E2BR3-frontend/lib/e2b/nullFlavors.ts:34",
+        "db/bootstrap/03-safety-report-identification.sql:191",
+        "crates/libs/validator/src/case/sections/c.rs:2177-2195"
+      ],
+      "status": "mismatch"
+    },
+    {
+      "severity": "medium",
+      "element": "G.k.9.i.2.r.3.KR.1",
+      "official_rule": "The WHO-UMC result field is available for postmarket domestic reports when G.k.9.i.2.r.2.KR.1 is WHO-UMC; the value is 1-6 or NullFlavor NA.",
+      "official_location": "안내서-0925-03, printed pages 20 and 36",
+      "repository_state": "Exact value and NA sets are correct in registry, contracts, frontend and DB. The validator's required context is has_source && WHO-UMC and is not gated by receiver_is_kr, so the Korean field can be required outside postmarket domestic reporting.",
+      "evidence": [
+        "registry/dictionary/mfds-regional.json:G.k.9.i.2.r.3.KR.1",
+        "crates/libs/input-contracts/src/generated/g.rs:1078-1103",
+        "db/bootstrap/07-drug-information.sql:395-398",
+        "../frontend/E2BR3-frontend/lib/e2b/nullFlavors.ts:82",
+        "crates/libs/validator/src/case/sections/g.rs:2225-2254"
+      ],
+      "status": "conditional_scope_mismatch"
+    }
+  ],
+  "element_by_element": [
+    {
+      "element": "GLOBAL.REQUIRED.VALUE",
+      "official_allowed_null_flavors": "Any NullFlavor permitted by the element's ICH/MFDS element rule",
+      "official_condition": "A required element with no reportable content must still appear in XML with NullFlavor; an optional omitted element may be absent.",
+      "official_location": "section 5, printed page 22",
+      "comparison": "Architecture-wide completeness cannot be proven from static schema checks alone; element-specific import/export coverage remains the governing test.",
+      "status": "guidance"
+    },
+    {
+      "element": "C.1.7",
+      "official_allowed_null_flavors": ["NI"],
+      "official_condition": "Only for an R2-origin retransmission where the equivalent field was absent; CT/CU must use true.",
+      "repo_allowed_set": ["NI"],
+      "layers": {"mfds_rules": "set_match", "input_contract": "set_match", "frontend": "set_match", "db": "set_match", "business_condition": "mismatch"},
+      "status": "mismatch"
+    },
+    {
+      "element": "C.2.r.1.2",
+      "official_allowed_null_flavors": "Not enumerated in the public MFDS guide; it says NullFlavor allowed and defers the exact set to ICH.",
+      "official_condition": "Required for domestic CT/CU; a value or allowed NullFlavor satisfies the requirement.",
+      "repo_allowed_set": ["MSK", "ASKU", "NASK"],
+      "layers": {"mfds_rules": "present", "input_contract": "present", "frontend": "present", "db": "present", "business_condition": "match"},
+      "status": "match_with_ich_dependency"
+    },
+    {
+      "element": "C.2.r.2.1",
+      "official_allowed_null_flavors": "Not enumerated in the public MFDS guide; exact set is an ICH dependency.",
+      "official_condition": "Required for domestic CT/CU; a value or allowed NullFlavor satisfies the requirement.",
+      "repo_allowed_set": ["MSK", "ASKU", "NASK"],
+      "layers": {"mfds_rules": "present", "input_contract": "present", "frontend": "present", "db": "present", "business_condition": "match"},
+      "status": "match_with_ich_dependency"
+    },
+    {
+      "element": "C.2.r.2.3",
+      "official_allowed_null_flavors": "Not enumerated in the public MFDS guide; exact set is an ICH dependency.",
+      "official_condition": "At least one of C.2.r.2.3, C.2.r.2.4, C.2.r.2.5 is required for domestic CT/CU; NullFlavor is allowed.",
+      "repo_allowed_set": ["MSK", "ASKU", "NASK"],
+      "layers": {"mfds_rules": "present", "input_contract": "present", "frontend": "present", "db": "present", "business_condition": "match"},
+      "status": "match_with_ich_dependency"
+    },
+    {
+      "element": "C.2.r.2.4",
+      "official_allowed_null_flavors": "Not enumerated in the public MFDS guide; exact set is an ICH dependency.",
+      "official_condition": "At least one of C.2.r.2.3, C.2.r.2.4, C.2.r.2.5 is required for domestic CT/CU; NullFlavor is allowed.",
+      "repo_allowed_set": ["MSK", "ASKU", "NASK"],
+      "layers": {"mfds_rules": "present", "input_contract": "present", "frontend": "present", "db": "present", "business_condition": "match"},
+      "status": "match_with_ich_dependency"
+    },
+    {
+      "element": "C.2.r.2.5",
+      "official_allowed_null_flavors": "Not enumerated in the public MFDS guide; exact set is an ICH dependency.",
+      "official_condition": "At least one of C.2.r.2.3, C.2.r.2.4, C.2.r.2.5 is required for domestic CT/CU; NullFlavor is allowed.",
+      "repo_allowed_set": ["MSK", "ASKU", "NASK"],
+      "layers": {"mfds_rules": "present", "input_contract": "present", "frontend": "present", "db": "present", "business_condition": "match"},
+      "status": "match_with_ich_dependency"
+    },
+    {
+      "element": "C.2.r.4",
+      "official_allowed_null_flavors": [],
+      "official_condition": "No NullFlavor for MFDS CT or CU SUSAR; outside that profile the ICH set applies.",
+      "repo_base_allowed_set": ["UNK"],
+      "layers": {"mfds_rules": "condition_present", "input_contract": "base_set_match", "frontend": "base_set_match", "db": "base_set_match", "business_condition": "CT_only_not_CU"},
+      "status": "mismatch"
+    },
+    {
+      "element": "C.3.3.3",
+      "official_allowed_null_flavors": [],
+      "official_condition": "Concrete sender given name required for domestic CT/CU.",
+      "repo_allowed_set": [],
+      "layers": {"mfds_rules": "present", "input_contract": "no_nullflavor", "frontend": "no_nullflavor", "db": "no_companion_column", "business_condition": "match"},
+      "status": "match"
+    },
+    {
+      "element": "C.5.1.r.1",
+      "official_allowed_null_flavors": [],
+      "official_condition": "Concrete MFDS clinical-trial approval number required for domestic CT/CU; NullFlavor forbidden.",
+      "repo_base_allowed_set": ["ASKU", "NASK"],
+      "layers": {"mfds_rules": "condition_present", "input_contract": "base_set_present", "frontend": "base_set_present", "db": "base_set_present", "business_condition": "match"},
+      "status": "match"
+    },
+    {
+      "element": "C.5.2",
+      "official_allowed_null_flavors": "Allowed; exact set not enumerated in the public MFDS guide and therefore depends on ICH.",
+      "official_condition": "Mandatory for domestic CT/CU, satisfied by a concrete value or allowed NullFlavor.",
+      "repo_allowed_set": ["ASKU", "NASK"],
+      "layers": {"mfds_rules": "set_present", "input_contract": "set_present", "frontend": "set_present", "db": "set_present", "business_condition": "rejects_nullflavor"},
+      "status": "mismatch"
+    },
+    {
+      "element": "C.5.3",
+      "official_allowed_null_flavors": [],
+      "official_condition": "Concrete MFDS clinical-trial serial number required for domestic CT/CU; NullFlavor forbidden.",
+      "repo_base_allowed_set": ["ASKU", "NASK"],
+      "layers": {"mfds_rules": "condition_present", "input_contract": "base_set_present", "frontend": "base_set_present", "db": "base_set_present", "business_condition": "match"},
+      "status": "match"
+    },
+    {
+      "element": "D.1",
+      "official_allowed_null_flavors": ["UNK", "MSK", "ASKU", "NASK"],
+      "official_condition": "Reporting-form note: choose according to not collected, masked, asked-but-unknown, or not asked.",
+      "official_location": "reporting-form note 2, printed page 54",
+      "repo_allowed_set": ["MSK", "UNK", "ASKU", "NASK"],
+      "layers": {"mfds_rules": "set_match", "input_contract": "set_match", "frontend": "set_match", "db": "set_match"},
+      "status": "match"
+    },
+    {
+      "element": "D.1.1.4",
+      "official_allowed_null_flavors": "Allowed; exact public-guide set is not enumerated.",
+      "official_condition": "Required for domestic CT/CU; value or allowed NullFlavor accepted.",
+      "repo_allowed_set": ["MSK"],
+      "layers": {"mfds_rules": "present", "input_contract": "present", "frontend": "present", "db": "present", "business_condition": "match"},
+      "status": "match_with_ich_dependency"
+    },
+    {
+      "element": "D.2.1",
+      "official_allowed_null_flavors": ["MSK"],
+      "official_condition": "When none of date of birth, age, or age group is collected, MSK may be entered for date of birth; there is no Unknown NullFlavor for this case.",
+      "official_location": "reporting-form note 3, printed page 54",
+      "repo_allowed_set": ["MSK"],
+      "layers": {"mfds_rules": "set_match", "input_contract": "set_match", "frontend": "set_match", "db": "set_match"},
+      "status": "match"
+    },
+    {
+      "element": "D.5",
+      "official_allowed_null_flavors": "Allowed; exact public-guide set is not enumerated.",
+      "official_condition": "Required for domestic CT/CU; value or allowed NullFlavor accepted.",
+      "repo_allowed_set": ["MSK", "UNK", "ASKU", "NASK"],
+      "layers": {"mfds_rules": "present", "input_contract": "present", "frontend": "present", "db": "present", "business_condition": "match"},
+      "status": "match_with_ich_dependency"
+    },
+    {
+      "element": "E.i.4",
+      "official_allowed_null_flavors": "Allowed; exact public-guide set is not enumerated.",
+      "official_condition": "Required for domestic CT/CU; value or allowed NullFlavor accepted.",
+      "repo_allowed_set": ["MSK", "ASKU", "NASK"],
+      "layers": {"mfds_rules": "present", "input_contract": "present", "frontend": "present", "db": "present", "business_condition": "match"},
+      "status": "match_with_ich_dependency"
+    },
+    {
+      "element": "E.i.5",
+      "official_allowed_null_flavors": "Allowed; exact public-guide set is not enumerated.",
+      "official_condition": "Required for domestic CT/CU; value or allowed NullFlavor accepted.",
+      "repo_allowed_set": ["MSK", "ASKU", "NASK"],
+      "layers": {"mfds_rules": "present", "input_contract": "present", "frontend": "present", "db": "present", "business_condition": "match"},
+      "status": "match_with_ich_dependency"
+    },
+    {
+      "element": "G.k.8",
+      "official_allowed_null_flavors": [],
+      "official_condition": "Concrete action-taken code required for domestic CT/CU.",
+      "repo_allowed_set": [],
+      "layers": {"mfds_rules": "present", "input_contract": "no_nullflavor", "frontend": "no_nullflavor", "db": "no_companion_column", "business_condition": "match"},
+      "status": "match"
+    },
+    {
+      "element": "G.k.9.i.2.r.3.KR.1",
+      "official_allowed_null_flavors": ["NA"],
+      "official_condition": "Postmarket domestic report and assessment method WHO-UMC; enter 1-6 or NA.",
+      "repo_allowed_set": ["NA"],
+      "layers": {"mfds_regional_dictionary": "set_match", "input_contract": "set_match", "frontend": "set_match", "db": "set_match", "business_condition": "receiver_scope_mismatch"},
+      "status": "mismatch"
+    }
+  ],
+  "repository_source_quality_findings": [
+    {
+      "element": "F.r.1",
+      "finding": "The unverified MFDS workbook says UNK, while registry/dictionary/rules/mfds.json says MSK. The current frontend map says UNK. This cannot be resolved from the MFDS public guide because the guide does not enumerate F.r.1; use the official ICH core table as authority."
+    },
+    {
+      "elements": ["D.10.2.1", "D.10.3", "D.10.7.1.r.4", "D.10.8.r.4", "D.10.8.r.5"],
+      "finding": "The workbook contains the invalid token NSK. The generated MFDS rules normalize these to MSK. This is a workbook typo correction, not evidence of an MFDS regional override."
+    }
+  ],
+  "limitations": [
+    "The public MFDS guide explicitly says its validation uses the current MFDS portal rule version, but that complete live rule table is not attached to the public guide. Therefore the exact allowed sets for rows marked match_with_ich_dependency must be proven by the official ICH source audit, not by the local MFDS workbook.",
+    "No official nedrug.mfds.go.kr download corresponding exactly to registry/sources/mfds-safety-r3-business-rules.xlsx could be located. Its 62-row NullFlavor sheet is useful as repository provenance but is not accepted here as an authoritative public source."
+  ]
+}

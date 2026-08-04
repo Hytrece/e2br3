@@ -259,11 +259,11 @@ BEGIN
         condition_value_label
     ) AS (
         VALUES
-            ('MFDS', 1, 'mfds', 'MFDS(CT)', 'MFDS_CT', 'CT', 'MFDS_REPORT_TYPE', '1', '임상시험계획의 승인을 받은 자'),
-            ('MFDS', 2, 'mfds', 'MFDS(CU)', 'MFDS_CU', 'CU', 'MFDS_REPORT_TYPE', '2', '임상시험용의약품의 치료목적 사용승인을 받은 자'),
-            ('MFDS', 3, 'mfds', 'MFDS(KR)', 'MFDS', 'KR', 'MFDS_REPORT_TYPE', '3', '시판 후 이상사례 국내보고'),
-            ('MFDS', 4, 'mfds', 'MFDS(FR)', 'MFDS_FR', 'FR', 'MFDS_REPORT_TYPE', '4', '시판 후 이상사례 국외보고'),
-            ('MFDS', 5, 'mfds', 'MFDS(CF)', 'MFDS_CT', 'CT', 'MFDS_REPORT_TYPE', '5', '임상시험계획의 승인을 받은 자 (국외)'),
+            ('MFDS', 1, 'mfds', 'MFDS(CT)', 'MFDS-O-CT', 'MFDS-O-CT', 'MFDS_REPORT_TYPE', '1', '임상시험계획의 승인을 받은 자'),
+            ('MFDS', 2, 'mfds', 'MFDS(CU)', 'MFDS-O-CU', 'MFDS-O-CU', 'MFDS_REPORT_TYPE', '2', '임상시험용의약품의 치료목적 사용승인을 받은 자'),
+            ('MFDS', 3, 'mfds', 'MFDS(KR)', 'MFDS-O-KR', 'MFDS-O-KR', 'MFDS_REPORT_TYPE', '3', '시판 후 이상사례 국내보고'),
+            ('MFDS', 4, 'mfds', 'MFDS(FR)', 'MFDS-O-FR', 'MFDS-O-FR', 'MFDS_REPORT_TYPE', '4', '시판 후 이상사례 국외보고'),
+            ('MFDS', 5, 'mfds', 'MFDS(CF)', 'MFDS-O-CF', 'MFDS-O-CF', 'MFDS_REPORT_TYPE', '5', '임상시험계획의 승인을 받은 자 (국외)'),
             ('FDA', 1, 'fda', 'FDA(CDER IND)', 'ZZFDA_PREMKT', 'CDER_IND', 'FDA_REPORT_TYPE', '1', 'CDER IND'),
             ('FDA', 2, 'fda', 'FDA(CDER IND-exempt BA/BE)', 'ZZFDA_PREMKT', 'CDER_IND_EXEMPT_BA_BE', 'FDA_REPORT_TYPE', '2', 'CDER IND-exempt BA/BE'),
             ('FDA', 3, 'fda', 'FDA(CBER IND)', 'ZZFDA_PREMKT', 'CBER_IND', 'FDA_REPORT_TYPE', '3', 'CBER IND'),
@@ -540,41 +540,5 @@ BEGIN
     VALUES (v_case_summary_id, v_narrative_id, 1, 'eng', 'Case summary text', v_user_id, NOW(), NOW())
     ON CONFLICT (id) DO NOTHING;
 
-    -- ------------------------------------------------------------------------
-    -- DEV-ONLY MedDRA stub set (non-production)
-    -- ------------------------------------------------------------------------
-    INSERT INTO meddra_terms (code, term, level, version, language, active)
-    VALUES
-        ('10000001', 'Stub MedDRA Term 0001', 'PT', '26.0', 'en', true),
-        ('10000002', 'Stub MedDRA Term 0002', 'PT', '26.0', 'en', true),
-        ('10000003', 'Stub MedDRA Term 0003', 'LLT', '26.0', 'en', true),
-        ('10000004', 'Stub MedDRA Term 0004', 'PT', '26.0', 'en', true),
-        ('10000005', 'Stub MedDRA Term 0005', 'LLT', '26.0', 'en', true),
-        ('10000006', 'Stub MedDRA Term 0006', 'HLT', '26.0', 'en', true),
-        ('10000007', 'Stub MedDRA Term 0007', 'HLGT', '26.0', 'en', true),
-        ('10000008', 'Stub MedDRA Term 0008', 'SOC', '26.0', 'en', true),
-        ('10000009', 'Stub MedDRA Term 0009', 'PT', '26.0', 'en', true),
-        ('10000010', 'Stub MedDRA Term 0010', 'PT', '26.0', 'en', true),
-        ('10000011', 'Stub MedDRA Term 0011', 'LLT', '26.0', 'en', true),
-        ('10000012', 'Stub MedDRA Term 0012', 'LLT', '26.0', 'en', true),
-        ('10000013', 'Stub MedDRA Term 0013', 'PT', '26.0', 'en', true),
-        ('10000014', 'Stub MedDRA Term 0014', 'PT', '26.0', 'en', true),
-        ('10000015', 'Stub MedDRA Term 0015', 'HLT', '26.0', 'en', true),
-        ('10000016', 'Stub MedDRA Term 0016', 'HLGT', '26.0', 'en', true),
-        ('10000017', 'Stub MedDRA Term 0017', 'SOC', '26.0', 'en', true),
-        ('10000018', 'Stub MedDRA Term 0018', 'PT', '26.0', 'en', true),
-        ('10000019', 'Stub MedDRA Term 0019', 'PT', '26.0', 'en', true),
-        ('10000020', 'Stub MedDRA Term 0020', 'LLT', '26.0', 'en', true)
-    ON CONFLICT (code, version, language) DO NOTHING;
-
-    -- ------------------------------------------------------------------------
-    -- DEV-ONLY WHODrug stub set (non-production)
-    -- ------------------------------------------------------------------------
-    INSERT INTO whodrug_products (code, drug_name, atc_code, version, language, active)
-    VALUES
-        ('WTEST1', 'Stub WHODrug Product 1', 'A01AA01', '2024.1', 'en', true),
-        ('WTEST2', 'Stub WHODrug Product 2', 'A01AA02', '2024.1', 'en', true),
-        ('WTEST3', 'Stub WHODrug Product 3', 'A01AA03', '2024.1', 'en', true)
-    ON CONFLICT (code, version, language) DO NOTHING;
 END;
 $$;

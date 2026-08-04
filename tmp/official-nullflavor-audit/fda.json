@@ -1,0 +1,596 @@
+{
+  "audit": "FDA E2B(R3) NullFlavor official-source audit",
+  "audited_at": "2026-08-03",
+  "official_sources": [
+    {
+      "title": "FDA AEMS – E2B(R3) Standards",
+      "url": "https://www.fda.gov/drugs/fda-adverse-event-monitoring-system-aems/fda-adverse-event-monitoring-system-aems-e2br3-standards",
+      "location": "Premarketing items 3-6 and Postmarketing items 1-4",
+      "status": "current landing page"
+    },
+    {
+      "title": "FDA E2B(R3) Core and Regional Data Elements and Business Rules",
+      "url": "https://www.fda.gov/media/175373/download?attachment=",
+      "version": "1.7",
+      "version_date": "2024-04-01",
+      "location": "ICSR Data Elements rows 25-279; Rejection and Warning Rules rows 37, 113, 117, 199, 200, 288, 302, 310-312",
+      "role": "primary executable rule source"
+    },
+    {
+      "title": "FDA Regional Implementation Guide for E2B(R3)",
+      "url": "https://www.fda.gov/media/98536/download",
+      "version": "3.0",
+      "date": "2024-04-01",
+      "location": "§4.2.1 pp.11-12; §4.2.3.1 pp.12-13; §4.2.3.6 p.14; §4.2.4.1-2 p.15",
+      "role": "narrative authority and condition source"
+    }
+  ],
+  "scope": {
+    "fda_native_elements": 9,
+    "ich_elements_with_fda_or_vaers_regional_nullflavor_rules": 14,
+    "total": 23,
+    "authority_note": "The April 2024 Regional IG excludes vaccine postmarketing reports; workbook VAERS-column rules are reported separately as profile=vaers."
+  },
+  "summary": {
+    "exact_allowed_set_match": 20,
+    "confirmed_allowed_set_mismatches": 1,
+    "official_internal_ambiguities": 2,
+    "confirmed_end_to_end_or_condition_gaps": 7,
+    "highest_priority": [
+      "D.1 missing FDA nullFlavor NA across registry/contracts/frontend/DB",
+      "FDA.G.k.10a nullFlavor NA has no persistence/API/XML/UI path",
+      "FDA.C.2.r.2.8 and C.2.r.2.7 XML telecom nullFlavor serialization violates FDA prefix requirements",
+      "FDA.G.k.12.r.4/.5 frontend omits existing backend nullFlavor fields",
+      "FDA.E.i.3.2h premarket always-NI rule is not correctly enforced"
+    ]
+  },
+  "elements": [
+    {
+      "element": "FDA.C.1.12",
+      "official_location": "FDA Core and Regional Data Elements and Business Rules v1.7, ICSR Data Elements row 37",
+      "official_allowed_null_flavors": [
+        "NI"
+      ],
+      "profile": [
+        "post_market",
+        "pre_market"
+      ],
+      "official_condition": "Required; boolean true/false or NI.",
+      "repo": {
+        "registry_dictionary": "match",
+        "generated_contract": "match",
+        "frontend_map": "match",
+        "database": "match",
+        "condition_enforcement": "match"
+      },
+      "notes": []
+    },
+    {
+      "element": "FDA.C.2.r.2.8",
+      "official_location": "FDA Core and Regional Data Elements and Business Rules v1.7, ICSR Data Elements row 52",
+      "official_allowed_null_flavors": [
+        "MSK",
+        "ASKU",
+        "NASK"
+      ],
+      "profile": [
+        "post_market",
+        "pre_market"
+      ],
+      "official_condition": "When nullFlavor is used, telecom must also carry value=\"mailto\" (without colon). MSK is forbidden for the US primary reporter in the VAERS profile.",
+      "repo": {
+        "registry_dictionary": "match",
+        "generated_contract": "match",
+        "frontend_map": "match",
+        "database": "match",
+        "condition_enforcement": "partial"
+      },
+      "notes": [
+        "DB/API/import support the companion field, but the normal XML exporter ignores email_null_flavor and cannot emit the official nullFlavor form.",
+        "Exporter also does not emit the required value=\"mailto\" discriminator."
+      ]
+    },
+    {
+      "element": "FDA.C.5.6.r",
+      "official_location": "FDA Core and Regional Data Elements and Business Rules v1.7, ICSR Data Elements row 86",
+      "official_allowed_null_flavors": [
+        "NA"
+      ],
+      "profile": [
+        "pre_market"
+      ],
+      "official_condition": "Conditional-required when FDA.C.5.5a exists; use NA when there are no cross-reported INDs.",
+      "repo": {
+        "registry_dictionary": "match",
+        "generated_contract": "match",
+        "frontend_map": "match",
+        "database": "match",
+        "condition_enforcement": "match"
+      },
+      "notes": []
+    },
+    {
+      "element": "FDA.D.11.r.1",
+      "official_location": "FDA Core and Regional Data Elements and Business Rules v1.7, ICSR Data Elements row 169",
+      "official_allowed_null_flavors": [
+        "MSK",
+        "UNK",
+        "NA",
+        "OTH"
+      ],
+      "profile": [
+        "post_market",
+        "pre_market"
+      ],
+      "official_condition": "Required; when D.1 is NA/SUMMARY or AGGREGATE use NA.",
+      "repo": {
+        "registry_dictionary": "match",
+        "generated_contract": "match",
+        "frontend_map": "match",
+        "database": "match",
+        "condition_enforcement": "match"
+      },
+      "notes": [
+        "Official-guide ambiguity: Regional IG §4.2.4.1 says NI for unknown/unavailable race or ethnicity, but executable workbook row 169 excludes NI."
+      ]
+    },
+    {
+      "element": "FDA.D.12",
+      "official_location": "FDA Core and Regional Data Elements and Business Rules v1.7, ICSR Data Elements row 170",
+      "official_allowed_null_flavors": [
+        "NI",
+        "MSK",
+        "UNK",
+        "NA"
+      ],
+      "profile": [
+        "post_market",
+        "pre_market"
+      ],
+      "official_condition": "Required; when D.1 is NA/SUMMARY or AGGREGATE use NA.",
+      "repo": {
+        "registry_dictionary": "match",
+        "generated_contract": "match",
+        "frontend_map": "match",
+        "database": "match",
+        "condition_enforcement": "match"
+      },
+      "notes": []
+    },
+    {
+      "element": "FDA.E.i.3.2h",
+      "official_location": "FDA Core and Regional Data Elements and Business Rules v1.7, ICSR Data Elements row 185",
+      "official_allowed_null_flavors": [
+        "NI"
+      ],
+      "profile": [
+        "post_market",
+        "pre_market"
+      ],
+      "official_condition": "For premarket safety reports the value must always be NI; postmarket is an outcome for device reports and medication errors.",
+      "repo": {
+        "registry_dictionary": "match",
+        "generated_contract": "match",
+        "frontend_map": "match",
+        "database": "match",
+        "condition_enforcement": "mismatch"
+      },
+      "notes": [
+        "Case validator checks only the boolean value and does not pass required_intervention_null_flavor into the FDA required rule, so it does not implement the premarket always-NI rule correctly."
+      ]
+    },
+    {
+      "element": "FDA.G.k.10a",
+      "official_location": "FDA Core and Regional Data Elements and Business Rules v1.7, ICSR Data Elements row 271",
+      "official_allowed_null_flavors": [
+        "NA"
+      ],
+      "profile": [
+        "post_market",
+        "pre_market"
+      ],
+      "official_condition": "For IND-exempt BA/BE when FDA.C.5.5b exists, coded value 1 or 2 identifies test/reference drugs; use NA for all other drugs or unavailable information.",
+      "repo": {
+        "registry_dictionary": "match",
+        "generated_contract": "match",
+        "frontend_map": "match",
+        "database": "match",
+        "condition_enforcement": "missing"
+      },
+      "notes": [
+        "Dictionary and generated contract allow NA, but there is no nullFlavor companion in drug DB/model/API/XML/UI. Contract collector explicitly passes null for the nullFlavor path. Import/export read/write only @code."
+      ]
+    },
+    {
+      "element": "FDA.G.k.12.r.4",
+      "official_location": "FDA Core and Regional Data Elements and Business Rules v1.7, ICSR Data Elements row 278",
+      "official_allowed_null_flavors": [
+        "NI"
+      ],
+      "profile": [
+        "post_market"
+      ],
+      "official_condition": "For combination products provide device brand/common name; either may be null, but if both are null FDA.G.k.12.r.6 is required.",
+      "repo": {
+        "registry_dictionary": "match",
+        "generated_contract": "match",
+        "frontend_map": "match",
+        "database": "match",
+        "condition_enforcement": "partial"
+      },
+      "notes": [
+        "DB, Rust model, API, and XML support NI; frontend FdaDeviceInfo type, editor UI, and contract collector omit the nullFlavor path, so users cannot set or preserve it reliably."
+      ]
+    },
+    {
+      "element": "FDA.G.k.12.r.5",
+      "official_location": "FDA Core and Regional Data Elements and Business Rules v1.7, ICSR Data Elements row 279",
+      "official_allowed_null_flavors": [
+        "NI"
+      ],
+      "profile": [
+        "post_market"
+      ],
+      "official_condition": "For combination products provide device brand/common name; either may be null, but if both are null FDA.G.k.12.r.6 is required.",
+      "repo": {
+        "registry_dictionary": "match",
+        "generated_contract": "match",
+        "frontend_map": "match",
+        "database": "match",
+        "condition_enforcement": "partial"
+      },
+      "notes": [
+        "DB, Rust model, API, and XML support NI; frontend FdaDeviceInfo type, editor UI, and contract collector omit the nullFlavor path, so users cannot set or preserve it reliably."
+      ]
+    },
+    {
+      "element": "C.1.7",
+      "official_location": "FDA Core and Regional Data Elements and Business Rules v1.7, ICSR Data Elements row 25",
+      "official_allowed_null_flavors": [
+        "NI"
+      ],
+      "profile": [
+        "post_market",
+        "pre_market"
+      ],
+      "official_condition": "FDA rejects NI on initial submissions (R0011); ICH permits it only for retransmission of an R2-origin case where the equivalent field was omitted.",
+      "repo": {
+        "registry_dictionary": "match",
+        "generated_contract": "match",
+        "frontend_map": "match",
+        "database": "match",
+        "condition_enforcement": "match"
+      },
+      "notes": []
+    },
+    {
+      "element": "C.2.r.1.2",
+      "official_location": "FDA Core and Regional Data Elements and Business Rules v1.7, ICSR Data Elements row 41",
+      "official_allowed_null_flavors": [
+        "MSK",
+        "ASKU",
+        "NASK"
+      ],
+      "profile": [
+        "vaers"
+      ],
+      "official_condition": "Required for primary reporter; MSK forbidden for US primary-reporter cases.",
+      "repo": {
+        "registry_dictionary": "match",
+        "generated_contract": "match",
+        "frontend_map": "match",
+        "database": "match",
+        "condition_enforcement": "match"
+      },
+      "notes": []
+    },
+    {
+      "element": "C.2.r.1.4",
+      "official_location": "FDA Core and Regional Data Elements and Business Rules v1.7, ICSR Data Elements row 43",
+      "official_allowed_null_flavors": [
+        "MSK",
+        "ASKU",
+        "NASK"
+      ],
+      "profile": [
+        "vaers"
+      ],
+      "official_condition": "Required for primary reporter; MSK forbidden for US primary-reporter cases.",
+      "repo": {
+        "registry_dictionary": "match",
+        "generated_contract": "match",
+        "frontend_map": "match",
+        "database": "match",
+        "condition_enforcement": "match"
+      },
+      "notes": []
+    },
+    {
+      "element": "C.2.r.2.3",
+      "official_location": "FDA Core and Regional Data Elements and Business Rules v1.7, ICSR Data Elements row 47",
+      "official_allowed_null_flavors": [
+        "MSK",
+        "ASKU",
+        "NASK"
+      ],
+      "profile": [
+        "vaers"
+      ],
+      "official_condition": "Required for primary reporter; MSK forbidden for US primary-reporter cases.",
+      "repo": {
+        "registry_dictionary": "match",
+        "generated_contract": "match",
+        "frontend_map": "match",
+        "database": "match",
+        "condition_enforcement": "match"
+      },
+      "notes": []
+    },
+    {
+      "element": "C.2.r.2.4",
+      "official_location": "FDA Core and Regional Data Elements and Business Rules v1.7, ICSR Data Elements row 48",
+      "official_allowed_null_flavors": [
+        "MSK",
+        "ASKU",
+        "NASK"
+      ],
+      "profile": [
+        "vaers"
+      ],
+      "official_condition": "Required for primary reporter; MSK forbidden for US primary-reporter cases.",
+      "repo": {
+        "registry_dictionary": "match",
+        "generated_contract": "match",
+        "frontend_map": "match",
+        "database": "match",
+        "condition_enforcement": "match"
+      },
+      "notes": []
+    },
+    {
+      "element": "C.2.r.2.5",
+      "official_location": "FDA Core and Regional Data Elements and Business Rules v1.7, ICSR Data Elements row 49",
+      "official_allowed_null_flavors": [
+        "NI",
+        "MSK",
+        "ASKU",
+        "NASK"
+      ],
+      "profile": [
+        "vaers"
+      ],
+      "official_condition": "Required for primary reporter; MSK forbidden for US primary-reporter cases.",
+      "repo": {
+        "registry_dictionary": "mismatch",
+        "generated_contract": "mismatch",
+        "frontend_map": "mismatch",
+        "database": "mismatch",
+        "condition_enforcement": "partial"
+      },
+      "notes": [
+        "Official-workbook ambiguity: null-flag columns mark NI=Yes, while the same row's Values Allowed text lists only MSK/ASKU/NASK. Repo follows the Values Allowed text and excludes NI in registry/contracts/frontend/DB."
+      ]
+    },
+    {
+      "element": "C.2.r.2.6",
+      "official_location": "FDA Core and Regional Data Elements and Business Rules v1.7, ICSR Data Elements row 50",
+      "official_allowed_null_flavors": [
+        "MSK",
+        "ASKU",
+        "NASK"
+      ],
+      "profile": [
+        "vaers"
+      ],
+      "official_condition": "Required for primary reporter; MSK forbidden for US primary-reporter cases.",
+      "repo": {
+        "registry_dictionary": "match",
+        "generated_contract": "match",
+        "frontend_map": "match",
+        "database": "match",
+        "condition_enforcement": "match"
+      },
+      "notes": []
+    },
+    {
+      "element": "C.2.r.2.7",
+      "official_location": "FDA Core and Regional Data Elements and Business Rules v1.7, ICSR Data Elements row 51",
+      "official_allowed_null_flavors": [
+        "MSK",
+        "ASKU",
+        "NASK"
+      ],
+      "profile": [
+        "vaers"
+      ],
+      "official_condition": "Required for primary reporter; MSK forbidden for US primary-reporter cases. A nullFlavor telecom must retain value=\"tel\" without colon.",
+      "repo": {
+        "registry_dictionary": "match",
+        "generated_contract": "match",
+        "frontend_map": "match",
+        "database": "match",
+        "condition_enforcement": "partial"
+      },
+      "notes": [
+        "Normal XML exporter removes the value attribute when setting nullFlavor, contrary to FDA's required value=\"tel\" discriminator."
+      ]
+    },
+    {
+      "element": "C.2.r.3",
+      "official_location": "FDA Core and Regional Data Elements and Business Rules v1.7, ICSR Data Elements row 53",
+      "official_allowed_null_flavors": [
+        "MSK",
+        "UNK",
+        "ASKU",
+        "NASK"
+      ],
+      "profile": [
+        "vaers"
+      ],
+      "official_condition": "Required for primary reporter; MSK forbidden for US primary-reporter cases.",
+      "repo": {
+        "registry_dictionary": "match",
+        "generated_contract": "match",
+        "frontend_map": "match",
+        "database": "match",
+        "condition_enforcement": "match"
+      },
+      "notes": []
+    },
+    {
+      "element": "C.2.r.4",
+      "official_location": "FDA Core and Regional Data Elements and Business Rules v1.7, ICSR Data Elements row 54",
+      "official_allowed_null_flavors": [
+        "UNK"
+      ],
+      "profile": [
+        "vaers"
+      ],
+      "official_condition": "Qualification may use UNK.",
+      "repo": {
+        "registry_dictionary": "match",
+        "generated_contract": "match",
+        "frontend_map": "match",
+        "database": "match",
+        "condition_enforcement": "match"
+      },
+      "notes": []
+    },
+    {
+      "element": "C.5.2",
+      "official_location": "FDA Core and Regional Data Elements and Business Rules v1.7, ICSR Data Elements row 81",
+      "official_allowed_null_flavors": [
+        "ASKU",
+        "NASK"
+      ],
+      "profile": [
+        "pre_market"
+      ],
+      "official_condition": "For FDA IND study reports, use Study ID$Abbreviated Trial Name; allowed nullFlavors remain ASKU/NASK.",
+      "repo": {
+        "registry_dictionary": "match",
+        "generated_contract": "match",
+        "frontend_map": "match",
+        "database": "match",
+        "condition_enforcement": "partial"
+      },
+      "notes": [
+        "Allowed set matches. This audit did not re-test the separate Study ID formatting rule."
+      ]
+    },
+    {
+      "element": "D.1",
+      "official_location": "FDA Core and Regional Data Elements and Business Rules v1.7, ICSR Data Elements row 88",
+      "official_allowed_null_flavors": [
+        "MSK",
+        "UNK",
+        "NA",
+        "ASKU",
+        "NASK"
+      ],
+      "profile": [
+        "post_market",
+        "pre_market"
+      ],
+      "official_condition": "Use NA where no patient is involved and for a single postmarket combination-product malfunction without AE; use SUMMARY for multiple malfunction reports; use AGGREGATE for premarket aggregate reports.",
+      "repo": {
+        "registry_dictionary": "mismatch",
+        "generated_contract": "mismatch",
+        "frontend_map": "mismatch",
+        "database": "mismatch",
+        "condition_enforcement": "mismatch"
+      },
+      "notes": [
+        "Registry, generated contracts, frontend map, and DB omit FDA-added NA. The FDA no-patient scenario therefore cannot pass storage/contract validation even though business validation expects NA."
+      ]
+    },
+    {
+      "element": "D.2.1",
+      "official_location": "FDA Core and Regional Data Elements and Business Rules v1.7, ICSR Data Elements row 94",
+      "official_allowed_null_flavors": [
+        "MSK"
+      ],
+      "profile": [
+        "pre_market",
+        "vaers"
+      ],
+      "official_condition": "Optional for aggregate reports; VAERS requires at least one age element unless malfunction-only.",
+      "repo": {
+        "registry_dictionary": "match",
+        "generated_contract": "match",
+        "frontend_map": "match",
+        "database": "match",
+        "condition_enforcement": "match"
+      },
+      "notes": []
+    },
+    {
+      "element": "D.9.1",
+      "official_location": "FDA Core and Regional Data Elements and Business Rules v1.7, ICSR Data Elements row 128",
+      "official_allowed_null_flavors": [
+        "MSK",
+        "ASKU",
+        "NASK"
+      ],
+      "profile": [
+        "pre_market"
+      ],
+      "official_condition": "Required when E.i.3.2a indicates death; permitted set is unchanged.",
+      "repo": {
+        "registry_dictionary": "match",
+        "generated_contract": "match",
+        "frontend_map": "match",
+        "database": "match",
+        "condition_enforcement": "match"
+      },
+      "notes": []
+    }
+  ],
+  "official_ambiguities": [
+    {
+      "element": "FDA.D.11.r.1",
+      "workbook": "Row 169 permits MSK, UNK, NA, OTH and excludes NI.",
+      "regional_guide": "§4.2.4.1 says use NI when race or ethnic group is unknown/not available.",
+      "recommended_resolution": "Treat workbook v1.7 as executable validator behavior, document the conflict, and confirm with FDA/AEMS before adding NI to race."
+    },
+    {
+      "element": "C.2.r.2.5",
+      "workbook": "Row 49 Null Flag Applicable columns mark NI=Yes, MSK=Yes, ASKU=Yes, NASK=Yes, but Values Allowed text lists only MSK, ASKU, NASK.",
+      "recommended_resolution": "Do not silently choose. Confirm with FDA validator/support; current repo follows Values Allowed and ICH set, excluding NI."
+    }
+  ],
+  "repository_evidence": {
+    "registry": [
+      "registry/dictionary/fda-regional.json",
+      "registry/dictionary/ich-e2br3.json",
+      "registry/dictionary/rules/fda.json"
+    ],
+    "rust_contracts": "crates/libs/input-contracts/src/generated/{c,d,e,g}.rs",
+    "frontend_contracts": "../frontend/E2BR3-frontend/lib/input-contracts/generated/{c,d,e,g}.ts",
+    "frontend_policy": "../frontend/E2BR3-frontend/lib/e2b/nullFlavors.ts",
+    "database": [
+      "db/bootstrap/03-safety-report-identification.sql",
+      "db/bootstrap/04-patient-information.sql",
+      "db/bootstrap/05-reactions.sql",
+      "db/bootstrap/07-drug-information.sql",
+      "db/migrations/20260803_align_null_flavor_allowed_values.sql"
+    ],
+    "xml": [
+      "crates/libs/xml/src/export/sections/c.rs",
+      "crates/libs/xml/src/import_sections/c_safety_report/helpers.rs",
+      "crates/libs/xml/src/import_sections/g_drug.rs",
+      "crates/libs/xml/src/export/sections/g.rs"
+    ],
+    "validation": [
+      "crates/libs/validator/src/case/sections/c.rs",
+      "crates/libs/validator/src/case/sections/d.rs",
+      "crates/libs/validator/src/case/sections/e.rs",
+      "crates/libs/validator/src/case/sections/g.rs"
+    ]
+  },
+  "limits": [
+    "No live submission was sent to the FDA validator. Conclusions use the current FDA-hosted April 2024 workbook and Regional IG plus static repository inspection.",
+    "VAERS-specific findings are identified but the April 2024 non-vaccine Regional IG itself excludes vaccine postmarketing reporting."
+  ]
+}
+

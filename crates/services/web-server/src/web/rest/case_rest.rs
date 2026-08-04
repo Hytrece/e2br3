@@ -64,7 +64,9 @@ struct ReviewReceiverRequirements {
 }
 
 fn format_case_creation_timestamp(now: OffsetDateTime, timezone: &str) -> String {
-	let timezone = timezone.parse::<Tz>().unwrap_or(chrono_tz::Asia::Seoul);
+	let timezone = timezone
+		.parse::<Tz>()
+		.expect("runtime timezone must be a valid IANA timezone");
 	DateTime::<Utc>::from_timestamp(now.unix_timestamp(), now.nanosecond())
 		.expect("OffsetDateTime is within chrono's supported range")
 		.with_timezone(&timezone)

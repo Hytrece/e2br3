@@ -1,0 +1,36 @@
+          국문 “?” 로 출력되는 것
+          수정 필요                  요청한 서식 재확인.
+                                 요청한 CIOMS 양식과
+                                 상이한 양식이 출력됨.
+                                 좌측 1번째가 요청한
+                                 양식이며, 2-3번째가
+                                 출력한 결과.
+
+세로출력 결과          가로출력 결과
+                                  요청한 양식에 따라 세
+                                  로 출력 서식 생성한
+                                  뒤, 동일한 양식으로
+                                  가로출력(크기 안맞는
+                                  부분은 다음페이지 출
+                                  력)되도록 설정 필요
+
+
+
+
+                영문 출력 시 본 항목이 아래 출력되
+                는데, Safety Database의 어느 항목이
+                출력되는 것일지 확인 필요. 해당되는
+                항목이 없으면 삭제.
+CIOMS와 Safety DB 의 Mapping 설정 전체 재확인
+1.동일한 사례의 cubeSAFETY 출력 결과와 QVIS Safety 출력 결과가 상이함(좌측 두개 cubeSAFETY 출력물, 우측 1개
+QVIS Safety)
+
+2.”7+13.Describe reations(s)”항목은 전달한 자료의 Mapping 항목은 아래와 같으나, 일부만 출력됨(전체 항목 재확인)
+E.i.1 Reaction / Event as Reported by the Primary Source
+E.i.7 Outcome of Reaction / Event at the Time of Last Observation
+G.k.8 Action(s) Taken with Drug
+H.1Case Narrative Including Clinical Course, Therapeutic Measures, Outcome and Additional Relevant Information
+F.r.3.4 Result Unstructured Data (free text)
+
+3.출력 내용이 많은 경우 다음 페이지 출력되도록 설정
+

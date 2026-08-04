@@ -11,7 +11,7 @@ use csv::ReaderBuilder;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use sqlx::{types::Uuid, FromRow, Postgres, QueryBuilder};
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::io::{Cursor, Read};
 use zip::ZipArchive;
 
@@ -193,26 +193,7 @@ pub fn parse_meddra_upload(bytes: &[u8]) -> Result<Vec<MeddraRow>> {
 }
 
 pub fn parse_whodrug_upload(bytes: &[u8]) -> Result<Vec<WhodrugRow>> {
-	if let Ok(mut zip) = ZipArchive::new(Cursor::new(bytes)) {
-		let mut entries = Vec::new();
-		for idx in 0..zip.len() {
-			let mut entry = zip
-				.by_index(idx)
-				.map_err(|e| bad_input(format!("whodrug zip read error: {e}")))?;
-			if !entry.is_file() {
-				continue;
-			}
-			let name = entry.name().to_string();
-			if !is_delimited_name(&name.to_ascii_lowercase()) {
-				continue;
-			}
-			let mut entry_bytes = Vec::new();
-			entry.read_to_end(&mut entry_bytes).map_err(|e| {
-				bad_input(format!("whodrug zip file read error: {e}"))
-			})?;
-			entries.push((name, entry_bytes));
-		}
-
+	if let Some(entries) = whodrug_zip_entries(bytes)? {
 		if has_official_signature(&entries, WHODRUG_B3_DD)? {
 			return parse_whodrug_b3_zip_entries(&entries);
 		}
@@ -236,6 +217,97 @@ pub fn parse_whodrug_upload(bytes: &[u8]) -> Result<Vec<WhodrugRow>> {
 	}
 
 	parse_whodrug_delimited(bytes)
+}
+
+pub fn parse_whodrug_cas_numbers(bytes: &[u8]) -> Result<Vec<String>> {
+	let Ok(mut zip) = ZipArchive::new(Cursor::new(bytes)) else {
+		return Ok(Vec::new());
+	};
+	let mut has_c3_mp = false;
+	let mut sun = None;
+	for idx in 0..zip.len() {
+		let mut entry = zip
+			.by_index(idx)
+			.map_err(|e| bad_input(format!("whodrug zip read error: {e}")))?;
+		if !entry.is_file() || is_whodrug_zip_metadata_or_doc(entry.name()) {
+			continue;
+		}
+		let basename = zip_basename(entry.name());
+		if basename.eq_ignore_ascii_case(WHODRUG_C3_MP.basename) {
+			has_c3_mp = true;
+		} else if basename.eq_ignore_ascii_case("sun.csv") {
+			let mut bytes = Vec::new();
+			entry.read_to_end(&mut bytes).map_err(|e| {
+				bad_input(format!("whodrug SUN.csv read error: {e}"))
+			})?;
+			sun = Some(bytes);
+		}
+	}
+	if !has_c3_mp {
+		return Ok(Vec::new());
+	}
+	let sun = sun.ok_or_else(|| bad_input("Missing official WHODrug C3 SUN.csv"))?;
+	parse_whodrug_sun(&sun)
+}
+
+pub fn parse_whodrug_sun(bytes: &[u8]) -> Result<Vec<String>> {
+	let mut rdr = ReaderBuilder::new()
+		.has_headers(false)
+		.flexible(true)
+		.from_reader(Cursor::new(bytes));
+	let mut cas_numbers = BTreeSet::new();
+	for (idx, rec) in rdr.records().enumerate() {
+		let rec = rec.map_err(|e| {
+			bad_input(format!("whodrug SUN.csv row parse error: {e}"))
+		})?;
+		if is_blank_record(&rec) {
+			continue;
+		}
+		if rec.len() < 6 {
+			return Err(bad_input(format!(
+				"WHODrug C3 SUN.csv row {} has {} columns; expected at least 6",
+				idx + 1,
+				rec.len()
+			)));
+		}
+		let cas = rec.get(1).unwrap_or("").trim();
+		if cas.len() != 10 || !cas.bytes().all(|value| value.is_ascii_digit()) {
+			return Err(bad_input(format!(
+				"WHODrug C3 SUN.csv row {} has invalid 10-digit CAS number",
+				idx + 1
+			)));
+		}
+		cas_numbers.insert(cas.to_string());
+	}
+	if cas_numbers.is_empty() {
+		return Err(bad_input("No CAS numbers parsed from WHODrug C3 SUN.csv"));
+	}
+	Ok(cas_numbers.into_iter().collect())
+}
+
+fn whodrug_zip_entries(bytes: &[u8]) -> Result<Option<Vec<(String, Vec<u8>)>>> {
+	let Ok(mut zip) = ZipArchive::new(Cursor::new(bytes)) else {
+		return Ok(None);
+	};
+	let mut entries = Vec::new();
+	for idx in 0..zip.len() {
+		let mut entry = zip
+			.by_index(idx)
+			.map_err(|e| bad_input(format!("whodrug zip read error: {e}")))?;
+		if !entry.is_file() {
+			continue;
+		}
+		let name = entry.name().to_string();
+		if !is_delimited_name(&name.to_ascii_lowercase()) {
+			continue;
+		}
+		let mut entry_bytes = Vec::new();
+		entry
+			.read_to_end(&mut entry_bytes)
+			.map_err(|e| bad_input(format!("whodrug zip file read error: {e}")))?;
+		entries.push((name, entry_bytes));
+	}
+	Ok(Some(entries))
 }
 
 fn parse_whodrug_b3_zip_entries(
@@ -494,6 +566,7 @@ pub async fn stage_whodrug_rows(
 	mm: &ModelManager,
 	uploader_id: Uuid,
 	rows: &[WhodrugRow],
+	cas_numbers: &[String],
 	version: &str,
 	language: &str,
 	checksum: &str,
@@ -526,6 +599,16 @@ pub async fn stage_whodrug_rows(
 		let run_result = async {
 			set_platform_service_context(dbx).await?;
 			upsert_whodrug_rows(mm, chunk, version, language, false).await?;
+			Ok::<(), ImportError>(())
+		}
+		.await;
+		finish_txn(dbx, run_result).await?;
+	}
+	for chunk in cas_numbers.chunks(1000) {
+		dbx.begin_txn().await.map_err(store_err)?;
+		let run_result = async {
+			set_platform_service_context(dbx).await?;
+			upsert_whodrug_cas_numbers(mm, chunk, version, language, false).await?;
 			Ok::<(), ImportError>(())
 		}
 		.await;
@@ -655,6 +738,29 @@ pub async fn activate_release_tx(
 				if changed == 0 {
 					return Err(bad_input("target WHODrug rows were not staged"));
 				}
+				dbx.execute(
+					sqlx::query(
+						"UPDATE controlled_terminology_terms
+						 SET active = false
+						 WHERE dictionary = 'whodrug' AND scope = 'cas'
+						   AND language = $1 AND active = true",
+					)
+					.bind(language),
+				)
+				.await
+				.map_err(store_err)?;
+				dbx.execute(
+					sqlx::query(
+						"UPDATE controlled_terminology_terms
+						 SET active = true
+						 WHERE dictionary = 'whodrug' AND scope = 'cas'
+						   AND version = $1 AND language = $2",
+					)
+					.bind(target_version)
+					.bind(language),
+				)
+				.await
+				.map_err(store_err)?;
 			}
 			"iso3166" | "ich_constrained_ucum" | "edqm" => {
 				dbx.execute(
@@ -980,6 +1086,33 @@ async fn upsert_whodrug_rows(
 	Ok(())
 }
 
+async fn upsert_whodrug_cas_numbers(
+	mm: &ModelManager,
+	cas_numbers: &[String],
+	version: &str,
+	language: &str,
+	active: bool,
+) -> Result<()> {
+	let mut qb: QueryBuilder<Postgres> = QueryBuilder::new(
+		"INSERT INTO controlled_terminology_terms
+		 (dictionary, version, language, scope, code, active) ",
+	);
+	qb.push_values(cas_numbers, |mut row, cas| {
+		row.push_bind("whodrug")
+			.push_bind(version)
+			.push_bind(language)
+			.push_bind("cas")
+			.push_bind(cas)
+			.push_bind(active);
+	});
+	qb.push(
+		" ON CONFLICT (dictionary, version, language, scope, code)
+		  DO UPDATE SET active = EXCLUDED.active",
+	);
+	mm.dbx().execute(qb.build()).await.map_err(store_err)?;
+	Ok(())
+}
+
 fn read_zip_file_case_insensitive(
 	zip: &mut ZipArchive<Cursor<&[u8]>>,
 	target_name: &str,
@@ -1277,6 +1410,37 @@ mod tests {
 		assert_eq!(rows[0].code, "000001-01-001");
 		assert_eq!(rows[0].drug_name, "Methyldopa");
 		assert_eq!(rows[0].atc_code, None);
+	}
+
+	#[test]
+	fn parse_whodrug_official_c3_zip_reads_sun_cas_numbers() {
+		let zip = make_zip(&[
+			(
+				"MP.csv",
+				"1,,000001,01,001,0000000001,0000000001,Y,Methyldopa,,,,,N/A,,0,001,N/A,,001,19851231,20170907\n",
+			),
+			(
+				"SUN.csv",
+				"1,0000050000,EN,Formaldehyde solution,,180\n2,0000050011,EN,Guanidine hydrochloride,72,002\n",
+			),
+		]);
+
+		assert_eq!(
+			parse_whodrug_cas_numbers(&zip).expect("official C3 CAS rows"),
+			vec!["0000050000".to_string(), "0000050011".to_string()]
+		);
+	}
+
+	#[test]
+	fn parse_whodrug_official_c3_zip_requires_sun() {
+		let zip = make_zip(&[(
+			"MP.csv",
+			"1,,000001,01,001,0000000001,0000000001,Y,Methyldopa,,,,,N/A,,0,001,N/A,,001,19851231,20170907\n",
+		)]);
+
+		let err = parse_whodrug_cas_numbers(&zip)
+			.expect_err("official C3 without SUN must fail");
+		assert_bad_input_contains(err, "SUN.csv");
 	}
 
 	#[test]

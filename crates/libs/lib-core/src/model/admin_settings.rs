@@ -417,10 +417,17 @@ impl AdminSettingsBmc {
 
 		for (index, notice) in notices.iter().enumerate() {
 			let notice_key = notice_text(notice, "id")
-				.unwrap_or_else(|| format!("notice-{}", index + 1));
+				.ok_or_else(|| crate::model::Error::Validation {
+					message: format!("notice at index {index} requires an id"),
+				})?;
+			let title = notice_text(notice, "title").ok_or_else(|| {
+				crate::model::Error::Validation {
+					message: format!("notice at index {index} requires a title"),
+				}
+			})?;
 			let new_value = notice_json(
 				&notice_key,
-				notice_text(notice, "title").unwrap_or_default(),
+				title.clone(),
 				notice_text(notice, "body"),
 				notice_text(notice, "effective_date"),
 				notice_text(notice, "expire_date"),
@@ -458,7 +465,7 @@ impl AdminSettingsBmc {
 					)
 					.bind(organization_id)
 					.bind(&notice_key)
-					.bind(notice_text(notice, "title").unwrap_or_default())
+				.bind(title)
 					.bind(notice_text(notice, "body"))
 					.bind(notice_text(notice, "effective_date"))
 					.bind(notice_text(notice, "expire_date"))

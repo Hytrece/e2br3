@@ -1,0 +1,140 @@
+{
+  "auditDate": "2026-08-03",
+  "authority": "ICH",
+  "scope": "Every ICH E2B(R3) data element whose current official Value Allowed section permits a nullFlavor, plus repository-only nullFlavor declarations",
+  "sources": [
+    {
+      "id": "ICH-IG-5.03",
+      "title": "Implementation Guide for Electronic Transmission of Individual Case Safety Reports (ICSRs), E2B(R3) Data Elements and Message Specification",
+      "version": "5.03",
+      "date": "2025-07-18",
+      "url": "https://database.ich.org/sites/default/files/ICH_E2B%28R3%29_EWG_IWG_ICSR_Implementation_Guide_%28QA%20integration%29_Step3_2025_0718_Assembly_Approved_0.pdf",
+      "note": "Latest official integrated ICH guide; PDF page is one greater than the printed guide page."
+    },
+    {
+      "id": "ICH-QA-2025",
+      "title": "ICH E2B(R3) Expert Working Group / Implementation Working Group Questions and Answers",
+      "version": "Step 3 Assembly Approved",
+      "date": "2025-07-18",
+      "url": "https://database.ich.org/sites/default/files/ICH_E2B%28R3%29_EWG_IWG_Q%26A_Step3_2025_0718_Assembly_Approved.pdf",
+      "note": "Q&A 3.2 (002) states that only element-specific nullFlavors are acceptable and Q&A values supersede older IG values."
+    }
+  ],
+  "repositoryLayers": {
+    "registry": "registry/dictionary/ich-e2br3.json",
+    "rustGeneratedContracts": "crates/libs/input-contracts/src/generated/*.rs",
+    "frontendGeneratedContracts": "../frontend/E2BR3-frontend/lib/input-contracts/generated/*.ts",
+    "frontendMap": "../frontend/E2BR3-frontend/lib/e2b/nullFlavors.ts",
+    "database": ["db/bootstrap/*.sql", "db/migrations/*.sql"]
+  },
+  "summary": {
+    "officialElementsAllowingNullFlavor": 61,
+    "repositoryRegistryElementsAllowingNullFlavor": 62,
+    "officialValueSetExactMatches": 60,
+    "valueSetMismatches": 2,
+    "representationMismatches": 1,
+    "conditionalRuleMismatches": 1,
+    "confirmedMismatchElements": ["C.1.7", "C.2.r.3", "D.9.3", "F.r.3.2"]
+  },
+  "comparisonConvention": {
+    "repoSet": "The registry set. Generated Rust/TypeScript contracts and the frontend map mirror this set for the audited ICH elements unless an issue explicitly says otherwise.",
+    "db": "Database comparison is recorded explicitly for confirmed mismatches; null means no independent DB finding was established in this source audit.",
+    "evidence": "igPdfPage is the physical PDF page; igPrintedPage is the page printed in the ICH guide."
+  },
+  "elements": [
+    {"element":"C.1.7","official":["NI"],"repoSet":["NI"],"evidence":{"igPdfPage":51,"igPrintedPage":50,"section":"C.1.7 Value Allowed and starred Business Rule"},"status":"mismatch_conditional_use","condition":"NI is allowed only when retransmitting a case first received in E2B(R2) whose equivalent element was absent; otherwise only true/false are allowed.","layers":{"registry":["NI"],"rustGeneratedContract":["NI"],"frontendGeneratedContract":["NI"],"frontendMap":["NI"],"ui":"always displays the NI button without R2 provenance gating","validator":"has an FDA-initial-submission guard but no general ICH R2-retransmission provenance rule"}},
+    {"element":"C.1.9.1","official":["NI"],"repoSet":["NI"],"evidence":{"igPdfPage":53,"igPrintedPage":52,"section":"C.1.9.1 Value Allowed"},"status":"match"},
+    {"element":"C.2.r.1.1","official":["MSK","ASKU","NASK","UNK"],"repoSet":["MSK","UNK","ASKU","NASK"],"evidence":{"igPdfPage":58,"igPrintedPage":57,"section":"C.2.r.1.1 Value Allowed"},"status":"match_set"},
+    {"element":"C.2.r.1.2","official":["MSK","ASKU","NASK"],"repoSet":["MSK","ASKU","NASK"],"evidence":{"igPdfPage":58,"igPrintedPage":57,"section":"C.2.r.1.2 Value Allowed"},"status":"match"},
+    {"element":"C.2.r.1.3","official":["MSK","ASKU","NASK"],"repoSet":["MSK","ASKU","NASK"],"evidence":{"igPdfPage":59,"igPrintedPage":58,"section":"C.2.r.1.3 Value Allowed"},"status":"match"},
+    {"element":"C.2.r.1.4","official":["MSK","ASKU","NASK"],"repoSet":["MSK","ASKU","NASK"],"evidence":{"igPdfPage":59,"igPrintedPage":58,"section":"C.2.r.1.4 Value Allowed"},"status":"match"},
+    {"element":"C.2.r.2.1","official":["MSK","ASKU","NASK"],"repoSet":["MSK","ASKU","NASK"],"evidence":{"igPdfPage":59,"igPrintedPage":58,"section":"C.2.r.2.1 Value Allowed"},"status":"match"},
+    {"element":"C.2.r.2.2","official":["MSK","ASKU","NASK"],"repoSet":["MSK","ASKU","NASK"],"evidence":{"igPdfPage":60,"igPrintedPage":59,"section":"C.2.r.2.2 Value Allowed"},"status":"match"},
+    {"element":"C.2.r.2.3","official":["MSK","ASKU","NASK"],"repoSet":["MSK","ASKU","NASK"],"evidence":{"igPdfPage":60,"igPrintedPage":59,"section":"C.2.r.2.3 Value Allowed"},"status":"match"},
+    {"element":"C.2.r.2.4","official":["MSK","ASKU","NASK"],"repoSet":["MSK","ASKU","NASK"],"evidence":{"igPdfPage":60,"igPrintedPage":59,"section":"C.2.r.2.4 Value Allowed"},"status":"match"},
+    {"element":"C.2.r.2.5","official":["MSK","ASKU","NASK"],"repoSet":["MSK","ASKU","NASK"],"evidence":{"igPdfPage":60,"igPrintedPage":59,"section":"C.2.r.2.5 Value Allowed"},"status":"match"},
+    {"element":"C.2.r.2.6","official":["MSK","ASKU","NASK"],"repoSet":["MSK","ASKU","NASK"],"evidence":{"igPdfPage":60,"igPrintedPage":59,"section":"C.2.r.2.6 Value Allowed"},"status":"match"},
+    {"element":"C.2.r.2.7","official":["MSK","ASKU","NASK"],"repoSet":["MSK","ASKU","NASK"],"evidence":{"igPdfPage":61,"igPrintedPage":60,"section":"C.2.r.2.7 Value Allowed"},"status":"match"},
+    {"element":"C.2.r.3","official":[],"repoSet":["MSK","UNK","ASKU","NASK"],"evidence":{"igPdfPage":61,"igPrintedPage":60,"section":"C.2.r.3 Value Allowed: ISO 3166-1 alpha-2, EU; no nullFlavor","qaPdfPage":17,"qaPrintedPage":13,"qaSection":"4.2 (016): Can senders use nullFlavor in C.2.r.3? Answer: No"},"status":"mismatch_repo_allows_forbidden","layers":{"registry":["MSK","UNK","ASKU","NASK"],"rustGeneratedContract":["MSK","UNK","ASKU","NASK"],"frontendGeneratedContract":["MSK","UNK","ASKU","NASK"],"frontendMap":["MSK","UNK","ASKU","NASK"],"dbConstraints":["MSK","UNK","ASKU","NASK"],"xml":"imports and exports @nullFlavor on reporter country"}},
+    {"element":"C.2.r.4","official":["UNK"],"repoSet":["UNK"],"evidence":{"igPdfPage":62,"igPrintedPage":61,"section":"C.2.r.4 Value Allowed"},"status":"match"},
+    {"element":"C.4.r.1","official":["ASKU","NASK"],"repoSet":["ASKU","NASK"],"evidence":{"igPdfPage":69,"igPrintedPage":68,"section":"C.4.r.1 Value Allowed"},"status":"match"},
+    {"element":"C.5.1.r.1","official":["ASKU","NASK"],"repoSet":["ASKU","NASK"],"evidence":{"igPdfPage":70,"igPrintedPage":69,"section":"C.5.1.r.1 Value Allowed"},"status":"match"},
+    {"element":"C.5.1.r.2","official":["ASKU","NASK"],"repoSet":["ASKU","NASK"],"evidence":{"igPdfPage":71,"igPrintedPage":70,"section":"C.5.1.r.2 Value Allowed"},"status":"match"},
+    {"element":"C.5.2","official":["ASKU","NASK"],"repoSet":["ASKU","NASK"],"evidence":{"igPdfPage":71,"igPrintedPage":70,"section":"C.5.2 Value Allowed"},"status":"match"},
+    {"element":"C.5.3","official":["ASKU","NASK"],"repoSet":["ASKU","NASK"],"evidence":{"igPdfPage":71,"igPrintedPage":70,"section":"C.5.3 Value Allowed"},"status":"match"},
+    {"element":"D.1","official":["MSK","ASKU","NASK","UNK"],"repoSet":["MSK","UNK","ASKU","NASK"],"evidence":{"igPdfPage":77,"igPrintedPage":76,"section":"D.1 Value Allowed","qaPdfPage":17,"qaPrintedPage":13,"qaSection":"4.2 (017)"},"status":"match_set"},
+    {"element":"D.1.1.1","official":["MSK"],"repoSet":["MSK"],"evidence":{"igPdfPage":77,"igPrintedPage":76,"section":"D.1.1.1 Value Allowed"},"status":"match"},
+    {"element":"D.1.1.2","official":["MSK"],"repoSet":["MSK"],"evidence":{"igPdfPage":78,"igPrintedPage":77,"section":"D.1.1.2 Value Allowed"},"status":"match"},
+    {"element":"D.1.1.3","official":["MSK"],"repoSet":["MSK"],"evidence":{"igPdfPage":78,"igPrintedPage":77,"section":"D.1.1.3 Value Allowed"},"status":"match"},
+    {"element":"D.1.1.4","official":["MSK"],"repoSet":["MSK"],"evidence":{"igPdfPage":79,"igPrintedPage":78,"section":"D.1.1.4 Value Allowed"},"status":"match"},
+    {"element":"D.2.1","official":["MSK"],"repoSet":["MSK"],"evidence":{"igPdfPage":79,"igPrintedPage":78,"section":"D.2.1 Value Allowed"},"status":"match"},
+    {"element":"D.5","official":["MSK","UNK","ASKU","NASK"],"repoSet":["MSK","UNK","ASKU","NASK"],"evidence":{"igPdfPage":83,"igPrintedPage":82,"section":"D.5 Value Allowed"},"status":"match"},
+    {"element":"D.6","official":["MSK"],"repoSet":["MSK"],"evidence":{"igPdfPage":83,"igPrintedPage":82,"section":"D.6 Value Allowed","qaPdfPage":22,"qaPrintedPage":18,"qaSection":"4.20: Only MSK is allowed"},"status":"match"},
+    {"element":"D.7.1.r.2","official":["MSK","ASKU","NASK"],"repoSet":["MSK","ASKU","NASK"],"evidence":{"igPdfPage":85,"igPrintedPage":84,"section":"D.7.1.r.2 Value Allowed"},"status":"match"},
+    {"element":"D.7.1.r.3","official":["MSK","ASKU","NASK","UNK"],"repoSet":["MSK","UNK","ASKU","NASK"],"evidence":{"igPdfPage":85,"igPrintedPage":84,"section":"D.7.1.r.3 Value Allowed","qaPdfPage":17,"qaPrintedPage":13,"qaSection":"4.2 (018)"},"status":"match_set"},
+    {"element":"D.7.1.r.4","official":["MSK","ASKU","NASK"],"repoSet":["MSK","ASKU","NASK"],"evidence":{"igPdfPage":85,"igPrintedPage":84,"section":"D.7.1.r.4 Value Allowed"},"status":"match"},
+    {"element":"D.7.2","official":["MSK","ASKU","NASK","UNK"],"repoSet":["MSK","UNK","ASKU","NASK"],"evidence":{"igPdfPage":86,"igPrintedPage":85,"section":"D.7.2 Value Allowed and Business Rules"},"status":"match_set"},
+    {"element":"D.8.r.1","official":["UNK","NA"],"repoSet":["UNK","NA"],"evidence":{"igPdfPage":89,"igPrintedPage":88,"section":"D.8.r.1 Value Allowed","qaPdfPage":20,"qaPrintedPage":16,"qaSection":"4.11 (031)"},"status":"match"},
+    {"element":"D.8.r.4","official":["MSK","ASKU","NASK"],"repoSet":["MSK","ASKU","NASK"],"evidence":{"igPdfPage":90,"igPrintedPage":89,"section":"D.8.r.4 Value Allowed"},"status":"match"},
+    {"element":"D.8.r.5","official":["MSK","ASKU","NASK"],"repoSet":["MSK","ASKU","NASK"],"evidence":{"igPdfPage":90,"igPrintedPage":89,"section":"D.8.r.5 Value Allowed"},"status":"match"},
+    {"element":"D.9.1","official":["MSK","ASKU","NASK"],"repoSet":["MSK","ASKU","NASK"],"evidence":{"igPdfPage":92,"igPrintedPage":91,"section":"D.9.1 Value Allowed"},"status":"match"},
+    {"element":"D.9.3","official":["ASKU","NASK","UNK"],"repoSet":["UNK","ASKU","NASK","MSK"],"evidence":{"igPdfPage":93,"igPrintedPage":92,"section":"D.9.3 Value Allowed"},"status":"mismatch_extra_MSK","layers":{"registry":["UNK","ASKU","NASK","MSK"],"rustGeneratedContract":["UNK","ASKU","NASK","MSK"],"frontendGeneratedContract":["UNK","ASKU","NASK","MSK"],"frontendMap":["UNK","ASKU","NASK","MSK"],"dbConstraints":["MSK","UNK","ASKU","NASK"],"xml":"accepts MSK and defaults a missing value to forbidden NI"}},
+    {"element":"D.10.1","official":["MSK","ASKU","NASK","UNK"],"repoSet":["MSK","UNK","ASKU","NASK"],"evidence":{"igPdfPage":95,"igPrintedPage":94,"section":"D.10.1 Value Allowed"},"status":"match_set"},
+    {"element":"D.10.2.1","official":["MSK","ASKU","NASK"],"repoSet":["MSK","ASKU","NASK"],"evidence":{"igPdfPage":95,"igPrintedPage":94,"section":"D.10.2.1 Value Allowed"},"status":"match"},
+    {"element":"D.10.3","official":["MSK","ASKU","NASK"],"repoSet":["MSK","ASKU","NASK"],"evidence":{"igPdfPage":96,"igPrintedPage":95,"section":"D.10.3 Value Allowed"},"status":"match"},
+    {"element":"D.10.6","official":["UNK","MSK","ASKU","NASK"],"repoSet":["MSK","UNK","ASKU","NASK"],"evidence":{"igPdfPage":97,"igPrintedPage":96,"section":"D.10.6 Value Allowed"},"status":"match_set"},
+    {"element":"D.10.7.1.r.2","official":["MSK","ASKU","NASK"],"repoSet":["MSK","ASKU","NASK"],"evidence":{"igPdfPage":98,"igPrintedPage":97,"section":"D.10.7.1.r.2 Value Allowed"},"status":"match"},
+    {"element":"D.10.7.1.r.3","official":["MSK","ASKU","NASK","UNK"],"repoSet":["MSK","UNK","ASKU","NASK"],"evidence":{"igPdfPage":98,"igPrintedPage":97,"section":"D.10.7.1.r.3 Value Allowed","qaPdfPage":17,"qaPrintedPage":13,"qaSection":"4.2 (018)"},"status":"match_set"},
+    {"element":"D.10.7.1.r.4","official":["MSK","ASKU","NASK"],"repoSet":["MSK","ASKU","NASK"],"evidence":{"igPdfPage":98,"igPrintedPage":97,"section":"D.10.7.1.r.4 Value Allowed"},"status":"match"},
+    {"element":"D.10.8.r.4","official":["MSK","ASKU","NASK"],"repoSet":["MSK","ASKU","NASK"],"evidence":{"igPdfPage":100,"igPrintedPage":99,"section":"D.10.8.r.4 Value Allowed"},"status":"match"},
+    {"element":"D.10.8.r.5","official":["MSK","ASKU","NASK"],"repoSet":["MSK","ASKU","NASK"],"evidence":{"igPdfPage":101,"igPrintedPage":100,"section":"D.10.8.r.5 Value Allowed"},"status":"match"},
+    {"element":"E.i.3.2a","official":["NI"],"repoSet":["NI"],"evidence":{"igPdfPage":106,"igPrintedPage":105,"section":"E.i.3.2a Value Allowed","qaPdfPage":18,"qaPrintedPage":14,"qaSection":"4.4 (019)"},"status":"match"},
+    {"element":"E.i.3.2b","official":["NI"],"repoSet":["NI"],"evidence":{"igPdfPage":106,"igPrintedPage":105,"section":"E.i.3.2b Value Allowed","qaPdfPage":18,"qaPrintedPage":14,"qaSection":"4.4 (019)"},"status":"match"},
+    {"element":"E.i.3.2c","official":["NI"],"repoSet":["NI"],"evidence":{"igPdfPage":106,"igPrintedPage":105,"section":"E.i.3.2c Value Allowed","qaPdfPage":18,"qaPrintedPage":14,"qaSection":"4.4 (019)"},"status":"match"},
+    {"element":"E.i.3.2d","official":["NI"],"repoSet":["NI"],"evidence":{"igPdfPage":106,"igPrintedPage":105,"section":"E.i.3.2d Value Allowed","qaPdfPage":18,"qaPrintedPage":14,"qaSection":"4.4 (019)"},"status":"match"},
+    {"element":"E.i.3.2e","official":["NI"],"repoSet":["NI"],"evidence":{"igPdfPage":107,"igPrintedPage":106,"section":"E.i.3.2e Value Allowed","qaPdfPage":18,"qaPrintedPage":14,"qaSection":"4.4 (019)"},"status":"match"},
+    {"element":"E.i.3.2f","official":["NI"],"repoSet":["NI"],"evidence":{"igPdfPage":107,"igPrintedPage":106,"section":"E.i.3.2f Value Allowed","qaPdfPage":18,"qaPrintedPage":14,"qaSection":"4.4 (019)"},"status":"match"},
+    {"element":"E.i.4","official":["MSK","ASKU","NASK"],"repoSet":["MSK","ASKU","NASK"],"evidence":{"igPdfPage":107,"igPrintedPage":106,"section":"E.i.4 Value Allowed"},"status":"match"},
+    {"element":"E.i.5","official":["MSK","ASKU","NASK"],"repoSet":["MSK","ASKU","NASK"],"evidence":{"igPdfPage":108,"igPrintedPage":107,"section":"E.i.5 Value Allowed"},"status":"match"},
+    {"element":"F.r.1","official":["UNK"],"repoSet":["UNK"],"evidence":{"igPdfPage":111,"igPrintedPage":110,"section":"F.r.1 Value Allowed"},"status":"match"},
+    {"element":"F.r.3.2","official":["NINF","PINF"],"repoSet":["NINF","PINF"],"evidence":{"igPdfPage":113,"igPrintedPage":112,"section":"F.r.3.2 Value Allowed and XML examples","qaPdfPage":18,"qaPrintedPage":14,"qaSection":"4.6 (022) and 4.7 (023)"},"status":"mismatch_representation","layers":{"registry":["NINF","PINF"],"rustGeneratedContract":["NINF","PINF"],"frontendGeneratedContract":["NINF","PINF"],"frontendMap":["NINF","PINF"],"dbConstraints":["NINF","PINF"],"xml":"incorrectly stores/exports a top-level <value nullFlavor>; official representation uses NINF/PINF only on IVL_PQ low/high range bounds"}},
+    {"element":"G.k.4.r.4","official":["MSK","ASKU","NASK"],"repoSet":["MSK","ASKU","NASK"],"evidence":{"igPdfPage":129,"igPrintedPage":128,"section":"G.k.4.r.4 Value Allowed"},"status":"match"},
+    {"element":"G.k.4.r.5","official":["MSK","ASKU","NASK"],"repoSet":["MSK","ASKU","NASK"],"evidence":{"igPdfPage":129,"igPrintedPage":128,"section":"G.k.4.r.5 Value Allowed"},"status":"match"},
+    {"element":"G.k.4.r.9.1","official":["ASKU","NASK","UNK"],"repoSet":["UNK","ASKU","NASK"],"evidence":{"igPdfPage":132,"igPrintedPage":131,"section":"G.k.4.r.9.1 Value Allowed"},"status":"match_set"},
+    {"element":"G.k.4.r.10.1","official":["ASKU","NASK","UNK"],"repoSet":["UNK","ASKU","NASK"],"evidence":{"igPdfPage":133,"igPrintedPage":132,"section":"G.k.4.r.10.1 Value Allowed"},"status":"match_set"},
+    {"element":"G.k.4.r.11.1","official":["ASKU","NASK","UNK"],"repoSet":["UNK","ASKU","NASK"],"evidence":{"igPdfPage":134,"igPrintedPage":133,"section":"G.k.4.r.11.1 Value Allowed"},"status":"match_set"},
+    {"element":"G.k.7.r.1","official":["ASKU","NASK","UNK"],"repoSet":["UNK","ASKU","NASK"],"evidence":{"igPdfPage":136,"igPrintedPage":135,"section":"G.k.7.r.1 Value Allowed"},"status":"match_set"}
+  ],
+  "findings": [
+    {
+      "severity": "high",
+      "element": "C.1.7",
+      "finding": "The code set is correct but NI is exposed as an ordinary choice. ICH permits it only for a narrow E2B(R2)-retransmission compatibility case.",
+      "requiredRootFix": "Hide NI for normal/manual R3 entry and validate it using reliable R2-origin provenance. Preserve it only for qualifying retransmitted legacy cases."
+    },
+    {
+      "severity": "high",
+      "element": "C.2.r.3",
+      "finding": "NullFlavor is forbidden by the latest official IG/Q&A, but every repository layer models and accepts four NullFlavors.",
+      "requiredRootFix": "Remove the companion nullFlavor from registry, generated contracts, UI, API/model/DB, and XML import/export for reporter country. Do not confuse this with C.5.1.r.2 study registration country, where ASKU/NASK remain allowed."
+    },
+    {
+      "severity": "high",
+      "element": "D.9.3",
+      "finding": "MSK is not allowed; the repository allows it. The XML exporter also falls back to NI, which is likewise forbidden.",
+      "requiredRootFix": "Change the canonical set to ASKU/NASK/UNK, propagate it through contracts/UI/DB, reject MSK/NI on import, and remove the exporter NI fallback."
+    },
+    {
+      "severity": "high",
+      "element": "F.r.3.2",
+      "finding": "The code values match but the data model is semantically wrong. NINF/PINF qualify an open interval bound, not a missing whole test-result value.",
+      "requiredRootFix": "Model numeric interval value/bounds/inclusivity and serialize xsi:type=IVL_PQ with low/high nullFlavor bounds as shown in IG/Q&A; remove the whole-field NullFlavor selector and top-level value@nullFlavor persistence."
+    }
+  ],
+  "ambiguities": [
+    {
+      "element": "D.8.r.1",
+      "note": "NA and UNK have distinct circumstances: NA for no previous exposure; UNK when the section is otherwise used but the drug name is unavailable."
+    }
+  ]
+}

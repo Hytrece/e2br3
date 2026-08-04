@@ -1012,7 +1012,9 @@ async fn test_mfds_sender_type_3_requires_kr1() -> Result<()> {
 	let case_id = create_case(&app, &cookie, seed.org_id).await?;
 	create_safety_report(&app, &cookie, case_id).await?;
 	create_message_header(&app, &cookie, case_id).await?;
-	update_message_header_message_receiver(&app, &cookie, case_id, "KR").await?;
+	update_message_header_receiver(&app, &cookie, case_id, "MFDS-O-KR").await?;
+	update_message_header_message_receiver(&app, &cookie, case_id, "MFDS-O-KR")
+		.await?;
 	create_sender(&app, &cookie, case_id, "3").await?;
 
 	let (status, body) = get_validation(
@@ -1120,8 +1122,15 @@ async fn test_mfds_parent_past_drug_rules_emit_mfds_field_paths() -> Result<()> 
 
 	let missing_id_case_id = create_case(&app, &cookie, seed.org_id).await?;
 	seed_rule_clean_case(&mm, &app, &cookie, missing_id_case_id).await?;
-	update_message_header_message_receiver(&app, &cookie, missing_id_case_id, "FR")
+	update_message_header_receiver(&app, &cookie, missing_id_case_id, "MFDS-O-FR")
 		.await?;
+	update_message_header_message_receiver(
+		&app,
+		&cookie,
+		missing_id_case_id,
+		"MFDS-O-FR",
+	)
+	.await?;
 	let parent_id =
 		create_parent_information(&app, &cookie, missing_id_case_id).await?;
 	create_parent_past_drug_history(
@@ -1169,7 +1178,14 @@ async fn test_mfds_parent_past_drug_rules_emit_mfds_field_paths() -> Result<()> 
 		&app,
 		&cookie,
 		missing_version_case_id,
-		"FR",
+		"MFDS-O-FR",
+	)
+	.await?;
+	update_message_header_receiver(
+		&app,
+		&cookie,
+		missing_version_case_id,
+		"MFDS-O-FR",
 	)
 	.await?;
 	let parent_id =
@@ -1233,7 +1249,9 @@ async fn test_mfds_domestic_product_ingredient_paths() -> Result<()> {
 	create_patient(&app, &cookie, case_id).await?;
 	create_reaction(&app, &cookie, case_id).await?;
 	create_narrative(&app, &cookie, case_id).await?;
-	update_message_header_message_receiver(&app, &cookie, case_id, "KR").await?;
+	update_message_header_receiver(&app, &cookie, case_id, "MFDS-O-KR").await?;
+	update_message_header_message_receiver(&app, &cookie, case_id, "MFDS-O-KR")
+		.await?;
 	let drug_id = create_domestic_kr_drug(&app, &cookie, case_id).await?;
 	create_drug_active_substance(&app, &cookie, case_id, drug_id).await?;
 
@@ -1816,8 +1834,9 @@ async fn test_validation_infers_mfds_profile_from_batch_receiver() -> Result<()>
 	assert_eq!(status, StatusCode::OK, "{body:?}");
 	create_safety_report(&app, &cookie, case_id).await?;
 	create_message_header(&app, &cookie, case_id).await?;
-	update_message_header_receiver(&app, &cookie, case_id, "ZZMFDS").await?;
-	update_message_header_message_receiver(&app, &cookie, case_id, "KR").await?;
+	update_message_header_receiver(&app, &cookie, case_id, "MFDS-O-KR").await?;
+	update_message_header_message_receiver(&app, &cookie, case_id, "MFDS-O-KR")
+		.await?;
 	create_sender(&app, &cookie, case_id, "3").await?;
 
 	let (status, body) =

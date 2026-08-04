@@ -7,7 +7,7 @@ use lib_core::model::message_header::MessageHeader;
 use lib_core::regulatory::{
 	FDA_BATCH_RECEIVER_POSTMARKET, FDA_BATCH_RECEIVER_PREMARKET,
 	FDA_MSG_RECEIVER_CBER_IND, FDA_MSG_RECEIVER_CDER, FDA_MSG_RECEIVER_CDER_IND,
-	FDA_MSG_RECEIVER_CDER_IND_EXEMPT_BA_BE,
+	FDA_MSG_RECEIVER_CDER_IND_EXEMPT_BA_BE, MFDS_KNOWN_RECEIVERS,
 };
 
 const SECTION: &str = "case-identification";
@@ -145,6 +145,35 @@ fn fda_n_routing(header: &MessageHeader, issues: &mut Vec<ValidationIssue>) {
 		"FDA.R0100",
 		"messageHeader.messageSenderIdentifier",
 		"FDA N.2.r.2 must match N.1.3.",
+	);
+}
+
+/// MFDS.N.1.4.ALLOWED.VALUE
+/// MFDS.N.2.r.3.ALLOWED.VALUE
+/// MFDS.N.ROUTE.PAIR
+fn mfds_n_routing(header: &MessageHeader, issues: &mut Vec<ValidationIssue>) {
+	let batch_receiver = trimmed(header.batch_receiver_identifier.as_deref());
+	let message_receiver = trimmed(Some(&header.message_receiver_identifier));
+	push_business_violation(
+		issues,
+		batch_receiver.is_some_and(|value| !MFDS_KNOWN_RECEIVERS.contains(&value)),
+		"MFDS.N.1.4.ALLOWED.VALUE",
+		"messageHeader.batchReceiverIdentifier",
+		"MFDS N.1.4 must use an official MFDS operational or test receiver identifier.",
+	);
+	push_business_violation(
+		issues,
+		message_receiver.is_some_and(|value| !MFDS_KNOWN_RECEIVERS.contains(&value)),
+		"MFDS.N.2.r.3.ALLOWED.VALUE",
+		"messageHeader.messageReceiverIdentifier",
+		"MFDS N.2.r.3 must use an official MFDS operational or test receiver identifier.",
+	);
+	push_business_violation(
+		issues,
+		matches!((batch_receiver, message_receiver), (Some(batch), Some(message)) if batch != message),
+		"MFDS.N.ROUTE.PAIR",
+		"messageHeader.messageReceiverIdentifier",
+		"MFDS N.1.4 and N.2.r.3 must use the same receiver identifier.",
 	);
 }
 
@@ -357,6 +386,8 @@ pub(crate) fn collect(
 		c_1_2_matches_n_2_r_4(header, validation_ctx, issues);
 		if authority == RegulatoryAuthority::Fda {
 			fda_n_routing(header, issues);
+		} else if authority == RegulatoryAuthority::Mfds {
+			mfds_n_routing(header, issues);
 		}
 	}
 }
@@ -542,6 +573,23 @@ mod tests {
 
 		assert!(issues.iter().any(|issue| issue.code == "FDA.R0007"));
 		assert!(issues.iter().any(|issue| issue.code == "FDA.R0100"));
+	}
+
+	#[test]
+	fn mfds_routing_accepts_only_matching_official_identifiers() {
+		let mut header = message_header();
+		header.batch_receiver_identifier = Some("MFDS-O-CT".to_string());
+		header.message_receiver_identifier = "MFDS-O-CT".to_string();
+		let mut issues = Vec::new();
+		mfds_n_routing(&header, &mut issues);
+		assert!(issues.is_empty());
+
+		header.message_receiver_identifier = "CT".to_string();
+		mfds_n_routing(&header, &mut issues);
+		assert!(issues
+			.iter()
+			.any(|issue| issue.code == "MFDS.N.2.r.3.ALLOWED.VALUE"));
+		assert!(issues.iter().any(|issue| issue.code == "MFDS.N.ROUTE.PAIR"));
 	}
 
 	#[test]

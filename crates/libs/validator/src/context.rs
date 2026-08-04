@@ -97,9 +97,8 @@ pub struct VocabularyContext {
 	meddra_available: bool,
 	meddra_versions: HashSet<String>,
 	meddra_terms: HashSet<MeddraTermKey>,
-	whodrug_available: bool,
-	whodrug_versions: HashSet<String>,
 	whodrug_products: HashSet<(String, String)>,
+	whodrug_cas_numbers: HashSet<(String, String)>,
 	snapshot_codes: Arc<SnapshotCodes>,
 }
 
@@ -109,9 +108,8 @@ impl Default for VocabularyContext {
 			meddra_available: false,
 			meddra_versions: HashSet::new(),
 			meddra_terms: HashSet::new(),
-			whodrug_available: false,
-			whodrug_versions: HashSet::new(),
 			whodrug_products: HashSet::new(),
+			whodrug_cas_numbers: HashSet::new(),
 			snapshot_codes: embedded_snapshot_codes(),
 		}
 	}
@@ -133,20 +131,17 @@ impl VocabularyContext {
 		})
 	}
 
-	pub(crate) fn whodrug_available(&self) -> bool {
-		self.whodrug_available
-	}
-
-	pub(crate) fn contains_whodrug_version(&self, version: &str) -> bool {
-		self.whodrug_versions.contains(version)
-	}
-
 	pub(crate) fn contains_whodrug_product(
 		&self,
 		version: &str,
 		code: &str,
 	) -> bool {
 		self.whodrug_products
+			.contains(&(version.to_string(), code.to_string()))
+	}
+
+	pub(crate) fn contains_whodrug_cas(&self, version: &str, code: &str) -> bool {
+		self.whodrug_cas_numbers
 			.contains(&(version.to_string(), code.to_string()))
 	}
 
@@ -197,12 +192,17 @@ impl VocabularyContext {
 	#[cfg(test)]
 	pub(crate) fn for_whodrug(keys: &[(&str, &str)]) -> Self {
 		let mut context = Self::default();
-		context.whodrug_available = true;
-		context.whodrug_versions = keys
-			.iter()
-			.map(|(version, _)| (*version).to_string())
-			.collect();
 		context.whodrug_products = keys
+			.iter()
+			.map(|(version, code)| ((*version).to_string(), (*code).to_string()))
+			.collect();
+		context
+	}
+
+	#[cfg(test)]
+	pub(crate) fn for_whodrug_cas(keys: &[(&str, &str)]) -> Self {
+		let mut context = Self::default();
+		context.whodrug_cas_numbers = keys
 			.iter()
 			.map(|(version, code)| ((*version).to_string(), (*code).to_string()))
 			.collect();
@@ -364,6 +364,7 @@ async fn load_vocabulary_context(
 	let requested_product_codes = case_product_codes(validation_ctx);
 	let requested_substance_codes = case_substance_codes(validation_ctx);
 	let requested_whodrug_keys = case_whodrug_keys(validation_ctx);
+	let requested_whodrug_cas_keys = case_whodrug_cas_keys(validation_ctx);
 	let (
 		versions,
 		terms,
@@ -371,9 +372,8 @@ async fn load_vocabulary_context(
 		ich_country_extensions,
 		mfds_products,
 		mfds_substances,
-		whodrug_versions,
-		whodrug_products,
 		whodrug_keys,
+		whodrug_cas_keys,
 	) = tokio::try_join!(
 		MeddraTermBmc::active_versions(mm),
 		MeddraTermBmc::existing_active_keys(mm, &requested_keys),
@@ -389,9 +389,13 @@ async fn load_vocabulary_context(
 			mm,
 			&requested_substance_codes,
 		),
-		WhodrugProductBmc::active_versions(mm),
-		WhodrugProductBmc::existing_active_codes(mm, &requested_product_codes),
 		WhodrugProductBmc::existing_active_keys(mm, &requested_whodrug_keys),
+		ControlledTermBmc::existing_active_keys(
+			mm,
+			"whodrug",
+			"cas",
+			&requested_whodrug_cas_keys,
+		),
 	)?;
 	let meddra_available = !versions.is_empty();
 	let mut snapshot_codes = embedded_snapshot_codes();
@@ -411,10 +415,6 @@ async fn load_vocabulary_context(
 		.entry(("MFDS_SUBSTANCE".to_string(), VocabularyScope::All))
 		.or_default()
 		.extend(mfds_substances);
-	Arc::make_mut(&mut snapshot_codes)
-		.entry(("WHODrug".to_string(), VocabularyScope::All))
-		.or_default()
-		.extend(whodrug_products);
 	let requested_scoped_codes = case_scoped_terminology_codes(validation_ctx);
 	for (scope, codes) in requested_scoped_codes {
 		let (dictionary, vocabulary) = match scope {
@@ -442,9 +442,8 @@ async fn load_vocabulary_context(
 		meddra_available,
 		meddra_versions: versions.into_iter().collect(),
 		meddra_terms: terms.into_iter().collect(),
-		whodrug_available: !whodrug_versions.is_empty(),
-		whodrug_versions,
 		whodrug_products: whodrug_keys,
+		whodrug_cas_numbers: whodrug_cas_keys,
 		snapshot_codes,
 	})
 }
@@ -512,6 +511,25 @@ fn case_whodrug_keys(validation_ctx: &ValidationContext) -> Vec<(String, String)
 		add(item.mfds_mpid_version.as_deref(), item.mfds_mpid.as_deref());
 	}
 	keys.into_iter().collect()
+}
+
+fn case_whodrug_cas_keys(
+	validation_ctx: &ValidationContext,
+) -> Vec<(String, String)> {
+	validation_ctx
+		.active_substances
+		.iter()
+		.filter_map(|item| {
+			Some((
+				item.mfds_version.as_deref()?.trim(),
+				item.mfds_id.as_deref()?.trim(),
+			))
+		})
+		.filter(|(version, code)| !version.is_empty() && !code.is_empty())
+		.map(|(version, code)| (version.to_string(), code.to_string()))
+		.collect::<HashSet<_>>()
+		.into_iter()
+		.collect()
 }
 
 fn vocabulary_scope_name(scope: VocabularyScope) -> &'static str {

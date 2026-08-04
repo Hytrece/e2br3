@@ -891,30 +891,36 @@ async fn test_submission_receiver_options_list_defaults_by_authority() -> Result
 			"MFDS(CT)",
 			"1",
 			"임상시험계획의 승인을 받은 자",
-			"MFDS_CT",
-			"CT",
+			"MFDS-O-CT",
+			"MFDS-O-CT",
 		),
 		(
 			"MFDS(CU)",
 			"2",
 			"임상시험용의약품의 치료목적 사용승인을 받은 자",
-			"MFDS_CU",
-			"CU",
+			"MFDS-O-CU",
+			"MFDS-O-CU",
 		),
-		("MFDS(KR)", "3", "시판 후 이상사례 국내보고", "MFDS", "KR"),
+		(
+			"MFDS(KR)",
+			"3",
+			"시판 후 이상사례 국내보고",
+			"MFDS-O-KR",
+			"MFDS-O-KR",
+		),
 		(
 			"MFDS(FR)",
 			"4",
 			"시판 후 이상사례 국외보고",
-			"MFDS_FR",
-			"FR",
+			"MFDS-O-FR",
+			"MFDS-O-FR",
 		),
 		(
 			"MFDS(CF)",
 			"5",
 			"임상시험계획의 승인을 받은 자 (국외)",
-			"MFDS_CF",
-			"CF",
+			"MFDS-O-CF",
+			"MFDS-O-CF",
 		),
 	] {
 		assert!(
@@ -960,8 +966,8 @@ async fn test_submission_receiver_selection_updates_message_header_n_identifiers
 			"data": {
 				"authority": "mfds",
 				"receiver_label": "MFDS(KR)",
-				"batch_receiver_identifier": "MFDS",
-				"message_receiver_identifier": "KR"
+				"batch_receiver_identifier": "MFDS-O-KR",
+				"message_receiver_identifier": "MFDS-O-KR"
 			}
 		}),
 	)
@@ -969,12 +975,12 @@ async fn test_submission_receiver_selection_updates_message_header_n_identifiers
 	assert_eq!(status, StatusCode::OK, "{body:?}");
 	assert_eq!(
 		body["data"]["batch_receiver_identifier"].as_str(),
-		Some("MFDS"),
+		Some("MFDS-O-KR"),
 		"{body:?}"
 	);
 	assert_eq!(
 		body["data"]["message_receiver_identifier"].as_str(),
-		Some("KR"),
+		Some("MFDS-O-KR"),
 		"{body:?}"
 	);
 
@@ -987,12 +993,12 @@ async fn test_submission_receiver_selection_updates_message_header_n_identifiers
 	assert_eq!(header_status, StatusCode::OK, "{header:?}");
 	assert_eq!(
 		header["data"]["batch_receiver_identifier"].as_str(),
-		Some("MFDS"),
+		Some("MFDS-O-KR"),
 		"{header:?}"
 	);
 	assert_eq!(
 		header["data"]["message_receiver_identifier"].as_str(),
-		Some("KR"),
+		Some("MFDS-O-KR"),
 		"{header:?}"
 	);
 

@@ -1,7 +1,9 @@
 use clap::{Args, Parser, Subcommand};
 use lib_core::ctx::Ctx;
 use lib_core::model::store::set_full_context_dbx;
-use lib_core::model::terminology_import::parse_whodrug_upload;
+use lib_core::model::terminology_import::{
+	parse_whodrug_cas_numbers, parse_whodrug_upload,
+};
 use lib_core::model::ModelManager;
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
@@ -419,9 +421,20 @@ async fn load_whodrug(
 	args: &LoadArgs,
 ) -> Result<(), Box<dyn std::error::Error>> {
 	let rows = parse_whodrug(&args.input)?;
+	let cas_numbers = if args.input.is_file()
+		&& args
+			.input
+			.extension()
+			.is_some_and(|extension| extension.eq_ignore_ascii_case("zip"))
+	{
+		parse_whodrug_cas_numbers(&fs::read(&args.input)?)?
+	} else {
+		Vec::new()
+	};
 	println!(
-		"Whodrug parse complete: rows={}, version={}, language={}",
+		"Whodrug parse complete: rows={}, cas_numbers={}, version={}, language={}",
 		rows.len(),
+		cas_numbers.len(),
 		args.version,
 		args.language
 	);
@@ -456,6 +469,19 @@ async fn load_whodrug(
 		})
 		.await?;
 	}
+	for chunk in cas_numbers.chunks(1000) {
+		with_loader_txn(mm, || async {
+			upsert_whodrug_cas_numbers(
+				mm,
+				chunk,
+				&args.version,
+				&args.language,
+				false,
+			)
+			.await
+		})
+		.await?;
+	}
 
 	with_whodrug_row_audit_disabled(mm, || async {
 		mm.dbx()
@@ -463,6 +489,31 @@ async fn load_whodrug(
 				sqlx::query(
 					"UPDATE whodrug_products SET active = false WHERE language = $1 AND active = true",
 				)
+				.bind(&args.language),
+			)
+			.await?;
+
+		mm.dbx()
+			.execute(
+				sqlx::query(
+					"UPDATE controlled_terminology_terms
+					 SET active = false
+					 WHERE dictionary = 'whodrug' AND scope = 'cas'
+					   AND language = $1 AND active = true",
+				)
+				.bind(&args.language),
+			)
+			.await?;
+
+		mm.dbx()
+			.execute(
+				sqlx::query(
+					"UPDATE controlled_terminology_terms
+					 SET active = true
+					 WHERE dictionary = 'whodrug' AND scope = 'cas'
+					   AND version = $1 AND language = $2",
+				)
+				.bind(&args.version)
 				.bind(&args.language),
 			)
 			.await?;
@@ -716,6 +767,33 @@ async fn upsert_whodrug_rows(
 		);
 		mm.dbx().execute(qb.build()).await?;
 	}
+	Ok(())
+}
+
+async fn upsert_whodrug_cas_numbers(
+	mm: &ModelManager,
+	cas_numbers: &[String],
+	version: &str,
+	language: &str,
+	active: bool,
+) -> Result<(), Box<dyn std::error::Error>> {
+	let mut qb: QueryBuilder<Postgres> = QueryBuilder::new(
+		"INSERT INTO controlled_terminology_terms
+		 (dictionary, version, language, scope, code, active) ",
+	);
+	qb.push_values(cas_numbers, |mut row, cas| {
+		row.push_bind("whodrug")
+			.push_bind(version)
+			.push_bind(language)
+			.push_bind("cas")
+			.push_bind(cas)
+			.push_bind(active);
+	});
+	qb.push(
+		" ON CONFLICT (dictionary, version, language, scope, code)
+		  DO UPDATE SET active = EXCLUDED.active",
+	);
+	mm.dbx().execute(qb.build()).await?;
 	Ok(())
 }
 
