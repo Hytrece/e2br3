@@ -17,27 +17,31 @@ pub(super) async fn user_views(
 	let user_ids = users.iter().map(|user| user.id).collect::<Vec<_>>();
 	let role_assignments =
 		UserBmc::role_assignments_for_users(ctx, mm, &user_ids).await?;
-	Ok(users
+	users
 		.into_iter()
 		.map(|user| {
 			let role_id = role_assignments
 				.get(&(user.id, user.organization_id))
-				.copied();
-			user_view_with_role(user, role_id)
+				.copied()
+				.ok_or_else(|| {
+					Error::Model(lib_core::model::Error::Store(format!(
+						"missing role assignment for user {}",
+						user.id
+					)))
+				})?;
+			Ok(user_view_with_role(user, role_id))
 		})
-		.collect())
+		.collect()
 }
 
-fn user_view_with_role(user: User, assigned_role_id: Option<Uuid>) -> UserView {
+fn user_view_with_role(user: User, assigned_role_id: Uuid) -> UserView {
 	let active = user_is_effectively_active(&user);
 	let access_sender_ids = user.access_sender_ids.clone();
 	let access_product_ids = user.access_product_ids.clone();
 	let access_study_ids = user.access_study_ids.clone();
 	let access_blind_allowed = user.access_blind_allowed;
 	let active_sender_identifier = user.active_sender_identifier.clone();
-	let role = assigned_role_id
-		.map(role_for_assignment)
-		.unwrap_or_else(|| canonical_role(&user.role));
+	let role = role_for_assignment(assigned_role_id);
 	UserView {
 		id: user.id,
 		organization_id: user.organization_id,
