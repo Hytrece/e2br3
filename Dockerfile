@@ -20,7 +20,7 @@ COPY crates/ crates/
 COPY registry/ registry/
 
 # Build the application and operational helper binaries.
-RUN cargo build --release --package web-server --package terminology-loader
+RUN cargo build --release --jobs 1 --package web-server --package terminology-loader
 
 # ============================================
 # Stage 2: Create minimal runtime image

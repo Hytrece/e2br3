@@ -1,0 +1,44 @@
+services:
+  backend:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    image: e2br3-backend:staging
+    container_name: e2br3-staging-back
+    restart: unless-stopped
+    ports:
+      - "${BACKEND_PORT:-8216}:8080"
+    environment:
+      SERVICE_BIND_ADDR: "0.0.0.0:8080"
+      SERVICE_WEB_FOLDER: "/app/web-folder/"
+      SERVICE_DB_URL: "${SERVICE_DB_URL}"
+      SERVICE_PWD_KEY: "${SERVICE_PWD_KEY}"
+      SERVICE_TOKEN_KEY: "${SERVICE_TOKEN_KEY}"
+      SERVICE_TOKEN_DURATION_SEC: "${SERVICE_TOKEN_DURATION_SEC:-86400}"
+      E2BR3_VALIDATOR_TOKEN: "${E2BR3_VALIDATOR_TOKEN}"
+      E2BR3_XSD_PATH: "/app/schemas/multicacheschemas/MCCI_IN200100UV01.xsd"
+      E2BR3_SKIP_XML_VALIDATE: "0"
+      E2BR3_EXPORT_VALIDATE: "1"
+      E2BR3_ENV: "staging"
+      E2BR3_STRICT_SUBMISSION_CONFIG: "true"
+      E2BR3_ALLOW_MOCK_SUBMISSION: "false"
+      RUST_LOG: "web_server=info,lib_core=info,lib_web=info"
+      SKIP_DEV_INIT: "1"
+    volumes:
+      - ../../schemas:/app/schemas:ro
+
+  frontend:
+    build:
+      context: ../../../e2br3-frontend
+      dockerfile: Dockerfile
+      args:
+        API_PROXY_TARGET: "${API_PROXY_TARGET}"
+    image: e2br3-frontend:staging
+    container_name: e2br3-staging-front
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-4033}:3000"
+    environment:
+      API_PROXY_TARGET: "${API_PROXY_TARGET}"
+    depends_on:
+      - backend
