@@ -416,7 +416,7 @@ async fn import_single_xml(
 			let message = if potential_duplicate {
 				decision.message.clone()
 			} else {
-				Some("Successfully imported".to_string())
+				None
 			};
 			record_import_history(
 				ctx,
