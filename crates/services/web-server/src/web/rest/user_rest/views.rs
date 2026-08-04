@@ -29,12 +29,12 @@ pub(super) async fn user_views(
 						user.id
 					)))
 				})?;
-			Ok(user_view_with_role(user, role_id))
+			user_view_with_role(user, role_id)
 		})
 		.collect()
 }
 
-fn user_view_with_role(user: User, assigned_role_id: Uuid) -> UserView {
+fn user_view_with_role(user: User, assigned_role_id: Uuid) -> Result<UserView> {
 	let active = user_is_effectively_active(&user);
 	let access_sender_ids = user.access_sender_ids.clone();
 	let access_product_ids = user.access_product_ids.clone();
@@ -42,7 +42,7 @@ fn user_view_with_role(user: User, assigned_role_id: Uuid) -> UserView {
 	let access_blind_allowed = user.access_blind_allowed;
 	let active_sender_identifier = user.active_sender_identifier.clone();
 	let role = role_for_assignment(assigned_role_id);
-	UserView {
+	Ok(UserView {
 		id: user.id,
 		organization_id: user.organization_id,
 		email: user.email,
@@ -54,13 +54,16 @@ fn user_view_with_role(user: User, assigned_role_id: Uuid) -> UserView {
 		scope: UserScopeView {
 			assigned_sender_ids: lib_rest_core::scope_values_from_raw(
 				access_sender_ids.as_deref(),
-			),
+			)
+			.map_err(|error| Error::Model(lib_core::model::Error::Store(error)))?,
 			assigned_product_ids: lib_rest_core::scope_values_from_raw(
 				access_product_ids.as_deref(),
-			),
+			)
+			.map_err(|error| Error::Model(lib_core::model::Error::Store(error)))?,
 			assigned_study_ids: lib_rest_core::scope_values_from_raw(
 				access_study_ids.as_deref(),
-			),
+			)
+			.map_err(|error| Error::Model(lib_core::model::Error::Store(error)))?,
 			access_blind_allowed: access_blind_allowed == Some(true),
 			active_sender_identifier: active_sender_identifier.clone(),
 			access_start_at: user.access_start_at,
@@ -73,7 +76,7 @@ fn user_view_with_role(user: User, assigned_role_id: Uuid) -> UserView {
 		updated_at: user.updated_at,
 		created_by: user.created_by,
 		updated_by: user.updated_by,
-	}
+	})
 }
 
 fn role_for_assignment(role_id: Uuid) -> String {

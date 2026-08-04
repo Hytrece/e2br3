@@ -364,27 +364,44 @@ struct SenderOptionRow {
 	case_count: i64,
 }
 
-fn parse_scope_values(raw: Option<&str>) -> HashSet<String> {
-	let Some(raw) = raw.map(str::trim).filter(|raw| !raw.is_empty()) else {
-		return HashSet::new();
-	};
-	if let Ok(values) = serde_json::from_str::<Vec<String>>(raw) {
-		return values
-			.into_iter()
-			.filter_map(|value| Uuid::parse_str(value.trim()).ok())
-			.map(|value| value.to_string())
-			.collect();
-	}
-	raw.split(',')
-		.filter_map(|value| Uuid::parse_str(value.trim()).ok())
-		.map(|value| value.to_string())
-		.collect()
+#[derive(Debug, Default)]
+struct ParsedScope {
+	values: HashSet<String>,
+	invalid: bool,
 }
 
-pub fn scope_values_from_raw(raw: Option<&str>) -> Vec<String> {
-	let mut values = parse_scope_values(raw).into_iter().collect::<Vec<_>>();
+fn parse_scope_values(raw: Option<&str>) -> ParsedScope {
+	let Some(raw) = raw.map(str::trim).filter(|raw| !raw.is_empty()) else {
+		return ParsedScope::default();
+	};
+	let Ok(values) = serde_json::from_str::<Vec<String>>(raw) else {
+		return ParsedScope {
+			invalid: true,
+			..ParsedScope::default()
+		};
+	};
+	let mut parsed = ParsedScope::default();
+	for value in values {
+		match Uuid::parse_str(value.trim()) {
+			Ok(value) => {
+				parsed.values.insert(value.to_string());
+			}
+			Err(_) => parsed.invalid = true,
+		}
+	}
+	parsed
+}
+
+pub fn scope_values_from_raw(
+	raw: Option<&str>,
+) -> std::result::Result<Vec<String>, String> {
+	let parsed = parse_scope_values(raw);
+	if parsed.invalid {
+		return Err("scope contains non-UUID values".to_string());
+	}
+	let mut values = parsed.values.into_iter().collect::<Vec<_>>();
 	values.sort();
-	values
+	Ok(values)
 }
 
 fn normalize_values(values: &[String]) -> HashSet<String> {
@@ -399,12 +416,17 @@ fn normalize_values(values: &[String]) -> HashSet<String> {
 /// scope for the dimension AND the case carries a value for it that does not
 /// match. An unset user scope means "allow all"; a case with no value for the
 /// dimension is always allowed. Applied uniformly to sender/product/study.
-fn scope_allows(assigned: &HashSet<String>, available: &[String]) -> bool {
-	if assigned.is_empty() || available.is_empty() {
+fn scope_allows(assigned: &ParsedScope, available: &[String]) -> bool {
+	if assigned.invalid {
+		return false;
+	}
+	if assigned.values.is_empty() || available.is_empty() {
 		return true;
 	}
 	let available = normalize_values(available);
-	available.iter().any(|value| assigned.contains(value))
+	available
+		.iter()
+		.any(|value| assigned.values.contains(value))
 }
 
 async fn load_sender_options_for_org(
@@ -456,11 +478,27 @@ pub async fn routing_profile_for_user(
 	let built_in_role_id = canonical_role(ctx.role());
 	let user: lib_core::model::user::User =
 		UserBmc::get(ctx, mm, ctx.user_id()).await?;
+	let sender_scope = parse_scope_values(user.access_sender_ids.as_deref());
+	let product_scope = parse_scope_values(user.access_product_ids.as_deref());
+	let study_scope = parse_scope_values(user.access_study_ids.as_deref());
+	if !ctx.is_sponsor_admin()
+		&& [
+			sender_scope.invalid,
+			product_scope.invalid,
+			study_scope.invalid,
+		]
+		.into_iter()
+		.any(|invalid| invalid)
+	{
+		return Err(Error::Model(lib_core::model::Error::Store(
+			"invalid user access scope".to_string(),
+		)));
+	}
 	let assigned_sender_ids =
-		scope_values_from_raw(user.access_sender_ids.as_deref());
+		sender_scope.values.iter().cloned().collect::<Vec<_>>();
 	let assigned_product_ids =
-		scope_values_from_raw(user.access_product_ids.as_deref());
-	let assigned_study_ids = scope_values_from_raw(user.access_study_ids.as_deref());
+		product_scope.values.iter().cloned().collect::<Vec<_>>();
+	let assigned_study_ids = study_scope.values.iter().cloned().collect::<Vec<_>>();
 	let active_sender_identifier = user
 		.active_sender_identifier
 		.as_deref()
@@ -476,16 +514,17 @@ pub async fn routing_profile_for_user(
 
 	let available_senders = if ctx.is_sponsor_admin() {
 		all_senders
+	} else if sender_scope.values.is_empty() {
+		all_senders
 	} else {
 		all_senders
 			.into_iter()
 			.filter(|row| {
-				assigned_sender_ids.is_empty()
-					|| assigned_sender_ids.iter().any(|assigned| {
-						row.scope_identifiers
-							.iter()
-							.any(|scope| assigned.eq_ignore_ascii_case(scope))
-					})
+				sender_scope.values.iter().any(|assigned| {
+					row.scope_identifiers
+						.iter()
+						.any(|scope| assigned.eq_ignore_ascii_case(scope))
+				})
 			})
 			.collect()
 	};
@@ -769,6 +808,28 @@ pub async fn workflow_actionability_for_case(
 		can_act_on_workflow: true,
 		workflow_block_reason: None,
 	})
+}
+
+#[cfg(test)]
+mod scope_tests {
+	use super::*;
+
+	const SENDER_ID: &str = "11111111-1111-4111-8111-111111111111";
+
+	#[test]
+	fn empty_scope_allows_all() {
+		let scope = parse_scope_values(None);
+		assert!(!scope.invalid);
+		assert!(scope_allows(&scope, &[SENDER_ID.to_string()]));
+	}
+
+	#[test]
+	fn invalid_scope_does_not_become_unrestricted() {
+		let scope = parse_scope_values(Some("[\"Demo CRO Organization\"]"));
+		assert!(scope.invalid);
+		assert!(!scope_allows(&scope, &[SENDER_ID.to_string()]));
+		assert!(scope_values_from_raw(Some("[\"Demo CRO Organization\"]")).is_err());
+	}
 }
 
 pub mod prelude;
