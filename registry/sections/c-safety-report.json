@@ -898,7 +898,7 @@
     },
     "frontend": {
       "status": "mapped",
-      "section": "safetyReportIdentification",
+      "section": "senderInformation",
       "field": "senderType",
       "file": "../frontend/E2BR3-frontend/components/case-form/sections/SectionC3.tsx",
       "evidence": "SenderFields binds fieldNumber C.3.1 to senderInformation.senderType."
@@ -924,8 +924,8 @@
     },
     "frontend": {
       "status": "mapped",
-      "section": "safetyReportIdentification",
-      "field": "senderHealthProfessionalTypeKr1",
+      "section": "senderInformation",
+      "field": "healthProfessionalTypeKr1",
       "file": "../frontend/E2BR3-frontend/components/case-form/sections/SectionC3.tsx",
       "evidence": "SenderFields binds fieldNumber C.3.1.KR.1 to senderInformation.healthProfessionalTypeKr1."
     },
@@ -950,8 +950,8 @@
     },
     "frontend": {
       "status": "mapped",
-      "section": "safetyReportIdentification",
-      "field": "senderOrganization",
+      "section": "senderInformation",
+      "field": "organizationName",
       "file": "../frontend/E2BR3-frontend/components/case-form/sections/SectionC3.tsx",
       "evidence": "SenderFields binds fieldNumber C.3.2 to senderInformation.organizationName."
     },
@@ -976,8 +976,8 @@
     },
     "frontend": {
       "status": "mapped",
-      "section": "safetyReportIdentification",
-      "field": "senderDepartment",
+      "section": "senderInformation",
+      "field": "department",
       "file": "../frontend/E2BR3-frontend/components/case-form/sections/SectionC3.tsx",
       "evidence": "SenderFields binds fieldNumber C.3.3.1 to senderInformation.department."
     },
@@ -1002,8 +1002,8 @@
     },
     "frontend": {
       "status": "mapped",
-      "section": "safetyReportIdentification",
-      "field": "senderPersonTitle",
+      "section": "senderInformation",
+      "field": "personTitle",
       "file": "../frontend/E2BR3-frontend/components/case-form/sections/SectionC3.tsx",
       "evidence": "SenderFields binds fieldNumber C.3.3.2 to senderInformation.personTitle."
     },
@@ -1028,8 +1028,8 @@
     },
     "frontend": {
       "status": "mapped",
-      "section": "safetyReportIdentification",
-      "field": "senderPersonGivenName",
+      "section": "senderInformation",
+      "field": "personGivenName",
       "file": "../frontend/E2BR3-frontend/components/case-form/sections/SectionC3.tsx",
       "evidence": "SenderFields binds fieldNumber C.3.3.3 to senderInformation.personGivenName."
     },
@@ -1054,8 +1054,8 @@
     },
     "frontend": {
       "status": "mapped",
-      "section": "safetyReportIdentification",
-      "field": "senderPersonMiddleName",
+      "section": "senderInformation",
+      "field": "personMiddleName",
       "file": "../frontend/E2BR3-frontend/components/case-form/sections/SectionC3.tsx",
       "evidence": "SenderFields binds fieldNumber C.3.3.4 to senderInformation.personMiddleName."
     },
@@ -1080,8 +1080,8 @@
     },
     "frontend": {
       "status": "mapped",
-      "section": "safetyReportIdentification",
-      "field": "senderPersonFamilyName",
+      "section": "senderInformation",
+      "field": "personFamilyName",
       "file": "../frontend/E2BR3-frontend/components/case-form/sections/SectionC3.tsx",
       "evidence": "SenderFields binds fieldNumber C.3.3.5 to senderInformation.personFamilyName."
     },
@@ -1106,8 +1106,8 @@
     },
     "frontend": {
       "status": "mapped",
-      "section": "safetyReportIdentification",
-      "field": "senderStreetAddress",
+      "section": "senderInformation",
+      "field": "streetAddress",
       "file": "../frontend/E2BR3-frontend/components/case-form/sections/SectionC3.tsx",
       "evidence": "SenderFields binds fieldNumber C.3.4.1 to senderInformation.streetAddress."
     },
@@ -1132,8 +1132,8 @@
     },
     "frontend": {
       "status": "mapped",
-      "section": "safetyReportIdentification",
-      "field": "senderCity",
+      "section": "senderInformation",
+      "field": "city",
       "file": "../frontend/E2BR3-frontend/components/case-form/sections/SectionC3.tsx",
       "evidence": "SenderFields binds fieldNumber C.3.4.2 to senderInformation.city."
     },
@@ -1158,8 +1158,8 @@
     },
     "frontend": {
       "status": "mapped",
-      "section": "safetyReportIdentification",
-      "field": "senderState",
+      "section": "senderInformation",
+      "field": "state",
       "file": "../frontend/E2BR3-frontend/components/case-form/sections/SectionC3.tsx",
       "evidence": "SenderFields binds fieldNumber C.3.4.3 to senderInformation.state."
     },
@@ -1184,8 +1184,8 @@
     },
     "frontend": {
       "status": "mapped",
-      "section": "safetyReportIdentification",
-      "field": "senderPostcode",
+      "section": "senderInformation",
+      "field": "postcode",
       "file": "../frontend/E2BR3-frontend/components/case-form/sections/SectionC3.tsx",
       "evidence": "SenderFields binds fieldNumber C.3.4.4 to senderInformation.postcode."
     },
@@ -1210,8 +1210,8 @@
     },
     "frontend": {
       "status": "mapped",
-      "section": "safetyReportIdentification",
-      "field": "senderCountryCode",
+      "section": "senderInformation",
+      "field": "countryCode",
       "file": "../frontend/E2BR3-frontend/components/case-form/sections/SectionC3.tsx",
       "evidence": "SenderFields binds fieldNumber C.3.4.5 to senderInformation.countryCode."
     },
@@ -1236,8 +1236,8 @@
     },
     "frontend": {
       "status": "mapped",
-      "section": "safetyReportIdentification",
-      "field": "senderTelephone",
+      "section": "senderInformation",
+      "field": "telephone",
       "file": "../frontend/E2BR3-frontend/components/case-form/sections/SectionC3.tsx",
       "evidence": "SenderFields binds fieldNumber C.3.4.6 to senderInformation.telephone."
     },
@@ -1262,8 +1262,8 @@
     },
     "frontend": {
       "status": "mapped",
-      "section": "safetyReportIdentification",
-      "field": "senderFax",
+      "section": "senderInformation",
+      "field": "fax",
       "file": "../frontend/E2BR3-frontend/components/case-form/sections/SectionC3.tsx",
       "evidence": "SenderFields binds fieldNumber C.3.4.7 to senderInformation.fax."
     },
@@ -1288,8 +1288,8 @@
     },
     "frontend": {
       "status": "mapped",
-      "section": "safetyReportIdentification",
-      "field": "senderEmail",
+      "section": "senderInformation",
+      "field": "email",
       "file": "../frontend/E2BR3-frontend/components/case-form/sections/SectionC3.tsx",
       "evidence": "SenderFields binds fieldNumber C.3.4.8 to senderInformation.email."
     },
@@ -1730,8 +1730,8 @@
     },
     "frontend": {
       "status": "mapped",
-      "section": "safetyReportIdentification",
-      "field": "receiverOrganization",
+      "section": "receiverInformation",
+      "field": "organizationName",
       "file": "../frontend/E2BR3-frontend/lib/case-save/contracts.ts",
       "evidence": "ReceiverFields registers receiverInformation.organizationName."
     },
@@ -1757,7 +1757,7 @@
     },
     "frontend": {
       "status": "mapped",
-      "section": "safetyReportIdentification",
+      "section": "receiverInformation",
       "field": "receiverType",
       "file": "../frontend/E2BR3-frontend/lib/case-save/contracts.ts",
       "evidence": "ReceiverFields registers receiverInformation.receiverType."
@@ -1784,8 +1784,8 @@
     },
     "frontend": {
       "status": "mapped",
-      "section": "safetyReportIdentification",
-      "field": "receiverDepartment",
+      "section": "receiverInformation",
+      "field": "department",
       "file": "../frontend/E2BR3-frontend/lib/case-save/contracts.ts",
       "evidence": "ReceiverFields registers receiverInformation.department."
     },
@@ -1811,8 +1811,8 @@
     },
     "frontend": {
       "status": "mapped",
-      "section": "safetyReportIdentification",
-      "field": "receiverStreet",
+      "section": "receiverInformation",
+      "field": "streetAddress",
       "file": "../frontend/E2BR3-frontend/lib/case-save/contracts.ts",
       "evidence": "ReceiverFields registers receiverInformation.streetAddress."
     },
@@ -1838,8 +1838,8 @@
     },
     "frontend": {
       "status": "mapped",
-      "section": "safetyReportIdentification",
-      "field": "receiverCity",
+      "section": "receiverInformation",
+      "field": "city",
       "file": "../frontend/E2BR3-frontend/lib/case-save/contracts.ts",
       "evidence": "ReceiverFields registers receiverInformation.city."
     },
@@ -1865,8 +1865,8 @@
     },
     "frontend": {
       "status": "mapped",
-      "section": "safetyReportIdentification",
-      "field": "receiverState",
+      "section": "receiverInformation",
+      "field": "stateProvince",
       "file": "../frontend/E2BR3-frontend/lib/case-save/contracts.ts",
       "evidence": "ReceiverFields registers receiverInformation.stateProvince."
     },
@@ -1892,8 +1892,8 @@
     },
     "frontend": {
       "status": "mapped",
-      "section": "safetyReportIdentification",
-      "field": "receiverPostcode",
+      "section": "receiverInformation",
+      "field": "postcode",
       "file": "../frontend/E2BR3-frontend/lib/case-save/contracts.ts",
       "evidence": "ReceiverFields registers receiverInformation.postcode."
     },
@@ -1919,8 +1919,8 @@
     },
     "frontend": {
       "status": "mapped",
-      "section": "safetyReportIdentification",
-      "field": "receiverCountry",
+      "section": "receiverInformation",
+      "field": "countryCode",
       "file": "../frontend/E2BR3-frontend/lib/case-save/contracts.ts",
       "evidence": "ReceiverFields registers receiverInformation.countryCode."
     },
@@ -1946,8 +1946,8 @@
     },
     "frontend": {
       "status": "mapped",
-      "section": "safetyReportIdentification",
-      "field": "receiverTelephone",
+      "section": "receiverInformation",
+      "field": "telephone",
       "file": "../frontend/E2BR3-frontend/lib/case-save/contracts.ts",
       "evidence": "ReceiverFields registers receiverInformation.telephone."
     },
@@ -1973,8 +1973,8 @@
     },
     "frontend": {
       "status": "mapped",
-      "section": "safetyReportIdentification",
-      "field": "receiverFax",
+      "section": "receiverInformation",
+      "field": "fax",
       "file": "../frontend/E2BR3-frontend/lib/case-save/contracts.ts",
       "evidence": "ReceiverFields registers receiverInformation.fax."
     },
@@ -2000,8 +2000,8 @@
     },
     "frontend": {
       "status": "mapped",
-      "section": "safetyReportIdentification",
-      "field": "receiverEmail",
+      "section": "receiverInformation",
+      "field": "email",
       "file": "../frontend/E2BR3-frontend/lib/case-save/contracts.ts",
       "evidence": "ReceiverFields registers receiverInformation.email."
     },
@@ -2469,8 +2469,20 @@
     "editor_page": "RP",
     "editor_status": "complete",
     "local_only": true,
-    "backend": {"status": "mapped", "model": "PrimarySource", "field": "reporter_middle_name_null_flavor", "file": "crates/libs/lib-core/src/model/safety_report.rs", "evidence": "PrimarySource.reporter_middle_name_null_flavor stores the C.2.r.1.3 nullFlavor."},
-    "frontend": {"status": "mapped", "section": "primarySources", "field": "reporterMiddleNameNullFlavor", "file": "../frontend/E2BR3-frontend/app/(protected)/[authority]/case/[id]/detail/RP/components/ReporterEditorPanel.tsx", "evidence": "ReporterEditorPanel binds primarySources[index].reporterMiddleNameNullFlavor."},
+    "backend": {
+      "status": "mapped",
+      "model": "PrimarySource",
+      "field": "reporter_middle_name_null_flavor",
+      "file": "crates/libs/lib-core/src/model/safety_report.rs",
+      "evidence": "PrimarySource.reporter_middle_name_null_flavor stores the C.2.r.1.3 nullFlavor."
+    },
+    "frontend": {
+      "status": "mapped",
+      "section": "primarySources",
+      "field": "reporterMiddleNameNullFlavor",
+      "file": "../frontend/E2BR3-frontend/app/(protected)/[authority]/case/[id]/detail/RP/components/ReporterEditorPanel.tsx",
+      "evidence": "ReporterEditorPanel binds primarySources[index].reporterMiddleNameNullFlavor."
+    },
     "action": "",
     "notes": "Dedicated local persistence companion for official E2B element C.2.r.1.3."
   },
@@ -2484,8 +2496,20 @@
     "editor_page": "RP",
     "editor_status": "complete",
     "local_only": true,
-    "backend": {"status": "mapped", "model": "PrimarySource", "field": "reporter_family_name_null_flavor", "file": "crates/libs/lib-core/src/model/safety_report.rs", "evidence": "PrimarySource.reporter_family_name_null_flavor stores the C.2.r.1.4 nullFlavor."},
-    "frontend": {"status": "mapped", "section": "primarySources", "field": "reporterFamilyNameNullFlavor", "file": "../frontend/E2BR3-frontend/app/(protected)/[authority]/case/[id]/detail/RP/components/ReporterEditorPanel.tsx", "evidence": "ReporterEditorPanel binds primarySources[index].reporterFamilyNameNullFlavor."},
+    "backend": {
+      "status": "mapped",
+      "model": "PrimarySource",
+      "field": "reporter_family_name_null_flavor",
+      "file": "crates/libs/lib-core/src/model/safety_report.rs",
+      "evidence": "PrimarySource.reporter_family_name_null_flavor stores the C.2.r.1.4 nullFlavor."
+    },
+    "frontend": {
+      "status": "mapped",
+      "section": "primarySources",
+      "field": "reporterFamilyNameNullFlavor",
+      "file": "../frontend/E2BR3-frontend/app/(protected)/[authority]/case/[id]/detail/RP/components/ReporterEditorPanel.tsx",
+      "evidence": "ReporterEditorPanel binds primarySources[index].reporterFamilyNameNullFlavor."
+    },
     "action": "",
     "notes": "Dedicated local persistence companion for official E2B element C.2.r.1.4."
   },
@@ -2499,8 +2523,20 @@
     "editor_page": "RP",
     "editor_status": "complete",
     "local_only": true,
-    "backend": {"status": "mapped", "model": "PrimarySource", "field": "organization_null_flavor", "file": "crates/libs/lib-core/src/model/safety_report.rs", "evidence": "PrimarySource.organization_null_flavor stores the C.2.r.2.1 nullFlavor."},
-    "frontend": {"status": "mapped", "section": "primarySources", "field": "reporterOrganizationNullFlavor", "file": "../frontend/E2BR3-frontend/app/(protected)/[authority]/case/[id]/detail/RP/components/ReporterEditorPanel.tsx", "evidence": "ReporterEditorPanel binds primarySources[index].reporterOrganizationNullFlavor."},
+    "backend": {
+      "status": "mapped",
+      "model": "PrimarySource",
+      "field": "organization_null_flavor",
+      "file": "crates/libs/lib-core/src/model/safety_report.rs",
+      "evidence": "PrimarySource.organization_null_flavor stores the C.2.r.2.1 nullFlavor."
+    },
+    "frontend": {
+      "status": "mapped",
+      "section": "primarySources",
+      "field": "reporterOrganizationNullFlavor",
+      "file": "../frontend/E2BR3-frontend/app/(protected)/[authority]/case/[id]/detail/RP/components/ReporterEditorPanel.tsx",
+      "evidence": "ReporterEditorPanel binds primarySources[index].reporterOrganizationNullFlavor."
+    },
     "action": "",
     "notes": "Dedicated local persistence companion for official E2B element C.2.r.2.1."
   },
@@ -2514,8 +2550,20 @@
     "editor_page": "RP",
     "editor_status": "complete",
     "local_only": true,
-    "backend": {"status": "mapped", "model": "PrimarySource", "field": "department_null_flavor", "file": "crates/libs/lib-core/src/model/safety_report.rs", "evidence": "PrimarySource.department_null_flavor stores the C.2.r.2.2 nullFlavor."},
-    "frontend": {"status": "mapped", "section": "primarySources", "field": "reporterDepartmentNullFlavor", "file": "../frontend/E2BR3-frontend/app/(protected)/[authority]/case/[id]/detail/RP/components/ReporterEditorPanel.tsx", "evidence": "ReporterEditorPanel binds primarySources[index].reporterDepartmentNullFlavor."},
+    "backend": {
+      "status": "mapped",
+      "model": "PrimarySource",
+      "field": "department_null_flavor",
+      "file": "crates/libs/lib-core/src/model/safety_report.rs",
+      "evidence": "PrimarySource.department_null_flavor stores the C.2.r.2.2 nullFlavor."
+    },
+    "frontend": {
+      "status": "mapped",
+      "section": "primarySources",
+      "field": "reporterDepartmentNullFlavor",
+      "file": "../frontend/E2BR3-frontend/app/(protected)/[authority]/case/[id]/detail/RP/components/ReporterEditorPanel.tsx",
+      "evidence": "ReporterEditorPanel binds primarySources[index].reporterDepartmentNullFlavor."
+    },
     "action": "",
     "notes": "Dedicated local persistence companion for official E2B element C.2.r.2.2."
   },
@@ -2529,8 +2577,20 @@
     "editor_page": "RP",
     "editor_status": "complete",
     "local_only": true,
-    "backend": {"status": "mapped", "model": "PrimarySource", "field": "street_null_flavor", "file": "crates/libs/lib-core/src/model/safety_report.rs", "evidence": "PrimarySource.street_null_flavor stores the C.2.r.2.3 nullFlavor."},
-    "frontend": {"status": "mapped", "section": "primarySources", "field": "reporterStreetNullFlavor", "file": "../frontend/E2BR3-frontend/app/(protected)/[authority]/case/[id]/detail/RP/components/ReporterEditorPanel.tsx", "evidence": "ReporterEditorPanel binds primarySources[index].reporterStreetNullFlavor."},
+    "backend": {
+      "status": "mapped",
+      "model": "PrimarySource",
+      "field": "street_null_flavor",
+      "file": "crates/libs/lib-core/src/model/safety_report.rs",
+      "evidence": "PrimarySource.street_null_flavor stores the C.2.r.2.3 nullFlavor."
+    },
+    "frontend": {
+      "status": "mapped",
+      "section": "primarySources",
+      "field": "reporterStreetNullFlavor",
+      "file": "../frontend/E2BR3-frontend/app/(protected)/[authority]/case/[id]/detail/RP/components/ReporterEditorPanel.tsx",
+      "evidence": "ReporterEditorPanel binds primarySources[index].reporterStreetNullFlavor."
+    },
     "action": "",
     "notes": "Dedicated local persistence companion for official E2B element C.2.r.2.3."
   },
@@ -2544,8 +2604,20 @@
     "editor_page": "RP",
     "editor_status": "complete",
     "local_only": true,
-    "backend": {"status": "mapped", "model": "PrimarySource", "field": "city_null_flavor", "file": "crates/libs/lib-core/src/model/safety_report.rs", "evidence": "PrimarySource.city_null_flavor stores the C.2.r.2.4 nullFlavor."},
-    "frontend": {"status": "mapped", "section": "primarySources", "field": "reporterCityNullFlavor", "file": "../frontend/E2BR3-frontend/app/(protected)/[authority]/case/[id]/detail/RP/components/ReporterEditorPanel.tsx", "evidence": "ReporterEditorPanel binds primarySources[index].reporterCityNullFlavor."},
+    "backend": {
+      "status": "mapped",
+      "model": "PrimarySource",
+      "field": "city_null_flavor",
+      "file": "crates/libs/lib-core/src/model/safety_report.rs",
+      "evidence": "PrimarySource.city_null_flavor stores the C.2.r.2.4 nullFlavor."
+    },
+    "frontend": {
+      "status": "mapped",
+      "section": "primarySources",
+      "field": "reporterCityNullFlavor",
+      "file": "../frontend/E2BR3-frontend/app/(protected)/[authority]/case/[id]/detail/RP/components/ReporterEditorPanel.tsx",
+      "evidence": "ReporterEditorPanel binds primarySources[index].reporterCityNullFlavor."
+    },
     "action": "",
     "notes": "Dedicated local persistence companion for official E2B element C.2.r.2.4."
   },
@@ -2559,8 +2631,20 @@
     "editor_page": "RP",
     "editor_status": "complete",
     "local_only": true,
-    "backend": {"status": "mapped", "model": "PrimarySource", "field": "state_null_flavor", "file": "crates/libs/lib-core/src/model/safety_report.rs", "evidence": "PrimarySource.state_null_flavor stores the C.2.r.2.5 nullFlavor."},
-    "frontend": {"status": "mapped", "section": "primarySources", "field": "reporterStateNullFlavor", "file": "../frontend/E2BR3-frontend/app/(protected)/[authority]/case/[id]/detail/RP/components/ReporterEditorPanel.tsx", "evidence": "ReporterEditorPanel binds primarySources[index].reporterStateNullFlavor."},
+    "backend": {
+      "status": "mapped",
+      "model": "PrimarySource",
+      "field": "state_null_flavor",
+      "file": "crates/libs/lib-core/src/model/safety_report.rs",
+      "evidence": "PrimarySource.state_null_flavor stores the C.2.r.2.5 nullFlavor."
+    },
+    "frontend": {
+      "status": "mapped",
+      "section": "primarySources",
+      "field": "reporterStateNullFlavor",
+      "file": "../frontend/E2BR3-frontend/app/(protected)/[authority]/case/[id]/detail/RP/components/ReporterEditorPanel.tsx",
+      "evidence": "ReporterEditorPanel binds primarySources[index].reporterStateNullFlavor."
+    },
     "action": "",
     "notes": "Dedicated local persistence companion for official E2B element C.2.r.2.5."
   },
@@ -2574,8 +2658,20 @@
     "editor_page": "RP",
     "editor_status": "complete",
     "local_only": true,
-    "backend": {"status": "mapped", "model": "PrimarySource", "field": "postcode_null_flavor", "file": "crates/libs/lib-core/src/model/safety_report.rs", "evidence": "PrimarySource.postcode_null_flavor stores the C.2.r.2.6 nullFlavor."},
-    "frontend": {"status": "mapped", "section": "primarySources", "field": "reporterPostcodeNullFlavor", "file": "../frontend/E2BR3-frontend/app/(protected)/[authority]/case/[id]/detail/RP/components/ReporterEditorPanel.tsx", "evidence": "ReporterEditorPanel binds primarySources[index].reporterPostcodeNullFlavor."},
+    "backend": {
+      "status": "mapped",
+      "model": "PrimarySource",
+      "field": "postcode_null_flavor",
+      "file": "crates/libs/lib-core/src/model/safety_report.rs",
+      "evidence": "PrimarySource.postcode_null_flavor stores the C.2.r.2.6 nullFlavor."
+    },
+    "frontend": {
+      "status": "mapped",
+      "section": "primarySources",
+      "field": "reporterPostcodeNullFlavor",
+      "file": "../frontend/E2BR3-frontend/app/(protected)/[authority]/case/[id]/detail/RP/components/ReporterEditorPanel.tsx",
+      "evidence": "ReporterEditorPanel binds primarySources[index].reporterPostcodeNullFlavor."
+    },
     "action": "",
     "notes": "Dedicated local persistence companion for official E2B element C.2.r.2.6."
   },
@@ -2589,8 +2685,20 @@
     "editor_page": "RP",
     "editor_status": "complete",
     "local_only": true,
-    "backend": {"status": "mapped", "model": "PrimarySource", "field": "telephone_null_flavor", "file": "crates/libs/lib-core/src/model/safety_report.rs", "evidence": "PrimarySource.telephone_null_flavor stores the C.2.r.2.7 nullFlavor."},
-    "frontend": {"status": "mapped", "section": "primarySources", "field": "reporterTelephoneNullFlavor", "file": "../frontend/E2BR3-frontend/app/(protected)/[authority]/case/[id]/detail/RP/components/ReporterEditorPanel.tsx", "evidence": "ReporterEditorPanel binds primarySources[index].reporterTelephoneNullFlavor."},
+    "backend": {
+      "status": "mapped",
+      "model": "PrimarySource",
+      "field": "telephone_null_flavor",
+      "file": "crates/libs/lib-core/src/model/safety_report.rs",
+      "evidence": "PrimarySource.telephone_null_flavor stores the C.2.r.2.7 nullFlavor."
+    },
+    "frontend": {
+      "status": "mapped",
+      "section": "primarySources",
+      "field": "reporterTelephoneNullFlavor",
+      "file": "../frontend/E2BR3-frontend/app/(protected)/[authority]/case/[id]/detail/RP/components/ReporterEditorPanel.tsx",
+      "evidence": "ReporterEditorPanel binds primarySources[index].reporterTelephoneNullFlavor."
+    },
     "action": "",
     "notes": "Dedicated local persistence companion for official E2B element C.2.r.2.7."
   }

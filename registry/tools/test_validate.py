@@ -200,9 +200,6 @@ class RegistryValidatorTests(unittest.TestCase):
             "C.3.4.6",
             "C.3.4.7",
             "C.3.4.8",
-            "N.1.5",
-            "N.2.r.2",
-            "N.2.r.3",
             # LR: FDA attachment file-name/mediaType consistency.
             "C.4.r.2",
         }
@@ -1900,7 +1897,7 @@ class DictionaryValidatorTests(unittest.TestCase):
         )
 
         self.assertIn(
-            "cargo test --workspace --exclude lib-core -- --test-threads=1",
+            "scripts/test-isolated-db.sh --workspace --exclude lib-core -- --test-threads=1",
             workflow,
         )
 

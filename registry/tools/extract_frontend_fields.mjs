@@ -19,7 +19,7 @@ function walk(directory) {
 }
 walk(detailRoot);
 
-const roots = "caseSummaryInformation|drugReactionAssessments|drugs|literatureReferences|messageHeader|narrative|patientInformation|primarySources|reactions|safetyReportIdentification|studyInformation|testResults";
+const roots = "case|caseSummaryInformation|documentsHeldBySender|drugReactionAssessments|drugs|linkedReports|literatureReferences|messageHeader|narrative|otherCaseIdentifiers|patientInformation|primarySources|receiverInformation|reactions|safetyReportIdentification|senderInformation|sourceDocuments|studyInformation|testResults";
 const rootPattern = new RegExp(`^(?:${roots})\\.`);
 const inventory = new Map();
 const containerPaths = new Set([
@@ -70,7 +70,14 @@ for (const file of files) {
     if (ts.isJsxExpression(node)) return expressionRaw(node.expression, seen);
     if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) return node.text;
     if (ts.isTemplateExpression(node)) {
-      return node.head.text + node.templateSpans.map((span) => `\${${span.expression.getText(ast)}}${span.literal.text}`).join("");
+      return node.head.text + node.templateSpans.map((span) => {
+        const expression = ts.isIdentifier(span.expression)
+          ? expressionRaw(span.expression, seen)
+          : undefined;
+        return expression !== undefined
+          ? `${expression}${span.literal.text}`
+          : `\${${span.expression.getText(ast)}}${span.literal.text}`;
+      }).join("");
     }
     if (ts.isIdentifier(node) && variables.has(node.text) && !seen.has(node.text)) {
       return expressionRaw(variables.get(node.text), new Set([...seen, node.text]));
@@ -78,9 +85,9 @@ for (const file of files) {
     return undefined;
   }
   function visit(node) {
-    if (ts.isJsxAttribute(node) && ["name", "fieldName", "valueName", "realValueName", "codeName", "productNameName"].includes(node.name.text)) {
+    if (ts.isJsxAttribute(node) && ["name", "fieldName", "valueName", "realValueName", "codeName", "productNameName", "nullFlavorName"].includes(node.name.text)) {
       const raw = expressionRaw(node.initializer);
-      if (raw) add(raw, file);
+      if (raw && !raw.includes("${criterion.name}NullFlavor")) add(raw, file);
     }
     if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === "register") {
       const raw = expressionRaw(node.arguments[0]);
@@ -90,7 +97,20 @@ for (const file of files) {
   }
   visit(ast);
 
-  for (const match of source.matchAll(new RegExp(`\\bname:\\s*[\"']((?:${roots})\\.[^\"']+)[\"']`, "g"))) add(match[1], file);
+  const pathPrefix = source.match(/const\s+path\s*=\s*\([^)]*\)\s*=>\s*`([^`]+)`/)?.[1]
+    ?.replace(/\.\$\{[^}]+\}$/, "");
+  if (pathPrefix) {
+    for (const match of source.matchAll(/\bpath\([^,]+,\s*["']([A-Za-z][A-Za-z0-9_]*)["']\)/g)) {
+      add(`${pathPrefix}.${match[1]}`, file);
+    }
+  }
+
+  for (const match of source.matchAll(new RegExp(`\\bname:\\s*[\"']((?:${roots})\\.[^\"']+)[\"']`, "g"))) {
+    if (!match[1].startsWith("messageHeader.")) add(match[1], file);
+  }
+  for (const match of source.matchAll(/elementNullFlavor\([^,]+,\s*["']([A-Za-z][A-Za-z0-9]*NullFlavor)["']/g)) {
+    add(`primarySources.${match[1]}`, file);
+  }
   for (const match of source.matchAll(/parentPastDrugPath\([^,]+,\s*["']([A-Za-z][A-Za-z0-9]+)["']\)/g)) {
     if (match[1] !== "id") add(`patientInformation.parentInformation.pastDrugHistory.${match[1]}`, file);
   }

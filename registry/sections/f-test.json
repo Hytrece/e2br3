@@ -17,7 +17,7 @@
     "frontend": {
       "status": "mapped",
       "section": "testResults",
-      "field": "testDate",
+      "field": "testDate / testDateNullFlavor",
       "file": "../frontend/E2BR3-frontend/__tests__/case-save/tests.coordinator.test.ts",
       "evidence": "Frontend tests coordinator asserts testResults row testDate readback."
     },
@@ -85,14 +85,14 @@
     "backend": {
       "status": "mapped",
       "model": "TestResult",
-      "field": "test_result_value",
+      "field": "test_result_value / test_result_qualifier",
       "file": "crates/libs/lib-core/src/model/test_result.rs",
       "evidence": "TestResult.test_result_value is annotated as F.r.3.2."
     },
     "frontend": {
       "status": "mapped",
       "section": "testResults",
-      "field": "testResult",
+      "field": "testResult / testResultQualifier",
       "file": "../frontend/E2BR3-frontend/lib/validation/backendPathAliases.ts",
       "evidence": "Frontend backend path aliases map testResultValue to testResult."
     },

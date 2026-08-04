@@ -96,7 +96,7 @@
     "frontend": {
       "status": "mapped",
       "section": "reactions",
-      "field": "reactionStartDate",
+      "field": "reactionStartDate / reactionStartDateNullFlavor",
       "file": "../frontend/E2BR3-frontend/lib/api/endpoints/cases/core/detail.reactions.ts",
       "evidence": "Frontend input inventory extracts reactions.reactionStartDate from the case-form section source."
     },
@@ -489,7 +489,7 @@
     "frontend": {
       "status": "mapped",
       "section": "reactions",
-      "field": "reactionEndDate",
+      "field": "reactionEndDate / reactionEndDateNullFlavor",
       "file": "../frontend/E2BR3-frontend/components/case-form/sections/SectionE.tsx",
       "evidence": "SectionE binds fieldNumber E.i.5 to reactions[index].reactionEndDate."
     },

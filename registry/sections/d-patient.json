@@ -17,7 +17,7 @@
     "frontend": {
       "status": "mapped",
       "section": "patientInformation",
-      "field": "patientInitials",
+      "field": "patientInitials / patientInitialsNullFlavor",
       "file": "../frontend/E2BR3-frontend/__tests__/case-save/pathOwnership.test.ts",
       "evidence": "Frontend path ownership tests route patientInformation.patientInitials to patient-core."
     },
@@ -88,7 +88,7 @@
     "frontend": {
       "status": "mapped",
       "section": "patientInformation",
-      "field": "patientBirthDate",
+      "field": "patientBirthDate / patientBirthDateNullFlavor",
       "file": "../frontend/E2BR3-frontend/__tests__/case-save/patientHistory.coordinator.test.ts",
       "evidence": "Frontend input inventory extracts patientInformation.patientBirthDate from the case-form section source."
     },
@@ -288,7 +288,7 @@
     "frontend": {
       "status": "mapped",
       "section": "patientInformation",
-      "field": "patientSex",
+      "field": "patientSex / patientSexNullFlavor",
       "file": "../frontend/E2BR3-frontend/components/case-form/CaseFormWizardNew.tsx",
       "evidence": "CaseFormWizardNew reads patientInformation.patientSex for D.5 sex intake."
     },
@@ -313,7 +313,7 @@
     "frontend": {
       "status": "mapped",
       "section": "patientInformation",
-      "field": "lastMenstrualPeriodDate",
+      "field": "lastMenstrualPeriodDate / lastMenstrualPeriodDateNullFlavor",
       "file": "../frontend/E2BR3-frontend/components/case-form/sections/SectionD.tsx",
       "evidence": "SectionD binds fieldNumber D.6 to patientInformation.lastMenstrualPeriodDate."
     },
@@ -438,7 +438,7 @@
     "frontend": {
       "status": "mapped",
       "section": "patientInformation",
-      "field": "medicalHistoryEpisodes.startDate",
+      "field": "medicalHistoryEpisodes.startDate / medicalHistoryEpisodes.startDateNullFlavor",
       "file": "../frontend/E2BR3-frontend/components/case-form/sections/SectionD.tsx",
       "evidence": "SectionD binds fieldNumber D.7.1.r.2 to patientInformation.medicalHistoryEpisodes[index].startDate."
     },
@@ -488,7 +488,7 @@
     "frontend": {
       "status": "mapped",
       "section": "patientInformation",
-      "field": "medicalHistoryEpisodes.endDate",
+      "field": "medicalHistoryEpisodes.endDate / medicalHistoryEpisodes.endDateNullFlavor",
       "file": "../frontend/E2BR3-frontend/components/case-form/sections/SectionD.tsx",
       "evidence": "SectionD binds fieldNumber D.7.1.r.4 to patientInformation.medicalHistoryEpisodes[index].endDate."
     },
@@ -563,7 +563,7 @@
     "frontend": {
       "status": "mapped",
       "section": "patientInformation",
-      "field": "pastDrugHistory.drugName",
+      "field": "pastDrugHistory.drugName / pastDrugHistory.drugNameNullFlavor",
       "file": "../frontend/E2BR3-frontend/components/case-form/sections/SectionDH.tsx",
       "evidence": "Frontend binds fieldNumber D.8.r.1 to patientInformation.pastDrugHistory.drugName."
     },
@@ -738,7 +738,7 @@
     "frontend": {
       "status": "mapped",
       "section": "patientInformation",
-      "field": "pastDrugHistory.startDate",
+      "field": "pastDrugHistory.startDate / pastDrugHistory.startDateNullFlavor",
       "file": "../frontend/E2BR3-frontend/components/case-form/sections/SectionDH.tsx",
       "evidence": "Frontend binds fieldNumber D.8.r.4 to patientInformation.pastDrugHistory.startDate."
     },
@@ -763,7 +763,7 @@
     "frontend": {
       "status": "mapped",
       "section": "patientInformation",
-      "field": "pastDrugHistory.endDate",
+      "field": "pastDrugHistory.endDate / pastDrugHistory.endDateNullFlavor",
       "file": "../frontend/E2BR3-frontend/components/case-form/sections/SectionDH.tsx",
       "evidence": "Frontend binds fieldNumber D.8.r.5 to patientInformation.pastDrugHistory.endDate."
     },
@@ -888,7 +888,7 @@
     "frontend": {
       "status": "mapped",
       "section": "patientInformation",
-      "field": "patientDeath.dateOfDeath",
+      "field": "patientDeath.dateOfDeath / patientDeath.dateOfDeathNullFlavor",
       "file": "../frontend/E2BR3-frontend/components/case-form/sections/SectionD.tsx",
       "evidence": "SectionD binds fieldNumber D.9.1 to patientInformation.patientDeath.dateOfDeath."
     },
@@ -1088,7 +1088,7 @@
     "frontend": {
       "status": "mapped",
       "section": "patientInformation",
-      "field": "parentInformation.parentIdentification",
+      "field": "parentInformation.parentIdentification / parentInformation.parentIdentificationNullFlavor",
       "file": "../frontend/E2BR3-frontend/app/(protected)/[authority]/case/[id]/detail/DM/components/ParentBasicInformationFields.tsx",
       "evidence": "ParentBasicInformationFields binds D.10.1 value and NullFlavor to patientInformation.parentInformation.parentIdentification."
     },
@@ -1113,7 +1113,7 @@
     "frontend": {
       "status": "mapped",
       "section": "patientInformation",
-      "field": "parentInformation.parentBirthDate",
+      "field": "parentInformation.parentBirthDate / parentInformation.parentBirthDateNullFlavor",
       "file": "../frontend/E2BR3-frontend/components/case-form/sections/SectionD.tsx",
       "evidence": "SectionD binds fieldNumber D.10.2.1 to patientInformation.parentInformation.parentBirthDate."
     },
@@ -1188,7 +1188,7 @@
     "frontend": {
       "status": "mapped",
       "section": "patientInformation",
-      "field": "parentInformation.parentLastMenstrualPeriodDate",
+      "field": "parentInformation.parentLastMenstrualPeriodDate / parentInformation.parentLastMenstrualPeriodDateNullFlavor",
       "file": "../frontend/E2BR3-frontend/components/case-form/sections/SectionD.tsx",
       "evidence": "SectionD binds fieldNumber D.10.3 to patientInformation.parentInformation.parentLastMenstrualPeriodDate."
     },
@@ -1263,7 +1263,7 @@
     "frontend": {
       "status": "mapped",
       "section": "patientInformation",
-      "field": "parentInformation.parentSex",
+      "field": "parentInformation.parentSex / parentInformation.parentSexNullFlavor",
       "file": "../frontend/E2BR3-frontend/app/(protected)/[authority]/case/[id]/detail/DM/components/ParentBasicInformationFields.tsx",
       "evidence": "ParentBasicInformationFields binds D.10.6 value and NullFlavor to patientInformation.parentInformation.parentSex."
     },
@@ -1338,7 +1338,7 @@
     "frontend": {
       "status": "mapped",
       "section": "patientInformation",
-      "field": "parentInformation.medicalHistoryEpisodes.startDate",
+      "field": "parentInformation.medicalHistoryEpisodes.startDate / parentInformation.medicalHistoryEpisodes.startDateNullFlavor",
       "file": "../frontend/E2BR3-frontend/components/case-form/sections/SectionD.tsx",
       "evidence": "SectionD binds fieldNumber D.10.7.1.r.2 to patientInformation.parentInformation.medicalHistoryEpisodes[index].startDate."
     },
@@ -1363,7 +1363,7 @@
     "frontend": {
       "status": "mapped",
       "section": "patientInformation",
-      "field": "parentInformation.medicalHistoryEpisodes.continuing",
+      "field": "parentInformation.medicalHistoryEpisodes.continuing / parentInformation.medicalHistoryEpisodes.continuingNullFlavor",
       "file": "../frontend/E2BR3-frontend/components/case-form/sections/SectionD.tsx",
       "evidence": "SectionD binds fieldNumber D.10.7.1.r.3 to patientInformation.parentInformation.medicalHistoryEpisodes[index].continuing."
     },
@@ -1388,7 +1388,7 @@
     "frontend": {
       "status": "mapped",
       "section": "patientInformation",
-      "field": "parentInformation.medicalHistoryEpisodes.endDate",
+      "field": "parentInformation.medicalHistoryEpisodes.endDate / parentInformation.medicalHistoryEpisodes.endDateNullFlavor",
       "file": "../frontend/E2BR3-frontend/components/case-form/sections/SectionD.tsx",
       "evidence": "SectionD binds fieldNumber D.10.7.1.r.4 to patientInformation.parentInformation.medicalHistoryEpisodes[index].endDate."
     },

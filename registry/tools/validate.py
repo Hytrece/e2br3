@@ -100,6 +100,8 @@ ALLOWED_DICTIONARY_ENTRY_FIELDS = {
     "allowed_values",
     "allowed_value_constraint",
     "null_flavors",
+    "null_flavor_condition",
+    "interval_bound_null_flavors",
     "oid",
     "profiles",
     "xpath",
@@ -156,7 +158,6 @@ IGNORED_BACKEND_FIELDS = {
     "case_id",
     "deleted",
     "drug_id",
-    "reaction_id",
     "patient_id",
     "parent_id",
     "death_info_id",
@@ -187,6 +188,7 @@ IGNORED_BACKEND_FIELDS_BY_MODEL = {
         "organization_id",
         "dg_prd_key",
         "status",
+        "status_before_lock",
         "review_receivers_json",
         "workflow_routes_json",
         "workflow_status",
@@ -754,17 +756,33 @@ def validate_registry(
 
             backend = row.get("backend")
             if isinstance(backend, dict) and backend.get("status") == "mapped":
-                key = f"{backend.get('model')}.{backend.get('field')}:{backend.get('mapping_key', '')}"
-                if key in seen_backend:
-                    result.add(f"{row_id}: duplicate backend mapping {key}; first seen in {seen_backend[key]}")
-                seen_backend[key] = row_id
+                mapping_key = backend.get("mapping_key")
+                field_name = backend.get("field")
+                fields = (
+                    field_name.split("/")
+                    if isinstance(field_name, str)
+                    else [field_name]
+                )
+                for field in fields:
+                    base_key = f"{backend.get('model')}.{field.strip()}"
+                    key = f"{base_key}:{mapping_key}" if mapping_key else base_key
+                    if key in seen_backend:
+                        result.add(f"{row_id}: duplicate backend mapping {key}; first seen in {seen_backend[key]}")
+                    seen_backend[key] = row_id
 
             frontend = row.get("frontend")
             if isinstance(frontend, dict) and frontend.get("status") == "mapped":
-                key = f"{frontend.get('section')}.{frontend.get('field')}"
-                if key in seen_frontend:
-                    result.add(f"{row_id}: duplicate frontend mapping {key}; first seen in {seen_frontend[key]}")
-                seen_frontend[key] = row_id
+                field_name = frontend.get("field")
+                fields = (
+                    field_name.split("/")
+                    if isinstance(field_name, str)
+                    else [field_name]
+                )
+                for field in fields:
+                    key = f"{frontend.get('section')}.{field.strip()}"
+                    if key in seen_frontend:
+                        result.add(f"{row_id}: duplicate frontend mapping {key}; first seen in {seen_frontend[key]}")
+                    seen_frontend[key] = row_id
 
     if editor_page_id is not None:
         try:
@@ -867,7 +885,11 @@ def validate_registry(
                 continue
             backend = row.get("backend", {})
             case_backend = case_row.get("backend", {})
-            if backend.get("status") == "mapped" and case_backend.get("status") == "mapped":
+            if (
+                backend.get("status") == "mapped"
+                and case_backend.get("status") == "mapped"
+                and row.get("frontend", {}).get("status") == "mapped"
+            ):
                 expected_transfers_by_section.setdefault(presave_section, set()).add(
                     (
                         f"{backend['model']}.{backend['field']}",

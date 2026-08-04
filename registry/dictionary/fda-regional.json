@@ -136,6 +136,7 @@
       "name": "Patient (Name or Initials) - FDA regional NullFlavor override",
       "section": "D",
       "kind": "element",
+      "conformance": "optional",
       "null_flavors": [
         "MSK",
         "UNK",

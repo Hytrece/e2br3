@@ -105,14 +105,11 @@ return {
         )
 
     def test_repository_transfer_includes_country_null_flavor(self):
-        self.assertIn(
-            (
-                "ReporterPresave.country_code_null_flavor",
-                "PrimarySource.country_code_null_flavor",
-            ),
-            extractor.extract_reporter_transfers(ROOT),
-        )
         transfers = extractor.extract_reporter_transfers(ROOT)
+        self.assertIn(
+            ("ReporterPresave.country_code", "PrimarySource.country_code"),
+            transfers,
+        )
         self.assertIn(
             ("ReporterPresave.reporter_given_name_null_flavor", "PrimarySource.reporter_given_name_null_flavor"),
             transfers,

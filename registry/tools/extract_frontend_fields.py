@@ -40,16 +40,23 @@ DEFAULT_SOURCE_GLOBS = [
 ]
 
 ALLOWED_FIELD_ROOTS = {
+    "case",
     "caseSummaryInformation",
+    "documentsHeldBySender",
     "drugReactionAssessments",
     "drugs",
+    "linkedReports",
     "literatureReferences",
     "messageHeader",
     "narrative",
+    "otherCaseIdentifiers",
     "patientInformation",
     "primarySources",
+    "receiverInformation",
     "reactions",
     "safetyReportIdentification",
+    "senderInformation",
+    "sourceDocuments",
     "studyInformation",
     "testResults",
 }

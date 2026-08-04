@@ -30,7 +30,6 @@
     "section": "N",
     "authority": "ICH",
     "status": "complete",
-    "editor_page": "N",
     "backend": {
       "status": "mapped",
       "model": "MessageHeader",
@@ -55,7 +54,6 @@
     "section": "N",
     "authority": "ICH",
     "status": "complete",
-    "editor_page": "N",
     "backend": {
       "status": "mapped",
       "model": "MessageHeader",
@@ -80,7 +78,6 @@
     "section": "N",
     "authority": "ICH",
     "status": "complete",
-    "editor_page": "N",
     "backend": {
       "status": "mapped",
       "model": "MessageHeader",
@@ -105,7 +102,6 @@
     "section": "N",
     "authority": "ICH",
     "status": "complete",
-    "editor_page": "N",
     "backend": {
       "status": "mapped",
       "model": "MessageHeader",
@@ -130,7 +126,6 @@
     "section": "N",
     "authority": "ICH",
     "status": "complete",
-    "editor_page": "N",
     "backend": {
       "status": "mapped",
       "model": "MessageHeader",
@@ -155,7 +150,6 @@
     "section": "N",
     "authority": "ICH",
     "status": "complete",
-    "editor_page": "N",
     "backend": {
       "status": "mapped",
       "model": "MessageHeader",
@@ -180,7 +174,6 @@
     "section": "N",
     "authority": "ICH",
     "status": "complete",
-    "editor_page": "N",
     "backend": {
       "status": "mapped",
       "model": "MessageHeader",
