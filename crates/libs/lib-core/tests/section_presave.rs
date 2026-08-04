@@ -1677,7 +1677,7 @@ async fn reporter_presave_accepts_field_specific_null_flavors() -> Result<()> {
 			telephone: None,
 			telephone_null_flavor: Some("MSK".into()),
 			country_code: None,
-			qualification: Some("1".into()),
+			qualification: None,
 			qualification_kr1: None,
 			primary_source_regulatory: None,
 			qualification_null_flavor: Some("UNK".into()),
