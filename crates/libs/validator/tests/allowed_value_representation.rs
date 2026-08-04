@@ -317,5 +317,4 @@ fn documented_invalid_representations_are_rejected() {
 		accepted.is_empty(),
 		"invalid representations accepted: {accepted:?}"
 	);
-
 }
