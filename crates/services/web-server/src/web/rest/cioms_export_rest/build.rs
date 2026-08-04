@@ -47,8 +47,7 @@ pub(super) fn build_cioms_pdf_with_options(
 		let template = CIOMS_LANDSCAPE_TEMPLATE;
 		let scale = (width as f32 / template.page_width as f32)
 			.min(height as f32 / template.page_height as f32);
-		let translate_x =
-			(width as f32 - template.page_width as f32 * scale) / 2.0;
+		let translate_x = (width as f32 - template.page_width as f32 * scale) / 2.0;
 		let translate_y =
 			(height as f32 - template.page_height as f32 * scale) / 2.0;
 		canvas.save_state();
