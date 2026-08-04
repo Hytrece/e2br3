@@ -11,6 +11,34 @@ use time::{Date, Month};
 pub const SETTINGS_KEY: &str = "system";
 pub const DEFAULT_TIMEZONE: &str = "Asia/Seoul";
 pub const DEFAULT_NOTATION: bool = false;
+pub const DATA_ORDERING_BASIC: &str = "Basic";
+pub const DATA_ORDERING_PRIMARY: &str = "Primary data will appear first";
+pub const DATA_ORDERING_LATEST: &str = "Latest data will appear first";
+pub const DEFAULT_DATA_ORDERING: &str = DATA_ORDERING_PRIMARY;
+
+/// Resolve stored/UI aliases to the values consumed by runtime and export code.
+/// Invalid or missing values intentionally use the existing primary-order default.
+pub fn normalize_data_ordering(value: Option<&str>) -> String {
+	let compact = value
+		.unwrap_or_default()
+		.chars()
+		.filter(|character| character.is_ascii_alphanumeric())
+		.collect::<String>()
+		.to_ascii_lowercase();
+
+	match compact.as_str() {
+		"basic" | "basicdata" => DATA_ORDERING_BASIC.to_string(),
+		"primary"
+		| "primarydata"
+		| "primarydatafirst"
+		| "primarydatawillappearfirst" => DATA_ORDERING_PRIMARY.to_string(),
+		"latest"
+		| "latestdata"
+		| "latestdatafirst"
+		| "latestdatawillappearfirst" => DATA_ORDERING_LATEST.to_string(),
+		_ => DEFAULT_DATA_ORDERING.to_string(),
+	}
+}
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct ImportDateSettings {
@@ -39,7 +67,7 @@ impl Default for RuntimeSettings {
 			import_dates: ImportDateSettings::default(),
 			apply_sender_info_to_imported_cases: false,
 			orientation: "Landscape".to_string(),
-			data_ordering: "Primary data will appear first".to_string(),
+			data_ordering: DEFAULT_DATA_ORDERING.to_string(),
 		}
 	}
 }
@@ -90,13 +118,9 @@ impl RuntimeSettings {
 				.filter(|value| !value.is_empty())
 				.unwrap_or(&defaults.orientation)
 				.to_string(),
-			data_ordering: value
-				.get("data_ordering")
-				.and_then(Value::as_str)
-				.map(str::trim)
-				.filter(|value| !value.is_empty())
-				.unwrap_or(&defaults.data_ordering)
-				.to_string(),
+			data_ordering: normalize_data_ordering(
+				value.get("data_ordering").and_then(Value::as_str),
+			),
 		}
 	}
 

@@ -464,6 +464,10 @@ async fn payload_to_value(
 		message: "stored timezone must be a valid IANA timezone".to_string(),
 	})?;
 	object.insert("timezone".to_string(), json!(existing_timezone));
+	let existing_data_ordering = runtime_settings::normalize_data_ordering(
+		object.get("data_ordering").and_then(Value::as_str),
+	);
+	object.insert("data_ordering".to_string(), json!(existing_data_ordering));
 
 	if let Some(timezone) = payload.timezone.as_deref() {
 		let timezone =
@@ -503,7 +507,14 @@ async fn payload_to_value(
 	set_if_present(object, "meddra_version", payload.meddra_version.as_ref())?;
 	set_if_present(object, "idf_version", payload.idf_version.as_ref())?;
 	set_if_present(object, "company_logo", payload.company_logo.as_ref())?;
-	set_if_present(object, "data_ordering", payload.data_ordering.as_ref())?;
+	if let Some(data_ordering) = payload.data_ordering.as_deref() {
+		object.insert(
+			"data_ordering".to_string(),
+			json!(runtime_settings::normalize_data_ordering(Some(
+				data_ordering
+			))),
+		);
+	}
 	set_if_present(
 		object,
 		"upload_excel_template_without_element_label",
@@ -737,9 +748,9 @@ fn runtime_settings_payload(
 		orientation: payload
 			.orientation
 			.unwrap_or_else(|| "Landscape".to_string()),
-		data_ordering: payload
-			.data_ordering
-			.unwrap_or_else(|| "Primary data will appear first".to_string()),
+		data_ordering: runtime_settings::normalize_data_ordering(
+			payload.data_ordering.as_deref(),
+		),
 		notation: payload
 			.notation
 			.unwrap_or(runtime_settings::DEFAULT_NOTATION),
