@@ -101,7 +101,7 @@ struct SameSafetyReportRow {
 	case_id: Uuid,
 	safety_report_id: String,
 	version: i32,
-	date_of_most_recent_information: Option<time::Date>,
+	transmission_date: Option<String>,
 }
 
 async fn read_xml_multipart(
@@ -387,6 +387,52 @@ async fn import_single_xml(
 				.case_id
 				.as_deref()
 				.and_then(|value| Uuid::parse_str(value).ok());
+			if result.skipped {
+				let message =
+					"Existing case has the same C.1.1 and C.1.2; import skipped."
+						.to_string();
+				record_import_history(
+					ctx,
+					mm,
+					uploaded_file_name,
+					&filename,
+					case_id,
+					Some(case_number.as_str()),
+					XmlImportHistoryStatus::Skipped,
+					Some(&message),
+				)
+				.await?;
+				return Ok(ImportedCaseSummary {
+					case_number,
+					status: XmlImportHistoryStatus::Skipped,
+					message: Some(message),
+					case_id: None,
+					case_version: None,
+					decision: Some("skip"),
+					source_file_name: Some(filename),
+					matched_case_id: case_id.map(|id| id.to_string()),
+					matched_case_number: result.case_number,
+					matched_case_version: result
+						.case_version
+						.and_then(|version| i32::try_from(version).ok()),
+				});
+			}
+			let potential_duplicate = decision.action
+				== XmlImportDecisionAction::New
+				&& decision.matched_case_id.is_some();
+			let status = if potential_duplicate {
+				XmlImportHistoryStatus::Warning
+			} else {
+				XmlImportHistoryStatus::Success
+			};
+			let message = if potential_duplicate {
+				decision
+					.message
+					.clone()
+					.unwrap_or_else(|| "Imported with duplicate warning".to_string())
+			} else {
+				"Successfully imported".to_string()
+			};
 			record_import_history(
 				ctx,
 				mm,
@@ -394,14 +440,14 @@ async fn import_single_xml(
 				&filename,
 				case_id,
 				result.case_number.as_deref(),
-				XmlImportHistoryStatus::Success,
-				None,
+				status,
+				potential_duplicate.then_some(message.as_str()),
 			)
 			.await?;
 			Ok(ImportedCaseSummary {
 				case_number,
-				status: XmlImportHistoryStatus::Success,
-				message: Some("Successfully imported".to_string()),
+				status,
+				message: Some(message),
 				case_id: result.case_id,
 				case_version: result.case_version,
 				decision: Some(decision_label(decision.action)),
@@ -519,8 +565,7 @@ fn duplicate_key_from_xml(
 	Ok((
 		XmlImportIncomingKey {
 			safety_report_id,
-			date_of_most_recent_information: c_report
-				.date_of_most_recent_information,
+			transmission_date: c_report.transmission_date,
 		},
 		CaseDuplicateKey {
 			report_type: Some(c_report.report_type),
@@ -569,7 +614,7 @@ async fn list_same_safety_report_cases(
 				SELECT c.id AS case_id,
 				       s.safety_report_id,
 				       s.version,
-				       s.date_of_most_recent_information
+				       s.transmission_date
 				  FROM safety_report_identification s
 				  JOIN cases c ON c.id = s.case_id
 				 WHERE s.safety_report_id = $1
@@ -593,7 +638,7 @@ async fn list_same_safety_report_cases(
 			case_id: row.case_id,
 			safety_report_id: row.safety_report_id,
 			version: row.version,
-			date_of_most_recent_information: row.date_of_most_recent_information,
+			transmission_date: row.transmission_date,
 		})
 		.collect())
 }
@@ -617,7 +662,6 @@ async fn decide_import_entry(
 			case_id: item.case_id,
 			safety_report_id: item.safety_report_id,
 			version: item.version,
-			date_of_most_recent_information: item.date_of_most_recent_information,
 		})
 		.collect::<Vec<_>>();
 	Ok(decide_xml_import(
@@ -911,9 +955,12 @@ async fn import_xml_authorized(
 		);
 	}
 
-	let first_success = imported_cases
-		.iter()
-		.find(|item| item.status == XmlImportHistoryStatus::Success);
+	let first_success = imported_cases.iter().find(|item| {
+		matches!(
+			item.status,
+			XmlImportHistoryStatus::Success | XmlImportHistoryStatus::Warning
+		)
+	});
 	let result = XmlImportBatchResult {
 		case_id: first_success.and_then(|item| item.case_id.clone()),
 		case_version: first_success.and_then(|item| item.case_version),

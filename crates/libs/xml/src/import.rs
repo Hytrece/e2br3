@@ -1,5 +1,7 @@
 use crate::error::Error;
-use crate::import_sections::c_safety_report::import_section_c;
+use crate::import_sections::c_safety_report::{
+	import_section_c, parse_c_safety_report,
+};
 use crate::import_sections::d_patient::import_section_d;
 use crate::import_sections::e_reaction::import_section_e;
 use crate::import_sections::f_test_result::import_section_f;
@@ -18,6 +20,7 @@ use lib_core::model::store::set_full_context_dbx;
 use lib_core::model::{self, ModelManager};
 use serde_json::json;
 use sqlx::types::time::Date;
+use sqlx::types::Uuid;
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct CImportSettings {
@@ -69,8 +72,26 @@ async fn import_e2b_xml_in_txn(
 ) -> Result<XmlImportResult> {
 	let parsed = parse_e2b_xml(&req.xml)?;
 	let safety_report_id = shared::extract_safety_report_id(&req.xml)?;
+	let transmission_date =
+		parse_c_safety_report(&req.xml)?.map(|report| report.transmission_date);
 	let header_extract = shared::extract_message_header(&req.xml).ok();
-	let next_version = {
+	// Serialize imports for the same organization/report ID. The lock is held
+	// by the outer import transaction, so the recheck below closes the race
+	// between the REST decision query and case creation.
+	mm.dbx()
+		.execute(
+			sqlx::query(
+				"SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))",
+			)
+			.bind(format!(
+				"e2b-xml-import:{}:{}",
+				ctx.organization_id(),
+				&safety_report_id
+			)),
+		)
+		.await
+		.map_err(model::Error::from)?;
+	let (duplicate_case, next_version) = {
 		let dbx = mm.dbx();
 		dbx.begin_txn().await.map_err(model::Error::from)?;
 		if let Err(err) = set_full_context_dbx(
@@ -84,14 +105,58 @@ async fn import_e2b_xml_in_txn(
 			let _ = dbx.rollback_txn().await;
 			return Err(Error::Model(err));
 		}
-		let sql = "select max(version) from safety_report_identification where safety_report_id = $1";
+		let duplicate_case =
+			if let Some(transmission_date) = transmission_date.as_deref() {
+				dbx.fetch_optional(
+					sqlx::query_as::<_, (Uuid, String, i32)>(
+						r#"
+					SELECT c.id, s.safety_report_id, s.version
+					  FROM safety_report_identification s
+					  JOIN cases c ON c.id = s.case_id
+					 WHERE s.safety_report_id = $1
+					   AND s.transmission_date = $2
+					   AND c.organization_id = $3
+					 ORDER BY s.version DESC
+					 LIMIT 1
+					"#,
+					)
+					.bind(&safety_report_id)
+					.bind(transmission_date)
+					.bind(ctx.organization_id()),
+				)
+				.await
+				.map_err(model::Error::from)?
+			} else {
+				None
+			};
+		let sql = r#"
+			SELECT MAX(s.version)
+			  FROM safety_report_identification s
+			  JOIN cases c ON c.id = s.case_id
+			 WHERE s.safety_report_id = $1
+			   AND c.organization_id = $2
+		"#;
 		let max_version: (Option<i32>,) = dbx
-			.fetch_one(sqlx::query_as(sql).bind(&safety_report_id))
+			.fetch_one(
+				sqlx::query_as(sql)
+					.bind(&safety_report_id)
+					.bind(ctx.organization_id()),
+			)
 			.await
 			.map_err(model::Error::from)?;
 		dbx.commit_txn().await.map_err(model::Error::from)?;
-		max_version.0.unwrap_or(0) + 1
+		(duplicate_case, max_version.0.unwrap_or(0) + 1)
 	};
+	if let Some((case_id, case_number, case_version)) = duplicate_case {
+		return Ok(XmlImportResult {
+			skipped: true,
+			case_id: Some(case_id.to_string()),
+			case_number: Some(case_number),
+			case_version: Some(i64::from(case_version)),
+			xml_key: None,
+			parsed_json_id: None,
+		});
+	}
 
 	let case_id = CaseBmc::create(
 		ctx,
@@ -253,6 +318,7 @@ async fn import_e2b_xml_in_txn(
 	.await?;
 
 	Ok(XmlImportResult {
+		skipped: false,
 		case_id: Some(case_id.to_string()),
 		case_number: Some(safety_report_id),
 		case_version: Some(i64::from(next_version)),

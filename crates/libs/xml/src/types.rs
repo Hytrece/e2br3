@@ -26,6 +26,8 @@ pub struct ParsedE2b {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct XmlImportResult {
+	#[serde(default)]
+	pub skipped: bool,
 	pub case_id: Option<String>,
 	pub case_number: Option<String>,
 	pub case_version: Option<i64>,
