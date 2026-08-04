@@ -614,11 +614,14 @@ pub fn catalog() -> &'static [CatalogPage] {
 	CATALOG
 }
 
+/// Looks up a page by id (used by the query result projection).
+pub fn find_page(page_id: &str) -> Option<&'static CatalogPage> {
+	CATALOG.iter().find(|page| page.id == page_id)
+}
+
 /// Looks up an item by page id and item id (used by the query builder in 2.2).
 pub fn find_item(page_id: &str, item_id: &str) -> Option<&'static CatalogItem> {
-	CATALOG
-		.iter()
-		.find(|page| page.id == page_id)?
+	find_page(page_id)?
 		.items
 		.iter()
 		.find(|item| item.id == item_id)

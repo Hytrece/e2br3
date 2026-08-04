@@ -1118,13 +1118,14 @@ async fn test_case_query_returns_lightweight_list_view_items() -> Result<()> {
 		&cookie,
 		"/api/cases/query",
 		json!({
-			"conditions": [{
-				"page": "CASE",
-				"item": "dg_prd_key",
-				"operator": "equal",
-				"values": [product_id]
-			}],
-			"reportTypeLast": false,
+				"conditions": [{
+					"page": "CASE",
+					"item": "dg_prd_key",
+					"operator": "equal",
+					"values": [product_id]
+				}],
+				"resultPages": ["CASE"],
+				"reportTypeLast": false,
 			"noAckAcceptHistory": false
 		}),
 	)
@@ -1152,6 +1153,31 @@ async fn test_case_query_returns_lightweight_list_view_items() -> Result<()> {
 	);
 	assert_eq!(
 		items[0]["dgPrdKey"].as_str(),
+		Some(product_id.as_str()),
+		"{body:?}"
+	);
+	assert_eq!(
+		body["data"]["elements"][0]["page"].as_str(),
+		Some("CASE"),
+		"{body:?}"
+	);
+	assert_eq!(
+		body["data"]["elements"][0]["item"].as_str(),
+		Some("dg_prd_key"),
+		"{body:?}"
+	);
+	assert_eq!(
+		body["data"]["elements"][0]["label"].as_str(),
+		Some("Product ID"),
+		"{body:?}"
+	);
+	assert_eq!(
+		body["data"]["elementValues"][0]["caseId"].as_str(),
+		Some(case_id),
+		"{body:?}"
+	);
+	assert_eq!(
+		body["data"]["elementValues"][0]["values"]["CASE.dg_prd_key"][0].as_str(),
 		Some(product_id.as_str()),
 		"{body:?}"
 	);
