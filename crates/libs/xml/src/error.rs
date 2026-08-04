@@ -22,6 +22,9 @@ pub enum Error {
 	NotImplemented {
 		feature: &'static str,
 	},
+	InvalidImportRequest {
+		message: String,
+	},
 	#[from]
 	Io(#[serde_as(as = "DisplayFromStr")] std::io::Error),
 	#[from]

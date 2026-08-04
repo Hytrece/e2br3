@@ -25,7 +25,7 @@ pub(crate) async fn import_section_g(
 	xml: &[u8],
 	case_id: Uuid,
 	reaction_map: &ImportIdMap,
-	product_presave_id: Option<Uuid>,
+	product_presave_id: Uuid,
 ) -> Result<ImportIdMap> {
 	let drug_map = import_drugs(ctx, mm, xml, case_id, product_presave_id).await?;
 	import_drug_reaction_assessments(ctx, mm, xml, &drug_map, reaction_map).await?;
@@ -37,7 +37,7 @@ async fn import_drugs(
 	mm: &ModelManager,
 	xml: &[u8],
 	case_id: Uuid,
-	product_presave_id: Option<Uuid>,
+	product_presave_id: Uuid,
 ) -> Result<ImportIdMap> {
 	let imports = super::parse_g_drugs(xml)?;
 	let mut map = ImportIdMap::default();
@@ -58,8 +58,7 @@ async fn import_drugs(
 			DrugInformationForCreate {
 				case_id,
 				source_product_presave_id: (index == 0)
-					.then_some(product_presave_id)
-					.flatten(),
+					.then_some(product_presave_id),
 				sequence_number: drug.sequence_number,
 				drug_characterization: drug.drug_characterization.clone(),
 				medicinal_product: drug.medicinal_product.clone(),
@@ -74,8 +73,7 @@ async fn import_drugs(
 			drug_id,
 			DrugInformationForUpdate {
 				source_product_presave_id: (index == 0)
-					.then_some(product_presave_id)
-					.flatten(),
+					.then_some(product_presave_id),
 				medicinal_product: Some(drug.medicinal_product),
 				drug_characterization: Some(drug.drug_characterization),
 				// FDA.G.k.2.2.1 intentionally unsupported until a verified

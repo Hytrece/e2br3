@@ -31,7 +31,7 @@ use time::format_description::well_known::Rfc3339;
 use uuid::Uuid;
 use xml::import_sections::{
 	c_safety_report::parse_c_safety_report, d_patient::parse_d_patient,
-	e_reaction::parse_e_reactions, g_drug::parse_g_drugs,
+	e_reaction::parse_e_reactions,
 };
 use xml::validation::validate_e2b_xml;
 use xml::{
@@ -46,7 +46,6 @@ const MAX_XML_ZIP_ENTRY_BYTES: usize = 25 * 1024 * 1024;
 struct UploadedImportPayload {
 	bytes: Vec<u8>,
 	filename: Option<String>,
-	product_id: Option<String>,
 	product_presave_id: Option<Uuid>,
 }
 
@@ -109,7 +108,6 @@ async fn read_xml_multipart(
 ) -> Result<UploadedImportPayload> {
 	let mut file_bytes: Option<Vec<u8>> = None;
 	let mut filename: Option<String> = None;
-	let mut product_id: Option<String> = None;
 	let mut product_presave_id: Option<Uuid> = None;
 
 	while let Some(field) =
@@ -129,14 +127,11 @@ async fn read_xml_multipart(
 			continue;
 		}
 		if matches!(name.as_deref(), Some("productId") | Some("product_id")) {
-			let text = field.text().await.map_err(|err| Error::BadRequest {
-				message: format!("multipart productId read error: {err}"),
-			})?;
-			let trimmed = text.trim();
-			if !trimmed.is_empty() {
-				product_id = Some(trimmed.to_string());
-			}
-			continue;
+			return Err(Error::BadRequest {
+				message:
+					"productId is not accepted; select an authorized productPresaveId"
+						.to_string(),
+			});
 		}
 		if matches!(
 			name.as_deref(),
@@ -164,7 +159,6 @@ async fn read_xml_multipart(
 	Ok(UploadedImportPayload {
 		bytes,
 		filename,
-		product_id,
 		product_presave_id,
 	})
 }
@@ -553,14 +547,11 @@ fn duplicate_key_from_xml(
 			})?;
 	let patient = parse_d_patient(xml).map_err(Error::Xml)?;
 	let reactions = parse_e_reactions(xml).map_err(Error::Xml)?;
-	let drugs = parse_g_drugs(xml).map_err(Error::Xml)?;
 	let first_reaction = reactions.first();
-	let first_drug = drugs.first();
 	let dg_prd_key = product_id
 		.map(str::trim)
 		.filter(|value| !value.is_empty())
-		.map(ToOwned::to_owned)
-		.or_else(|| first_drug.map(|drug| drug.medicinal_product.clone()));
+		.map(ToOwned::to_owned);
 
 	Ok((
 		XmlImportIncomingKey {
@@ -857,26 +848,40 @@ async fn import_xml_authorized(
 	multipart: Multipart,
 ) -> Result<(StatusCode, Json<DataRestResult<XmlImportBatchResult>>)> {
 	let payload = read_xml_multipart(multipart).await?;
-	let selected_product = match payload.product_presave_id {
-		Some(id) => {
-			let product = ProductPresaveBmc::get(ctx, mm, id)
-				.await
-				.map_err(Error::Model)?;
-			if product.deleted {
-				return Err(Error::BadRequest {
-					message: "selected Product is deleted".to_string(),
-				});
-			}
-			if !super::section_presave_rest::product_presave_allowed(scope, &product)
-			{
-				return Err(Error::PermissionDenied {
-					required_permission: "info.read product scope".to_string(),
-				});
-			}
-			Some((id, product.product_id, product.sender_presave_id))
+	let product_presave_id = payload.product_presave_id.ok_or_else(|| {
+		Error::BadRequest {
+			message: "productPresaveId is required for XML import".to_string(),
 		}
-		None => None,
-	};
+	})?;
+	let product = ProductPresaveBmc::get(ctx, mm, product_presave_id)
+		.await
+		.map_err(Error::Model)?;
+	if product.deleted {
+		return Err(Error::BadRequest {
+			message: "selected Product is deleted".to_string(),
+		});
+	}
+	if !super::section_presave_rest::product_presave_allowed(scope, &product) {
+		return Err(Error::PermissionDenied {
+			required_permission: "info.read product scope".to_string(),
+		});
+	}
+	if product
+		.product_id
+		.as_deref()
+		.map(str::trim)
+		.filter(|value| !value.is_empty())
+		.is_none()
+	{
+		return Err(Error::BadRequest {
+			message: "selected Product has no Product ID".to_string(),
+		});
+	}
+	let selected_product = Some((
+		product_presave_id,
+		product.product_id,
+		product.sender_presave_id,
+	));
 	let entries = extract_xml_entries(&payload.bytes, payload.filename.as_deref())?;
 	let mut imported_cases = Vec::with_capacity(entries.len());
 	let mut c_settings = load_import_settings(ctx, mm).await?;
@@ -891,8 +896,7 @@ async fn import_xml_authorized(
 		.unwrap_or_else(|| "import.xml".to_string());
 	let effective_product_id = selected_product
 		.as_ref()
-		.and_then(|(_, product_id, _)| product_id.as_deref())
-		.or(payload.product_id.as_deref());
+		.and_then(|(_, product_id, _)| product_id.as_deref());
 
 	for (entry_name, xml) in entries {
 		let decision =

@@ -70,6 +70,20 @@ async fn import_e2b_xml_in_txn(
 	mm: &ModelManager,
 	req: XmlImportRequest,
 ) -> Result<XmlImportResult> {
+	let product_presave_id = req.product_presave_id.ok_or_else(|| {
+		Error::InvalidImportRequest {
+			message: "productPresaveId is required for XML import".to_string(),
+		}
+	})?;
+	let product_id = req
+		.product_id
+		.as_deref()
+		.map(str::trim)
+		.filter(|value| !value.is_empty())
+		.ok_or_else(|| Error::InvalidImportRequest {
+			message: "Product ID is required for XML import".to_string(),
+		})?
+		.to_string();
 	let parsed = parse_e2b_xml(&req.xml)?;
 	let safety_report_id = shared::extract_safety_report_id(&req.xml)?;
 	let transmission_date =
@@ -163,7 +177,7 @@ async fn import_e2b_xml_in_txn(
 		&mm,
 		CaseForCreate {
 			organization_id: ctx.organization_id(),
-			dg_prd_key: req.product_id.clone(),
+			dg_prd_key: Some(product_id.clone()),
 			status: Some("draft".to_string()),
 			review_receivers_json: None,
 			workflow_routes_json: None,
@@ -272,7 +286,7 @@ async fn import_e2b_xml_in_txn(
 		&req.xml,
 		case_id,
 		&reaction_map,
-		req.product_presave_id,
+		product_presave_id,
 	)
 	.await?;
 
@@ -298,7 +312,7 @@ async fn import_e2b_xml_in_txn(
 		case_id,
 		CaseForUpdate {
 			raw_xml: Some(req.xml.to_vec()),
-			dg_prd_key: req.product_id,
+			dg_prd_key: Some(product_id),
 			status: None,
 			review_receivers_json: None,
 			workflow_routes_json: None,
