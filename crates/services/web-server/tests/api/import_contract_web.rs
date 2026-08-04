@@ -177,6 +177,34 @@ async fn import_xml_fixture_with_product(
 	Ok((status, serde_json::from_slice::<Value>(&body)?))
 }
 
+async fn import_xml_without_filename_with_product(
+	app: &axum::Router,
+	cookie: &str,
+	xml: &[u8],
+	product_presave_id: &str,
+) -> Result<(StatusCode, Value)> {
+	let boundary = "X-BOUNDARY-IMPORT-MISSING-FILENAME";
+	let mut multipart = format!(
+		"--{boundary}\r\nContent-Disposition: form-data; name=\"productPresaveId\"\r\n\r\n{product_presave_id}\r\n--{boundary}\r\nContent-Disposition: form-data; name=\"file\"\r\nContent-Type: application/xml\r\n\r\n"
+	)
+	.into_bytes();
+	multipart.extend_from_slice(xml);
+	multipart.extend_from_slice(format!("\r\n--{boundary}--\r\n").as_bytes());
+	let req = Request::builder()
+		.method("POST")
+		.uri("/api/import/xml")
+		.header("cookie", cookie)
+		.header(
+			"content-type",
+			format!("multipart/form-data; boundary={boundary}"),
+		)
+		.body(Body::from(multipart))?;
+	let res = app.clone().oneshot(req).await?;
+	let status = res.status();
+	let body = to_bytes(res.into_body(), usize::MAX).await?;
+	Ok((status, serde_json::from_slice::<Value>(&body)?))
+}
+
 async fn create_product_presave(
 	app: &axum::Router,
 	cookie: &str,
@@ -204,6 +232,60 @@ async fn create_product_presave(
 		.as_str()
 		.map(str::to_string)
 		.ok_or_else(|| format!("missing product id in body {body:?}").into())
+}
+
+#[serial]
+#[tokio::test]
+async fn test_import_rejects_missing_upload_filename() -> Result<()> {
+	let mm = init_test_mm().await?;
+	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
+	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
+	let cookie = cookie_header(&token.to_string());
+	let app = web_server::app(mm.clone());
+
+	let (status, body) = post_json(
+		&app,
+		&cookie,
+		"/api/presaves/senders",
+		json!({
+			"data": { "rows": {
+				"sender": {
+					"senderType": "2",
+					"organizationName": "Missing Filename Sender",
+					"email": "missing-filename@example.test"
+				},
+				"gateways": [], "responsiblePersons": []
+			} }
+		}),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::CREATED, "{body:?}");
+	let sender_presave_id = body["data"]["rows"]["sender"]["id"]
+		.as_str()
+		.ok_or_else(|| format!("missing sender id in body {body:?}"))?;
+	let product_presave_id = create_product_presave(
+		&app,
+		&cookie,
+		sender_presave_id,
+		"MISSING-FILENAME-PRODUCT",
+	)
+	.await?;
+
+	let (status, body) = import_xml_without_filename_with_product(
+		&app,
+		&cookie,
+		b"<xml />",
+		&product_presave_id,
+	)
+	.await?;
+	assert_eq!(status, StatusCode::BAD_REQUEST, "{body:?}");
+	assert!(
+		body.to_string()
+			.contains("uploaded file name is required for XML import"),
+		"{body:?}"
+	);
+
+	Ok(())
 }
 
 #[serial]
