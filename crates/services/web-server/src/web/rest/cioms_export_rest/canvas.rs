@@ -1,5 +1,6 @@
 use super::*;
 use std::collections::BTreeMap;
+use std::sync::OnceLock;
 
 pub(super) struct PdfCanvas {
 	pub(super) stream: String,
@@ -136,29 +137,35 @@ impl PdfCanvas {
 }
 
 pub(super) fn wrap_pdf_text(value: &str, max_chars: usize) -> Vec<String> {
+	let max_width = max_chars.saturating_mul(600).max(1);
 	let mut line = String::new();
 	let mut lines = Vec::new();
 	for word in value.split_whitespace() {
-		if word.chars().count() > max_chars {
+		let word_width = pdf_text_width(word);
+		if word_width > max_width {
 			if !line.is_empty() {
 				lines.push(line);
 				line = String::new();
 			}
+			let mut line_width = 0;
 			for ch in word.chars() {
-				line.push(ch);
-				if line.chars().count() == max_chars {
+				let char_width = pdf_char_width(ch);
+				if !line.is_empty() && line_width + char_width > max_width {
 					lines.push(line);
 					line = String::new();
+					line_width = 0;
 				}
+				line.push(ch);
+				line_width += char_width;
 			}
 			continue;
 		}
-		let next_len = if line.is_empty() {
-			word.chars().count()
+		let next_width = if line.is_empty() {
+			word_width
 		} else {
-			line.chars().count() + 1 + word.chars().count()
+			pdf_text_width(&line) + pdf_char_width(' ') + word_width
 		};
-		if next_len > max_chars && !line.is_empty() {
+		if next_width > max_width && !line.is_empty() {
 			lines.push(line);
 			line = word.to_string();
 		} else {
@@ -172,6 +179,35 @@ pub(super) fn wrap_pdf_text(value: &str, max_chars: usize) -> Vec<String> {
 		lines.push(line);
 	}
 	lines
+}
+
+fn pdf_text_width(value: &str) -> usize {
+	value.chars().map(pdf_char_width).sum()
+}
+
+fn pdf_char_width(value: char) -> usize {
+	let glyph = glyph_id(value as u32) as usize;
+	font_width_table().get(glyph).copied().unwrap_or(1000) as usize
+}
+
+fn font_width_table() -> &'static [u16] {
+	static WIDTHS: OnceLock<Vec<u16>> = OnceLock::new();
+	WIDTHS.get_or_init(|| {
+		let values = font_widths()
+			.split_whitespace()
+			.filter_map(|value| value.parse::<usize>().ok())
+			.collect::<Vec<_>>();
+		let mut widths = Vec::new();
+		for range in values.chunks_exact(3) {
+			let start = range[0];
+			let end = range[1];
+			widths.resize(widths.len().max(end + 1), 1000);
+			for width in &mut widths[start..=end] {
+				*width = range[2].min(u16::MAX as usize) as u16;
+			}
+		}
+		widths
+	})
 }
 
 pub(super) fn overflow_pdf_text(
@@ -356,5 +392,5 @@ pub(super) fn render_cioms_notation(
 		return;
 	}
 	canvas.text(x, y + 14, 7, "CIOMS NOTATION");
-	canvas.text(x, y, 7, &notation);
+	canvas.wrapped_text(x, y, 7, 90, 1, &notation);
 }

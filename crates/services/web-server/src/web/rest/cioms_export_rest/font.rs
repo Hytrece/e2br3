@@ -12,6 +12,7 @@ const FONT_BYTES: &[u8] = include_bytes!(concat!(
 ));
 
 const FONT_NAME: &str = "NotoSansCJKkr-Regular";
+const REPLACEMENT_CODEPOINT: u32 = 0xFFFD;
 
 pub(super) fn font_name() -> &'static str {
 	FONT_NAME
@@ -65,20 +66,23 @@ pub(super) fn font_widths() -> &'static str {
 
 pub(super) fn glyph_id(codepoint: u32) -> u16 {
 	static GLYPHS: OnceLock<BTreeMap<u32, u16>> = OnceLock::new();
-	*GLYPHS
-		.get_or_init(|| {
-			let font = FontRef::new(FONT_BYTES)
-				.expect("embedded CIOMS font must be valid OpenType");
-			font.charmap()
-				.mappings()
-				.filter_map(|(codepoint, glyph)| {
-					let glyph = glyph.to_u32();
-					(codepoint <= 0x10FFFF && glyph <= u16::MAX as u32)
-						.then_some((codepoint, glyph as u16))
-				})
-				.collect()
-		})
+	let glyphs = GLYPHS.get_or_init(|| {
+		let font = FontRef::new(FONT_BYTES)
+			.expect("embedded CIOMS font must be valid OpenType");
+		font.charmap()
+			.mappings()
+			.filter_map(|(codepoint, glyph)| {
+				let glyph = glyph.to_u32();
+				(codepoint <= 0x10FFFF && glyph <= u16::MAX as u32)
+					.then_some((codepoint, glyph as u16))
+			})
+			.collect()
+	});
+	// Keep unsupported scalars visible in the PDF instead of silently emitting
+	// the font's .notdef CID. ToUnicode still preserves the original scalar.
+	*glyphs
 		.get(&codepoint)
+		.or_else(|| glyphs.get(&REPLACEMENT_CODEPOINT))
 		.unwrap_or(&0)
 }
 

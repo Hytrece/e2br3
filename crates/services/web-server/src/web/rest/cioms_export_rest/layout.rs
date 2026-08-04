@@ -8,18 +8,15 @@ pub(super) fn render_cioms_first_page(
 	page_width: i32,
 	page_height: i32,
 ) {
-	let template = CIOMS_LANDSCAPE_TEMPLATE;
-	let scale = (page_width as f32 / template.page_width as f32)
-		.min(page_height as f32 / template.page_height as f32);
-	let translate_x = (page_width as f32 - template.page_width as f32 * scale) / 2.0;
-	let translate_y =
-		(page_height as f32 - template.page_height as f32 * scale) / 2.0;
-
 	if settings.orientation.eq_ignore_ascii_case("Portrait") {
-		canvas.save_state();
-		canvas.transform(scale, scale, translate_x, translate_y);
-		render_landscape_cioms(canvas, data, settings, options);
-		canvas.restore_state();
+		render_portrait_cioms(
+			canvas,
+			data,
+			settings,
+			options,
+			page_width,
+			page_height,
+		);
 	} else {
 		render_landscape_cioms(canvas, data, settings, options);
 	}
@@ -41,6 +38,12 @@ pub(super) fn render_landscape_cioms(
 		.iter()
 		.find(|drug| drug.drug_characterization == "1")
 		.or_else(|| data.drugs.first());
+	let suspect_drug_count = data
+		.drugs
+		.iter()
+		.filter(|drug| drug.drug_characterization == "1")
+		.count()
+		.max(1);
 	let patient = data.patient.as_ref();
 	let report = data.report.as_ref();
 	let source = data.primary_sources.first();
@@ -57,19 +60,6 @@ pub(super) fn render_landscape_cioms(
 
 	canvas.text(28, height - 28, 15, "CIOMS FORM");
 	canvas.text(148, height - 28, 13, "SUSPECT ADVERSE REACTION REPORT");
-	canvas.text(
-		width - 190,
-		height - 28,
-		8,
-		&format!("CIOMS layout: {}", settings.orientation),
-	);
-	canvas.text(
-		width - 190,
-		height - 40,
-		7,
-		&format!("Data ordering: {}", settings.data_ordering),
-	);
-
 	canvas.rect(24, 24, width - 48, height - 62);
 	canvas.text(
 		30,
@@ -239,7 +229,9 @@ pub(super) fn render_landscape_cioms(
 		template.suspect_drug_information.y + 50,
 		286,
 		42,
-		"14. SUSPECT DRUG 1 of 1 (include generic name)",
+		&format!(
+			"14. SUSPECT DRUG 1 of {suspect_drug_count} (include generic name)"
+		),
 		&drug_name(suspect_drug),
 		42,
 		1,
@@ -412,10 +404,393 @@ pub(super) fn render_landscape_cioms(
 	);
 	render_reporter_footer(canvas, 34, 38, source);
 	render_missing_information_legend(canvas, 300, 38);
-	if is_basic_data_ordering(settings) {
-		render_basic_repeated_items_table(canvas, data, 34, 56, width - 68);
-	}
 	render_cioms_notation(canvas, data, options, 34, 26);
+}
+
+fn render_portrait_cioms(
+	canvas: &mut PdfCanvas,
+	data: &CiomsCaseData,
+	settings: &CiomsSettings,
+	options: CiomsExportOptions,
+	page_width: i32,
+	page_height: i32,
+) {
+	let form = CiomsFormData::from_case_data(data, settings);
+	let first_reaction = data.reactions.first();
+	let first_reaction_id = first_reaction.map(|reaction| reaction.id);
+	let suspect_drug = data
+		.drugs
+		.iter()
+		.find(|drug| drug.drug_characterization == "1")
+		.or_else(|| data.drugs.first());
+	let suspect_drug_count = data
+		.drugs
+		.iter()
+		.filter(|drug| drug.drug_characterization == "1")
+		.count()
+		.max(1);
+	let suspect_assessment = suspect_drug.and_then(|drug| {
+		data.causality_rows.iter().find(|row| {
+			row.drug_id == drug.id
+				&& first_reaction_id
+					.map_or(true, |reaction_id| row.reaction_id == reaction_id)
+		})
+	});
+	let patient = data.patient.as_ref();
+	let report = data.report.as_ref();
+	let source = data.primary_sources.first();
+
+	canvas.text(30, page_height - 32, 15, "CIOMS FORM");
+	canvas.text(150, page_height - 32, 12, "SUSPECT ADVERSE REACTION REPORT");
+	canvas.rect(24, 24, page_width - 48, page_height - 70);
+
+	canvas.text(30, 778, 9, "I. REACTION INFORMATION");
+	let y = 728;
+	render_box(
+		canvas,
+		30,
+		y,
+		80,
+		40,
+		"1. PATIENT INITIALS",
+		patient
+			.and_then(|p| p.patient_initials.as_deref())
+			.unwrap_or(""),
+		14,
+		1,
+	);
+	render_box(
+		canvas,
+		110,
+		y,
+		60,
+		40,
+		"1a. COUNTRY",
+		first_reaction
+			.and_then(|r| r.country_code.as_deref())
+			.or_else(|| source.and_then(|s| s.country_code.as_deref()))
+			.unwrap_or(""),
+		12,
+		1,
+	);
+	render_box(
+		canvas,
+		170,
+		y,
+		90,
+		40,
+		"2. DATE OF BIRTH",
+		&date_text(patient.and_then(|p| p.birth_date)),
+		16,
+		1,
+	);
+	render_box(
+		canvas,
+		260,
+		y,
+		70,
+		40,
+		"2a. AGE",
+		&patient_age(patient),
+		12,
+		1,
+	);
+	render_box(
+		canvas,
+		330,
+		y,
+		60,
+		40,
+		"3. SEX",
+		sex_text(patient.and_then(|p| p.sex.as_deref())),
+		10,
+		1,
+	);
+	render_box(
+		canvas,
+		390,
+		y,
+		170,
+		40,
+		"4-6. REACTION ONSET",
+		&reaction_dates(first_reaction),
+		26,
+		1,
+	);
+
+	canvas.rect(30, 688, 530, 40);
+	canvas.wrapped_text(
+		30,
+		716,
+		7,
+		78,
+		1,
+		"8-12 CHECK ALL APPROPRIATE TO ADVERSE REACTION",
+	);
+	render_checkbox(
+		canvas,
+		36,
+		699,
+		"DIED",
+		first_reaction
+			.and_then(|r| r.criteria_death)
+			.unwrap_or(false),
+	);
+	render_checkbox(
+		canvas,
+		128,
+		699,
+		"HOSPITALIZED",
+		first_reaction
+			.and_then(|r| r.criteria_hospitalization)
+			.unwrap_or(false),
+	);
+	render_checkbox(
+		canvas,
+		285,
+		699,
+		"LIFE THREATENING",
+		first_reaction
+			.and_then(|r| r.criteria_life_threatening)
+			.unwrap_or(false),
+	);
+	render_checkbox(
+		canvas,
+		36,
+		689,
+		"DISABLED",
+		first_reaction
+			.and_then(|r| r.criteria_disabling)
+			.unwrap_or(false),
+	);
+	render_checkbox(
+		canvas,
+		128,
+		689,
+		"CONGENITAL ANOMALY",
+		first_reaction
+			.and_then(|r| r.criteria_congenital_anomaly)
+			.unwrap_or(false),
+	);
+	render_checkbox(
+		canvas,
+		285,
+		689,
+		"MED. IMPORTANT",
+		first_reaction
+			.and_then(|r| r.criteria_other_medically_important)
+			.unwrap_or(false),
+	);
+	render_box(
+		canvas,
+		30,
+		520,
+		530,
+		168,
+		"7 + 13 DESCRIBE REACTION(S) (including relevant tests/lab data)",
+		&form.reaction_description,
+		78,
+		10,
+	);
+
+	canvas.text(30, 498, 9, "II. SUSPECT DRUG(S) INFORMATION");
+	render_box(
+		canvas,
+		30,
+		446,
+		165,
+		42,
+		&format!(
+			"14. SUSPECT DRUG 1 of {suspect_drug_count} (include generic name)"
+		),
+		&drug_name(suspect_drug),
+		24,
+		1,
+	);
+	render_box(
+		canvas,
+		195,
+		446,
+		90,
+		42,
+		"15. DAILY DOSE(S)",
+		&form.suspect_drug_dose,
+		14,
+		1,
+	);
+	render_box(
+		canvas,
+		285,
+		446,
+		80,
+		42,
+		"16. ROUTE(S) OF ADMINISTRATION",
+		&form.suspect_drug_route,
+		12,
+		1,
+	);
+	render_box(
+		canvas,
+		365,
+		446,
+		95,
+		42,
+		"20. DID REACTION ABATE AFTER STOPPING DRUG?",
+		// ponytail: keep blank until an explicit dechallenge field exists; never infer it from G.k.7.
+		"",
+		14,
+		1,
+	);
+	render_box(
+		canvas,
+		460,
+		446,
+		100,
+		42,
+		"21. DID REACTION REAPPEAR AFTER REINTRODUCTION?",
+		yes_no_unknown(
+			suspect_assessment.and_then(|row| row.reaction_recurred.as_deref()),
+		),
+		14,
+		1,
+	);
+	render_box(
+		canvas,
+		30,
+		396,
+		260,
+		50,
+		"17. INDICATION(S) FOR USE",
+		&form.suspect_drug_indication,
+		38,
+		2,
+	);
+	render_box(
+		canvas,
+		290,
+		396,
+		150,
+		50,
+		"18. THERAPY DATES (from/to)",
+		&form.suspect_drug_therapy_dates,
+		24,
+		1,
+	);
+	render_box(
+		canvas,
+		440,
+		396,
+		120,
+		50,
+		"19. THERAPY DURATION",
+		&form.suspect_drug_therapy_duration,
+		16,
+		1,
+	);
+
+	canvas.text(30, 374, 9, "III. CONCOMITANT DRUGS AND HISTORY");
+	render_box(
+		canvas,
+		30,
+		306,
+		530,
+		60,
+		"22. CONCOMITANT DRUG(S) AND DATES OF ADMINISTRATION",
+		&concomitant_drugs_text(data),
+		78,
+		3,
+	);
+	render_box(
+		canvas,
+		30,
+		236,
+		530,
+		60,
+		"23. OTHER RELEVANT HISTORY",
+		patient
+			.and_then(|p| p.medical_history_text.as_deref())
+			.unwrap_or(""),
+		78,
+		3,
+	);
+
+	canvas.text(30, 214, 9, "IV. MANUFACTURER INFORMATION");
+	render_box(
+		canvas,
+		30,
+		132,
+		260,
+		74,
+		"24a. NAME AND ADDRESS OF MANUFACTURER",
+		&sender_address(data.senders.first()),
+		38,
+		4,
+	);
+	render_box(
+		canvas,
+		290,
+		132,
+		270,
+		74,
+		"24b. MFR CONTROL NO.",
+		&data.case_number,
+		38,
+		2,
+	);
+	render_box(
+		canvas,
+		30,
+		92,
+		175,
+		40,
+		"24c. DATE RECEIVED",
+		&date_text(report.and_then(|r| r.date_first_received_from_source)),
+		24,
+		1,
+	);
+	render_box(
+		canvas,
+		205,
+		92,
+		175,
+		40,
+		"DATE OF THIS REPORT",
+		&e2b_datetime_date_text(report.and_then(|r| r.transmission_date.as_deref())),
+		24,
+		1,
+	);
+	render_box(
+		canvas,
+		380,
+		92,
+		180,
+		40,
+		"25a. REPORT TYPE",
+		report_type_text(report.and_then(|r| r.report_type.as_deref())),
+		24,
+		1,
+	);
+	render_reporter_footer(canvas, 34, 58, source);
+	render_missing_information_legend(canvas, 34, 46);
+	render_portrait_cioms_notation(canvas, data, options, 34, 26);
+}
+
+fn render_portrait_cioms_notation(
+	canvas: &mut PdfCanvas,
+	data: &CiomsCaseData,
+	options: CiomsExportOptions,
+	x: i32,
+	y: i32,
+) {
+	if !options.include_notation {
+		return;
+	}
+	let notation = cioms_notation_text(data);
+	if notation.is_empty() {
+		return;
+	}
+	canvas.text(x, y + 14, 7, "CIOMS NOTATION");
+	canvas.wrapped_text(x, y, 7, 90, 1, &notation);
 }
 
 pub(super) fn collect_cioms_overflow(
@@ -426,6 +801,7 @@ pub(super) fn collect_cioms_overflow(
 	let form = CiomsFormData::from_case_data(data, settings);
 	let patient = data.patient.as_ref();
 	let sender = data.senders.first();
+	let portrait = settings.orientation.eq_ignore_ascii_case("Portrait");
 	let mut overflow = Vec::new();
 	let mut push_overflow =
 		|label: &str, value: &str, max_chars: usize, max_lines: usize| {
@@ -437,39 +813,49 @@ pub(super) fn collect_cioms_overflow(
 	push_overflow(
 		"7 + 13 DESCRIBE REACTION(S)",
 		&form.reaction_description,
-		118,
-		8,
+		if portrait { 78 } else { 118 },
+		if portrait { 10 } else { 8 },
 	);
-	push_overflow("14. SUSPECT DRUG", &form.suspect_drug_name, 42, 1);
-	push_overflow("15. DAILY DOSE(S)", &form.suspect_drug_dose, 22, 1);
+	push_overflow(
+		"14. SUSPECT DRUG",
+		&form.suspect_drug_name,
+		if portrait { 24 } else { 42 },
+		1,
+	);
+	push_overflow(
+		"15. DAILY DOSE(S)",
+		&form.suspect_drug_dose,
+		if portrait { 14 } else { 22 },
+		1,
+	);
 	push_overflow(
 		"16. ROUTE(S) OF ADMINISTRATION",
 		&form.suspect_drug_route,
-		22,
+		if portrait { 12 } else { 22 },
 		1,
 	);
 	push_overflow(
 		"17. INDICATION(S) FOR USE",
 		&form.suspect_drug_indication,
-		42,
+		if portrait { 38 } else { 42 },
 		2,
 	);
 	push_overflow(
 		"18. THERAPY DATES (from/to)",
 		&form.suspect_drug_therapy_dates,
-		38,
+		if portrait { 24 } else { 38 },
 		1,
 	);
 	push_overflow(
 		"19. THERAPY DURATION",
 		&form.suspect_drug_therapy_duration,
-		34,
+		if portrait { 16 } else { 34 },
 		1,
 	);
 	push_overflow(
 		"22. CONCOMITANT DRUG(S) AND DATES OF ADMINISTRATION",
 		&concomitant_drugs_text(data),
-		56,
+		if portrait { 78 } else { 56 },
 		3,
 	);
 	push_overflow(
@@ -477,16 +863,21 @@ pub(super) fn collect_cioms_overflow(
 		patient
 			.and_then(|patient| patient.medical_history_text.as_deref())
 			.unwrap_or(""),
-		58,
+		if portrait { 78 } else { 58 },
 		3,
 	);
 	push_overflow(
 		"24a. NAME AND ADDRESS OF MANUFACTURER",
 		&sender_address(sender),
-		42,
+		if portrait { 38 } else { 42 },
 		4,
 	);
-	push_overflow("24b. MFR CONTROL NO.", &data.case_number, 20, 2);
+	push_overflow(
+		"24b. MFR CONTROL NO.",
+		&data.case_number,
+		if portrait { 38 } else { 20 },
+		2,
+	);
 	push_overflow(
 		"24c. DATE RECEIVED BY MANUFACTURER",
 		&date_text(
@@ -494,7 +885,7 @@ pub(super) fn collect_cioms_overflow(
 				.as_ref()
 				.and_then(|r| r.date_first_received_from_source),
 		),
-		18,
+		if portrait { 24 } else { 18 },
 		1,
 	);
 	let report_date = e2b_datetime_date_text(
@@ -502,11 +893,21 @@ pub(super) fn collect_cioms_overflow(
 			.as_ref()
 			.and_then(|r| r.transmission_date.as_deref()),
 	);
-	push_overflow("DATE OF THIS REPORT", &report_date, 16, 1);
+	push_overflow(
+		"DATE OF THIS REPORT",
+		&report_date,
+		if portrait { 24 } else { 16 },
+		1,
+	);
 	let report_type = report_type_text(
 		data.report.as_ref().and_then(|r| r.report_type.as_deref()),
 	);
-	push_overflow("25a. REPORT TYPE", report_type, 18, 2);
+	push_overflow(
+		"25a. REPORT TYPE",
+		report_type,
+		if portrait { 24 } else { 18 },
+		1,
+	);
 	if options.include_notation {
 		push_overflow("CIOMS NOTATION", &cioms_notation_text(data), 90, 1);
 	}
@@ -1050,14 +1451,15 @@ fn new_continuation_page(
 	let mut canvas = PdfCanvas::with_font_mapping(font_mapping);
 	canvas.stream.push_str("0.8 w\n");
 	if portrait {
-		let scale = (page_width as f32 / template.page_width as f32)
-			.min(page_height as f32 / template.page_height as f32);
-		let translate_x =
-			(page_width as f32 - template.page_width as f32 * scale) / 2.0;
-		let translate_y =
-			(page_height as f32 - template.page_height as f32 * scale) / 2.0;
-		canvas.save_state();
-		canvas.transform(scale, scale, translate_x, translate_y);
+		canvas.rect(24, 24, page_width - 48, page_height - 62);
+		canvas.text(28, page_height - 32, 14, "CIOMS CONTINUATION");
+		canvas.text(
+			28,
+			page_height - 48,
+			8,
+			&format!("MFR CONTROL NO.: {}", data.case_number),
+		);
+		return (canvas, page_height - 74);
 	}
 	canvas.rect(24, 24, template.page_width - 48, template.page_height - 62);
 	canvas.text(28, template.page_height - 32, 14, "CIOMS CONTINUATION");
@@ -1070,10 +1472,7 @@ fn new_continuation_page(
 	(canvas, template.page_height - 74)
 }
 
-fn finish_continuation_page(mut canvas: PdfCanvas, portrait: bool) -> String {
-	if portrait {
-		canvas.restore_state();
-	}
+fn finish_continuation_page(canvas: PdfCanvas, _portrait: bool) -> String {
 	canvas.stream
 }
 
@@ -1088,7 +1487,13 @@ fn render_continuation_row(
 	label: &str,
 	value: &str,
 ) {
-	let lines = wrap_pdf_text(&format!("{label}: {value}"), 112);
+	let max_chars = if portrait { 72 } else { 112 };
+	let (row_x, row_width) = if portrait {
+		(28, page_width - 56)
+	} else {
+		(28, 786)
+	};
+	let lines = wrap_pdf_text(&format!("{label}: {value}"), max_chars);
 	let mut offset = 0;
 	while offset < lines.len() {
 		if *y < 90 {
@@ -1108,7 +1513,7 @@ fn render_continuation_row(
 		let available_lines = (((*y - 60).max(28) - 18) / 11).max(1) as usize;
 		let count = available_lines.min(lines.len() - offset);
 		let row_height = 18 + (count as i32 * 11);
-		canvas.rect(28, *y - row_height, 786, row_height);
+		canvas.rect(row_x, *y - row_height, row_width, row_height);
 		for (index, line) in lines[offset..offset + count].iter().enumerate() {
 			canvas.text(34, *y - 13 - (index as i32 * 11), 8, line);
 		}
