@@ -122,7 +122,6 @@ async fn inactive_presave_reference_returns_p2001_for_receiver_link() -> Result<
 		ReceiverPresaveForCreate {
 			receiver_type: Some("Regulatory Authority".into()),
 			organization_name: Some(format!("Archived receiver {}", Uuid::new_v4())),
-			receiver_identifier: None,
 			day_count_rule: None,
 			nsae_solicited_day_count: None,
 			nsae_solicited_not_applicable: None,
@@ -504,7 +503,6 @@ fn receiver_presave_create(organization_name: String) -> ReceiverPresaveForCreat
 	ReceiverPresaveForCreate {
 		receiver_type: Some("Regulatory Authority".into()),
 		organization_name: Some(organization_name),
-		receiver_identifier: None,
 		day_count_rule: None,
 		nsae_solicited_day_count: None,
 		nsae_solicited_not_applicable: None,
@@ -677,7 +675,6 @@ async fn product_presave_round_trips_receiver_presave_id() -> Result<()> {
 		ReceiverPresaveForCreate {
 			receiver_type: Some("Regulatory Authority".into()),
 			organization_name: Some(format!("Receiver Link {}", Uuid::new_v4())),
-			receiver_identifier: None,
 			day_count_rule: None,
 			nsae_solicited_day_count: None,
 			nsae_solicited_not_applicable: None,
@@ -721,7 +718,6 @@ async fn product_presave_round_trips_receiver_presave_id() -> Result<()> {
 		ReceiverPresaveForCreate {
 			receiver_type: Some("Regulatory Authority".into()),
 			organization_name: Some(format!("Deleted Receiver {}", Uuid::new_v4())),
-			receiver_identifier: None,
 			day_count_rule: None,
 			nsae_solicited_day_count: None,
 			nsae_solicited_not_applicable: None,
@@ -1380,7 +1376,6 @@ async fn section_presave_parent_bmcs_crud_roundtrip() -> Result<()> {
 		ReceiverPresaveForCreate {
 			receiver_type: Some("Regulatory Authority".into()),
 			organization_name: Some(format!("Receiver Org {suffix}")),
-			receiver_identifier: Some("CDER".into()),
 			day_count_rule: Some("calendar".into()),
 			nsae_solicited_day_count: Some(15),
 			nsae_solicited_not_applicable: Some(false),
@@ -1394,8 +1389,6 @@ async fn section_presave_parent_bmcs_crud_roundtrip() -> Result<()> {
 		},
 	)
 	.await?;
-	let receiver = ReceiverPresaveBmc::get(&ctx, &mm, receiver_id).await?;
-	assert_eq!(receiver.receiver_identifier.as_deref(), Some("CDER"));
 
 	let product_id = ProductPresaveBmc::create(
 		&ctx,
@@ -1876,7 +1869,6 @@ async fn section_presave_parent_bmcs_enforce_minimal_identity_requirements(
 			ReceiverPresaveForCreate {
 				receiver_type: None,
 				organization_name: Some("Invalid Receiver Org".into()),
-				receiver_identifier: None,
 				day_count_rule: None,
 				nsae_solicited_day_count: None,
 				nsae_solicited_not_applicable: None,
@@ -2078,7 +2070,6 @@ async fn section_presave_parent_bmcs_reject_duplicate_identity_within_org(
 		ReceiverPresaveForCreate {
 			receiver_type: Some("Regulatory Authority".into()),
 			organization_name: Some(format!("Duplicate Receiver Org {suffix}")),
-			receiver_identifier: None,
 			day_count_rule: None,
 			nsae_solicited_day_count: None,
 			nsae_solicited_not_applicable: None,
@@ -2101,7 +2092,6 @@ async fn section_presave_parent_bmcs_reject_duplicate_identity_within_org(
 				organization_name: Some(format!(
 					" duplicate receiver org {suffix} "
 				)),
-				receiver_identifier: None,
 				day_count_rule: None,
 				nsae_solicited_day_count: None,
 				nsae_solicited_not_applicable: None,
@@ -2469,7 +2459,6 @@ async fn section_presave_receiver_delete_uses_receiver_name_not_template_name(
 		ReceiverPresaveForCreate {
 			receiver_type: Some("Regulatory Authority".into()),
 			organization_name: Some(receiver_org.clone()),
-			receiver_identifier: None,
 			day_count_rule: None,
 			nsae_solicited_day_count: None,
 			nsae_solicited_not_applicable: None,
@@ -2534,7 +2523,6 @@ async fn section_presave_child_bmcs_crud_roundtrip() -> Result<()> {
 		ReceiverPresaveForCreate {
 			receiver_type: Some("Regulatory Authority".into()),
 			organization_name: Some(format!("Child Receiver Org {suffix}")),
-			receiver_identifier: None,
 			day_count_rule: None,
 			nsae_solicited_day_count: None,
 			nsae_solicited_not_applicable: None,
@@ -3156,7 +3144,6 @@ async fn test_receiver_presave_route_bmc_crud() -> Result<()> {
 		ReceiverPresaveForCreate {
 			receiver_type: Some("Regulatory Authority".into()),
 			organization_name: Some(format!("Route Receiver Org {suffix}")),
-			receiver_identifier: Some("CBER".into()),
 			day_count_rule: None,
 			nsae_solicited_day_count: None,
 			nsae_solicited_not_applicable: None,

@@ -238,31 +238,6 @@
     "local_only": true
   },
   {
-    "id": "presave.receiver.local.presave.receiver.receiverId",
-    "e2br3_code": "local.presave.receiver.receiverId",
-    "label": "receiverId",
-    "section": "C",
-    "authority": "ICH",
-    "status": "not_applicable",
-    "backend": {
-      "status": "mapped",
-      "model": "ReceiverPresave",
-      "field": "receiver_identifier",
-      "file": "crates/libs/lib-core/src/model/presave.rs",
-      "evidence": "ReceiverPresave.receiver_identifier persists the presave value."
-    },
-    "frontend": {
-      "status": "mapped",
-      "section": "receiver",
-      "field": "receiverId",
-      "file": "components/presave/ReceiverForm.tsx",
-      "evidence": "ReceiverPresaveData.receiverId exposes the presave value."
-    },
-    "action": "",
-    "notes": "",
-    "local_only": true
-  },
-  {
     "id": "presave.receiver.local.presave.receiver.saeSolicitedDayCount",
     "e2br3_code": "local.presave.receiver.saeSolicitedDayCount",
     "label": "saeSolicitedDayCount",

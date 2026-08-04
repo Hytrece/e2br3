@@ -596,7 +596,6 @@ async fn update_case_review_receiver_defaults_report_due_from_receiver_timeline(
 				"receiver": {
 					"receiverType": "Regulatory Authority",
 					"organizationName": receiver_name,
-					"receiverIdentifier": format!("RE-TL-{}", Uuid::new_v4()),
 					"dayCountRule": "calendar",
 					"nsaeNonSolicitedDayCount": 30,
 					"saeNonSolicitedDayCount": 3,

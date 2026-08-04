@@ -48,7 +48,6 @@ FRONTEND_TO_BACKEND = {
         "saeSolicitedDayCount": ("ReceiverPresave", "sae_solicited_day_count"),
         "saeSolicitedNotApplicable": ("ReceiverPresave", "sae_solicited_not_applicable"),
         "receiverDescription": ("ReceiverPresave", "description"),
-        "receiverId": ("ReceiverPresave", "receiver_identifier"),
     },
     "product": {
         "productId": ("ProductPresave", "product_id"),

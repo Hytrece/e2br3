@@ -212,7 +212,6 @@ CREATE TABLE IF NOT EXISTS receiver_presaves (
     deleted BOOLEAN NOT NULL DEFAULT false,
     receiver_type VARCHAR(50),
     organization_name VARCHAR(500),
-    receiver_identifier VARCHAR(255),
     day_count_rule VARCHAR(100),
     nsae_solicited_day_count INTEGER,
     nsae_solicited_not_applicable BOOLEAN,

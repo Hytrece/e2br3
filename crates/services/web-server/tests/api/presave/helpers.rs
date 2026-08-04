@@ -310,11 +310,10 @@ pub(super) async fn create_receiver_presave_via_api(
 		"/api/presaves/receivers".to_string(),
 		json!({
 			"data": { "rows": {
-				"receiver": {
-					"receiverType": "Regulatory Authority",
-					"organizationName": format!("REST Receiver Details Org {}", Uuid::new_v4()),
-					"receiverIdentifier": format!("REC-{}", Uuid::new_v4())
-				},
+			"receiver": {
+				"receiverType": "Regulatory Authority",
+				"organizationName": format!("REST Receiver Details Org {}", Uuid::new_v4())
+			},
 				"consignees": [],
 				"routes": []
 			} }

@@ -75,7 +75,7 @@ async fn test_section_presave_sender_receiver_product_reporter_rest_contract(
 		Method::POST,
 		"/api/presaves/receivers".to_string(),
 		Some(json!({ "data": { "rows": {
-			"receiver": { "receiverType": "Regulatory Authority", "organizationName": "REST Receiver Org", "receiverIdentifier": "REST-RECEIVER" },
+			"receiver": { "receiverType": "Regulatory Authority", "organizationName": "REST Receiver Org" },
 			"consignees": [], "routes": []
 		} } })),
 	)
