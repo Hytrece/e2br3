@@ -1,6 +1,8 @@
 ALTER TABLE patient_information
     ADD COLUMN IF NOT EXISTS race_codes VARCHAR(10)[] NOT NULL DEFAULT '{}';
 
+SELECT set_current_user_context('00000000-0000-0000-0000-000000000001');
+
 DO $$
 BEGIN
     IF EXISTS (

@@ -12,6 +12,7 @@ set -a
 . "${APP_DIR}/.env.dev"
 set +a
 
+docker image prune -af
 docker pull "${BACKEND_IMAGE}"
 docker pull "${FRONTEND_IMAGE}"
 
