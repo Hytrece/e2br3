@@ -123,20 +123,15 @@ fn apply_primary_source_values(
 	authority: lib_core::regulatory::RegulatoryAuthority,
 ) -> Result<()> {
 	let base = "//hl7:investigationEvent/hl7:outboundRelationship[hl7:relatedInvestigation/hl7:code[@code='2']]/hl7:relatedInvestigation/hl7:subjectOf2/hl7:controlActEvent/hl7:author/hl7:assignedEntity";
-	ensure_primary_source_author_nodes(doc, parser, xpath)?;
-	if xpath
-		.findnodes(&format!("{base}/hl7:representedOrganization"), None)
-		.map(|nodes| nodes.is_empty())
-		.unwrap_or(true)
-	{
-		append_fragment_child(
-			doc,
-			parser,
-			xpath,
-			base,
-			"<representedOrganization classCode=\"ORG\" determinerCode=\"INSTANCE\"><name/></representedOrganization>",
-		)?;
-	}
+	ensure_primary_source_author_nodes(doc, parser, xpath, primary, authority)?;
+	let has_organization = primary
+		.organization
+		.as_deref()
+		.is_some_and(|v| !v.trim().is_empty())
+		|| primary
+			.organization_null_flavor
+			.as_deref()
+			.is_some_and(|v| !v.trim().is_empty());
 
 	write_c_2_r_1_1(xpath, base, primary);
 	write_c_2_r_1_2(xpath, base, primary);
@@ -176,6 +171,20 @@ fn apply_primary_source_values(
 			.department_null_flavor
 			.as_deref()
 			.is_some_and(|v| !v.trim().is_empty());
+	if (has_organization || has_department)
+		&& xpath
+			.findnodes(&format!("{base}/hl7:representedOrganization"), None)
+			.map(|nodes| nodes.is_empty())
+			.unwrap_or(true)
+	{
+		append_fragment_child(
+			doc,
+			parser,
+			xpath,
+			base,
+			"<representedOrganization classCode=\"ORG\" determinerCode=\"INSTANCE\"><name/></representedOrganization>",
+		)?;
+	}
 	let organization_path = if has_department {
 		let nested = format!("{base}/hl7:representedOrganization/hl7:assignedEntity/hl7:representedOrganization/hl7:name");
 		if xpath
@@ -417,7 +426,10 @@ fn ensure_primary_source_author_nodes(
 	doc: &mut Document,
 	parser: &Parser,
 	xpath: &mut Context,
+	primary: &PrimarySource,
+	authority: lib_core::regulatory::RegulatoryAuthority,
 ) -> Result<()> {
+	let relationship = "//hl7:investigationEvent/hl7:outboundRelationship[hl7:relatedInvestigation/hl7:code[@code='2']]";
 	let base = "//hl7:investigationEvent/hl7:outboundRelationship[hl7:relatedInvestigation/hl7:code[@code='2']]/hl7:relatedInvestigation/hl7:subjectOf2/hl7:controlActEvent/hl7:author/hl7:assignedEntity";
 	if xpath
 		.findnodes(base, None)
@@ -426,13 +438,159 @@ fn ensure_primary_source_author_nodes(
 	{
 		return Ok(());
 	}
+	let present = |value: Option<&str>, null_flavor: Option<&str>| {
+		[value, null_flavor]
+			.into_iter()
+			.flatten()
+			.any(|value| !value.trim().is_empty())
+	};
+	let title = present(
+		primary.reporter_title.as_deref(),
+		primary.reporter_title_null_flavor.as_deref(),
+	)
+	.then_some("<prefix/>")
+	.unwrap_or_default();
+	let given_name = present(
+		primary.reporter_given_name.as_deref(),
+		primary.reporter_given_name_null_flavor.as_deref(),
+	);
+	let middle_name = present(
+		primary.reporter_middle_name.as_deref(),
+		primary.reporter_middle_name_null_flavor.as_deref(),
+	);
+	if middle_name && !given_name {
+		return Err(Error::InvalidXml {
+			message:
+				"C.2.r.1.3 requires C.2.r.1.2 value or nullFlavor for XML position"
+					.to_string(),
+			line: None,
+			column: None,
+		});
+	}
+	let given = given_name.then_some("<given/>").unwrap_or_default();
+	let middle = middle_name.then_some("<given/>").unwrap_or_default();
+	let family = present(
+		primary.reporter_family_name.as_deref(),
+		primary.reporter_family_name_null_flavor.as_deref(),
+	)
+	.then_some("<family/>")
+	.unwrap_or_default();
+	let name = (!title.is_empty()
+		|| !given.is_empty()
+		|| !middle.is_empty()
+		|| !family.is_empty())
+	.then(|| format!("<name>{title}{given}{middle}{family}</name>"))
+	.unwrap_or_default();
+	let qualification = present(
+		primary.qualification.as_deref(),
+		primary.qualification_null_flavor.as_deref(),
+	)
+	.then_some("<asQualifiedEntity classCode=\"QUAL\"><code codeSystem=\"2.16.840.1.113883.3.989.2.1.1.6\"/></asQualifiedEntity>")
+	.unwrap_or_default();
+	let location = primary
+		.country_code
+		.as_deref()
+		.filter(|value| !value.trim().is_empty())
+		.map(|_| "<asLocatedEntity classCode=\"LOCE\"><location classCode=\"COUNTRY\" determinerCode=\"INSTANCE\"><code codeSystem=\"1.0.3166.1.2.2\"/></location></asLocatedEntity>")
+		.unwrap_or_default();
+	let assigned_person = (!name.is_empty()
+		|| !qualification.is_empty()
+		|| !location.is_empty())
+		.then(|| format!("<assignedPerson classCode=\"PSN\" determinerCode=\"INSTANCE\">{name}{qualification}{location}</assignedPerson>"))
+		.unwrap_or_default();
+	let street = present(
+		primary.street.as_deref(),
+		primary.street_null_flavor.as_deref(),
+	)
+	.then_some("<streetAddressLine/>")
+	.unwrap_or_default();
+	let city = present(primary.city.as_deref(), primary.city_null_flavor.as_deref())
+		.then_some("<city/>")
+		.unwrap_or_default();
+	let state = present(
+		primary.state.as_deref(),
+		primary.state_null_flavor.as_deref(),
+	)
+	.then_some("<state/>")
+	.unwrap_or_default();
+	let postcode = present(
+		primary.postcode.as_deref(),
+		primary.postcode_null_flavor.as_deref(),
+	)
+	.then_some("<postalCode/>")
+	.unwrap_or_default();
+	let address = (!street.is_empty()
+		|| !city.is_empty()
+		|| !state.is_empty()
+		|| !postcode.is_empty())
+	.then(|| format!("<addr>{street}{city}{state}{postcode}</addr>"))
+	.unwrap_or_default();
+	let telephone = present(
+		primary.telephone.as_deref(),
+		primary.telephone_null_flavor.as_deref(),
+	)
+	.then_some("<telecom value=\"tel:\"/>")
+	.unwrap_or_default();
+	let email =
+		(matches!(authority, lib_core::regulatory::RegulatoryAuthority::Fda)
+			&& present(
+				primary.email.as_deref(),
+				primary.email_null_flavor.as_deref(),
+			))
+		.then_some("<telecom value=\"mailto:\"/>")
+		.unwrap_or_default();
+	let has_organization = present(
+		primary.organization.as_deref(),
+		primary.organization_null_flavor.as_deref(),
+	);
+	let has_department = present(
+		primary.department.as_deref(),
+		primary.department_null_flavor.as_deref(),
+	);
+	let organization = if has_department {
+		let nested = has_organization
+			.then_some("<assignedEntity classCode=\"ASSIGNED\"><representedOrganization classCode=\"ORG\" determinerCode=\"INSTANCE\"><name/></representedOrganization></assignedEntity>")
+			.unwrap_or_default();
+		format!("<representedOrganization classCode=\"ORG\" determinerCode=\"INSTANCE\"><name/>{nested}</representedOrganization>")
+	} else if has_organization {
+		"<representedOrganization classCode=\"ORG\" determinerCode=\"INSTANCE\"><name/></representedOrganization>".to_string()
+	} else {
+		String::new()
+	};
+	let author = format!(
+		"<subjectOf2 typeCode=\"SUBJ\"><controlActEvent classCode=\"CACT\" moodCode=\"EVN\"><author typeCode=\"AUT\"><assignedEntity classCode=\"ASSIGNED\">{address}{telephone}{email}{assigned_person}{organization}</assignedEntity></author></controlActEvent></subjectOf2>"
+	);
+
+	if xpath
+		.findnodes(relationship, None)
+		.map(|nodes| nodes.is_empty())
+		.unwrap_or(true)
+	{
+		let priority = primary
+			.primary_source_regulatory
+			.as_deref()
+			.filter(|value| !value.trim().is_empty())
+			.map(|_| "<priorityNumber/>")
+			.unwrap_or_default();
+		append_fragment_child(
+			doc,
+			parser,
+			xpath,
+			"//hl7:investigationEvent",
+			&format!(
+				"<outboundRelationship typeCode=\"SPRT\">{priority}<relatedInvestigation classCode=\"INVSTG\" moodCode=\"EVN\"><code code=\"2\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.22\"/>{author}</relatedInvestigation></outboundRelationship>"
+			),
+		)?;
+		crate::export::roundtrip::reorder_investigation_event_children(xpath);
+		return Ok(());
+	}
 
 	append_fragment_child(
 		doc,
 		parser,
 		xpath,
 		"//hl7:investigationEvent/hl7:outboundRelationship[hl7:relatedInvestigation/hl7:code[@code='2']]/hl7:relatedInvestigation",
-		"<subjectOf2 typeCode=\"SUBJ\"><controlActEvent classCode=\"CACT\" moodCode=\"EVN\"><author typeCode=\"AUT\"><assignedEntity classCode=\"ASSIGNED\"><assignedPerson classCode=\"PSN\" determinerCode=\"INSTANCE\"><name><prefix/><given/><family/></name></assignedPerson><representedOrganization classCode=\"ORG\" determinerCode=\"INSTANCE\"><name/></representedOrganization></assignedEntity></author></controlActEvent></subjectOf2>",
+		&author,
 	)
 }
 
@@ -762,6 +920,130 @@ mod primary_source_null_flavor_tests {
 			created_by: Uuid::nil(),
 			updated_by: None,
 		}
+	}
+
+	#[test]
+	fn primary_source_export_creates_required_relationship_from_fresh_skeleton() {
+		let parser = Parser::default();
+		let mut doc = parser
+			.parse_string(crate::export::base_export_skeleton())
+			.expect("parse skeleton");
+		let mut xpath = Context::new(&doc).expect("xpath");
+		xpath.register_namespace("hl7", "urn:hl7-org:v3").unwrap();
+		let mut primary = source();
+		primary.reporter_middle_name = Some("Q".to_string());
+		primary.street = Some("13 Elm St".to_string());
+		primary.city = Some("Metropolis".to_string());
+		primary.city_null_flavor = None;
+		primary.telephone = Some("6102227777".to_string());
+		primary.country_code = Some("US".to_string());
+		primary.email = Some("reporter@example.com".to_string());
+		primary.qualification = Some("1".to_string());
+		primary.primary_source_regulatory = Some("1".to_string());
+
+		apply_primary_source_values(
+			&mut doc,
+			&parser,
+			&mut xpath,
+			&primary,
+			lib_core::regulatory::RegulatoryAuthority::Fda,
+		)
+		.expect("apply primary source");
+
+		let relationship = "//hl7:investigationEvent/hl7:outboundRelationship[hl7:relatedInvestigation/hl7:code[@code='2']]";
+		assert_eq!(xpath.findnodes(relationship, None).unwrap().len(), 1);
+		assert_eq!(
+			xpath
+				.findvalue(
+					&format!("{relationship}/hl7:priorityNumber/@value"),
+					None
+				)
+				.unwrap(),
+			"1"
+		);
+		assert_eq!(
+			xpath
+				.findvalue(
+					&format!("{relationship}//hl7:addr/hl7:streetAddressLine"),
+					None
+				)
+				.unwrap(),
+			"13 Elm St"
+		);
+		assert_eq!(
+			xpath
+				.findvalue(
+					&format!("{relationship}//hl7:asQualifiedEntity/hl7:code/@code"),
+					None
+				)
+				.unwrap(),
+			"1"
+		);
+
+		let node = xpath
+			.findnodes(relationship, None)
+			.unwrap()
+			.into_iter()
+			.next()
+			.unwrap();
+		let children = node
+			.get_child_nodes()
+			.into_iter()
+			.filter(|node| {
+				node.get_type() == Some(libxml::tree::NodeType::ElementNode)
+			})
+			.map(|node| node.get_name())
+			.collect::<Vec<_>>();
+		assert_eq!(children, ["priorityNumber", "relatedInvestigation"]);
+	}
+
+	#[test]
+	fn sparse_primary_source_does_not_create_empty_optional_nodes() {
+		let parser = Parser::default();
+		let mut doc = parser
+			.parse_string(crate::export::base_export_skeleton())
+			.expect("parse skeleton");
+		let mut xpath = Context::new(&doc).expect("xpath");
+		xpath.register_namespace("hl7", "urn:hl7-org:v3").unwrap();
+		let mut primary = source();
+		primary.reporter_given_name_null_flavor = None;
+		primary.city_null_flavor = None;
+		primary.qualification = Some("1".to_string());
+		primary.primary_source_regulatory = Some("1".to_string());
+
+		apply_primary_source_values(
+			&mut doc,
+			&parser,
+			&mut xpath,
+			&primary,
+			lib_core::regulatory::RegulatoryAuthority::Fda,
+		)
+		.expect("apply sparse primary source");
+
+		let relationship = "//hl7:investigationEvent/hl7:outboundRelationship[hl7:relatedInvestigation/hl7:code[@code='2']]";
+		for path in [
+			"//hl7:assignedPerson/hl7:name",
+			"//hl7:assignedEntity/hl7:addr",
+			"//hl7:assignedEntity/hl7:telecom",
+			"//hl7:assignedEntity/hl7:representedOrganization",
+		] {
+			assert!(
+				xpath
+					.findnodes(&format!("{relationship}{path}"), None)
+					.unwrap()
+					.is_empty(),
+				"unexpected optional node: {path}"
+			);
+		}
+		assert_eq!(
+			xpath
+				.findvalue(
+					&format!("{relationship}//hl7:asQualifiedEntity/hl7:code/@code"),
+					None,
+				)
+				.unwrap(),
+			"1"
+		);
 	}
 
 	#[test]
