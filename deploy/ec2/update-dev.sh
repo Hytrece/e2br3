@@ -42,10 +42,13 @@ fi
 running_backend=$(docker inspect e2br3-web-server --format '{{.Image}}' 2>/dev/null || true)
 latest_backend=$(docker image inspect "${BACKEND_IMAGE}" --format '{{.Id}}')
 if [ "${running_backend}" != "${latest_backend}" ]; then
-	BASELINE_IF_EMPTY=1 PROJECT_DIR="${APP_DIR}" "${APP_DIR}/deploy/ec2/migrate-rds.sh"
+	db_host=$(python3 -c 'import sys, urllib.parse; print(urllib.parse.urlsplit(sys.argv[1]).hostname)' "${SERVICE_DB_URL}")
+	db_token=$(aws rds generate-db-auth-token --hostname "${db_host}" --port 5432 --username postgres --region ap-northeast-2)
+	root_db_url=$(python3 -c 'import sys, urllib.parse; print("postgresql://postgres:{}@{}:5432/postgres?sslmode=require".format(urllib.parse.quote(sys.argv[2], safe=""), sys.argv[1]))' "${db_host}" "${db_token}")
 	APP_DIR="${APP_DIR}" ENV_FILE="${APP_DIR}/.env.dev" \
 		COMPOSE_FILE="${APP_DIR}/deploy/ec2/docker-compose.prod.yml" \
-		IMAGE_REF="${BACKEND_IMAGE}" RESET_DB=0 RELOAD_TERMINOLOGY=0 \
+		IMAGE_REF="${BACKEND_IMAGE}" SERVICE_DB_ROOT_URL="${root_db_url}" \
+		RESET_DB=1 RESET_PRESERVE_TERMINOLOGY=1 INCLUDE_SEED=1 RELOAD_TERMINOLOGY=0 \
 		HEALTHCHECK_URL=http://127.0.0.1:8216/health \
 		"${APP_DIR}/deploy/ec2/deploy.sh"
 fi
