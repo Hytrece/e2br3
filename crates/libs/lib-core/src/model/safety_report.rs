@@ -1216,10 +1216,12 @@ impl LiteratureReferenceBmc {
 		list_options: Option<ListOptions>,
 	) -> Result<Vec<LiteratureReference>> {
 		let mut filters = filters.unwrap_or_default();
-		filters.push(LiteratureReferenceFilter {
-			deleted: Some(OpValBool::Eq(false).into()),
-			..Default::default()
-		});
+		if filters.is_empty() {
+			filters.push(LiteratureReferenceFilter::default());
+		}
+		for filter in &mut filters {
+			filter.deleted = Some(OpValBool::Eq(false).into());
+		}
 		base_uuid::list::<Self, _, _>(ctx, mm, Some(filters), list_options).await
 	}
 
