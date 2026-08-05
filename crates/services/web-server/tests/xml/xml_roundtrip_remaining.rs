@@ -146,7 +146,7 @@ async fn setup_imported_case_from(fixture_name: &str) -> Result<ImportedCaseSetu
 
 #[serial]
 #[tokio::test(flavor = "multi_thread")]
-async fn fda_export_reads_persisted_n_and_c_values_through_rls() -> Result<()> {
+async fn fda_export_reads_persisted_sections_through_rls() -> Result<()> {
 	init_test_env().await?;
 	let mm = init_test_mm().await?;
 	let seed = seed_org_with_users(&mm, "admin_pwd", "viewer_pwd").await?;
@@ -234,6 +234,67 @@ async fn fda_export_reads_persisted_n_and_c_values_through_rls() -> Result<()> {
 		"{}",
 		String::from_utf8_lossy(&body)
 	);
+	let patient_id = extract_data_id(&body)?;
+	let (status, body) = request_json(
+		&app,
+		&cookie,
+		"POST",
+		format!("/api/cases/{case_id}/patient/death-info"),
+		Some(serde_json::json!({
+			"data": {
+				"patient_id": patient_id,
+				"date_of_death": "2026-08-04",
+				"autopsy_performed": true
+			}
+		})),
+	)
+	.await?;
+	assert_eq!(
+		status,
+		StatusCode::CREATED,
+		"{}",
+		String::from_utf8_lossy(&body)
+	);
+	let death_info_id = extract_data_id(&body)?;
+	let persisted_death = lib_core::model::patient::PatientDeathInformationBmc::get(
+		&ctx,
+		&mm,
+		Uuid::parse_str(&death_info_id)?,
+	)
+	.await?;
+	assert!(
+		persisted_death.date_of_death.is_some(),
+		"death setup did not persist date: {persisted_death:?}"
+	);
+	for (path, code, comments) in [
+		("reported-causes", "10036807", "RLS-visible reported cause"),
+		("autopsy-causes", "10067063", "RLS-visible autopsy cause"),
+	] {
+		let (status, body) = request_json(
+			&app,
+			&cookie,
+			"POST",
+			format!(
+				"/api/cases/{case_id}/patient/death-info/{death_info_id}/{path}"
+			),
+			Some(serde_json::json!({
+				"data": {
+					"death_info_id": death_info_id,
+					"sequence_number": 1,
+					"meddra_version": "28.1",
+					"meddra_code": code,
+					"comments": comments
+				}
+			})),
+		)
+		.await?;
+		assert_eq!(
+			status,
+			StatusCode::CREATED,
+			"{}",
+			String::from_utf8_lossy(&body)
+		);
+	}
 	let (status, body) = request_json(
 		&app,
 		&cookie,
@@ -368,6 +429,54 @@ async fn fda_export_reads_persisted_n_and_c_values_through_rls() -> Result<()> {
 		"{}",
 		String::from_utf8_lossy(&body)
 	);
+	for (uri, data) in [
+		(
+			format!("/api/cases/{case_id}/reactions"),
+			serde_json::json!({
+				"case_id": case_id,
+				"sequence_number": 1,
+				"primary_source_reaction": "RLS-visible Headache",
+				"reaction_language": "eng",
+				"reaction_meddra_version": "28.1",
+				"reaction_meddra_code": "10019211",
+				"serious": false,
+				"criteria_death": false,
+				"criteria_life_threatening": false,
+				"criteria_hospitalization": false,
+				"criteria_disabling": false,
+				"criteria_congenital_anomaly": false,
+				"criteria_other_medically_important": false,
+				"required_intervention": false,
+				"outcome": "1"
+			}),
+		),
+		(
+			format!("/api/cases/{case_id}/test-results"),
+			serde_json::json!({
+				"case_id": case_id,
+				"sequence_number": 1,
+				"test_date": "2026-08-05",
+				"test_name": "RLS-visible CBC",
+				"result_unstructured": "Normal",
+				"more_info_available": false
+			}),
+		),
+	] {
+		let (status, body) = request_json(
+			&app,
+			&cookie,
+			"POST",
+			uri,
+			Some(serde_json::json!({ "data": data })),
+		)
+		.await?;
+		assert_eq!(
+			status,
+			StatusCode::CREATED,
+			"{}",
+			String::from_utf8_lossy(&body)
+		);
+	}
 
 	let case_id = Uuid::parse_str(&case_id)?;
 	let exported = tokio::task::block_in_place(|| {
@@ -383,6 +492,32 @@ async fn fda_export_reads_persisted_n_and_c_values_through_rls() -> Result<()> {
 	assert!(
 		exported.contains(&format!("<creationTime value=\"{transmission_date}\"")),
 		"N.2.r.4 did not use persisted C.1.2"
+	);
+	let deceased = exported
+		.split_once("<deceasedTime")
+		.and_then(|(_, rest)| rest.split_once('>'))
+		.map(|(tag, _)| tag)
+		.ok_or("missing FDA D deceasedTime")?;
+	assert!(
+		deceased.contains("value=\"20260804\""),
+		"wrong FDA D deceasedTime: {deceased}"
+	);
+	for expected in [
+		"<originalText>RLS-visible reported cause</originalText>",
+		"<originalText>RLS-visible autopsy cause</originalText>",
+	] {
+		assert!(
+			exported.contains(expected),
+			"missing FDA D node: {expected}"
+		);
+	}
+	assert!(
+		exported.contains("code=\"10019211\" codeSystem=\"2.16.840.1.113883.6.163\" codeSystemVersion=\"28.1\""),
+		"persisted E.i.2.1 MedDRA coding missing"
+	);
+	assert!(
+		exported.contains("displayName=\"RLS-visible CBC\""),
+		"persisted F.r test result missing"
 	);
 	for expected in [
 		"<code code=\"C54588\" codeSystem=\"2.16.840.1.113883.3.26.1.1\"/>",

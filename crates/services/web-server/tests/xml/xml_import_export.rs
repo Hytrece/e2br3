@@ -1001,6 +1001,7 @@ async fn test_import_update_dg_fields_then_export_contains_updates() -> Result<(
 	}
 	let xml = String::from_utf8_lossy(&body);
 	for expected in [
+		"Roger",
 		sentinel_indication.as_str(),
 		sentinel_substance.as_str(),
 		"mg",

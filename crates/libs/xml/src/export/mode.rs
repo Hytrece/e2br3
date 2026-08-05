@@ -19,8 +19,9 @@ pub(crate) async fn build_fresh_export_from_db(
 		sections::c::export_patch(ctx, mm, case_id, case, xml.as_bytes(), authority)
 			.await?;
 	xml = sections::d::export_patch(ctx, mm, case_id, xml.as_bytes()).await?;
-	xml = sections::e::export_patch(mm, case_id, xml.as_bytes(), authority).await?;
-	xml = sections::f::export_patch(mm, case_id, xml.as_bytes()).await?;
+	xml = sections::e::export_patch(ctx, mm, case_id, xml.as_bytes(), authority)
+		.await?;
+	xml = sections::f::export_patch(ctx, mm, case_id, xml.as_bytes()).await?;
 	xml = sections::g::export_patch(ctx, mm, case_id, xml.as_bytes(), authority)
 		.await?;
 	sections::h::export_patch(ctx, mm, case_id, xml.as_bytes()).await

@@ -5,12 +5,15 @@ use lib_core::model;
 use lib_core::model::drug::{
 	derive_drug_characteristics, DosageInformation, DrugActiveSubstance,
 	DrugDeviceCharacteristic, DrugIndication, DrugInformation, DrugInformationBmc,
-	FdaDeviceCode, FdaDeviceCodeBmc, FdaDeviceInformation, FdaDeviceInformationBmc,
+	FdaDeviceCode, FdaDeviceCodeBmc, FdaDeviceCodeFilter, FdaDeviceInformation,
+	FdaDeviceInformationBmc, FdaDeviceInformationFilter,
 };
 use lib_core::model::drug_reaction_assessment::{
 	DrugReactionAssessment, RelatednessAssessment,
 };
 use lib_core::model::ModelManager;
+use modql::filter::{ListOptions, OpValValue, OpValsValue};
+use serde_json::json;
 
 pub(crate) struct DrugExportBundle {
 	pub(crate) drugs: Vec<DrugInformation>,
@@ -132,17 +135,43 @@ pub(crate) async fn load_drug_export_bundle(
 	let mut devices = if drug_ids.is_empty() {
 		Vec::new()
 	} else {
-		FdaDeviceInformationBmc::list(ctx, mm, None, None).await?
+		FdaDeviceInformationBmc::list(
+			ctx,
+			mm,
+			Some(vec![FdaDeviceInformationFilter {
+				drug_id: Some(OpValsValue::from(vec![OpValValue::In(
+					drug_ids.iter().map(|id| json!(id.to_string())).collect(),
+				)])),
+				..Default::default()
+			}]),
+			Some(ListOptions {
+				limit: Some(5000),
+				..Default::default()
+			}),
+		)
+		.await?
 	};
-	devices.retain(|device| drug_ids.contains(&device.drug_id));
 	devices.sort_by_key(|device| (device.drug_id, device.sequence_number));
 	let device_ids: Vec<_> = devices.iter().map(|device| device.id).collect();
 	let mut device_codes = if device_ids.is_empty() {
 		Vec::new()
 	} else {
-		FdaDeviceCodeBmc::list(ctx, mm, None, None).await?
+		FdaDeviceCodeBmc::list(
+			ctx,
+			mm,
+			Some(vec![FdaDeviceCodeFilter {
+				device_id: Some(OpValsValue::from(vec![OpValValue::In(
+					device_ids.iter().map(|id| json!(id.to_string())).collect(),
+				)])),
+				..Default::default()
+			}]),
+			Some(ListOptions {
+				limit: Some(5000),
+				..Default::default()
+			}),
+		)
+		.await?
 	};
-	device_codes.retain(|code| device_ids.contains(&code.device_id));
 	device_codes.sort_by_key(|code| {
 		(code.device_id, code.element.clone(), code.sequence_number)
 	});

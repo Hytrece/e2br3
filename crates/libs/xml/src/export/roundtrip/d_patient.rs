@@ -66,13 +66,13 @@ pub fn patch_d_patient(raw_xml: &[u8], patch: &DPatientPatch) -> Result<String> 
 		write_d_4(&mut xpath, height);
 	}
 
-	remove_nodes(&mut xpath, "//hl7:primaryRole/hl7:deceasedTime");
+	remove_nodes(&mut xpath, "//hl7:primaryRole/hl7:player1/hl7:deceasedTime");
 	if let Some(date_of_death) = patch.date_of_death {
 		append_fragment_child(
 			&mut doc,
 			&parser,
 			&mut xpath,
-			"//hl7:primaryRole",
+			"//hl7:primaryRole/hl7:player1",
 			&write_d_9_1(date_of_death),
 		)?;
 	}

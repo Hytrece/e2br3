@@ -1,29 +1,17 @@
 use super::*;
 use lib_core::e2b::null_flavor::E2bNullFlavorValue;
+use lib_core::model::test_result::TestResultBmc;
 
 pub(crate) async fn export_patch(
+	ctx: &Ctx,
 	mm: &ModelManager,
 	case_id: sqlx::types::Uuid,
 	raw_xml: &[u8],
 ) -> Result<String> {
-	let tests = fetch_test_results(mm, case_id).await?;
-	patch_f_test_results(raw_xml, &tests)
-}
-
-async fn fetch_test_results(
-	mm: &ModelManager,
-	case_id: sqlx::types::Uuid,
-) -> Result<Vec<TestResult>> {
-	mm.dbx()
-		.fetch_all(
-			sqlx::query_as::<_, TestResult>(
-				"SELECT * FROM test_results WHERE case_id = $1 AND deleted = false ORDER BY sequence_number",
-			)
-			.bind(case_id),
-		)
+	let tests = TestResultBmc::list_by_case(ctx, mm, case_id)
 		.await
-		.map_err(model::Error::from)
-		.map_err(Error::from)
+		.map_err(Error::from)?;
+	patch_f_test_results(raw_xml, &tests)
 }
 
 use sqlx::types::time::Date;

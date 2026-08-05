@@ -1336,13 +1336,14 @@ fn apply_patient_death_null_flavor(
 	let Some(death) = death_info.as_ref() else {
 		return Ok(());
 	};
+	let deceased_time = "//hl7:primaryRole/hl7:player1/hl7:deceasedTime";
 	if death.date_of_death.is_some() {
-		remove_attr_first(xpath, "//hl7:primaryRole/hl7:deceasedTime", "nullFlavor");
+		remove_attr_first(xpath, deceased_time, "nullFlavor");
 		return Ok(());
 	}
 	if let Some(null_flavor) = death.date_of_death_null_flavor.as_deref() {
 		if xpath
-			.findnodes("//hl7:primaryRole/hl7:deceasedTime", None)
+			.findnodes(deceased_time, None)
 			.map(|nodes| nodes.is_empty())
 			.unwrap_or(true)
 		{
@@ -1350,17 +1351,12 @@ fn apply_patient_death_null_flavor(
 				doc,
 				parser,
 				xpath,
-				"//hl7:primaryRole",
+				"//hl7:primaryRole/hl7:player1",
 				"<deceasedTime/>",
 			)?;
 		}
-		remove_attr_first(xpath, "//hl7:primaryRole/hl7:deceasedTime", "value");
-		set_attr_first(
-			xpath,
-			"//hl7:primaryRole/hl7:deceasedTime",
-			"nullFlavor",
-			null_flavor,
-		);
+		remove_attr_first(xpath, deceased_time, "value");
+		set_attr_first(xpath, deceased_time, "nullFlavor", null_flavor);
 	}
 	Ok(())
 }

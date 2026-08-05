@@ -1,31 +1,19 @@
 use super::*;
+use lib_core::model::reaction::ReactionBmc;
 
 pub(crate) async fn export_patch(
+	ctx: &Ctx,
 	mm: &ModelManager,
 	case_id: sqlx::types::Uuid,
 	raw_xml: &[u8],
 	authority: lib_core::regulatory::RegulatoryAuthority,
 ) -> Result<String> {
-	let reactions = fetch_reactions(mm, case_id).await?;
+	let reactions = ReactionBmc::list_by_case(ctx, mm, case_id)
+		.await
+		.map_err(Error::from)?;
 	crate::export::roundtrip::patch_e_reactions_for_authority(
 		raw_xml, &reactions, authority,
 	)
-}
-
-async fn fetch_reactions(
-	mm: &ModelManager,
-	case_id: sqlx::types::Uuid,
-) -> Result<Vec<Reaction>> {
-	mm.dbx()
-		.fetch_all(
-			sqlx::query_as::<_, Reaction>(
-				"SELECT * FROM reactions WHERE case_id = $1 AND deleted = false ORDER BY sequence_number",
-			)
-			.bind(case_id),
-		)
-		.await
-		.map_err(model::Error::from)
-		.map_err(Error::from)
 }
 
 use crate::export::policy::{

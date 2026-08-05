@@ -3,7 +3,8 @@ use crate::export::mode::{apply_section_postprocess, build_fresh_export_from_db}
 use crate::Result;
 use lib_core::ctx::Ctx;
 use lib_core::model::case::CaseBmc;
-use lib_core::model::ModelManager;
+use lib_core::model::store::set_full_context_from_ctx_dbx;
+use lib_core::model::{self, ModelManager};
 use lib_core::regulatory::RegulatoryAuthority;
 
 #[derive(Debug, Clone, Copy)]
@@ -88,10 +89,29 @@ pub async fn serialize_case_xml_for_authority(
 	case_id: sqlx::types::Uuid,
 	authority: RegulatoryAuthority,
 ) -> Result<String> {
-	let case = CaseBmc::get(ctx, mm, case_id).await.map_err(Error::from)?;
-	let xml = build_fresh_export_from_db(ctx, mm, case_id, &case, authority).await?;
-
-	apply_section_postprocess(ctx, mm, case_id, xml, authority).await
+	let mm = mm.new_with_txn()?;
+	mm.dbx().begin_txn().await.map_err(model::Error::from)?;
+	if let Err(err) = set_full_context_from_ctx_dbx(mm.dbx(), ctx).await {
+		let _ = mm.dbx().rollback_txn().await;
+		return Err(err.into());
+	}
+	let result = async {
+		let case = CaseBmc::get(ctx, &mm, case_id).await.map_err(Error::from)?;
+		let xml =
+			build_fresh_export_from_db(ctx, &mm, case_id, &case, authority).await?;
+		apply_section_postprocess(ctx, &mm, case_id, xml, authority).await
+	}
+	.await;
+	match result {
+		Ok(xml) => {
+			mm.dbx().commit_txn().await.map_err(model::Error::from)?;
+			Ok(xml)
+		}
+		Err(err) => {
+			let _ = mm.dbx().rollback_txn().await;
+			Err(err)
+		}
+	}
 }
 
 pub(crate) fn base_export_skeleton() -> &'static str {

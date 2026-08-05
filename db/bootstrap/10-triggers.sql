@@ -1521,6 +1521,74 @@ CREATE POLICY drug_indications_via_case ON drug_indications
         )
     );
 
+-- Drug Device Characteristics (via drug_information)
+ALTER TABLE drug_device_characteristics ENABLE ROW LEVEL SECURITY;
+ALTER TABLE drug_device_characteristics FORCE ROW LEVEL SECURITY;
+CREATE POLICY drug_device_characteristics_via_case ON drug_device_characteristics
+    FOR ALL TO e2br3_app_role
+    USING (
+        EXISTS (
+            SELECT 1 FROM drug_information di
+            JOIN cases c ON c.id = di.case_id
+            WHERE di.id = drug_device_characteristics.drug_id
+            AND (c.organization_id = current_organization_id() OR is_current_user_admin())
+        )
+    )
+    WITH CHECK (
+        EXISTS (
+            SELECT 1 FROM drug_information di
+            JOIN cases c ON c.id = di.case_id
+            WHERE di.id = drug_device_characteristics.drug_id
+            AND (c.organization_id = current_organization_id() OR is_current_user_admin())
+        )
+    );
+
+-- FDA Device Information (via drug_information)
+ALTER TABLE fda_device_information ENABLE ROW LEVEL SECURITY;
+ALTER TABLE fda_device_information FORCE ROW LEVEL SECURITY;
+CREATE POLICY fda_device_information_via_case ON fda_device_information
+    FOR ALL TO e2br3_app_role
+    USING (
+        EXISTS (
+            SELECT 1 FROM drug_information di
+            JOIN cases c ON c.id = di.case_id
+            WHERE di.id = fda_device_information.drug_id
+            AND (c.organization_id = current_organization_id() OR is_current_user_admin())
+        )
+    )
+    WITH CHECK (
+        EXISTS (
+            SELECT 1 FROM drug_information di
+            JOIN cases c ON c.id = di.case_id
+            WHERE di.id = fda_device_information.drug_id
+            AND (c.organization_id = current_organization_id() OR is_current_user_admin())
+        )
+    );
+
+-- FDA Device Codes (via fda_device_information -> drug_information)
+ALTER TABLE fda_device_codes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE fda_device_codes FORCE ROW LEVEL SECURITY;
+CREATE POLICY fda_device_codes_via_case ON fda_device_codes
+    FOR ALL TO e2br3_app_role
+    USING (
+        EXISTS (
+            SELECT 1 FROM fda_device_information fdi
+            JOIN drug_information di ON di.id = fdi.drug_id
+            JOIN cases c ON c.id = di.case_id
+            WHERE fdi.id = fda_device_codes.device_id
+            AND (c.organization_id = current_organization_id() OR is_current_user_admin())
+        )
+    )
+    WITH CHECK (
+        EXISTS (
+            SELECT 1 FROM fda_device_information fdi
+            JOIN drug_information di ON di.id = fdi.drug_id
+            JOIN cases c ON c.id = di.case_id
+            WHERE fdi.id = fda_device_codes.device_id
+            AND (c.organization_id = current_organization_id() OR is_current_user_admin())
+        )
+    );
+
 -- Sender Diagnoses (via narrative_information)
 ALTER TABLE sender_diagnoses ENABLE ROW LEVEL SECURITY;
 ALTER TABLE sender_diagnoses FORCE ROW LEVEL SECURITY;
