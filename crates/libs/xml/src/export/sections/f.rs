@@ -69,11 +69,6 @@ pub(crate) fn test_result_fragment(result: &TestResult) -> Result<String> {
 	out.push_str("</originalText>");
 	out.push_str("</code>");
 	out.push_str(&write_f_r_1(result)?);
-	if let Some(code) = write_f_r_3_1(result) {
-		out.push_str("<interpretationCode code=\"");
-		out.push_str(&xml_escape(code));
-		out.push_str("\"/>");
-	}
 	if let Some(val) = write_f_r_3_2(result) {
 		let unit = write_f_r_3_3(result);
 		out.push_str("<value xsi:type=\"IVL_PQ\">");
@@ -102,23 +97,32 @@ pub(crate) fn test_result_fragment(result: &TestResult) -> Result<String> {
 		out.push_str(&xml_escape(text));
 		out.push_str("</value>");
 	}
-	if result.normal_low_value.is_some() || result.normal_high_value.is_some() {
-		out.push_str("<referenceRange>");
-		if let Some(low) = write_f_r_4(result) {
-			out.push_str(
-				"<observationRange><interpretationCode code=\"L\"/><value value=\"",
-			);
-			out.push_str(&xml_escape(low));
-			out.push_str("\"/></observationRange>");
+	if let Some(code) = write_f_r_3_1(result) {
+		out.push_str("<interpretationCode code=\"");
+		out.push_str(&xml_escape(code));
+		out.push_str("\"/>");
+	}
+	if let Some(low) = write_f_r_4(result) {
+		out.push_str(
+			"<referenceRange><observationRange><value xsi:type=\"PQ\" value=\"",
+		);
+		out.push_str(&xml_escape(low));
+		if let Some(unit) = write_f_r_3_3(result) {
+			out.push_str("\" unit=\"");
+			out.push_str(&xml_escape(unit));
 		}
-		if let Some(high) = write_f_r_5(result) {
-			out.push_str(
-				"<observationRange><interpretationCode code=\"H\"/><value value=\"",
-			);
-			out.push_str(&xml_escape(high));
-			out.push_str("\"/></observationRange>");
+		out.push_str("\"/><interpretationCode code=\"L\"/></observationRange></referenceRange>");
+	}
+	if let Some(high) = write_f_r_5(result) {
+		out.push_str(
+			"<referenceRange><observationRange><value xsi:type=\"PQ\" value=\"",
+		);
+		out.push_str(&xml_escape(high));
+		if let Some(unit) = write_f_r_3_3(result) {
+			out.push_str("\" unit=\"");
+			out.push_str(&xml_escape(unit));
 		}
-		out.push_str("</referenceRange>");
+		out.push_str("\"/><interpretationCode code=\"H\"/></observationRange></referenceRange>");
 	}
 	if let Some(comments) = write_f_r_6(result) {
 		out.push_str("<outboundRelationship2 typeCode=\"COMP\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code code=\"10\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.19\"/><value>");
@@ -260,7 +264,9 @@ mod registry_coverage_tests {
 
 #[cfg(test)]
 mod tests {
-	use super::test_result_fragment;
+	use super::{patch_f_test_results, test_result_fragment};
+	use crate::default_xsd_path;
+	use crate::validation::validate_e2b_xml_xsd;
 	use lib_core::model::test_result::TestResult;
 	use sqlx::types::time::OffsetDateTime;
 	use sqlx::types::Uuid;
@@ -301,5 +307,66 @@ mod tests {
 		result.test_date_null_flavor = Some("ASKU".to_string());
 		let xml = test_result_fragment(&result).expect("export date NullFlavor");
 		assert!(xml.contains("<effectiveTime nullFlavor=\"ASKU\"/>"));
+	}
+
+	#[test]
+	fn exports_test_result_children_in_xsd_order_for_each_value_shape() {
+		let now = OffsetDateTime::now_utc();
+		let mut result = TestResult {
+			id: Uuid::new_v4(),
+			case_id: Uuid::new_v4(),
+			sequence_number: 1,
+			test_date: None,
+			test_date_null_flavor: None,
+			test_name: "Result".to_string(),
+			test_meddra_version: None,
+			test_meddra_code: None,
+			test_result_code: Some("N".to_string()),
+			test_result_value: Some("10".to_string()),
+			test_result_qualifier: None,
+			test_result_unit: Some("mg/dL".to_string()),
+			result_unstructured: None,
+			normal_low_value: Some("5".to_string()),
+			normal_high_value: Some("15".to_string()),
+			comments: None,
+			more_info_available: None,
+			deleted: false,
+			created_at: now,
+			updated_at: now,
+			created_by: Uuid::new_v4(),
+			updated_by: None,
+		};
+		let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+			.parent()
+			.and_then(|path| path.parent())
+			.and_then(|path| path.parent())
+			.expect("workspace root")
+			.to_path_buf();
+		let source =
+			std::fs::read(root.join("docs/exporter/fda/FAERS2022Scenario1.xml"))
+				.expect("official FDA example");
+		let schema = default_xsd_path().expect("official ICH schema");
+
+		for value_start in ["<value xsi:type=\"IVL_PQ\">", "<value xsi:type=\"ED\">"]
+		{
+			let xml = test_result_fragment(&result).expect("export");
+			assert!(
+				xml.find(value_start).expect("typed result value")
+					< xml
+						.find("<interpretationCode code=\"N\"/>")
+						.expect("result interpretation"),
+				"{xml}"
+			);
+			let exported =
+				patch_f_test_results(&source, std::slice::from_ref(&result))
+					.expect("patch official FDA example");
+			let errors = validate_e2b_xml_xsd(exported.as_bytes(), &schema)
+				.expect("validate XSD");
+			assert!(errors.is_empty(), "{errors:#?}");
+
+			result.test_result_value = None;
+			result.test_result_unit = None;
+			result.result_unstructured = Some("normal".to_string());
+		}
 	}
 }

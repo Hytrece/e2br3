@@ -1028,10 +1028,27 @@ pub(crate) fn drug_fragment(
 			out.push_str(&xml_escape(text));
 			out.push_str("</text>");
 		}
-		if dose.number_of_units.is_some() || dose.frequency_unit.is_some() {
-			out.push_str(
-				"<effectiveTime xsi:type=\"SXPR_TS\"><comp xsi:type=\"PIVL_TS\"><period",
-			);
+		let has_frequency =
+			dose.number_of_units.is_some() || dose.frequency_unit.is_some();
+		let (start, start_null_flavor) = write_g_k_4_r_4(dose);
+		let (end, end_null_flavor) = write_g_k_4_r_5(dose);
+		let has_bounds = start.is_some()
+			|| start_null_flavor.is_some()
+			|| end.is_some()
+			|| end_null_flavor.is_some();
+		let has_duration = dose.duration_value.is_some();
+		let timing_parts = usize::from(has_frequency)
+			+ usize::from(has_bounds)
+			+ usize::from(has_duration);
+		if timing_parts > 1 {
+			out.push_str("<effectiveTime xsi:type=\"SXPR_TS\">");
+		}
+		if has_frequency {
+			out.push_str(if timing_parts > 1 {
+				"<comp xsi:type=\"PIVL_TS\"><period"
+			} else {
+				"<effectiveTime xsi:type=\"PIVL_TS\"><period"
+			});
 			if let Some(v) = write_g_k_4_r_2(dose) {
 				out.push_str(" value=\"");
 				out.push_str(&xml_escape(&decimal_text(v)));
@@ -1042,47 +1059,49 @@ pub(crate) fn drug_fragment(
 				out.push_str(&xml_escape(u));
 				out.push_str("\"");
 			}
-			out.push_str("/></comp></effectiveTime>");
+			out.push_str(if timing_parts > 1 {
+				"/></comp>"
+			} else {
+				"/></effectiveTime>"
+			});
 		}
-		let (start, start_null_flavor) = write_g_k_4_r_4(dose);
-		let (end, end_null_flavor) = write_g_k_4_r_5(dose);
-		if start.is_some()
-			|| start_null_flavor.is_some()
-			|| end.is_some()
-			|| end_null_flavor.is_some()
-			|| dose.duration_value.is_some()
-		{
-			out.push_str("<effectiveTime xsi:type=\"SXPR_TS\">");
+		if has_bounds {
+			out.push_str(if timing_parts > 1 {
+				"<comp xsi:type=\"IVL_TS\" operator=\"A\">"
+			} else {
+				"<effectiveTime xsi:type=\"IVL_TS\">"
+			});
 			if let Some(start) = start {
-				out.push_str(
-					"<comp xsi:type=\"IVL_TS\" operator=\"A\"><low value=\"",
-				);
+				out.push_str("<low value=\"");
 				out.push_str(&fmt_ts(start, None));
-				out.push_str("\"/></comp>");
+				out.push_str("\"/>");
 			} else if let Some(null_flavor) = start_null_flavor {
-				out.push_str(
-					"<comp xsi:type=\"IVL_TS\" operator=\"A\"><low nullFlavor=\"",
-				);
+				out.push_str("<low nullFlavor=\"");
 				out.push_str(&xml_escape(null_flavor));
-				out.push_str("\"/></comp>");
+				out.push_str("\"/>");
 			}
 			if let Some(end) = end {
-				out.push_str(
-					"<comp xsi:type=\"IVL_TS\" operator=\"A\"><high value=\"",
-				);
+				out.push_str("<high value=\"");
 				out.push_str(&fmt_ts(end, None));
-				out.push_str("\"/></comp>");
+				out.push_str("\"/>");
 			} else if let Some(null_flavor) = end_null_flavor {
-				out.push_str(
-					"<comp xsi:type=\"IVL_TS\" operator=\"A\"><high nullFlavor=\"",
-				);
+				out.push_str("<high nullFlavor=\"");
 				out.push_str(&xml_escape(null_flavor));
-				out.push_str("\"/></comp>");
+				out.push_str("\"/>");
 			}
+			out.push_str(if timing_parts > 1 {
+				"</comp>"
+			} else {
+				"</effectiveTime>"
+			});
+		}
+		if has_duration {
+			out.push_str(if timing_parts > 1 {
+				"<comp xsi:type=\"IVL_TS\" operator=\"A\"><width value=\""
+			} else {
+				"<effectiveTime xsi:type=\"IVL_TS\"><width value=\""
+			});
 			if let Some(width) = write_g_k_4_r_6a(dose) {
-				out.push_str(
-					"<comp xsi:type=\"IVL_TS\" operator=\"A\"><width value=\"",
-				);
 				out.push_str(&xml_escape(&decimal_text(width)));
 				out.push_str("\"");
 				if let Some(unit) = write_g_k_4_r_6b(dose) {
@@ -1090,8 +1109,14 @@ pub(crate) fn drug_fragment(
 					out.push_str(&xml_escape(unit));
 					out.push_str("\"");
 				}
-				out.push_str("/></comp>");
+				out.push_str(if timing_parts > 1 {
+					"/></comp>"
+				} else {
+					"/></effectiveTime>"
+				});
 			}
+		}
+		if timing_parts > 1 {
 			out.push_str("</effectiveTime>");
 		}
 		if dose.route_of_administration.is_some()
@@ -1758,7 +1783,58 @@ mod tests {
 				xml.contains(&format!("<period value=\"0.5\" unit=\"{unit}\"/>")),
 				"{xml}"
 			);
+			assert!(
+				xml.contains("<effectiveTime xsi:type=\"PIVL_TS\"><period"),
+				"{xml}"
+			);
+			assert!(!xml.contains("xsi:type=\"SXPR_TS\""), "{xml}");
+			let imported =
+				crate::import_sections::g_drug::parse_g_drugs(xml.as_bytes())
+					.expect("import exported XML");
+			assert_eq!(
+				imported[0].dosages[0].number_of_units,
+				Some(Decimal::new(5, 1))
+			);
+			assert_eq!(imported[0].dosages[0].frequency_unit.as_deref(), Some(unit));
 		}
+	}
+
+	#[test]
+	fn export_g_groups_dosage_timing_like_official_examples() {
+		let case_id = Uuid::new_v4();
+		let drug_id = Uuid::new_v4();
+		let drug = test_drug(drug_id, case_id);
+		let mut dosage = test_dosage(drug_id);
+		dosage.number_of_units = Some(Decimal::new(1, 0));
+		dosage.frequency_unit = Some("d".to_string());
+		dosage.first_administration_date =
+			Some(Date::from_calendar_date(2024, time::Month::January, 1).unwrap());
+		dosage.last_administration_date =
+			Some(Date::from_calendar_date(2024, time::Month::January, 10).unwrap());
+		dosage.duration_value = Some(Decimal::new(9, 0));
+		dosage.duration_unit = Some("d".to_string());
+
+		let xml = export_g_drugs_xml(&[drug], &[], &[dosage], &[], &[], &[], &[])
+			.expect("export XML");
+		let timing = "<effectiveTime xsi:type=\"SXPR_TS\"><comp xsi:type=\"PIVL_TS\"><period value=\"1\" unit=\"d\"/></comp><comp xsi:type=\"IVL_TS\" operator=\"A\"><low value=\"20240101\"/><high value=\"20240110\"/></comp><comp xsi:type=\"IVL_TS\" operator=\"A\"><width value=\"9\" unit=\"d\"/></comp></effectiveTime>";
+		assert!(xml.contains(timing), "{xml}");
+		assert_eq!(xml.matches("xsi:type=\"SXPR_TS\"").count(), 1, "{xml}");
+
+		let imported = crate::import_sections::g_drug::parse_g_drugs(xml.as_bytes())
+			.expect("import exported XML");
+		let imported = &imported[0].dosages[0];
+		assert_eq!(imported.number_of_units, Some(Decimal::new(1, 0)));
+		assert_eq!(imported.frequency_unit.as_deref(), Some("d"));
+		assert_eq!(
+			imported.start_date,
+			Some(Date::from_calendar_date(2024, time::Month::January, 1).unwrap())
+		);
+		assert_eq!(
+			imported.end_date,
+			Some(Date::from_calendar_date(2024, time::Month::January, 10).unwrap())
+		);
+		assert_eq!(imported.duration_value, Some(Decimal::new(9, 0)));
+		assert_eq!(imported.duration_unit.as_deref(), Some("d"));
 	}
 
 	#[test]

@@ -3,6 +3,8 @@ use crate::Result;
 use libxml::parser::Parser;
 use libxml::tree::{Document, Node, NodeType};
 use libxml::xpath::Context;
+use quick_xml::events::Event;
+use quick_xml::Reader;
 use sqlx::types::time::{Date, OffsetDateTime};
 use time::UtcOffset;
 
@@ -103,7 +105,7 @@ fn node_from_fragment(
 	parser: &Parser,
 	fragment: &str,
 ) -> Result<Node> {
-	let fragment = wrap_fragment(fragment, "urn:hl7-org:v3");
+	let fragment = wrap_fragment(fragment, "urn:hl7-org:v3")?;
 	let frag_doc =
 		parser
 			.parse_string(&fragment)
@@ -134,10 +136,84 @@ fn node_from_fragment(
 	})
 }
 
-fn wrap_fragment(fragment: &str, ns: &str) -> String {
-	format!(
-		"<wrapper xmlns=\"{ns}\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\">{fragment}</wrapper>"
-	)
+fn wrap_fragment(fragment: &str, ns: &str) -> Result<String> {
+	let mut reader = Reader::from_str(fragment);
+	loop {
+		let (element, closing_len) = match reader.read_event() {
+			Ok(Event::Start(element)) => (element, 1),
+			Ok(Event::Empty(element)) => (element, 2),
+			Ok(Event::Eof) => {
+				return Err(Error::InvalidXml {
+					message: "Fragment has no root element".to_string(),
+					line: None,
+					column: None,
+				})
+			}
+			Ok(_) => continue,
+			Err(err) => {
+				return Err(Error::InvalidXml {
+					message: format!("XML parse error: {err}"),
+					line: None,
+					column: None,
+				})
+			}
+		};
+
+		let has_default_namespace = match element
+			.try_get_attribute("xmlns")
+			.map_err(|err| Error::InvalidXml {
+				message: format!("XML parse error: {err}"),
+				line: None,
+				column: None,
+			})? {
+			Some(attr) if attr.value.as_ref() == ns.as_bytes() => true,
+			Some(_) => {
+				return Err(Error::InvalidXml {
+					message: "Fragment root has an invalid default namespace"
+						.to_string(),
+					line: None,
+					column: None,
+				})
+			}
+			None => false,
+		};
+		let xsi = "http://www.w3.org/2001/XMLSchema-instance";
+		let has_xsi_namespace = match element
+			.try_get_attribute("xmlns:xsi")
+			.map_err(|err| Error::InvalidXml {
+				message: format!("XML parse error: {err}"),
+				line: None,
+				column: None,
+			})? {
+			Some(attr) if attr.value.as_ref() == xsi.as_bytes() => true,
+			Some(_) => {
+				return Err(Error::InvalidXml {
+					message: "Fragment root has an invalid xsi namespace"
+						.to_string(),
+					line: None,
+					column: None,
+				})
+			}
+			None => false,
+		};
+
+		let insert_at = reader.buffer_position() - closing_len;
+		let mut rooted =
+			String::with_capacity(fragment.len() + ns.len() + xsi.len() + 25);
+		rooted.push_str(&fragment[..insert_at]);
+		if !has_default_namespace {
+			rooted.push_str(" xmlns=\"");
+			rooted.push_str(ns);
+			rooted.push('"');
+		}
+		if !has_xsi_namespace {
+			rooted.push_str(" xmlns:xsi=\"");
+			rooted.push_str(xsi);
+			rooted.push('"');
+		}
+		rooted.push_str(&fragment[insert_at..]);
+		return Ok(format!("<wrapper>{rooted}</wrapper>"));
+	}
 }
 
 pub(crate) fn xml_escape(input: &str) -> String {
@@ -147,4 +223,59 @@ pub(crate) fn xml_escape(input: &str) -> String {
 		.replace('>', "&gt;")
 		.replace('"', "&quot;")
 		.replace('\'', "&apos;")
+}
+
+#[cfg(test)]
+mod tests {
+	use super::{append_fragment_child, wrap_fragment};
+	use libxml::parser::Parser;
+	use libxml::xpath::Context;
+
+	#[test]
+	fn appended_fragment_keeps_namespace_bindings() {
+		let parser = Parser::default();
+		let mut doc = parser
+			.parse_string("<root xmlns=\"urn:hl7-org:v3\"><parent/></root>")
+			.expect("destination document");
+		let mut xpath = Context::new(&doc).expect("destination XPath");
+		xpath
+			.register_namespace("hl7", "urn:hl7-org:v3")
+			.expect("HL7 namespace");
+
+		append_fragment_child(
+			&mut doc,
+			&parser,
+			&mut xpath,
+			"//hl7:parent",
+			"<value xsi:type=\"ED\"/>",
+		)
+		.expect("append fragment");
+
+		let reparsed = parser
+			.parse_string(&doc.to_string())
+			.expect("serialized document with bound xsi prefix");
+		let mut reparsed_xpath = Context::new(&reparsed).expect("reparsed XPath");
+		reparsed_xpath
+			.register_namespace("xsi", "http://www.w3.org/2001/XMLSchema-instance")
+			.expect("xsi namespace");
+		assert_eq!(
+			reparsed_xpath
+				.findnodes("//*[@xsi:type='ED']", None)
+				.expect("xsi:type lookup")
+				.len(),
+			1
+		);
+	}
+
+	#[test]
+	fn fragment_root_namespaces_are_not_duplicated() {
+		let wrapped = wrap_fragment(
+			"<value xmlns=\"urn:hl7-org:v3\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:type=\"ED\"/>",
+			"urn:hl7-org:v3",
+		)
+		.expect("wrap fragment");
+
+		assert_eq!(wrapped.matches("xmlns=\"").count(), 1);
+		assert_eq!(wrapped.matches("xmlns:xsi=\"").count(), 1);
+	}
 }

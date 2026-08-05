@@ -76,23 +76,23 @@ impl GDrugPaths {
 		"hl7:outboundRelationship2[@typeCode='COMP']/hl7:substanceAdministration";
 	pub const DOSAGE_TEXT_NODE: &'static str = "hl7:text";
 	pub const DOSAGE_FREQUENCY_VALUE: &'static str =
-		"hl7:effectiveTime/hl7:comp[@xsi:type='PIVL_TS']/hl7:period/@value";
+		"hl7:effectiveTime[@xsi:type='PIVL_TS']/hl7:period/@value | hl7:effectiveTime/hl7:comp[@xsi:type='PIVL_TS']/hl7:period/@value";
 	pub const DOSAGE_FREQUENCY_UNIT: &'static str =
-		"hl7:effectiveTime/hl7:comp[@xsi:type='PIVL_TS']/hl7:period/@unit";
+		"hl7:effectiveTime[@xsi:type='PIVL_TS']/hl7:period/@unit | hl7:effectiveTime/hl7:comp[@xsi:type='PIVL_TS']/hl7:period/@unit";
 	pub const DOSAGE_EFFECTIVE_TIME_NULL_FLAVOR: &'static str =
 		"hl7:effectiveTime/@nullFlavor";
 	pub const DOSAGE_START_DATE: &'static str =
-		"hl7:effectiveTime/hl7:comp[@operator='A']/hl7:low/@value";
+		"hl7:effectiveTime[@xsi:type='IVL_TS']/hl7:low/@value | hl7:effectiveTime/hl7:comp[@xsi:type='IVL_TS']/hl7:low/@value";
 	pub const DOSAGE_START_DATE_NULL_FLAVOR: &'static str =
-		"hl7:effectiveTime/hl7:comp[@operator='A']/hl7:low/@nullFlavor";
+		"hl7:effectiveTime[@xsi:type='IVL_TS']/hl7:low/@nullFlavor | hl7:effectiveTime/hl7:comp[@xsi:type='IVL_TS']/hl7:low/@nullFlavor";
 	pub const DOSAGE_END_DATE: &'static str =
-		"hl7:effectiveTime/hl7:comp[@operator='A']/hl7:high/@value";
+		"hl7:effectiveTime[@xsi:type='IVL_TS']/hl7:high/@value | hl7:effectiveTime/hl7:comp[@xsi:type='IVL_TS']/hl7:high/@value";
 	pub const DOSAGE_END_DATE_NULL_FLAVOR: &'static str =
-		"hl7:effectiveTime/hl7:comp[@operator='A']/hl7:high/@nullFlavor";
+		"hl7:effectiveTime[@xsi:type='IVL_TS']/hl7:high/@nullFlavor | hl7:effectiveTime/hl7:comp[@xsi:type='IVL_TS']/hl7:high/@nullFlavor";
 	pub const DOSAGE_DURATION_VALUE: &'static str =
-		"hl7:effectiveTime/hl7:comp[@operator='A']/hl7:width/@value";
+		"hl7:effectiveTime[@xsi:type='IVL_TS']/hl7:width/@value | hl7:effectiveTime/hl7:comp[@xsi:type='IVL_TS']/hl7:width/@value";
 	pub const DOSAGE_DURATION_UNIT: &'static str =
-		"hl7:effectiveTime/hl7:comp[@operator='A']/hl7:width/@unit";
+		"hl7:effectiveTime[@xsi:type='IVL_TS']/hl7:width/@unit | hl7:effectiveTime/hl7:comp[@xsi:type='IVL_TS']/hl7:width/@unit";
 	pub const DOSE_VALUE: &'static str = "hl7:doseQuantity/@value";
 	pub const DOSE_UNIT: &'static str = "hl7:doseQuantity/@unit";
 	pub const ROUTE_CODE: &'static str = "hl7:routeCode/@code";
