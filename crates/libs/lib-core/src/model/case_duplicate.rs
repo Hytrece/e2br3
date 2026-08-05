@@ -274,7 +274,7 @@ pub fn assess_duplicate_basis(key: &CaseDuplicateKey) -> DuplicateBasisAssessmen
 			&& ae_start_present;
 		if !complete {
 			warnings.push(
-				"study intake duplicate check is incomplete; resubmit with allow_duplicate_override=true after review".to_string(),
+				"Some fields needed for the duplicate check are missing. Review the form before creating this case.".to_string(),
 			);
 		}
 		complete
@@ -288,7 +288,7 @@ pub fn assess_duplicate_basis(key: &CaseDuplicateKey) -> DuplicateBasisAssessmen
 			&& ae_start_present;
 		if !complete {
 			warnings.push(
-				"duplicate check basis is incomplete; resubmit with allow_duplicate_override=true after review".to_string(),
+				"Some fields needed for the duplicate check are missing. Review the form before creating this case.".to_string(),
 			);
 		}
 		complete
@@ -296,52 +296,56 @@ pub fn assess_duplicate_basis(key: &CaseDuplicateKey) -> DuplicateBasisAssessmen
 
 	if report_type == "2" && !reporter_present {
 		warnings.push(
-			"Reporter organization is missing from duplicate check input"
+			"Reporter organization is missing. Add it or mark it as unavailable before checking for duplicates."
 				.to_string(),
 		);
 	}
 	if report_type == "2" && !sponsor_study_present {
 		warnings.push(
-			"Sponsor Study Number is missing from duplicate check input".to_string(),
+			"Sponsor Study Number is missing. Add it or mark it as unavailable before checking for duplicates.".to_string(),
 		);
 	}
 	if report_type == "2" && !investigation_present {
 		warnings.push(
-			"Investigation Number is missing from duplicate check input".to_string(),
+			"Investigation Number is missing. Add it or mark it as unavailable before checking for duplicates.".to_string(),
 		);
 	}
 	if report_type != "2" && !patient_initials_present {
 		warnings.push(
-			"Patient Name or Initials is missing from duplicate check input"
+			"Patient name or initials are missing. Add them or mark them as unavailable before checking for duplicates."
 				.to_string(),
 		);
 	}
 	if report_type != "2" && !age_present {
-		warnings
-			.push("Patient age is missing from duplicate check input".to_string());
+		warnings.push(
+			"Patient age is missing. Add it before checking for duplicates."
+				.to_string(),
+		);
 	}
 	if report_type != "2" && !sex_present {
 		warnings
-			.push("Patient sex is missing from duplicate check input".to_string());
+			.push("Patient sex is missing. Add it or mark it as unavailable before checking for duplicates.".to_string());
 	}
 	if !product_present {
-		warnings
-			.push("Product ID is missing from duplicate check input".to_string());
+		warnings.push(
+			"Product ID is missing. Add it before checking for duplicates."
+				.to_string(),
+		);
 	}
 	if !reaction_version_present {
 		warnings.push(
-			"Reaction MedDRA version is missing from duplicate check input"
+			"Reaction MedDRA version is missing. Add it before checking for duplicates."
 				.to_string(),
 		);
 	}
 	if !reaction_code_present {
 		warnings.push(
-			"Reaction MedDRA code is missing from duplicate check input".to_string(),
+			"Reaction MedDRA code is missing. Add it before checking for duplicates.".to_string(),
 		);
 	}
 	if !ae_start_present {
 		warnings
-			.push("AE start date is missing from duplicate check input".to_string());
+			.push("AE start date is missing. Add it or mark it as unavailable before checking for duplicates.".to_string());
 	}
 
 	DuplicateBasisAssessment {

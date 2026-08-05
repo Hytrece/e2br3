@@ -482,7 +482,7 @@ async fn create_case_from_intake_authorized(
 			.first()
 			.cloned()
 			.unwrap_or_else(|| {
-				"duplicate check basis is incomplete; resubmit with allow_duplicate_override=true after review".to_string()
+				"Some fields needed for the duplicate check are missing. Review the form before creating this case.".to_string()
 			});
 		return Err(Error::BadRequest { message });
 	}
