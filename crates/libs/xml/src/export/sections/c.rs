@@ -1107,19 +1107,12 @@ pub(crate) async fn apply_study_section(
 		));
 	}
 
-	let fda_ids =
-		if matches!(authority, lib_core::regulatory::RegulatoryAuthority::Fda) {
-			format!(
-				"{}{}{}",
-				write_fda_c_5_5a(&study),
-				write_fda_c_5_5b(&study),
-				write_fda_c_5_6_r(&cross_reported_inds)
-			)
-		} else {
-			String::new()
-		};
-	if !fda_ids.is_empty() {
-		auth_xml.push_str(&format!("<authorization typeCode=\"AUTH\"><studyRegistration classCode=\"ACT\" moodCode=\"EVN\">{fda_ids}</studyRegistration></authorization>"));
+	if matches!(authority, lib_core::regulatory::RegulatoryAuthority::Fda) {
+		let mut fda_ids = vec![write_fda_c_5_5a(&study), write_fda_c_5_5b(&study)];
+		fda_ids.extend(cross_reported_inds.iter().map(write_fda_c_5_6_r));
+		for id in fda_ids.into_iter().filter(|id| !id.is_empty()) {
+			auth_xml.push_str(&format!("<authorization typeCode=\"AUTH\"><studyRegistration classCode=\"ACT\" moodCode=\"EVN\">{id}</studyRegistration></authorization>"));
+		}
 	}
 
 	let sponsor_id_xml = write_c_5_3(&study);
@@ -1264,14 +1257,22 @@ fn write_fda_c_5_5b(value: &StudyInformation) -> String {
 }
 
 /// e2b:FDA.C.5.6.r
-fn write_fda_c_5_6_r(values: &[StudyFdaCrossReportedInd]) -> String {
-	values.iter().map(|value| {
-		if let Some(number) = value.ind_number.as_deref().filter(|v| !v.trim().is_empty()) {
-			format!("<id extension=\"{}\" root=\"2.16.840.1.113883.3.989.5.1.2.2.1.2.3\"/>", xml_escape(number))
-		} else if let Some(null_flavor) = value.ind_number_null_flavor.as_deref() {
-			format!("<id nullFlavor=\"{}\" root=\"2.16.840.1.113883.3.989.5.1.2.2.1.2.3\"/>", xml_escape(null_flavor))
-		} else { String::new() }
-	}).collect()
+fn write_fda_c_5_6_r(value: &StudyFdaCrossReportedInd) -> String {
+	if let Some(number) =
+		value.ind_number.as_deref().filter(|v| !v.trim().is_empty())
+	{
+		format!(
+			"<id extension=\"{}\" root=\"2.16.840.1.113883.3.989.5.1.2.2.1.2.3\"/>",
+			xml_escape(number)
+		)
+	} else if let Some(null_flavor) = value.ind_number_null_flavor.as_deref() {
+		format!(
+			"<id nullFlavor=\"{}\" root=\"2.16.840.1.113883.3.989.5.1.2.2.1.2.3\"/>",
+			xml_escape(null_flavor)
+		)
+	} else {
+		String::new()
+	}
 }
 
 fn write_fda_study_id(value: Option<&str>, root: &str) -> String {

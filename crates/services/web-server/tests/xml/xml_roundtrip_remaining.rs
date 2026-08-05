@@ -283,6 +283,7 @@ async fn fda_export_reads_persisted_n_and_c_values_through_rls() -> Result<()> {
 	assert_eq!(report["data"]["transmission_date"], transmission_date);
 	assert_eq!(report["data"]["local_criteria_report_type"], "1");
 
+	let mut study_id = None;
 	for (uri, data) in [
 		(
 			format!("/api/cases/{case_id}/safety-report/senders"),
@@ -310,7 +311,9 @@ async fn fda_export_reads_persisted_n_and_c_values_through_rls() -> Result<()> {
 				"case_id": case_id,
 				"study_name": "QVIS Clinical Trial",
 				"sponsor_study_number": "QVIS-CT-2026-004",
-				"study_type_reaction": "1"
+				"study_type_reaction": "1",
+				"fda_ind_number_occurred": "123456",
+				"fda_pre_anda_number_occurred": "654321"
 			}),
 		),
 		(
@@ -323,6 +326,7 @@ async fn fda_export_reads_persisted_n_and_c_values_through_rls() -> Result<()> {
 			}),
 		),
 	] {
+		let is_study = uri.ends_with("/studies");
 		let (status, body) = request_json(
 			&app,
 			&cookie,
@@ -337,7 +341,33 @@ async fn fda_export_reads_persisted_n_and_c_values_through_rls() -> Result<()> {
 			"{}",
 			String::from_utf8_lossy(&body)
 		);
+		if is_study {
+			study_id = Some(extract_data_id(&body)?);
+		}
 	}
+	let study_id = study_id.ok_or("missing persisted study id")?;
+	let (status, body) = request_json(
+		&app,
+		&cookie,
+		"POST",
+		format!(
+			"/api/cases/{case_id}/safety-report/studies/{study_id}/fda-cross-reported-inds"
+		),
+		Some(serde_json::json!({
+			"data": {
+				"study_information_id": study_id,
+				"ind_number": "789012",
+				"sequence_number": 1
+			}
+		})),
+	)
+	.await?;
+	assert_eq!(
+		status,
+		StatusCode::CREATED,
+		"{}",
+		String::from_utf8_lossy(&body)
+	);
 
 	let case_id = Uuid::parse_str(&case_id)?;
 	let exported = tokio::task::block_in_place(|| {
@@ -372,6 +402,9 @@ async fn fda_export_reads_persisted_n_and_c_values_through_rls() -> Result<()> {
 		"<name>QVIS Safety CRO</name>",
 		"<code codeSystem=\"1.0.3166.1.2.2\" code=\"KR\"/>",
 		"<researchStudy classCode=\"CLNTRL\" moodCode=\"EVN\"><id extension=\"QVIS-CT-2026-004\" root=\"2.16.840.1.113883.3.989.2.1.3.5\"/><code code=\"1\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.8\" codeSystemVersion=\"1.0\"/>",
+		"<authorization typeCode=\"AUTH\"><studyRegistration classCode=\"ACT\" moodCode=\"EVN\"><id extension=\"123456\" root=\"2.16.840.1.113883.3.989.5.1.2.2.1.2.1\"/></studyRegistration></authorization>",
+		"<authorization typeCode=\"AUTH\"><studyRegistration classCode=\"ACT\" moodCode=\"EVN\"><id extension=\"654321\" root=\"2.16.840.1.113883.3.989.5.1.2.2.1.2.2\"/></studyRegistration></authorization>",
+		"<authorization typeCode=\"AUTH\"><studyRegistration classCode=\"ACT\" moodCode=\"EVN\"><id extension=\"789012\" root=\"2.16.840.1.113883.3.989.5.1.2.2.1.2.3\"/></studyRegistration></authorization>",
 		"<id root=\"2.16.840.1.113883.3.989.2.1.3.3\" assigningAuthorityName=\"QVIS Safety CRO\" extension=\"KR-QVIS-PRIOR-2026-004\"/>",
 	] {
 		assert!(exported.contains(expected), "missing FDA C node: {expected}");
