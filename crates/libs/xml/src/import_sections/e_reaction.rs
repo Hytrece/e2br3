@@ -518,11 +518,23 @@ fn read_e_i_6a(xpath: &mut Context, node: &Node) -> Result<Option<Decimal>> {
 
 /// e2b:E.i.6b
 fn read_e_i_6b(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
-	input_string(
+	let unit = input_string(
 		first_attr(xpath, node, EReactionPaths::DURATION_UNIT),
 		"reactionDuration.unit",
 		input_contracts::generated::e::e_i_6b,
-	)
+	)?;
+	let Some(unit) = unit else {
+		return Ok(None);
+	};
+	crate::mapping::fda::e_reaction::reaction_duration_unit_from_ucum(&unit)
+		.map(|code| Some(code.to_string()))
+		.ok_or_else(|| Error::InvalidXml {
+			message: format!(
+				"ICH.E.i.6b.ALLOWED.VALUE: unsupported UCUM reaction duration unit `{unit}`"
+			),
+			line: None,
+			column: None,
+		})
 }
 
 /// e2b:E.i.7
@@ -878,6 +890,12 @@ fn parse_bool_value(value: Option<String>) -> Option<bool> {
 mod split_null_flavor_tests {
 	use super::parse_e_reactions;
 
+	fn reaction_with_duration_unit(unit: &str) -> String {
+		format!(
+			r#"<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><subjectOf2><observation><code code="29" codeSystem="2.16.840.1.113883.3.989.2.1.1.19"/><effectiveTime xsi:type="SXPR_TS"><comp xsi:type="IVL_TS" operator="A"><width value="1" unit="{unit}"/></comp></effectiveTime><value xsi:type="CE"><originalText>Reaction</originalText></value></observation></subjectOf2></MCCI_IN200100UV01>"#
+		)
+	}
+
 	#[test]
 	fn imports_required_intervention_boolean_null_flavor_into_companion() {
 		let xml = br#"<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><subjectOf2><observation><code code="29" codeSystem="2.16.840.1.113883.3.989.2.1.1.19"/><value xsi:type="CE"><originalText>Reaction</originalText></value><outboundRelationship2><observation><code code="7"/><value xsi:type="BL" nullFlavor="NI"/></observation></outboundRelationship2></observation></subjectOf2></MCCI_IN200100UV01>"#;
@@ -887,6 +905,28 @@ mod split_null_flavor_tests {
 			reactions[0].required_intervention_null_flavor.as_deref(),
 			Some("NI")
 		);
+	}
+
+	#[test]
+	fn imports_ucum_duration_units_as_internal_codes_and_rejects_unknown_units() {
+		for (ucum, stored) in [
+			("10.a", "800"),
+			("a", "801"),
+			("mo", "802"),
+			("wk", "803"),
+			("d", "804"),
+			("h", "805"),
+		] {
+			let xml = reaction_with_duration_unit(ucum);
+			let reactions = parse_e_reactions(xml.as_bytes())
+				.expect("supported UCUM reaction duration unit");
+			assert_eq!(reactions[0].duration_unit.as_deref(), Some(stored));
+		}
+
+		let xml = reaction_with_duration_unit("min");
+		let error = parse_e_reactions(xml.as_bytes())
+			.expect_err("unsupported UCUM unit must not be stored");
+		assert!(format!("{error}").contains("ICH.E.i.6b.ALLOWED.VALUE"));
 	}
 }
 

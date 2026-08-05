@@ -87,7 +87,7 @@ pub(crate) fn reaction_fragment_for_authority(
 			out.push_str("<comp xsi:type=\"IVL_TS\" operator=\"A\"><width value=\"");
 			out.push_str(&xml_escape(&width.to_string()));
 			out.push_str("\"");
-			if let Some(unit) = write_e_i_6b(reaction) {
+			if let Some(unit) = write_e_i_6b(reaction)? {
 				out.push_str(" unit=\"");
 				out.push_str(&xml_escape(unit));
 				out.push_str("\"");
@@ -309,8 +309,19 @@ fn write_e_i_6a(value: &Reaction) -> Option<&rust_decimal::Decimal> {
 }
 
 /// e2b:E.i.6b
-fn write_e_i_6b(value: &Reaction) -> Option<&str> {
-	value.duration_unit.as_deref()
+fn write_e_i_6b(value: &Reaction) -> Result<Option<&'static str>> {
+	let Some(unit) = value.duration_unit.as_deref() else {
+		return Ok(None);
+	};
+	crate::mapping::fda::e_reaction::reaction_duration_unit_to_ucum(unit)
+		.map(Some)
+		.ok_or_else(|| Error::InvalidXml {
+			message: format!(
+				"ICH.E.i.6b.ALLOWED.VALUE: unsupported internal reaction duration unit `{unit}`"
+			),
+			line: None,
+			column: None,
+		})
 }
 
 /// e2b:E.i.7
@@ -674,5 +685,29 @@ mod meddra_requirement_tests {
 			crate::validation::validate_e2b_xml_xsd(exported.as_bytes(), &schema)
 				.expect("validate XSD");
 		assert!(errors.is_empty(), "{errors:#?}");
+	}
+
+	#[test]
+	fn exports_internal_duration_codes_as_ucum_and_rejects_unknown_codes() {
+		let mut reaction = reaction();
+		reaction.duration_value = Some(1.into());
+		for (stored, ucum) in [
+			("800", "10.a"),
+			("801", "a"),
+			("802", "mo"),
+			("803", "wk"),
+			("804", "d"),
+			("805", "h"),
+		] {
+			reaction.duration_unit = Some(stored.to_string());
+			let xml = export_e_reactions_xml(std::slice::from_ref(&reaction))
+				.expect("supported reaction duration unit");
+			assert!(xml.contains(&format!("<width value=\"1\" unit=\"{ucum}\"/>")));
+		}
+
+		reaction.duration_unit = Some("d".to_string());
+		let error = export_e_reactions_xml(&[reaction])
+			.expect_err("raw or unknown units must not pass through");
+		assert!(format!("{error}").contains("ICH.E.i.6b.ALLOWED.VALUE"));
 	}
 }
