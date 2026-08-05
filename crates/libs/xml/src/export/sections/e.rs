@@ -121,6 +121,14 @@ pub(crate) fn reaction_fragment_for_authority(
 	out.push_str(">");
 	out.push_str(&write_e_i_1_1a(reaction));
 	out.push_str("</originalText></value>");
+	if let Some(country) = write_e_i_9(reaction) {
+		let country = country.trim();
+		if !country.is_empty() {
+			out.push_str("<location><locatedEntity><locatedPlace><code code=\"");
+			out.push_str(&xml_escape(country));
+			out.push_str("\"/></locatedPlace></locatedEntity></location>");
+		}
+	}
 	out.push_str(&write_e_i_1_2(reaction));
 	if let Some(term_code) = write_e_i_3_1(reaction) {
 		out.push_str(&observation_rel_code("37", term_code));
@@ -175,14 +183,6 @@ pub(crate) fn reaction_fragment_for_authority(
 	)?);
 	if let Some(value) = write_e_i_8(reaction) {
 		out.push_str(&observation_rel_bool("24", value));
-	}
-	if let Some(country) = write_e_i_9(reaction) {
-		let country = country.trim();
-		if !country.is_empty() {
-			out.push_str("<location><locatedEntity><locatedPlace><code code=\"");
-			out.push_str(&xml_escape(country));
-			out.push_str("\"/></locatedPlace></locatedEntity></location>");
-		}
 	}
 	out.push_str("</observation></subjectOf2>");
 	Ok(out)
@@ -638,5 +638,17 @@ mod meddra_requirement_tests {
 			assert!(message.contains("ICH.E.i.2.1b.REQUIRED"));
 			assert!(message.contains("reaction sequence 1"));
 		}
+	}
+
+	#[test]
+	fn exports_location_before_xsd_outbound_relationships() {
+		let xml = export_e_reactions_xml(&[reaction()]).expect("reaction XML");
+		let value = xml.find("</originalText></value>").expect("reaction value");
+		let location = xml.find("<location>").expect("E.i.9 location");
+		let relationship = xml
+			.find("<outboundRelationship2")
+			.expect("reaction relationships");
+
+		assert!(value < location && location < relationship);
 	}
 }
