@@ -192,14 +192,22 @@ if url.password is None:
 print(unquote(url.password))
 PY
 )"
+  APP_DB_USER="$(python3 -c 'import sys; from urllib.parse import urlsplit; print(urlsplit(sys.argv[1]).username or "")' "${DATABASE_URL}")"
+  APP_DB_NAME="$(python3 -c 'import sys; from urllib.parse import urlsplit; print(urlsplit(sys.argv[1]).path.lstrip("/"))' "${DATABASE_URL}")"
   if [ -z "${APP_USER_PASSWORD}" ]; then
     echo "Could not derive app_user password from DATABASE_URL."
+    exit 1
+  fi
+  if [ -z "${APP_DB_USER}" ] || [ -z "${APP_DB_NAME}" ]; then
+    echo "Could not derive database user/name from DATABASE_URL."
     exit 1
   fi
 
   echo "RESET_DB=1 -> running admin/00-recreate-db.sql on root DB URL"
   psql "${ROOT_DATABASE_URL}" \
     -v ON_ERROR_STOP=1 \
+    -v "app_db_user=${APP_DB_USER}" \
+    -v "app_db_name=${APP_DB_NAME}" \
     -v "app_user_password=${APP_USER_PASSWORD}" \
     -f "${recreate_path}"
 fi

@@ -4,12 +4,12 @@
 -- of using CREATE DATABASE ... OWNER app_user.
 SELECT pg_terminate_backend(pid)
 FROM pg_stat_activity
-WHERE usename = 'app_user' OR datname = 'app_db';
+WHERE usename = :'app_db_user' OR datname = :'app_db_name';
 
-DROP DATABASE IF EXISTS app_db WITH (FORCE);
-DROP ROLE IF EXISTS app_user;
+DROP DATABASE IF EXISTS :"app_db_name" WITH (FORCE);
+DROP ROLE IF EXISTS :"app_db_user";
 
-CREATE USER app_user PASSWORD :'app_user_password';
-ALTER USER app_user CREATEROLE;
-CREATE DATABASE app_db ENCODING 'UTF8' TEMPLATE template0;
-GRANT ALL PRIVILEGES ON DATABASE app_db TO app_user;
+CREATE USER :"app_db_user" PASSWORD :'app_user_password';
+ALTER USER :"app_db_user" CREATEROLE;
+CREATE DATABASE :"app_db_name" ENCODING 'UTF8' TEMPLATE template0;
+GRANT ALL PRIVILEGES ON DATABASE :"app_db_name" TO :"app_db_user";
