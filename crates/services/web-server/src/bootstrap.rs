@@ -26,7 +26,7 @@ const DEMO_COMPANY_ADMIN_USERNAME: &str = "demo_company_admin";
 const DEFAULT_ADMIN_SETTINGS_JSON: &str = r#"{
     "timezone": "Asia/Seoul",
     "meddra_language": "English",
-    "meddra_version": "26.0",
+    "meddra_version": "28.1",
     "idf_version": "3.0",
     "orientation": "Landscape",
     "data_ordering": "Primary data will appear first",

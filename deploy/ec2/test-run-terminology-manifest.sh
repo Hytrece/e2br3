@@ -43,6 +43,7 @@ APP_DIR="${APP_DIR}" \
 E2BR3_TERMINOLOGY_DIR="${TERMINOLOGY_DIR}" \
 TERMINOLOGY_MANIFEST="${MANIFEST}" \
 DOCKER_LOG="${DOCKER_LOG}" \
+REQUIRE_DEFAULT_MEDDRA=1 \
 sh "${SCRIPT}"
 
 awk '
@@ -99,6 +100,7 @@ E2BR3_TERMINOLOGY_DIR="${TERMINOLOGY_DIR}" \
 TERMINOLOGY_MANIFEST="${MANIFEST}" \
 DOCKER_LOG="${DOCKER_LOG}" \
 CHECK_ONLY=1 \
+REQUIRE_DEFAULT_MEDDRA=1 \
 sh "${SCRIPT}" >"${TMP_DIR}/check-only.out"
 
 grep -F "Terminology manifest check complete: entries=2" "${TMP_DIR}/check-only.out" >/dev/null
@@ -106,6 +108,23 @@ if [ -e "${DOCKER_LOG}" ] && [ -s "${DOCKER_LOG}" ]; then
   echo "CHECK_ONLY=1 must not invoke docker compose"
   exit 1
 fi
+
+MISSING_DEFAULT_MANIFEST="${TMP_DIR}/missing-default-manifest.prod"
+cat > "${MISSING_DEFAULT_MANIFEST}" <<EOF
+whodrug ${INCOMING_DIR}/whodrug.zip 2026.03 ko
+EOF
+if PATH="${TMP_DIR}/bin:${PATH}" \
+  APP_DIR="${APP_DIR}" \
+  E2BR3_TERMINOLOGY_DIR="${TERMINOLOGY_DIR}" \
+  TERMINOLOGY_MANIFEST="${MISSING_DEFAULT_MANIFEST}" \
+  DOCKER_LOG="${DOCKER_LOG}" \
+  REQUIRE_DEFAULT_MEDDRA=1 \
+  CHECK_ONLY=1 \
+  sh "${SCRIPT}" 2>"${TMP_DIR}/missing-default.err"; then
+  echo "production terminology check should require MedDRA 28.1 English"
+  exit 1
+fi
+grep -F "must provide MedDRA 28.1 English" "${TMP_DIR}/missing-default.err" >/dev/null
 
 MFDS_MANIFEST="${TMP_DIR}/mfds-manifest.prod"
 cat > "${MFDS_MANIFEST}" <<EOF

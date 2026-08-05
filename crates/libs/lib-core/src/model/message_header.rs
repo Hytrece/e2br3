@@ -49,6 +49,7 @@ pub struct MessageHeader {
 #[derive(Fields, Deserialize)]
 pub struct MessageHeaderForCreate {
 	pub case_id: Uuid,
+	pub batch_transmission_date: Option<OffsetDateTime>,
 	pub message_number: String,
 	pub message_sender_identifier: String,
 	pub message_receiver_identifier: String,
@@ -90,8 +91,8 @@ impl MessageHeaderBmc {
 		.await?;
 
 		let sql = format!(
-			"INSERT INTO {} (case_id, batch_number, message_type, message_format_version, message_format_release, message_date_format, message_number, message_sender_identifier, message_receiver_identifier, message_date, created_at, updated_at, created_by)
-			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, now(), now(), $11)
+			"INSERT INTO {} (case_id, batch_number, batch_transmission_date, message_type, message_format_version, message_format_release, message_date_format, message_number, message_sender_identifier, message_receiver_identifier, message_date, created_at, updated_at, created_by)
+			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, now(), now(), $12)
 			 RETURNING id",
 			Self::TABLE
 		);
@@ -101,6 +102,7 @@ impl MessageHeaderBmc {
 				sqlx::query_as::<_, (Uuid,)>(&sql)
 					.bind(data.case_id)
 					.bind(format!("BATCH-{}", data.case_id))
+					.bind(data.batch_transmission_date)
 					.bind("ichicsr")
 					.bind("2.1")
 					.bind("2.0")

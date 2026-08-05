@@ -1,5 +1,7 @@
 #[path = "xml/xml_export_e.rs"]
 mod xml_export_e;
+#[path = "xml/xml_export_g.rs"]
+mod xml_export_g;
 #[path = "xml/xml_export_h.rs"]
 mod xml_export_h;
 #[cfg(any())]

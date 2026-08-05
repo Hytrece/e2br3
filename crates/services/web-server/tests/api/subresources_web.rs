@@ -434,6 +434,7 @@ async fn test_singleton_post_endpoints_are_idempotent() -> Result<()> {
 	// message header
 	let body = json!({"data": {
 		"case_id": case_id,
+		"batch_transmission_date": [2024, 32, 1, 1, 1, 0, 0, 0, 0],
 		"message_number": msg_a,
 		"message_sender_identifier": "SEND-A",
 		"message_receiver_identifier": "RECV-A",
@@ -474,6 +475,7 @@ async fn test_singleton_post_endpoints_are_idempotent() -> Result<()> {
 	assert_eq!(status, StatusCode::OK);
 	let value: Value = serde_json::from_slice(&body)?;
 	assert!(value["data"]["id"].as_str().is_some(), "{value:?}");
+	assert_eq!(value["data"]["batch_transmission_date"][0], 2024);
 
 	// patient
 	create_patient(&app, &cookie, case_id).await?;

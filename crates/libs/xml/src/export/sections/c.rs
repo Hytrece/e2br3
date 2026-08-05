@@ -602,18 +602,6 @@ pub fn export_c_safety_report_patch(
 			column: None,
 		});
 	}
-	let combination_true = report
-		.combination_product_report_indicator
-		.as_deref()
-		.map(is_true_like)
-		.unwrap_or(false);
-	let local_criteria_report_type =
-		if !report.fulfil_expedited_criteria.unwrap_or(false) && !combination_true {
-			Some("2")
-		} else {
-			report.local_criteria_report_type.as_deref()
-		};
-
 	let patch = CSafetyReportPatch {
 		report_unique_id: report.safety_report_id.as_deref().unwrap_or(""),
 		transmission_date: report.transmission_date.as_deref(),
@@ -634,7 +622,7 @@ pub fn export_c_safety_report_patch(
 			authority,
 			lib_core::regulatory::RegulatoryAuthority::Fda
 		)
-		.then_some(local_criteria_report_type)
+		.then_some(report.local_criteria_report_type.as_deref())
 		.flatten(),
 		combination_product_indicator: matches!(
 			authority,
@@ -681,13 +669,6 @@ pub fn export_c_safety_report_patch(
 	};
 
 	patch_c_safety_report(raw_xml, &patch)
-}
-
-fn is_true_like(value: &str) -> bool {
-	matches!(
-		value.trim().to_ascii_lowercase().as_str(),
-		"true" | "1" | "y" | "yes"
-	)
 }
 
 #[cfg(test)]

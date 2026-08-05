@@ -152,7 +152,7 @@ jobs:
           set -eu
           image_ref_q="$(jq -rn --arg v "${IMAGE_REF}" '$v|@sh')"
           aws_region_q="$(jq -rn --arg v "${AWS_REGION}" '$v|@sh')"
-          deploy_command="APP_DIR=/opt/e2br3 ENV_FILE=/opt/e2br3/.env.prod COMPOSE_FILE=/opt/e2br3/deploy/ec2/docker-compose.prod.yml IMAGE_REF=${image_ref_q} RESET_DB=1 RESET_PRESERVE_TERMINOLOGY=1 INCLUDE_SEED=1 RELOAD_TERMINOLOGY=0 HEALTHCHECK_URL=http://127.0.0.1:8080/health /opt/e2br3/deploy/ec2/deploy.sh"
+          deploy_command="APP_DIR=/opt/e2br3 ENV_FILE=/opt/e2br3/.env.prod COMPOSE_FILE=/opt/e2br3/deploy/ec2/docker-compose.prod.yml IMAGE_REF=${image_ref_q} RESET_DB=1 RESET_PRESERVE_TERMINOLOGY=1 INCLUDE_SEED=1 RELOAD_TERMINOLOGY=1 HEALTHCHECK_URL=http://127.0.0.1:8080/health /opt/e2br3/deploy/ec2/deploy.sh"
           commands_json="$(jq -n \
             --arg aws_region_q "${aws_region_q}" \
             --arg deploy_command "${deploy_command}" \

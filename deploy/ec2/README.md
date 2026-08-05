@@ -6,7 +6,7 @@
 - `deploy.sh`: Pull and rollout script used by CD. In the temporary demo environment it can reset RDS, load seed data, preserve terminology, and restart the app.
 - `init-rds.sh`: One-time SQL bootstrap runner for RDS.
 - `run-terminology-manifest.sh`: Loads every terminology release listed in the EC2 terminology manifest.
-- `terminology-manifest.prod.example`: Example manifest format. Real licensed dictionary files stay outside git.
+- `terminology-manifest.prod.example`: Production manifest format. Real licensed dictionary files stay outside git.
 - `terminology-load.sh`: Docker Compose wrapper for one-off terminology dry-run/load operations.
 - `../../db/`: Organized SQL source tree (`admin/`, `bootstrap/`, `migrations/`, `seed/`).
 
@@ -26,6 +26,9 @@
    - `sudo chown -R "$USER":"$USER" /opt/e2br3/terminology`
    - `cp /opt/e2br3/deploy/ec2/terminology-manifest.prod.example /opt/e2br3/terminology/terminology-manifest.prod`
    - Edit `/opt/e2br3/terminology/terminology-manifest.prod` to reference the licensed release files uploaded to `/opt/e2br3/terminology/incoming`.
+   - The MedDRA entry must use the licensed English 28.1 release:
+     `meddra /opt/e2br3/terminology/incoming/meddra_28_1 28.1 en`
+     (the directory must contain the release's `llt.asc` and `mdhier.asc`, possibly in nested folders).
 6. Create `/opt/e2br3/.env.prod` manually with the runtime image, RDS URLs, secrets, and deployment
    settings. Use real operational values for secrets and URLs:
 
@@ -164,16 +167,19 @@ After CI succeeds on `main`, CD builds the runtime image and deploys through AWS
 using:
 
 ```sh
-IMAGE_REF=ghcr.io/<owner>/e2br3-web-server:<sha> RESET_DB=1 RESET_PRESERVE_TERMINOLOGY=1 INCLUDE_SEED=1 RELOAD_TERMINOLOGY=0 ./deploy/ec2/deploy.sh
+IMAGE_REF=ghcr.io/<owner>/e2br3-web-server:<sha> RESET_DB=1 RESET_PRESERVE_TERMINOLOGY=1 INCLUDE_SEED=1 RELOAD_TERMINOLOGY=1 ./deploy/ec2/deploy.sh
 ```
 
 `RESET_DB=1` recreates the database. With the default `RESET_PRESERVE_TERMINOLOGY=1`,
-the deploy preserves the already-loaded terminology tables and avoids parsing the licensed zip files
-on every deploy. `INCLUDE_SEED=1` reloads demo seed data. `RELOAD_TERMINOLOGY=0` means
-automatic demo deploys do not run the terminology manifest.
+the deploy preserves existing terminology rows before the configured MedDRA 28.1 release is reloaded.
+`INCLUDE_SEED=1` reloads demo seed data. Production preflight fails if the external MedDRA 28.1
+source is missing, so a deployment cannot silently start with an empty catalog.
 
-Use `RELOAD_TERMINOLOGY=1` only when you intentionally want to reload the releases listed in
-`/opt/e2br3/terminology/terminology-manifest.prod`.
+The Docker image intentionally packages the loader, not the licensed MedDRA source. The repository's
+`data/` directory is ignored and absent from the CI checkout/build context; embedding the catalog
+would require explicit MedDRA distribution authorization and a separately provisioned build artifact.
+Until that authorization/artifact exists, upload the licensed 28.1 release outside git under
+`/opt/e2br3/terminology/incoming/meddra_28_1` and let the mounted terminology-loader import it.
 
 ## GitHub Actions configuration
 

@@ -186,53 +186,13 @@ async fn apply_patient_section(
 		&patient.race_codes,
 		patient.race_code_null_flavor.as_deref(),
 	)?;
-	if let Some(v) = patient.ethnicity_code.as_deref() {
-		set_attr_first(
-			xpath,
-			"//hl7:primaryRole/hl7:subjectOf2/hl7:observation[hl7:code[@code='C16564']]/hl7:value",
-			"xsi:type",
-			"CE",
-		);
-		set_attr_first(
-			xpath,
-			"//hl7:primaryRole/hl7:subjectOf2/hl7:observation[hl7:code[@code='C16564']]/hl7:value",
-			"code",
-			write_fda_d_12(v),
-		);
-		remove_attr_first(
-			xpath,
-			"//hl7:primaryRole/hl7:subjectOf2/hl7:observation[hl7:code[@code='C16564']]/hl7:value",
-			"nullFlavor",
-		);
-	} else if let Some(null_flavor) = patient.ethnicity_code_null_flavor.as_deref() {
-		set_attr_first(
-			xpath,
-			"//hl7:primaryRole/hl7:subjectOf2/hl7:observation[hl7:code[@code='C16564']]/hl7:value",
-			"xsi:type",
-			"CE",
-		);
-		remove_attr_first(
-			xpath,
-			"//hl7:primaryRole/hl7:subjectOf2/hl7:observation[hl7:code[@code='C16564']]/hl7:value",
-			"code",
-		);
-		remove_attr_first(
-			xpath,
-			"//hl7:primaryRole/hl7:subjectOf2/hl7:observation[hl7:code[@code='C16564']]/hl7:value",
-			"displayName",
-		);
-		remove_attr_first(
-			xpath,
-			"//hl7:primaryRole/hl7:subjectOf2/hl7:observation[hl7:code[@code='C16564']]/hl7:value",
-			"codeSystem",
-		);
-		set_attr_first(
-			xpath,
-			"//hl7:primaryRole/hl7:subjectOf2/hl7:observation[hl7:code[@code='C16564']]/hl7:value",
-			"nullFlavor",
-			null_flavor,
-		);
-	}
+	apply_fda_patient_ethnicity(
+		doc,
+		parser,
+		xpath,
+		patient.ethnicity_code.as_deref(),
+		patient.ethnicity_code_null_flavor.as_deref(),
+	)?;
 	if let Some(v) = patient.last_menstrual_period_date {
 		ensure_patient_observation(xpath, doc, parser, "22", "TS")?;
 		write_d_6(xpath, v);
@@ -592,6 +552,42 @@ fn apply_fda_patient_races(
 /// e2b:FDA.D.12
 fn write_fda_d_12(value: &str) -> &str {
 	value
+}
+
+/// e2b:FDA.D.12
+fn apply_fda_patient_ethnicity(
+	doc: &mut Document,
+	parser: &Parser,
+	xpath: &mut Context,
+	ethnicity_code: Option<&str>,
+	null_flavor: Option<&str>,
+) -> Result<()> {
+	if ethnicity_code.is_none() && null_flavor.is_none() {
+		return Ok(());
+	}
+
+	ensure_patient_observation(xpath, doc, parser, "C16564", "CE")?;
+	let value_xpath =
+		"//hl7:primaryRole/hl7:subjectOf2/hl7:observation[hl7:code[@code='C16564']]/hl7:value";
+	set_attr_first(xpath, value_xpath, "xsi:type", "CE");
+
+	if let Some(value) = ethnicity_code {
+		set_attr_first(xpath, value_xpath, "code", write_fda_d_12(value));
+		set_attr_first(
+			xpath,
+			value_xpath,
+			"codeSystem",
+			"2.16.840.1.113883.3.26.1.1",
+		);
+		remove_attr_first(xpath, value_xpath, "nullFlavor");
+	} else if let Some(null_flavor) = null_flavor {
+		remove_attr_first(xpath, value_xpath, "code");
+		remove_attr_first(xpath, value_xpath, "displayName");
+		remove_attr_first(xpath, value_xpath, "codeSystem");
+		set_attr_first(xpath, value_xpath, "nullFlavor", null_flavor);
+	}
+
+	Ok(())
 }
 
 fn write_patient_identifier(
@@ -1576,6 +1572,55 @@ mod tests {
 				)
 				.expect("null flavor"),
 			["UNK"]
+		);
+	}
+
+	#[test]
+	fn fda_d_12_exports_saved_code_when_skeleton_has_no_observation() {
+		let parser = Parser::default();
+		let mut doc = parser
+			.parse_string(
+				"<MCCI_IN200100UV01 xmlns=\"urn:hl7-org:v3\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"><primaryRole/></MCCI_IN200100UV01>",
+			)
+			.expect("doc");
+		let mut xpath = Context::new(&doc).expect("xpath");
+		let _ = xpath.register_namespace("hl7", "urn:hl7-org:v3");
+		let _ = xpath
+			.register_namespace("xsi", "http://www.w3.org/2001/XMLSchema-instance");
+
+		apply_fda_patient_ethnicity(
+			&mut doc,
+			&parser,
+			&mut xpath,
+			Some("C41222"),
+			None,
+		)
+		.expect("ethnicity node");
+
+		assert_eq!(
+			xpath
+				.findnodes("//hl7:observation[hl7:code[@code='C16564']]", None)
+				.expect("ethnicity node")
+				.len(),
+			1
+		);
+		assert_eq!(
+			xpath
+				.findvalue(
+					"//hl7:observation[hl7:code[@code='C16564']]/hl7:value/@code",
+					None,
+				)
+				.expect("ethnicity code"),
+			"C41222"
+		);
+		assert_eq!(
+			xpath
+				.findvalue(
+					"//hl7:observation[hl7:code[@code='C16564']]/hl7:value/@codeSystem",
+					None,
+				)
+				.expect("ethnicity code system"),
+			"2.16.840.1.113883.3.26.1.1"
 		);
 	}
 

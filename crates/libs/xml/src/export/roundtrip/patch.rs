@@ -25,7 +25,6 @@ use libxml::parser::Parser;
 use libxml::tree::Document;
 use libxml::xpath::Context;
 use sqlx::types::time::Date;
-use sqlx::types::time::OffsetDateTime;
 
 #[path = "c_safety_report.rs"]
 mod c_safety_report;

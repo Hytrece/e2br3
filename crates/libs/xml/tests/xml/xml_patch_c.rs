@@ -203,6 +203,100 @@ fn patch_c_sender_telecoms_omit_empty_uris_and_export_populated_values() {
 }
 
 #[test]
+fn patch_c_writes_sender_values_when_optional_nodes_are_absent() {
+	let sparse = br#"<?xml version="1.0" encoding="UTF-8"?>
+<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <PORR_IN049016UV>
+    <controlActProcess classCode="CACT" moodCode="EVN">
+      <subject><investigationEvent classCode="INVSTG" moodCode="EVN">
+        <subjectOf1 typeCode="SUBJ"><controlActEvent classCode="CACT" moodCode="EVN">
+          <author typeCode="AUT"><assignedEntity classCode="ASSIGNED"/>
+          </author>
+        </controlActEvent></subjectOf1>
+      </investigationEvent></subject>
+    </controlActProcess>
+  </PORR_IN049016UV>
+</MCCI_IN200100UV01>"#;
+	let mut patch = sender_patch(
+		Some("tel:+82-2-5555-0102"),
+		Some("fax:+82-2-5555-0103"),
+		Some("mailto:pv@qvis-safety.example"),
+	);
+	patch.sender_type = Some("3");
+	patch.sender_department = Some("Pharmacovigilance");
+	patch.sender_person_title = Some("Dr");
+	patch.sender_person_given_name = Some("Sora");
+	patch.sender_person_family_name = Some("Kim");
+	patch.sender_street_address = Some("1 Test Road");
+	patch.sender_city = Some("Seoul");
+	patch.sender_state = Some("Seoul");
+	patch.sender_postcode = Some("04524");
+	patch.sender_country_code = Some("KR");
+
+	let patched =
+		patch_c_safety_report(sparse, &patch).expect("patch sparse sender XML");
+	let parser = Parser::default();
+	let doc = parser
+		.parse_string(&patched)
+		.expect("parse sparse sender XML");
+	let mut xpath = Context::new(&doc).expect("sender xpath");
+	xpath.register_namespace("hl7", "urn:hl7-org:v3").unwrap();
+	let base = "//hl7:investigationEvent/hl7:subjectOf1/hl7:controlActEvent/hl7:author/hl7:assignedEntity";
+	for (path, expected) in [
+		(format!("{base}/hl7:code/@code"), "3"),
+		(
+			format!("{base}/hl7:representedOrganization/hl7:name"),
+			"Pharmacovigilance",
+		),
+		(
+			format!("{base}/hl7:assignedPerson/hl7:name/hl7:prefix"),
+			"Dr",
+		),
+		(
+			format!("{base}/hl7:assignedPerson/hl7:name/hl7:given[1]"),
+			"Sora",
+		),
+		(
+			format!("{base}/hl7:assignedPerson/hl7:name/hl7:family"),
+			"Kim",
+		),
+		(
+			format!("{base}/hl7:addr/hl7:streetAddressLine"),
+			"1 Test Road",
+		),
+		(format!("{base}/hl7:addr/hl7:city"), "Seoul"),
+		(format!("{base}/hl7:addr/hl7:state"), "Seoul"),
+		(format!("{base}/hl7:addr/hl7:postalCode"), "04524"),
+		(
+			format!(
+				"{base}/hl7:assignedPerson/hl7:asLocatedEntity/hl7:location/hl7:code/@code"
+			),
+			"KR",
+		),
+	] {
+		assert_eq!(xpath.findvalue(&path, None).unwrap(), expected, "{path}");
+	}
+	for (prefix, expected) in [
+		("tel:", "tel:+82-2-5555-0102"),
+		("fax:", "fax:+82-2-5555-0103"),
+		("mailto:", "mailto:pv@qvis-safety.example"),
+	] {
+		assert_eq!(
+			xpath
+				.findvalue(
+					&format!(
+						"{base}/hl7:telecom[starts-with(@value,'{prefix}')]/@value"
+					),
+					None,
+				)
+				.unwrap(),
+			expected,
+			"{prefix} URI",
+		);
+	}
+}
+
+#[test]
 fn patch_c_1_9_1_exports_boolean_value_without_ce_children() {
 	let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 		.parent()
@@ -631,4 +725,40 @@ fn patch_c_exports_sender_health_professional_type_kr1() {
 		)
 		.unwrap();
 	assert_eq!(sender_kr1, "4");
+}
+
+#[test]
+fn patch_c_inserts_first_sender_relationship_when_skeleton_lacks_it() {
+	let xml = std::fs::read(
+		std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+			.join("src/fixtures/base_export_skeleton.xml"),
+	)
+	.expect("read export skeleton");
+	let mut patch = sender_patch(None, None, None);
+	patch.first_sender_type = Some("1");
+
+	let patched = patch_c_safety_report(&xml, &patch).expect("patch xml");
+	let parser = Parser::default();
+	let doc = parser.parse_string(&patched).expect("parse patched");
+	let mut xpath = Context::new(&doc).expect("xpath");
+	xpath.register_namespace("hl7", "urn:hl7-org:v3").unwrap();
+
+	assert_eq!(
+		xpath
+			.findvalue(
+				"count(//hl7:outboundRelationship[hl7:relatedInvestigation/hl7:code[@code='1']])",
+				None,
+			)
+			.unwrap(),
+		"1"
+	);
+	assert_eq!(
+		xpath
+			.findvalue(
+				"//hl7:outboundRelationship[hl7:relatedInvestigation/hl7:code[@code='1']]//hl7:assignedEntity/hl7:code/@code",
+				None,
+			)
+			.unwrap(),
+		"1"
+	);
 }

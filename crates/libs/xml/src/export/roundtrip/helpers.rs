@@ -1,5 +1,4 @@
 use super::*;
-use time::UtcOffset;
 
 pub(super) fn ensure_investigation_id(
 	doc: &mut Document,
@@ -275,19 +274,6 @@ pub(super) fn fmt_date(date: Date) -> String {
 	let month: u8 = date.month().into();
 	let day = date.day();
 	format!("{:04}{:02}{:02}", year, month, day)
-}
-
-pub(super) fn fmt_offset_datetime(dt: OffsetDateTime) -> String {
-	let dt = dt.to_offset(UtcOffset::UTC);
-	format!(
-		"{:04}{:02}{:02}{:02}{:02}{:02}",
-		dt.year(),
-		u8::from(dt.month()),
-		dt.day(),
-		dt.hour(),
-		dt.minute(),
-		dt.second()
-	)
 }
 
 pub(super) fn is_14_digit_datetime(value: &str) -> bool {

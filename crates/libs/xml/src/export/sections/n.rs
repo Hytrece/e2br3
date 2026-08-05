@@ -33,7 +33,7 @@ pub(crate) async fn apply_section_n(
 			column: None,
 		})?;
 	write_n_1_4(doc, parser, xpath, batch_receiver)?;
-	write_n_1_5(xpath, header.batch_transmission_date, &header.message_date);
+	write_n_1_5(xpath, header.batch_transmission_date);
 	write_n_2_r_1(xpath, &header.message_number);
 	write_n_2_r_2(xpath, &header.message_sender_identifier);
 	write_n_2_r_3(xpath, &header.message_receiver_identifier);
@@ -129,17 +129,13 @@ fn write_n_1_4(
 fn write_n_1_5(
 	xpath: &mut Context,
 	batch_transmission_date: Option<sqlx::types::time::OffsetDateTime>,
-	message_date: &str,
 ) {
-	let value = batch_transmission_date
-		.map(fmt_datetime)
-		.unwrap_or_else(|| message_date.to_string());
-	set_attr_first(
-		xpath,
-		"/hl7:MCCI_IN200100UV01/hl7:creationTime",
-		"value",
-		&value,
-	);
+	let path = "/hl7:MCCI_IN200100UV01/hl7:creationTime";
+	if let Some(value) = batch_transmission_date.map(fmt_datetime) {
+		set_attr_first(xpath, path, "value", &value);
+	} else {
+		remove_attr_first(xpath, path, "value");
+	}
 }
 
 /// e2b:N.2.r.1
@@ -209,6 +205,62 @@ pub(crate) async fn fetch_primary_source(
 		.fetch_optional(sqlx::query_as::<_, PrimarySource>(sql).bind(case_id))
 		.await
 		.map_err(|e| Error::Model(lib_core::model::Error::Store(format!("{e}"))))
+}
+
+#[cfg(test)]
+mod date_tests {
+	use super::*;
+	use time::OffsetDateTime;
+
+	#[test]
+	fn n_dates_export_from_their_own_persisted_values() {
+		let xml = br#"<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3"><creationTime value="stale"/><PORR_IN049016UV><creationTime value="old-message"/><controlActProcess><effectiveTime value="old-effective"/></controlActProcess></PORR_IN049016UV></MCCI_IN200100UV01>"#;
+		let parser = Parser::default();
+		let doc = parser.parse_string(xml).expect("parse");
+		let mut xpath = Context::new(&doc).expect("xpath");
+		xpath.register_namespace("hl7", "urn:hl7-org:v3").unwrap();
+
+		let batch_date = OffsetDateTime::from_unix_timestamp(1_704_164_645).unwrap();
+		write_n_1_5(&mut xpath, Some(batch_date));
+		write_n_2_r_4(&mut xpath, "20260301120000");
+
+		assert_eq!(
+			xpath
+				.findvalue("/hl7:MCCI_IN200100UV01/hl7:creationTime/@value", None)
+				.unwrap(),
+			"20240102030405"
+		);
+		assert_eq!(
+			xpath
+				.findvalue("/hl7:MCCI_IN200100UV01/hl7:PORR_IN049016UV/hl7:creationTime/@value", None)
+				.unwrap(),
+			"20260301120000"
+		);
+		assert_eq!(
+			xpath
+				.findvalue("/hl7:MCCI_IN200100UV01/hl7:PORR_IN049016UV/hl7:controlActProcess/hl7:effectiveTime/@value", None)
+				.unwrap(),
+			"20260301120000"
+		);
+	}
+
+	#[test]
+	fn n_1_5_is_absent_when_batch_transmission_date_is_missing() {
+		let xml = br#"<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3"><creationTime value="message-date-must-not-be-copied"/></MCCI_IN200100UV01>"#;
+		let parser = Parser::default();
+		let doc = parser.parse_string(xml).expect("parse");
+		let mut xpath = Context::new(&doc).expect("xpath");
+		xpath.register_namespace("hl7", "urn:hl7-org:v3").unwrap();
+
+		write_n_1_5(&mut xpath, None);
+
+		assert_eq!(
+			xpath
+				.findvalue("/hl7:MCCI_IN200100UV01/hl7:creationTime/@value", None)
+				.unwrap(),
+			""
+		);
+	}
 }
 
 pub(crate) fn ensure_receiver_agent_nodes(

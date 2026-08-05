@@ -60,10 +60,11 @@ pub fn patch_c_safety_report(
 	write_c_1_11_1(&mut doc, &parser, &mut xpath, patch.nullification_code)?;
 	write_c_1_11_2(&mut doc, &parser, &mut xpath, patch.nullification_reason)?;
 
-	write_c_1_8_2(&mut xpath, patch.first_sender_type);
+	write_c_1_8_2(&mut doc, &parser, &mut xpath, patch.first_sender_type)?;
 
-	// C.3 Sender information (best-effort)
+	// C.3 Sender information
 	let sender_base = "//hl7:investigationEvent/hl7:subjectOf1/hl7:controlActEvent/hl7:author/hl7:assignedEntity";
+	ensure_c_3_nodes(&mut doc, &parser, &mut xpath, sender_base, patch)?;
 	if let Some(v) = patch.sender_type {
 		write_c_3_1(&mut xpath, sender_base, v);
 	}
@@ -311,6 +312,194 @@ pub fn patch_c_safety_report(
 	Ok(doc.to_string())
 }
 
+fn ensure_c_3_nodes(
+	doc: &mut Document,
+	parser: &Parser,
+	xpath: &mut Context,
+	base: &str,
+	patch: &CSafetyReportPatch<'_>,
+) -> Result<()> {
+	let value =
+		|value: Option<&str>| value.is_some_and(|value| !value.trim().is_empty());
+	let mut ensure = |parent: &str, path: &str, fragment: &str| {
+		if xpath
+			.findnodes(path, None)
+			.map(|nodes| nodes.is_empty())
+			.unwrap_or(true)
+		{
+			append_fragment_child(doc, parser, xpath, parent, fragment)?;
+		}
+		Ok::<_, Error>(())
+	};
+
+	if value(patch.sender_type) {
+		ensure(
+			base,
+			&format!("{base}/hl7:code"),
+			"<code codeSystem=\"2.16.840.1.113883.3.989.2.1.1.7\"/>",
+		)?;
+	}
+
+	if value(patch.sender_department) || value(patch.sender_org_name) {
+		ensure(
+			base,
+			&format!("{base}/hl7:representedOrganization"),
+			"<representedOrganization classCode=\"ORG\" determinerCode=\"INSTANCE\"/>",
+		)?;
+	}
+	if value(patch.sender_department) {
+		ensure(
+			&format!("{base}/hl7:representedOrganization"),
+			&format!("{base}/hl7:representedOrganization/hl7:name"),
+			"<name/>",
+		)?;
+	}
+	if value(patch.sender_org_name) {
+		let organization = format!("{base}/hl7:representedOrganization");
+		ensure(
+			&organization,
+			&format!("{organization}/hl7:assignedEntity"),
+			"<assignedEntity classCode=\"ASSIGNED\"/>",
+		)?;
+		let assigned = format!("{organization}/hl7:assignedEntity");
+		ensure(
+			&assigned,
+			&format!("{assigned}/hl7:representedOrganization"),
+			"<representedOrganization classCode=\"ORG\" determinerCode=\"INSTANCE\"/>",
+		)?;
+		let nested = format!("{assigned}/hl7:representedOrganization");
+		ensure(&nested, &format!("{nested}/hl7:name"), "<name/>")?;
+	}
+
+	if [
+		patch.sender_street_address,
+		patch.sender_city,
+		patch.sender_state,
+		patch.sender_postcode,
+	]
+	.into_iter()
+	.any(value)
+	{
+		ensure(base, &format!("{base}/hl7:addr"), "<addr/>")?;
+		for (field, fragment) in [
+			("streetAddressLine", "<streetAddressLine/>"),
+			("city", "<city/>"),
+			("state", "<state/>"),
+			("postalCode", "<postalCode/>"),
+		] {
+			let field_value = match field {
+				"streetAddressLine" => patch.sender_street_address,
+				"city" => patch.sender_city,
+				"state" => patch.sender_state,
+				"postalCode" => patch.sender_postcode,
+				_ => None,
+			};
+			if value(field_value) {
+				ensure(
+					&format!("{base}/hl7:addr"),
+					&format!("{base}/hl7:addr/hl7:{field}"),
+					fragment,
+				)?;
+			}
+		}
+	}
+
+	if [
+		patch.sender_person_title,
+		patch.sender_person_given_name,
+		patch.sender_person_middle_name,
+		patch.sender_person_family_name,
+		patch.sender_country_code,
+	]
+	.into_iter()
+	.any(value)
+	{
+		ensure(
+			base,
+			&format!("{base}/hl7:assignedPerson"),
+			"<assignedPerson classCode=\"PSN\" determinerCode=\"INSTANCE\"/>",
+		)?;
+	}
+	if [
+		patch.sender_person_title,
+		patch.sender_person_given_name,
+		patch.sender_person_middle_name,
+		patch.sender_person_family_name,
+	]
+	.into_iter()
+	.any(value)
+	{
+		ensure(
+			base,
+			&format!("{base}/hl7:assignedPerson/hl7:name"),
+			"<name/>",
+		)?;
+		for (field, fragment) in [
+			("prefix", "<prefix/>"),
+			("given[1]", "<given/>"),
+			("family", "<family/>"),
+		] {
+			let field_value = match field {
+				"prefix" => patch.sender_person_title,
+				"given[1]" => patch.sender_person_given_name,
+				"family" => patch.sender_person_family_name,
+				_ => None,
+			};
+			if value(field_value) {
+				ensure(
+					&format!("{base}/hl7:assignedPerson/hl7:name"),
+					&format!("{base}/hl7:assignedPerson/hl7:name/hl7:{field}"),
+					fragment,
+				)?;
+			}
+		}
+		if value(patch.sender_person_middle_name) {
+			ensure(
+				&format!("{base}/hl7:assignedPerson/hl7:name"),
+				&format!("{base}/hl7:assignedPerson/hl7:name/hl7:given[2]"),
+				"<given/>",
+			)?;
+		}
+	}
+
+	if value(patch.sender_country_code) {
+		let person = format!("{base}/hl7:assignedPerson");
+		ensure(
+			&person,
+			&format!("{person}/hl7:asLocatedEntity"),
+			"<asLocatedEntity classCode=\"LOCE\"/>",
+		)?;
+		let located = format!("{person}/hl7:asLocatedEntity");
+		ensure(
+			&located,
+			&format!("{located}/hl7:location"),
+			"<location classCode=\"COUNTRY\" determinerCode=\"INSTANCE\"/>",
+		)?;
+		let location = format!("{located}/hl7:location");
+		ensure(
+			&location,
+			&format!("{location}/hl7:code"),
+			"<code codeSystem=\"1.0.3166.1.2.2\"/>",
+		)?;
+	}
+
+	for (prefix, field_value) in [
+		("tel:", patch.sender_telephone),
+		("fax:", patch.sender_fax),
+		("mailto:", patch.sender_email),
+	] {
+		if normalized_c_3_4_telecom(prefix, field_value).is_some() {
+			ensure(
+				base,
+				&format!("{base}/hl7:telecom[starts-with(@value,'{prefix}')]"),
+				&format!("<telecom value=\"{prefix}\"/>"),
+			)?;
+		}
+	}
+
+	Ok(())
+}
+
 /// e2b:C.1.1
 fn write_c_1_1(
 	doc: &mut Document,
@@ -343,7 +532,6 @@ fn write_c_1_2(
 			.transmission_date_value
 			.filter(|value| is_14_digit_datetime(value))
 			.map(str::to_owned)
-			.or_else(|| patch.transmission_date_time.map(fmt_offset_datetime))
 			.unwrap_or_else(|| transmission_date.to_string());
 		set_attr_first(xpath, path, "value", &value);
 	}
@@ -521,10 +709,28 @@ fn write_c_1_9_1(
 }
 
 /// e2b:C.1.8.2
-fn write_c_1_8_2(xpath: &mut Context, first_sender_type: Option<&str>) {
+fn write_c_1_8_2(
+	doc: &mut Document,
+	parser: &Parser,
+	xpath: &mut Context,
+	first_sender_type: Option<&str>,
+) -> Result<()> {
 	let relationship =
 		"//hl7:outboundRelationship[hl7:relatedInvestigation/hl7:code[@code='1']]";
 	if let Some(value) = first_sender_type {
+		if xpath
+			.findnodes(relationship, None)
+			.map(|nodes| nodes.is_empty())
+			.unwrap_or(true)
+		{
+			append_fragment_child(
+				doc,
+				parser,
+				xpath,
+				"//hl7:investigationEvent",
+				"<outboundRelationship typeCode=\"SPRT\"><relatedInvestigation classCode=\"INVSTG\" moodCode=\"EVN\"><code code=\"1\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.22\"/><subjectOf2 typeCode=\"SUBJ\"><controlActEvent classCode=\"CACT\" moodCode=\"EVN\"><author typeCode=\"AUT\"><assignedEntity classCode=\"ASSIGNED\"><code codeSystem=\"2.16.840.1.113883.3.989.2.1.1.3\"/></assignedEntity></author></controlActEvent></subjectOf2></relatedInvestigation></outboundRelationship>",
+			)?;
+		}
 		set_attr_first(
 			xpath,
 			&format!("{relationship}/hl7:relatedInvestigation/hl7:subjectOf2/hl7:controlActEvent/hl7:author/hl7:assignedEntity/hl7:code"),
@@ -534,6 +740,7 @@ fn write_c_1_8_2(xpath: &mut Context, first_sender_type: Option<&str>) {
 	} else {
 		remove_nodes(xpath, relationship);
 	}
+	Ok(())
 }
 
 /// e2b:C.1.11.1
@@ -783,17 +990,56 @@ fn write_c_3_4_telecom(
 	value: Option<&str>,
 ) {
 	let path = format!("{base}/hl7:telecom[starts-with(@value,'{prefix}')]");
-	let value = value
-		.map(str::trim)
-		.filter(|value| !value.is_empty())
-		.and_then(|value| {
-			let body = value.strip_prefix(prefix).unwrap_or(value).trim();
-			(!body.is_empty()).then(|| format!("{prefix}{body}"))
-		});
+	let value = normalized_c_3_4_telecom(prefix, value);
 
 	if let Some(value) = value {
 		set_attr_first(xpath, &path, "value", &value);
 	} else {
 		remove_nodes(xpath, &path);
+	}
+}
+
+fn normalized_c_3_4_telecom(prefix: &str, value: Option<&str>) -> Option<String> {
+	value
+		.map(str::trim)
+		.filter(|value| !value.is_empty())
+		.and_then(|value| {
+			let body = value.strip_prefix(prefix).unwrap_or(value).trim();
+			(!body.is_empty()).then(|| format!("{prefix}{body}"))
+		})
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn c_1_8_2_inserts_relationship_when_export_skeleton_lacks_it() {
+		let xml = br#"<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3"><PORR_IN049016UV><controlActProcess><subject><investigationEvent/></subject></controlActProcess></PORR_IN049016UV></MCCI_IN200100UV01>"#;
+		let parser = Parser::default();
+		let mut doc = parser.parse_string(xml).expect("parse");
+		let mut xpath = Context::new(&doc).expect("xpath");
+		xpath.register_namespace("hl7", "urn:hl7-org:v3").unwrap();
+
+		write_c_1_8_2(&mut doc, &parser, &mut xpath, Some("1")).unwrap();
+
+		assert_eq!(
+			xpath
+				.findvalue(
+					"count(//hl7:outboundRelationship[hl7:relatedInvestigation/hl7:code[@code='1']])",
+					None,
+				)
+				.unwrap(),
+			"1"
+		);
+		assert_eq!(
+			xpath
+				.findvalue(
+					"//hl7:outboundRelationship[hl7:relatedInvestigation/hl7:code[@code='1']]//hl7:assignedEntity/hl7:code/@code",
+					None,
+				)
+				.unwrap(),
+			"1"
+		);
 	}
 }

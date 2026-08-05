@@ -33,6 +33,7 @@ if [ ! -f "${TERMINOLOGY_MANIFEST}" ]; then
 fi
 
 loaded=0
+default_meddra_loaded=0
 cd "${APP_DIR}"
 
 while IFS= read -r line || [ -n "${line}" ]; do
@@ -72,6 +73,10 @@ while IFS= read -r line || [ -n "${line}" ]; do
     exit 1
   fi
 
+  if [ "${dictionary}" = "meddra" ] && [ "${version}" = "28.1" ] && [ "${language}" = "en" ]; then
+    default_meddra_loaded=1
+  fi
+
   case "${input_path}" in
     "${E2BR3_TERMINOLOGY_DIR}"/*)
       relative_input=${input_path#"${E2BR3_TERMINOLOGY_DIR}/"}
@@ -106,6 +111,11 @@ done < "${TERMINOLOGY_MANIFEST}"
 
 if [ "${loaded}" -eq 0 ]; then
   echo "Terminology manifest contained no loadable entries: ${TERMINOLOGY_MANIFEST}" >&2
+  exit 1
+fi
+
+if [ "${REQUIRE_DEFAULT_MEDDRA:-0}" = "1" ] && [ "${default_meddra_loaded}" -ne 1 ]; then
+  echo "Production terminology manifest must provide MedDRA 28.1 English" >&2
   exit 1
 fi
 

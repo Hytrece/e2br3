@@ -214,6 +214,7 @@ async fn import_e2b_xml_in_txn(
 			&mm,
 			MessageHeaderForCreate {
 				case_id,
+				batch_transmission_date: None,
 				message_number,
 				message_sender_identifier: message_sender,
 				message_receiver_identifier: message_receiver,

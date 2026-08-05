@@ -150,6 +150,7 @@ if [ "${RESET_DB:-}" = "1" ]; then
 
   if [ "${RELOAD_TERMINOLOGY}" = "1" ]; then
     CHECK_ONLY=1 \
+    REQUIRE_DEFAULT_MEDDRA=1 \
     APP_DIR="${APP_DIR}" \
     ENV_FILE="${ENV_FILE}" \
     COMPOSE_FILE="${COMPOSE_FILE}" \
@@ -168,6 +169,7 @@ if [ "${RESET_DB:-}" = "1" ]; then
   "${INIT_RDS_SCRIPT}"
 
   if [ "${RELOAD_TERMINOLOGY}" = "1" ]; then
+    REQUIRE_DEFAULT_MEDDRA=1 \
     APP_DIR="${APP_DIR}" \
     ENV_FILE="${ENV_FILE}" \
     COMPOSE_FILE="${COMPOSE_FILE}" \

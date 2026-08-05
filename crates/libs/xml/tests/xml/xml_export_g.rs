@@ -2,7 +2,6 @@ use lib_core::model::drug::{
 	DosageInformation, DrugActiveSubstance, DrugDeviceCharacteristic,
 	DrugIndication, DrugInformation,
 };
-use xml::export_sections::g_drug::export_g_drugs_xml;
 use libxml::parser::Parser;
 use libxml::xpath::Context;
 use rust_decimal::Decimal;
@@ -10,6 +9,7 @@ use sqlx::types::time::{Date, Time};
 use sqlx::types::Uuid;
 use time::Month;
 use time::OffsetDateTime;
+use xml::export_sections::g_drug::export_g_drugs_xml;
 
 #[test]
 fn export_g_drug_basic() {
@@ -154,6 +154,13 @@ fn export_g_drug_basic() {
 		)
 		.unwrap();
 	assert_eq!(mpid, "MPID123");
+	let authorization_country = xpath
+		.findvalue(
+			"//hl7:approval/hl7:author/hl7:territorialAuthority/hl7:territory/hl7:code/@code",
+			None,
+		)
+		.unwrap();
+	assert_eq!(authorization_country, "US");
 	let drug_batch = xpath
 		.findvalue(
 			"//hl7:consumable/hl7:instanceOfKind/hl7:productInstanceInstance/hl7:lotNumberText",

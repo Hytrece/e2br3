@@ -20,7 +20,7 @@ fn validate_message_header_fields(fields: Map<String, Value>) -> Result<()> {
 }
 
 fn create_constraint_fields(data: &MessageHeaderForCreate) -> Map<String, Value> {
-	Map::from_iter([
+	let mut fields = Map::from_iter([
 		(
 			"messageNumber".to_string(),
 			Value::String(data.message_number.clone()),
@@ -37,7 +37,14 @@ fn create_constraint_fields(data: &MessageHeaderForCreate) -> Map<String, Value>
 			"messageDate".to_string(),
 			Value::String(data.message_date.clone()),
 		),
-	])
+	]);
+	if let Some(value) = data.batch_transmission_date {
+		fields.insert(
+			"batchTransmissionDate".to_string(),
+			Value::String(e2b_timestamp(value)),
+		);
+	}
+	fields
 }
 
 fn e2b_timestamp(value: time::OffsetDateTime) -> String {

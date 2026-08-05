@@ -7,7 +7,7 @@ AS $$
     SELECT jsonb_build_object(
         'timezone', 'Asia/Seoul',
         'meddra_language', 'English',
-        'meddra_version', '26.0',
+        'meddra_version', '28.1',
         'idf_version', '3.0',
         'orientation', 'Landscape',
         'data_ordering', 'Primary data will appear first',
