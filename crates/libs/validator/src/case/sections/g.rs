@@ -73,7 +73,7 @@ fn vocabulary(
 }
 
 fn decimal_text(value: Option<Decimal>) -> Option<String> {
-	value.map(|value| value.to_string())
+	value.map(|value| value.normalize().to_string())
 }
 
 fn resolve_drug_child_indices(
@@ -3061,6 +3061,22 @@ mod golden_g_required_tests {
 			.filter(|issue| issue.code.ends_with(".LENGTH.MAX"))
 			.map(|issue| (issue.code, issue.field_path.unwrap_or_default()))
 			.collect()
+	}
+
+	#[test]
+	fn stored_dose_scale_does_not_trigger_max_length() {
+		let mut ctx = empty_ctx();
+		let mut drug = drug();
+		drug.id = Uuid::from_u128(1);
+		ctx.drugs.push(drug);
+		let mut dosage = dosage();
+		dosage.drug_id = Uuid::from_u128(1);
+		dosage.dose_value = Some(Decimal::new(10_000_000, 5));
+		ctx.dosages.push(dosage);
+
+		assert!(!length_issues(&ctx)
+			.iter()
+			.any(|(code, _)| code == "ICH.G.k.4.r.1a.LENGTH.MAX"));
 	}
 
 	#[test]

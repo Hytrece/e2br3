@@ -1125,7 +1125,7 @@ pub(crate) fn drug_fragment(
 			out.push_str("<doseQuantity");
 			if let Some(v) = write_g_k_4_r_1a(dose) {
 				out.push_str(" value=\"");
-				out.push_str(&xml_escape(&v.to_string()));
+				out.push_str(&xml_escape(&v.normalize().to_string()));
 				out.push_str("\"");
 			}
 			if let Some(u) = write_g_k_4_r_1b(dose) {
@@ -1755,6 +1755,21 @@ mod tests {
 				"{xml}"
 			);
 		}
+	}
+
+	#[test]
+	fn export_g_normalizes_stored_dose_scale() {
+		let case_id = Uuid::new_v4();
+		let drug_id = Uuid::new_v4();
+		let drug = test_drug(drug_id, case_id);
+		let mut dosage = test_dosage(drug_id);
+		dosage.dose_value = Some(Decimal::new(10_000_000, 5));
+
+		let xml = export_g_drugs_xml(&[drug], &[], &[dosage], &[], &[], &[], &[])
+			.expect("export xml");
+
+		assert!(xml.contains("<doseQuantity value=\"100\"/>"), "{xml}");
+		assert!(!xml.contains("value=\"100.00000\""), "{xml}");
 	}
 
 	#[test]
