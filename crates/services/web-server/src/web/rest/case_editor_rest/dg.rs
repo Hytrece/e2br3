@@ -794,6 +794,7 @@ async fn load_editor_dg_row_detail(
 	}
 	let mut drug = json!(drug);
 	if let Value::Object(ref mut map) = drug {
+		insert_alias(map, "drugAuthorizationCountry", &["manufacturer_country"]);
 		map.insert("activeSubstances".to_string(), json!(active_substances));
 		map.insert("dosageInformation".to_string(), json!(dosage_information));
 		map.insert("indications".to_string(), json!(indications));

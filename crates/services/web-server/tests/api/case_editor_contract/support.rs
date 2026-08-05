@@ -47,7 +47,7 @@ pub(super) async fn patch_json(
 	Ok((status, serde_json::from_slice(&body)?))
 }
 
-async fn get_json(
+pub(super) async fn get_json(
 	app: &axum::Router,
 	cookie: &str,
 	uri: &str,
