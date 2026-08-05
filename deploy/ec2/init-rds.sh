@@ -21,12 +21,19 @@ LIST_SQL_SCRIPT="${PROJECT_DIR}/scripts/db/list_init_sql.sh"
 DB_DIR="${PROJECT_DIR}/db"
 SQL_EXEC_URL=""
 APP_USER_PASSWORD=""
+APP_DB_USER=""
 TERMINOLOGY_DUMP_FILE=""
 
 if [ -z "${DATABASE_URL}" ]; then
   echo "DATABASE_URL is required."
   echo "Example:"
   echo "  DATABASE_URL='postgres://user:pwd@host:5432/app_db?sslmode=require' ./deploy/ec2/init-rds.sh"
+  exit 1
+fi
+
+APP_DB_USER="$(python3 -c 'import sys; from urllib.parse import urlsplit; print(urlsplit(sys.argv[1]).username or "")' "${DATABASE_URL}")"
+if [ -z "${APP_DB_USER}" ]; then
+  echo "Could not derive database user from DATABASE_URL."
   exit 1
 fi
 
@@ -91,7 +98,7 @@ apply_sql_group() {
       exit 1
     fi
     echo "==> ${group_name}/${file}"
-    psql "${SQL_EXEC_URL}" -v ON_ERROR_STOP=1 -f "${path}"
+    psql "${SQL_EXEC_URL}" -v ON_ERROR_STOP=1 -v "app_db_user=${APP_DB_USER}" -f "${path}"
   done
 }
 
@@ -192,7 +199,6 @@ if url.password is None:
 print(unquote(url.password))
 PY
 )"
-  APP_DB_USER="$(python3 -c 'import sys; from urllib.parse import urlsplit; print(urlsplit(sys.argv[1]).username or "")' "${DATABASE_URL}")"
   APP_DB_NAME="$(python3 -c 'import sys; from urllib.parse import urlsplit; print(urlsplit(sys.argv[1]).path.lstrip("/"))' "${DATABASE_URL}")"
   if [ -z "${APP_USER_PASSWORD}" ]; then
     echo "Could not derive app_user password from DATABASE_URL."
@@ -232,7 +238,7 @@ else
       exit 1
     fi
     echo "==> ${f}"
-    psql "${SQL_EXEC_URL}" -v ON_ERROR_STOP=1 -f "${path}"
+    psql "${SQL_EXEC_URL}" -v ON_ERROR_STOP=1 -v "app_db_user=${APP_DB_USER}" -f "${path}"
   done
 fi
 

@@ -8,7 +8,7 @@ BEGIN
     END IF;
 END $$;
 
-GRANT e2br3_app_role TO app_user;
+GRANT e2br3_app_role TO :"app_db_user";
 
 DO $$
 BEGIN
@@ -1332,7 +1332,7 @@ ALTER TABLE audit_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE audit_logs FORCE ROW LEVEL SECURITY;
 ALTER TABLE authorization_audit_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE authorization_audit_events FORCE ROW LEVEL SECURITY;
-GRANT e2br3_auditor_role TO app_user;
+GRANT e2br3_auditor_role TO :"app_db_user";
 
 -- Function to get current organization from session. Defined here as well so
 -- audit RLS policies can reference it before the general tenant RLS section.
