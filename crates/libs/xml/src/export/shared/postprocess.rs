@@ -1,4 +1,5 @@
 use super::*;
+use crate::export::roundtrip::reorder_investigation_event_children;
 use crate::export::sections::c::apply_literature_section;
 use crate::export::sections::c::apply_primary_source_section;
 use crate::export::sections::c::apply_report_relationships_section;
@@ -68,6 +69,7 @@ pub(crate) async fn apply_section_postprocess(
 	apply_case_summary_section(ctx, &mut doc, &parser, mm, case_id, &mut xpath)
 		.await?;
 	postprocess_export_doc(&mut doc, &mut xpath);
+	reorder_investigation_event_children(&mut xpath);
 
 	Ok(normalize_namespace_artifacts(doc.to_string()))
 }

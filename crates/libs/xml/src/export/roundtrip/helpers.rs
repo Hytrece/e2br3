@@ -260,6 +260,25 @@ pub(crate) fn reorder_investigation_event_children(xpath: &mut Context) {
 			}
 		}
 	}
+
+	// C.5 subjectOf1 must precede the D/G subjectOf2 children in primaryRole.
+	if let Ok(mut roles) = xpath.findnodes(
+		"//hl7:investigationEvent/hl7:component/hl7:adverseEventAssessment/hl7:subject1/hl7:primaryRole",
+		None,
+	) {
+		for mut role in roles.drain(..) {
+			for name in ["subjectOf1", "subjectOf2"] {
+				if let Ok(nodes) =
+					xpath.findnodes(&format!("./hl7:{name}"), Some(&role))
+				{
+					for mut node in nodes {
+						node.unlink_node();
+						let _ = role.add_child(&mut node);
+					}
+				}
+			}
+		}
+	}
 }
 
 pub(super) fn clear_null_flavor_if_export_policy(

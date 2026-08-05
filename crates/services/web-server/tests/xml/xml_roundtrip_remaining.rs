@@ -260,6 +260,7 @@ async fn fda_export_reads_persisted_n_and_c_values_through_rls() -> Result<()> {
 		Some(serde_json::json!({
 			"data": {
 				"transmission_date": transmission_date,
+				"report_type": "2",
 				"fulfil_expedited_criteria": true,
 				"local_criteria_report_type": "1",
 				"other_case_identifiers_exist": true
@@ -381,6 +382,21 @@ async fn fda_export_reads_persisted_n_and_c_values_through_rls() -> Result<()> {
 	let local_criteria = exported.find("code=\"C54588\"").unwrap();
 	let sender = exported.find("<name>QVIS Safety CRO</name>").unwrap();
 	assert!(expedited < local_criteria && local_criteria < sender);
+	let primary_role = exported.find("<primaryRole").unwrap();
+	let study = exported[primary_role..].find("<subjectOf1").unwrap();
+	let patient_data = exported[primary_role..].find("<subjectOf2").unwrap();
+	assert!(
+		study < patient_data,
+		"C.5 subjectOf1 must precede D/G subjectOf2"
+	);
+	let report = xml::validation::validate_e2b_xml(
+		exported.as_bytes(),
+		Some(xml::validation::XmlValidatorConfig {
+			xsd_path: Some(resolved_xsd_path()),
+			..Default::default()
+		}),
+	)?;
+	assert!(report.ok, "FDA schema errors: {:?}", report.errors);
 	Ok(())
 }
 
