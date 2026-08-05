@@ -2,10 +2,23 @@ use super::n::fetch_primary_source;
 use super::*;
 use crate::export::roundtrip::{patch_c_safety_report, CSafetyReportPatch};
 use crate::mfds::codes::KR_C_5_4_1;
-use lib_core::model::case_identifiers::{LinkedReportNumber, OtherCaseIdentifier};
-use lib_core::model::safety_report::{
-	DocumentsHeldBySender, SafetyReportIdentification, StudyFdaCrossReportedInd,
+use lib_core::model::case_identifiers::{
+	LinkedReportNumber, LinkedReportNumberBmc, LinkedReportNumberFilter,
+	OtherCaseIdentifier, OtherCaseIdentifierBmc, OtherCaseIdentifierFilter,
 };
+use lib_core::model::safety_report::{
+	DocumentsHeldBySender, DocumentsHeldBySenderBmc, DocumentsHeldBySenderFilter,
+	SafetyReportIdentification, SenderInformationBmc, SenderInformationFilter,
+	StudyFdaCrossReportedInd, StudyFdaCrossReportedIndBmc,
+	StudyFdaCrossReportedIndFilter, StudyInformationBmc, StudyInformationFilter,
+	StudyRegistrationNumberBmc, StudyRegistrationNumberFilter,
+};
+use modql::filter::{ListOptions, OpValValue, OpValsValue};
+use serde_json::json;
+
+fn uuid_eq(id: sqlx::types::Uuid) -> OpValsValue {
+	OpValValue::Eq(json!(id)).into()
+}
 
 pub(crate) async fn export_patch(
 	ctx: &Ctx,
@@ -18,24 +31,27 @@ pub(crate) async fn export_patch(
 	let report = SafetyReportIdentificationBmc::get_by_case(ctx, mm, case_id)
 		.await
 		.map_err(Error::from)?;
-	let sender = fetch_sender_information(mm, case_id).await?;
+	let sender = fetch_sender_information(ctx, mm, case_id).await?;
 	export_c_safety_report_patch(raw_xml, case, &report, sender.as_ref(), authority)
 }
 
 async fn fetch_sender_information(
+	ctx: &Ctx,
 	mm: &ModelManager,
 	case_id: sqlx::types::Uuid,
 ) -> Result<Option<SenderInformation>> {
-	mm.dbx()
-		.fetch_optional(
-			sqlx::query_as::<_, SenderInformation>(
-				"SELECT * FROM sender_information WHERE case_id = $1 ORDER BY created_at LIMIT 1",
-			)
-			.bind(case_id),
-		)
-		.await
-		.map_err(model::Error::from)
-		.map_err(Error::from)
+	let mut senders = SenderInformationBmc::list(
+		ctx,
+		mm,
+		Some(vec![SenderInformationFilter {
+			case_id: Some(uuid_eq(case_id)),
+		}]),
+		Some(ListOptions::default()),
+	)
+	.await
+	.map_err(Error::from)?;
+	senders.sort_by_key(|sender| sender.created_at);
+	Ok(senders.into_iter().next())
 }
 
 fn set_text_or_null_flavor(
@@ -423,14 +439,48 @@ fn ensure_primary_source_author_nodes(
 pub(crate) async fn apply_report_relationships_section(
 	doc: &mut Document,
 	parser: &Parser,
+	ctx: &Ctx,
 	mm: &ModelManager,
 	case_id: sqlx::types::Uuid,
 	xpath: &mut Context,
 	authority: lib_core::regulatory::RegulatoryAuthority,
 ) -> Result<()> {
-	let documents = mm.dbx().fetch_all(sqlx::query_as::<_, DocumentsHeldBySender>("SELECT * FROM documents_held_by_sender WHERE case_id = $1 AND deleted = false ORDER BY sequence_number").bind(case_id)).await.map_err(model::Error::from)?;
-	let identifiers = mm.dbx().fetch_all(sqlx::query_as::<_, OtherCaseIdentifier>("SELECT * FROM other_case_identifiers WHERE case_id = $1 AND deleted = false ORDER BY sequence_number").bind(case_id)).await.map_err(model::Error::from)?;
-	let linked_reports = mm.dbx().fetch_all(sqlx::query_as::<_, LinkedReportNumber>("SELECT * FROM linked_report_numbers WHERE case_id = $1 AND deleted = false ORDER BY sequence_number").bind(case_id)).await.map_err(model::Error::from)?;
+	let mut documents = DocumentsHeldBySenderBmc::list(
+		ctx,
+		mm,
+		Some(vec![DocumentsHeldBySenderFilter {
+			case_id: Some(uuid_eq(case_id)),
+			..Default::default()
+		}]),
+		Some(ListOptions::default()),
+	)
+	.await
+	.map_err(Error::from)?;
+	let mut identifiers = OtherCaseIdentifierBmc::list(
+		ctx,
+		mm,
+		Some(vec![OtherCaseIdentifierFilter {
+			case_id: Some(uuid_eq(case_id)),
+			..Default::default()
+		}]),
+		Some(ListOptions::default()),
+	)
+	.await
+	.map_err(Error::from)?;
+	let mut linked_reports = LinkedReportNumberBmc::list(
+		ctx,
+		mm,
+		Some(vec![LinkedReportNumberFilter {
+			case_id: Some(uuid_eq(case_id)),
+			..Default::default()
+		}]),
+		Some(ListOptions::default()),
+	)
+	.await
+	.map_err(Error::from)?;
+	documents.sort_by_key(|value| value.sequence_number);
+	identifiers.sort_by_key(|value| value.sequence_number);
+	linked_reports.sort_by_key(|value| value.sequence_number);
 
 	remove_nodes(
 		xpath,
@@ -1020,19 +1070,20 @@ fn write_c_4_r_2(
 pub(crate) async fn apply_study_section(
 	doc: &mut Document,
 	parser: &Parser,
+	ctx: &Ctx,
 	mm: &ModelManager,
 	case_id: sqlx::types::Uuid,
 	xpath: &mut Context,
 	authority: lib_core::regulatory::RegulatoryAuthority,
 ) -> Result<()> {
-	let study = fetch_study_information(mm, case_id).await?;
+	let study = fetch_study_information(ctx, mm, case_id).await?;
 	let Some(study) = study else {
 		return Ok(());
 	};
-	let registrations = fetch_study_registrations(mm, study.id).await?;
+	let registrations = fetch_study_registrations(ctx, mm, study.id).await?;
 	let cross_reported_inds =
 		if matches!(authority, lib_core::regulatory::RegulatoryAuthority::Fda) {
-			fetch_study_fda_cross_reported_inds(mm, study.id).await?
+			fetch_study_fda_cross_reported_inds(ctx, mm, study.id).await?
 		} else {
 			Vec::new()
 		};
@@ -1231,14 +1282,22 @@ fn write_fda_study_id(value: Option<&str>, root: &str) -> String {
 }
 
 async fn fetch_study_information(
+	ctx: &Ctx,
 	mm: &ModelManager,
 	case_id: sqlx::types::Uuid,
 ) -> Result<Option<StudyInformation>> {
-	let sql = "SELECT * FROM study_information WHERE case_id = $1 ORDER BY created_at ASC LIMIT 1";
-	mm.dbx()
-		.fetch_optional(sqlx::query_as::<_, StudyInformation>(sql).bind(case_id))
-		.await
-		.map_err(|e| Error::Model(lib_core::model::Error::Store(format!("{e}"))))
+	let mut studies = StudyInformationBmc::list(
+		ctx,
+		mm,
+		Some(vec![StudyInformationFilter {
+			case_id: Some(uuid_eq(case_id)),
+		}]),
+		Some(ListOptions::default()),
+	)
+	.await
+	.map_err(Error::from)?;
+	studies.sort_by_key(|study| study.created_at);
+	Ok(studies.into_iter().next())
 }
 
 async fn fetch_literature_references(
@@ -1253,24 +1312,43 @@ async fn fetch_literature_references(
 }
 
 async fn fetch_study_registrations(
+	ctx: &Ctx,
 	mm: &ModelManager,
 	study_information_id: sqlx::types::Uuid,
 ) -> Result<Vec<StudyRegistrationNumber>> {
-	let sql = "SELECT * FROM study_registration_numbers WHERE study_information_id = $1 AND deleted = false ORDER BY sequence_number";
-	mm.dbx()
-		.fetch_all(
-			sqlx::query_as::<_, StudyRegistrationNumber>(sql)
-				.bind(study_information_id),
-		)
-		.await
-		.map_err(|e| Error::Model(lib_core::model::Error::Store(format!("{e}"))))
+	let mut registrations = StudyRegistrationNumberBmc::list(
+		ctx,
+		mm,
+		Some(vec![StudyRegistrationNumberFilter {
+			study_information_id: Some(uuid_eq(study_information_id)),
+			..Default::default()
+		}]),
+		Some(ListOptions::default()),
+	)
+	.await
+	.map_err(Error::from)?;
+	registrations.sort_by_key(|value| value.sequence_number);
+	Ok(registrations)
 }
 
 async fn fetch_study_fda_cross_reported_inds(
+	ctx: &Ctx,
 	mm: &ModelManager,
 	study_information_id: sqlx::types::Uuid,
 ) -> Result<Vec<StudyFdaCrossReportedInd>> {
-	mm.dbx().fetch_all(sqlx::query_as::<_, StudyFdaCrossReportedInd>("SELECT * FROM study_fda_cross_reported_inds WHERE study_information_id = $1 AND deleted = false ORDER BY sequence_number").bind(study_information_id)).await.map_err(model::Error::from).map_err(Error::from)
+	let mut values = StudyFdaCrossReportedIndBmc::list(
+		ctx,
+		mm,
+		Some(vec![StudyFdaCrossReportedIndFilter {
+			study_information_id: Some(uuid_eq(study_information_id)),
+			..Default::default()
+		}]),
+		Some(ListOptions::default()),
+	)
+	.await
+	.map_err(Error::from)?;
+	values.sort_by_key(|value| value.sequence_number);
+	Ok(values)
 }
 
 #[cfg(test)]

@@ -146,7 +146,7 @@ async fn setup_imported_case_from(fixture_name: &str) -> Result<ImportedCaseSetu
 
 #[serial]
 #[tokio::test(flavor = "multi_thread")]
-async fn n_2_r_4_reads_persisted_offset_c_1_2_through_rls() -> Result<()> {
+async fn fda_export_reads_persisted_n_and_c_values_through_rls() -> Result<()> {
 	init_test_env().await?;
 	let mm = init_test_mm().await?;
 	let seed = seed_org_with_users(&mm, "admin_pwd", "viewer_pwd").await?;
@@ -258,7 +258,12 @@ async fn n_2_r_4_reads_persisted_offset_c_1_2_through_rls() -> Result<()> {
 		"PUT",
 		format!("/api/cases/{case_id}/safety-report"),
 		Some(serde_json::json!({
-			"data": { "transmission_date": transmission_date }
+			"data": {
+				"transmission_date": transmission_date,
+				"fulfil_expedited_criteria": true,
+				"local_criteria_report_type": "1",
+				"other_case_identifiers_exist": true
+			}
 		})),
 	)
 	.await?;
@@ -275,6 +280,63 @@ async fn n_2_r_4_reads_persisted_offset_c_1_2_through_rls() -> Result<()> {
 	assert_eq!(status, StatusCode::OK, "{}", String::from_utf8_lossy(&body));
 	let report: Value = serde_json::from_slice(&body)?;
 	assert_eq!(report["data"]["transmission_date"], transmission_date);
+	assert_eq!(report["data"]["local_criteria_report_type"], "1");
+
+	for (uri, data) in [
+		(
+			format!("/api/cases/{case_id}/safety-report/senders"),
+			serde_json::json!({
+				"case_id": case_id,
+				"sender_type": "1",
+				"organization_name": "QVIS Safety CRO",
+				"department": "Drug Safety",
+				"street_address": "123 Teheran-ro",
+				"city": "Seoul",
+				"state": "Seoul",
+				"postcode": "06236",
+				"country_code": "KR",
+				"person_title": "Ms",
+				"person_given_name": "Sara J",
+				"person_family_name": "Lee",
+				"telephone": "+82-2-555-0100",
+				"fax": "+82-2-555-0101",
+				"email": "sara.lee@example.com"
+			}),
+		),
+		(
+			format!("/api/cases/{case_id}/safety-report/studies"),
+			serde_json::json!({
+				"case_id": case_id,
+				"study_name": "QVIS Clinical Trial",
+				"sponsor_study_number": "QVIS-CT-2026-004",
+				"study_type_reaction": "1"
+			}),
+		),
+		(
+			format!("/api/cases/{case_id}/other-identifiers"),
+			serde_json::json!({
+				"case_id": case_id,
+				"sequence_number": 1,
+				"source_of_identifier": "QVIS Safety CRO",
+				"case_identifier": "KR-QVIS-PRIOR-2026-004"
+			}),
+		),
+	] {
+		let (status, body) = request_json(
+			&app,
+			&cookie,
+			"POST",
+			uri,
+			Some(serde_json::json!({ "data": data })),
+		)
+		.await?;
+		assert_eq!(
+			status,
+			StatusCode::CREATED,
+			"{}",
+			String::from_utf8_lossy(&body)
+		);
+	}
 
 	let case_id = Uuid::parse_str(&case_id)?;
 	let exported = tokio::task::block_in_place(|| {
@@ -291,6 +353,34 @@ async fn n_2_r_4_reads_persisted_offset_c_1_2_through_rls() -> Result<()> {
 		exported.contains(&format!("<creationTime value=\"{transmission_date}\"")),
 		"N.2.r.4 did not use persisted C.1.2"
 	);
+	for expected in [
+		"<code code=\"C54588\" codeSystem=\"2.16.840.1.113883.3.26.1.1\"/>",
+		"<value xsi:type=\"CE\" code=\"1\" codeSystem=\"2.16.840.1.113883.3.989.5.1.2.2.1.1.1\"/>",
+		"<code codeSystem=\"2.16.840.1.113883.3.989.2.1.1.7\" code=\"1\"/>",
+		"<streetAddressLine>123 Teheran-ro</streetAddressLine>",
+		"<city>Seoul</city>",
+		"<state>Seoul</state>",
+		"<postalCode>06236</postalCode>",
+		"<prefix>Ms</prefix>",
+		"<given>Sara J</given>",
+		"<family>Lee</family>",
+		"<telecom value=\"tel:+82-2-555-0100\"/>",
+		"<telecom value=\"fax:+82-2-555-0101\"/>",
+		"<telecom value=\"mailto:sara.lee@example.com\"/>",
+		"<name>Drug Safety</name>",
+		"<name>QVIS Safety CRO</name>",
+		"<code codeSystem=\"1.0.3166.1.2.2\" code=\"KR\"/>",
+		"<researchStudy classCode=\"CLNTRL\" moodCode=\"EVN\"><id extension=\"QVIS-CT-2026-004\" root=\"2.16.840.1.113883.3.989.2.1.3.5\"/><code code=\"1\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.8\" codeSystemVersion=\"1.0\"/>",
+		"<id root=\"2.16.840.1.113883.3.989.2.1.3.3\" assigningAuthorityName=\"QVIS Safety CRO\" extension=\"KR-QVIS-PRIOR-2026-004\"/>",
+	] {
+		assert!(exported.contains(expected), "missing FDA C node: {expected}");
+	}
+	let expedited = exported
+		.find("code=\"23\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.19\"")
+		.unwrap();
+	let local_criteria = exported.find("code=\"C54588\"").unwrap();
+	let sender = exported.find("<name>QVIS Safety CRO</name>").unwrap();
+	assert!(expedited < local_criteria && local_criteria < sender);
 	Ok(())
 }
 

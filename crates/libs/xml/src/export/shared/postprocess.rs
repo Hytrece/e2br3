@@ -56,12 +56,12 @@ pub(crate) async fn apply_section_postprocess(
 	)
 	.await?;
 	apply_report_relationships_section(
-		&mut doc, &parser, mm, case_id, &mut xpath, authority,
+		&mut doc, &parser, ctx, mm, case_id, &mut xpath, authority,
 	)
 	.await?;
 	apply_literature_section(&mut doc, &parser, mm, case_id, &mut xpath, authority)
 		.await?;
-	apply_study_section(&mut doc, &parser, mm, case_id, &mut xpath, authority)
+	apply_study_section(&mut doc, &parser, ctx, mm, case_id, &mut xpath, authority)
 		.await?;
 	apply_sender_diagnosis_section(ctx, &mut doc, &parser, mm, case_id, &mut xpath)
 		.await?;
@@ -573,6 +573,12 @@ fn apply_fda_patient_ethnicity(
 	}
 
 	ensure_patient_observation(xpath, doc, parser, "C16564", "CE")?;
+	set_attr_first(
+		xpath,
+		"//hl7:primaryRole/hl7:subjectOf2/hl7:observation[hl7:code[@code='C16564']]/hl7:code",
+		"codeSystem",
+		"2.16.840.1.113883.3.26.1.1",
+	);
 	let value_xpath =
 		"//hl7:primaryRole/hl7:subjectOf2/hl7:observation[hl7:code[@code='C16564']]/hl7:value";
 	set_attr_first(xpath, value_xpath, "xsi:type", "CE");
@@ -1618,6 +1624,15 @@ mod tests {
 				)
 				.expect("ethnicity code"),
 			"C41222"
+		);
+		assert_eq!(
+			xpath
+				.findvalue(
+					"//hl7:observation[hl7:code[@code='C16564']]/hl7:code/@codeSystem",
+					None,
+				)
+				.expect("ethnicity observation code system"),
+			"2.16.840.1.113883.3.26.1.1"
 		);
 		assert_eq!(
 			xpath

@@ -814,6 +814,12 @@ fn write_fda_c_1_7_1(
 		remove_attr_first(xpath, &path, "type");
 		set_attr_first(xpath, &path, "xsi:type", "CE");
 		set_attr_first(xpath, &path, "code", value);
+		set_attr_first(
+			xpath,
+			&path,
+			"codeSystem",
+			"2.16.840.1.113883.3.989.5.1.2.2.1.1.1",
+		);
 		clear_null_flavor_if_export_policy(xpath, "FDA.C.1.7.1.REQUIRED", &path);
 	} else {
 		remove_nodes(xpath, component);
@@ -1026,6 +1032,12 @@ mod tests {
 		let xml = doc.to_string();
 		assert_eq!(xml.matches("xsi:type=\"CE\"").count(), 1, "{xml}");
 		assert!(!xml.contains(" type=\"CE\""), "{xml}");
+		assert!(
+			xml.contains(
+				"code=\"1\" codeSystem=\"2.16.840.1.113883.3.989.5.1.2.2.1.1.1\""
+			),
+			"{xml}"
+		);
 	}
 
 	#[test]
