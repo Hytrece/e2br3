@@ -27,7 +27,7 @@ COPY assets/ assets/
 RUN --mount=type=cache,id=e2br3-cargo-registry,target=/usr/local/cargo/registry,sharing=locked \
     --mount=type=cache,id=e2br3-cargo-git,target=/usr/local/cargo/git,sharing=locked \
     --mount=type=cache,id=e2br3-cargo-target,target=/app/target,sharing=locked \
-    cargo build --release --jobs 1 --package web-server --package terminology-loader \
+    cargo build --release --jobs 4 --package web-server --package terminology-loader \
     && mkdir -p /app/build-artifacts \
     && cp target/release/web-server target/release/terminology-loader /app/build-artifacts/
 
