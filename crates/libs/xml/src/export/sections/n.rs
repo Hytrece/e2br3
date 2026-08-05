@@ -13,11 +13,13 @@ pub(crate) async fn apply_section_n(
 	let Some(header) = header else {
 		return Ok(());
 	};
-	let report = fetch_safety_report_identification(mm, case_id).await?;
+	let report = SafetyReportIdentificationBmc::get_by_case(ctx, mm, case_id)
+		.await
+		.map_err(Error::from)?;
 	let export_time = sqlx::types::time::OffsetDateTime::now_utc();
 	let message_date = report
-		.as_ref()
-		.and_then(|report| report.transmission_date.as_deref())
+		.transmission_date
+		.as_deref()
 		.filter(|value| !value.trim().is_empty())
 		.ok_or_else(|| Error::InvalidXml {
 			message: "safety_report_identification.transmission_date is required for N.2.r.4 export".to_string(),
@@ -68,9 +70,7 @@ pub(crate) async fn apply_section_n(
 			xpath,
 			"/hl7:MCCI_IN200100UV01/hl7:receiver/hl7:device/hl7:asAgent",
 			&receiver,
-			report
-				.as_ref()
-				.and_then(|r| r.receiver_organization.as_deref()),
+			report.receiver_organization.as_deref(),
 		);
 		apply_receiver_organization(
 			doc,
@@ -78,7 +78,7 @@ pub(crate) async fn apply_section_n(
 			xpath,
 			"/hl7:MCCI_IN200100UV01/hl7:PORR_IN049016UV/hl7:receiver/hl7:device/hl7:asAgent",
 			&receiver,
-			report.as_ref().and_then(|r| r.receiver_organization.as_deref()),
+			report.receiver_organization.as_deref(),
 		);
 	}
 	Ok(())
@@ -441,24 +441,6 @@ pub(super) async fn fetch_receiver_information(
 	let sql = "SELECT * FROM receiver_information WHERE case_id = $1 LIMIT 1";
 	mm.dbx()
 		.fetch_optional(sqlx::query_as::<_, ReceiverInformation>(sql).bind(case_id))
-		.await
-		.map_err(|e| Error::Model(lib_core::model::Error::Store(format!("{e}"))))
-}
-
-async fn fetch_safety_report_identification(
-	mm: &ModelManager,
-	case_id: sqlx::types::Uuid,
-) -> Result<Option<lib_core::model::safety_report::SafetyReportIdentification>> {
-	let sql =
-		"SELECT * FROM safety_report_identification WHERE case_id = $1 LIMIT 1";
-	mm.dbx()
-		.fetch_optional(
-			sqlx::query_as::<
-				_,
-				lib_core::model::safety_report::SafetyReportIdentification,
-			>(sql)
-			.bind(case_id),
-		)
 		.await
 		.map_err(|e| Error::Model(lib_core::model::Error::Store(format!("{e}"))))
 }

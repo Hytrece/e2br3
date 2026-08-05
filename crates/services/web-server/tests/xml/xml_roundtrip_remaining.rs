@@ -146,6 +146,156 @@ async fn setup_imported_case_from(fixture_name: &str) -> Result<ImportedCaseSetu
 
 #[serial]
 #[tokio::test(flavor = "multi_thread")]
+async fn n_2_r_4_reads_persisted_offset_c_1_2_through_rls() -> Result<()> {
+	init_test_env().await?;
+	let mm = init_test_mm().await?;
+	let seed = seed_org_with_users(&mm, "admin_pwd", "viewer_pwd").await?;
+	let ctx = Ctx::new(
+		seed.admin.id,
+		seed.org_id,
+		ROLE_SPONSOR_ADMIN_CRO.to_string(),
+	)?;
+	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
+	let cookie = cookie_header(&token.to_string());
+	let app = web_server::app(mm.clone());
+	let (status, body) = request_json(
+		&app,
+		&cookie,
+		"POST",
+		"/api/cases".to_string(),
+		Some(serde_json::json!({
+			"data": {
+				"status": "draft",
+				"safetyReportIdentification": {
+					"safetyReportId": format!("N-RLS-{}", Uuid::new_v4())
+				}
+			}
+		})),
+	)
+	.await?;
+	assert_eq!(
+		status,
+		StatusCode::CREATED,
+		"{}",
+		String::from_utf8_lossy(&body)
+	);
+	let case_id = extract_data_id(&body)?;
+	let (status, body) = request_json(
+		&app,
+		&cookie,
+		"POST",
+		format!("/api/cases/{case_id}/message-header"),
+		Some(serde_json::json!({
+			"data": {
+				"case_id": case_id,
+				"message_number": format!("MSG-{case_id}"),
+				"message_sender_identifier": "SENDER01",
+				"message_receiver_identifier": "RECEIVER01",
+				"message_date": "20260805065000",
+				"batch_receiver_identifier": "ZZFDA"
+			}
+		})),
+	)
+	.await?;
+	assert_eq!(
+		status,
+		StatusCode::CREATED,
+		"{}",
+		String::from_utf8_lossy(&body)
+	);
+	let (status, body) = request_json(
+		&app,
+		&cookie,
+		"PUT",
+		format!("/api/cases/{case_id}/message-header"),
+		Some(serde_json::json!({
+			"data": { "batch_receiver_identifier": "ZZFDA" }
+		})),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK, "{}", String::from_utf8_lossy(&body));
+	let (status, body) = request_json(
+		&app,
+		&cookie,
+		"POST",
+		format!("/api/cases/{case_id}/patient"),
+		Some(serde_json::json!({
+			"data": {
+				"case_id": case_id,
+				"patient_initials": "NR",
+				"sex": "1"
+			}
+		})),
+	)
+	.await?;
+	assert_eq!(
+		status,
+		StatusCode::CREATED,
+		"{}",
+		String::from_utf8_lossy(&body)
+	);
+	let (status, body) = request_json(
+		&app,
+		&cookie,
+		"POST",
+		format!("/api/cases/{case_id}/narrative"),
+		Some(serde_json::json!({
+			"data": { "case_id": case_id, "case_narrative": "N.2.r.4 test" }
+		})),
+	)
+	.await?;
+	assert_eq!(
+		status,
+		StatusCode::CREATED,
+		"{}",
+		String::from_utf8_lossy(&body)
+	);
+
+	let transmission_date = "20260805065000-0400";
+	let (status, body) = request_json(
+		&app,
+		&cookie,
+		"PUT",
+		format!("/api/cases/{case_id}/safety-report"),
+		Some(serde_json::json!({
+			"data": { "transmission_date": transmission_date }
+		})),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK, "{}", String::from_utf8_lossy(&body));
+
+	let (status, body) = request_json(
+		&app,
+		&cookie,
+		"GET",
+		format!("/api/cases/{case_id}/safety-report"),
+		None,
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK, "{}", String::from_utf8_lossy(&body));
+	let report: Value = serde_json::from_slice(&body)?;
+	assert_eq!(report["data"]["transmission_date"], transmission_date);
+
+	let case_id = Uuid::parse_str(&case_id)?;
+	let exported = tokio::task::block_in_place(|| {
+		tokio::runtime::Handle::current().block_on(
+			xml::export::serialize_case_xml_for_authority(
+				&ctx,
+				&mm,
+				case_id,
+				lib_core::regulatory::RegulatoryAuthority::Fda,
+			),
+		)
+	})?;
+	assert!(
+		exported.contains(&format!("<creationTime value=\"{transmission_date}\"")),
+		"N.2.r.4 did not use persisted C.1.2"
+	);
+	Ok(())
+}
+
+#[serial]
+#[tokio::test(flavor = "multi_thread")]
 async fn fresh_full_build_validates_for_all_authorities() -> Result<()> {
 	let (_app, _cookie, case_id, mm, ctx) =
 		setup_imported_case_from("FAERS2022Scenario7.xml").await?;
