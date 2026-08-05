@@ -14,6 +14,16 @@ pub(crate) async fn apply_section_n(
 		return Ok(());
 	};
 	let report = fetch_safety_report_identification(mm, case_id).await?;
+	let export_time = sqlx::types::time::OffsetDateTime::now_utc();
+	let message_date = report
+		.as_ref()
+		.and_then(|report| report.transmission_date.as_deref())
+		.filter(|value| !value.trim().is_empty())
+		.ok_or_else(|| Error::InvalidXml {
+			message: "safety_report_identification.transmission_date is required for N.2.r.4 export".to_string(),
+			line: None,
+			column: None,
+		})?;
 
 	write_n_1_1(xpath, &header.message_type);
 	write_n_1_2(xpath, header.batch_number.as_deref());
@@ -33,11 +43,11 @@ pub(crate) async fn apply_section_n(
 			column: None,
 		})?;
 	write_n_1_4(doc, parser, xpath, batch_receiver)?;
-	write_n_1_5(xpath, header.batch_transmission_date);
+	write_n_1_5(xpath, Some(export_time));
 	write_n_2_r_1(xpath, &header.message_number);
 	write_n_2_r_2(xpath, &header.message_sender_identifier);
 	write_n_2_r_3(xpath, &header.message_receiver_identifier);
-	write_n_2_r_4(xpath, &header.message_date);
+	write_n_2_r_4(xpath, message_date);
 
 	if let Some(receiver) = fetch_receiver_information(mm, case_id).await? {
 		ensure_top_level_receiver_agent_nodes(
@@ -213,7 +223,7 @@ mod date_tests {
 	use time::OffsetDateTime;
 
 	#[test]
-	fn n_dates_export_from_their_own_persisted_values() {
+	fn n_1_5_includes_utc_offset_and_n_2_r_4_preserves_c_1_2() {
 		let xml = br#"<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3"><creationTime value="stale"/><PORR_IN049016UV><creationTime value="old-message"/><controlActProcess><effectiveTime value="old-effective"/></controlActProcess></PORR_IN049016UV></MCCI_IN200100UV01>"#;
 		let parser = Parser::default();
 		let doc = parser.parse_string(xml).expect("parse");
@@ -222,25 +232,25 @@ mod date_tests {
 
 		let batch_date = OffsetDateTime::from_unix_timestamp(1_704_164_645).unwrap();
 		write_n_1_5(&mut xpath, Some(batch_date));
-		write_n_2_r_4(&mut xpath, "20260301120000");
+		write_n_2_r_4(&mut xpath, "20260805043201-0400");
 
 		assert_eq!(
 			xpath
 				.findvalue("/hl7:MCCI_IN200100UV01/hl7:creationTime/@value", None)
 				.unwrap(),
-			"20240102030405"
+			"20240102030405+0000"
 		);
 		assert_eq!(
 			xpath
 				.findvalue("/hl7:MCCI_IN200100UV01/hl7:PORR_IN049016UV/hl7:creationTime/@value", None)
 				.unwrap(),
-			"20260301120000"
+			"20260805043201-0400"
 		);
 		assert_eq!(
 			xpath
 				.findvalue("/hl7:MCCI_IN200100UV01/hl7:PORR_IN049016UV/hl7:controlActProcess/hl7:effectiveTime/@value", None)
 				.unwrap(),
-			"20260301120000"
+			"20260805043201-0400"
 		);
 	}
 

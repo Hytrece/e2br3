@@ -1,5 +1,4 @@
 use sqlx::types::time::Date;
-use sqlx::types::time::OffsetDateTime;
 
 pub struct DPatientDeathCausePatch<'a> {
 	pub meddra_version: Option<&'a str>,
@@ -10,8 +9,6 @@ pub struct DPatientDeathCausePatch<'a> {
 pub struct CSafetyReportPatch<'a> {
 	pub report_unique_id: &'a str,
 	pub transmission_date: Option<&'a str>,
-	pub transmission_date_value: Option<&'a str>,
-	pub transmission_date_time: Option<OffsetDateTime>,
 	pub report_type: &'a str,
 	pub date_first_received: Option<Date>,
 	pub date_most_recent: Option<Date>,

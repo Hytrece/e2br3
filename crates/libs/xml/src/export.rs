@@ -162,8 +162,6 @@ mod tests {
 		let c = CSafetyReportPatch {
 			report_unique_id: "CASE-1",
 			transmission_date: Some("20240101"),
-			transmission_date_value: Some("20240101000000"),
-			transmission_date_time: None,
 			report_type: "1",
 			date_first_received: None,
 			date_most_recent: None,

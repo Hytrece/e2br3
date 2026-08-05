@@ -38,6 +38,10 @@ use sqlx::types::time::{Date, Time};
 #[cfg(test)]
 use std::collections::HashMap;
 
+fn decimal_text(value: &rust_decimal::Decimal) -> String {
+	value.normalize().to_string()
+}
+
 #[cfg(test)]
 pub fn export_g_drugs_xml(
 	drugs: &[DrugInformation],
@@ -752,9 +756,9 @@ pub(crate) fn drug_fragment(
 			out.push_str("</name></playingOrganization></role></holder>");
 		}
 		if let Some(country) = write_g_k_3_2(drug) {
-			out.push_str("<author><territorialAuthority><territory><code code=\"");
+			out.push_str("<author typeCode=\"AUT\"><territorialAuthority classCode=\"TERR\"><territory classCode=\"NAT\" determinerCode=\"INSTANCE\"><code code=\"");
 			out.push_str(&xml_escape(country));
-			out.push_str("\"/></territory></territorialAuthority></author>");
+			out.push_str("\" codeSystem=\"1.0.3166.1.2.2\"/></territory></territorialAuthority></author>");
 		}
 		out.push_str("</approval></subjectOf></asManufacturedProduct>");
 	}
@@ -766,7 +770,7 @@ pub(crate) fn drug_fragment(
 				out.push_str("<quantity><numerator");
 				if let Some(v) = write_g_k_2_3_r_3a(sub) {
 					out.push_str(" value=\"");
-					out.push_str(&xml_escape(&v.to_string()));
+					out.push_str(&xml_escape(&decimal_text(v)));
 					out.push_str("\"");
 				}
 				if let Some(u) = write_g_k_2_3_r_3b(sub) {
@@ -973,7 +977,7 @@ pub(crate) fn drug_fragment(
 		out.push_str("<outboundRelationship2 typeCode=\"SUMM\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code code=\"14\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.19\" displayName=\"cumulativeDoseToReaction\"/><value xsi:type=\"PQ\"");
 		if let Some(v) = write_g_k_5a(drug) {
 			out.push_str(" value=\"");
-			out.push_str(&xml_escape(&v.to_string()));
+			out.push_str(&xml_escape(&decimal_text(v)));
 			out.push_str("\"");
 		}
 		if let Some(u) = write_g_k_5b(drug) {
@@ -989,7 +993,7 @@ pub(crate) fn drug_fragment(
 		out.push_str("<outboundRelationship2 typeCode=\"PERT\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code code=\"16\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.19\" displayName=\"gestationPeriod\"/><value xsi:type=\"PQ\"");
 		if let Some(v) = write_g_k_6a(drug) {
 			out.push_str(" value=\"");
-			out.push_str(&xml_escape(&v.to_string()));
+			out.push_str(&xml_escape(&decimal_text(v)));
 			out.push_str("\"");
 		}
 		if let Some(u) = write_g_k_6b(drug) {
@@ -1030,7 +1034,7 @@ pub(crate) fn drug_fragment(
 			);
 			if let Some(v) = write_g_k_4_r_2(dose) {
 				out.push_str(" value=\"");
-				out.push_str(&xml_escape(&v.to_string()));
+				out.push_str(&xml_escape(&decimal_text(v)));
 				out.push_str("\"");
 			}
 			if let Some(u) = write_g_k_4_r_3(dose) {
@@ -1079,7 +1083,7 @@ pub(crate) fn drug_fragment(
 				out.push_str(
 					"<comp xsi:type=\"IVL_TS\" operator=\"A\"><width value=\"",
 				);
-				out.push_str(&xml_escape(&width.to_string()));
+				out.push_str(&xml_escape(&decimal_text(width)));
 				out.push_str("\"");
 				if let Some(unit) = write_g_k_4_r_6b(dose) {
 					out.push_str(" unit=\"");
@@ -1125,7 +1129,7 @@ pub(crate) fn drug_fragment(
 			out.push_str("<doseQuantity");
 			if let Some(v) = write_g_k_4_r_1a(dose) {
 				out.push_str(" value=\"");
-				out.push_str(&xml_escape(&v.normalize().to_string()));
+				out.push_str(&xml_escape(&decimal_text(v)));
 				out.push_str("\"");
 			}
 			if let Some(u) = write_g_k_4_r_1b(dose) {
@@ -1302,7 +1306,7 @@ fn drug_recurrence_fragment(assessment: &DrugReactionAssessment) -> String {
 		out.push_str("<outboundRelationship1 typeCode=\"SAS\"><pauseQuantity");
 		if let Some(value) = write_g_k_9_i_3_1a(assessment) {
 			out.push_str(" value=\"");
-			out.push_str(&xml_escape(&value.to_string()));
+			out.push_str(&xml_escape(&decimal_text(value)));
 			out.push_str("\"");
 		}
 		if let Some(unit) = write_g_k_9_i_3_1b(assessment) {
@@ -1322,7 +1326,7 @@ fn drug_recurrence_fragment(assessment: &DrugReactionAssessment) -> String {
 		out.push_str("<outboundRelationship1 typeCode=\"SAE\"><pauseQuantity");
 		if let Some(value) = write_g_k_9_i_3_2a(assessment) {
 			out.push_str(" value=\"");
-			out.push_str(&xml_escape(&value.to_string()));
+			out.push_str(&xml_escape(&decimal_text(value)));
 			out.push_str("\"");
 		}
 		if let Some(unit) = write_g_k_9_i_3_2b(assessment) {
@@ -1770,6 +1774,21 @@ mod tests {
 
 		assert!(xml.contains("<doseQuantity value=\"100\"/>"), "{xml}");
 		assert!(!xml.contains("value=\"100.00000\""), "{xml}");
+	}
+
+	#[test]
+	fn export_g_preserves_authorization_country_and_normalizes_decimals() {
+		let mut drug = test_drug(Uuid::new_v4(), Uuid::new_v4());
+		drug.drug_authorization_number = Some("FDA-IND-123456".to_string());
+		drug.manufacturer_country = Some("US".to_string());
+		drug.gestation_period_exposure_value = Some(Decimal::new(2000, 2));
+		drug.gestation_period_exposure_unit = Some("wk".to_string());
+
+		let xml = export_g_drugs_xml(&[drug], &[], &[], &[], &[], &[], &[])
+			.expect("export XML");
+
+		assert!(xml.contains("<author typeCode=\"AUT\"><territorialAuthority classCode=\"TERR\"><territory classCode=\"NAT\" determinerCode=\"INSTANCE\"><code code=\"US\" codeSystem=\"1.0.3166.1.2.2\"/>"), "{xml}");
+		assert!(xml.contains("displayName=\"gestationPeriod\"/><value xsi:type=\"PQ\" value=\"20\" unit=\"wk\"/>"), "{xml}");
 	}
 
 	#[test]

@@ -1,4 +1,3 @@
-use super::n::fetch_message_header;
 use super::n::fetch_primary_source;
 use super::*;
 use crate::export::roundtrip::{patch_c_safety_report, CSafetyReportPatch};
@@ -20,15 +19,7 @@ pub(crate) async fn export_patch(
 		.await
 		.map_err(Error::from)?;
 	let sender = fetch_sender_information(mm, case_id).await?;
-	let header = fetch_message_header(ctx, mm, case_id).await?;
-	export_c_safety_report_patch(
-		raw_xml,
-		case,
-		&report,
-		header.as_ref(),
-		sender.as_ref(),
-		authority,
-	)
+	export_c_safety_report_patch(raw_xml, case, &report, sender.as_ref(), authority)
 }
 
 async fn fetch_sender_information(
@@ -450,7 +441,7 @@ pub(crate) async fn apply_report_relationships_section(
 
 	let mut fragment = String::new();
 	for value in identifiers {
-		fragment.push_str(&format!("<subjectOf1 typeCode=\"SUBJ\"><controlActEvent classCode=\"CACT\" moodCode=\"EVN\"><id root=\"2.16.840.1.113883.3.989.2.1.3.3\" assigningAuthorityName=\"{}\" extension=\"{}\"/></controlActEvent></subjectOf1>", write_c_1_9_1_r_1(&value), write_c_1_9_1_r_2(&value)));
+		fragment.push_str(&write_c_1_9_1(&value));
 	}
 	for value in linked_reports {
 		fragment.push_str(&write_c_1_10_r(&value));
@@ -480,6 +471,7 @@ pub(crate) async fn apply_report_relationships_section(
 	let _ = xpath.register_namespace("hl7", "urn:hl7-org:v3");
 	let _ =
 		xpath.register_namespace("xsi", "http://www.w3.org/2001/XMLSchema-instance");
+	crate::export::roundtrip::reorder_investigation_event_children(xpath);
 	Ok(())
 }
 
@@ -570,6 +562,10 @@ fn write_attachment_text(
 	))
 }
 
+fn write_c_1_9_1(value: &OtherCaseIdentifier) -> String {
+	format!("<subjectOf1 typeCode=\"SUBJ\"><controlActEvent classCode=\"CACT\" moodCode=\"EVN\"><id root=\"2.16.840.1.113883.3.989.2.1.3.3\" assigningAuthorityName=\"{}\" extension=\"{}\"/></controlActEvent></subjectOf1>", write_c_1_9_1_r_1(value), write_c_1_9_1_r_2(value))
+}
+
 /// e2b:C.1.9.1.r.1
 fn write_c_1_9_1_r_1(value: &OtherCaseIdentifier) -> String {
 	xml_escape(&value.source_of_identifier)
@@ -589,7 +585,6 @@ pub fn export_c_safety_report_patch(
 	raw_xml: &[u8],
 	_case: &Case,
 	report: &SafetyReportIdentification,
-	header: Option<&MessageHeader>,
 	sender: Option<&SenderInformation>,
 	authority: lib_core::regulatory::RegulatoryAuthority,
 ) -> Result<String> {
@@ -605,8 +600,6 @@ pub fn export_c_safety_report_patch(
 	let patch = CSafetyReportPatch {
 		report_unique_id: report.safety_report_id.as_deref().unwrap_or(""),
 		transmission_date: report.transmission_date.as_deref(),
-		transmission_date_value: header.map(|h| h.message_date.as_str()),
-		transmission_date_time: header.and_then(|h| h.batch_transmission_date),
 		report_type: report.report_type.as_deref().unwrap_or(""),
 		date_first_received: report.date_first_received_from_source,
 		date_most_recent: report.date_of_most_recent_information,
@@ -1334,8 +1327,8 @@ mod study_writer_strictness_tests {
 		study.sponsor_study_number_null_flavor = Some("NASK".to_string());
 		assert!(write_c_5_3(&study).contains("nullFlavor=\"NASK\""));
 		assert!(write_c_5_4(&study).is_empty());
-		study.study_type_reaction = Some("2".to_string());
-		assert!(write_c_5_4(&study).contains("code=\"2\""));
+		study.study_type_reaction = Some("1".to_string());
+		assert_eq!(write_c_5_4(&study), "<code code=\"1\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.8\" codeSystemVersion=\"1.0\"/>");
 	}
 }
 
@@ -1375,4 +1368,69 @@ fn inject_fragment_in_investigation_event(
 	out.push_str(fragment);
 	out.push_str(&xml[insert_at..]);
 	Some(out)
+}
+
+#[cfg(test)]
+mod relationship_order_tests {
+	use super::*;
+	use libxml::tree::NodeType;
+	use sqlx::types::time::OffsetDateTime;
+
+	#[test]
+	fn previous_identifier_is_exported_after_components() {
+		let identifier = OtherCaseIdentifier {
+			id: sqlx::types::Uuid::nil(),
+			case_id: sqlx::types::Uuid::nil(),
+			sequence_number: 1,
+			source_of_identifier: "QVIS Safety CRO".to_string(),
+			case_identifier: "KR-QVIS-PRIOR-2026-004".to_string(),
+			deleted: false,
+			created_at: OffsetDateTime::UNIX_EPOCH,
+			updated_at: OffsetDateTime::UNIX_EPOCH,
+			created_by: sqlx::types::Uuid::nil(),
+			updated_by: None,
+		};
+		let xml = inject_fragment_in_investigation_event(
+			crate::export::base_export_skeleton(),
+			&write_c_1_9_1(&identifier),
+		)
+		.expect("inject previous identifier");
+		let parser = Parser::default();
+		let doc = parser.parse_string(&xml).expect("parse");
+		let mut xpath = Context::new(&doc).expect("xpath");
+		xpath.register_namespace("hl7", "urn:hl7-org:v3").unwrap();
+		crate::export::roundtrip::reorder_investigation_event_children(&mut xpath);
+
+		let base = "//hl7:investigationEvent/hl7:subjectOf1/hl7:controlActEvent/hl7:id[@root='2.16.840.1.113883.3.989.2.1.3.3']";
+		assert_eq!(
+			xpath
+				.findvalue(&format!("{base}/@assigningAuthorityName"), None)
+				.unwrap(),
+			"QVIS Safety CRO"
+		);
+		assert_eq!(
+			xpath
+				.findvalue(&format!("{base}/@extension"), None)
+				.unwrap(),
+			"KR-QVIS-PRIOR-2026-004"
+		);
+
+		let event = xpath
+			.findnodes("//hl7:investigationEvent", None)
+			.unwrap()
+			.into_iter()
+			.next()
+			.unwrap();
+		let names = event
+			.get_child_nodes()
+			.into_iter()
+			.filter(|node| node.get_type() == Some(NodeType::ElementNode))
+			.map(|node| node.get_name())
+			.collect::<Vec<_>>();
+		let last_component =
+			names.iter().rposition(|name| name == "component").unwrap();
+		let first_subject =
+			names.iter().position(|name| name == "subjectOf1").unwrap();
+		assert!(last_component < first_subject, "{names:?}");
+	}
 }

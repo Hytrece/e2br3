@@ -528,12 +528,7 @@ fn write_c_1_2(
 	let path = "//hl7:controlActProcess/hl7:effectiveTime";
 	if let Some(transmission_date) = patch.transmission_date {
 		remove_attr_first(xpath, path, "nullFlavor");
-		let value = patch
-			.transmission_date_value
-			.filter(|value| is_14_digit_datetime(value))
-			.map(str::to_owned)
-			.unwrap_or_else(|| transmission_date.to_string());
-		set_attr_first(xpath, path, "value", &value);
+		set_attr_first(xpath, path, "value", transmission_date);
 	}
 	Ok(())
 }

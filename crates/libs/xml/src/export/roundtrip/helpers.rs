@@ -42,7 +42,7 @@ pub(super) fn ensure_primary_role(
 			<primaryRole classCode=\"INVSBJ\">\
 				<player1 classCode=\"PSN\" determinerCode=\"INSTANCE\">\
 					<name/>\
-					<administrativeGenderCode code=\"0\" codeSystem=\"1.0.5218\"/>\
+					<administrativeGenderCode codeSystem=\"1.0.5218\"/>\
 					<birthTime/>\
 				</player1>\
 			</primaryRole>\
@@ -246,7 +246,7 @@ pub(super) fn ensure_observation_event_component(
 	Ok(())
 }
 
-pub(super) fn reorder_investigation_event_children(xpath: &mut Context) {
+pub(crate) fn reorder_investigation_event_children(xpath: &mut Context) {
 	// InvestigationEvent schema order ends with outboundRelationship, subjectOf1, subjectOf2.
 	for name in ["outboundRelationship", "subjectOf1", "subjectOf2"] {
 		if let Ok(nodes) =
@@ -277,10 +277,6 @@ pub(super) fn fmt_date(date: Date) -> String {
 	let month: u8 = date.month().into();
 	let day = date.day();
 	format!("{:04}{:02}{:02}", year, month, day)
-}
-
-pub(super) fn is_14_digit_datetime(value: &str) -> bool {
-	value.len() == 14 && value.chars().all(|c| c.is_ascii_digit())
 }
 
 pub(super) fn normalize_bl_value(value: &str) -> Option<&'static str> {

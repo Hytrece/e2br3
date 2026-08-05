@@ -18,8 +18,6 @@ fn patch_c_section_updates_values() {
 	let patch = CSafetyReportPatch {
 		report_unique_id: "SR-TEST-123",
 		transmission_date: Some("20240115"),
-		transmission_date_value: None,
-		transmission_date_time: None,
 		report_type: "1",
 		date_first_received: Some(
 			Date::from_calendar_date(2024, Month::January, 10).unwrap(),
@@ -28,7 +26,7 @@ fn patch_c_section_updates_values() {
 			Date::from_calendar_date(2024, Month::January, 15).unwrap(),
 		),
 		fulfil_expedited: true,
-		additional_documents_available: None,
+		additional_documents_available: Some(false),
 		other_case_identifiers_exist: None,
 		other_case_identifiers_exist_null_flavor: None,
 		worldwide_unique_id: Some("WW-TEST-999"),
@@ -38,22 +36,22 @@ fn patch_c_section_updates_values() {
 		combination_product_indicator_null_flavor: None,
 		nullification_code: None,
 		nullification_reason: None,
-		sender_type: None,
+		sender_type: Some("1"),
 		sender_health_professional_type_kr1: None,
-		sender_org_name: None,
-		sender_department: None,
-		sender_street_address: None,
-		sender_city: None,
-		sender_state: None,
-		sender_postcode: None,
-		sender_country_code: None,
-		sender_person_title: None,
-		sender_person_given_name: None,
-		sender_person_middle_name: None,
-		sender_person_family_name: None,
-		sender_telephone: None,
-		sender_fax: None,
-		sender_email: None,
+		sender_org_name: Some("QVIS Safety CRO"),
+		sender_department: Some("Drug Safety"),
+		sender_street_address: Some("200 Regulatory Avenue"),
+		sender_city: Some("Seoul"),
+		sender_state: Some("Seoul"),
+		sender_postcode: Some("04524"),
+		sender_country_code: Some("KR"),
+		sender_person_title: Some("Ms"),
+		sender_person_given_name: Some("Sara"),
+		sender_person_middle_name: Some("J"),
+		sender_person_family_name: Some("Lee"),
+		sender_telephone: Some("+82-2-555-0100"),
+		sender_fax: Some("+82-2-555-0101"),
+		sender_email: Some("safety.sender@example.com"),
 	};
 
 	let patched = patch_c_safety_report(&xml, &patch).expect("patch xml");
@@ -77,6 +75,20 @@ fn patch_c_section_updates_values() {
 		)
 		.unwrap();
 	assert_eq!(worldwide_id, "WW-TEST-999");
+
+	for (path, expected) in [
+		("//hl7:component/hl7:observationEvent[hl7:code/@code='1']/hl7:value/@value", "false"),
+		("//hl7:component/hl7:observationEvent[hl7:code/@code='C54588']/hl7:value/@code", "1"),
+		("//hl7:investigationEvent/hl7:subjectOf1/hl7:controlActEvent/hl7:author/hl7:assignedEntity/hl7:code/@code", "1"),
+		("//hl7:investigationEvent/hl7:subjectOf1/hl7:controlActEvent/hl7:author/hl7:assignedEntity/hl7:representedOrganization/hl7:name", "Drug Safety"),
+		("//hl7:investigationEvent/hl7:subjectOf1/hl7:controlActEvent/hl7:author/hl7:assignedEntity/hl7:representedOrganization/hl7:assignedEntity/hl7:representedOrganization/hl7:name", "QVIS Safety CRO"),
+		("//hl7:investigationEvent/hl7:subjectOf1/hl7:controlActEvent/hl7:author/hl7:assignedEntity/hl7:assignedPerson/hl7:name/hl7:given[2]", "J"),
+		("//hl7:investigationEvent/hl7:subjectOf1/hl7:controlActEvent/hl7:author/hl7:assignedEntity/hl7:addr/hl7:city", "Seoul"),
+		("//hl7:investigationEvent/hl7:subjectOf1/hl7:controlActEvent/hl7:author/hl7:assignedEntity/hl7:assignedPerson/hl7:asLocatedEntity/hl7:location/hl7:code/@code", "KR"),
+		("//hl7:investigationEvent/hl7:subjectOf1/hl7:controlActEvent/hl7:author/hl7:assignedEntity/hl7:telecom[starts-with(@value,'tel:')]/@value", "tel:+82-2-555-0100"),
+	] {
+		assert_eq!(xpath.findvalue(path, None).unwrap(), expected, "{path}");
+	}
 }
 
 fn sender_patch<'a>(
@@ -87,8 +99,6 @@ fn sender_patch<'a>(
 	CSafetyReportPatch {
 		report_unique_id: "SENDER-TEST",
 		transmission_date: None,
-		transmission_date_value: None,
-		transmission_date_time: None,
 		report_type: "1",
 		date_first_received: None,
 		date_most_recent: None,
@@ -313,8 +323,6 @@ fn patch_c_1_9_1_exports_boolean_value_without_ce_children() {
 	let patch = CSafetyReportPatch {
 		report_unique_id: "FAERS2022Scenario1",
 		transmission_date: None,
-		transmission_date_value: None,
-		transmission_date_time: None,
 		report_type: "1",
 		date_first_received: None,
 		date_most_recent: None,
@@ -392,7 +400,7 @@ fn patch_c_1_9_1_exports_boolean_value_without_ce_children() {
 }
 
 #[test]
-fn patch_c_prefers_transmission_date_value_for_c1_2() {
+fn patch_c_uses_persisted_c1_2() {
 	let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 		.parent()
 		.and_then(|p| p.parent())
@@ -404,8 +412,6 @@ fn patch_c_prefers_transmission_date_value_for_c1_2() {
 	let patch = CSafetyReportPatch {
 		report_unique_id: "SR-TEST-124",
 		transmission_date: Some("20240115"),
-		transmission_date_value: Some("20240102030405"),
-		transmission_date_time: None,
 		report_type: "1",
 		date_first_received: Some(
 			Date::from_calendar_date(2024, Month::January, 10).unwrap(),
@@ -451,7 +457,7 @@ fn patch_c_prefers_transmission_date_value_for_c1_2() {
 	let c1_2 = xpath
 		.findvalue("//hl7:controlActProcess/hl7:effectiveTime/@value", None)
 		.unwrap();
-	assert_eq!(c1_2, "20240102030405");
+	assert_eq!(c1_2, "20240115");
 }
 
 #[test]
@@ -478,8 +484,6 @@ fn patch_c_keeps_investigation_event_order_when_adding_components() {
 	let patch = CSafetyReportPatch {
 		report_unique_id: "CASE-1",
 		transmission_date: Some("20240115"),
-		transmission_date_value: None,
-		transmission_date_time: None,
 		report_type: "1",
 		date_first_received: Some(
 			Date::from_calendar_date(2024, Month::January, 10).unwrap(),
@@ -572,8 +576,6 @@ fn patch_c_keeps_order_when_adding_local_criteria_component() {
 	let patch = CSafetyReportPatch {
 		report_unique_id: "CASE-2",
 		transmission_date: Some("20240115"),
-		transmission_date_value: None,
-		transmission_date_time: None,
 		report_type: "2",
 		date_first_received: Some(
 			Date::from_calendar_date(2024, Month::January, 10).unwrap(),
@@ -674,8 +676,6 @@ fn patch_c_exports_sender_health_professional_type_kr1() {
 	let patch = CSafetyReportPatch {
 		report_unique_id: "CASE-3",
 		transmission_date: Some("20240115"),
-		transmission_date_value: None,
-		transmission_date_time: None,
 		report_type: "2",
 		date_first_received: Some(
 			Date::from_calendar_date(2024, Month::January, 10).unwrap(),

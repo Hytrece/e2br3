@@ -38,7 +38,7 @@ pub(crate) fn remove_attr_first(xpath: &mut Context, path: &str, attr: &str) {
 pub(crate) fn fmt_datetime(dt: OffsetDateTime) -> String {
 	let dt = dt.to_offset(UtcOffset::UTC);
 	format!(
-		"{:04}{:02}{:02}{:02}{:02}{:02}",
+		"{:04}{:02}{:02}{:02}{:02}{:02}+0000",
 		dt.year(),
 		u8::from(dt.month()),
 		dt.day(),

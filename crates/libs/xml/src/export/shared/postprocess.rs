@@ -179,6 +179,11 @@ async fn apply_patient_section(
 			"nullFlavor",
 			null_flavor,
 		);
+	} else {
+		remove_nodes(
+			xpath,
+			"//hl7:primaryRole/hl7:player1/hl7:administrativeGenderCode",
+		);
 	}
 	apply_fda_patient_races(
 		doc,

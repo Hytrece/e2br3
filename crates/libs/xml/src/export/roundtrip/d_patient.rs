@@ -286,3 +286,44 @@ fn xml_escape(value: &str) -> String {
 		.replace('"', "&quot;")
 		.replace('\'', "&apos;")
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn missing_sex_does_not_emit_unknown_code() {
+		let patch = DPatientPatch {
+			patient_name: None,
+			sex: None,
+			birth_date: None,
+			age_value: None,
+			age_unit: None,
+			weight_kg: None,
+			height_cm: None,
+			date_of_death: None,
+			autopsy_performed: None,
+			autopsy_performed_null_flavor: None,
+			reported_causes: &[],
+			autopsy_causes: &[],
+		};
+		let xml = patch_d_patient(
+			crate::export::base_export_skeleton().as_bytes(),
+			&patch,
+		)
+		.expect("patch D");
+		let doc = Parser::default().parse_string(&xml).expect("parse D");
+		let mut xpath = Context::new(&doc).expect("xpath");
+		xpath
+			.register_namespace("hl7", "urn:hl7-org:v3")
+			.expect("namespace");
+
+		assert!(xpath
+			.findvalues(
+				"//hl7:primaryRole/hl7:player1/hl7:administrativeGenderCode/@code",
+				None,
+			)
+			.expect("sex codes")
+			.is_empty());
+	}
+}
