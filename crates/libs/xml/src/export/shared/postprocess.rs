@@ -9,6 +9,7 @@ use crate::export::sections::h::{
 };
 use crate::export::sections::n::apply_section_n;
 use crate::export::shared::patch_doc::postprocess_export_doc;
+use crate::export_utils::set_xsi_type_first;
 
 fn normalize_namespace_artifacts(mut xml: String) -> String {
 	xml = xml.replace("xmlns:default=\"urn:hl7-org:v3\"", "");
@@ -68,7 +69,7 @@ pub(crate) async fn apply_section_postprocess(
 		.await?;
 	apply_case_summary_section(ctx, &mut doc, &parser, mm, case_id, &mut xpath)
 		.await?;
-	postprocess_export_doc(&mut doc, &mut xpath);
+	postprocess_export_doc(&mut doc, &mut xpath)?;
 	reorder_investigation_event_children(&mut xpath);
 
 	Ok(normalize_namespace_artifacts(doc.to_string()))
@@ -583,7 +584,7 @@ fn apply_fda_patient_ethnicity(
 	);
 	let value_xpath =
 		"//hl7:primaryRole/hl7:subjectOf2/hl7:observation[hl7:code[@code='C16564']]/hl7:value";
-	set_attr_first(xpath, value_xpath, "xsi:type", "CE");
+	set_xsi_type_first(xpath, value_xpath, "CE")?;
 
 	if let Some(value) = ethnicity_code {
 		set_attr_first(xpath, value_xpath, "code", write_fda_d_12(value));

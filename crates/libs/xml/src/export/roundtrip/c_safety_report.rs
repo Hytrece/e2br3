@@ -1,4 +1,5 @@
 use super::*;
+use crate::export_utils::set_xsi_type_first;
 use crate::mfds::codes::KR_C_3_1_1;
 
 pub fn patch_c_safety_report(
@@ -690,7 +691,7 @@ fn write_c_1_9_1(
 	for attr in ["code", "codeSystem", "codeSystemVersion", "displayName"] {
 		remove_attr_first(xpath, path, attr);
 	}
-	set_attr_first(xpath, path, "xsi:type", "BL");
+	set_xsi_type_first(xpath, path, "BL")?;
 	remove_nodes(xpath, &format!("{path}/hl7:originalText"));
 	if let Some(value) = patch.other_case_identifiers_exist {
 		remove_attr_first(xpath, path, "nullFlavor");
@@ -812,7 +813,7 @@ fn write_fda_c_1_7_1(
 		)?;
 		let path = format!("{component}/hl7:value");
 		remove_attr_first(xpath, &path, "type");
-		set_attr_first(xpath, &path, "xsi:type", "CE");
+		set_xsi_type_first(xpath, &path, "CE")?;
 		set_attr_first(xpath, &path, "code", value);
 		set_attr_first(
 			xpath,

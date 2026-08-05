@@ -125,7 +125,7 @@ pub(crate) fn test_result_fragment(result: &TestResult) -> Result<String> {
 		out.push_str("\"/><interpretationCode code=\"H\"/></observationRange></referenceRange>");
 	}
 	if let Some(comments) = write_f_r_6(result) {
-		out.push_str("<outboundRelationship2 typeCode=\"COMP\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code code=\"10\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.19\"/><value>");
+		out.push_str("<outboundRelationship2 typeCode=\"COMP\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code code=\"10\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.19\"/><value xsi:type=\"ED\">");
 		out.push_str(&xml_escape(comments));
 		out.push_str("</value></observation></outboundRelationship2>");
 	}
@@ -328,7 +328,7 @@ mod tests {
 			result_unstructured: None,
 			normal_low_value: Some("5".to_string()),
 			normal_high_value: Some("15".to_string()),
-			comments: None,
+			comments: Some("These results may be skewed".to_string()),
 			more_info_available: None,
 			deleted: false,
 			created_at: now,

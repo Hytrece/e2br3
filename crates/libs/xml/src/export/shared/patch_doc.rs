@@ -10,15 +10,20 @@ use crate::export::policy::{
 	EXPORT_RULE_RACE_NI_PRUNE, EXPORT_RULE_STRUCTURAL_EMPTY_PRUNE,
 	EXPORT_RULE_SUMMARY_LANGUAGE_JA_FORBIDDEN,
 };
+use crate::export_utils::{remove_xsi_type, set_xsi_type};
 use libxml::tree::{Document, Node, NodeType};
 use libxml::xpath::Context;
 
-pub(crate) fn postprocess_export_doc(doc: &mut Document, xpath: &mut Context) {
-	normalize_export_values(xpath);
+pub(crate) fn postprocess_export_doc(
+	doc: &mut Document,
+	xpath: &mut Context,
+) -> crate::Result<()> {
+	normalize_export_values(xpath)?;
 	prune_optional_nodes(doc, xpath);
+	Ok(())
 }
 
-fn normalize_export_values(xpath: &mut Context) {
+fn normalize_export_values(xpath: &mut Context) -> crate::Result<()> {
 	for rule_code in EXPORT_NORMALIZE_INVALID_CODE_RULES {
 		if !has_export_policy_directive(
 			rule_code,
@@ -46,8 +51,7 @@ fn normalize_export_values(xpath: &mut Context) {
 	if let Ok(nodes) = xpath.findnodes("//*[@type]", None) {
 		for mut node in nodes {
 			if let Some(value) = node.get_attribute("type") {
-				let _ = node.remove_attribute("type");
-				let _ = node.set_attribute("xsi:type", &value);
+				set_xsi_type(&mut node, &value)?;
 			}
 		}
 	}
@@ -60,11 +64,12 @@ fn normalize_export_values(xpath: &mut Context) {
 		None,
 	) {
 		for mut node in nodes {
-			let _ = node.remove_attribute("xsi:type");
+			remove_xsi_type(&mut node)?;
 			let _ = node.remove_attribute("type");
 			let _ = node.set_name("code");
 		}
 	}
+	Ok(())
 }
 
 fn matches_normalization_kind(value: &str, kind: ExportNormalizeKind) -> bool {
@@ -410,7 +415,7 @@ mod tests {
 			.register_namespace("hl7", "urn:hl7-org:v3")
 			.expect("register namespace");
 
-		postprocess_export_doc(&mut doc, &mut xpath);
+		postprocess_export_doc(&mut doc, &mut xpath).expect("postprocess export");
 
 		assert_eq!(
 			xpath

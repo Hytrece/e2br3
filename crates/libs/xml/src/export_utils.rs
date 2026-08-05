@@ -1,7 +1,7 @@
 use crate::error::Error;
 use crate::Result;
 use libxml::parser::Parser;
-use libxml::tree::{Document, Node, NodeType};
+use libxml::tree::{Document, Namespace, Node, NodeType};
 use libxml::xpath::Context;
 use quick_xml::events::Event;
 use quick_xml::Reader;
@@ -21,6 +21,59 @@ pub(crate) fn set_attr_first(
 	}
 }
 
+pub(crate) fn set_xsi_type_first(
+	xpath: &mut Context,
+	path: &str,
+	value: &str,
+) -> Result<()> {
+	let mut node = xpath
+		.findnodes(path, None)
+		.map_err(|_| Error::InvalidXml {
+			message: format!("Failed to find nodes for path {path}"),
+			line: None,
+			column: None,
+		})?
+		.into_iter()
+		.next()
+		.ok_or_else(|| Error::InvalidXml {
+			message: format!("Failed to find nodes for path {path}"),
+			line: None,
+			column: None,
+		})?;
+	set_xsi_type(&mut node, value)
+}
+
+pub(crate) fn set_xsi_type(node: &mut Node, value: &str) -> Result<()> {
+	let namespace = match xsi_namespace(node) {
+		Some(namespace) => namespace,
+		None => Namespace::new("xsi", XSI_NAMESPACE, node).map_err(|err| {
+			Error::InvalidXml {
+				message: format!("Failed to declare xsi namespace: {err}"),
+				line: None,
+				column: None,
+			}
+		})?,
+	};
+	node.remove_attribute_no_ns("type")
+		.map_err(|err| Error::InvalidXml {
+			message: format!("Failed to remove unqualified type attribute: {err}"),
+			line: None,
+			column: None,
+		})?;
+	node.remove_attribute_no_ns("xsi:type")
+		.map_err(|err| Error::InvalidXml {
+			message: format!("Failed to remove malformed xsi:type attribute: {err}"),
+			line: None,
+			column: None,
+		})?;
+	node.set_attribute_ns("type", value, &namespace)
+		.map_err(|err| Error::InvalidXml {
+			message: format!("Failed to set xsi:type attribute: {err}"),
+			line: None,
+			column: None,
+		})
+}
+
 pub(crate) fn set_text_first(xpath: &mut Context, path: &str, value: &str) {
 	if let Ok(nodes) = xpath.findnodes(path, None) {
 		if let Some(mut node) = nodes.into_iter().next() {
@@ -35,6 +88,40 @@ pub(crate) fn remove_attr_first(xpath: &mut Context, path: &str, attr: &str) {
 			let _ = node.remove_attribute(attr);
 		}
 	}
+}
+
+pub(crate) fn remove_xsi_type(node: &mut Node) -> Result<()> {
+	node.remove_attribute_ns("type", XSI_NAMESPACE)
+		.map_err(|err| Error::InvalidXml {
+			message: format!("Failed to remove xsi:type attribute: {err}"),
+			line: None,
+			column: None,
+		})?;
+	node.remove_attribute_no_ns("xsi:type")
+		.map_err(|err| Error::InvalidXml {
+			message: format!("Failed to remove malformed xsi:type attribute: {err}"),
+			line: None,
+			column: None,
+		})
+}
+
+const XSI_NAMESPACE: &str = "http://www.w3.org/2001/XMLSchema-instance";
+
+fn xsi_namespace(node: &Node) -> Option<Namespace> {
+	let mut current = Some(node.clone());
+	while let Some(element) = current {
+		if let Some(namespace) = element
+			.get_namespace_declarations()
+			.into_iter()
+			.find(|namespace| {
+				namespace.get_prefix() == "xsi"
+					&& namespace.get_href() == XSI_NAMESPACE
+			}) {
+			return Some(namespace);
+		}
+		current = element.get_parent();
+	}
+	None
 }
 
 pub(crate) fn fmt_datetime(dt: OffsetDateTime) -> String {
@@ -227,7 +314,9 @@ pub(crate) fn xml_escape(input: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-	use super::{append_fragment_child, wrap_fragment};
+	use super::{
+		append_fragment_child, set_xsi_type_first, wrap_fragment, XSI_NAMESPACE,
+	};
 	use libxml::parser::Parser;
 	use libxml::xpath::Context;
 
@@ -277,5 +366,40 @@ mod tests {
 
 		assert_eq!(wrapped.matches("xmlns=\"").count(), 1);
 		assert_eq!(wrapped.matches("xmlns:xsi=\"").count(), 1);
+	}
+
+	#[test]
+	fn namespaced_attribute_update_does_not_duplicate_xsi_type() {
+		let parser = Parser::default();
+		let doc = parser
+			.parse_string(
+				"<root xmlns=\"urn:hl7-org:v3\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"><value xsi:type=\"BL\"/></root>",
+			)
+			.expect("source document");
+		let mut xpath = Context::new(&doc).expect("source XPath");
+		xpath
+			.register_namespace("hl7", "urn:hl7-org:v3")
+			.expect("HL7 namespace");
+
+		set_xsi_type_first(&mut xpath, "//hl7:value", "CE")
+			.expect("update xsi:type");
+
+		let serialized = doc.to_string();
+		assert_eq!(serialized.matches("xsi:type=\"").count(), 1, "{serialized}");
+		let reparsed = parser.parse_string(&serialized).expect("serialized XML");
+		let mut reparsed_xpath = Context::new(&reparsed).expect("reparsed XPath");
+		reparsed_xpath
+			.register_namespace("hl7", "urn:hl7-org:v3")
+			.expect("HL7 namespace");
+		reparsed_xpath
+			.register_namespace("xsi", XSI_NAMESPACE)
+			.expect("xsi namespace");
+		assert_eq!(
+			reparsed_xpath
+				.findnodes("//hl7:value[@xsi:type='CE']", None)
+				.expect("xsi:type lookup")
+				.len(),
+			1
+		);
 	}
 }

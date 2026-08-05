@@ -124,9 +124,9 @@ pub(crate) fn reaction_fragment_for_authority(
 	if let Some(country) = write_e_i_9(reaction) {
 		let country = country.trim();
 		if !country.is_empty() {
-			out.push_str("<location><locatedEntity><locatedPlace><code code=\"");
+			out.push_str("<location typeCode=\"LOC\"><locatedEntity classCode=\"LOCE\"><locatedPlace classCode=\"COUNTRY\" determinerCode=\"INSTANCE\"><code code=\"");
 			out.push_str(&xml_escape(country));
-			out.push_str("\"/></locatedPlace></locatedEntity></location>");
+			out.push_str("\" codeSystem=\"1.0.3166.1.2.2\"/></locatedPlace></locatedEntity></location>");
 		}
 	}
 	out.push_str(&write_e_i_1_2(reaction));
@@ -642,13 +642,37 @@ mod meddra_requirement_tests {
 
 	#[test]
 	fn exports_location_before_xsd_outbound_relationships() {
-		let xml = export_e_reactions_xml(&[reaction()]).expect("reaction XML");
+		let reaction = reaction();
+		let xml = export_e_reactions_xml(std::slice::from_ref(&reaction))
+			.expect("reaction XML");
 		let value = xml.find("</originalText></value>").expect("reaction value");
-		let location = xml.find("<location>").expect("E.i.9 location");
+		let location = xml
+			.find("<location typeCode=\"LOC\"><locatedEntity classCode=\"LOCE\"><locatedPlace classCode=\"COUNTRY\" determinerCode=\"INSTANCE\"><code code=\"US\" codeSystem=\"1.0.3166.1.2.2\"/></locatedPlace></locatedEntity></location>")
+			.expect("official E.i.9 location structure");
 		let relationship = xml
 			.find("<outboundRelationship2")
 			.expect("reaction relationships");
 
 		assert!(value < location && location < relationship);
+
+		let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+			.parent()
+			.and_then(|path| path.parent())
+			.and_then(|path| path.parent())
+			.expect("workspace root")
+			.to_path_buf();
+		let source =
+			std::fs::read(root.join("docs/exporter/fda/FAERS2022Scenario1.xml"))
+				.expect("official FDA example");
+		let exported = crate::export::roundtrip::patch_e_reactions(
+			&source,
+			std::slice::from_ref(&reaction),
+		)
+		.expect("patch official FDA example");
+		let schema = crate::default_xsd_path().expect("official ICH schema");
+		let errors =
+			crate::validation::validate_e2b_xml_xsd(exported.as_bytes(), &schema)
+				.expect("validate XSD");
+		assert!(errors.is_empty(), "{errors:#?}");
 	}
 }
