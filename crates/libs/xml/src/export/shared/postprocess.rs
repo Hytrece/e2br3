@@ -110,6 +110,7 @@ async fn apply_patient_section(
 		);
 	} else if let Some(null_flavor) = patient.patient_initials_null_flavor.as_deref()
 	{
+		set_text_first(xpath, "//hl7:primaryRole/hl7:player1/hl7:name", "");
 		set_attr_first(
 			xpath,
 			"//hl7:primaryRole/hl7:player1/hl7:name",

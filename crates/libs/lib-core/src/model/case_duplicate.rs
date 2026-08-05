@@ -21,15 +21,21 @@ use uuid::Uuid;
 pub struct CaseDuplicateKey {
 	pub report_type: Option<String>,
 	pub reporter_organization: Option<String>,
+	pub reporter_organization_null_flavor: Option<String>,
 	pub sponsor_study_number: Option<String>,
+	pub sponsor_study_number_null_flavor: Option<String>,
 	pub patient_initials: Option<String>,
+	pub patient_initials_null_flavor: Option<String>,
 	pub investigation_number: Option<String>,
+	pub investigation_number_null_flavor: Option<String>,
 	pub age_d2_2a: Option<String>,
 	pub sex_d5: Option<String>,
+	pub sex_d5_null_flavor: Option<String>,
 	pub dg_prd_key: Option<String>,
 	pub reaction_meddra_version: Option<String>,
 	pub reaction_meddra_code: Option<String>,
 	pub ae_start_date: Option<Date>,
+	pub ae_start_date_null_flavor: Option<String>,
 }
 
 /// Result of a duplicate basis completeness check.
@@ -73,14 +79,20 @@ struct DuplicateScanRow {
 	report_type: Option<String>,
 	date_of_most_recent_information: Option<Date>,
 	reporter_organization: Option<String>,
+	reporter_organization_null_flavor: Option<String>,
 	sponsor_study_number: Option<String>,
+	sponsor_study_number_null_flavor: Option<String>,
 	patient_initials: Option<String>,
+	patient_initials_null_flavor: Option<String>,
 	age_d2_2a: Option<String>,
 	sex_d5: Option<String>,
+	sex_d5_null_flavor: Option<String>,
 	investigation_number: Option<String>,
+	investigation_number_null_flavor: Option<String>,
 	reaction_meddra_code: Option<String>,
 	reaction_meddra_version: Option<String>,
 	ae_start_date: Option<Date>,
+	ae_start_date_null_flavor: Option<String>,
 }
 
 // -- Pure matching helpers
@@ -88,6 +100,46 @@ struct DuplicateScanRow {
 /// Returns false when `value` is absent or blank.
 pub fn has_meaningful_text(value: Option<&str>) -> bool {
 	value.map(str::trim).is_some_and(|value| !value.is_empty())
+}
+
+fn field_present(value: Option<&str>, null_flavor: Option<&str>) -> bool {
+	has_meaningful_text(value) || has_meaningful_text(null_flavor)
+}
+
+fn matches_required_text(
+	expected: Option<&str>,
+	expected_null_flavor: Option<&str>,
+	actual: Option<&str>,
+	actual_null_flavor: Option<&str>,
+) -> bool {
+	match (
+		has_meaningful_text(expected),
+		has_meaningful_text(expected_null_flavor),
+	) {
+		(true, false) => matches_optional_text(expected, actual)
+			&& !has_meaningful_text(actual_null_flavor),
+		(false, true) => !has_meaningful_text(actual)
+			&& matches_optional_text(expected_null_flavor, actual_null_flavor),
+		_ => false,
+	}
+}
+
+fn matches_required_decimal(expected: Option<&str>, actual: Option<&str>) -> bool {
+	has_meaningful_text(expected) && matches_optional_decimal(expected, actual)
+}
+
+fn match_date_or_null_flavor(
+	expected: Option<Date>,
+	expected_null_flavor: Option<&str>,
+	actual: Option<Date>,
+	actual_null_flavor: Option<&str>,
+) -> bool {
+	match (expected, has_meaningful_text(expected_null_flavor)) {
+		(Some(expected), false) => actual == Some(expected) && !has_meaningful_text(actual_null_flavor),
+		(None, true) => actual.is_none()
+			&& matches_optional_text(expected_null_flavor, actual_null_flavor),
+		_ => false,
+	}
 }
 
 /// Returns true when `expected` is absent, or when it matches `actual`
@@ -168,13 +220,106 @@ pub fn matches_patient_signature(
 	false
 }
 
-/// Optional matching fields narrow duplicate detection when supplied, but they
-/// do not make the intake gate incomplete when omitted.
-pub fn assess_duplicate_basis(_key: &CaseDuplicateKey) -> DuplicateBasisAssessment {
-	DuplicateBasisAssessment {
-		basis_complete: true,
-		warnings: Vec::new(),
+/// The duplicate scan is only meaningful when every active intake field is
+/// supplied, either as a value or a NullFlavor.
+pub fn assess_duplicate_basis(key: &CaseDuplicateKey) -> DuplicateBasisAssessment {
+	let report_type = key
+		.report_type
+		.as_deref()
+		.map(str::trim)
+		.unwrap_or_default();
+	let reporter_present = field_present(
+		key.reporter_organization.as_deref(),
+		key.reporter_organization_null_flavor.as_deref(),
+	);
+	let sponsor_study_present = field_present(
+		key.sponsor_study_number.as_deref(),
+		key.sponsor_study_number_null_flavor.as_deref(),
+	);
+	let patient_initials_present = field_present(
+		key.patient_initials.as_deref(),
+		key.patient_initials_null_flavor.as_deref(),
+	);
+	let investigation_present = field_present(
+		key.investigation_number.as_deref(),
+		key.investigation_number_null_flavor.as_deref(),
+	);
+	let age_present = has_meaningful_text(key.age_d2_2a.as_deref());
+	let sex_present = field_present(
+		key.sex_d5.as_deref(),
+		key.sex_d5_null_flavor.as_deref(),
+	);
+	let product_present = has_meaningful_text(key.dg_prd_key.as_deref());
+	let reaction_version_present =
+		has_meaningful_text(key.reaction_meddra_version.as_deref());
+	let reaction_code_present =
+		has_meaningful_text(key.reaction_meddra_code.as_deref());
+	let ae_start_present = key.ae_start_date.is_some()
+		|| has_meaningful_text(key.ae_start_date_null_flavor.as_deref());
+
+	let mut warnings = Vec::new();
+	let basis_complete = if report_type == "2" {
+		let complete = reporter_present
+			&& sponsor_study_present
+			&& investigation_present
+			&& product_present
+			&& reaction_version_present
+			&& reaction_code_present
+			&& ae_start_present;
+		if !complete {
+			warnings.push(
+				"study intake duplicate check is incomplete; resubmit with allow_duplicate_override=true after review".to_string(),
+			);
+		}
+		complete
+	} else {
+		let complete = patient_initials_present
+			&& age_present
+			&& sex_present
+			&& product_present
+			&& reaction_version_present
+			&& reaction_code_present
+			&& ae_start_present;
+		if !complete {
+			warnings.push(
+				"duplicate check basis is incomplete; resubmit with allow_duplicate_override=true after review".to_string(),
+			);
+		}
+		complete
+	};
+
+	if report_type == "2" && !reporter_present {
+		warnings.push("Reporter organization is missing from duplicate check input".to_string());
 	}
+	if report_type == "2" && !sponsor_study_present {
+		warnings.push("Sponsor Study Number is missing from duplicate check input".to_string());
+	}
+	if report_type == "2" && !investigation_present {
+		warnings.push("Investigation Number is missing from duplicate check input".to_string());
+	}
+	if report_type != "2" && !patient_initials_present {
+		warnings.push("Patient Name or Initials is missing from duplicate check input".to_string());
+	}
+	if report_type != "2" && !age_present {
+		warnings.push("Patient age is missing from duplicate check input".to_string());
+	}
+	if report_type != "2" && !sex_present {
+		warnings.push("Patient sex is missing from duplicate check input".to_string());
+	}
+	if !product_present {
+		warnings.push("Product ID is missing from duplicate check input".to_string());
+	}
+	if !reaction_version_present {
+		warnings.push("Reaction MedDRA version is missing from duplicate check input".to_string());
+	}
+	if !reaction_code_present {
+		warnings.push("Reaction MedDRA code is missing from duplicate check input".to_string());
+	}
+	if !ae_start_present {
+		warnings.push("AE start date is missing from duplicate check input".to_string());
+	}
+
+	DuplicateBasisAssessment { basis_complete, warnings }
 }
 
 // -- CaseDuplicateBmc
@@ -208,14 +353,20 @@ impl CaseDuplicateBmc {
 				    s.report_type,
 				    s.date_of_most_recent_information,
 				    ps.organization                       AS reporter_organization,
+				    ps.organization_null_flavor            AS reporter_organization_null_flavor,
 				    st.sponsor_study_number,
+				    st.sponsor_study_number_null_flavor,
 				    p.patient_initials,
+				    p.patient_initials_null_flavor,
 				    CAST(p.age_at_time_of_onset AS TEXT)  AS age_d2_2a,
 				    p.sex                                 AS sex_d5,
+				    p.sex_null_flavor                      AS sex_d5_null_flavor,
 				    pi.identifier_value                   AS investigation_number,
+				    pi.identifier_value_null_flavor        AS investigation_number_null_flavor,
 				    r.reaction_meddra_code,
 				    r.reaction_meddra_version,
-				    r.start_date                          AS ae_start_date
+				    r.start_date                          AS ae_start_date,
+				    r.start_date_null_flavor               AS ae_start_date_null_flavor
 				FROM cases c
 				LEFT JOIN safety_report_identification s
 				       ON s.case_id = c.id
@@ -268,45 +419,60 @@ impl CaseDuplicateBmc {
 		for row in rows {
 			let dg_prd_key = row.dg_prd_key;
 
-			let patient_match = matches_patient_signature(
-				key.patient_initials.as_deref(),
-				row.patient_initials.as_deref(),
-				key.investigation_number.as_deref(),
-				row.investigation_number.as_deref(),
-				key.age_d2_2a.as_deref(),
-				row.age_d2_2a.as_deref(),
-				key.sex_d5.as_deref(),
-				row.sex_d5.as_deref(),
+			let report_type_match = matches_optional_text(
+				key.report_type.as_deref(),
+				row.report_type.as_deref(),
 			);
-			let event_match = matches_optional_text(
-				key.reaction_meddra_code.as_deref(),
-				row.reaction_meddra_code.as_deref(),
-			);
-			let dg_prd_key_match = matches_optional_text(
+			let active_fields_match = if key.report_type.as_deref() == Some("2") {
+				matches_required_text(
+					key.reporter_organization.as_deref(),
+					key.reporter_organization_null_flavor.as_deref(),
+					row.reporter_organization.as_deref(),
+					row.reporter_organization_null_flavor.as_deref(),
+				) && matches_required_text(
+					key.sponsor_study_number.as_deref(),
+					key.sponsor_study_number_null_flavor.as_deref(),
+					row.sponsor_study_number.as_deref(),
+					row.sponsor_study_number_null_flavor.as_deref(),
+				) && matches_required_text(
+					key.investigation_number.as_deref(),
+					key.investigation_number_null_flavor.as_deref(),
+					row.investigation_number.as_deref(),
+					row.investigation_number_null_flavor.as_deref(),
+				)
+			} else {
+				matches_required_text(
+					key.patient_initials.as_deref(),
+					key.patient_initials_null_flavor.as_deref(),
+					row.patient_initials.as_deref(),
+					row.patient_initials_null_flavor.as_deref(),
+				) && matches_required_decimal(
+					key.age_d2_2a.as_deref(),
+					row.age_d2_2a.as_deref(),
+				) && matches_required_text(
+					key.sex_d5.as_deref(),
+					key.sex_d5_null_flavor.as_deref(),
+					row.sex_d5.as_deref(),
+					row.sex_d5_null_flavor.as_deref(),
+				)
+			};
+			let common_fields_match = matches_optional_text(
 				key.dg_prd_key.as_deref(),
 				dg_prd_key.as_deref(),
-			);
-			let reaction_version_match = matches_optional_text(
+			) && matches_optional_text(
 				key.reaction_meddra_version.as_deref(),
 				row.reaction_meddra_version.as_deref(),
-			);
-			let ae_start_date_match = key
-				.ae_start_date
-				.map(|v| row.ae_start_date == Some(v))
-				.unwrap_or(false);
-			let patient_basis_match =
-				patient_match && event_match && ae_start_date_match;
-			let product_basis_match = product_signature_present(
-				key.dg_prd_key.as_deref(),
-				key.reaction_meddra_version.as_deref(),
+			) && matches_optional_text(
 				key.reaction_meddra_code.as_deref(),
+				row.reaction_meddra_code.as_deref(),
+			) && match_date_or_null_flavor(
 				key.ae_start_date,
-			) && dg_prd_key_match
-				&& reaction_version_match
-				&& event_match
-				&& ae_start_date_match;
+				key.ae_start_date_null_flavor.as_deref(),
+				row.ae_start_date,
+				row.ae_start_date_null_flavor.as_deref(),
+			);
 
-			if !patient_basis_match && !product_basis_match {
+			if !report_type_match || !active_fields_match || !common_fields_match {
 				continue;
 			}
 			matches.push(CaseIntakeDuplicateMatch {
@@ -343,24 +509,30 @@ mod tests {
 		CaseDuplicateKey {
 			report_type: Some(report_type.to_string()),
 			reporter_organization: None,
+			reporter_organization_null_flavor: None,
 			sponsor_study_number: None,
+			sponsor_study_number_null_flavor: None,
 			patient_initials: None,
+			patient_initials_null_flavor: None,
 			investigation_number: None,
+			investigation_number_null_flavor: None,
 			age_d2_2a: None,
 			sex_d5: None,
+			sex_d5_null_flavor: None,
 			dg_prd_key: None,
 			reaction_meddra_version: None,
 			reaction_meddra_code: None,
 			ae_start_date: None,
+			ae_start_date_null_flavor: None,
 		}
 	}
 
 	#[test]
-	fn duplicate_basis_accepts_missing_optional_matching_fields() {
+	fn duplicate_basis_requires_active_matching_fields() {
 		for report_type in ["1", "2", "3", "4"] {
 			let assessment = assess_duplicate_basis(&duplicate_key(report_type));
-			assert!(assessment.basis_complete, "{assessment:?}");
-			assert!(assessment.warnings.is_empty(), "{assessment:?}");
+			assert!(!assessment.basis_complete, "{assessment:?}");
+			assert!(!assessment.warnings.is_empty(), "{assessment:?}");
 		}
 	}
 }

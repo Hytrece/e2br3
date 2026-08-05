@@ -550,21 +550,27 @@ fn duplicate_key_from_xml(
 		CaseDuplicateKey {
 			report_type: Some(c_report.report_type),
 			reporter_organization: None,
+			reporter_organization_null_flavor: None,
 			sponsor_study_number: None,
+			sponsor_study_number_null_flavor: None,
 			patient_initials: patient
 				.as_ref()
 				.and_then(|patient| patient.patient_initials.clone()),
+			patient_initials_null_flavor: None,
 			investigation_number: None,
+			investigation_number_null_flavor: None,
 			age_d2_2a: patient
 				.as_ref()
 				.and_then(|patient| decimal_string(patient.age_at_time_of_onset)),
 			sex_d5: patient.as_ref().and_then(|patient| patient.sex.clone()),
+			sex_d5_null_flavor: None,
 			dg_prd_key,
 			reaction_meddra_version: first_reaction
 				.and_then(|reaction| reaction.reaction_meddra_version.clone()),
 			reaction_meddra_code: first_reaction
 				.and_then(|reaction| reaction.reaction_meddra_code.clone()),
 			ae_start_date: first_reaction.and_then(|reaction| reaction.start_date),
+			ae_start_date_null_flavor: None,
 		},
 	))
 }

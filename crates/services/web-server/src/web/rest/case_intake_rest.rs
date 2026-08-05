@@ -139,15 +139,27 @@ fn to_duplicate_key(input: &CaseIntakeCheckInput) -> CaseDuplicateKey {
 	CaseDuplicateKey {
 		report_type: input.report_type.clone(),
 		reporter_organization: input.reporter_organization.clone(),
+		reporter_organization_null_flavor: input
+			.reporter_organization_null_flavor
+			.clone(),
 		sponsor_study_number: input.sponsor_study_number.clone(),
+		sponsor_study_number_null_flavor: input
+			.sponsor_study_number_null_flavor
+			.clone(),
 		patient_initials: input.patient_initials.clone(),
+		patient_initials_null_flavor: input.patient_initials_null_flavor.clone(),
 		investigation_number: input.investigation_number.clone(),
+		investigation_number_null_flavor: input
+			.investigation_number_null_flavor
+			.clone(),
 		age_d2_2a: input.age_d2_2a.clone(),
 		sex_d5: input.sex_d5.clone(),
+		sex_d5_null_flavor: input.sex_d5_null_flavor.clone(),
 		dg_prd_key: input.dg_prd_key.clone(),
 		reaction_meddra_version: input.reaction_meddra_version.clone(),
 		reaction_meddra_code: input.reaction_meddra_code.clone(),
 		ae_start_date: input.ae_start_date,
+		ae_start_date_null_flavor: input.ae_start_date_null_flavor.clone(),
 	}
 }
 
@@ -338,6 +350,9 @@ async fn assess_intake_duplicates(
 	key: &CaseDuplicateKey,
 ) -> Result<(DuplicateBasisAssessment, Vec<CaseIntakeDuplicateMatch>)> {
 	let assessment = assess_duplicate_basis(key);
+	if !assessment.basis_complete {
+		return Ok((assessment, Vec::new()));
+	}
 	let matches = CaseDuplicateBmc::list_potential_matches(ctx, mm, key)
 		.await
 		.map_err(Error::Model)?;
@@ -442,11 +457,18 @@ async fn create_case_from_intake_authorized(
 			message: "report_type is required".to_string(),
 		});
 	}
+	let dg_prd_key = non_empty(data.dg_prd_key.as_deref()).ok_or_else(|| {
+		Error::BadRequest {
+			message: "Product ID is required".to_string(),
+		}
+	})?;
 
 	let duplicate_key = intake_to_duplicate_key(&data);
 	let (duplicate_basis, duplicate_matches) =
 		assess_intake_duplicates(ctx, mm, &duplicate_key).await?;
-	if !duplicate_matches.is_empty() {
+	if !duplicate_matches.is_empty()
+		&& !data.allow_duplicate_override.unwrap_or(false)
+	{
 		return Err(Error::BadRequest {
 			message:
 				"duplicate case detected; create is blocked when intake check finds duplicates"
@@ -481,7 +503,7 @@ async fn create_case_from_intake_authorized(
 	let next_version = next_case_version(ctx, mm, &safety_report_id).await?;
 	let case_create = InternalCaseForCreate {
 		organization_id: ctx.organization_id(),
-		dg_prd_key: data.dg_prd_key.clone(),
+		dg_prd_key: Some(dg_prd_key),
 		status: Some(data.status.unwrap_or_else(|| "draft".to_string())),
 		review_receivers_json: None,
 		workflow_routes_json: None,
