@@ -231,15 +231,19 @@ impl MeddraTermBmc {
 			Self::TABLE
 		));
 		qb.push_bind(search_pattern);
-		qb.push(" OR code ILIKE ").push_bind(format!("%{}%", query.trim()));
+		qb.push(" OR code ILIKE ")
+			.push_bind(format!("%{}%", query.trim()));
 		qb.push(") AND active = true");
 		if let Some(ver) = version {
 			qb.push(" AND version = ").push_bind(ver.trim());
 		}
 		if let Some(lang) = language {
-			qb.push(" AND LOWER(language) = LOWER(").push_bind(lang.trim()).push(")");
+			qb.push(" AND LOWER(language) = LOWER(")
+				.push_bind(lang.trim())
+				.push(")");
 		}
-		qb.push(" ORDER BY term LIMIT ").push_bind(limit.clamp(1, 100));
+		qb.push(" ORDER BY term LIMIT ")
+			.push_bind(limit.clamp(1, 100));
 
 		let terms = mm
 			.dbx()

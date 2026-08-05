@@ -116,10 +116,14 @@ fn matches_required_text(
 		has_meaningful_text(expected),
 		has_meaningful_text(expected_null_flavor),
 	) {
-		(true, false) => matches_optional_text(expected, actual)
-			&& !has_meaningful_text(actual_null_flavor),
-		(false, true) => !has_meaningful_text(actual)
-			&& matches_optional_text(expected_null_flavor, actual_null_flavor),
+		(true, false) => {
+			matches_optional_text(expected, actual)
+				&& !has_meaningful_text(actual_null_flavor)
+		}
+		(false, true) => {
+			!has_meaningful_text(actual)
+				&& matches_optional_text(expected_null_flavor, actual_null_flavor)
+		}
 		_ => false,
 	}
 }
@@ -135,9 +139,13 @@ fn match_date_or_null_flavor(
 	actual_null_flavor: Option<&str>,
 ) -> bool {
 	match (expected, has_meaningful_text(expected_null_flavor)) {
-		(Some(expected), false) => actual == Some(expected) && !has_meaningful_text(actual_null_flavor),
-		(None, true) => actual.is_none()
-			&& matches_optional_text(expected_null_flavor, actual_null_flavor),
+		(Some(expected), false) => {
+			actual == Some(expected) && !has_meaningful_text(actual_null_flavor)
+		}
+		(None, true) => {
+			actual.is_none()
+				&& matches_optional_text(expected_null_flavor, actual_null_flavor)
+		}
 		_ => false,
 	}
 }
@@ -245,10 +253,8 @@ pub fn assess_duplicate_basis(key: &CaseDuplicateKey) -> DuplicateBasisAssessmen
 		key.investigation_number_null_flavor.as_deref(),
 	);
 	let age_present = has_meaningful_text(key.age_d2_2a.as_deref());
-	let sex_present = field_present(
-		key.sex_d5.as_deref(),
-		key.sex_d5_null_flavor.as_deref(),
-	);
+	let sex_present =
+		field_present(key.sex_d5.as_deref(), key.sex_d5_null_flavor.as_deref());
 	let product_present = has_meaningful_text(key.dg_prd_key.as_deref());
 	let reaction_version_present =
 		has_meaningful_text(key.reaction_meddra_version.as_deref());
@@ -289,37 +295,59 @@ pub fn assess_duplicate_basis(key: &CaseDuplicateKey) -> DuplicateBasisAssessmen
 	};
 
 	if report_type == "2" && !reporter_present {
-		warnings.push("Reporter organization is missing from duplicate check input".to_string());
+		warnings.push(
+			"Reporter organization is missing from duplicate check input"
+				.to_string(),
+		);
 	}
 	if report_type == "2" && !sponsor_study_present {
-		warnings.push("Sponsor Study Number is missing from duplicate check input".to_string());
+		warnings.push(
+			"Sponsor Study Number is missing from duplicate check input".to_string(),
+		);
 	}
 	if report_type == "2" && !investigation_present {
-		warnings.push("Investigation Number is missing from duplicate check input".to_string());
+		warnings.push(
+			"Investigation Number is missing from duplicate check input".to_string(),
+		);
 	}
 	if report_type != "2" && !patient_initials_present {
-		warnings.push("Patient Name or Initials is missing from duplicate check input".to_string());
+		warnings.push(
+			"Patient Name or Initials is missing from duplicate check input"
+				.to_string(),
+		);
 	}
 	if report_type != "2" && !age_present {
-		warnings.push("Patient age is missing from duplicate check input".to_string());
+		warnings
+			.push("Patient age is missing from duplicate check input".to_string());
 	}
 	if report_type != "2" && !sex_present {
-		warnings.push("Patient sex is missing from duplicate check input".to_string());
+		warnings
+			.push("Patient sex is missing from duplicate check input".to_string());
 	}
 	if !product_present {
-		warnings.push("Product ID is missing from duplicate check input".to_string());
+		warnings
+			.push("Product ID is missing from duplicate check input".to_string());
 	}
 	if !reaction_version_present {
-		warnings.push("Reaction MedDRA version is missing from duplicate check input".to_string());
+		warnings.push(
+			"Reaction MedDRA version is missing from duplicate check input"
+				.to_string(),
+		);
 	}
 	if !reaction_code_present {
-		warnings.push("Reaction MedDRA code is missing from duplicate check input".to_string());
+		warnings.push(
+			"Reaction MedDRA code is missing from duplicate check input".to_string(),
+		);
 	}
 	if !ae_start_present {
-		warnings.push("AE start date is missing from duplicate check input".to_string());
+		warnings
+			.push("AE start date is missing from duplicate check input".to_string());
 	}
 
-	DuplicateBasisAssessment { basis_complete, warnings }
+	DuplicateBasisAssessment {
+		basis_complete,
+		warnings,
+	}
 }
 
 // -- CaseDuplicateBmc

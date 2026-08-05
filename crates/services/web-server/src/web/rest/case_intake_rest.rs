@@ -457,11 +457,10 @@ async fn create_case_from_intake_authorized(
 			message: "report_type is required".to_string(),
 		});
 	}
-	let dg_prd_key = non_empty(data.dg_prd_key.as_deref()).ok_or_else(|| {
-		Error::BadRequest {
+	let dg_prd_key =
+		non_empty(data.dg_prd_key.as_deref()).ok_or_else(|| Error::BadRequest {
 			message: "Product ID is required".to_string(),
-		}
-	})?;
+		})?;
 
 	let duplicate_key = intake_to_duplicate_key(&data);
 	let (duplicate_basis, duplicate_matches) =
