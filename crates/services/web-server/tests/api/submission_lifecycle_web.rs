@@ -37,7 +37,6 @@ fn clear_esg_env() {
 	std::env::remove_var("AS2_SUBMITTER_TIMEOUT_SECS");
 	std::env::remove_var("AS2_ACK_CALLBACK_URL");
 	std::env::remove_var("AS2_CALLBACK_TOKEN");
-	std::env::remove_var("E2BR3_ALLOW_MOCK_SUBMISSION");
 }
 
 fn valid_compliance_payload() -> Value {
@@ -165,7 +164,7 @@ async fn mock_submitter_submit(
 		StatusCode::OK,
 		Json(json!({
 			"remote_submission_id": format!("AS2-MOCK-{}", Uuid::new_v4().simple().to_string().to_uppercase()),
-			"status": "submitted_ack1_pending",
+			"ack": { "level": 1, "success": true, "code": "ACK1" },
 		})),
 	)
 }
@@ -212,6 +211,26 @@ async fn mock_esg_submit(
 		"body": payload,
 	}));
 	(state.response_status, Json(state.response_body.clone()))
+}
+
+async fn configure_mock_esg_transport() -> Result<()> {
+	let (esg_url, _received) = start_mock_esg(
+		StatusCode::OK,
+		json!({
+			"submission_id": format!("ESG-{}", Uuid::new_v4().simple()),
+			"ack": { "level": 1, "success": true, "code": "ACK1" }
+		}),
+	)
+	.await?;
+	std::env::set_var("FDA_ESG_ENABLED", "1");
+	std::env::set_var("FDA_ESG_BASE_URL", esg_url);
+	Ok(())
+}
+
+async fn configure_mock_as2_transport() -> Result<()> {
+	let (submitter_url, _received) = start_mock_submitter().await?;
+	std::env::set_var("AS2_SUBMITTER_URL", submitter_url);
+	Ok(())
 }
 
 async fn create_case(
@@ -708,73 +727,6 @@ async fn test_manual_export_statuses_follow_workflow_eligibility() -> Result<()>
 
 #[serial]
 #[tokio::test]
-async fn test_submission_ack_out_of_order_does_not_regress_status() -> Result<()> {
-	clear_esg_env();
-	std::env::set_var("E2BR3_ALLOW_MOCK_SUBMISSION", "1");
-	std::env::set_var("E2BR3_VALIDATOR_TOKEN", "validator-secret");
-	std::env::set_var("E2BR3_SKIP_XML_VALIDATE", "1");
-	let mm = init_test_mm().await?;
-	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
-	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
-	let cookie = cookie_header(&token.to_string());
-	let app = web_server::app(mm.clone());
-
-	let case_id = create_case(&app, &cookie, seed.org_id).await?;
-	seed_rule_clean_case(&mm, &app, &cookie, case_id).await?;
-	mm.dbx().begin_txn().await?;
-	set_full_context_dbx(
-		mm.dbx(),
-		seed.admin.id,
-		seed.org_id,
-		ROLE_SPONSOR_ADMIN_CRO,
-	)
-	.await?;
-	mm.dbx()
-		.execute(
-			sqlx::query("UPDATE cases SET status = 'validated' WHERE id = $1")
-				.bind(case_id),
-		)
-		.await?;
-	mm.dbx().commit_txn().await?;
-
-	let (status, submit_body) = post_json(
-		&app,
-		&cookie,
-		&format!("/api/cases/{case_id}/submissions/fda"),
-		valid_compliance_payload(),
-	)
-	.await?;
-	assert_eq!(status, StatusCode::CREATED, "{submit_body:?}");
-	let submission_id = submit_body["data"]["id"]
-		.as_str()
-		.ok_or("missing submission id")?
-		.to_string();
-
-	let (status, ack3) = post_json(
-		&app,
-		&cookie,
-		&format!("/api/submissions/{submission_id}/acks/mock"),
-		json!({ "level": 3, "success": true, "code": "ACK3" }),
-	)
-	.await?;
-	assert_eq!(status, StatusCode::OK, "{ack3:?}");
-	assert_eq!(ack3["data"]["status"], "ack3_received");
-
-	let (status, ack2) = post_json(
-		&app,
-		&cookie,
-		&format!("/api/submissions/{submission_id}/acks/mock"),
-		json!({ "level": 2, "success": true, "code": "ACK2" }),
-	)
-	.await?;
-	assert_eq!(status, StatusCode::OK, "{ack2:?}");
-	assert_eq!(ack2["data"]["status"], "ack3_received");
-
-	Ok(())
-}
-
-#[serial]
-#[tokio::test]
 async fn test_submission_history_includes_latest_ack_time_and_event() -> Result<()> {
 	clear_esg_env();
 	let mm = init_test_mm().await?;
@@ -1188,72 +1140,6 @@ async fn test_submission_ack_can_be_downloaded_as_text() -> Result<()> {
 
 #[serial]
 #[tokio::test]
-async fn test_submission_ack_terminal_status_does_not_change() -> Result<()> {
-	clear_esg_env();
-	std::env::set_var("E2BR3_ALLOW_MOCK_SUBMISSION", "1");
-	std::env::set_var("E2BR3_VALIDATOR_TOKEN", "validator-secret");
-	std::env::set_var("E2BR3_SKIP_XML_VALIDATE", "1");
-	let mm = init_test_mm().await?;
-	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
-	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
-	let cookie = cookie_header(&token.to_string());
-	let app = web_server::app(mm.clone());
-
-	let case_id = create_case(&app, &cookie, seed.org_id).await?;
-	seed_rule_clean_case(&mm, &app, &cookie, case_id).await?;
-	mark_case_validated(&app, &cookie, case_id, "validator-secret").await?;
-
-	let (status, submit_body) = post_json(
-		&app,
-		&cookie,
-		&format!("/api/cases/{case_id}/submissions/fda"),
-		valid_compliance_payload(),
-	)
-	.await?;
-	assert_eq!(status, StatusCode::CREATED, "{submit_body:?}");
-	let submission_id = submit_body["data"]["id"]
-		.as_str()
-		.ok_or("missing submission id")?
-		.to_string();
-
-	let (status, ack4) = post_json(
-		&app,
-		&cookie,
-		&format!("/api/submissions/{submission_id}/acks/mock"),
-		json!({ "level": 4, "success": true, "code": "ACK4" }),
-	)
-	.await?;
-	assert_eq!(status, StatusCode::OK, "{ack4:?}");
-	assert_eq!(ack4["data"]["status"], "ack4_received");
-	let (dispatch_status, dispatch_body) = get_json(
-		&app,
-		&cookie,
-		&format!("/api/submissions/{submission_id}/dispatch-state"),
-	)
-	.await?;
-	if dispatch_status == StatusCode::OK {
-		assert_eq!(dispatch_body["data"]["state"]["attempt_count"], 1);
-		assert!(
-			!dispatch_body["data"]["state"]["terminal_at"].is_null(),
-			"{dispatch_body:?}"
-		);
-	}
-
-	let (status, ack2) = post_json(
-		&app,
-		&cookie,
-		&format!("/api/submissions/{submission_id}/acks/mock"),
-		json!({ "level": 2, "success": true, "code": "ACK2" }),
-	)
-	.await?;
-	assert_eq!(status, StatusCode::OK, "{ack2:?}");
-	assert_eq!(ack2["data"]["status"], "ack4_received");
-
-	Ok(())
-}
-
-#[serial]
-#[tokio::test]
 async fn test_submission_rejects_enabled_esg_without_base_url() -> Result<()> {
 	clear_esg_env();
 	std::env::set_var("FDA_ESG_ENABLED", "1");
@@ -1383,7 +1269,7 @@ async fn test_submission_esg_non_success_response_returns_bad_request() -> Resul
 #[tokio::test]
 async fn test_submission_accepts_mfds_route_for_mfds_profile() -> Result<()> {
 	clear_esg_env();
-	std::env::set_var("E2BR3_ALLOW_MOCK_SUBMISSION", "1");
+	configure_mock_as2_transport().await?;
 	std::env::set_var("E2BR3_VALIDATOR_TOKEN", "validator-secret");
 	std::env::set_var("E2BR3_SKIP_XML_VALIDATE", "1");
 	let mm = init_test_mm().await?;
@@ -1408,7 +1294,7 @@ async fn test_submission_accepts_mfds_route_for_mfds_profile() -> Result<()> {
 	let remote_submission_id = submit_body["data"]["remote_submission_id"]
 		.as_str()
 		.ok_or("missing remote_submission_id")?;
-	assert!(remote_submission_id.starts_with("MFDS-MOCK-"));
+	assert!(remote_submission_id.starts_with("AS2-MOCK-"));
 
 	clear_esg_env();
 	Ok(())
@@ -1418,7 +1304,7 @@ async fn test_submission_accepts_mfds_route_for_mfds_profile() -> Result<()> {
 #[tokio::test]
 async fn test_submission_uses_request_authority_not_case_appendices() -> Result<()> {
 	clear_esg_env();
-	std::env::set_var("E2BR3_ALLOW_MOCK_SUBMISSION", "1");
+	configure_mock_as2_transport().await?;
 	std::env::set_var("E2BR3_VALIDATOR_TOKEN", "validator-secret");
 	std::env::set_var("E2BR3_SKIP_XML_VALIDATE", "1");
 	let mm = init_test_mm().await?;
@@ -1456,7 +1342,7 @@ async fn test_submission_uses_request_authority_not_case_appendices() -> Result<
 	assert!(body["data"]["remote_submission_id"]
 		.as_str()
 		.unwrap_or_default()
-		.starts_with("MFDS-MOCK-"));
+		.starts_with("AS2-MOCK-"));
 
 	clear_esg_env();
 	Ok(())
@@ -1514,7 +1400,7 @@ async fn test_submission_rejects_when_as2_submitter_unreachable() -> Result<()> 
 #[tokio::test]
 async fn test_internal_ack_callback_updates_submission_by_remote_id() -> Result<()> {
 	clear_esg_env();
-	std::env::set_var("E2BR3_ALLOW_MOCK_SUBMISSION", "1");
+	configure_mock_esg_transport().await?;
 	std::env::set_var("AS2_CALLBACK_TOKEN", "callback-secret");
 	std::env::set_var("E2BR3_VALIDATOR_TOKEN", "validator-secret");
 	std::env::set_var("E2BR3_SKIP_XML_VALIDATE", "1");
@@ -1623,7 +1509,7 @@ async fn test_internal_ack_callback_updates_submission_by_remote_id() -> Result<
 async fn test_submission_idempotency_key_reuses_submission_when_enabled(
 ) -> Result<()> {
 	clear_esg_env();
-	std::env::set_var("E2BR3_ALLOW_MOCK_SUBMISSION", "1");
+	configure_mock_esg_transport().await?;
 	std::env::set_var("E2BR3_VALIDATOR_TOKEN", "validator-secret");
 	std::env::set_var("E2BR3_SKIP_XML_VALIDATE", "1");
 	let mm = init_test_mm().await?;
@@ -1693,7 +1579,7 @@ async fn test_submission_idempotency_key_reuses_submission_when_enabled(
 async fn test_submission_idempotency_key_parallel_requests_single_submission(
 ) -> Result<()> {
 	clear_esg_env();
-	std::env::set_var("E2BR3_ALLOW_MOCK_SUBMISSION", "1");
+	configure_mock_esg_transport().await?;
 	std::env::set_var("E2BR3_VALIDATOR_TOKEN", "validator-secret");
 	std::env::set_var("E2BR3_SKIP_XML_VALIDATE", "1");
 	let mm = init_test_mm().await?;
@@ -1854,7 +1740,7 @@ async fn test_internal_reconcile_status_accumulates_runtime_counters() -> Result
 async fn test_internal_reconcile_retries_failed_submission_to_success() -> Result<()>
 {
 	clear_esg_env();
-	std::env::set_var("E2BR3_ALLOW_MOCK_SUBMISSION", "1");
+	configure_mock_esg_transport().await?;
 	std::env::set_var("AS2_CALLBACK_TOKEN", "callback-secret");
 	std::env::set_var("E2BR3_VALIDATOR_TOKEN", "validator-secret");
 	std::env::set_var("E2BR3_SKIP_XML_VALIDATE", "1");
@@ -1982,7 +1868,7 @@ async fn test_internal_reconcile_retries_failed_submission_to_success() -> Resul
 async fn test_internal_reconcile_retries_failed_submission_and_keeps_rejected_on_failure(
 ) -> Result<()> {
 	clear_esg_env();
-	std::env::set_var("E2BR3_ALLOW_MOCK_SUBMISSION", "1");
+	configure_mock_esg_transport().await?;
 	std::env::set_var("AS2_CALLBACK_TOKEN", "callback-secret");
 	std::env::set_var("E2BR3_VALIDATOR_TOKEN", "validator-secret");
 	std::env::set_var("E2BR3_SKIP_XML_VALIDATE", "1");
@@ -2282,7 +2168,7 @@ async fn test_rust_to_submitter_bridge_payload_and_ack_flow() -> Result<()> {
 #[tokio::test]
 async fn test_internal_ack_callback_duplicate_payload_is_idempotent() -> Result<()> {
 	clear_esg_env();
-	std::env::set_var("E2BR3_ALLOW_MOCK_SUBMISSION", "1");
+	configure_mock_esg_transport().await?;
 	std::env::set_var("AS2_CALLBACK_TOKEN", "callback-secret");
 	std::env::set_var("E2BR3_VALIDATOR_TOKEN", "validator-secret");
 	std::env::set_var("E2BR3_SKIP_XML_VALIDATE", "1");

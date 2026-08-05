@@ -364,7 +364,6 @@ POST /api/presaves/studies
 POST /api/presaves/studies/{study_id}/products
 POST /api/presaves/studies/{study_id}/registration-numbers
 POST /api/presaves/studies/{study_id}/reporters
-POST /api/submissions/{id}/acks/mock
 POST /api/terminology/import/meddra
 POST /api/terminology/import/whodrug
 POST /api/terminology/releases/{dictionary}/{version}/activate

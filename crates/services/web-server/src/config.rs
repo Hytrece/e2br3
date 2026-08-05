@@ -48,14 +48,8 @@ pub fn validate_submission_runtime_config() -> core::result::Result<(), String> 
 
 	let as2_enabled = env_non_empty("AS2_SUBMITTER_URL");
 	let esg_enabled = env_truthy("FDA_ESG_ENABLED");
-	let allow_mock = env_truthy("E2BR3_ALLOW_MOCK_SUBMISSION");
 
 	if strict {
-		if allow_mock {
-			return Err(
-				"E2BR3_ALLOW_MOCK_SUBMISSION must be disabled in strict/production mode".to_string(),
-			);
-		}
 		if !as2_enabled && !esg_enabled {
 			return Err(
 				"missing submission transport: set AS2_SUBMITTER_URL or FDA_ESG_ENABLED=1".to_string(),

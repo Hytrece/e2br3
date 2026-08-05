@@ -53,7 +53,6 @@
    RUST_LOG=info
    E2BR3_ENV=prod
    E2BR3_STRICT_SUBMISSION_CONFIG=true
-   E2BR3_ALLOW_MOCK_SUBMISSION=false
    ```
 7. Ensure `/opt/e2br3/.env.prod` has `E2BR3_SCHEMAS_DIR=/opt/e2br3/schemas`
    so the container bind-mount includes `/app/schemas/...`.

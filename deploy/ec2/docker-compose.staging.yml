@@ -25,7 +25,6 @@ services:
       E2BR3_DEFAULT_MESSAGE_RECEIVER_MFDS: "${E2BR3_DEFAULT_MESSAGE_RECEIVER_MFDS:?E2BR3_DEFAULT_MESSAGE_RECEIVER_MFDS must be configured}"
       E2BR3_ENV: "staging"
       E2BR3_STRICT_SUBMISSION_CONFIG: "true"
-      E2BR3_ALLOW_MOCK_SUBMISSION: "false"
       RUST_LOG: "web_server=info,lib_core=info,lib_web=info"
       SKIP_DEV_INIT: "1"
     volumes:
