@@ -152,15 +152,6 @@ pub struct SubmissionReconcileRuntimeStatus {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct MockAckInput {
-	pub level: u8,
-	#[serde(default = "default_true")]
-	pub success: bool,
-	pub code: Option<String>,
-	pub message: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
 pub struct GatewayAckCallbackInput {
 	pub remote_submission_id: String,
 	pub ack_level: u8,

@@ -1088,7 +1088,7 @@ pub(crate) async fn apply_study_section(
 			String::new()
 		};
 	let fragment = format!(
-		"<subjectOf1 typeCode=\"SBJ\"><researchStudy classCode=\"CLNTRL\" moodCode=\"EVN\">{}<code code=\"{}\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.8\" codeSystemVersion=\"1.0\"/>{}{}{}</researchStudy></subjectOf1>",
+		"<subjectOf1 typeCode=\"SBJ\"><researchStudy classCode=\"CLNTRL\" moodCode=\"EVN\">{}{}{}{}{}</researchStudy></subjectOf1>",
 		sponsor_id_xml,
 		study_type,
 		title_xml,
@@ -1122,15 +1122,16 @@ pub(crate) async fn apply_study_section(
 /// e2b:C.5.1.r.1
 fn write_c_5_1_r_1(value: &StudyRegistrationNumber) -> String {
 	if value.registration_number.trim().is_empty() {
-		return format!(
-			"<id nullFlavor=\"{}\" root=\"2.16.840.1.113883.3.989.2.1.3.6\"/>",
-			xml_escape(
-				value
-					.registration_number_null_flavor
-					.as_deref()
-					.unwrap_or("ASKU")
-			)
-		);
+		return value
+			.registration_number_null_flavor
+			.as_deref()
+			.map(|null_flavor| {
+				format!(
+					"<id nullFlavor=\"{}\" root=\"2.16.840.1.113883.3.989.2.1.3.6\"/>",
+					xml_escape(null_flavor)
+				)
+			})
+			.unwrap_or_default();
 	}
 	format!(
 		"<id extension=\"{}\" root=\"2.16.840.1.113883.3.989.2.1.3.6\"/>",
@@ -1169,26 +1170,32 @@ fn write_c_5_3(value: &StudyInformation) -> String {
 			xml_escape(number)
 		);
 	}
-	format!(
-		"<id nullFlavor=\"{}\" root=\"2.16.840.1.113883.3.989.2.1.3.5\"/>",
-		xml_escape(
-			value
-				.sponsor_study_number_null_flavor
-				.as_deref()
-				.unwrap_or("ASKU")
-		)
-	)
+	value
+		.sponsor_study_number_null_flavor
+		.as_deref()
+		.map(|null_flavor| {
+			format!(
+				"<id nullFlavor=\"{}\" root=\"2.16.840.1.113883.3.989.2.1.3.5\"/>",
+				xml_escape(null_flavor)
+			)
+		})
+		.unwrap_or_default()
 }
 
 /// e2b:C.5.4
 fn write_c_5_4(value: &StudyInformation) -> String {
-	xml_escape(
-		value
-			.study_type_reaction
-			.as_deref()
-			.filter(|v| !v.trim().is_empty())
-			.unwrap_or("1"),
-	)
+	value
+		.study_type_reaction
+		.as_deref()
+		.map(str::trim)
+		.filter(|value| !value.is_empty())
+		.map(|value| {
+			format!(
+				"<code code=\"{}\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.8\" codeSystemVersion=\"1.0\"/>",
+				xml_escape(value)
+			)
+		})
+		.unwrap_or_default()
 }
 
 /// e2b:C.5.4.KR.1
@@ -1271,6 +1278,65 @@ async fn fetch_study_fda_cross_reported_inds(
 	study_information_id: sqlx::types::Uuid,
 ) -> Result<Vec<StudyFdaCrossReportedInd>> {
 	mm.dbx().fetch_all(sqlx::query_as::<_, StudyFdaCrossReportedInd>("SELECT * FROM study_fda_cross_reported_inds WHERE study_information_id = $1 AND deleted = false ORDER BY sequence_number").bind(study_information_id)).await.map_err(model::Error::from).map_err(Error::from)
+}
+
+#[cfg(test)]
+mod study_writer_strictness_tests {
+	use super::*;
+	use sqlx::types::time::OffsetDateTime;
+
+	fn study() -> StudyInformation {
+		StudyInformation {
+			id: sqlx::types::Uuid::nil(),
+			case_id: sqlx::types::Uuid::nil(),
+			source_study_presave_id: None,
+			study_name: None,
+			study_name_null_flavor: None,
+			sponsor_study_number: None,
+			sponsor_study_number_null_flavor: None,
+			study_type_reaction: None,
+			study_type_reaction_kr1: None,
+			fda_ind_number_occurred: None,
+			fda_pre_anda_number_occurred: None,
+			created_at: OffsetDateTime::UNIX_EPOCH,
+			updated_at: OffsetDateTime::UNIX_EPOCH,
+			created_by: sqlx::types::Uuid::nil(),
+			updated_by: None,
+		}
+	}
+
+	fn registration() -> StudyRegistrationNumber {
+		StudyRegistrationNumber {
+			id: sqlx::types::Uuid::nil(),
+			study_information_id: sqlx::types::Uuid::nil(),
+			registration_number: String::new(),
+			registration_number_null_flavor: None,
+			country_code: None,
+			country_code_null_flavor: None,
+			sequence_number: 1,
+			deleted: false,
+			created_at: OffsetDateTime::UNIX_EPOCH,
+			updated_at: OffsetDateTime::UNIX_EPOCH,
+			created_by: sqlx::types::Uuid::nil(),
+			updated_by: None,
+		}
+	}
+
+	#[test]
+	fn study_writers_omit_missing_values_and_keep_explicit_null_flavors() {
+		let mut registration = registration();
+		assert!(write_c_5_1_r_1(&registration).is_empty());
+		registration.registration_number_null_flavor = Some("ASKU".to_string());
+		assert!(write_c_5_1_r_1(&registration).contains("nullFlavor=\"ASKU\""));
+
+		let mut study = study();
+		assert!(write_c_5_3(&study).is_empty());
+		study.sponsor_study_number_null_flavor = Some("NASK".to_string());
+		assert!(write_c_5_3(&study).contains("nullFlavor=\"NASK\""));
+		assert!(write_c_5_4(&study).is_empty());
+		study.study_type_reaction = Some("2".to_string());
+		assert!(write_c_5_4(&study).contains("code=\"2\""));
+	}
 }
 
 fn inject_study_fragment_in_primary_role(

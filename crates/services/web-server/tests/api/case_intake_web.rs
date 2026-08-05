@@ -344,7 +344,7 @@ async fn test_case_from_intake_persists_distinct_c_1_dates() -> Result<()> {
 
 #[serial]
 #[tokio::test]
-async fn test_case_from_intake_blocks_duplicates_even_with_override() -> Result<()> {
+async fn test_case_from_intake_allows_duplicate_override() -> Result<()> {
 	let mm = init_test_mm().await?;
 	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
 	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
@@ -375,18 +375,14 @@ async fn test_case_from_intake_blocks_duplicates_even_with_override() -> Result<
 	});
 	let (status, body) =
 		post_json(&app, &cookie, "/api/cases/from-intake", override_body).await?;
-	assert_eq!(status, StatusCode::BAD_REQUEST, "{body:?}");
-	assert!(body["error"]["data"]["detail"]
-		.as_str()
-		.unwrap_or_default()
-		.contains("duplicate case detected"));
+	assert_eq!(status, StatusCode::CREATED, "{body:?}");
 
 	Ok(())
 }
 
 #[serial]
 #[tokio::test]
-async fn test_case_intake_duplicate_check_uses_patient_signature_over_product_mismatch(
+async fn test_case_intake_duplicate_check_requires_all_active_fields_to_match(
 ) -> Result<()> {
 	let mm = init_test_mm().await?;
 	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
@@ -413,7 +409,7 @@ async fn test_case_intake_duplicate_check_uses_patient_signature_over_product_mi
 	let (status, body) =
 		post_json(&app, &cookie, "/api/cases/intake-check", same_key_check).await?;
 	assert_eq!(status, StatusCode::OK, "{body:?}");
-	assert_eq!(body["data"]["duplicate"], true, "{body:?}");
+	assert_eq!(body["data"]["duplicate"], false, "{body:?}");
 
 	let different_key_check = json!({
 		"data": intake_data(&safety_report_id, 122, "1", json!({
@@ -435,7 +431,7 @@ async fn test_case_intake_duplicate_check_uses_patient_signature_over_product_mi
 
 #[serial]
 #[tokio::test]
-async fn test_case_intake_duplicate_check_omits_optional_missing_field_warnings(
+async fn test_case_intake_duplicate_check_warns_for_missing_active_fields(
 ) -> Result<()> {
 	let mm = init_test_mm().await?;
 	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
@@ -453,22 +449,18 @@ async fn test_case_intake_duplicate_check_omits_optional_missing_field_warnings(
 		post_json(&app, &cookie, "/api/cases/intake-check", check_body).await?;
 	assert_eq!(status, StatusCode::OK, "{body:?}");
 	assert_eq!(body["data"]["duplicate"], false, "{body:?}");
-	assert_eq!(body["data"]["basis_complete"], true, "{body:?}");
-	assert_eq!(
-		body["data"]["warnings"]
-			.as_array()
-			.ok_or("warnings should be array")?
-			.len(),
-		0,
-		"{body:?}"
-	);
+	assert_eq!(body["data"]["basis_complete"], false, "{body:?}");
+	assert!(!body["data"]["warnings"]
+		.as_array()
+		.ok_or("warnings should be array")?
+		.is_empty());
 
 	Ok(())
 }
 
 #[serial]
 #[tokio::test]
-async fn test_case_intake_duplicate_check_accepts_minimum_required_fields(
+async fn test_case_intake_duplicate_check_rejects_missing_product_and_basis_fields(
 ) -> Result<()> {
 	let mm = init_test_mm().await?;
 	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
@@ -492,15 +484,11 @@ async fn test_case_intake_duplicate_check_accepts_minimum_required_fields(
 		post_json(&app, &cookie, "/api/cases/intake-check", check_body).await?;
 	assert_eq!(status, StatusCode::OK, "{body:?}");
 	assert_eq!(body["data"]["duplicate"], false, "{body:?}");
-	assert_eq!(body["data"]["basis_complete"], true, "{body:?}");
-	assert_eq!(
-		body["data"]["warnings"]
-			.as_array()
-			.ok_or("warnings should be array")?
-			.len(),
-		0,
-		"{body:?}"
-	);
+	assert_eq!(body["data"]["basis_complete"], false, "{body:?}");
+	assert!(!body["data"]["warnings"]
+		.as_array()
+		.ok_or("warnings should be array")?
+		.is_empty());
 
 	let create_body = json!({
 		"data": intake_data(&safety_report_id, 141, "1", json!({
@@ -515,15 +503,14 @@ async fn test_case_intake_duplicate_check_accepts_minimum_required_fields(
 	});
 	let (status, body) =
 		post_json(&app, &cookie, "/api/cases/from-intake", create_body).await?;
-	assert_eq!(status, StatusCode::CREATED, "{body:?}");
+	assert_eq!(status, StatusCode::BAD_REQUEST, "{body:?}");
 
 	Ok(())
 }
 
 #[serial]
 #[tokio::test]
-async fn test_case_from_intake_allows_missing_optional_duplicate_fields(
-) -> Result<()> {
+async fn test_case_from_intake_requires_product_id() -> Result<()> {
 	let mm = init_test_mm().await?;
 	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
 	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
@@ -541,7 +528,7 @@ async fn test_case_from_intake_allows_missing_optional_duplicate_fields(
 	let (status, body) =
 		post_json(&app, &cookie, "/api/cases/from-intake", intake_body.clone())
 			.await?;
-	assert_eq!(status, StatusCode::CREATED, "{body:?}");
+	assert_eq!(status, StatusCode::BAD_REQUEST, "{body:?}");
 
 	let override_body = json!({
 		"data": intake_data(&safety_report_id, 142, "1", json!({
@@ -553,7 +540,7 @@ async fn test_case_from_intake_allows_missing_optional_duplicate_fields(
 	});
 	let (status, body) =
 		post_json(&app, &cookie, "/api/cases/from-intake", override_body).await?;
-	assert_eq!(status, StatusCode::CREATED, "{body:?}");
+	assert_eq!(status, StatusCode::BAD_REQUEST, "{body:?}");
 
 	Ok(())
 }
@@ -572,9 +559,7 @@ async fn test_case_intake_duplicate_check_accepts_null_flavor_codes_as_optional(
 	let check_body = json!({
 		"data": intake_data(&safety_report_id, 142, "1", json!({
 			"patient_initials": null,
-			"patient_initials_null_flavor": "UNK",
-			"reaction_meddra_version": null,
-			"reaction_meddra_version_null_flavor": "UNK"
+			"patient_initials_null_flavor": "UNK"
 		}))
 	});
 	let (status, body) =
@@ -595,7 +580,7 @@ async fn test_case_intake_duplicate_check_accepts_null_flavor_codes_as_optional(
 
 #[serial]
 #[tokio::test]
-async fn test_case_intake_duplicate_check_keeps_matching_fields_optional_by_report_type(
+async fn test_case_intake_duplicate_check_requires_active_fields_by_report_type(
 ) -> Result<()> {
 	let mm = init_test_mm().await?;
 	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
@@ -619,15 +604,11 @@ async fn test_case_intake_duplicate_check_keeps_matching_fields_optional_by_repo
 	)
 	.await?;
 	assert_eq!(status, StatusCode::OK, "{body:?}");
-	assert_eq!(body["data"]["basis_complete"], true, "{body:?}");
-	assert_eq!(
-		body["data"]["warnings"]
-			.as_array()
-			.ok_or("warnings should be array")?
-			.len(),
-		0,
-		"{body:?}"
-	);
+	assert_eq!(body["data"]["basis_complete"], false, "{body:?}");
+	assert!(!body["data"]["warnings"]
+		.as_array()
+		.ok_or("warnings should be array")?
+		.is_empty());
 
 	let study_id = format!("INTAKE-{}", Uuid::new_v4());
 	let study_missing_investigation = json!({
@@ -645,15 +626,11 @@ async fn test_case_intake_duplicate_check_keeps_matching_fields_optional_by_repo
 	)
 	.await?;
 	assert_eq!(status, StatusCode::OK, "{body:?}");
-	assert_eq!(body["data"]["basis_complete"], true, "{body:?}");
-	assert_eq!(
-		body["data"]["warnings"]
-			.as_array()
-			.ok_or("warnings should be array")?
-			.len(),
-		0,
-		"{body:?}"
-	);
+	assert_eq!(body["data"]["basis_complete"], false, "{body:?}");
+	assert!(!body["data"]["warnings"]
+		.as_array()
+		.ok_or("warnings should be array")?
+		.is_empty());
 
 	let unknown_id = format!("INTAKE-{}", Uuid::new_v4());
 	let unknown_complete = json!({
@@ -674,8 +651,8 @@ async fn test_case_intake_duplicate_check_keeps_matching_fields_optional_by_repo
 
 #[serial]
 #[tokio::test]
-async fn test_case_intake_duplicate_check_respects_patient_and_reaction_fields(
-) -> Result<()> {
+async fn test_case_intake_duplicate_check_requires_all_active_fields() -> Result<()>
+{
 	let mm = init_test_mm().await?;
 	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
 	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
@@ -731,7 +708,7 @@ async fn test_case_intake_duplicate_check_respects_patient_and_reaction_fields(
 	let (status, body) =
 		post_json(&app, &cookie, "/api/cases/intake-check", d1_match).await?;
 	assert_eq!(status, StatusCode::OK, "{body:?}");
-	assert_eq!(body["data"]["duplicate"], true, "{body:?}");
+	assert_eq!(body["data"]["duplicate"], false, "{body:?}");
 
 	let d1_mismatch = json!({
 		"data": intake_data(&safety_report_id, 123, "1", json!({
@@ -757,7 +734,7 @@ async fn test_case_intake_duplicate_check_respects_patient_and_reaction_fields(
 	let (status, body) =
 		post_json(&app, &cookie, "/api/cases/intake-check", d5_match).await?;
 	assert_eq!(status, StatusCode::OK, "{body:?}");
-	assert_eq!(body["data"]["duplicate"], true, "{body:?}");
+	assert_eq!(body["data"]["duplicate"], false, "{body:?}");
 
 	let d5_mismatch = json!({
 		"data": intake_data(&safety_report_id, 123, "1", json!({

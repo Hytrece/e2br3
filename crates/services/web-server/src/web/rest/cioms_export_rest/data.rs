@@ -1,12 +1,7 @@
 use super::*;
 use crate::runtime_settings;
+use lib_core::model::e2b_field_notation::E2bFieldNotationBmc;
 use lib_core::model::patient::{MedicalHistoryEpisode, PastDrugHistory};
-
-#[derive(Debug, sqlx::FromRow)]
-struct CiomsFieldNotationRow {
-	field_path: String,
-	notation: String,
-}
 
 async fn load_list_by_patient<T>(
 	ctx: &lib_core::ctx::Ctx,
@@ -298,24 +293,15 @@ pub(super) async fn load_cioms_case_data(
 		),
 		None => (Vec::new(), Vec::new()),
 	};
-	let field_notations = lib_rest_core::with_rls_read(mm, ctx, |dbx| {
-		Box::pin(async move {
-			dbx.fetch_all(sqlx::query_as::<_, CiomsFieldNotationRow>(
-				"SELECT field_path, notation FROM case_field_notations WHERE case_id = $1 ORDER BY field_path, record_id",
-			)
-			.bind(case_id))
-			.await
-			.map_err(ModelError::Dbx)
-			.map_err(Error::Model)
+	let field_notations = E2bFieldNotationBmc::list_by_case(ctx, mm, case_id)
+		.await
+		.map_err(Error::Model)?
+		.into_iter()
+		.map(|row| CiomsFieldNotation {
+			e2b_code: row.e2b_code,
+			notation: row.notation,
 		})
-	})
-	.await?
-	.into_iter()
-	.map(|row| CiomsFieldNotation {
-		field_path: row.field_path,
-		notation: row.notation,
-	})
-	.collect();
+		.collect();
 	let primary_sources = load_list_by_case::<PrimarySource>(
 		ctx,
 		mm,

@@ -108,36 +108,31 @@ pub(crate) fn reaction_fragment_for_authority(
 		}
 		out.push_str("</effectiveTime>");
 	}
-	let meddracode = write_e_i_2_1b(reaction);
-	if !meddracode.is_empty() {
-		out.push_str("<value xsi:type=\"CE\" code=\"");
-		out.push_str(&xml_escape(meddracode));
-		out.push_str("\" codeSystem=\"2.16.840.1.113883.6.163\"");
-		if let Some(version) = write_e_i_2_1a(reaction) {
-			out.push_str(" codeSystemVersion=\"");
-			out.push_str(&xml_escape(version));
-			out.push_str("\"");
-		}
-		out.push_str("><originalText");
-		if let Some(lang) = write_e_i_1_1b(reaction) {
-			out.push_str(" language=\"");
-			out.push_str(&xml_escape(lang));
-			out.push_str("\"");
-		}
-		out.push_str(">");
-		out.push_str(&write_e_i_1_1a(reaction));
-		out.push_str("</originalText></value>");
-	} else {
-		out.push_str("<value xsi:type=\"CE\"><originalText");
-		if let Some(lang) = write_e_i_1_1b(reaction) {
-			out.push_str(" language=\"");
-			out.push_str(&xml_escape(lang));
-			out.push_str("\"");
-		}
-		out.push_str(">");
-		out.push_str(&write_e_i_1_1a(reaction));
-		out.push_str("</originalText></value>");
+	let meddracode = write_e_i_2_1b(reaction).ok_or_else(|| Error::InvalidXml {
+		message: format!(
+			"ICH.E.i.2.1b.REQUIRED: MedDRA code missing for reaction sequence {}",
+			reaction.sequence_number
+		),
+		line: None,
+		column: None,
+	})?;
+	out.push_str("<value xsi:type=\"CE\" code=\"");
+	out.push_str(&xml_escape(meddracode));
+	out.push_str("\" codeSystem=\"2.16.840.1.113883.6.163\"");
+	if let Some(version) = write_e_i_2_1a(reaction) {
+		out.push_str(" codeSystemVersion=\"");
+		out.push_str(&xml_escape(version));
+		out.push_str("\"");
 	}
+	out.push_str("><originalText");
+	if let Some(lang) = write_e_i_1_1b(reaction) {
+		out.push_str(" language=\"");
+		out.push_str(&xml_escape(lang));
+		out.push_str("\"");
+	}
+	out.push_str(">");
+	out.push_str(&write_e_i_1_1a(reaction));
+	out.push_str("</originalText></value>");
 	out.push_str(&write_e_i_1_2(reaction));
 	if let Some(term_code) = write_e_i_3_1(reaction) {
 		out.push_str(&observation_rel_code("37", term_code));
@@ -226,8 +221,12 @@ fn write_e_i_2_1a(value: &Reaction) -> Option<&str> {
 }
 
 /// e2b:E.i.2.1b
-fn write_e_i_2_1b(value: &Reaction) -> &str {
-	value.reaction_meddra_code.as_deref().unwrap_or("").trim()
+fn write_e_i_2_1b(value: &Reaction) -> Option<&str> {
+	value
+		.reaction_meddra_code
+		.as_deref()
+		.map(str::trim)
+		.filter(|code| !code.is_empty())
 }
 
 /// e2b:E.i.3.1
@@ -568,5 +567,88 @@ mod registry_coverage_tests {
 			.collect::<BTreeSet<_>>();
 
 		assert_eq!(implemented, expected);
+	}
+}
+
+#[cfg(test)]
+mod meddra_requirement_tests {
+	use super::*;
+	use sqlx::types::Uuid;
+	use time::OffsetDateTime;
+
+	fn reaction() -> Reaction {
+		Reaction {
+			id: Uuid::new_v4(),
+			case_id: Uuid::new_v4(),
+			sequence_number: 1,
+			primary_source_reaction: "Headache".to_string(),
+			primary_source_reaction_translation: None,
+			reaction_language: Some("en".to_string()),
+			reaction_meddra_version: Some("24.1".to_string()),
+			reaction_meddra_code: Some("10019211".to_string()),
+			term_highlighted: Some("4".to_string()),
+			serious: Some(false),
+			criteria_death: Some(false),
+			criteria_death_null_flavor: None,
+			criteria_life_threatening: Some(false),
+			criteria_life_threatening_null_flavor: None,
+			criteria_hospitalization: Some(false),
+			criteria_hospitalization_null_flavor: None,
+			criteria_disabling: Some(false),
+			criteria_disabling_null_flavor: None,
+			criteria_congenital_anomaly: Some(false),
+			criteria_congenital_anomaly_null_flavor: None,
+			criteria_other_medically_important: Some(false),
+			criteria_other_medically_important_null_flavor: None,
+			required_intervention: None,
+			required_intervention_null_flavor: None,
+			expectedness: None,
+			severity: None,
+			mfds_device_ae_classification: None,
+			mfds_device_ae_outcome: None,
+			mfds_device_cause_medical_device: None,
+			mfds_device_cause_procedure_issue: None,
+			mfds_device_cause_patient_condition: None,
+			mfds_device_cause_unable_to_assess: None,
+			mfds_device_cause_other: None,
+			mfds_device_action_reason: None,
+			mfds_device_action_recall: None,
+			mfds_device_action_repair: None,
+			mfds_device_action_inspection: None,
+			mfds_device_action_replacement: None,
+			mfds_device_action_improvement: None,
+			mfds_device_action_monitoring: None,
+			mfds_device_action_notification: None,
+			mfds_device_action_label_change: None,
+			mfds_device_action_other: None,
+			start_date: None,
+			start_date_null_flavor: None,
+			end_date: None,
+			end_date_null_flavor: None,
+			duration_value: None,
+			duration_unit: None,
+			outcome: Some("1".to_string()),
+			medical_confirmation: Some(true),
+			country_code: Some("US".to_string()),
+			deleted: false,
+			created_at: OffsetDateTime::now_utc(),
+			updated_at: OffsetDateTime::now_utc(),
+			created_by: Uuid::new_v4(),
+			updated_by: None,
+		}
+	}
+
+	#[test]
+	fn export_rejects_missing_or_blank_meddra_code() {
+		for code in [None, Some("  ".to_string())] {
+			let mut reaction = reaction();
+			reaction.reaction_meddra_code = code;
+
+			let err = export_e_reactions_xml(&[reaction])
+				.expect_err("missing MedDRA code should fail before XML is emitted");
+			let message = format!("{err}");
+			assert!(message.contains("ICH.E.i.2.1b.REQUIRED"));
+			assert!(message.contains("reaction sequence 1"));
+		}
 	}
 }

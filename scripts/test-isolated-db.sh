@@ -17,12 +17,18 @@ if [[ "$needs_xml_assets" -eq 1 ]]; then
 	"$repo_root/scripts/prepare-xml-assets.sh"
 fi
 
-for required_command in createdb psql dropdb cargo; do
+for required_command in createdb psql dropdb cargo python3; do
 	if ! command -v "$required_command" >/dev/null 2>&1; then
 		printf 'required command not found: %s\n' "$required_command" >&2
 		exit 127
 	fi
 done
+
+app_db_user="$(python3 -c 'import sys; from urllib.parse import urlsplit; print(urlsplit(sys.argv[1]).username or "")' "${maintenance_url}")"
+if [[ -z "$app_db_user" ]]; then
+	printf 'SERVICE_DB_URL must include a database user\n' >&2
+	exit 2
+fi
 
 database_name="e2br3_test_$(od -An -N8 -tx1 /dev/urandom | tr -d ' \n')"
 if [[ ! "$database_name" =~ ^e2br3_test_[a-z0-9_]+$ ]]; then
@@ -154,7 +160,8 @@ sql_list="$("$repo_root/scripts/db/list_init_sql.sh" "$repo_root/db" 1)"
 while IFS= read -r sql_file; do
 	if [[ -n "$sql_file" ]]; then
 		run_interruptible \
-			psql "$test_url" -v ON_ERROR_STOP=1 -f "$repo_root/db/$sql_file"
+			psql "$test_url" -v ON_ERROR_STOP=1 -v "app_db_user=${app_db_user}" \
+				-f "$repo_root/db/$sql_file"
 	fi
 done <<<"$sql_list"
 

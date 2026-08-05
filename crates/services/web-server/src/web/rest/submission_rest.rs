@@ -21,11 +21,11 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::submission::{
-	apply_gateway_ack_by_remote, apply_mock_ack, create_submission_idempotent,
+	apply_gateway_ack_by_remote, create_submission_idempotent,
 	get_ack_download, get_reconcile_runtime_status, get_submission,
 	get_submission_dispatch_state, list_by_case, list_submission_events,
 	list_submission_history, reconcile_due_submissions_with_runtime_status,
-	GatewayAckCallbackInput, MockAckInput, SubmissionAuthority,
+	GatewayAckCallbackInput, SubmissionAuthority,
 	SubmissionDispatchStateRecord, SubmissionEventRecord, SubmissionHistoryRecord,
 	SubmissionReconcileResult, SubmissionReconcileRuntimeStatus, SubmissionRecord,
 };
@@ -516,30 +516,6 @@ pub async fn get_submission_dispatch_state_view(
 						data: SubmissionDispatchStateData { state },
 					}),
 				))
-			})
-		},
-	)
-	.await
-}
-
-/// POST /api/submissions/{id}/acks/mock
-pub async fn post_mock_ack(
-	State(_mm): State<ModelManager>,
-	ctx_w: CtxW,
-	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
-	Path(submission_id): Path<Uuid>,
-	Json(input): Json<MockAckInput>,
-) -> Result<(StatusCode, Json<DataRestResult<SubmissionRecord>>)> {
-	let ctx = ctx_w.0;
-	lib_rest_core::with_authorized_submission_mutation(
-		&ctx,
-		&snapshot,
-		&_mm,
-		submission_id,
-		move |ctx, mm| {
-			Box::pin(async move {
-				let record = apply_mock_ack(ctx, mm, submission_id, input).await?;
-				Ok((StatusCode::OK, Json(DataRestResult { data: record })))
 			})
 		},
 	)

@@ -31,10 +31,6 @@ pub fn routes_submissions(mm: ModelManager) -> Router {
 			"/submissions/{id}/dispatch-state",
 			get(submission_rest::get_submission_dispatch_state_view),
 		)
-		.route(
-			"/submissions/{id}/acks/mock",
-			axum::routing::post(submission_rest::post_mock_ack),
-		)
 		.with_state(mm)
 }
 

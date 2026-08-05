@@ -1,7 +1,7 @@
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::Json;
-use lib_core::model::case_field_notation::CaseFieldNotationBmc;
+use lib_core::model::e2b_field_notation::E2bFieldNotationBmc;
 use lib_core::model::ModelManager;
 use lib_rest_core::{Error, Result};
 use lib_web::middleware::mw_auth::CtxW;
@@ -12,14 +12,14 @@ use uuid::Uuid;
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FieldNotationQuery {
-	field_path: String,
+	e2b_code: String,
 	record_id: Option<Uuid>,
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SaveFieldNotationRequest {
-	field_path: String,
+	e2b_code: String,
 	record_id: Option<Uuid>,
 	notation: String,
 }
@@ -28,19 +28,27 @@ pub struct SaveFieldNotationRequest {
 #[serde(rename_all = "camelCase")]
 pub struct FieldNotationResponse {
 	id: Option<Uuid>,
-	field_path: String,
+	e2b_code: String,
 	record_id: Option<Uuid>,
 	notation: String,
 }
 
-fn validate_field_path(field_path: &str) -> Result<&str> {
-	let field_path = field_path.trim();
-	if field_path.is_empty() || field_path.len() > 255 {
+fn validate_e2b_code(e2b_code: &str) -> Result<&str> {
+	let e2b_code = e2b_code.trim();
+	if e2b_code.is_empty() || e2b_code.len() > 64 {
 		return Err(Error::BadRequest {
-			message: "fieldPath must contain 1-255 characters".to_string(),
+			message: "e2bCode must contain 1-64 characters".to_string(),
 		});
 	}
-	Ok(field_path)
+	if !e2b_code
+		.chars()
+		.all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '.' | '_' | '-'))
+	{
+		return Err(Error::BadRequest {
+			message: "e2bCode contains invalid characters".to_string(),
+		});
+	}
+	Ok(e2b_code)
 }
 
 pub async fn get_field_notation(
@@ -51,7 +59,7 @@ pub async fn get_field_notation(
 	Query(query): Query<FieldNotationQuery>,
 ) -> Result<(StatusCode, Json<FieldNotationResponse>)> {
 	let ctx = ctx_w.0;
-	let field_path = validate_field_path(&query.field_path)?.to_string();
+	let e2b_code = validate_e2b_code(&query.e2b_code)?.to_string();
 	lib_rest_core::with_authorized_case_child_read(
 		&ctx,
 		&snapshot,
@@ -60,12 +68,12 @@ pub async fn get_field_notation(
 		"field-notation",
 		move |ctx, mm| {
 			Box::pin(async move {
-				let row = CaseFieldNotationBmc::get(
+				let row = E2bFieldNotationBmc::get(
 					ctx,
 					mm,
 					case_id,
 					query.record_id,
-					&field_path,
+					&e2b_code,
 				)
 				.await
 				.map_err(Error::Model)?;
@@ -73,7 +81,7 @@ pub async fn get_field_notation(
 					StatusCode::OK,
 					Json(FieldNotationResponse {
 						id: row.as_ref().map(|row| row.id),
-						field_path,
+						e2b_code,
 						record_id: query.record_id,
 						notation: row.map(|row| row.notation).unwrap_or_default(),
 					}),
@@ -92,7 +100,7 @@ pub async fn save_field_notation(
 	Json(request): Json<SaveFieldNotationRequest>,
 ) -> Result<(StatusCode, Json<FieldNotationResponse>)> {
 	let ctx = ctx_w.0;
-	let field_path = validate_field_path(&request.field_path)?.to_string();
+	let e2b_code = validate_e2b_code(&request.e2b_code)?.to_string();
 	if request.notation.len() > 10_000 {
 		return Err(Error::BadRequest {
 			message: "notation must not exceed 10000 characters".to_string(),
@@ -106,12 +114,12 @@ pub async fn save_field_notation(
 		"field-notation",
 		move |ctx, mm| {
 			Box::pin(async move {
-				let row = CaseFieldNotationBmc::upsert(
+				let row = E2bFieldNotationBmc::upsert(
 					ctx,
 					mm,
 					case_id,
 					request.record_id,
-					&field_path,
+					&e2b_code,
 					request.notation.trim(),
 				)
 				.await
@@ -120,8 +128,8 @@ pub async fn save_field_notation(
 					StatusCode::OK,
 					Json(FieldNotationResponse {
 						id: Some(row.id),
-						field_path,
-						record_id: request.record_id,
+						e2b_code: row.e2b_code,
+						record_id: row.record_id,
 						notation: row.notation,
 					}),
 				))
@@ -139,7 +147,7 @@ pub async fn delete_field_notation(
 	Query(query): Query<FieldNotationQuery>,
 ) -> Result<(StatusCode, Json<FieldNotationResponse>)> {
 	let ctx = ctx_w.0;
-	let field_path = validate_field_path(&query.field_path)?.to_string();
+	let e2b_code = validate_e2b_code(&query.e2b_code)?.to_string();
 	lib_rest_core::with_authorized_case_child_mutation(
 		&ctx,
 		&snapshot,
@@ -148,12 +156,12 @@ pub async fn delete_field_notation(
 		"field-notation",
 		move |ctx, mm| {
 			Box::pin(async move {
-				CaseFieldNotationBmc::delete(
+				E2bFieldNotationBmc::delete(
 					ctx,
 					mm,
 					case_id,
 					query.record_id,
-					&field_path,
+					&e2b_code,
 				)
 				.await
 				.map_err(Error::Model)?;
@@ -161,7 +169,7 @@ pub async fn delete_field_notation(
 					StatusCode::OK,
 					Json(FieldNotationResponse {
 						id: None,
-						field_path,
+						e2b_code,
 						record_id: query.record_id,
 						notation: String::new(),
 					}),

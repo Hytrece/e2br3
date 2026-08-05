@@ -356,8 +356,8 @@ pub struct CaseDuplicateBmc;
 
 impl CaseDuplicateBmc {
 	/// Scan up to 500 recent cases in the caller's organization and return those
-	/// that match the given key on either the patient-event basis or the
-	/// product-event basis. Returns at most 20 matches, newest first.
+	/// that match every active field in the given key. Returns at most 20
+	/// matches, newest first.
 	pub async fn list_potential_matches(
 		ctx: &Ctx,
 		mm: &ModelManager,

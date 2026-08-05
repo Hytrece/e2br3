@@ -60,7 +60,7 @@ pub(super) struct CiomsCaseData {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct CiomsFieldNotation {
-	pub(super) field_path: String,
+	pub(super) e2b_code: String,
 	pub(super) notation: String,
 }
 

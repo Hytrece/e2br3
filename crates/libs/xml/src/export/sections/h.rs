@@ -21,11 +21,11 @@ pub(crate) async fn apply_case_summary_section(
 	case_id: sqlx::types::Uuid,
 	xpath: &mut Context,
 ) -> Result<()> {
-	let narrative =
-		match NarrativeInformationBmc::get_by_case(ctx, mm, case_id).await {
-			Ok(v) => v,
-			Err(_) => return Ok(()),
-		};
+	let Some(narrative) =
+		NarrativeInformationBmc::get_by_case_optional(ctx, mm, case_id).await?
+	else {
+		return Ok(());
+	};
 	let summaries = fetch_case_summaries(ctx, mm, narrative.id).await?;
 	let Some(summary) = summaries.iter().find(|s| {
 		s.summary_text
@@ -69,11 +69,11 @@ pub(crate) async fn apply_sender_diagnosis_section(
 	case_id: sqlx::types::Uuid,
 	xpath: &mut Context,
 ) -> Result<()> {
-	let narrative =
-		match NarrativeInformationBmc::get_by_case(ctx, mm, case_id).await {
-			Ok(v) => v,
-			Err(_) => return Ok(()),
-		};
+	let Some(narrative) =
+		NarrativeInformationBmc::get_by_case_optional(ctx, mm, case_id).await?
+	else {
+		return Ok(());
+	};
 	let diagnoses = fetch_sender_diagnoses(ctx, mm, narrative.id).await?;
 
 	remove_nodes(

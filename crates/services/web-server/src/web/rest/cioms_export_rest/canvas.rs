@@ -372,7 +372,7 @@ pub(super) fn cioms_notation_text(data: &CiomsCaseData) -> String {
 		]);
 	}
 	values.extend(data.field_notations.iter().map(|notation| {
-		Some(format!("{}: {}", notation.field_path, notation.notation))
+		Some(format!("{}: {}", notation.e2b_code, notation.notation))
 	}));
 	values.into_iter().flatten().collect::<Vec<_>>().join(" | ")
 }

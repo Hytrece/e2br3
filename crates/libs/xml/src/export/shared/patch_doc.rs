@@ -15,20 +15,7 @@ use libxml::xpath::Context;
 
 pub(crate) fn postprocess_export_doc(doc: &mut Document, xpath: &mut Context) {
 	normalize_export_values(xpath);
-	normalize_empty_text(xpath);
 	prune_optional_nodes(doc, xpath);
-}
-
-// e2b:ICH.XML.TEXT.NULLFLAVOR.REQUIRED
-fn normalize_empty_text(xpath: &mut Context) {
-	if let Ok(nodes) = xpath.findnodes(
-		"//*[self::hl7:text or self::hl7:originalText][normalize-space(.) = '' and not(@nullFlavor) and not(*)]",
-		None,
-	) {
-		for mut node in nodes {
-			let _ = node.set_attribute("nullFlavor", "NI");
-		}
-	}
 }
 
 fn normalize_export_values(xpath: &mut Context) {
@@ -404,4 +391,44 @@ fn child_observation_code(obs: &Node) -> Option<String> {
 			None
 		}
 	})
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn postprocess_does_not_invent_null_flavor_for_empty_text() {
+		let parser = libxml::parser::Parser::default();
+		let mut doc = parser
+			.parse_string(
+				br#"<root xmlns="urn:hl7-org:v3"><text/><originalText/><text nullFlavor="UNK"/></root>"#,
+			)
+			.expect("parse fixture");
+		let mut xpath = Context::new(&doc).expect("create xpath");
+		xpath
+			.register_namespace("hl7", "urn:hl7-org:v3")
+			.expect("register namespace");
+
+		postprocess_export_doc(&mut doc, &mut xpath);
+
+		assert_eq!(
+			xpath
+				.findvalue("/hl7:root/hl7:text[1]/@nullFlavor", None)
+				.expect("read empty text nullFlavor"),
+			""
+		);
+		assert_eq!(
+			xpath
+				.findvalue("/hl7:root/hl7:originalText/@nullFlavor", None)
+				.expect("read empty originalText nullFlavor"),
+			""
+		);
+		assert_eq!(
+			xpath
+				.findvalue("/hl7:root/hl7:text[2]/@nullFlavor", None)
+				.expect("read explicit nullFlavor"),
+			"UNK"
+		);
+	}
 }

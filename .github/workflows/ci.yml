@@ -155,12 +155,15 @@ jobs:
       - name: Initialize database schema
         env:
           PGPASSWORD: dev_only_pwd
+          APP_DB_USER: app_user
         run: |
-          psql -h localhost -U app_user -d app_db -v ON_ERROR_STOP=1 \
+          psql -h localhost -U "${APP_DB_USER}" -d app_db -v ON_ERROR_STOP=1 \
+            -v "app_db_user=${APP_DB_USER}" \
             -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
           sh scripts/db/list_init_sql.sh db 1 |
           while IFS= read -r f; do
-            psql -h localhost -U app_user -d app_db -v ON_ERROR_STOP=1 -f "db/$f"
+            psql -h localhost -U "${APP_DB_USER}" -d app_db -v ON_ERROR_STOP=1 \
+              -v "app_db_user=${APP_DB_USER}" -f "db/$f"
           done
 
       - name: Run lib-core tests

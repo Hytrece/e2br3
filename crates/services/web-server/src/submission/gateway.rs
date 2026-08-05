@@ -1,5 +1,55 @@
 use super::*;
 
+#[derive(Debug, Deserialize)]
+struct As2GatewaySubmitResponse {
+	remote_submission_id: Option<String>,
+	submission_id: Option<String>,
+	ack: Option<EsgAckResponse>,
+}
+
+fn require_ack1(
+	ack: Option<EsgAckResponse>,
+	gateway: &str,
+	now: OffsetDateTime,
+) -> Result<SubmissionAck> {
+	let ack = ack.ok_or(Error::BadRequest {
+		message: format!(
+			"{gateway} submit response missing ACK1; remote submission remains pending acknowledgement"
+		),
+	})?;
+	let level = ack.level.ok_or(Error::BadRequest {
+		message: format!("{gateway} submit response ACK level is missing"),
+	})?;
+	if level != 1 {
+		return Err(Error::BadRequest {
+			message: format!(
+				"{gateway} submit response must contain ACK1, received ACK{level}"
+			),
+		});
+	}
+	let success = ack.success.ok_or(Error::BadRequest {
+		message: format!("{gateway} submit response ACK1 success is missing"),
+	})?;
+	if !success {
+		return Err(Error::BadRequest {
+			message: format!(
+				"{gateway} submit response contains unsuccessful ACK1{}",
+				ack.message
+					.as_deref()
+					.map(|message| format!(": {message}"))
+					.unwrap_or_default()
+			),
+		});
+	}
+	Ok(SubmissionAck {
+		level,
+		success,
+		code: ack.code,
+		message: ack.message,
+		received_at: now,
+	})
+}
+
 pub(super) async fn submit_to_gateway(
 	case_id: Uuid,
 	xml: &str,
@@ -52,8 +102,8 @@ pub(super) async fn submit_to_gateway(
 				),
 			});
 		}
-		let parsed: As2SubmitResponse =
-			serde_json::from_str(&body_text).map_err(|err| Error::BadRequest {
+		let parsed: As2GatewaySubmitResponse = serde_json::from_str(&body_text)
+			.map_err(|err| Error::BadRequest {
 				message: format!("AS2 submitter response is not valid JSON: {err}"),
 			})?;
 		let remote_submission_id = parsed
@@ -64,45 +114,14 @@ pub(super) async fn submit_to_gateway(
 					"AS2 submitter response missing remote submission identifier"
 						.to_string(),
 			})?;
-		let ack_message = match (parsed.status, parsed.authority) {
-			(Some(status), Some(authority)) => {
-				Some(format!("AS2 accepted: {status} ({authority})"))
-			}
-			(Some(status), None) => Some(format!("AS2 accepted: {status}")),
-			(None, Some(authority)) => Some(format!("AS2 accepted ({authority})")),
-			(None, None) => None,
-		};
+		let ack1 = require_ack1(parsed.ack, "AS2", now)?;
 		return Ok(GatewaySubmissionOutcome {
 			gateway: "as2-submitter-http".to_string(),
 			remote_submission_id,
-			ack1: SubmissionAck {
-				level: 1,
-				success: true,
-				code: Some("ACK1_ACCEPTED".to_string()),
-				message: ack_message,
-				received_at: now,
-			},
+			ack1,
 		});
 	}
 
-	if allow_mock_submission() {
-		let submission_id = Uuid::new_v4();
-		return Ok(GatewaySubmissionOutcome {
-			gateway: "fda-esg-nextgen-mock".to_string(),
-			remote_submission_id: format!(
-				"{}-MOCK-{}",
-				authority.as_str().to_ascii_uppercase(),
-				submission_id.simple().to_string().to_uppercase()
-			),
-			ack1: SubmissionAck {
-				level: 1,
-				success: true,
-				code: Some("ACK1_ACCEPTED".to_string()),
-				message: Some("Upload accepted by mock FDA gateway".to_string()),
-				received_at: now,
-			},
-		});
-	}
 	if !is_esg_enabled() {
 		return Err(Error::BadRequest {
 			message: "no submission transport configured: set AS2_SUBMITTER_URL or FDA_ESG_ENABLED=1".to_string(),
@@ -184,22 +203,7 @@ pub(super) async fn submit_to_gateway(
 			message: "FDA ESG submit response missing remote submission identifier"
 				.to_string(),
 		})?;
-	let ack = parsed.ack.unwrap_or(EsgAckResponse {
-		level: Some(1),
-		success: Some(true),
-		code: Some("ACK1_ACCEPTED".to_string()),
-		message: Some(
-			"Submitted to FDA ESG; awaiting downstream ACK updates".to_string(),
-		),
-		received_at: None,
-	});
-	let ack1 = SubmissionAck {
-		level: ack.level.unwrap_or(1),
-		success: ack.success.unwrap_or(true),
-		code: ack.code,
-		message: ack.message,
-		received_at: now,
-	};
+	let ack1 = require_ack1(parsed.ack, "FDA ESG", now)?;
 	Ok(GatewaySubmissionOutcome {
 		gateway: "fda-esg-nextgen-api".to_string(),
 		remote_submission_id,
@@ -210,9 +214,6 @@ pub(super) async fn submit_to_gateway(
 pub(super) fn select_gateway_name(authority: SubmissionAuthority) -> Result<String> {
 	if as2_submitter_url().is_some() {
 		return Ok("as2-submitter-http".to_string());
-	}
-	if allow_mock_submission() {
-		return Ok("fda-esg-nextgen-mock".to_string());
 	}
 	if !is_esg_enabled() {
 		return Err(Error::BadRequest {
@@ -267,9 +268,90 @@ pub(super) fn backoff_ms_for_attempt(attempt_number: u32) -> u64 {
 pub(super) fn is_retryable_submit_error(msg: &str) -> bool {
 	let lower = msg.to_ascii_lowercase();
 	!(lower.contains("missing remote submission identifier")
+		|| lower.contains("ack1")
 		|| lower.contains("response is not valid json")
 		|| lower.contains("rejected request (")
 		|| lower.contains("submit failed ("))
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	fn ack(level: Option<u8>, success: Option<bool>) -> EsgAckResponse {
+		EsgAckResponse {
+			level,
+			success,
+			code: Some("ACK1".to_string()),
+			message: Some("accepted by gateway".to_string()),
+			received_at: None,
+		}
+	}
+
+	#[test]
+	fn missing_ack_is_an_error_instead_of_synthetic_success() {
+		let error = require_ack1(None, "FDA ESG", OffsetDateTime::now_utc())
+			.expect_err("missing ACK must not be accepted");
+		let message = error.to_string();
+		assert!(message.contains("missing ACK1"), "{message}");
+		assert!(!message.contains("ACK1_ACCEPTED"), "{message}");
+	}
+
+	#[test]
+	fn ack_requires_explicit_level_and_success() {
+		for response in [ack(None, Some(true)), ack(Some(1), None)] {
+			assert!(
+				require_ack1(Some(response), "AS2", OffsetDateTime::now_utc())
+					.is_err()
+			);
+		}
+	}
+
+	#[test]
+	fn explicit_successful_ack_is_preserved() {
+		let result = require_ack1(
+			Some(ack(Some(1), Some(true))),
+			"AS2",
+			OffsetDateTime::now_utc(),
+		)
+		.expect("explicit ACK1 should be accepted");
+		assert_eq!(result.level, 1);
+		assert!(result.success);
+		assert_eq!(result.code.as_deref(), Some("ACK1"));
+		assert_eq!(result.message.as_deref(), Some("accepted by gateway"));
+	}
+
+	#[test]
+	fn unsuccessful_ack_is_not_reported_as_submission_success() {
+		let error = require_ack1(
+			Some(ack(Some(1), Some(false))),
+			"FDA ESG",
+			OffsetDateTime::now_utc(),
+		)
+		.expect_err("negative ACK must not enter successful outcome type");
+		assert!(error.to_string().contains("unsuccessful ACK1"));
+	}
+
+	#[test]
+	fn mock_flag_does_not_select_a_gateway() {
+		std::env::remove_var("AS2_SUBMITTER_URL");
+		std::env::remove_var("FDA_ESG_ENABLED");
+		std::env::remove_var("FDA_ESG_BASE_URL");
+		std::env::set_var("E2BR3_ALLOW_MOCK_SUBMISSION", "1");
+		let result = select_gateway_name(SubmissionAuthority::Fda);
+		std::env::remove_var("E2BR3_ALLOW_MOCK_SUBMISSION");
+		let error = result.expect_err("mock flag must not configure a gateway");
+		assert!(error
+			.to_string()
+			.contains("no submission transport configured"));
+	}
+
+	#[test]
+	fn missing_ack_is_not_retryable() {
+		assert!(!is_retryable_submit_error(
+			"FDA ESG submit response missing ACK1; remote submission remains pending acknowledgement"
+		));
+	}
 }
 
 pub(super) struct GatewayDispatchFailure {

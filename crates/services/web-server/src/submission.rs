@@ -45,7 +45,7 @@ mod types;
 mod tests;
 
 pub use ack::{
-	apply_gateway_ack_by_remote, apply_mock_ack, get_ack_download,
+	apply_gateway_ack_by_remote, get_ack_download,
 	get_submission_dispatch_state, list_submission_events,
 };
 pub use create::{create_submission_idempotent, get_submission, list_by_case};
@@ -53,7 +53,7 @@ pub use persistence::list_submission_history;
 pub use reconcile::reconcile_due_submissions_with_runtime_status;
 pub use reconcile_runtime::get_reconcile_runtime_status;
 pub use types::{
-	GatewayAckCallbackInput, MockAckInput, SubmissionAck, SubmissionAckDownload,
+	GatewayAckCallbackInput, SubmissionAck, SubmissionAckDownload,
 	SubmissionAuthority, SubmissionDispatchStateRecord, SubmissionEventRecord,
 	SubmissionHistoryRecord, SubmissionReconcileResult,
 	SubmissionReconcileRuntimeStatus, SubmissionRecord, SubmissionStatus,

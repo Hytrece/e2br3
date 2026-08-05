@@ -121,10 +121,6 @@ pub(super) fn is_esg_enabled() -> bool {
 	env_truthy("FDA_ESG_ENABLED")
 }
 
-pub(super) fn allow_mock_submission() -> bool {
-	env_truthy("E2BR3_ALLOW_MOCK_SUBMISSION")
-}
-
 pub(super) fn as2_submitter_url() -> Option<String> {
 	std::env::var("AS2_SUBMITTER_URL").ok().and_then(|v| {
 		let trimmed = v.trim();

@@ -137,7 +137,6 @@ pub fn router() -> Router {
 		list_submission_event_history,
 		download_submission_ack_text,
 		get_submission_dispatch_state_view,
-		post_mock_ack,
 		post_gateway_ack_callback,
 		post_reconcile_due_submissions,
 		get_reconcile_status
@@ -275,7 +274,6 @@ pub fn router() -> Router {
 			SubmissionDispatchStateRecordDoc,
 			SubmissionReconcileResultDoc,
 			SubmissionReconcileRuntimeStatusDoc,
-			MockAckInputDoc,
 			GatewayAckCallbackInputDoc,
 			ReconcileRequestInputDoc,
 			CaseSubmissionListDoc,
@@ -1968,14 +1966,6 @@ struct SubmissionReconcileRuntimeStatusDoc {
 	total_succeeded: u64,
 	total_failed: u64,
 	total_skipped: u64,
-}
-
-#[derive(serde::Serialize, serde::Deserialize, ToSchema)]
-struct MockAckInputDoc {
-	level: u8,
-	success: bool,
-	code: Option<String>,
-	message: Option<String>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, ToSchema)]
@@ -3872,19 +3862,6 @@ fn download_submission_ack_text() {}
 	responses((status = 200, description = "Dispatch state view", body = SubmissionDispatchStateResponse))
 )]
 fn get_submission_dispatch_state_view() {}
-
-#[utoipa::path(
-	post,
-	path = "/api/submissions/{id}/acks/mock",
-	tag = "submissions",
-	security(
-		("auth_token" = [])
-	),
-	params(("id" = String, Path, description = "Submission ID")),
-	request_body = MockAckInputDoc,
-	responses((status = 200, description = "Mock ACK posted", body = SubmissionRecordResponse))
-)]
-fn post_mock_ack() {}
 
 #[utoipa::path(
 	post,

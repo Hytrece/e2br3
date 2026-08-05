@@ -97,7 +97,7 @@ assert_success_contract() {
 
 	local expected_psql_args="$case_dir/psql.expected"
 	while IFS= read -r sql_file; do
-		printf '%s -v ON_ERROR_STOP=1 -f %s/db/%s\n' \
+		printf '%s -v ON_ERROR_STOP=1 -v app_db_user=user -f %s/db/%s\n' \
 			"$test_url" "$repo_root" "$sql_file" >>"$expected_psql_args"
 	done < <("$repo_root/scripts/db/list_init_sql.sh" "$repo_root/db" 1)
 	diff -u "$expected_psql_args" "$case_dir/psql.args"
@@ -106,6 +106,17 @@ assert_success_contract() {
 		printf 'runner leaked database credentials\n' >&2
 		return 1
 	fi
+}
+
+assert_bootstrap_role_wiring() {
+	grep -F -- '-v "app_db_user=${APP_DB_USER}"' \
+		"$repo_root/deploy/docker/postgres-init/01-run-all.sh" >/dev/null
+	grep -F -- '-v "app_db_user=${APP_DB_USER}"' \
+		"$repo_root/.github/workflows/ci.yml" >/dev/null
+	grep -F -- 'GRANT e2br3_app_role TO :"app_db_user";' \
+		"$repo_root/db/bootstrap/01-safetydb-schema.sql" >/dev/null
+	grep -F -- 'GRANT e2br3_auditor_role TO :"app_db_user";' \
+		"$repo_root/db/bootstrap/01-safetydb-schema.sql" >/dev/null
 }
 
 assert_interrupt_forwards_signal_and_cleans_up() {
@@ -312,5 +323,6 @@ assert_interrupt_stops_database_initialization
 assert_test_failure_preserves_status_and_cleans_up
 assert_cleanup_failure_fails_successful_run
 assert_initialization_failure_preserves_status_and_cleans_up
+assert_bootstrap_role_wiring
 assert_repository_wiring
 printf 'isolated database runner contract: PASS\n'

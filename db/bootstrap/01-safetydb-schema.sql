@@ -1,3 +1,9 @@
+\if :{?app_db_user}
+\else
+\echo 'app_db_user psql variable is required'
+\quit 1
+\endif
+
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 -- Create database roles before any table grants/policies reference them.
@@ -597,6 +603,19 @@ CREATE TABLE IF NOT EXISTS case_field_notations (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE NULLS NOT DISTINCT (case_id, record_id, field_path)
+);
+
+CREATE TABLE IF NOT EXISTS case_e2b_field_notations (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    case_id UUID NOT NULL REFERENCES cases(id) ON DELETE CASCADE,
+    record_id UUID,
+    e2b_code VARCHAR(64) NOT NULL,
+    notation TEXT NOT NULL,
+    created_by UUID NOT NULL REFERENCES users(id),
+    updated_by UUID REFERENCES users(id),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE NULLS NOT DISTINCT (case_id, record_id, e2b_code)
 );
 
 CREATE TABLE IF NOT EXISTS case_validation_summaries (
