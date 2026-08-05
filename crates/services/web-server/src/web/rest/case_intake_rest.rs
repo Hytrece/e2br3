@@ -525,7 +525,7 @@ async fn create_case_from_intake_authorized(
 		&mm,
 		MessageHeaderForCreate {
 			case_id,
-			batch_transmission_date: None,
+			batch_transmission_date: Some(now),
 			message_number: format!("MSG-{case_id}"),
 			message_sender_identifier,
 			message_receiver_identifier,

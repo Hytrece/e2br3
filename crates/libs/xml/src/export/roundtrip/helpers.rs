@@ -247,13 +247,16 @@ pub(super) fn ensure_observation_event_component(
 }
 
 pub(super) fn reorder_investigation_event_children(xpath: &mut Context) {
-	if let Ok(subject_nodes) =
-		xpath.findnodes("//hl7:investigationEvent/hl7:subjectOf2", None)
-	{
-		for mut node in subject_nodes {
-			if let Some(mut parent) = node.get_parent() {
-				node.unlink_node();
-				let _ = parent.add_child(&mut node);
+	// InvestigationEvent schema order ends with outboundRelationship, subjectOf1, subjectOf2.
+	for name in ["outboundRelationship", "subjectOf1", "subjectOf2"] {
+		if let Ok(nodes) =
+			xpath.findnodes(&format!("//hl7:investigationEvent/hl7:{name}"), None)
+		{
+			for mut node in nodes {
+				if let Some(mut parent) = node.get_parent() {
+					node.unlink_node();
+					let _ = parent.add_child(&mut node);
+				}
 			}
 		}
 	}

@@ -731,6 +731,7 @@ fn write_c_1_8_2(
 				"<outboundRelationship typeCode=\"SPRT\"><relatedInvestigation classCode=\"INVSTG\" moodCode=\"EVN\"><code code=\"1\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.22\"/><subjectOf2 typeCode=\"SUBJ\"><controlActEvent classCode=\"CACT\" moodCode=\"EVN\"><author typeCode=\"AUT\"><assignedEntity classCode=\"ASSIGNED\"><code codeSystem=\"2.16.840.1.113883.3.989.2.1.1.3\"/></assignedEntity></author></controlActEvent></subjectOf2></relatedInvestigation></outboundRelationship>",
 			)?;
 		}
+		reorder_investigation_event_children(xpath);
 		set_attr_first(
 			xpath,
 			&format!("{relationship}/hl7:relatedInvestigation/hl7:subjectOf2/hl7:controlActEvent/hl7:author/hl7:assignedEntity/hl7:code"),
@@ -1040,6 +1041,47 @@ mod tests {
 				)
 				.unwrap(),
 			"1"
+		);
+	}
+
+	#[test]
+	fn c_1_8_2_relationship_precedes_existing_subject_nodes() {
+		let xml = br#"<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3"><PORR_IN049016UV><controlActProcess><subject><investigationEvent><id/><code/><text/><statusCode/><effectiveTime/><availabilityTime/><component/><subjectOf1/><subjectOf2/></investigationEvent></subject></controlActProcess></PORR_IN049016UV></MCCI_IN200100UV01>"#;
+		let parser = Parser::default();
+		let mut doc = parser.parse_string(xml).expect("parse");
+		let mut xpath = Context::new(&doc).expect("xpath");
+		xpath.register_namespace("hl7", "urn:hl7-org:v3").unwrap();
+
+		write_c_1_8_2(&mut doc, &parser, &mut xpath, Some("2")).unwrap();
+
+		let event = xpath
+			.findnodes("//hl7:investigationEvent", None)
+			.unwrap()
+			.into_iter()
+			.next()
+			.unwrap();
+		let children = event
+			.get_child_nodes()
+			.into_iter()
+			.filter(|node| {
+				node.get_type() == Some(libxml::tree::NodeType::ElementNode)
+			})
+			.map(|node| node.get_name())
+			.collect::<Vec<_>>();
+		assert_eq!(
+			children,
+			[
+				"id",
+				"code",
+				"text",
+				"statusCode",
+				"effectiveTime",
+				"availabilityTime",
+				"component",
+				"outboundRelationship",
+				"subjectOf1",
+				"subjectOf2"
+			]
 		);
 	}
 }
