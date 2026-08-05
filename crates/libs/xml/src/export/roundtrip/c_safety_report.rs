@@ -304,30 +304,9 @@ pub fn patch_c_safety_report(
 	if let Some(v) = patch.sender_org_name {
 		write_c_3_2(&mut xpath, sender_base, v);
 	}
-	if let Some(v) = patch.sender_telephone {
-		let value = if v.contains(':') {
-			v.to_string()
-		} else {
-			format!("tel:{v}")
-		};
-		write_c_3_4_6(&mut xpath, sender_base, &value);
-	}
-	if let Some(v) = patch.sender_fax {
-		let value = if v.contains(':') {
-			v.to_string()
-		} else {
-			format!("fax:{v}")
-		};
-		write_c_3_4_7(&mut xpath, sender_base, &value);
-	}
-	if let Some(v) = patch.sender_email {
-		let value = if v.contains(':') {
-			v.to_string()
-		} else {
-			format!("mailto:{v}")
-		};
-		write_c_3_4_8(&mut xpath, sender_base, &value);
-	}
+	write_c_3_4_6(&mut xpath, sender_base, patch.sender_telephone);
+	write_c_3_4_7(&mut xpath, sender_base, patch.sender_fax);
+	write_c_3_4_8(&mut xpath, sender_base, patch.sender_email);
 
 	Ok(doc.to_string())
 }
@@ -366,12 +345,7 @@ fn write_c_1_2(
 			.map(str::to_owned)
 			.or_else(|| patch.transmission_date_time.map(fmt_offset_datetime))
 			.unwrap_or_else(|| transmission_date.to_string());
-		set_attr_first(
-			xpath,
-			path,
-			"value",
-			&clamp_14_digit_datetime_not_future(&value),
-		);
+		set_attr_first(xpath, path, "value", &value);
 	}
 	Ok(())
 }
@@ -529,6 +503,12 @@ fn write_c_1_9_1(
 		None,
 	)?;
 	let path = &format!("{characteristic}/hl7:value");
+	remove_attr_first(xpath, path, "type");
+	for attr in ["code", "codeSystem", "codeSystemVersion", "displayName"] {
+		remove_attr_first(xpath, path, attr);
+	}
+	set_attr_first(xpath, path, "xsi:type", "BL");
+	remove_nodes(xpath, &format!("{path}/hl7:originalText"));
 	if let Some(value) = patch.other_case_identifiers_exist {
 		remove_attr_first(xpath, path, "nullFlavor");
 		set_attr_first(xpath, path, "value", if value { "true" } else { "false" });
@@ -782,31 +762,38 @@ fn write_c_3_4_5(xpath: &mut Context, base: &str, value: &str) {
 }
 
 /// e2b:C.3.4.6
-fn write_c_3_4_6(xpath: &mut Context, base: &str, value: &str) {
-	set_attr_first(
-		xpath,
-		&format!("{base}/hl7:telecom[starts-with(@value,'tel:')]"),
-		"value",
-		value,
-	);
+fn write_c_3_4_6(xpath: &mut Context, base: &str, value: Option<&str>) {
+	write_c_3_4_telecom(xpath, base, "tel:", value);
 }
 
 /// e2b:C.3.4.7
-fn write_c_3_4_7(xpath: &mut Context, base: &str, value: &str) {
-	set_attr_first(
-		xpath,
-		&format!("{base}/hl7:telecom[starts-with(@value,'fax:')]"),
-		"value",
-		value,
-	);
+fn write_c_3_4_7(xpath: &mut Context, base: &str, value: Option<&str>) {
+	write_c_3_4_telecom(xpath, base, "fax:", value);
 }
 
 /// e2b:C.3.4.8
-fn write_c_3_4_8(xpath: &mut Context, base: &str, value: &str) {
-	set_attr_first(
-		xpath,
-		&format!("{base}/hl7:telecom[starts-with(@value,'mailto:')]"),
-		"value",
-		value,
-	);
+fn write_c_3_4_8(xpath: &mut Context, base: &str, value: Option<&str>) {
+	write_c_3_4_telecom(xpath, base, "mailto:", value);
+}
+
+fn write_c_3_4_telecom(
+	xpath: &mut Context,
+	base: &str,
+	prefix: &str,
+	value: Option<&str>,
+) {
+	let path = format!("{base}/hl7:telecom[starts-with(@value,'{prefix}')]");
+	let value = value
+		.map(str::trim)
+		.filter(|value| !value.is_empty())
+		.and_then(|value| {
+			let body = value.strip_prefix(prefix).unwrap_or(value).trim();
+			(!body.is_empty()).then(|| format!("{prefix}{body}"))
+		});
+
+	if let Some(value) = value {
+		set_attr_first(xpath, &path, "value", &value);
+	} else {
+		remove_nodes(xpath, &path);
+	}
 }

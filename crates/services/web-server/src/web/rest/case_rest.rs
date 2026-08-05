@@ -1,11 +1,8 @@
-use crate::runtime_settings;
 use crate::web::rest::compliance::{
 	capture_e_signature, ComplianceActionInput, ESignatureInput,
 };
 use axum::extract::{Path, State};
 use axum::Json;
-use chrono::{DateTime, Utc};
-use chrono_tz::Tz;
 use lib_core::ctx::Ctx;
 use lib_core::model::authorization::CaseMutationKind;
 use lib_core::model::case::{
@@ -61,17 +58,6 @@ const REVIEW_RECEIVER_ROW_FIELDS: &[&str] = &[
 struct ReviewReceiverRequirements {
 	needs_report_due_default: bool,
 	needs_report_due_date: bool,
-}
-
-fn format_case_creation_timestamp(now: OffsetDateTime, timezone: &str) -> String {
-	let timezone = timezone
-		.parse::<Tz>()
-		.expect("runtime timezone must be a valid IANA timezone");
-	DateTime::<Utc>::from_timestamp(now.unix_timestamp(), now.nanosecond())
-		.expect("OffsetDateTime is within chrono's supported range")
-		.with_timezone(&timezone)
-		.format("%Y%m%d%H%M%S%z")
-		.to_string()
 }
 
 // -- Public helpers (used by sibling modules)
@@ -939,10 +925,11 @@ async fn create_case_authorized(
 	let data = to_internal_case_for_create(ctx, data);
 	validate_case_create_payload(&data)?;
 
-	let timezone = runtime_settings::load(ctx, mm).await?.timezone;
 	let id = CaseBmc::create(ctx, mm, data).await?;
 	let creation_timestamp =
-		format_case_creation_timestamp(OffsetDateTime::now_utc(), &timezone);
+		crate::web::rest::case_export_rest::format_message_timestamp_utc_pub(
+			OffsetDateTime::now_utc(),
+		);
 	SafetyReportIdentificationBmc::create(
 		ctx,
 		mm,
@@ -1601,20 +1588,4 @@ async fn list_case_link_options_authorized(
 			data: CaseLinkOptionList { items: scoped },
 		}),
 	))
-}
-
-#[cfg(test)]
-mod tests {
-	use super::*;
-
-	#[test]
-	fn case_creation_timestamp_uses_timezone_offset_at_that_instant() {
-		let winter = OffsetDateTime::from_unix_timestamp(1_767_268_800).unwrap();
-		let summer = OffsetDateTime::from_unix_timestamp(1_783_249_200).unwrap();
-
-		assert!(format_case_creation_timestamp(winter, "Europe/Berlin")
-			.ends_with("+0100"));
-		assert!(format_case_creation_timestamp(summer, "Europe/Berlin")
-			.ends_with("+0200"));
-	}
 }

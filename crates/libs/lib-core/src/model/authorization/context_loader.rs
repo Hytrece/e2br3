@@ -52,6 +52,7 @@ pub enum CaseMutationKind {
 	Delete,
 	Validate,
 	Submission,
+	SubmissionReceiver,
 	ChildEdit,
 	WorkflowTransition,
 }
@@ -952,6 +953,9 @@ fn case_lifecycle_allows(facts: &CaseFacts, kind: CaseMutationKind) -> bool {
 		}
 		CaseMutationKind::Submission => {
 			!matches!(status.as_str(), "locked" | "deleted" | "archived")
+		}
+		CaseMutationKind::SubmissionReceiver => {
+			matches!(status.as_str(), "reviewed" | "validated" | "locked")
 		}
 		CaseMutationKind::WorkflowTransition => status != "locked",
 	}

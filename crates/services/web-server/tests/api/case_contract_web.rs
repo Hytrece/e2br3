@@ -14,14 +14,15 @@ use tower::ServiceExt;
 use uuid::Uuid;
 
 fn format_e2b_creation_timestamp(value: OffsetDateTime) -> String {
-	chrono::DateTime::<chrono::Utc>::from_timestamp(
-		value.unix_timestamp(),
-		value.nanosecond(),
+	format!(
+		"{:04}{:02}{:02}{:02}{:02}{:02}",
+		value.year(),
+		value.month() as u8,
+		value.day(),
+		value.hour(),
+		value.minute(),
+		value.second()
 	)
-	.unwrap()
-	.with_timezone(&chrono_tz::Asia::Seoul)
-	.format("%Y%m%d%H%M%S%z")
-	.to_string()
 }
 
 fn parse_json_body(body: &[u8]) -> Result<Value> {
@@ -214,7 +215,7 @@ async fn create_case_defaults_c1_2_to_backend_creation_timestamp() -> Result<()>
 		.await?;
 	mm.dbx().commit_txn().await?;
 
-	assert_eq!(transmission_date.len(), 19);
+	assert_eq!(transmission_date.len(), 14);
 	assert!(
 		transmission_date >= lower_bound && transmission_date <= upper_bound,
 		"transmission_date {transmission_date} not within {lower_bound}..={upper_bound}"

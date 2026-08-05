@@ -171,6 +171,41 @@ async fn newly_added_pairs_persist_either_member_and_reject_both() -> Result<()>
 	assert_eq!(status, StatusCode::CREATED, "{body}");
 	let drug_id = body["data"]["id"].as_str().ok_or("missing drug id")?;
 	let dg_uri = format!("/api/cases/{case_id}/editor/pages/DG/rows/{drug_id}");
+
+	let (status, body) = post_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/reactions"),
+		json!({
+			"data": {
+				"case_id": case_id,
+				"sequence_number": 1,
+				"primary_source_reaction": "Assessment reaction"
+			}
+		}),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::CREATED, "{body}");
+	let reaction_id = body["data"]["id"].as_str().ok_or("missing reaction id")?;
+
+	let (status, body) = patch_json(
+		&app,
+		&cookie,
+		&dg_uri,
+		json!({
+			"authorities": ["ich"],
+			"rows": {
+				"drug": {
+					"drugReactionAssessments": [{
+						"reactionId": reaction_id,
+						"dechallengeResult": "1"
+					}]
+				}
+			}
+		}),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK, "{body}");
 	let (status, body) = patch_json(
 		&app,
 		&cookie,
@@ -238,6 +273,29 @@ async fn newly_added_pairs_persist_either_member_and_reject_both() -> Result<()>
 		ROLE_SPONSOR_ADMIN_CRO,
 	)
 	.await?;
+	mm.dbx().commit_txn().await?;
+
+	mm.dbx().begin_txn().await?;
+	set_full_context_dbx(
+		mm.dbx(),
+		seed.admin.id,
+		seed.org_id,
+		ROLE_SPONSOR_ADMIN_CRO,
+	)
+	.await?;
+	let (stored_dechallenge,): (Option<String>,) = mm
+		.dbx()
+		.fetch_one(
+			sqlx::query_as(
+				"SELECT dechallenge_result
+				 FROM drug_reaction_assessments
+				 WHERE drug_id = $1 AND reaction_id = $2",
+			)
+			.bind(Uuid::parse_str(drug_id)?)
+			.bind(Uuid::parse_str(reaction_id)?),
+		)
+		.await?;
+	assert_eq!(stored_dechallenge.as_deref(), Some("1"));
 	mm.dbx().commit_txn().await?;
 	Ok(())
 }

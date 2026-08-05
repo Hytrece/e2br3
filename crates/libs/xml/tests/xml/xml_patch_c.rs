@@ -79,6 +79,224 @@ fn patch_c_section_updates_values() {
 	assert_eq!(worldwide_id, "WW-TEST-999");
 }
 
+fn sender_patch<'a>(
+	telephone: Option<&'a str>,
+	fax: Option<&'a str>,
+	email: Option<&'a str>,
+) -> CSafetyReportPatch<'a> {
+	CSafetyReportPatch {
+		report_unique_id: "SENDER-TEST",
+		transmission_date: None,
+		transmission_date_value: None,
+		transmission_date_time: None,
+		report_type: "1",
+		date_first_received: None,
+		date_most_recent: None,
+		fulfil_expedited: false,
+		additional_documents_available: None,
+		other_case_identifiers_exist: None,
+		other_case_identifiers_exist_null_flavor: None,
+		worldwide_unique_id: None,
+		first_sender_type: None,
+		local_criteria_report_type: None,
+		combination_product_indicator: None,
+		combination_product_indicator_null_flavor: None,
+		nullification_code: None,
+		nullification_reason: None,
+		sender_type: None,
+		sender_health_professional_type_kr1: None,
+		sender_org_name: None,
+		sender_department: None,
+		sender_street_address: None,
+		sender_city: None,
+		sender_state: None,
+		sender_postcode: None,
+		sender_country_code: None,
+		sender_person_title: None,
+		sender_person_given_name: None,
+		sender_person_middle_name: None,
+		sender_person_family_name: None,
+		sender_telephone: telephone,
+		sender_fax: fax,
+		sender_email: email,
+	}
+}
+
+#[test]
+fn patch_c_sender_telecoms_omit_empty_uris_and_export_populated_values() {
+	let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+		.parent()
+		.and_then(|p| p.parent())
+		.and_then(|p| p.parent())
+		.expect("workspace root")
+		.to_path_buf();
+	let skeleton = std::fs::read(
+		root.join("crates/libs/xml/src/fixtures/base_export_skeleton.xml"),
+	)
+	.expect("read export skeleton");
+	let parser = Parser::default();
+
+	let empty = patch_c_safety_report(&skeleton, &sender_patch(None, None, None))
+		.expect("patch empty sender telecoms");
+	let empty_doc = parser.parse_string(&empty).expect("parse empty sender XML");
+	let mut empty_xpath = Context::new(&empty_doc).expect("empty xpath");
+	empty_xpath
+		.register_namespace("hl7", "urn:hl7-org:v3")
+		.unwrap();
+	for prefix in ["tel:", "fax:", "mailto:"] {
+		assert_eq!(
+			empty_xpath
+				.findvalue(
+					&format!(
+						"count(//hl7:investigationEvent/hl7:subjectOf1//hl7:telecom[@value='{prefix}'])"
+					),
+					None,
+				)
+				.unwrap(),
+			"0",
+		);
+	}
+
+	let populated = patch_c_safety_report(
+		&skeleton,
+		&sender_patch(
+			Some("+82-2-5555-0102"),
+			Some("fax:+82-2-5555-0103"),
+			Some("pv@qvis-safety.example"),
+		),
+	)
+	.expect("patch populated sender telecoms");
+	let populated_doc = parser
+		.parse_string(&populated)
+		.expect("parse populated sender XML");
+	let mut populated_xpath = Context::new(&populated_doc).expect("populated xpath");
+	populated_xpath
+		.register_namespace("hl7", "urn:hl7-org:v3")
+		.unwrap();
+	assert_eq!(
+		populated_xpath
+			.findvalue(
+				"//hl7:investigationEvent/hl7:subjectOf1//hl7:telecom[starts-with(@value,'tel:')]/@value",
+				None,
+			)
+			.unwrap(),
+		"tel:+82-2-5555-0102"
+	);
+	assert_eq!(
+		populated_xpath
+			.findvalue(
+				"//hl7:investigationEvent/hl7:subjectOf1//hl7:telecom[starts-with(@value,'fax:')]/@value",
+				None,
+			)
+			.unwrap(),
+		"fax:+82-2-5555-0103"
+	);
+	assert_eq!(
+		populated_xpath
+			.findvalue(
+				"//hl7:investigationEvent/hl7:subjectOf1//hl7:telecom[starts-with(@value,'mailto:')]/@value",
+				None,
+			)
+			.unwrap(),
+		"mailto:pv@qvis-safety.example"
+	);
+}
+
+#[test]
+fn patch_c_1_9_1_exports_boolean_value_without_ce_children() {
+	let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+		.parent()
+		.and_then(|p| p.parent())
+		.and_then(|p| p.parent())
+		.expect("workspace root")
+		.to_path_buf();
+	let xml = std::fs::read_to_string(root.join("docs/exporter/fda/FAERS2022Scenario1.xml"))
+		.expect("read sample xml")
+		.replace(
+			r#"<value xsi:type="BL" nullFlavor="NI"/>"#,
+			r#"<value xsi:type="CE" code="legacy"><originalText>legacy</originalText></value>"#,
+		);
+	let patch = CSafetyReportPatch {
+		report_unique_id: "FAERS2022Scenario1",
+		transmission_date: None,
+		transmission_date_value: None,
+		transmission_date_time: None,
+		report_type: "1",
+		date_first_received: None,
+		date_most_recent: None,
+		fulfil_expedited: true,
+		additional_documents_available: None,
+		other_case_identifiers_exist: Some(true),
+		other_case_identifiers_exist_null_flavor: None,
+		worldwide_unique_id: None,
+		first_sender_type: None,
+		local_criteria_report_type: None,
+		combination_product_indicator: None,
+		combination_product_indicator_null_flavor: None,
+		nullification_code: None,
+		nullification_reason: None,
+		sender_type: None,
+		sender_health_professional_type_kr1: None,
+		sender_org_name: None,
+		sender_department: None,
+		sender_street_address: None,
+		sender_city: None,
+		sender_state: None,
+		sender_postcode: None,
+		sender_country_code: None,
+		sender_person_title: None,
+		sender_person_given_name: None,
+		sender_person_middle_name: None,
+		sender_person_family_name: None,
+		sender_telephone: None,
+		sender_fax: None,
+		sender_email: None,
+	};
+
+	let patched = patch_c_safety_report(xml.as_bytes(), &patch).expect("patch xml");
+	let parser = Parser::default();
+	let doc = parser.parse_string(&patched).expect("parse patched");
+	let mut xpath = Context::new(&doc).expect("xpath");
+	xpath.register_namespace("hl7", "urn:hl7-org:v3").unwrap();
+	xpath
+		.register_namespace("xsi", "http://www.w3.org/2001/XMLSchema-instance")
+		.unwrap();
+
+	let value_path = "//hl7:investigationCharacteristic[hl7:code[@code='2' and @codeSystem='2.16.840.1.113883.3.989.2.1.1.23']]/hl7:value";
+	assert_eq!(
+		xpath
+			.findvalue(&format!("{value_path}/@xsi:type"), None)
+			.unwrap(),
+		"BL"
+	);
+	assert_eq!(
+		xpath
+			.findvalue(&format!("{value_path}/@value"), None)
+			.unwrap(),
+		"true"
+	);
+	assert_eq!(
+		xpath
+			.findvalue(&format!("count({value_path}/hl7:originalText)"), None)
+			.unwrap(),
+		"0"
+	);
+	assert_eq!(
+		xpath
+			.findvalue(
+				&format!("count({value_path}/@code | {value_path}/@codeSystem | {value_path}/@nullFlavor)"),
+				None,
+			)
+			.unwrap(),
+		"0"
+	);
+	assert!(
+		xml::validate_e2b_xml_basic(patched.as_bytes(), None)
+			.expect("validate XML")
+			.ok
+	);
+}
+
 #[test]
 fn patch_c_prefers_transmission_date_value_for_c1_2() {
 	let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))

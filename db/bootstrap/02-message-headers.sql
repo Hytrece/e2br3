@@ -6,16 +6,16 @@ CREATE TABLE if NOT EXISTS message_headers (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     case_id UUID NOT NULL REFERENCES cases(id) ON DELETE CASCADE,
 
-    -- N.1.1 - Batch Number
+    -- N.1.2 - Message Number (batch identifier)
     batch_number VARCHAR(100),
 
-    -- N.1.2 - Batch Sender Identifier
+    -- N.1.3 - Batch Sender Identifier
     batch_sender_identifier VARCHAR(60),
 
-    -- N.1.3 - Batch Receiver Identifier
+    -- N.1.4 - Batch Receiver Identifier
     batch_receiver_identifier VARCHAR(60),
 
-    -- N.1.4 - Date of Batch Transmission
+    -- N.1.5 - Date of Batch Transmission
     batch_transmission_date TIMESTAMPTZ,
 
     -- Message identification

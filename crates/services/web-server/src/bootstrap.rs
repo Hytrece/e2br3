@@ -23,10 +23,53 @@ const DEMO_CRO_ADMIN_EMAIL: &str = "demo.cro.admin@example.com";
 const DEMO_CRO_ADMIN_USERNAME: &str = "demo_cro_admin";
 const DEMO_COMPANY_ADMIN_EMAIL: &str = "demo.company.admin@example.com";
 const DEMO_COMPANY_ADMIN_USERNAME: &str = "demo_company_admin";
+const DEFAULT_ADMIN_SETTINGS_JSON: &str = r#"{
+    "timezone": "Asia/Seoul",
+    "meddra_language": "English",
+    "meddra_version": "26.0",
+    "idf_version": "3.0",
+    "orientation": "Landscape",
+    "data_ordering": "Primary data will appear first",
+    "upload_excel_template_without_element_label": false,
+    "notation": false,
+    "apply_comments_on_exported_xml": false,
+    "apply_sender_info_to_imported_cases": false,
+    "import_date_update": {
+        "date_of_creation": false,
+        "most_recent_info_date": false,
+        "report_first_received_date": false
+    },
+    "appendices": ["ICH"],
+    "case_number_setting": "AE Row No.",
+    "case_number_identifier": "ICSR",
+    "case_number_padding": 6,
+    "case_number_sequence_condition": "Per sender",
+    "case_number_format_fields": ["AE Row No."],
+    "workflow_enabled": false,
+    "workflow": {
+        "statuses": [{
+            "name": "Saved",
+            "editable": true,
+            "description": "Default state",
+            "due_days": 0,
+            "allowed_roles": ["sponsor_admin_cro"]
+        }]
+    },
+    "idle_session_minutes": 60,
+    "session_warning_minutes": 5
+}"#;
 
 pub async fn bootstrap_admin_user(mm: &ModelManager) -> Result<()> {
 	let root_ctx = Ctx::root_ctx();
 	migrate_legacy_demo_user(mm).await?;
+	sync_org(
+		mm,
+		Uuid::parse_str(SYSTEM_ORG_ID).expect("invalid system org id"),
+		"System",
+		"Internal",
+		"system@e2br3.local",
+	)
+	.await?;
 	let cro_org_id = Uuid::parse_str(DEMO_CRO_ORG_ID).expect("invalid CRO org id");
 	let company_org_id =
 		Uuid::parse_str(DEMO_COMPANY_ORG_ID).expect("invalid company org id");
@@ -203,26 +246,36 @@ async fn sync_org(
 		.execute(
 			query(
 				r#"
-				INSERT INTO organizations (
-					id, name, org_type, country_code, contact_email, active,
-					created_by, created_at, updated_by, updated_at
-				) VALUES (
-					$1, $2, $3, 'KR', $4, true, $5, NOW(), $5, NOW()
+				WITH synced_org AS (
+					INSERT INTO organizations (
+						id, name, org_type, country_code, contact_email, active,
+						created_by, created_at, updated_by, updated_at
+					) VALUES (
+						$1, $2, $3, 'KR', $4, true, $5, NOW(), $5, NOW()
+					)
+					ON CONFLICT (id) DO UPDATE
+					SET name = EXCLUDED.name,
+						org_type = EXCLUDED.org_type,
+						contact_email = EXCLUDED.contact_email,
+						active = true,
+						updated_by = EXCLUDED.updated_by,
+						updated_at = NOW()
+					RETURNING id
 				)
-				ON CONFLICT (id) DO UPDATE
-				SET name = EXCLUDED.name,
-					org_type = EXCLUDED.org_type,
-					contact_email = EXCLUDED.contact_email,
-					active = true,
-					updated_by = EXCLUDED.updated_by,
-					updated_at = NOW()
+				INSERT INTO app_settings (
+					organization_id, key, value, updated_by
+				)
+				SELECT id, 'system', $6::jsonb, $5
+				FROM synced_org
+				ON CONFLICT (organization_id, key) DO NOTHING
 				"#,
 			)
 			.bind(org_id)
 			.bind(name)
 			.bind(org_type)
 			.bind(contact_email)
-			.bind(root_ctx.user_id()),
+			.bind(root_ctx.user_id())
+			.bind(DEFAULT_ADMIN_SETTINGS_JSON),
 		)
 		.await;
 	match result {
@@ -534,6 +587,43 @@ mod tests {
 				Uuid::parse_str(DEMO_CRO_ORG_ID).expect("invalid CRO org id"),
 				"Demo Sender Organization".to_string(),
 			))
+		);
+
+		mm.dbx().begin_txn().await.expect("begin settings query");
+		set_full_context_dbx(
+			mm.dbx(),
+			root_ctx.user_id(),
+			root_ctx.organization_id(),
+			root_ctx.role(),
+		)
+		.await
+		.expect("set settings query context");
+		let settings = mm
+			.dbx()
+			.fetch_all(
+				sqlx::query_as::<_, (Uuid,)>(
+					r#"
+				SELECT organization_id
+				FROM app_settings
+				WHERE key = 'system'
+				  AND organization_id IN ($1, $2, $3)
+				ORDER BY organization_id
+				"#,
+				)
+				.bind(Uuid::parse_str(SYSTEM_ORG_ID).expect("invalid system org id"))
+				.bind(Uuid::parse_str(DEMO_CRO_ORG_ID).expect("invalid CRO org id"))
+				.bind(
+					Uuid::parse_str(DEMO_COMPANY_ORG_ID)
+						.expect("invalid company org id"),
+				),
+			)
+			.await
+			.expect("query bootstrapped settings");
+		mm.dbx().commit_txn().await.expect("commit settings query");
+		assert_eq!(
+			settings.len(),
+			3,
+			"all bootstrap organizations need settings"
 		);
 	}
 }

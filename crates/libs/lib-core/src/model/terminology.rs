@@ -414,12 +414,11 @@ impl DbBmc for UcumUnitBmc {
 
 impl UcumUnitBmc {
 	pub async fn list_all(_ctx: &Ctx, mm: &ModelManager) -> Result<Vec<UcumUnit>> {
-		let sql = "SELECT row_number() OVER (ORDER BY scope, code)::int AS id,
-			code, coalesce(display_name, code) AS display_name,
-			NULL::text AS description, scope AS unit_type, active
-			FROM controlled_terminology_terms
-			WHERE dictionary = 'ich_constrained_ucum' AND active = true
-			ORDER BY scope, code";
+		let sql = format!(
+			"SELECT id, code, display_name, description, unit_type, active FROM {} \
+			 WHERE active = true ORDER BY unit_type NULLS LAST, code",
+			Self::TABLE
+		);
 		let units = mm
 			.dbx()
 			.fetch_all(sqlx::query_as::<_, UcumUnit>(&sql))

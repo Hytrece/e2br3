@@ -203,17 +203,6 @@ async fn test_terminology_queries() -> Result<()> {
 		return Err(err.into());
 	}
 
-	dbx.execute(sqlx::query(
-		"INSERT INTO controlled_terminology_terms
-		 (dictionary, version, language, scope, code, display_name, active)
-		 VALUES
-		 ('ich_constrained_ucum', 'test', 'en', 'unit', 'mg/dL', 'mg/dL', true),
-		 ('ich_constrained_ucum', 'test', 'en', 'unit', 'U/L', 'U/L', true),
-		 ('ich_constrained_ucum', 'test', 'en', 'unit', 'mmol/L', 'mmol/L', true)
-		 ON CONFLICT DO NOTHING",
-	))
-	.await?;
-
 	if let Err(err) = dbx
 		.execute(
 			sqlx::query(
@@ -279,9 +268,17 @@ async fn test_terminology_queries() -> Result<()> {
 	assert!(!report_types.is_empty());
 
 	let ucum_units = UcumUnitBmc::list_all(&ctx, &mm).await?;
-	assert!(ucum_units.iter().any(|u| u.code == "mg/dL"));
-	assert!(ucum_units.iter().any(|u| u.code == "U/L"));
-	assert!(ucum_units.iter().any(|u| u.code == "mmol/L"));
+	assert!(ucum_units.len() >= 31);
+	assert!(ucum_units.iter().any(|u| {
+		u.code == "ug"
+			&& u.display_name == "microgram"
+			&& u.unit_type.as_deref() == Some("mass")
+	}));
+	assert!(ucum_units.iter().any(|u| {
+		u.code == "[IU]"
+			&& u.display_name == "international unit"
+			&& u.unit_type.as_deref() == Some("dose")
+	}));
 
 	dbx.rollback_txn().await?;
 

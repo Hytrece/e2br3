@@ -263,7 +263,7 @@ pub async fn apply_submission_receiver_selection(
 	let ctx = ctx_w.0;
 	lib_rest_core::with_authorized_case_mutation(
 		&ctx, &snapshot, &mm, case_id, "submission.execute",
-		CaseMutationKind::Edit,
+		CaseMutationKind::SubmissionReceiver,
 		move |ctx, mm| Box::pin(async move {
 	let ParamsForUpdate { data } = params;
 

@@ -133,9 +133,7 @@ fn write_n_1_5(
 ) {
 	let value = batch_transmission_date
 		.map(fmt_datetime)
-		.unwrap_or_else(|| {
-			crate::export_utils::clamp_14_digit_datetime_not_future(message_date)
-		});
+		.unwrap_or_else(|| message_date.to_string());
 	set_attr_first(
 		xpath,
 		"/hl7:MCCI_IN200100UV01/hl7:creationTime",
@@ -176,19 +174,17 @@ fn write_n_2_r_3(xpath: &mut Context, message_receiver: &str) {
 
 /// e2b:N.2.r.4
 fn write_n_2_r_4(xpath: &mut Context, message_date: &str) {
-	let safe_message_date =
-		crate::export_utils::clamp_14_digit_datetime_not_future(message_date);
 	set_attr_first(
 		xpath,
 		"/hl7:MCCI_IN200100UV01/hl7:PORR_IN049016UV/hl7:creationTime",
 		"value",
-		&safe_message_date,
+		message_date,
 	);
 	set_attr_first(
 		xpath,
 		"/hl7:MCCI_IN200100UV01/hl7:PORR_IN049016UV/hl7:controlActProcess/hl7:effectiveTime",
 		"value",
-		&safe_message_date,
+		message_date,
 	);
 }
 

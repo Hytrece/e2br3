@@ -17,16 +17,16 @@ pub struct MessageHeader {
 	pub id: Uuid,
 	pub case_id: Uuid,
 
-	// N.1.1 - Batch Number
+	// N.1.2 - Message Number (batch identifier)
 	pub batch_number: Option<String>,
 
-	// N.1.2 - Batch Sender Identifier
+	// N.1.3 - Batch Sender Identifier
 	pub batch_sender_identifier: Option<String>,
 
-	// N.1.3 - Batch Receiver Identifier (Phase 1 addition)
+	// N.1.4 - Batch Receiver Identifier (Phase 1 addition)
 	pub batch_receiver_identifier: Option<String>,
 
-	// N.1.4 - Date of Batch Transmission (Phase 1 addition)
+	// N.1.5 - Date of Batch Transmission (Phase 1 addition)
 	pub batch_transmission_date: Option<OffsetDateTime>,
 
 	// Message identification
@@ -90,8 +90,8 @@ impl MessageHeaderBmc {
 		.await?;
 
 		let sql = format!(
-			"INSERT INTO {} (case_id, message_type, message_format_version, message_format_release, message_date_format, message_number, message_sender_identifier, message_receiver_identifier, message_date, created_at, updated_at, created_by)
-			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, now(), now(), $10)
+			"INSERT INTO {} (case_id, batch_number, message_type, message_format_version, message_format_release, message_date_format, message_number, message_sender_identifier, message_receiver_identifier, message_date, created_at, updated_at, created_by)
+			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, now(), now(), $11)
 			 RETURNING id",
 			Self::TABLE
 		);
@@ -100,6 +100,7 @@ impl MessageHeaderBmc {
 			.fetch_one(
 				sqlx::query_as::<_, (Uuid,)>(&sql)
 					.bind(data.case_id)
+					.bind(format!("BATCH-{}", data.case_id))
 					.bind("ichicsr")
 					.bind("2.1")
 					.bind("2.0")

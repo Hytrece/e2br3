@@ -651,6 +651,63 @@ async fn test_submission_requires_case_validated_status() -> Result<()> {
 
 #[serial]
 #[tokio::test]
+async fn test_manual_export_statuses_follow_workflow_eligibility() -> Result<()> {
+	clear_esg_env();
+	std::env::set_var("E2BR3_EXPORT_VALIDATE_FDA", "0");
+	let mm = init_test_mm().await?;
+	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
+	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
+	let cookie = cookie_header(&token.to_string());
+	let app = web_server::app(mm.clone());
+
+	for status in ["draft", "reviewed", "locked"] {
+		let case_id = create_case(&app, &cookie, seed.org_id).await?;
+		create_patient(&app, &cookie, case_id).await?;
+		create_narrative(&app, &cookie, case_id).await?;
+		mm.dbx().begin_txn().await?;
+		set_full_context_dbx(
+			mm.dbx(),
+			seed.admin.id,
+			seed.org_id,
+			ROLE_SPONSOR_ADMIN_CRO,
+		)
+		.await?;
+		mm.dbx()
+			.execute(
+				sqlx::query("UPDATE cases SET status = $1 WHERE id = $2")
+					.bind(status)
+					.bind(case_id),
+			)
+			.await?;
+		mm.dbx().commit_txn().await?;
+
+		let req = Request::builder()
+			.method("GET")
+			.uri(format!("/api/cases/{case_id}/export/xml?authority=fda"))
+			.header("cookie", &cookie)
+			.body(Body::empty())?;
+		let res = app.clone().oneshot(req).await?;
+		let response_status = res.status();
+		let body = to_bytes(res.into_body(), usize::MAX).await?;
+
+		if status == "draft" {
+			assert_eq!(response_status, StatusCode::BAD_REQUEST);
+			assert!(String::from_utf8_lossy(&body).contains("Only validated cases"));
+		} else {
+			assert_eq!(
+				response_status,
+				StatusCode::OK,
+				"status={status} body={}",
+				String::from_utf8_lossy(&body)
+			);
+		}
+	}
+
+	Ok(())
+}
+
+#[serial]
+#[tokio::test]
 async fn test_submission_ack_out_of_order_does_not_regress_status() -> Result<()> {
 	clear_esg_env();
 	std::env::set_var("E2BR3_ALLOW_MOCK_SUBMISSION", "1");
@@ -953,54 +1010,89 @@ async fn test_submission_receiver_selection_updates_message_header_n_identifiers
 	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
 	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
 	let cookie = cookie_header(&token.to_string());
-	let app = web_server::app(mm);
+	let app = web_server::app(mm.clone());
 
-	let case_id = create_case(&app, &cookie, seed.org_id).await?;
-	create_message_header(&app, &cookie, case_id).await?;
+	for lifecycle in ["draft", "reviewed", "validated", "locked"] {
+		let case_id = create_case(&app, &cookie, seed.org_id).await?;
+		create_message_header(&app, &cookie, case_id).await?;
 
-	let (status, body) = put_json(
-		&app,
-		&cookie,
-		&format!("/api/cases/{case_id}/submission-receiver"),
-		json!({
-			"data": {
-				"authority": "mfds",
-				"receiver_label": "MFDS(KR)",
-				"batch_receiver_identifier": "MFDS-O-KR",
-				"message_receiver_identifier": "MFDS-O-KR"
-			}
-		}),
-	)
-	.await?;
-	assert_eq!(status, StatusCode::OK, "{body:?}");
-	assert_eq!(
-		body["data"]["batch_receiver_identifier"].as_str(),
-		Some("MFDS-O-KR"),
-		"{body:?}"
-	);
-	assert_eq!(
-		body["data"]["message_receiver_identifier"].as_str(),
-		Some("MFDS-O-KR"),
-		"{body:?}"
-	);
+		mm.dbx().begin_txn().await?;
+		set_full_context_dbx(
+			mm.dbx(),
+			seed.admin.id,
+			seed.org_id,
+			ROLE_SPONSOR_ADMIN_CRO,
+		)
+		.await?;
+		mm.dbx()
+			.execute(
+				sqlx::query("UPDATE cases SET status = $1 WHERE id = $2")
+					.bind(lifecycle)
+					.bind(case_id),
+			)
+			.await?;
+		mm.dbx().commit_txn().await?;
 
-	let (header_status, header) = get_json(
-		&app,
-		&cookie,
-		&format!("/api/cases/{case_id}/message-header"),
-	)
-	.await?;
-	assert_eq!(header_status, StatusCode::OK, "{header:?}");
-	assert_eq!(
-		header["data"]["batch_receiver_identifier"].as_str(),
-		Some("MFDS-O-KR"),
-		"{header:?}"
-	);
-	assert_eq!(
-		header["data"]["message_receiver_identifier"].as_str(),
-		Some("MFDS-O-KR"),
-		"{header:?}"
-	);
+		let (response_status, body) = put_json(
+			&app,
+			&cookie,
+			&format!("/api/cases/{case_id}/submission-receiver"),
+			json!({
+				"data": {
+					"authority": "mfds",
+					"receiver_label": "MFDS(KR)",
+					"batch_receiver_identifier": "MFDS-O-KR",
+					"message_receiver_identifier": "MFDS-O-KR"
+				}
+			}),
+		)
+		.await?;
+
+		if lifecycle == "draft" {
+			assert_eq!(response_status, StatusCode::FORBIDDEN, "{body:?}");
+			continue;
+		}
+
+		assert_eq!(response_status, StatusCode::OK, "{body:?}");
+		assert_eq!(
+			body["data"]["batch_receiver_identifier"].as_str(),
+			Some("MFDS-O-KR"),
+			"{body:?}"
+		);
+		assert_eq!(
+			body["data"]["message_receiver_identifier"].as_str(),
+			Some("MFDS-O-KR"),
+			"{body:?}"
+		);
+
+		let (header_status, header) = get_json(
+			&app,
+			&cookie,
+			&format!("/api/cases/{case_id}/message-header"),
+		)
+		.await?;
+		assert_eq!(header_status, StatusCode::OK, "{header:?}");
+		assert_eq!(
+			header["data"]["message_number"].as_str(),
+			Some(format!("US-SENDER-{}", case_id.simple()).as_str())
+		);
+		assert_eq!(
+			header["data"]["message_sender_identifier"].as_str(),
+			Some("SENDER01")
+		);
+		assert_eq!(
+			header["data"]["batch_number"].as_str(),
+			Some(format!("BATCH-{case_id}").as_str())
+		);
+		assert_eq!(
+			header["data"]["batch_sender_identifier"].as_str(),
+			Some("BATCH-SENDER")
+		);
+		assert_eq!(
+			header["data"]["message_date"].as_str(),
+			Some("20241001000000")
+		);
+	}
 
 	Ok(())
 }

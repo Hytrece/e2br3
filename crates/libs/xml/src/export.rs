@@ -57,11 +57,13 @@ pub async fn export_case_xml_with_options(
 				));
 			}
 		}
-		return Err(Error::InvalidXml {
-			message: "Only validated cases can be exported".to_string(),
-			line: None,
-			column: None,
-		});
+		if !matches!(case.status.as_str(), "reviewed" | "locked") {
+			return Err(Error::InvalidXml {
+				message: "Only validated cases can be exported".to_string(),
+				line: None,
+				column: None,
+			});
+		}
 	}
 
 	serialize_case_xml_for_authority(ctx, mm, case_id, options.authority)
