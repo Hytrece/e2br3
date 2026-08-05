@@ -1448,6 +1448,15 @@ async fn apply_si_page_rows_patch(
 			let id = uuid_field(registration, &["id"]);
 			if bool_field(registration, &["deleted"]) == Some(true) {
 				if let Some(id) = id {
+					let existing =
+						StudyRegistrationNumberBmc::get(ctx, mm, id).await?;
+					if existing.study_information_id != study_id {
+						return Err(lib_core::model::Error::EntityUuidNotFound {
+							entity: "study_registration_numbers",
+							id,
+						}
+						.into());
+					}
 					StudyRegistrationNumberBmc::delete(ctx, mm, id).await?;
 				}
 				continue;
@@ -1469,6 +1478,14 @@ async fn apply_si_page_rows_patch(
 				sequence_number: i32_field(registration, &["sequenceNumber"]),
 			};
 			if let Some(id) = id {
+				let existing = StudyRegistrationNumberBmc::get(ctx, mm, id).await?;
+				if existing.study_information_id != study_id {
+					return Err(lib_core::model::Error::EntityUuidNotFound {
+						entity: "study_registration_numbers",
+						id,
+					}
+					.into());
+				}
 				StudyRegistrationNumberBmc::update(ctx, mm, id, update).await?;
 			} else if let Some(registration_number) = update.registration_number {
 				StudyRegistrationNumberBmc::create(
@@ -1509,6 +1526,17 @@ async fn apply_si_page_rows_patch(
 				let id = uuid_field(number, &["id"]);
 				if bool_field(number, &["deleted"]) == Some(true) {
 					if let Some(id) = id {
+						let existing =
+							StudyFdaCrossReportedIndBmc::get(ctx, mm, id).await?;
+						if existing.study_information_id != study_id {
+							return Err(
+								lib_core::model::Error::EntityUuidNotFound {
+									entity: "study_fda_cross_reported_inds",
+									id,
+								}
+								.into(),
+							);
+						}
 						StudyFdaCrossReportedIndBmc::delete(ctx, mm, id).await?;
 					}
 					continue;
@@ -1522,6 +1550,15 @@ async fn apply_si_page_rows_patch(
 					sequence_number: i32_field(number, &["sequenceNumber"]),
 				};
 				if let Some(id) = id {
+					let existing =
+						StudyFdaCrossReportedIndBmc::get(ctx, mm, id).await?;
+					if existing.study_information_id != study_id {
+						return Err(lib_core::model::Error::EntityUuidNotFound {
+							entity: "study_fda_cross_reported_inds",
+							id,
+						}
+						.into());
+					}
 					StudyFdaCrossReportedIndBmc::update(ctx, mm, id, update).await?;
 				} else {
 					StudyFdaCrossReportedIndBmc::create(

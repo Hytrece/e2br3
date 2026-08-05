@@ -1370,10 +1370,12 @@ impl StudyRegistrationNumberBmc {
 		list_options: Option<ListOptions>,
 	) -> Result<Vec<StudyRegistrationNumber>> {
 		let mut filters = filters.unwrap_or_default();
-		filters.push(StudyRegistrationNumberFilter {
-			deleted: Some(OpValBool::Eq(false).into()),
-			..Default::default()
-		});
+		if filters.is_empty() {
+			filters.push(StudyRegistrationNumberFilter::default());
+		}
+		for filter in &mut filters {
+			filter.deleted = Some(OpValBool::Eq(false).into());
+		}
 		base_uuid::list::<Self, _, _>(ctx, mm, Some(filters), list_options).await
 	}
 
@@ -1424,10 +1426,12 @@ impl StudyFdaCrossReportedIndBmc {
 		list_options: Option<ListOptions>,
 	) -> Result<Vec<StudyFdaCrossReportedInd>> {
 		let mut filters = filters.unwrap_or_default();
-		filters.push(StudyFdaCrossReportedIndFilter {
-			deleted: Some(OpValBool::Eq(false).into()),
-			..Default::default()
-		});
+		if filters.is_empty() {
+			filters.push(StudyFdaCrossReportedIndFilter::default());
+		}
+		for filter in &mut filters {
+			filter.deleted = Some(OpValBool::Eq(false).into());
+		}
 		base_uuid::list::<Self, _, _>(ctx, mm, Some(filters), list_options).await
 	}
 
