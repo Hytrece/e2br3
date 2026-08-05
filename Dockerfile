@@ -1,3 +1,5 @@
+# syntax=docker/dockerfile:1.7
+
 # ============================================
 # Stage 1: Build the application
 # ============================================
@@ -21,7 +23,13 @@ COPY registry/ registry/
 COPY assets/ assets/
 
 # Build the application and operational helper binaries.
-RUN cargo build --release --jobs 1 --package web-server --package terminology-loader
+# Keep Cargo's downloads and compiled target between source-only rebuilds.
+RUN --mount=type=cache,id=e2br3-cargo-registry,target=/usr/local/cargo/registry,sharing=locked \
+    --mount=type=cache,id=e2br3-cargo-git,target=/usr/local/cargo/git,sharing=locked \
+    --mount=type=cache,id=e2br3-cargo-target,target=/app/target,sharing=locked \
+    cargo build --release --jobs 1 --package web-server --package terminology-loader \
+    && mkdir -p /app/build-artifacts \
+    && cp target/release/web-server target/release/terminology-loader /app/build-artifacts/
 
 # ============================================
 # Stage 2: Create minimal runtime image
@@ -41,8 +49,8 @@ RUN useradd --create-home --shell /bin/bash appuser
 WORKDIR /app
 
 # Copy the binary from builder
-COPY --from=builder /app/target/release/web-server /app/web-server
-COPY --from=builder /app/target/release/terminology-loader /app/terminology-loader
+COPY --from=builder /app/build-artifacts/web-server /app/web-server
+COPY --from=builder /app/build-artifacts/terminology-loader /app/terminology-loader
 
 # Copy web-folder if it exists (static files)
 COPY --chown=appuser:appuser web-folder/ /app/web-folder/
