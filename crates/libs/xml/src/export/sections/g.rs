@@ -25,6 +25,7 @@ pub(crate) async fn export_patch(
 
 use crate::export::policy::{
 	drug_characterization_display_name, normalize_drug_characterization,
+	normalize_gestation_unit, normalize_time_unit,
 };
 use lib_core::model::drug::{
 	DosageInformation, DrugActiveSubstance, DrugDeviceCharacteristic,
@@ -257,8 +258,19 @@ fn write_g_k_6a(value: &DrugInformation) -> Option<&rust_decimal::Decimal> {
 }
 
 /// e2b:G.k.6b
-fn write_g_k_6b(value: &DrugInformation) -> Option<&str> {
-	value.gestation_period_exposure_unit.as_deref()
+fn write_g_k_6b(value: &DrugInformation) -> Result<Option<&'static str>> {
+	let Some(unit) = value.gestation_period_exposure_unit.as_deref() else {
+		return Ok(None);
+	};
+	normalize_gestation_unit(unit)
+		.map(Some)
+		.ok_or_else(|| Error::InvalidXml {
+			message: format!(
+				"ICH.G.k.6b.ALLOWED.VALUE: unsupported gestation unit `{unit}`"
+			),
+			line: None,
+			column: None,
+		})
 }
 
 /// e2b:G.k.11
@@ -427,8 +439,19 @@ fn write_g_k_4_r_6a(value: &DosageInformation) -> Option<&rust_decimal::Decimal>
 }
 
 /// e2b:G.k.4.r.6b
-fn write_g_k_4_r_6b(value: &DosageInformation) -> Option<&str> {
-	value.duration_unit.as_deref()
+fn write_g_k_4_r_6b(value: &DosageInformation) -> Result<Option<&'static str>> {
+	let Some(unit) = value.duration_unit.as_deref() else {
+		return Ok(None);
+	};
+	normalize_time_unit(unit)
+		.map(Some)
+		.ok_or_else(|| Error::InvalidXml {
+			message: format!(
+				"ICH.G.k.4.r.6b.ALLOWED.VALUE: unsupported duration unit `{unit}`"
+			),
+			line: None,
+			column: None,
+		})
 }
 
 /// e2b:G.k.4.r.7
@@ -730,14 +753,6 @@ pub(crate) fn drug_fragment(
 		}
 		out.push_str("/></asIdentifiedEntity>");
 	}
-	if let Some(blinded) = write_g_k_2_5(drug) {
-		let val = if blinded { "true" } else { "false" };
-		out.push_str(
-			"<subjectOf typeCode=\"SBJ\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code code=\"G.k.2.5\"/><value xsi:type=\"BL\" value=\"",
-		);
-		out.push_str(val);
-		out.push_str("\"/></observation></subjectOf>");
-	}
 	if drug.manufacturer_name.is_some()
 		|| drug.manufacturer_country.is_some()
 		|| drug.drug_authorization_number.is_some()
@@ -996,7 +1011,7 @@ pub(crate) fn drug_fragment(
 			out.push_str(&xml_escape(&decimal_text(v)));
 			out.push_str("\"");
 		}
-		if let Some(u) = write_g_k_6b(drug) {
+		if let Some(u) = write_g_k_6b(drug)? {
 			out.push_str(" unit=\"");
 			out.push_str(&xml_escape(u));
 			out.push_str("\"");
@@ -1104,7 +1119,7 @@ pub(crate) fn drug_fragment(
 			if let Some(width) = write_g_k_4_r_6a(dose) {
 				out.push_str(&xml_escape(&decimal_text(width)));
 				out.push_str("\"");
-				if let Some(unit) = write_g_k_4_r_6b(dose) {
+				if let Some(unit) = write_g_k_4_r_6b(dose)? {
 					out.push_str(" unit=\"");
 					out.push_str(&xml_escape(unit));
 					out.push_str("\"");
@@ -1241,6 +1256,9 @@ pub(crate) fn drug_fragment(
 			);
 		}
 		out.push_str("</substanceAdministration></outboundRelationship2>");
+	}
+	if write_g_k_2_5(drug) == Some(true) {
+		out.push_str("<outboundRelationship2 typeCode=\"PERT\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code code=\"6\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.19\" displayName=\"blinded\"/><value xsi:type=\"BL\" value=\"true\"/></observation></outboundRelationship2>");
 	}
 	if let Some(action) = write_g_k_8(drug) {
 		out.push_str("<inboundRelationship typeCode=\"CAUS\"><act classCode=\"ACT\" moodCode=\"EVN\"><code code=\"");
@@ -1838,6 +1856,62 @@ mod tests {
 	}
 
 	#[test]
+	fn export_g_blinded_product_matches_official_fda_xsd_path() {
+		let mut drug = test_drug(Uuid::new_v4(), Uuid::new_v4());
+		drug.investigational_product_blinded = Some(true);
+		let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+			.parent()
+			.and_then(|path| path.parent())
+			.and_then(|path| path.parent())
+			.expect("workspace root")
+			.to_path_buf();
+		let source =
+			std::fs::read(root.join("docs/exporter/fda/FAERS2022Scenario6.xml"))
+				.expect("official FDA example");
+		let exported = crate::export::roundtrip::patch_g_drugs_for_authority(
+			&source,
+			std::slice::from_ref(&drug),
+			&[],
+			&[],
+			&[],
+			&[],
+			&[],
+			&[],
+			&[],
+			&[],
+			RegulatoryAuthority::Fda,
+		)
+		.expect("patch FDA drug");
+
+		let errors = crate::validation::validate_e2b_xml_xsd(
+			exported.as_bytes(),
+			&crate::default_xsd_path().expect("official ICH schema"),
+		)
+		.expect("validate XSD");
+		assert!(errors.is_empty(), "{errors:#?}");
+		assert!(exported.contains("<code code=\"6\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.19\" displayName=\"blinded\"/><value xsi:type=\"BL\" value=\"true\"/>"));
+		let imported =
+			crate::import_sections::g_drug::parse_g_drugs(exported.as_bytes())
+				.expect("import exported XML");
+		assert_eq!(imported[0].investigational_product_blinded, Some(true));
+
+		drug.investigational_product_blinded = Some(false);
+		let fragment = drug_fragment(
+			&drug,
+			&[],
+			&[],
+			&[],
+			&[],
+			&[],
+			&[],
+			&[],
+			RegulatoryAuthority::Fda,
+		)
+		.expect("export unblinded drug");
+		assert!(!fragment.contains("displayName=\"blinded\""), "{fragment}");
+	}
+
+	#[test]
 	fn export_g_normalizes_stored_dose_scale() {
 		let case_id = Uuid::new_v4();
 		let drug_id = Uuid::new_v4();
@@ -1853,18 +1927,22 @@ mod tests {
 	}
 
 	#[test]
-	fn export_g_preserves_authorization_country_and_normalizes_decimals() {
+	fn export_g_normalizes_time_units_and_decimals() {
 		let mut drug = test_drug(Uuid::new_v4(), Uuid::new_v4());
 		drug.drug_authorization_number = Some("FDA-IND-123456".to_string());
 		drug.manufacturer_country = Some("US".to_string());
 		drug.gestation_period_exposure_value = Some(Decimal::new(2000, 2));
-		drug.gestation_period_exposure_unit = Some("wk".to_string());
+		drug.gestation_period_exposure_unit = Some("804".to_string());
+		let mut dosage = test_dosage(drug.id);
+		dosage.duration_value = Some(Decimal::new(200, 2));
+		dosage.duration_unit = Some("day".to_string());
 
-		let xml = export_g_drugs_xml(&[drug], &[], &[], &[], &[], &[], &[])
+		let xml = export_g_drugs_xml(&[drug], &[], &[dosage], &[], &[], &[], &[])
 			.expect("export XML");
 
 		assert!(xml.contains("<author typeCode=\"AUT\"><territorialAuthority classCode=\"TERR\"><territory classCode=\"NAT\" determinerCode=\"INSTANCE\"><code code=\"US\" codeSystem=\"1.0.3166.1.2.2\"/>"), "{xml}");
-		assert!(xml.contains("displayName=\"gestationPeriod\"/><value xsi:type=\"PQ\" value=\"20\" unit=\"wk\"/>"), "{xml}");
+		assert!(xml.contains("displayName=\"gestationPeriod\"/><value xsi:type=\"PQ\" value=\"20\" unit=\"d\"/>"), "{xml}");
+		assert!(xml.contains("<width value=\"2\" unit=\"d\"/>"), "{xml}");
 	}
 
 	#[test]

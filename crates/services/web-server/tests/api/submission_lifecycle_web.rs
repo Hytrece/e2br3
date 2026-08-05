@@ -967,6 +967,8 @@ async fn test_submission_receiver_selection_updates_message_header_n_identifiers
 	for lifecycle in ["draft", "reviewed", "validated", "locked"] {
 		let case_id = create_case(&app, &cookie, seed.org_id).await?;
 		create_message_header(&app, &cookie, case_id).await?;
+		let outbound_batch_number = format!("OUTBOUND-BATCH-{case_id}");
+		let outbound_message_number = format!("OUTBOUND-MESSAGE-{case_id}");
 
 		mm.dbx().begin_txn().await?;
 		set_full_context_dbx(
@@ -976,6 +978,42 @@ async fn test_submission_receiver_selection_updates_message_header_n_identifiers
 			ROLE_SPONSOR_ADMIN_CRO,
 		)
 		.await?;
+		let sender_presave_id = Uuid::new_v4();
+		mm.dbx()
+			.execute(
+				sqlx::query(
+					"INSERT INTO sender_presaves (id, organization_id, organization_name, created_by)
+					 VALUES ($1, $2, 'Outbound Sender', $3)",
+				)
+				.bind(sender_presave_id)
+				.bind(seed.org_id)
+				.bind(seed.admin.id),
+			)
+			.await?;
+		mm.dbx()
+			.execute(
+				sqlx::query(
+					"INSERT INTO sender_presave_gateways (
+						sender_presave_id, sequence_number, gateway_authority,
+						sender_identifier, is_default_for_authority, created_by
+					 ) VALUES ($1, 1, 'mfds', 'OUTBOUND-SENDER', true, $2)",
+				)
+				.bind(sender_presave_id)
+				.bind(seed.admin.id),
+			)
+			.await?;
+		mm.dbx()
+			.execute(
+				sqlx::query(
+					"INSERT INTO sender_information (case_id, source_sender_presave_id, created_by)
+					 VALUES ($2, $1, $3)
+					 ON CONFLICT (case_id) DO UPDATE SET source_sender_presave_id = EXCLUDED.source_sender_presave_id",
+				)
+				.bind(sender_presave_id)
+				.bind(case_id)
+				.bind(seed.admin.id),
+			)
+			.await?;
 		mm.dbx()
 			.execute(
 				sqlx::query("UPDATE cases SET status = $1 WHERE id = $2")
@@ -994,7 +1032,17 @@ async fn test_submission_receiver_selection_updates_message_header_n_identifiers
 					"authority": "mfds",
 					"receiver_label": "MFDS(KR)",
 					"batch_receiver_identifier": "MFDS-O-KR",
-					"message_receiver_identifier": "MFDS-O-KR"
+					"message_receiver_identifier": "MFDS-O-KR",
+					"outbound_message_header": {
+						"batch_number": outbound_batch_number,
+						"batch_sender_identifier": "OUTBOUND-SENDER",
+						"batch_receiver_identifier": "MFDS-O-KR",
+						"batch_transmission_date": "20260806010203",
+						"message_number": outbound_message_number,
+						"message_sender_identifier": "OUTBOUND-SENDER",
+						"message_receiver_identifier": "MFDS-O-KR",
+						"message_date": "20260806010203"
+					}
 				}
 			}),
 		)
@@ -1026,24 +1074,25 @@ async fn test_submission_receiver_selection_updates_message_header_n_identifiers
 		assert_eq!(header_status, StatusCode::OK, "{header:?}");
 		assert_eq!(
 			header["data"]["message_number"].as_str(),
-			Some(format!("US-SENDER-{}", case_id.simple()).as_str())
+			Some(outbound_message_number.as_str())
 		);
 		assert_eq!(
 			header["data"]["message_sender_identifier"].as_str(),
-			Some("SENDER01")
+			Some("OUTBOUND-SENDER")
 		);
 		assert_eq!(
 			header["data"]["batch_number"].as_str(),
-			Some(format!("BATCH-{case_id}").as_str())
+			Some(outbound_batch_number.as_str())
 		);
 		assert_eq!(
 			header["data"]["batch_sender_identifier"].as_str(),
-			Some("BATCH-SENDER")
+			Some("OUTBOUND-SENDER")
 		);
 		assert_eq!(
 			header["data"]["message_date"].as_str(),
-			Some("20241001000000")
+			Some("20260806010203")
 		);
+		assert_eq!(header["data"]["batch_transmission_date"][0], 2026);
 	}
 
 	Ok(())

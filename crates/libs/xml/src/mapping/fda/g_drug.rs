@@ -20,7 +20,7 @@ impl GDrugPaths {
 	pub const PHPID_VERSION: &'static str =
 		"(hl7:consumable/hl7:instanceOfKind/hl7:kindOfProduct/hl7:asIdentifiedEntity[hl7:code[@code='PhPID' or @code='PHPID']]/hl7:code/@codeSystemVersion)[1]";
 	pub const INVESTIGATIONAL_BLINDED: &'static str =
-		"hl7:consumable/hl7:instanceOfKind/hl7:kindOfProduct/hl7:subjectOf/hl7:observation[hl7:code[@code='G.k.2.5']]/hl7:value/@value";
+		"hl7:outboundRelationship2[@typeCode='PERT']/hl7:observation[hl7:code[@code='6' and @codeSystem='2.16.840.1.113883.3.989.2.1.1.19']]/hl7:value/@value";
 	pub const DRUG_AUTHORIZATION_NUMBER: &'static str =
 		"hl7:consumable/hl7:instanceOfKind/hl7:kindOfProduct/hl7:asManufacturedProduct/hl7:subjectOf/hl7:approval/hl7:id/@extension";
 	pub const MANUFACTURER_NAME: &'static str =

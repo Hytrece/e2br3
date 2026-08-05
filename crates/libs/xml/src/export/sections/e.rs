@@ -369,6 +369,7 @@ fn observation_rel_bool_or_null_flavor(
 	value: Option<bool>,
 	null_flavor: Option<&str>,
 ) -> String {
+	let value = value.filter(|value| *value);
 	match (value, null_flavor) {
 		(Some(value), None) => observation_rel_bool(code, value),
 		(None, null_flavor) => format!(
@@ -665,6 +666,12 @@ mod meddra_requirement_tests {
 			.expect("reaction relationships");
 
 		assert!(value < location && location < relationship);
+		assert!(!xml.contains("<value xsi:type=\"BL\" value=\"false\"/>"));
+		for code in ["34", "21", "33", "35", "12", "26"] {
+			assert!(xml.contains(&format!(
+				"<code code=\"{code}\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.19\"/><value xsi:type=\"BL\" nullFlavor=\"NI\"/>"
+			)));
+		}
 
 		let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 			.parent()

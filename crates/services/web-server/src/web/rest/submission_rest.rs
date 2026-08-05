@@ -9,6 +9,10 @@ use lib_core::model::authorization::CaseMutationKind;
 use lib_core::model::message_header::{
 	MessageHeader, MessageHeaderBmc, MessageHeaderForUpdate,
 };
+use lib_core::model::presave::SenderPresaveGatewayBmc;
+use lib_core::model::safety_report::{
+	SenderInformationBmc, SenderInformationFilter,
+};
 use lib_core::model::submission_receiver_option::{
 	SubmissionReceiverOption, SubmissionReceiverOptionBmc,
 };
@@ -17,17 +21,19 @@ use lib_rest_core::rest_params::ParamsForUpdate;
 use lib_rest_core::rest_result::DataRestResult;
 use lib_rest_core::{Error, Result};
 use lib_web::middleware::mw_auth::CtxW;
+use modql::filter::{OpValValue, OpValsValue};
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use uuid::Uuid;
 
 use crate::submission::{
-	apply_gateway_ack_by_remote, create_submission_idempotent,
-	get_ack_download, get_reconcile_runtime_status, get_submission,
-	get_submission_dispatch_state, list_by_case, list_submission_events,
-	list_submission_history, reconcile_due_submissions_with_runtime_status,
-	GatewayAckCallbackInput, SubmissionAuthority,
-	SubmissionDispatchStateRecord, SubmissionEventRecord, SubmissionHistoryRecord,
-	SubmissionReconcileResult, SubmissionReconcileRuntimeStatus, SubmissionRecord,
+	apply_gateway_ack_by_remote, create_submission_idempotent, get_ack_download,
+	get_reconcile_runtime_status, get_submission, get_submission_dispatch_state,
+	list_by_case, list_submission_events, list_submission_history,
+	reconcile_due_submissions_with_runtime_status, GatewayAckCallbackInput,
+	SubmissionAuthority, SubmissionDispatchStateRecord, SubmissionEventRecord,
+	SubmissionHistoryRecord, SubmissionReconcileResult,
+	SubmissionReconcileRuntimeStatus, SubmissionRecord,
 };
 
 #[derive(Debug, Serialize)]
@@ -53,9 +59,22 @@ pub struct SubmissionReceiverOptionList {
 #[derive(Debug, Deserialize)]
 pub struct SubmissionReceiverSelectionInput {
 	pub authority: String,
-	pub receiver_label: String,
+	pub receiver_label: Option<String>,
 	pub batch_receiver_identifier: String,
 	pub message_receiver_identifier: String,
+	pub outbound_message_header: Option<OutboundMessageHeaderInput>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct OutboundMessageHeaderInput {
+	pub batch_number: String,
+	pub batch_sender_identifier: String,
+	pub batch_receiver_identifier: String,
+	pub batch_transmission_date: String,
+	pub message_number: String,
+	pub message_sender_identifier: String,
+	pub message_receiver_identifier: String,
+	pub message_date: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -268,13 +287,11 @@ pub async fn apply_submission_receiver_selection(
 	let ParamsForUpdate { data } = params;
 
 	let authority = data.authority.trim().to_ascii_lowercase();
-	if !matches!(authority.as_str(), "fda" | "mfds") {
+	if !matches!(authority.as_str(), "ich" | "fda" | "mfds") {
 		return Err(Error::BadRequest {
 			message: format!("unsupported receiver authority: {}", data.authority),
 		});
 	}
-	let receiver_label =
-		require_non_empty("receiver_label", data.receiver_label.as_str())?;
 	let batch_receiver_identifier = require_non_empty(
 		"batch_receiver_identifier",
 		data.batch_receiver_identifier.as_str(),
@@ -283,19 +300,131 @@ pub async fn apply_submission_receiver_selection(
 		"message_receiver_identifier",
 		data.message_receiver_identifier.as_str(),
 	)?;
+	let outbound_message_header = match data.outbound_message_header {
+		Some(header) => {
+			require_non_empty("batch_number", &header.batch_number)?;
+			require_non_empty(
+				"batch_sender_identifier",
+				&header.batch_sender_identifier,
+			)?;
+			require_non_empty("message_number", &header.message_number)?;
+			require_non_empty(
+				"message_sender_identifier",
+				&header.message_sender_identifier,
+			)?;
+			if header.batch_receiver_identifier != batch_receiver_identifier
+				|| header.message_receiver_identifier != message_receiver_identifier
+			{
+				return Err(Error::BadRequest {
+					message: "outbound message-header receiver identifiers must match the selected receiver option".to_string(),
+				});
+			}
+			let expected_sender = if authority == "ich" {
+				MessageHeaderBmc::get_by_case(ctx, mm, case_id)
+					.await?
+					.message_sender_identifier
+			} else {
+				let sender = SenderInformationBmc::list(
+					ctx,
+					mm,
+					Some(vec![SenderInformationFilter {
+						case_id: Some(OpValsValue::from(vec![OpValValue::Eq(json!(
+							case_id.to_string()
+						))])),
+					}]),
+					None,
+				)
+				.await?
+				.into_iter()
+				.next()
+				.ok_or_else(|| Error::BadRequest {
+					message: "case Sender information is required".to_string(),
+				})?;
+				let sender_presave_id = sender.source_sender_presave_id.ok_or_else(|| {
+					Error::BadRequest {
+						message: "case Sender must reference a Sender template".to_string(),
+					}
+				})?;
+				let matching_senders = SenderPresaveGatewayBmc::list_by_parent(
+					ctx,
+					mm,
+					sender_presave_id,
+				)
+				.await?
+				.into_iter()
+				.filter(|gateway| {
+					!gateway.deleted
+						&& gateway.is_default_for_authority
+						&& gateway
+							.gateway_authority
+							.trim()
+							.eq_ignore_ascii_case(&authority)
+						&& gateway
+							.sender_identifier
+							.as_deref()
+							.is_some_and(|value| !value.trim().is_empty())
+				})
+				.collect::<Vec<_>>();
+				if matching_senders.len() != 1 {
+					return Err(Error::BadRequest {
+						message: format!(
+							"case Sender must have exactly one default {authority} gateway Sender ID"
+						),
+					});
+				}
+				matching_senders[0]
+					.sender_identifier
+					.as_deref()
+					.map(str::trim)
+					.unwrap_or_default()
+					.to_string()
+			};
+			if header.batch_sender_identifier.trim() != expected_sender
+				|| header.message_sender_identifier.trim() != expected_sender
+			{
+				return Err(Error::BadRequest {
+					message: "outbound message-header sender identifiers must match the case Sender gateway Sender ID".to_string(),
+				});
+			}
+			let batch_transmission_date = parse_e2b_timestamp(
+				"batch_transmission_date",
+				&header.batch_transmission_date,
+			)?;
+			parse_e2b_timestamp("message_date", &header.message_date)?;
+			Some((header, batch_transmission_date))
+		}
+		None => None,
+	};
 
-	let options =
-		SubmissionReceiverOptionBmc::list_by_authority(ctx, mm, &authority)
-			.await?;
-	let matched = options.iter().any(|option| {
-		option.receiver_label == receiver_label
-			&& option.batch_receiver_identifier == batch_receiver_identifier
-			&& option.message_receiver_identifier == message_receiver_identifier
-	});
-	if !matched {
-		return Err(Error::BadRequest {
-			message: "selected receiver identifiers do not match a configured submission receiver option".to_string(),
+	if authority == "ich" {
+		let existing_header = MessageHeaderBmc::get_by_case(ctx, mm, case_id).await?;
+		if existing_header.batch_receiver_identifier.as_deref()
+			!= Some(batch_receiver_identifier)
+			|| existing_header.message_receiver_identifier
+				!= message_receiver_identifier
+		{
+			return Err(Error::BadRequest {
+				message: "ICH receiver identifiers must match the existing case message header".to_string(),
+			});
+		}
+	} else {
+		let receiver_label = require_non_empty(
+			"receiver_label",
+			data.receiver_label.as_deref().unwrap_or_default(),
+		)?;
+		let options =
+			SubmissionReceiverOptionBmc::list_by_authority(ctx, mm, &authority)
+				.await?;
+		let matched = options.iter().any(|option| {
+			option.receiver_label == receiver_label
+				&& option.batch_receiver_identifier == batch_receiver_identifier
+				&& option.message_receiver_identifier == message_receiver_identifier
 		});
+		if !matched {
+			return Err(Error::BadRequest {
+				message: "selected receiver identifiers do not match a configured submission receiver option".to_string(),
+			});
+		}
 	}
 
 	MessageHeaderBmc::update_by_case(
@@ -303,16 +432,27 @@ pub async fn apply_submission_receiver_selection(
 		mm,
 		case_id,
 		MessageHeaderForUpdate {
-			batch_number: None,
-			batch_sender_identifier: None,
+			batch_number: outbound_message_header
+				.as_ref()
+				.map(|(header, _)| header.batch_number.clone()),
+			batch_sender_identifier: outbound_message_header
+				.as_ref()
+				.map(|(header, _)| header.batch_sender_identifier.clone()),
 			batch_receiver_identifier: Some(batch_receiver_identifier.to_string()),
-			batch_transmission_date: None,
-			message_number: None,
-			message_sender_identifier: None,
+			batch_transmission_date: outbound_message_header
+				.as_ref()
+				.map(|(_, batch_transmission_date)| *batch_transmission_date),
+			message_number: outbound_message_header
+				.as_ref()
+				.map(|(header, _)| header.message_number.clone()),
+			message_sender_identifier: outbound_message_header
+				.as_ref()
+				.map(|(header, _)| header.message_sender_identifier.clone()),
 			message_receiver_identifier: Some(
 				message_receiver_identifier.to_string(),
 			),
-			message_date: None,
+			message_date: outbound_message_header
+				.map(|(header, _)| header.message_date),
 		},
 	)
 	.await?;
@@ -357,6 +497,19 @@ fn require_non_empty<'a>(field: &str, value: &'a str) -> Result<&'a str> {
 		});
 	}
 	Ok(trimmed)
+}
+
+fn parse_e2b_timestamp(field: &str, value: &str) -> Result<time::OffsetDateTime> {
+	let format =
+		time::format_description::parse("[year][month][day][hour][minute][second]")
+			.map_err(|err| Error::BadRequest {
+				message: format!("failed to initialize E2B datetime parser: {err}"),
+			})?;
+	time::PrimitiveDateTime::parse(value, &format)
+		.map(|value| value.assume_utc())
+		.map_err(|_| Error::BadRequest {
+			message: format!("{field} must be YYYYMMDDhhmmss"),
+		})
 }
 
 /// GET /api/submissions/{id}/events

@@ -1,4 +1,5 @@
 use super::*;
+use crate::export::policy::{normalize_gestation_unit, normalize_time_unit};
 use crate::export::roundtrip::reorder_investigation_event_children;
 use crate::export::sections::c::apply_literature_section;
 use crate::export::sections::c::apply_primary_source_section;
@@ -151,8 +152,15 @@ async fn apply_patient_section(
 		let age_xpath =
 			"//hl7:primaryRole/hl7:subjectOf2/hl7:observation[hl7:code[@code='3']]/hl7:value";
 		if let Some(v) = patient.age_at_time_of_onset.as_ref() {
-			set_attr_first(xpath, age_xpath, "value", &v.to_string());
+			set_attr_first(xpath, age_xpath, "value", &v.normalize().to_string());
 			if let Some(unit) = patient.age_unit.as_deref() {
+				let unit = normalize_time_unit(unit).ok_or_else(|| {
+					Error::InvalidXml {
+					message: format!("ICH.D.2.2b.ALLOWED.VALUE: unsupported age unit `{unit}`"),
+					line: None,
+					column: None,
+				}
+				})?;
 				set_attr_first(xpath, age_xpath, "unit", unit);
 			}
 			remove_attr_first(xpath, age_xpath, "nullFlavor");
@@ -255,10 +263,17 @@ async fn apply_patient_section(
 	{
 		ensure_patient_observation(xpath, doc, parser, "16", "PQ")?;
 		if let Some(v) = patient.gestation_period.as_ref() {
-			write_d_2_2_1a(xpath, &v.to_string());
+			write_d_2_2_1a(xpath, v);
 		}
 		if let Some(v) = patient.gestation_period_unit.as_deref() {
-			write_d_2_2_1b(xpath, v);
+			let unit = normalize_gestation_unit(v).ok_or_else(|| {
+				Error::InvalidXml {
+				message: format!("ICH.D.2.2.1b.ALLOWED.VALUE: unsupported gestation unit `{v}`"),
+				line: None,
+				column: None,
+			}
+			})?;
+			write_d_2_2_1b(xpath, unit);
 		}
 	}
 	if let Some(v) = patient.age_group.as_deref() {
@@ -431,7 +446,7 @@ async fn apply_patient_section(
 					"<subjectOf2 typeCode=\"SBJ\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code code=\"7\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.19\"/><value xsi:type=\"PQ\"/></observation></subjectOf2>",
 				)?;
 			}
-			write_d_10_4(xpath, weight_xpath, &v.to_string());
+			write_d_10_4(xpath, weight_xpath, v);
 			set_attr_first(xpath, weight_xpath, "unit", "kg");
 		}
 		if let Some(v) = parent.height_cm.as_ref() {
@@ -449,7 +464,7 @@ async fn apply_patient_section(
 					"<subjectOf2 typeCode=\"SBJ\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code code=\"17\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.19\"/><value xsi:type=\"PQ\"/></observation></subjectOf2>",
 				)?;
 			}
-			write_d_10_5(xpath, height_xpath, &v.to_string());
+			write_d_10_5(xpath, height_xpath, v);
 			set_attr_first(xpath, height_xpath, "unit", "cm");
 		}
 		if parent.parent_age.is_some() || parent.parent_age_unit.is_some() {
@@ -468,10 +483,15 @@ async fn apply_patient_section(
 				)?;
 			}
 			if let Some(v) = parent.parent_age.as_ref() {
-				write_d_10_2_2a(xpath, age_value_xpath, &v.to_string());
+				write_d_10_2_2a(xpath, age_value_xpath, v);
 			}
 			if let Some(v) = parent.parent_age_unit.as_deref() {
-				write_d_10_2_2b(xpath, age_value_xpath, v);
+				let unit = normalize_time_unit(v).ok_or_else(|| Error::InvalidXml {
+					message: format!("ICH.D.10.2.2b.ALLOWED.VALUE: unsupported parent age unit `{v}`"),
+					line: None,
+					column: None,
+				})?;
+				write_d_10_2_2b(xpath, age_value_xpath, unit);
 			}
 			remove_attr_first(xpath, age_value_xpath, "nullFlavor");
 		}
@@ -650,8 +670,8 @@ fn write_d_10_2_1(xpath: &mut Context, value: time::Date) {
 }
 
 /// e2b:D.10.2.2a
-fn write_d_10_2_2a(xpath: &mut Context, path: &str, value: &str) {
-	set_attr_first(xpath, path, "value", value);
+fn write_d_10_2_2a(xpath: &mut Context, path: &str, value: &rust_decimal::Decimal) {
+	set_attr_first(xpath, path, "value", &value.normalize().to_string());
 }
 
 /// e2b:D.10.2.2b
@@ -665,18 +685,19 @@ fn write_d_10_3(xpath: &mut Context, value: time::Date) {
 }
 
 /// e2b:D.10.4
-fn write_d_10_4(xpath: &mut Context, path: &str, value: &str) {
-	set_attr_first(xpath, path, "value", value);
+fn write_d_10_4(xpath: &mut Context, path: &str, value: &rust_decimal::Decimal) {
+	set_attr_first(xpath, path, "value", &value.normalize().to_string());
 }
 
 /// e2b:D.10.5
-fn write_d_10_5(xpath: &mut Context, path: &str, value: &str) {
-	set_attr_first(xpath, path, "value", value);
+fn write_d_10_5(xpath: &mut Context, path: &str, value: &rust_decimal::Decimal) {
+	set_attr_first(xpath, path, "value", &value.normalize().to_string());
 }
 
 /// e2b:D.10.6
 fn write_d_10_6(xpath: &mut Context, path: &str, value: &str) {
 	set_attr_first(xpath, path, "code", value);
+	set_attr_first(xpath, path, "codeSystem", "1.0.5218");
 }
 
 /// e2b:D.10.7.2
@@ -685,8 +706,8 @@ fn write_d_10_7_2(xpath: &mut Context, value: &str) {
 }
 
 /// e2b:D.2.2.1a
-fn write_d_2_2_1a(xpath: &mut Context, value: &str) {
-	set_attr_first(xpath, "//hl7:primaryRole/hl7:subjectOf2/hl7:observation[hl7:code[@code='16']]/hl7:value", "value", value);
+fn write_d_2_2_1a(xpath: &mut Context, value: &rust_decimal::Decimal) {
+	set_attr_first(xpath, "//hl7:primaryRole/hl7:subjectOf2/hl7:observation[hl7:code[@code='16']]/hl7:value", "value", &value.normalize().to_string());
 }
 
 /// e2b:D.2.2.1b
@@ -744,7 +765,7 @@ fn apply_parent_medical_history_section(
 			history_effective_time(start, start_null, end, end_null);
 		let continuing = write_d_10_7_1_r_3(&episode);
 		let comments = write_d_10_7_1_r_5(&episode);
-		let fragment = format!("<component typeCode=\"COMP\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code {attrs}/>{effective_time}{continuing}{comments}</observation></component>");
+		let fragment = format!("<component typeCode=\"COMP\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code {attrs}/>{effective_time}{comments}{continuing}</observation></component>");
 		append_fragment_child(doc, parser, xpath, organizer, &fragment)?;
 	}
 	Ok(())
@@ -784,7 +805,7 @@ fn write_d_10_7_1_r_4(
 
 /// e2b:D.10.7.1.r.5
 fn write_d_10_7_1_r_5(value: &ParentMedicalHistory) -> String {
-	value.comments.as_deref().map(|v| format!("<outboundRelationship2 typeCode=\"COMP\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code code=\"10\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.19\"/><value>{}</value></observation></outboundRelationship2>", xml_escape(v))).unwrap_or_default()
+	value.comments.as_deref().map(|v| format!("<outboundRelationship2 typeCode=\"COMP\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code code=\"10\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.19\"/><value xsi:type=\"ED\">{}</value></observation></outboundRelationship2>", xml_escape(v))).unwrap_or_default()
 }
 
 fn apply_parent_past_drug_history_section(
@@ -1034,7 +1055,7 @@ fn write_d_7_1_r_4(
 
 /// e2b:D.7.1.r.5
 fn write_d_7_1_r_5(value: &MedicalHistoryEpisode) -> String {
-	value.comments.as_deref().map(|v| format!("<outboundRelationship2 typeCode=\"COMP\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code code=\"10\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.19\"/><value>{}</value></observation></outboundRelationship2>", xml_escape(v))).unwrap_or_default()
+	value.comments.as_deref().map(|v| format!("<outboundRelationship2 typeCode=\"COMP\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code code=\"10\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.19\"/><value xsi:type=\"ED\">{}</value></observation></outboundRelationship2>", xml_escape(v))).unwrap_or_default()
 }
 
 /// e2b:D.7.1.r.6
@@ -1079,7 +1100,7 @@ fn apply_medical_history_section(
 		let comments = write_d_7_1_r_5(&episode);
 		let family_history = write_d_7_1_r_6(&episode);
 		let fragment = format!(
-			"<component typeCode=\"COMP\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code {code_attrs}/>{effective_time}{continuing}{comments}{family_history}</observation></component>"
+			"<component typeCode=\"COMP\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code {code_attrs}/>{effective_time}{comments}{family_history}{continuing}</observation></component>"
 		);
 		append_fragment_child(
 			doc,
@@ -1379,9 +1400,130 @@ async fn fetch_patient_death_information(
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use rust_decimal::Decimal;
 	use sqlx::types::time::OffsetDateTime;
 	use sqlx::types::Uuid;
 	use std::collections::BTreeSet;
+
+	#[test]
+	fn patient_number_writers_normalize_decimal_scale() {
+		let parser = Parser::default();
+		let doc = parser
+			.parse_string("<MCCI_IN200100UV01 xmlns=\"urn:hl7-org:v3\"><primaryRole><subjectOf2><observation><code code=\"16\"/><value/></observation></subjectOf2></primaryRole><parentAge/><parentHeight/></MCCI_IN200100UV01>")
+			.expect("doc");
+		let mut xpath = Context::new(&doc).expect("xpath");
+		let _ = xpath.register_namespace("hl7", "urn:hl7-org:v3");
+
+		write_d_2_2_1a(&mut xpath, &Decimal::new(800, 2));
+		assert_eq!(
+			xpath
+				.findvalue(
+					"//hl7:observation[hl7:code[@code='16']]/hl7:value/@value",
+					None
+				)
+				.expect("integral gestation period"),
+			"8"
+		);
+
+		write_d_2_2_1a(&mut xpath, &Decimal::new(825, 2));
+		assert_eq!(
+			xpath
+				.findvalue(
+					"//hl7:observation[hl7:code[@code='16']]/hl7:value/@value",
+					None
+				)
+				.expect("fractional gestation period"),
+			"8.25"
+		);
+
+		write_d_10_2_2a(&mut xpath, "//hl7:parentAge", &Decimal::new(6300, 2));
+		write_d_10_5(&mut xpath, "//hl7:parentHeight", &Decimal::new(16200, 2));
+		assert_eq!(
+			xpath
+				.findvalue("//hl7:parentAge/@value", None)
+				.expect("parent age"),
+			"63"
+		);
+		assert_eq!(
+			xpath
+				.findvalue("//hl7:parentHeight/@value", None)
+				.expect("parent height"),
+			"162"
+		);
+	}
+
+	#[test]
+	fn medical_history_relationships_follow_xsd_order() {
+		let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+			.parent()
+			.and_then(|path| path.parent())
+			.and_then(|path| path.parent())
+			.expect("workspace root")
+			.to_path_buf();
+		let source = std::fs::read_to_string(
+			root.join("docs/exporter/fda/FAERS2022Scenario1.xml"),
+		)
+		.expect("official FDA example");
+		let parser = Parser::default();
+		let mut doc = parser.parse_string(&source).expect("document");
+		let mut xpath = Context::new(&doc).expect("xpath");
+		let _ = xpath.register_namespace("hl7", "urn:hl7-org:v3");
+
+		apply_medical_history_section(
+			&mut doc,
+			&parser,
+			&mut xpath,
+			&[MedicalHistoryEpisode {
+				id: Uuid::nil(),
+				patient_id: Uuid::nil(),
+				sequence_number: 1,
+				meddra_version: Some("27.1".to_string()),
+				meddra_code: Some("10000081".to_string()),
+				start_date: None,
+				start_date_null_flavor: None,
+				continuing: Some(true),
+				continuing_null_flavor: None,
+				end_date: None,
+				end_date_null_flavor: None,
+				comments: Some("history comment".to_string()),
+				family_history: Some(false),
+				deleted: false,
+				created_at: OffsetDateTime::UNIX_EPOCH,
+				updated_at: OffsetDateTime::UNIX_EPOCH,
+				created_by: Uuid::nil(),
+				updated_by: None,
+			}],
+		)
+		.expect("medical history");
+
+		let exported = doc.to_string();
+		let errors = crate::validation::validate_e2b_xml_xsd(
+			exported.as_bytes(),
+			&crate::default_xsd_path().expect("official ICH schema"),
+		)
+		.expect("validate XSD");
+		assert!(errors.is_empty(), "{errors:#?}");
+	}
+
+	#[test]
+	fn parent_sex_writer_emits_ich_code_system() {
+		let parser = Parser::default();
+		let doc = parser
+			.parse_string("<role xmlns=\"urn:hl7-org:v3\"><associatedPerson><administrativeGenderCode/></associatedPerson></role>")
+			.expect("document");
+		let mut xpath = Context::new(&doc).expect("xpath");
+		let _ = xpath.register_namespace("hl7", "urn:hl7-org:v3");
+		let path = "//hl7:administrativeGenderCode";
+
+		write_d_10_6(&mut xpath, path, "2");
+
+		assert_eq!(
+			xpath
+				.findvalue(&format!("{path}/@codeSystem"), None)
+				.expect("parent sex code system"),
+			"1.0.5218"
+		);
+	}
 
 	#[test]
 	fn past_drug_fragment_exports_mfds_code_separate_from_identifiers() {

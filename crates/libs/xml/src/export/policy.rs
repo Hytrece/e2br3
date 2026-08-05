@@ -169,6 +169,30 @@ pub fn normalize_outcome_code(value: Option<&str>) -> Option<&'static str> {
 	}
 }
 
+pub fn normalize_time_unit(value: &str) -> Option<&'static str> {
+	match value.trim() {
+		"800" | "10.a" | "decade" => Some("10.a"),
+		"801" | "a" | "year" => Some("a"),
+		"802" | "mo" | "month" => Some("mo"),
+		"803" | "wk" | "week" => Some("wk"),
+		"804" | "d" | "day" => Some("d"),
+		"805" | "h" | "hour" => Some("h"),
+		"min" | "minute" => Some("min"),
+		"s" | "second" => Some("s"),
+		_ => None,
+	}
+}
+
+pub fn normalize_gestation_unit(value: &str) -> Option<&'static str> {
+	match value.trim() {
+		"{Trimester}" | "{trimester}" => Some("{trimester}"),
+		value => match normalize_time_unit(value) {
+			Some(unit @ ("mo" | "wk" | "d")) => Some(unit),
+			_ => None,
+		},
+	}
+}
+
 pub fn outcome_display_name(code: &str) -> &'static str {
 	match code {
 		"1" => "recovered/resolved",
@@ -330,6 +354,16 @@ mod tests {
 		assert_eq!(outcome_display_name("3"), DEFAULT_OUTCOME_DISPLAY);
 		assert!(should_emit_required_intervention_null_flavor_ni());
 		assert!(should_case_validation_require_required_intervention());
+	}
+
+	#[test]
+	fn time_units_are_exported_as_constrained_ucum() {
+		assert_eq!(normalize_time_unit("801"), Some("a"));
+		assert_eq!(normalize_time_unit("day"), Some("d"));
+		assert_eq!(normalize_gestation_unit("804"), Some("d"));
+		assert_eq!(normalize_gestation_unit("{Trimester}"), Some("{trimester}"));
+		assert_eq!(normalize_gestation_unit("801"), None);
+		assert_eq!(normalize_time_unit("fortnight"), None);
 	}
 
 	#[test]
