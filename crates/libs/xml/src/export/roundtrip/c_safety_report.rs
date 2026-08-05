@@ -816,7 +816,8 @@ fn write_fda_c_1_7_1(
 			"CE",
 		)?;
 		let path = format!("{component}/hl7:value");
-		set_attr_first(xpath, &path, "type", "CE");
+		remove_attr_first(xpath, &path, "type");
+		set_attr_first(xpath, &path, "xsi:type", "CE");
 		set_attr_first(xpath, &path, "code", value);
 		clear_null_flavor_if_export_policy(xpath, "FDA.C.1.7.1.REQUIRED", &path);
 	} else {
@@ -1013,6 +1014,24 @@ fn normalized_c_3_4_telecom(prefix: &str, value: Option<&str>) -> Option<String>
 #[cfg(test)]
 mod tests {
 	use super::*;
+
+	#[test]
+	fn fda_c_1_7_1_uses_one_namespaced_value_type() {
+		let xml = br#"<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><PORR_IN049016UV><controlActProcess><subject><investigationEvent/></subject></controlActProcess></PORR_IN049016UV></MCCI_IN200100UV01>"#;
+		let parser = Parser::default();
+		let mut doc = parser.parse_string(xml).expect("parse");
+		let mut xpath = Context::new(&doc).expect("xpath");
+		xpath.register_namespace("hl7", "urn:hl7-org:v3").unwrap();
+		xpath
+			.register_namespace("xsi", "http://www.w3.org/2001/XMLSchema-instance")
+			.unwrap();
+
+		write_fda_c_1_7_1(&mut doc, &parser, &mut xpath, Some("1")).unwrap();
+
+		let xml = doc.to_string();
+		assert_eq!(xml.matches("xsi:type=\"CE\"").count(), 1, "{xml}");
+		assert!(!xml.contains(" type=\"CE\""), "{xml}");
+	}
 
 	#[test]
 	fn c_1_8_2_inserts_relationship_when_export_skeleton_lacks_it() {
