@@ -41,7 +41,7 @@ fn read_g_k_9_i_2_r_2_kr_1(
 	xpath: &mut Context,
 	node: &libxml::tree::Node,
 ) -> Option<String> {
-	first_attr(xpath, node, "hl7:causalityAssessment/hl7:methodCode[@codeSystem='2.16.840.1.113883.3.989.5.1.10.1.5']", "code")
+	first_attr(xpath, node, "hl7:causalityAssessment/hl7:methodCode[@codeSystem='2.16.840.1.113883.3.989.5.1.10.1.4']", "code")
 }
 
 fn build_xpath(xml: &[u8]) -> Result<(libxml::tree::Document, Context)> {

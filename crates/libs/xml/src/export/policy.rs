@@ -185,7 +185,7 @@ pub fn normalize_time_unit(value: &str) -> Option<&'static str> {
 
 pub fn normalize_gestation_unit(value: &str) -> Option<&'static str> {
 	match value.trim() {
-		"{Trimester}" | "{trimester}" => Some("{trimester}"),
+		"{Trimester}" | "{trimester}" => Some("{Trimester}"),
 		value => match normalize_time_unit(value) {
 			Some(unit @ ("mo" | "wk" | "d")) => Some(unit),
 			_ => None,
@@ -361,7 +361,7 @@ mod tests {
 		assert_eq!(normalize_time_unit("801"), Some("a"));
 		assert_eq!(normalize_time_unit("day"), Some("d"));
 		assert_eq!(normalize_gestation_unit("804"), Some("d"));
-		assert_eq!(normalize_gestation_unit("{Trimester}"), Some("{trimester}"));
+		assert_eq!(normalize_gestation_unit("{Trimester}"), Some("{Trimester}"));
 		assert_eq!(normalize_gestation_unit("801"), None);
 		assert_eq!(normalize_time_unit("fortnight"), None);
 	}

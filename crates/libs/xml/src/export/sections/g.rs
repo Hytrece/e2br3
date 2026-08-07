@@ -1484,7 +1484,7 @@ pub(crate) fn relatedness_fragment(
 		.flatten()
 	{
 		out.push_str(
-			"<methodCode codeSystem=\"2.16.840.1.113883.3.989.5.1.10.1.5\" code=\"",
+			"<methodCode codeSystem=\"2.16.840.1.113883.3.989.5.1.10.1.4\" code=\"",
 		);
 		out.push_str(&xml_escape(method));
 		out.push_str("\"/>");
@@ -2243,7 +2243,7 @@ mod tests {
 			RegulatoryAuthority::Mfds,
 		);
 
-		assert!(xml.contains("methodCode codeSystem=\"2.16.840.1.113883.3.989.5.1.10.1.5\" code=\"1\""));
+		assert!(xml.contains("methodCode codeSystem=\"2.16.840.1.113883.3.989.5.1.10.1.4\" code=\"1\""));
 		assert!(xml.contains(
 			"codeSystem=\"2.16.840.1.113883.3.989.5.1.10.1.5\" code=\"3\""
 		));

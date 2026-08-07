@@ -486,7 +486,9 @@ async fn apply_patient_section(
 				write_d_10_2_2a(xpath, age_value_xpath, v);
 			}
 			if let Some(v) = parent.parent_age_unit.as_deref() {
-				let unit = normalize_time_unit(v).ok_or_else(|| Error::InvalidXml {
+				let unit = normalize_time_unit(v)
+					.filter(|unit| matches!(*unit, "a" | "10.a"))
+					.ok_or_else(|| Error::InvalidXml {
 					message: format!("ICH.D.10.2.2b.ALLOWED.VALUE: unsupported parent age unit `{v}`"),
 					line: None,
 					column: None,

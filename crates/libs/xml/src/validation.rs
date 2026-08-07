@@ -1,4 +1,5 @@
 use crate::{Error, Result, XmlValidationError, XmlValidationReport};
+use lib_core::regulatory::RegulatoryAuthority;
 use libxml::parser::Parser;
 use libxml::schemas::{SchemaParserContext, SchemaValidationContext};
 use quick_xml::events::Event;
@@ -15,6 +16,7 @@ pub struct XmlValidatorConfig {
 	pub xsd_path: Option<PathBuf>,
 	pub require_schema_location: bool,
 	pub require_its_version: Option<&'static str>,
+	pub authority: Option<RegulatoryAuthority>,
 }
 
 impl Default for XmlValidatorConfig {
@@ -25,6 +27,7 @@ impl Default for XmlValidatorConfig {
 			xsd_path: default_xsd_path(),
 			require_schema_location: true,
 			require_its_version: Some("XML_1.0"),
+			authority: None,
 		}
 	}
 }
@@ -44,16 +47,6 @@ pub fn validate_e2b_xml(
 
 	if let Some(xsd_path) = config.xsd_path.as_ref() {
 		let mut xsd_errors = validate_e2b_xml_xsd(xml, xsd_path)?;
-		let xml_str = std::str::from_utf8(xml).unwrap_or_default();
-		let has_porr = xml_str.contains("<PORR_IN049016UV")
-			|| xml_str.contains("<PORR_IN049017UV")
-			|| xml_str.contains("<PORR_IN049018UV");
-		if has_porr {
-			xsd_errors.retain(|err| {
-				!err.message.contains("Missing child element(s)")
-					|| !err.message.contains("PORR_IN04901")
-			});
-		}
 		report.errors.append(&mut xsd_errors);
 	} else {
 		report.errors.push(XmlValidationError {
@@ -67,9 +60,20 @@ pub fn validate_e2b_xml(
 			column: None,
 		});
 	}
+	if report.errors.is_empty() {
+		if let Some(authority) = config.authority {
+			report
+				.errors
+				.append(&mut validate_export_rules(xml, authority)?);
+		}
+	}
 
-	report.ok = report.errors.is_empty();
+	report.ok = no_blocking_errors(&report.errors);
 	Ok(report)
+}
+
+fn no_blocking_errors(errors: &[XmlValidationError]) -> bool {
+	errors.iter().all(|error| error.blocking == Some(false))
 }
 
 /// Lightweight validation that checks payload size, XML well-formedness, and
@@ -260,4 +264,28 @@ fn default_xsd_candidates() -> Vec<PathBuf> {
 		"/opt/e2br3/schemas/multicacheschemas/MCCI_IN200100UV01.xsd",
 	));
 	candidates
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	fn issue(blocking: Option<bool>) -> XmlValidationError {
+		XmlValidationError {
+			message: String::new(),
+			code: None,
+			section: None,
+			field_path: None,
+			blocking,
+			line: None,
+			column: None,
+		}
+	}
+
+	#[test]
+	fn warnings_do_not_fail_the_report() {
+		assert!(no_blocking_errors(&[issue(Some(false))]));
+		assert!(!no_blocking_errors(&[issue(Some(true))]));
+		assert!(!no_blocking_errors(&[issue(None)]));
+	}
 }

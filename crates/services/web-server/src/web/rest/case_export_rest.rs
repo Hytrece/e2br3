@@ -22,7 +22,7 @@ use time::Month;
 use tokio::runtime::Handle;
 use tokio::task;
 use uuid::Uuid;
-use xml::validation::{validate_e2b_xml, validate_export_rules};
+use xml::validation::{validate_e2b_xml, XmlValidatorConfig};
 use xml::{export_case_xml_with_options, ExportXmlOptions};
 use zip::write::SimpleFileOptions;
 use zip::{CompressionMethod, ZipWriter};
@@ -100,38 +100,6 @@ pub fn message_receiver_identifier(
 		RegulatoryAuthority::Mfds => "E2BR3_DEFAULT_MESSAGE_RECEIVER_MFDS",
 	};
 	required_env_identifier(env_name)
-}
-
-fn should_validate_export_xml(authority: RegulatoryAuthority) -> Result<bool> {
-	let value = if matches!(authority, RegulatoryAuthority::Fda) {
-		match std::env::var("E2BR3_EXPORT_VALIDATE_FDA") {
-			Ok(value) => value,
-			Err(std::env::VarError::NotPresent) => {
-				std::env::var("E2BR3_EXPORT_VALIDATE").map_err(|_| {
-					Error::BadRequest {
-						message: "E2BR3_EXPORT_VALIDATE must be configured"
-							.to_string(),
-					}
-				})?
-			}
-			Err(err) => {
-				return Err(Error::BadRequest {
-					message: format!("E2BR3_EXPORT_VALIDATE_FDA is invalid: {err}"),
-				});
-			}
-		}
-	} else {
-		std::env::var("E2BR3_EXPORT_VALIDATE").map_err(|_| Error::BadRequest {
-			message: "E2BR3_EXPORT_VALIDATE must be configured".to_string(),
-		})?
-	};
-	match value.trim().to_ascii_lowercase().as_str() {
-		"0" | "false" | "no" => Ok(false),
-		"1" | "true" | "yes" => Ok(true),
-		_ => Err(Error::BadRequest {
-			message: "E2BR3_EXPORT_VALIDATE must be a boolean".to_string(),
-		}),
-	}
 }
 
 fn resolve_requested_export_authority(
@@ -231,13 +199,17 @@ async fn generate_validated_case_xml_for_authority_with_notation(
 		message: format!("export task failed: {err}"),
 	})??;
 
-	if should_validate_export_xml(authority)? {
-		let schema_report =
-			validate_e2b_xml(xml.as_bytes(), None).map_err(|err| {
-				Error::BadRequest {
-					message: format!("export XML validation failed: {err}"),
-				}
-			})?;
+	{
+		let schema_report = validate_e2b_xml(
+			xml.as_bytes(),
+			Some(XmlValidatorConfig {
+				authority: Some(authority),
+				..XmlValidatorConfig::default()
+			}),
+		)
+		.map_err(|err| Error::BadRequest {
+			message: format!("export XML validation failed: {err}"),
+		})?;
 		if !schema_report.ok {
 			let debug_path =
 				std::env::temp_dir().join(format!("e2br3-export-debug-{id}.xml"));
@@ -263,19 +235,6 @@ async fn generate_validated_case_xml_for_authority_with_notation(
 					schema_report.errors.len(),
 					details,
 					debug_path.display()
-				),
-			});
-		}
-		let export_errors = validate_export_rules(xml.as_bytes(), authority)
-			.map_err(|err| Error::BadRequest {
-				message: format!("export XML rule validation failed: {err}"),
-			})?;
-		if let Some(first) = export_errors.first() {
-			return Err(Error::BadRequest {
-				message: format!(
-					"exported XML failed export validation ({} issue(s)); first: {}",
-					export_errors.len(),
-					first.message
 				),
 			});
 		}
