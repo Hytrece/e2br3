@@ -41,12 +41,13 @@ fn build_multipart(
 	xml: &[u8],
 	filename: &str,
 	product_presave_id: Uuid,
+	authority: &str,
 ) -> (String, Vec<u8>) {
 	let boundary = "X-BOUNDARY-ROUNDTRIP";
 	let mut body = Vec::new();
 	body.extend_from_slice(
 		format!(
-			"--{boundary}\r\nContent-Disposition: form-data; name=\"productPresaveId\"\r\n\r\n{product_presave_id}\r\n--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"{filename}\"\r\nContent-Type: application/xml\r\n\r\n"
+			"--{boundary}\r\nContent-Disposition: form-data; name=\"format\"\r\n\r\n{authority}\r\n--{boundary}\r\nContent-Disposition: form-data; name=\"productPresaveId\"\r\n\r\n{product_presave_id}\r\n--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"{filename}\"\r\nContent-Type: application/xml\r\n\r\n"
 		)
 		.as_bytes(),
 	);
@@ -420,8 +421,12 @@ async fn test_roundtrip_fixtures_import_validate_export_revalidate() -> Result<(
 	for fixture in fixtures {
 		let fixture_path = examples_dir().join(fixture.filename);
 		let xml = unique_safety_report_id_xml(fs::read_to_string(&fixture_path)?);
-		let (boundary, multipart) =
-			build_multipart(xml.as_bytes(), fixture.filename, product_presave_id);
+		let (boundary, multipart) = build_multipart(
+			xml.as_bytes(),
+			fixture.filename,
+			product_presave_id,
+			fixture.authority,
+		);
 
 		let (import_status, import_body) = request_json(
 			&app,

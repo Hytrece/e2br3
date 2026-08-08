@@ -509,6 +509,7 @@ async fn create_case_from_intake_authorized(
 		mfds_report_type: data.mfds_report_type.clone(),
 		fda_report_type: data.fda_report_type.clone(),
 		report_year: data.report_year.clone(),
+		import_authority: None,
 	};
 	validate_case_create_payload(&case_create)?;
 	let case_id = CaseBmc::create(ctx, mm, case_create).await?;

@@ -111,7 +111,7 @@ fn build_multipart(
 	let mut body = Vec::new();
 	body.extend_from_slice(
 		format!(
-			"--{boundary}\r\nContent-Disposition: form-data; name=\"productPresaveId\"\r\n\r\n{product_presave_id}\r\n--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"{filename}\"\r\nContent-Type: application/xml\r\n\r\n"
+			"--{boundary}\r\nContent-Disposition: form-data; name=\"format\"\r\n\r\nmfds\r\n--{boundary}\r\nContent-Disposition: form-data; name=\"productPresaveId\"\r\n\r\n{product_presave_id}\r\n--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"{filename}\"\r\nContent-Type: application/xml\r\n\r\n"
 		)
 		.as_bytes(),
 	);

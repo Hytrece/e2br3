@@ -610,6 +610,7 @@ fn to_internal_case_for_create(
 		mfds_report_type: data.mfds_report_type,
 		fda_report_type: data.fda_report_type,
 		report_year: data.report_year,
+		import_authority: None,
 	}
 }
 

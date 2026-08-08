@@ -17,6 +17,7 @@ use lib_core::model::xml_import_history::{
 	XmlImportHistoryBmc, XmlImportHistoryStatus,
 };
 use lib_core::model::ModelManager;
+use lib_core::regulatory::RegulatoryAuthority;
 use lib_rest_core::rest_result::DataRestResult;
 use lib_rest_core::{
 	with_authorized_import_history_collection, with_authorized_import_history_read,
@@ -33,7 +34,9 @@ use xml::import_sections::{
 	c_safety_report::parse_c_safety_report, d_patient::parse_d_patient,
 	e_reaction::parse_e_reactions,
 };
-use xml::validation::{normalize_e2b_xml_for_import, validate_e2b_xml_for_import};
+use xml::validation::{
+	normalize_e2b_xml_for_import, validate_e2b_xml_for_import, XmlValidatorConfig,
+};
 use xml::{
 	extract_safety_report_id_from_xml, import_e2b_xml, CImportSettings,
 	XmlImportRequest, XmlValidationReport,
@@ -47,6 +50,7 @@ struct UploadedImportPayload {
 	bytes: Vec<u8>,
 	filename: Option<String>,
 	product_presave_id: Option<Uuid>,
+	import_authority: Option<RegulatoryAuthority>,
 }
 
 #[derive(Debug, Serialize)]
@@ -109,6 +113,7 @@ async fn read_xml_multipart(
 	let mut file_bytes: Option<Vec<u8>> = None;
 	let mut filename: Option<String> = None;
 	let mut product_presave_id: Option<Uuid> = None;
+	let mut import_authority: Option<RegulatoryAuthority> = None;
 
 	while let Some(field) =
 		multipart
@@ -149,6 +154,18 @@ async fn read_xml_multipart(
 						}
 					})?);
 			}
+			continue;
+		}
+		if name.as_deref() == Some("format") {
+			let value = field.text().await.map_err(|err| Error::BadRequest {
+				message: format!("multipart format read error: {err}"),
+			})?;
+			import_authority =
+				Some(RegulatoryAuthority::parse(&value).ok_or_else(|| {
+					Error::BadRequest {
+						message: "format must be ich, fda or mfds".to_string(),
+					}
+				})?);
 		}
 	}
 
@@ -160,6 +177,7 @@ async fn read_xml_multipart(
 		bytes,
 		filename,
 		product_presave_id,
+		import_authority,
 	})
 }
 
@@ -293,9 +311,16 @@ async fn import_single_xml(
 	decision: XmlImportDecision,
 	product_presave_id: Uuid,
 	product_id: String,
+	import_authority: RegulatoryAuthority,
 ) -> Result<ImportedCaseSummary> {
 	let xml = normalize_e2b_xml_for_import(&xml)?;
-	let validation_report = validate_e2b_xml_for_import(&xml, None);
+	let validation_report = validate_e2b_xml_for_import(
+		&xml,
+		Some(XmlValidatorConfig {
+			authority: Some(import_authority),
+			..Default::default()
+		}),
+	);
 	match validation_report {
 		Ok(report) if report.ok => {}
 		Ok(report) => {
@@ -360,6 +385,7 @@ async fn import_single_xml(
 			c_settings,
 			product_presave_id,
 			product_id,
+			import_authority,
 		},
 	)
 	.await;
@@ -811,7 +837,15 @@ pub async fn validate_xml(
 			Box::pin(async move {
 				let payload = read_xml_multipart(multipart).await?;
 				let xml = normalize_e2b_xml_for_import(&payload.bytes)?;
-				let report = validate_e2b_xml_for_import(&xml, None)?;
+				let report = validate_e2b_xml_for_import(
+					&xml,
+					payload
+						.import_authority
+						.map(|authority| XmlValidatorConfig {
+							authority: Some(authority),
+							..Default::default()
+						}),
+				)?;
 				Ok((StatusCode::OK, Json(DataRestResult { data: report })))
 			})
 		},
@@ -850,6 +884,10 @@ async fn import_xml_authorized(
 	multipart: Multipart,
 ) -> Result<(StatusCode, Json<DataRestResult<XmlImportBatchResult>>)> {
 	let payload = read_xml_multipart(multipart).await?;
+	let import_authority =
+		payload.import_authority.ok_or_else(|| Error::BadRequest {
+			message: "format is required and must be ich, fda or mfds".to_string(),
+		})?;
 	let product_presave_id =
 		payload
 			.product_presave_id
@@ -954,6 +992,7 @@ async fn import_xml_authorized(
 				decision,
 				selected_product.0,
 				selected_product.1.clone(),
+				import_authority,
 			)
 			.await?,
 		);

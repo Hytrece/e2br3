@@ -553,6 +553,7 @@ CREATE TABLE if NOT EXISTS cases (
     fda_report_type VARCHAR(20),
     mfds_report_type TEXT,
     report_year VARCHAR(10),
+    import_authority VARCHAR(16),
 
     -- Workflow tracking
     created_by UUID NOT NULL REFERENCES users(id),
@@ -576,7 +577,8 @@ CREATE TABLE if NOT EXISTS cases (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
     CONSTRAINT case_status_valid CHECK (status IN ('draft', 'reviewed', 'validated', 'locked', 'submitted', 'deleted', 'archived', 'nullified')),
-    CONSTRAINT case_status_before_lock_valid CHECK (status_before_lock IS NULL OR status_before_lock IN ('draft', 'reviewed', 'validated'))
+    CONSTRAINT case_status_before_lock_valid CHECK (status_before_lock IS NULL OR status_before_lock IN ('draft', 'reviewed', 'validated')),
+    CONSTRAINT cases_import_authority_valid CHECK (import_authority IS NULL OR import_authority IN ('ich', 'fda', 'mfds'))
 );
 
 CREATE INDEX idx_cases_organization ON cases(organization_id);
