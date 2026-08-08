@@ -4,8 +4,8 @@ use super::helpers::{
 	DateValues,
 };
 use crate::{
-	has_test_payload, has_text, push_business_issue, RegulatoryAuthority,
-	ValidationContext, ValidationIssue,
+	has_test_payload, has_text, RegulatoryAuthority, ValidationContext,
+	ValidationIssue,
 };
 use lib_core::model::test_result::TestResult;
 
@@ -351,11 +351,13 @@ fn f_r_7(validation_ctx: &ValidationContext, issues: &mut Vec<ValidationIssue>) 
 			.as_ref()
 			.is_none_or(|report| report.additional_documents_available != Some(true))
 	{
-		push_business_issue(
+		crate::push_field_issue(
 			issues,
 			"MFDS.F.r.7.C.1.6.1.REQUIRED",
-			"safetyReport.additionalDocumentsAvailable",
+			"safetyReportIdentification.additionalDocumentsAvailable",
+			"case-identification",
 			"Additional documents must be marked available when more test information is available",
+			true,
 		);
 	}
 }
@@ -424,6 +426,7 @@ mod golden_f_required_tests {
 			submitted_by: None,
 			submitted_at: None,
 			raw_xml: None,
+			import_authority: None,
 			dirty_c: false,
 			dirty_d: false,
 			dirty_e: false,
@@ -676,9 +679,20 @@ mod golden_f_required_tests {
 		ctx.tests = vec![test];
 		let mut issues = Vec::new();
 		f_r_7(&ctx, &mut issues);
-		assert!(issues
+		let issue = issues
 			.iter()
-			.any(|issue| issue.code == "MFDS.F.r.7.C.1.6.1.REQUIRED"));
+			.find(|issue| issue.code == "MFDS.F.r.7.C.1.6.1.REQUIRED")
+			.expect("MFDS F.r.7 issue");
+		assert_eq!(
+			issue.path,
+			"safetyReportIdentification.additionalDocumentsAvailable"
+		);
+		assert_eq!(
+			issue.field_path.as_deref(),
+			Some("safetyReportIdentification.additionalDocumentsAvailable")
+		);
+		assert_eq!(issue.section, "case-identification");
+		assert!(issue.blocking);
 	}
 
 	#[test]
