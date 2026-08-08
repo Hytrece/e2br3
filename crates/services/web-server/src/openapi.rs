@@ -1208,6 +1208,7 @@ struct CaseIntakeCheckResultDoc {
 
 #[derive(serde::Serialize, serde::Deserialize, ToSchema)]
 struct CaseFromIntakeInputDoc {
+	authority: String,
 	safety_report_id: String,
 	#[schema(value_type = Vec<i32>)]
 	transmission_date: Option<Vec<i32>>,

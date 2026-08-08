@@ -75,6 +75,7 @@ pub struct CaseIntakeCheckResult {
 
 #[derive(Debug, Deserialize)]
 pub struct CaseFromIntakeInput {
+	pub authority: RegulatoryAuthority,
 	pub safety_report_id: Option<String>,
 	#[serde(
 		default,
@@ -487,7 +488,7 @@ async fn create_case_from_intake_authorized(
 		return Err(Error::BadRequest { message });
 	}
 
-	let profile_enum = RegulatoryAuthority::Fda;
+	let profile_enum = data.authority;
 	let message_sender_identifier = message_sender_identifier()?;
 	let message_receiver_identifier = message_receiver_identifier(profile_enum)?;
 
@@ -509,7 +510,7 @@ async fn create_case_from_intake_authorized(
 		mfds_report_type: data.mfds_report_type.clone(),
 		fda_report_type: data.fda_report_type.clone(),
 		report_year: data.report_year.clone(),
-		import_authority: None,
+		import_authority: Some(profile_enum.as_str().to_string()),
 	};
 	validate_case_create_payload(&case_create)?;
 	let case_id = CaseBmc::create(ctx, mm, case_create).await?;
