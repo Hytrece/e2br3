@@ -196,14 +196,18 @@ pub async fn list_study_presaves(
 	with_authorized_presave_collection(&ctx, &snapshot, &mm, |ctx, mm, scope| {
 		Box::pin(async move {
 			let entities = StudyPresaveBmc::list(ctx, mm, None).await?;
-			let entities = filter_study_presaves_for_scope(scope, entities)
-				.into_iter()
-				.filter(|study| {
-					product_ids.as_ref().is_none_or(|ids| {
-						study.product_presave_id.is_some_and(|id| ids.contains(&id))
+			let products = ProductPresaveBmc::list(ctx, mm, None).await?;
+			let entities =
+				filter_study_presaves_for_scope(scope, entities, &products)
+					.into_iter()
+					.filter(|study| {
+						product_ids.as_ref().is_none_or(|ids| {
+							study
+								.product_presave_id
+								.is_some_and(|id| ids.contains(&id))
+						})
 					})
-				})
-				.collect();
+					.collect();
 			Ok(rest_ok(entities))
 		})
 	})

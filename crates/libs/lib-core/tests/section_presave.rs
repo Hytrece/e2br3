@@ -791,7 +791,7 @@ async fn study_presave_round_trips_fda_regional_numbers() -> Result<()> {
 
 #[serial]
 #[tokio::test]
-async fn sponsor_company_cannot_set_product_presave_sender() -> Result<()> {
+async fn sponsor_company_can_set_product_presave_sender_in_own_org() -> Result<()> {
 	_dev_utils::init_dev().await;
 	let mm = ModelManager::new().await?;
 	let org_id = create_acl_test_org(&mm, "company-product-sender").await?;
@@ -811,21 +811,18 @@ async fn sponsor_company_cannot_set_product_presave_sender() -> Result<()> {
 	)
 	.await?;
 
-	expect_conflict_error(
-		ProductPresaveBmc::create(
-			&company_ctx,
-			&mm,
-			product_presave_create(
-				RegulatoryAuthority::Fda,
-				"Company Product Create".into(),
-				first_sender_id,
-			),
-		)
-		.await,
-		"only CRO sponsor administrators can set product sender presaves",
-	);
+	let company_product_id = ProductPresaveBmc::create(
+		&company_ctx,
+		&mm,
+		product_presave_create(
+			RegulatoryAuthority::Fda,
+			"Company Product Create".into(),
+			first_sender_id,
+		),
+	)
+	.await?;
 
-	let product_id = ProductPresaveBmc::create(
+	let _cro_product_id = ProductPresaveBmc::create(
 		&cro_ctx,
 		&mm,
 		product_presave_create(
@@ -839,27 +836,13 @@ async fn sponsor_company_cannot_set_product_presave_sender() -> Result<()> {
 	ProductPresaveBmc::update(
 		&company_ctx,
 		&mm,
-		product_id,
+		company_product_id,
 		ProductPresaveForUpdate {
-			medicinal_product: Some("Company Product Text Edit".into()),
+			sender_presave_id: Some(second_sender_id),
 			..Default::default()
 		},
 	)
 	.await?;
-
-	expect_conflict_error(
-		ProductPresaveBmc::update(
-			&company_ctx,
-			&mm,
-			product_id,
-			ProductPresaveForUpdate {
-				sender_presave_id: Some(second_sender_id),
-				..Default::default()
-			},
-		)
-		.await,
-		"only CRO sponsor administrators can set product sender presaves",
-	);
 
 	Ok(())
 }

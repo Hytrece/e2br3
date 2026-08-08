@@ -144,7 +144,8 @@ async fn apply_test_authorization_isolation_migration() -> Result<()> {
 	static APPLIED: OnceCell<()> = OnceCell::const_new();
 	APPLIED
 		.get_or_try_init(|| async {
-			let database_url = std::env::var("SERVICE_DB_URL")
+			let database_url = std::env::var("SERVICE_MIGRATION_DB_URL")
+				.or_else(|_| std::env::var("SERVICE_DB_URL"))
 				.map_err(|error| sqlx::Error::Configuration(Box::new(error)))?;
 			let pool = PgPoolOptions::new()
 				.max_connections(1)
@@ -203,6 +204,11 @@ async fn apply_test_authorization_isolation_migration() -> Result<()> {
 			.map_err(|error| sqlx::Error::Protocol(error.to_string()))?;
 			sqlx::raw_sql(include_str!(
 				"../../../../../db/migrations/20260722_authorization_isolation_audit.sql"
+			))
+			.execute(&pool)
+			.await?;
+			sqlx::raw_sql(include_str!(
+				"../../../../../db/migrations/20260808_users_org_scoped_identity.sql"
 			))
 			.execute(&pool)
 			.await?;

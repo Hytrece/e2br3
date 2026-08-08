@@ -333,6 +333,8 @@ struct LoginRequest {
 	email: String,
 	#[schema(format = Password)]
 	pwd: String,
+	#[serde(rename = "organizationId", alias = "organization_id")]
+	organization_id: Option<String>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, ToSchema)]

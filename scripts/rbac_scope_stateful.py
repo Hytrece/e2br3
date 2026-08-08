@@ -238,9 +238,8 @@ def main(args: argparse.Namespace) -> int:
         observed_status: int | None,
         study_b_visible: bool,
     ) -> None:
-        # The planned invariant says sender-A scope must hide study B.  The
-        # shared policy function currently treats study scope independently;
-        # record a visible B as policy ambiguity, not as a silent pass/fail.
+        # Parent scope is part of the authorization invariant: sender-A must
+        # not expose an unrelated study-B descendant.
         invariant_holds = observed_status in {403, 404} or not study_b_visible
         steps.append(
             Step(
@@ -248,12 +247,12 @@ def main(args: argparse.Namespace) -> int:
                 method=method,
                 path=sanitize_path(path),
                 expected=[403, 404],
-                status="PASS" if invariant_holds else "INCONCLUSIVE",
+                status="PASS" if invariant_holds else "FAIL",
                 response={
                     "observed_status": observed_status,
                     "study_b_visible": study_b_visible,
-                    "policy_source": "context_loader.presave_within_scope(Study): access_study_ids only",
-                    "reason": None if invariant_holds else "policy ambiguity: sender scope alone does not constrain study IDs in current source semantics",
+                    "policy_source": "context_loader.presave_within_scope(Study): parent product/sender scope",
+                    "reason": None if invariant_holds else "scope inheritance violation: sender scope exposed an unrelated study",
                 },
             )
         )
@@ -272,12 +271,12 @@ def main(args: argparse.Namespace) -> int:
                 method=method,
                 path=sanitize_path(path),
                 expected=[403, 404],
-                status="PASS" if invariant_holds else "INCONCLUSIVE",
+                status="PASS" if invariant_holds else "FAIL",
                 response={
                     "observed_status": observed_status,
                     "sender_b_visible": sender_b_visible,
-                    "policy_source": "context_loader.presave_within_scope(Sender): access_sender_ids only",
-                    "reason": None if invariant_holds else "policy ambiguity: product scope alone does not constrain sender IDs in current source semantics",
+                    "policy_source": "context_loader.presave_within_scope(Sender): parent product/study scope",
+                    "reason": None if invariant_holds else "scope inheritance violation: product scope exposed an unrelated sender",
                 },
             )
         )
@@ -606,10 +605,7 @@ def main(args: argparse.Namespace) -> int:
                     "POST",
                     "/api/presaves/products",
                     {"data": {"rows": {"product": {"senderPresaveId": company_sender_id, "productId": f"{prefix}-company", "medicinalProduct": f"{prefix}-company"}, "activeSubstances": []}}},
-                    # Product sender linkage is intentionally CRO-only. A
-                    # company admin must be denied here, not treated as a
-                    # missing positive case.
-                    expected={201, 409},
+                    expected={201},
                     coverage_tags=("edit", "company", "create"),
                 )
                 company_product_id = nested(value, "data", "rows", "product", "id") if isinstance(value, dict) else None
@@ -831,9 +827,8 @@ def main(args: argparse.Namespace) -> int:
                 expected={400} if editable else {403},
             )
             route_target = sender_ids[target_index]
-            # Routing is self-service: product-only/empty scope exposes the
-            # organization's sender chooser; sender scope narrows it.
-            route_allowed = current_scope in {"empty", "product_a", "product_b"} or current_scope == f"sender_{target_label}"
+            # Sender chooser follows the same parent/child scope chain.
+            route_allowed = current_scope == "empty" or current_scope.endswith(target_label)
             call(
                 f"matrix_{round_no:02d}_routing_{target_label}",
                 user,
@@ -1025,19 +1020,8 @@ def main(args: argparse.Namespace) -> int:
         def entity_is_allowed(kind: str, index: int) -> bool:
             if current_scope == "empty":
                 return True
-            if current_scope.startswith("sender_"):
-                if kind == "study":
-                    return True
-                return (current_scope.endswith("a") and index == 0) or (current_scope.endswith("b") and index == 1)
-            if current_scope.startswith("product_"):
-                if kind in {"sender", "study"}:
-                    # Source policy constrains senders by sender IDs and
-                    # studies by study IDs; product scope alone leaves both
-                    # collections unrestricted.
-                    return True
-                return kind == "product" and ((current_scope.endswith("a") and index == 0) or (current_scope.endswith("b") and index == 1))
-            if current_scope.startswith("study_"):
-                return kind == "study" and ((current_scope.endswith("a") and index == 0) or (current_scope.endswith("b") and index == 1))
+            if current_scope.startswith(("sender_", "product_", "study_")):
+                return index == (0 if current_scope.endswith("a") else 1)
             return False
 
         def probe_entity(kind: str, entity_id: str, collection: str, index: int) -> None:
@@ -1244,7 +1228,7 @@ def main(args: argparse.Namespace) -> int:
                 # Routing profile is authenticated self-service, independent
                 # of menu read privilege. Only scope controls the write.
                 adversarial_call(f"adv_{action_no:03d}_route_read", user, email, "GET", "/api/users/me/routing", expected={200}, permission="routing", lifecycle="route", polarity_tag="positive")
-                route_scope_allows = current_scope in {"empty", "product_a", "product_b"} or current_scope == "sender_a" and route_target == sender_ids[0] or current_scope == "sender_b" and route_target == sender_ids[1]
+                route_scope_allows = current_scope == "empty" or current_scope.endswith("a") and route_target == sender_ids[0] or current_scope.endswith("b") and route_target == sender_ids[1]
                 adversarial_call(f"adv_{action_no:03d}_route_write", user, email, "PUT", "/api/users/me/routing", {"data": {"active_sender_identifier": route_target}}, expected={200} if route_scope_allows else {403, 404}, permission="routing", scope=current_scope, lifecycle="route", polarity_tag="positive" if route_scope_allows else "negative")
 
             # Randomly vary profile and scope between probes.  Invalid scope is
@@ -1283,8 +1267,6 @@ def main(args: argparse.Namespace) -> int:
         call("company_profile_soft_delete", system, "system", "DELETE", f"/api/admin/permission-profiles/{company_profile_id}?organizationId={COMPANY_ORG}", expected={204})
     call("profile_soft_delete", system, "system", "DELETE", f"/api/admin/permission-profiles/{profile_id}?organizationId={ORG}", expected={204})
     call("same_session_profile_delete_revoke", user, email, "GET", "/api/presaves/senders", expected={403})
-    steps.append(Step("multi_org_positive_public_api", "N/A", "<second-membership-unreachable>", [], "BLOCKED", {"reason": "public API can switch only an existing active membership; no endpoint adds a second membership"}))
-    steps.append(Step("membership_add_revoke_public_api", "N/A", "<no-public-membership-endpoint>", [], "BLOCKED", {"reason": "public API has no membership add/revoke or user deactivation route"}))
     return write(args, steps, interrupted, coverage, polarity)
 
 

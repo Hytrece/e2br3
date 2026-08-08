@@ -142,6 +142,9 @@
         <strong>Current profile</strong>
         <span id="profile-title">Loading session...</span>
         <div id="profile-chips" class="chips"></div>
+        <label for="organization-select">Organization</label>
+        <select id="organization-select" aria-label="Organization"></select>
+        <div id="organization-message" class="message"></div>
       </aside>
     </section>
 
@@ -261,7 +264,34 @@
         chip.textContent = text;
         $("profile-chips").appendChild(chip);
       });
+      renderOrganizations(body.data);
       renderRouting(body.data.routing);
+    }
+
+    function renderOrganizations(profile) {
+      const select = $("organization-select");
+      const activeId = profile.activeOrganization && profile.activeOrganization.id;
+      const organizations = profile.availableOrganizations || [];
+      select.innerHTML = "";
+      organizations.forEach((organization) => {
+        const option = document.createElement("option");
+        option.value = organization.id;
+        option.textContent = organization.name || organization.id;
+        option.selected = organization.id === activeId;
+        select.appendChild(option);
+      });
+      select.disabled = organizations.length < 2;
+    }
+
+    async function switchOrganization(organizationId) {
+      if (!organizationId || !state.profile || organizationId === state.profile.activeOrganization.id) return;
+      await api("/api/users/me/organization", {
+        method: "PUT",
+        body: JSON.stringify({ data: { organization_id: organizationId } })
+      });
+      setMessage("organization-message", "Organization switched.");
+      await loadProfile();
+      await loadUsers();
     }
 
     function renderRouting(routing) {
@@ -352,6 +382,7 @@
     $("clear-routing").addEventListener("click", () => saveRouting(null).catch((err) => setMessage("routing-message", err.message, false)));
     $("reload-users").addEventListener("click", () => loadUsers().catch((err) => setMessage("user-message", err.message, false)));
     $("save-user-scope").addEventListener("click", () => saveUserScope().catch((err) => setMessage("user-message", err.message, false)));
+    $("organization-select").addEventListener("change", () => switchOrganization($("organization-select").value).catch((err) => setMessage("organization-message", err.message, false)));
     $("user-select").addEventListener("change", fillSelectedUser);
     $("scope-role").addEventListener("input", () => syncScopePolicyForRole($("scope-role").value));
     boot();

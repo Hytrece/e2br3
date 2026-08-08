@@ -10,6 +10,7 @@ type Db = Pool<Postgres>;
 // NOTE: Hardcode to prevent deployed system db update.
 const PG_DEV_POSTGRES_URL: &str = "postgres://postgres:welcome@localhost/postgres";
 const PG_DEV_APP_URL: &str = "postgres://app_user:dev_only_pwd@localhost/app_db";
+const DEV_SYSTEM_USER_ID: &str = "00000000-0000-0000-0000-000000000001";
 
 // sql files
 const SQL_RECREATE_DB_FILE_NAME: &str = "00-recreate-db.sql";
@@ -37,6 +38,15 @@ pub async fn init_dev_db() -> Result<(), Box<dyn std::error::Error>> {
 			db_dir.join("admin").join(SQL_RECREATE_DB_FILE_NAME);
 		let root_db = new_db_pool(PG_DEV_POSTGRES_URL).await?;
 		pexec(&root_db, &sql_recreate_db_file).await?;
+		for sql in [
+			"ALTER DATABASE \"app_db\" OWNER TO \"app_user\"",
+			"DO $$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'e2br3_app_role') THEN CREATE ROLE e2br3_app_role NOLOGIN; END IF; END $$",
+			"DO $$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'e2br3_auditor_role') THEN CREATE ROLE e2br3_auditor_role NOLOGIN; END IF; END $$",
+			"GRANT e2br3_app_role TO app_user WITH ADMIN OPTION",
+			"GRANT e2br3_auditor_role TO app_user WITH ADMIN OPTION",
+		] {
+			sqlx::query(sql).execute(&root_db).await?;
+		}
 	}
 
 	// -- SQL Execute each file.
@@ -65,12 +75,27 @@ async fn pexec(db: &Db, file: &Path) -> Result<(), sqlx::Error> {
 
 	// -- Read the file.
 	let content = fs::read_to_string(file)?;
+	let content = render_dev_sql(&content);
 
 	// Split statements while respecting $$ and quoted strings.
 	let sqls = split_sql(&content);
+	let is_admin_sql = file.file_name().and_then(|name| name.to_str())
+		== Some(SQL_RECREATE_DB_FILE_NAME);
+	let mut connection = db.acquire().await?;
+	if !is_admin_sql {
+		sqlx::query(
+			"SELECT set_config('app.current_user_id', $1, false),
+			        set_config('app.current_organization_id', $2, false),
+			        set_config('app.platform_isolation_bypass', 'true', false)",
+		)
+		.bind(DEV_SYSTEM_USER_ID)
+		.bind("00000000-0000-0000-0000-000000000000")
+		.execute(&mut *connection)
+		.await?;
+	}
 
 	for sql in sqls {
-		if let Err(e) = sqlx::query(&sql).execute(db).await {
+		if let Err(e) = sqlx::query(&sql).execute(&mut *connection).await {
 			if should_ignore_role_error(&sql, &e) {
 				println!(
 					"pexec warning: skipping role creation due to permission error:\n{sql}\nreason:\n{e}"
@@ -99,6 +124,18 @@ async fn pexec(db: &Db, file: &Path) -> Result<(), sqlx::Error> {
 	}
 
 	Ok(())
+}
+
+fn render_dev_sql(sql: &str) -> String {
+	sql.lines()
+		.filter(|line| !line.trim_start().starts_with('\\'))
+		.collect::<Vec<_>>()
+		.join("\n")
+		.replace(":'app_db_user'", "'app_user'")
+		.replace(":\"app_db_user\"", "\"app_user\"")
+		.replace(":'app_db_name'", "'app_db'")
+		.replace(":\"app_db_name\"", "\"app_db\"")
+		.replace(":'app_user_password'", "'dev_only_pwd'")
 }
 
 async fn new_db_pool(db_con_url: &str) -> Result<Db, sqlx::Error> {
@@ -241,5 +278,24 @@ fn should_ignore_grant_role_error(sql: &str, err: &sqlx::Error) -> bool {
 			matches!(db_err.code().as_deref(), Some("42704"))
 		}
 		_ => false,
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::render_dev_sql;
+
+	#[test]
+	fn renders_psql_variables_for_raw_sqlx_execution() {
+		let rendered = render_dev_sql(
+			"\\if :{?app_db_user}\n\\
+			\\else\n\\
+			\\echo 'app_db_user psql variable is required'\n\\
+			\\quit 1\n\\
+			\\endif\n\\
+			GRANT e2br3_app_role TO :\"app_db_user\";",
+		);
+
+		assert_eq!(rendered, "\t\t\tGRANT e2br3_app_role TO \"app_user\";");
 	}
 }

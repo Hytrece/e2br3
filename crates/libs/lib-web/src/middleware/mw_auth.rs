@@ -148,11 +148,26 @@ async fn ctx_resolve(
 	// -- Parse Token
 	let token: Token = token.parse().map_err(|_| CtxExtError::TokenWrongFormat)?;
 
-	// -- Get UserForAuth (now includes role and organization_id)
-	let user: UserForAuth = UserBmc::auth_by_email(&mm, &token.ident)
-		.await
-		.map_err(|ex| CtxExtError::ModelAccessError(ex.to_string()))?
-		.ok_or(CtxExtError::UserNotFound)?;
+	// New tokens bind the selected organization to the signed identity. Keep
+	// accepting legacy email-only tokens while deployments rotate sessions.
+	let user: UserForAuth = if let Some((email, organization_id)) = token
+		.ident
+		.rsplit_once('|')
+		.and_then(|(email, organization)| {
+			uuid::Uuid::parse_str(organization)
+				.ok()
+				.map(|organization_id| (email, organization_id))
+		}) {
+		UserBmc::auth_by_email_and_organization(&mm, email, organization_id)
+			.await
+			.map_err(|ex| CtxExtError::ModelAccessError(ex.to_string()))?
+			.ok_or(CtxExtError::UserNotFound)?
+	} else {
+		UserBmc::auth_by_email(&mm, &token.ident)
+			.await
+			.map_err(|ex| CtxExtError::ModelAccessError(ex.to_string()))?
+			.ok_or(CtxExtError::UserNotFound)?
+	};
 	// -- Validate Token
 	validate_web_token(&token, user.token_salt)
 		.map_err(|_| CtxExtError::FailValidate)?;
@@ -170,7 +185,7 @@ async fn ctx_resolve(
 	.map_err(|error| CtxExtError::AuthorizationSnapshotLoad(error.to_string()))?;
 
 	// -- Update Token
-	set_token_cookie(cookies, &user.email, user.token_salt)
+	set_token_cookie(cookies, &user.email, user.organization_id, user.token_salt)
 		.map_err(|_| CtxExtError::CannotSetTokenCookie)?;
 
 	let ctx = Ctx::from_authorization_snapshot(&snapshot)

@@ -28,6 +28,20 @@ pub async fn reconcile_authorization_storage(
 		})?;
 	let pool = sqlx::postgres::PgPoolOptions::new()
 		.max_connections(1)
+		.after_connect(|conn, _meta| {
+			Box::pin(async move {
+				sqlx::query(
+					"SELECT set_config('app.current_user_id', $1, false),
+					        set_config('app.current_organization_id', $2, false),
+					        set_config('app.platform_isolation_bypass', 'true', false)",
+				)
+				.bind("00000000-0000-0000-0000-000000000001")
+				.bind("00000000-0000-0000-0000-000000000000")
+				.execute(&mut *conn)
+				.await?;
+				Ok(())
+			})
+		})
 		.connect(&database_url)
 		.await?;
 	let registry = lib_core::authorization::policy_registry();

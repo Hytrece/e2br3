@@ -10,6 +10,7 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 use tower_cookies::Cookies;
 use tracing::debug;
+use uuid::Uuid;
 
 // region:    --- Login
 pub async fn api_login_handler(
@@ -22,12 +23,22 @@ pub async fn api_login_handler(
 	let LoginPayload {
 		email,
 		pwd: pwd_clear,
+		organization_id,
 	} = payload;
 	// -- Get the user (set auth email in-session to satisfy RLS).
-	let user: UserForLogin = UserBmc::auth_login_by_email(&mm, &email)
+	let user: UserForLogin = match organization_id {
+		Some(organization_id) => UserBmc::auth_login_by_email_and_organization(
+			&mm,
+			&email,
+			organization_id,
+		)
 		.await
-		.map_err(Error::Model)?
-		.ok_or(Error::LoginFailEmailNotFound)?;
+		.map_err(Error::Model)?,
+		None => UserBmc::auth_login_by_email(&mm, &email)
+			.await
+			.map_err(Error::Model)?,
+	}
+	.ok_or(Error::LoginFailEmailNotFound)?;
 	let user_id = user.id;
 
 	// Reject malformed/legacy accounts that cannot build an authenticated context.
@@ -61,7 +72,12 @@ pub async fn api_login_handler(
 	}
 
 	// -- Set web token.
-	token::set_token_cookie(&cookies, &user.email, user.token_salt)?;
+	token::set_token_cookie(
+		&cookies,
+		&user.email,
+		user.organization_id,
+		user.token_salt,
+	)?;
 
 	// Create the success body.
 	let body = Json(json!({
@@ -78,6 +94,8 @@ pub async fn api_login_handler(
 pub struct LoginPayload {
 	email: String,
 	pwd: String,
+	#[serde(alias = "organizationId")]
+	organization_id: Option<Uuid>,
 }
 // endregion: --- Login
 
@@ -126,7 +144,12 @@ pub async fn api_refresh_handler(
 		.map_err(Error::Model)?;
 
 	// Set new web token
-	token::set_token_cookie(&cookies, &user.email, user.token_salt)?;
+	token::set_token_cookie(
+		&cookies,
+		&user.email,
+		user.organization_id,
+		user.token_salt,
+	)?;
 
 	// Calculate expiration time (15 minutes from now)
 	let expires_at = time::OffsetDateTime::now_utc() + time::Duration::minutes(15);

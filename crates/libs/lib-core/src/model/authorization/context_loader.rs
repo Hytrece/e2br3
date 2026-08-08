@@ -94,7 +94,10 @@ impl PresaveAuthorizationKind {
 #[derive(Debug, FromRow)]
 struct PresaveFacts {
 	organization_id: Uuid,
+	product_presave_id: Option<Uuid>,
 	sender_presave_id: Option<Uuid>,
+	child_product_ids: Vec<Uuid>,
+	child_study_ids: Vec<Uuid>,
 }
 
 #[derive(Debug, FromRow)]
@@ -250,7 +253,10 @@ impl<'tx> AuthorizationFactLoader<'tx> {
 			kind,
 			id,
 			facts.organization_id,
+			facts.product_presave_id,
 			facts.sender_presave_id,
+			&facts.child_product_ids,
+			&facts.child_study_ids,
 		)))
 	}
 
@@ -269,7 +275,10 @@ impl<'tx> AuthorizationFactLoader<'tx> {
 			kind,
 			id,
 			facts.organization_id,
+			facts.product_presave_id,
 			facts.sender_presave_id,
+			&facts.child_product_ids,
+			&facts.child_study_ids,
 		)))
 	}
 
@@ -280,14 +289,71 @@ impl<'tx> AuthorizationFactLoader<'tx> {
 		for_update: bool,
 	) -> Result<PresaveFacts, AuthorizationFactLoadError> {
 		let lock = if for_update { " FOR UPDATE" } else { "" };
-		let sender_presave_id = match kind {
-			PresaveAuthorizationKind::Product => "sender_presave_id",
-			_ => "NULL::uuid AS sender_presave_id",
+		let sql = match kind {
+			PresaveAuthorizationKind::Sender => format!(
+				r#"
+				SELECT sender.organization_id,
+				       NULL::uuid AS product_presave_id,
+				       NULL::uuid AS sender_presave_id,
+				       COALESCE(
+				        (SELECT array_agg(DISTINCT product.id)
+				           FROM product_presaves product
+				          WHERE product.sender_presave_id = sender.id
+				            AND product.deleted = false),
+				        ARRAY[]::uuid[]
+				       ) AS child_product_ids,
+				       COALESCE(
+				        (SELECT array_agg(DISTINCT study.id)
+				           FROM study_presaves study
+				           JOIN product_presaves product
+				             ON product.id = study.product_presave_id
+				            AND product.sender_presave_id = sender.id
+				          WHERE study.deleted = false
+				            AND product.deleted = false),
+				        ARRAY[]::uuid[]
+				       ) AS child_study_ids
+				  FROM sender_presaves sender
+				 WHERE sender.id = $1
+				 {lock}
+				"#
+			),
+			PresaveAuthorizationKind::Product => format!(
+				r#"
+				SELECT product.organization_id,
+				       NULL::uuid AS product_presave_id,
+				       product.sender_presave_id,
+				       ARRAY[]::uuid[] AS child_product_ids,
+				       COALESCE(
+				        (SELECT array_agg(DISTINCT study.id)
+				           FROM study_presaves study
+				          WHERE study.product_presave_id = product.id
+				            AND study.deleted = false),
+				        ARRAY[]::uuid[]
+				       ) AS child_study_ids
+				  FROM product_presaves product
+				 WHERE product.id = $1
+				 {lock}
+				"#
+			),
+			PresaveAuthorizationKind::Study => format!(
+				r#"
+				SELECT study.organization_id,
+				       study.product_presave_id,
+				       (SELECT product.sender_presave_id
+				          FROM product_presaves product
+				         WHERE product.id = study.product_presave_id
+				           AND product.deleted = false) AS sender_presave_id,
+				       ARRAY[]::uuid[] AS child_product_ids,
+				       ARRAY[]::uuid[] AS child_study_ids
+				  FROM study_presaves study
+				 WHERE study.id = $1{lock}
+				"#
+			),
+			_ => format!(
+				"SELECT organization_id, NULL::uuid AS product_presave_id, NULL::uuid AS sender_presave_id, ARRAY[]::uuid[] AS child_product_ids, ARRAY[]::uuid[] AS child_study_ids FROM {} WHERE id = $1{lock}",
+				kind.table()
+			),
 		};
-		let sql = format!(
-			"SELECT organization_id, {sender_presave_id} FROM {} WHERE id = $1{lock}",
-			kind.table()
-		);
 		self.dbx
 			.fetch_optional(sqlx::query_as::<_, PresaveFacts>(&sql).bind(id))
 			.await?
@@ -907,7 +973,10 @@ fn presave_evaluated(
 	kind: PresaveAuthorizationKind,
 	id: Uuid,
 	organization_id: Uuid,
+	product_presave_id: Option<Uuid>,
 	sender_presave_id: Option<Uuid>,
+	child_product_ids: &[Uuid],
+	child_study_ids: &[Uuid],
 ) -> EvaluatedContext {
 	EvaluatedContext {
 		organization_id: Some(organization_id),
@@ -916,7 +985,10 @@ fn presave_evaluated(
 			snapshot,
 			kind,
 			id,
+			product_presave_id,
 			sender_presave_id,
+			child_product_ids,
+			child_study_ids,
 		),
 		lifecycle_compatible: false,
 		parent_authorized: false,
@@ -929,29 +1001,59 @@ fn presave_within_scope(
 	snapshot: &RequestAuthorizationSnapshot,
 	kind: PresaveAuthorizationKind,
 	id: Uuid,
+	product_presave_id: Option<Uuid>,
 	sender_presave_id: Option<Uuid>,
+	child_product_ids: &[Uuid],
+	child_study_ids: &[Uuid],
 ) -> bool {
 	let identifier = id.to_string();
 	match kind {
 		PresaveAuthorizationKind::Sender => {
 			scope_allows(snapshot.scope().sender_ids(), &[identifier])
+				&& uuid_scope_allows(
+					snapshot.scope().product_ids(),
+					child_product_ids,
+				) && uuid_scope_allows(snapshot.scope().study_ids(), child_study_ids)
 		}
 		PresaveAuthorizationKind::Product => {
 			scope_allows(snapshot.scope().product_ids(), &[identifier])
-				&& sender_presave_id.is_none_or(|sender_id| {
-					scope_allows(
-						snapshot.scope().sender_ids(),
-						&[sender_id.to_string()],
-					)
-				})
+				&& parent_scope_allows(
+					snapshot.scope().sender_ids(),
+					sender_presave_id,
+				) && uuid_scope_allows(snapshot.scope().study_ids(), child_study_ids)
 		}
 		PresaveAuthorizationKind::Study => {
 			scope_allows(snapshot.scope().study_ids(), &[identifier])
+				&& parent_scope_allows(
+					snapshot.scope().product_ids(),
+					product_presave_id,
+				) && parent_scope_allows(
+				snapshot.scope().sender_ids(),
+				sender_presave_id,
+			)
 		}
 		PresaveAuthorizationKind::Receiver
 		| PresaveAuthorizationKind::Reporter
 		| PresaveAuthorizationKind::Narrative => true,
 	}
+}
+
+fn uuid_scope_allows(assigned: &[String], available: &[Uuid]) -> bool {
+	if assigned.is_empty() {
+		return true;
+	}
+	available.iter().any(|candidate| {
+		assigned
+			.iter()
+			.any(|assigned| assigned.eq_ignore_ascii_case(&candidate.to_string()))
+	})
+}
+
+fn parent_scope_allows(assigned: &[String], parent_id: Option<Uuid>) -> bool {
+	assigned.is_empty()
+		|| parent_id.is_some_and(|parent_id| {
+			scope_allows(assigned, &[parent_id.to_string()])
+		})
 }
 
 fn case_lifecycle_allows(facts: &CaseFacts, kind: CaseMutationKind) -> bool {
@@ -1067,19 +1169,79 @@ mod tests {
 			&snapshot,
 			PresaveAuthorizationKind::Product,
 			product_id,
-			Some(allowed_sender_id),
-		));
-		assert!(presave_within_scope(
-			&snapshot,
-			PresaveAuthorizationKind::Product,
-			product_id,
 			None,
+			Some(allowed_sender_id),
+			&[],
+			&[],
 		));
 		assert!(!presave_within_scope(
 			&snapshot,
 			PresaveAuthorizationKind::Product,
 			product_id,
+			None,
+			None,
+			&[],
+			&[],
+		));
+		assert!(!presave_within_scope(
+			&snapshot,
+			PresaveAuthorizationKind::Product,
+			product_id,
+			None,
 			Some(blocked_sender_id),
+			&[],
+			&[],
+		));
+	}
+
+	#[test]
+	fn parent_scopes_are_required_for_presave_descendants() {
+		let sender_id = Uuid::new_v4();
+		let product_id = Uuid::new_v4();
+		let study_id = Uuid::new_v4();
+		let other_sender_id = Uuid::new_v4();
+		let other_product_id = Uuid::new_v4();
+		let sender_snapshot =
+			snapshot(1, 1, vec![sender_id.to_string()], Vec::new());
+
+		assert!(presave_within_scope(
+			&sender_snapshot,
+			PresaveAuthorizationKind::Study,
+			study_id,
+			Some(product_id),
+			Some(sender_id),
+			&[],
+			&[],
+		));
+		assert!(!presave_within_scope(
+			&sender_snapshot,
+			PresaveAuthorizationKind::Study,
+			study_id,
+			Some(other_product_id),
+			Some(other_sender_id),
+			&[],
+			&[],
+		));
+
+		let product_snapshot =
+			snapshot(1, 1, Vec::new(), vec![product_id.to_string()]);
+		assert!(presave_within_scope(
+			&product_snapshot,
+			PresaveAuthorizationKind::Sender,
+			sender_id,
+			None,
+			None,
+			&[product_id],
+			&[study_id],
+		));
+		assert!(!presave_within_scope(
+			&product_snapshot,
+			PresaveAuthorizationKind::Sender,
+			other_sender_id,
+			None,
+			None,
+			&[other_product_id],
+			&[],
 		));
 	}
 }

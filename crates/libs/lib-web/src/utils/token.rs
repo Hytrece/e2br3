@@ -8,12 +8,16 @@ use uuid::Uuid;
 
 pub(crate) const AUTH_TOKEN: &str = "auth-token";
 
-pub(crate) fn set_token_cookie(
+pub fn set_token_cookie(
 	cookies: &Cookies,
-	user: &str,
+	email: &str,
+	organization_id: Uuid,
 	salt: Uuid,
 ) -> Result<()> {
-	let token = generate_web_token(user, salt)?;
+	// Email is not globally unique. Bind the selected tenant into the signed
+	// identity so a token can never resolve to another same-email account.
+	let identity = format!("{email}|{organization_id}");
+	let token = generate_web_token(&identity, salt)?;
 
 	let mut cookie = Cookie::new(AUTH_TOKEN, token.to_string());
 	cookie.set_http_only(true);

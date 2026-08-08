@@ -50,8 +50,8 @@ CREATE TABLE IF NOT EXISTS users (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     organization_id UUID NOT NULL,  -- FK added after organizations table is created
 
-    email VARCHAR(255) UNIQUE NOT NULL,
-    username VARCHAR(128) UNIQUE NOT NULL,
+    email VARCHAR(255) NOT NULL,
+    username VARCHAR(128) NOT NULL,
 
     -- Auth (reuse your existing pattern)
     pwd VARCHAR(256),
@@ -84,6 +84,14 @@ CREATE TABLE IF NOT EXISTS users (
         OR role ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
     )
 );
+
+-- An identity may be provisioned once per organization.  The same email and
+-- username are therefore valid in separate organizations but remain unique
+-- within each tenant.
+CREATE UNIQUE INDEX IF NOT EXISTS users_organization_email_unique
+    ON users (organization_id, lower(btrim(email)));
+CREATE UNIQUE INDEX IF NOT EXISTS users_organization_username_unique
+    ON users (organization_id, lower(btrim(username)));
 
 CREATE TABLE IF NOT EXISTS user_organization_memberships (
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -2181,7 +2189,7 @@ CREATE POLICY users_org_isolation_select ON users
     USING (
         organization_id = current_organization_id()
         OR is_current_user_admin()
-        OR email = current_setting('app.auth_email', true)
+        OR lower(btrim(email)) = lower(btrim(current_setting('app.auth_email', true)))
     );
 
 -- Only admins can create/update/delete users
@@ -2208,7 +2216,7 @@ CREATE POLICY user_organization_memberships_read ON user_organization_membership
     FOR SELECT
     TO e2br3_app_role
     USING (
-        user_id = get_current_user_context()
+        user_id = NULLIF(current_setting('app.current_user_id', true), '')::UUID
         OR is_current_user_admin()
     );
 
@@ -2240,8 +2248,15 @@ CREATE POLICY orgs_select ON organizations
             SELECT 1
             FROM user_organization_memberships membership
             WHERE membership.organization_id = organizations.id
-              AND membership.user_id = get_current_user_context()
+              AND membership.user_id = NULLIF(current_setting('app.current_user_id', true), '')::UUID
               AND membership.active = true
+        )
+        OR EXISTS (
+            SELECT 1
+            FROM users same_email_user
+            WHERE same_email_user.organization_id = organizations.id
+              AND lower(btrim(same_email_user.email)) = lower(btrim(current_setting('app.auth_email', true)))
+              AND same_email_user.active = true
         )
     );
 

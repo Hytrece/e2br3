@@ -484,6 +484,7 @@ async fn current_user_menu_privileges(
 pub async fn update_current_user_organization(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	cookies: tower_cookies::Cookies,
 	Json(params): Json<ParamsForUpdate<OrganizationSelectionBody>>,
 ) -> Result<(
 	StatusCode,
@@ -496,23 +497,37 @@ pub async fn update_current_user_organization(
 			message: "organization_id is required".to_string(),
 		});
 	}
-	let selected =
-		UserBmc::select_current_user_organization(&ctx, &mm, next_organization_id)
-			.await?;
-	if !selected {
-		return Err(Error::AccessDenied {
-			required_role: "organization_membership".to_string(),
-		});
-	}
-	let selected_ctx =
-		Ctx::new(ctx.user_id(), next_organization_id, ctx.role().to_string())
-			.map_err(|_| Error::BadRequest {
-				message: "valid selected organization context required".to_string(),
-			})?
-			.with_compliance(
-				ctx.change_reason().map(ToString::to_string),
-				ctx.e_signature_id(),
-			);
+	let current_user: User = UserBmc::get(&ctx, &mm, ctx.user_id()).await?;
+	let target_account = UserBmc::auth_by_email_and_organization(
+		&mm,
+		&current_user.email,
+		next_organization_id,
+	)
+	.await?
+	.ok_or_else(|| Error::AccessDenied {
+		required_role: "same_email_organization_account".to_string(),
+	})?;
+	token::set_token_cookie(
+		&cookies,
+		&target_account.email,
+		target_account.organization_id,
+		target_account.token_salt,
+	)
+	.map_err(|_| Error::BadRequest {
+		message: "could not establish organization session".to_string(),
+	})?;
+	let selected_ctx = Ctx::new(
+		target_account.id,
+		target_account.organization_id,
+		target_account.role.clone(),
+	)
+	.map_err(|_| Error::BadRequest {
+		message: "valid selected organization context required".to_string(),
+	})?
+	.with_compliance(
+		ctx.change_reason().map(ToString::to_string),
+		ctx.e_signature_id(),
+	);
 	let selection =
 		current_user_organization_selection_view(&selected_ctx, &mm).await?;
 	Ok((StatusCode::OK, Json(DataRestResult { data: selection })))
@@ -533,23 +548,24 @@ pub async fn get_current_user_routing(
 	let routing_ctx = if organization_id == ctx.organization_id() {
 		ctx
 	} else {
-		let is_member = UserBmc::user_has_organization_membership(
-			&ctx,
+		let current_user: User = UserBmc::get(&ctx, &mm, ctx.user_id()).await?;
+		let target_account = UserBmc::auth_by_email_and_organization(
 			&mm,
-			ctx.user_id(),
+			&current_user.email,
 			organization_id,
 		)
-		.await?;
-		if !is_member {
-			return Err(Error::AccessDenied {
-				required_role: "organization_membership".to_string(),
-			});
-		}
-		Ctx::new(ctx.user_id(), organization_id, ctx.role().to_string()).map_err(
-			|_| Error::BadRequest {
-				message: "valid organization context required".to_string(),
-			},
-		)?
+		.await?
+		.ok_or_else(|| Error::AccessDenied {
+			required_role: "same_email_organization_account".to_string(),
+		})?;
+		Ctx::new(
+			target_account.id,
+			target_account.organization_id,
+			target_account.role,
+		)
+		.map_err(|_| Error::BadRequest {
+			message: "valid organization context required".to_string(),
+		})?
 	};
 	let routing = routing_profile_for_user(&routing_ctx, &mm).await?;
 	Ok((StatusCode::OK, Json(DataRestResult { data: routing })))

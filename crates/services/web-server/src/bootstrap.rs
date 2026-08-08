@@ -266,7 +266,8 @@ async fn sync_user(
 	role: &str,
 	comments: &str,
 ) -> ModelResult<()> {
-	let existing_user_id = find_user_id_by_email(ctx, mm, email).await?;
+	let existing_user_id =
+		find_user_id_by_email(ctx, mm, email, organization_id).await?;
 
 	match existing_user_id {
 		Some(user_id) => {
@@ -329,6 +330,7 @@ async fn find_user_id_by_email(
 	ctx: &Ctx,
 	mm: &ModelManager,
 	email: &str,
+	organization_id: Uuid,
 ) -> ModelResult<Option<Uuid>> {
 	mm.dbx().begin_txn().await?;
 	if let Err(err) = set_full_context_dbx(
@@ -346,9 +348,13 @@ async fn find_user_id_by_email(
 		.dbx()
 		.fetch_optional(
 			query_as::<_, (Uuid,)>(
-				"SELECT id FROM users WHERE lower(email) = lower($1) LIMIT 1",
+				"SELECT id FROM users
+				 WHERE lower(email) = lower($1)
+				   AND organization_id = $2
+				 LIMIT 1",
 			)
-			.bind(email),
+			.bind(email)
+			.bind(organization_id),
 		)
 		.await;
 	match result {

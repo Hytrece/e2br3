@@ -485,8 +485,9 @@ fn product_allowed_by_scope(
 	product_sender_id: Option<Uuid>,
 ) -> bool {
 	identifier_allowed(product_ids, product_id)
-		&& product_sender_id
-			.is_none_or(|sender_id| identifier_allowed(sender_ids, sender_id))
+		&& (sender_ids.is_empty()
+			|| product_sender_id
+				.is_some_and(|sender_id| identifier_allowed(sender_ids, sender_id)))
 }
 
 pub(crate) fn product_presave_allowed(
@@ -742,20 +743,45 @@ pub(super) async fn narrative_presave_used_by_cases(
 pub(super) fn filter_sender_presaves_for_scope(
 	scope: &EnforcedScopeFilter,
 	entities: Vec<SenderPresave>,
+	products: &[ProductPresave],
+	studies: &[StudyPresave],
 ) -> Vec<SenderPresave> {
 	entities
 		.into_iter()
-		.filter(|entity| identifier_allowed(scope.sender_ids(), entity.id))
+		.filter(|entity| {
+			identifier_allowed(scope.sender_ids(), entity.id)
+				&& (scope.product_ids().is_empty()
+					|| products.iter().any(|product| {
+						product.sender_presave_id == Some(entity.id)
+							&& identifier_allowed(scope.product_ids(), product.id)
+					})) && (scope.study_ids().is_empty()
+				|| studies.iter().any(|study| {
+					study.product_presave_id.is_some_and(|product_id| {
+						products.iter().any(|product| {
+							product.id == product_id
+								&& product.sender_presave_id == Some(entity.id)
+						})
+					}) && identifier_allowed(scope.study_ids(), study.id)
+				}))
+		})
 		.collect()
 }
 
 pub(super) fn filter_product_presaves_for_scope(
 	scope: &EnforcedScopeFilter,
 	entities: Vec<ProductPresave>,
+	studies: &[StudyPresave],
 ) -> Vec<ProductPresave> {
 	entities
 		.into_iter()
-		.filter(|entity| product_presave_allowed(scope, entity))
+		.filter(|entity| {
+			product_presave_allowed(scope, entity)
+				&& (scope.study_ids().is_empty()
+					|| studies.iter().any(|study| {
+						study.product_presave_id == Some(entity.id)
+							&& identifier_allowed(scope.study_ids(), study.id)
+					}))
+		})
 		.collect()
 }
 
@@ -783,22 +809,49 @@ mod tests {
 			product_id,
 			Some(blocked_sender_id),
 		));
-		assert!(product_allowed_by_scope(
+		assert!(!product_allowed_by_scope(
 			&sender_scope,
 			&[],
 			product_id,
 			None,
 		));
+		assert!(product_allowed_by_scope(&[], &[], product_id, None));
 	}
 }
 
 pub(super) fn filter_study_presaves_for_scope(
 	scope: &EnforcedScopeFilter,
 	entities: Vec<StudyPresave>,
+	products: &[ProductPresave],
 ) -> Vec<StudyPresave> {
 	entities
 		.into_iter()
-		.filter(|entity| identifier_allowed(scope.study_ids(), entity.id))
+		.filter(|entity| {
+			identifier_allowed(scope.study_ids(), entity.id)
+				&& entity
+					.product_presave_id
+					.map(|product_id| {
+						products
+							.iter()
+							.find(|product| product.id == product_id)
+							.is_some_and(|product| {
+								identifier_allowed(scope.product_ids(), product.id)
+									&& (scope.sender_ids().is_empty()
+										|| product.sender_presave_id.is_some_and(
+											|sender_id| {
+												identifier_allowed(
+													scope.sender_ids(),
+													sender_id,
+												)
+											},
+										))
+							})
+					})
+					.unwrap_or_else(|| {
+						scope.product_ids().is_empty()
+							&& scope.sender_ids().is_empty()
+					})
+		})
 		.collect()
 }
 

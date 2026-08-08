@@ -346,6 +346,10 @@ pub struct RoutingSenderOption {
 	pub case_count: i64,
 	#[serde(skip)]
 	scope_identifiers: Vec<String>,
+	#[serde(skip)]
+	product_identifiers: Vec<String>,
+	#[serde(skip)]
+	study_identifiers: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -377,6 +381,8 @@ struct SenderOptionRow {
 	sender_identifier: String,
 	sender_organization: Option<String>,
 	scope_identifiers: Vec<String>,
+	product_identifiers: Vec<String>,
+	study_identifiers: Vec<String>,
 	case_count: i64,
 }
 
@@ -458,6 +464,20 @@ async fn load_sender_options_for_org(
 			SELECT s.id::text AS sender_identifier,
 			       NULLIF(BTRIM(s.organization_name), '') AS sender_organization,
 			       ARRAY[s.id::text] AS scope_identifiers,
+			       COALESCE((
+				       SELECT array_agg(DISTINCT p.id::text)
+				       FROM product_presaves p
+				       WHERE p.sender_presave_id = s.id
+				         AND p.deleted = FALSE
+				   ), ARRAY[]::text[]) AS product_identifiers,
+			       COALESCE((
+				       SELECT array_agg(DISTINCT study.id::text)
+				       FROM study_presaves study
+				       JOIN product_presaves p ON p.id = study.product_presave_id
+				       WHERE p.sender_presave_id = s.id
+				         AND p.deleted = FALSE
+				         AND study.deleted = FALSE
+				   ), ARRAY[]::text[]) AS study_identifiers,
 			       COUNT(DISTINCT sender.case_id)::bigint AS case_count
 			FROM sender_presaves s
 			LEFT JOIN sender_information sender
@@ -483,6 +503,8 @@ async fn load_sender_options_for_org(
 			sender_identifier: row.sender_identifier,
 			case_count: row.case_count,
 			scope_identifiers: row.scope_identifiers,
+			product_identifiers: row.product_identifiers,
+			study_identifiers: row.study_identifiers,
 		})
 		.collect())
 }
@@ -556,17 +578,18 @@ pub async fn routing_profile_for_user(
 
 	let available_senders = if ctx.is_sponsor_admin() {
 		all_senders
-	} else if sender_scope.values.is_empty() {
+	} else if sender_scope.values.is_empty()
+		&& product_scope.values.is_empty()
+		&& study_scope.values.is_empty()
+	{
 		all_senders
 	} else {
 		all_senders
 			.into_iter()
 			.filter(|row| {
-				sender_scope.values.iter().any(|assigned| {
-					row.scope_identifiers
-						.iter()
-						.any(|scope| assigned.eq_ignore_ascii_case(scope))
-				})
+				(scope_allows_strict(&sender_scope, &row.scope_identifiers))
+					&& scope_allows_strict(&product_scope, &row.product_identifiers)
+					&& scope_allows_strict(&study_scope, &row.study_identifiers)
 			})
 			.collect()
 	};
@@ -591,6 +614,19 @@ pub async fn routing_profile_for_user(
 		},
 		available_senders,
 	})
+}
+
+fn scope_allows_strict(assigned: &ParsedScope, available: &[String]) -> bool {
+	if assigned.invalid {
+		return false;
+	}
+	assigned.values.is_empty()
+		|| available.iter().any(|value| {
+			assigned
+				.values
+				.iter()
+				.any(|assigned| assigned.eq_ignore_ascii_case(value))
+		})
 }
 
 pub async fn validate_active_sender_selection(
@@ -871,6 +907,13 @@ mod scope_tests {
 		assert!(scope.invalid);
 		assert!(!scope_allows(&scope, &[SENDER_ID.to_string()]));
 		assert!(scope_values_from_raw(Some("[\"Demo CRO Organization\"]")).is_err());
+	}
+
+	#[test]
+	fn parent_scope_does_not_allow_unlinked_sender() {
+		let scope = parse_scope_values(Some(&format!("[\"{SENDER_ID}\"]")));
+		assert!(!scope_allows_strict(&scope, &[]));
+		assert!(scope_allows_strict(&scope, &[SENDER_ID.to_string()]));
 	}
 }
 

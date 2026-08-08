@@ -90,7 +90,11 @@ pub async fn list_sender_presaves(
 	with_authorized_presave_collection(&ctx, &snapshot, &mm, |ctx, mm, scope| {
 		Box::pin(async move {
 			let entities = SenderPresaveBmc::list(ctx, mm, None).await?;
-			let visible = filter_sender_presaves_for_scope(scope, entities);
+			let products = ProductPresaveBmc::list(ctx, mm, None).await?;
+			let studies = StudyPresaveBmc::list(ctx, mm, None).await?;
+			let visible = filter_sender_presaves_for_scope(
+				scope, entities, &products, &studies,
+			);
 			let mut details = Vec::with_capacity(visible.len());
 			for sender in visible {
 				details.push(load_sender_presave_details(ctx, mm, sender.id).await?);

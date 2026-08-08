@@ -1303,7 +1303,8 @@ impl ProductPresaveBmc {
 		mm: &ModelManager,
 		data: ProductPresaveForCreate,
 	) -> Result<Uuid> {
-		Self::ensure_sender_assignment_allowed(ctx, data.sender_presave_id)?;
+		Self::ensure_sender_assignment_allowed(ctx, mm, data.sender_presave_id)
+			.await?;
 		Self::ensure_receiver_assignment_allowed(ctx, mm, data.receiver_presave_id)
 			.await?;
 		Self::validate_identity(
@@ -1361,7 +1362,8 @@ impl ProductPresaveBmc {
 				"presave deletion must use lifecycle service",
 			));
 		}
-		Self::ensure_sender_assignment_allowed(ctx, data.sender_presave_id)?;
+		Self::ensure_sender_assignment_allowed(ctx, mm, data.sender_presave_id)
+			.await?;
 		Self::ensure_receiver_assignment_allowed(ctx, mm, data.receiver_presave_id)
 			.await?;
 		{
@@ -1409,14 +1411,32 @@ impl ProductPresaveBmc {
 		)
 	}
 
-	fn ensure_sender_assignment_allowed(
+	async fn ensure_sender_assignment_allowed(
 		ctx: &Ctx,
+		mm: &ModelManager,
 		sender_presave_id: Option<Uuid>,
 	) -> Result<()> {
-		if sender_presave_id.is_some() && !ctx.is_cro_sponsor_admin() {
+		if sender_presave_id.is_some()
+			&& !ctx.is_cro_sponsor_admin()
+			&& !ctx.is_company_sponsor_admin()
+		{
 			return Err(relationship_conflict(
-				"only CRO sponsor administrators can set product sender presaves",
+				"only CRO or company sponsor administrators can set product sender presaves",
 			));
+		}
+		if let Some(sender_presave_id) = sender_presave_id {
+			let sender = SenderPresaveBmc::get(ctx, mm, sender_presave_id)
+				.await
+				.map_err(|_| {
+					relationship_conflict(
+						"product sender presave must belong to the active organization",
+					)
+				})?;
+			if sender.deleted || sender.organization_id != ctx.organization_id() {
+				return Err(relationship_conflict(
+					"product sender presave must belong to the active organization",
+				));
+			}
 		}
 
 		Ok(())
