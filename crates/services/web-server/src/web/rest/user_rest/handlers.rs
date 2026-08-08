@@ -375,6 +375,7 @@ pub async fn update_user(
 					email,
 					username,
 					role,
+					active: data.active,
 					comments: data.comments,
 					other_information: data.other_information,
 					access_start_at: data.access_start_at,
@@ -386,7 +387,6 @@ pub async fn update_user(
 					access_study_ids: serialize_scope_input(data.access_study_ids),
 					access_blind_allowed: data.access_blind_allowed,
 					active_sender_identifier: data.active_sender_identifier,
-					active: None,
 					last_login_at: data.last_login_at,
 				};
 				UserBmc::update(db_ctx, mm, id, update).await?;

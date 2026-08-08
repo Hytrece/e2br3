@@ -27,6 +27,7 @@ from rbac_rls_blackbox import (
 
 ORG = "00000000-0000-0000-0000-000000000001"
 COMPANY_ORG = "00000000-0000-0000-0000-000000000002"
+UNKNOWN_ORG = "00000000-0000-0000-0000-000000000003"
 
 
 @dataclass
@@ -106,11 +107,16 @@ def main(args: argparse.Namespace) -> int:
     stale_user = ApiClient(args.base_url, args.timeout)
     fresh_user = ApiClient(args.base_url, args.timeout)
     company_user = ApiClient(args.base_url, args.timeout)
+    multi_org_legacy = ApiClient(args.base_url, args.timeout)
+    multi_org_one = ApiClient(args.base_url, args.timeout)
+    multi_org_one_stable = ApiClient(args.base_url, args.timeout)
+    multi_org_two = ApiClient(args.base_url, args.timeout)
     company_user_email = f"{prefix}-company-user@example.com"
     company_user_password = f"Syn-{uuid.uuid4().hex}-Bb2!"
     company_profile_id: str | None = None
     company_user_id: str | None = None
     company_product_id: str | None = None
+    multi_org_user_id: str | None = None
 
     def record_coverage(
         path: str,
@@ -228,6 +234,32 @@ def main(args: argparse.Namespace) -> int:
                 expected=[],
                 status="PASS" if not leaked else "FAIL",
                 response={"item_count": len(ids), "forbidden_count": len(leaked)},
+            )
+        )
+
+    def assert_identity(
+        name: str,
+        value: Any,
+        expected_user_id: str,
+        expected_organization_id: str,
+    ) -> None:
+        observed_user_id = nested(value, "data", "id")
+        observed_organization_id = nested(value, "data", "organizationId")
+        matches = (
+            observed_user_id == expected_user_id
+            and observed_organization_id == expected_organization_id
+        )
+        steps.append(
+            Step(
+                name=name,
+                method="ASSERT",
+                path="<response-data>",
+                expected=[],
+                status="PASS" if matches else "FAIL",
+                response={
+                    "user_id_match": observed_user_id == expected_user_id,
+                    "organization_id_match": observed_organization_id == expected_organization_id,
+                },
             )
         )
 
@@ -565,6 +597,246 @@ def main(args: argparse.Namespace) -> int:
             expected={201},
         )
         company_profile_id = value.get("id") if isinstance(value, dict) and status == 201 else None
+
+        # Multi-org account matrix: two real users share one email, but each
+        # Login binds to explicit organization. Membership-only and
+        # email-only ambiguous paths are rejected.
+        if company_profile_id:
+            status, value = call(
+                "multi_org_account_create",
+                system,
+                "system",
+                "POST",
+                "/api/users",
+                {"data": {
+                    "organization_id": COMPANY_ORG,
+                    "email": email,
+                    "username": f"{prefix}-same-email-org2",
+                    "pwd_clear": password,
+                    "role": company_profile_id,
+                }},
+                expected={201},
+                coverage_tags=("organization", "multi_org", "create"),
+                polarity_tag="positive",
+            )
+            multi_org_user_id = nested(value, "data", "id") if isinstance(value, dict) else None
+            if multi_org_user_id:
+                status, _ = call(
+                    "multi_org_login_org1",
+                    multi_org_one,
+                    email,
+                    "POST",
+                    "/auth/v1/login",
+                    {"email": email, "pwd": password, "organizationId": ORG},
+                    expected={200},
+                    coverage_tags=("organization", "org1", "login"),
+                    polarity_tag="positive",
+                )
+                if status == 200:
+                    status, value = call(
+                        "multi_org_org1_identity",
+                        multi_org_one,
+                        email,
+                        "GET",
+                        "/api/users/me",
+                        expected={200},
+                        coverage_tags=("organization", "org1", "read"),
+                        polarity_tag="positive",
+                    )
+                    if status == 200:
+                        assert_identity("multi_org_org1_identity_exact", value, user_id, ORG)
+
+                status, _ = call(
+                    "multi_org_login_org1_stable",
+                    multi_org_one_stable,
+                    email,
+                    "POST",
+                    "/auth/v1/login",
+                    {"email": email, "pwd": password, "organizationId": ORG},
+                    expected={200},
+                    coverage_tags=("organization", "org1", "login"),
+                    polarity_tag="positive",
+                )
+                status, _ = call(
+                    "multi_org_login_org2",
+                    multi_org_two,
+                    email,
+                    "POST",
+                    "/auth/v1/login",
+                    {"email": email, "pwd": password, "organizationId": COMPANY_ORG},
+                    expected={200},
+                    coverage_tags=("organization", "org2", "login"),
+                    polarity_tag="positive",
+                )
+                if status == 200:
+                    call(
+                        "multi_org_org2_password_clear",
+                        multi_org_two,
+                        email,
+                        "POST",
+                        "/api/users/me/password",
+                        {"data": {"new_password": password}},
+                        expected={204},
+                        coverage_tags=("organization", "org2", "update"),
+                        polarity_tag="positive",
+                    )
+                    status, value = call(
+                        "multi_org_org2_identity",
+                        multi_org_two,
+                        email,
+                        "GET",
+                        "/api/users/me",
+                        expected={200},
+                        coverage_tags=("organization", "org2", "read"),
+                        polarity_tag="positive",
+                    )
+                    if status == 200:
+                        assert_identity("multi_org_org2_identity_exact", value, multi_org_user_id, COMPANY_ORG)
+
+                call(
+                    "multi_org_legacy_login_rejected",
+                    multi_org_legacy,
+                    email,
+                    "POST",
+                    "/auth/v1/login",
+                    {"email": email, "pwd": password},
+                    expected={401, 403},
+                    coverage_tags=("organization", "ambiguous", "login"),
+                    polarity_tag="negative",
+                )
+                status, _ = call(
+                    "multi_org_switch_org1_to_org2",
+                    multi_org_one,
+                    email,
+                    "PUT",
+                    "/api/users/me/organization",
+                    {"data": {"organization_id": COMPANY_ORG}},
+                    expected={200},
+                    coverage_tags=("organization", "switch", "update"),
+                    polarity_tag="positive",
+                )
+                if status == 200:
+                    status, value = call(
+                        "multi_org_switched_identity",
+                        multi_org_one,
+                        email,
+                        "GET",
+                        "/api/users/me",
+                        expected={200},
+                        coverage_tags=("organization", "org2", "read"),
+                        polarity_tag="positive",
+                    )
+                    if status == 200:
+                        assert_identity("multi_org_switched_identity_exact", value, multi_org_user_id, COMPANY_ORG)
+
+                call(
+                    "multi_org_role_revoke_org2",
+                    system,
+                    "system",
+                    "PUT",
+                    f"/api/users/{multi_org_user_id}",
+                    {"data": {"role": "user"}},
+                    expected={200},
+                    coverage_tags=("role", "org2", "revoke"),
+                    polarity_tag="positive",
+                )
+                call(
+                    "multi_org_org2_role_revoked_denied",
+                    multi_org_two,
+                    email,
+                    "GET",
+                    "/api/presaves/senders",
+                    expected={403},
+                    coverage_tags=("read", "org2", "revoke"),
+                    polarity_tag="negative",
+                )
+                call(
+                    "multi_org_org1_survives_org2_role_revoke",
+                    multi_org_one_stable,
+                    email,
+                    "GET",
+                    "/api/presaves/senders",
+                    expected={200},
+                    coverage_tags=("read", "org1", "revoke"),
+                    polarity_tag="positive",
+                )
+                call(
+                    "multi_org_role_restore_org2",
+                    system,
+                    "system",
+                    "PUT",
+                    f"/api/users/{multi_org_user_id}",
+                    {"data": {"role": company_profile_id}},
+                    expected={200},
+                    coverage_tags=("role", "org2", "restore"),
+                    polarity_tag="positive",
+                )
+                call(
+                    "multi_org_org2_role_restored",
+                    multi_org_two,
+                    email,
+                    "GET",
+                    "/api/presaves/senders",
+                    expected={200},
+                    coverage_tags=("read", "org2", "restore"),
+                    polarity_tag="positive",
+                )
+                call(
+                    "multi_org_deactivate_org2",
+                    system,
+                    "system",
+                    "PUT",
+                    f"/api/users/{multi_org_user_id}",
+                    {"data": {"access_end_at": "2000-01-01T00:00:00Z"}},
+                    expected={200},
+                    coverage_tags=("account", "org2", "deactivate"),
+                    polarity_tag="positive",
+                )
+                call(
+                    "multi_org_org2_deactivated_denied",
+                    multi_org_two,
+                    email,
+                    "GET",
+                    "/api/presaves/senders",
+                    expected={401, 403},
+                    coverage_tags=("read", "org2", "deactivate"),
+                    polarity_tag="negative",
+                )
+                call(
+                    "multi_org_org1_survives_org2_deactivate",
+                    multi_org_one_stable,
+                    email,
+                    "GET",
+                    "/api/presaves/senders",
+                    expected={200},
+                    coverage_tags=("read", "org1", "deactivate"),
+                    polarity_tag="positive",
+                )
+                call(
+                    "multi_org_reactivate_org2",
+                    system,
+                    "system",
+                    "PUT",
+                    f"/api/users/{multi_org_user_id}",
+                    {"data": {"access_end_at": "2999-01-01T00:00:00Z"}},
+                    expected={200},
+                    coverage_tags=("account", "org2", "restore"),
+                    polarity_tag="positive",
+                )
+                call(
+                    "multi_org_org2_reactivated",
+                    multi_org_two,
+                    email,
+                    "GET",
+                    "/api/presaves/senders",
+                    expected={200},
+                    coverage_tags=("read", "org2", "restore"),
+                    polarity_tag="positive",
+                )
+            else:
+                steps.append(Step("multi_org_account_setup_failed", "N/A", "<same-email-account>", [], "BLOCKED", {"reason": "same-email organization account creation failed"}))
+        else:
+            steps.append(Step("multi_org_profile_setup_failed", "N/A", "<company-profile>", [], "BLOCKED", {"reason": "company organization permission profile creation failed"}))
         company_ready = refresh_company("company_admin_login")
         company_sender_id: str | None = None
         if company_ready:
@@ -708,7 +980,7 @@ def main(args: argparse.Namespace) -> int:
         set_profile("profile_info_both", privilege("info", read=True, edit=True))
         refresh_cro("cro_relogin_before_scope_clear_after_matrix")
         call("scope_clear_after_permission_matrix", cro, "cro", "PUT", f"/api/users/{user_id}", {"data": {"access_sender_ids": [], "access_product_ids": [], "access_study_ids": [], "active_sender_identifier": None}}, expected={200})
-        call("org_switch_nonmember_reject", user, email, "PUT", "/api/users/me/organization", {"data": {"organization_id": COMPANY_ORG}}, expected={403})
+        call("org_switch_unknown_org_reject", user, email, "PUT", "/api/users/me/organization", {"data": {"organization_id": UNKNOWN_ORG}}, expected={403})
 
         # Seeded matrix: each round changes both the profile and RLS scope,
         # then probes read/write paths through the same authenticated session.
@@ -1145,7 +1417,7 @@ def main(args: argparse.Namespace) -> int:
                     email,
                     "PUT",
                     "/api/users/me/organization",
-                    {"data": {"organization_id": COMPANY_ORG}},
+                    {"data": {"organization_id": UNKNOWN_ORG}},
                     expected={403, 404},
                     permission="organization",
                     scope="cross_org",
@@ -1196,7 +1468,7 @@ def main(args: argparse.Namespace) -> int:
                     email,
                     "POST",
                     "/auth/v1/login",
-                    {"email": email, "pwd": password},
+                    {"email": email, "pwd": password, "organizationId": ORG},
                     expected={200},
                     permission="role",
                     lifecycle="restore",

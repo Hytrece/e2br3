@@ -121,6 +121,9 @@ pub struct UserForUpdateAdminPayload {
 	pub email: Option<String>,
 	pub username: Option<String>,
 	pub role: Option<String>,
+	/// Administrators may deactivate/reactivate an account without changing
+	/// its organization-scoped identity or role assignment.
+	pub active: Option<bool>,
 	pub comments: Option<String>,
 	pub other_information: Option<String>,
 	#[serde(default, deserialize_with = "deserialize_access_datetime_option")]

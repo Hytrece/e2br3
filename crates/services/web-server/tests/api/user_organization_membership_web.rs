@@ -1,13 +1,16 @@
 use crate::common::{
-	cookie_header, init_test_mm, insert_user_organization_membership,
-	seed_two_orgs_users_cases, Result,
+	cookie_header, init_test_mm, insert_user, insert_user_organization_membership,
+	seed_two_orgs_users_cases, system_user_id, Result,
 };
 use axum::body::{to_bytes, Body};
 use axum::http::{header, Request, StatusCode};
+use lib_auth::pwd::{self, ContentToHash};
 use lib_auth::token::generate_web_token;
+use lib_core::ctx::ROLE_SPONSOR_ADMIN_CRO;
 use serde_json::{json, Value};
 use serial_test::serial;
 use tower::ServiceExt;
+use uuid::Uuid;
 
 async fn request_json(
 	app: &axum::Router,
@@ -35,6 +38,47 @@ async fn request_json(
 	let value = serde_json::from_slice(&bytes)
 		.unwrap_or_else(|_| json!({ "raw": String::from_utf8_lossy(&bytes) }));
 	Ok((status, value))
+}
+
+async fn login_for_organization(
+	app: &axum::Router,
+	email: &str,
+	password: &str,
+	organization_id: Uuid,
+) -> Result<String> {
+	let req = Request::builder()
+		.method("POST")
+		.uri("/auth/v1/login")
+		.header("content-type", "application/json")
+		.body(Body::from(
+			json!({
+				"email": email,
+				"pwd": password,
+				"organizationId": organization_id,
+			})
+			.to_string(),
+		))?;
+	let res = app.clone().oneshot(req).await?;
+	let status = res.status();
+	let cookie = res
+		.headers()
+		.get_all(header::SET_COOKIE)
+		.iter()
+		.filter_map(|value| value.to_str().ok())
+		.find_map(|value| value.strip_prefix("auth-token=")?.split(';').next())
+		.map(str::to_owned);
+	let bytes = to_bytes(res.into_body(), usize::MAX).await?;
+	if status != StatusCode::OK {
+		return Err(format!(
+			"login for organization {organization_id} failed: status {status}, body {}",
+			String::from_utf8_lossy(&bytes)
+		)
+		.into());
+	}
+	cookie.ok_or_else(|| {
+		format!("login for organization {organization_id} did not set auth-token")
+			.into()
+	})
 }
 
 #[serial]
@@ -79,6 +123,13 @@ async fn profile_does_not_treat_membership_as_an_organization_account() -> Resul
 async fn same_email_accounts_list_and_switch_by_organization() -> Result<()> {
 	let mm = init_test_mm().await?;
 	let seed = seed_two_orgs_users_cases(&mm).await?;
+	let password = "multi-org-password";
+	let pwd_salt = Uuid::new_v4();
+	let pwd_hash = pwd::hash_pwd(ContentToHash {
+		content: password.to_string(),
+		salt: pwd_salt,
+	})
+	.await?;
 	let mut tx = mm.dbx().db().begin().await?;
 	lib_core::model::store::set_user_context(
 		&mut tx,
@@ -91,32 +142,59 @@ async fn same_email_accounts_list_and_switch_by_organization() -> Result<()> {
 		lib_core::ctx::ROLE_SYSTEM_ADMIN,
 	)
 	.await?;
-	sqlx::query("UPDATE users SET email = $1 WHERE id = $2")
-		.bind(&seed.user1.email)
-		.bind(seed.user2.id)
-		.execute(&mut *tx)
-		.await?;
+	sqlx::query(
+		"UPDATE users
+		 SET email = $1, pwd = $2, pwd_salt = $3, must_change_password = false
+		 WHERE id IN ($4, $5)",
+	)
+	.bind(&seed.user1.email)
+	.bind(&pwd_hash)
+	.bind(pwd_salt)
+	.bind(seed.user1.id)
+	.bind(seed.user2.id)
+	.execute(&mut *tx)
+	.await?;
 	tx.commit().await?;
 
-	let legacy_token = generate_web_token(&seed.user1.email, seed.user1.token_salt)?;
 	let app = web_server::app(mm.clone());
-	let (status, ambiguous) = request_json(
+	let org1_cookie =
+		login_for_organization(&app, &seed.user1.email, password, seed.org1_id)
+			.await?;
+	let org2_cookie =
+		login_for_organization(&app, &seed.user1.email, password, seed.org2_id)
+			.await?;
+
+	let (status, org1_me) = request_json(
 		&app,
 		"GET",
-		&cookie_header(&legacy_token.to_string()),
+		&cookie_header(&org1_cookie),
 		"/api/users/me",
 		None,
 	)
 	.await?;
-	assert_eq!(status, StatusCode::FORBIDDEN, "{ambiguous:?}");
+	assert_eq!(status, StatusCode::OK, "{org1_me:?}");
+	assert_eq!(org1_me["data"]["id"], seed.user1.id.to_string());
+	assert_eq!(org1_me["data"]["organizationId"], seed.org1_id.to_string());
+	let (status, org2_me) = request_json(
+		&app,
+		"GET",
+		&cookie_header(&org2_cookie),
+		"/api/users/me",
+		None,
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK, "{org2_me:?}");
+	assert_eq!(org2_me["data"]["id"], seed.user2.id.to_string());
+	assert_eq!(org2_me["data"]["organizationId"], seed.org2_id.to_string());
 
-	let token = generate_web_token(
-		&format!("{}|{}", seed.user1.email, seed.org1_id),
-		seed.user1.token_salt,
-	)?;
-	let cookie = cookie_header(&token.to_string());
-	let (status, profile) =
-		request_json(&app, "GET", &cookie, "/api/users/me/profile", None).await?;
+	let (status, profile) = request_json(
+		&app,
+		"GET",
+		&cookie_header(&org1_cookie),
+		"/api/users/me/profile",
+		None,
+	)
+	.await?;
 	assert_eq!(status, StatusCode::OK, "{profile:?}");
 	let orgs = profile["data"]["availableOrganizations"]
 		.as_array()
@@ -129,7 +207,7 @@ async fn same_email_accounts_list_and_switch_by_organization() -> Result<()> {
 	let (status, routing) = request_json(
 		&app,
 		"GET",
-		&cookie,
+		&cookie_header(&org1_cookie),
 		&format!("/api/users/me/routing?organizationId={}", seed.org2_id),
 		None,
 	)
@@ -139,7 +217,7 @@ async fn same_email_accounts_list_and_switch_by_organization() -> Result<()> {
 	let switch_req = Request::builder()
 		.method("PUT")
 		.uri("/api/users/me/organization")
-		.header("cookie", cookie)
+		.header("cookie", cookie_header(&org1_cookie))
 		.header("content-type", "application/json")
 		.body(Body::from(
 			json!({ "data": { "organization_id": seed.org2_id } }).to_string(),
@@ -165,6 +243,52 @@ async fn same_email_accounts_list_and_switch_by_organization() -> Result<()> {
 	assert_eq!(status, StatusCode::OK, "{me:?}");
 	assert_eq!(me["data"]["id"], seed.user2.id.to_string());
 	assert_eq!(me["data"]["organizationId"], seed.org2_id.to_string());
+
+	let admin_password = "multi-org-admin-password";
+	let admin = insert_user(
+		&mm,
+		seed.org1_id,
+		ROLE_SPONSOR_ADMIN_CRO,
+		system_user_id(),
+		Some(admin_password),
+	)
+	.await?;
+	let admin_cookie =
+		login_for_organization(&app, &admin.email, admin_password, seed.org1_id)
+			.await?;
+	let (status, deactivated) = request_json(
+		&app,
+		"PUT",
+		&cookie_header(&admin_cookie),
+		&format!("/api/users/{}", seed.user1.id),
+		Some(json!({ "data": { "active": false } })),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK, "{deactivated:?}");
+
+	let (status, org1_revoked) = request_json(
+		&app,
+		"GET",
+		&cookie_header(&org1_cookie),
+		"/api/users/me",
+		None,
+	)
+	.await?;
+	assert_eq!(status, StatusCode::FORBIDDEN, "{org1_revoked:?}");
+	let (status, org2_still_valid) = request_json(
+		&app,
+		"GET",
+		&cookie_header(&org2_cookie),
+		"/api/users/me",
+		None,
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK, "{org2_still_valid:?}");
+	assert_eq!(org2_still_valid["data"]["id"], seed.user2.id.to_string());
+	assert_eq!(
+		org2_still_valid["data"]["organizationId"],
+		seed.org2_id.to_string()
+	);
 	Ok(())
 }
 
