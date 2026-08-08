@@ -234,3 +234,60 @@ async fn test_delete_permission_profile_soft_deletes_and_keeps_role_visible(
 	assert_eq!(deleted["active"], false);
 	Ok(())
 }
+
+#[serial]
+#[tokio::test]
+async fn test_users_list_survives_inactive_assigned_custom_role() -> Result<()> {
+	let mm = init_test_mm().await?;
+	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
+	let admin_token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
+	let admin_cookie = cookie_header(&admin_token.to_string());
+	let (status, created) = request_json(
+		&web_server::app(mm.clone()),
+		"POST",
+		&admin_cookie,
+		"/api/admin/permission-profiles".to_string(),
+		Some(json!({
+			"data": {
+				"name": "Assigned then inactive",
+				"privileges": [{
+					"menu_key": "case",
+					"can_read": true,
+					"can_edit": false,
+					"can_review": false,
+					"can_lock": false
+				}]
+			}
+		})),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::CREATED, "{created:?}");
+	let profile_id = created["id"].as_str().ok_or("missing role id")?;
+	let (_, custom_cookie) = custom_role_user(&mm, seed.org_id, profile_id).await?;
+	let app = web_server::app(mm);
+	let (status, body) =
+		request_json(&app, "GET", &custom_cookie, "/api/cases".to_string(), None)
+			.await?;
+	assert_eq!(status, StatusCode::OK, "{body:?}");
+
+	let (status, body) = request_json(
+		&app,
+		"DELETE",
+		&admin_cookie,
+		format!("/api/admin/permission-profiles/{profile_id}"),
+		None,
+	)
+	.await?;
+	assert_eq!(status, StatusCode::NO_CONTENT, "{body:?}");
+
+	let (status, body) =
+		request_json(&app, "GET", &admin_cookie, "/api/users".to_string(), None)
+			.await?;
+	assert_eq!(status, StatusCode::OK, "{body:?}");
+	assert!(body["data"].is_array(), "{body:?}");
+	let (status, body) =
+		request_json(&app, "GET", &custom_cookie, "/api/cases".to_string(), None)
+			.await?;
+	assert_eq!(status, StatusCode::FORBIDDEN, "{body:?}");
+	Ok(())
+}

@@ -610,9 +610,11 @@ fn write_c_1_7(
 		"2.16.840.1.113883.3.989.2.1.1.19",
 		"BL",
 	)?;
+	let path = "//hl7:component/hl7:observationEvent[hl7:code[@code='23' and @codeSystem='2.16.840.1.113883.3.989.2.1.1.19']]/hl7:value";
+	remove_attr_first(xpath, path, "nullFlavor");
 	set_attr_first(
 		xpath,
-		"//hl7:component/hl7:observationEvent[hl7:code[@code='23' and @codeSystem='2.16.840.1.113883.3.989.2.1.1.19']]/hl7:value",
+		path,
 		"value",
 		if fulfil_expedited { "true" } else { "false" },
 	);
@@ -1039,6 +1041,31 @@ mod tests {
 			),
 			"{xml}"
 		);
+	}
+
+	#[test]
+	fn c_1_7_value_clears_stale_null_flavor() {
+		let xml = br#"<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><PORR_IN049016UV><controlActProcess><subject><investigationEvent><component><observationEvent><code code="23" codeSystem="2.16.840.1.113883.3.989.2.1.1.19"/><value xsi:type="BL" nullFlavor="NI"/></observationEvent></component></investigationEvent></subject></controlActProcess></PORR_IN049016UV></MCCI_IN200100UV01>"#;
+		let parser = Parser::default();
+		let mut doc = parser.parse_string(xml).expect("parse");
+		let mut xpath = Context::new(&doc).expect("xpath");
+		xpath.register_namespace("hl7", "urn:hl7-org:v3").unwrap();
+		xpath
+			.register_namespace("xsi", "http://www.w3.org/2001/XMLSchema-instance")
+			.unwrap();
+
+		write_c_1_7(&mut doc, &parser, &mut xpath, true).expect("patch C.1.7");
+		let value = xpath
+			.findnodes(
+				"//hl7:observationEvent[hl7:code[@code='23']]/hl7:value",
+				None,
+			)
+			.unwrap()
+			.into_iter()
+			.next()
+			.unwrap();
+		assert_eq!(value.get_attribute("value").as_deref(), Some("true"));
+		assert!(value.get_attribute("nullFlavor").is_none());
 	}
 
 	#[test]

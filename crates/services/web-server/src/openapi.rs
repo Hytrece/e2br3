@@ -1316,7 +1316,7 @@ struct ReactionDoc {
 	id: String,
 	case_id: String,
 	sequence_number: i32,
-	primary_source_reaction: String,
+	primary_source_reaction: Option<String>,
 	primary_source_reaction_translation: Option<String>,
 	reaction_language: Option<String>,
 	reaction_meddra_version: Option<String>,
@@ -1374,7 +1374,7 @@ struct ReactionDoc {
 struct ReactionForCreateDoc {
 	case_id: String,
 	sequence_number: i32,
-	primary_source_reaction: String,
+	primary_source_reaction: Option<String>,
 	expectedness: Option<String>,
 	severity: Option<String>,
 	mfds_device_ae_classification: Option<String>,

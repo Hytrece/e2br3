@@ -456,6 +456,67 @@ async fn deleted_in_use_profile_is_rejected_without_partial_cleanup() -> Result<
 
 #[serial]
 #[tokio::test]
+async fn inactive_assigned_custom_role_does_not_block_startup_reconciliation(
+) -> Result<()> {
+	let database = init_authorization_test_db().await?;
+	let role_id = uuid::Uuid::parse_str("00000000-0000-0000-0000-000000000341")?;
+	sqlx::raw_sql(
+		r#"
+		INSERT INTO permission_profiles (id, organization_id, name)
+		VALUES (
+			'00000000-0000-0000-0000-000000000341',
+			'00000000-0000-0000-0000-000000000001',
+			'Inactive assigned role'
+		);
+		INSERT INTO users (id, role)
+		VALUES (
+			'00000000-0000-0000-0000-000000000342',
+			'00000000-0000-0000-0000-000000000341'
+		);
+		INSERT INTO user_organization_memberships (user_id, organization_id)
+		VALUES (
+			'00000000-0000-0000-0000-000000000342',
+			'00000000-0000-0000-0000-000000000001'
+		);
+		"#,
+	)
+	.execute(database.pool())
+	.await?;
+	crate::authorization_test_support::apply_authorization_migrations(&database)
+		.await?;
+	sqlx::query("UPDATE permission_profiles SET active = false WHERE id = $1")
+		.bind(role_id)
+		.execute(database.pool())
+		.await?;
+
+	let report = AuthorizationMigrationService::reconcile_database(
+		database.pool(),
+		policy_registry(),
+	)
+	.await?;
+	assert!(report.assignments >= 1);
+	assert_eq!(
+		scalar_i64(
+			&database,
+			"SELECT count(*) FROM user_role_assignments WHERE user_id = '00000000-0000-0000-0000-000000000342'",
+		)
+		.await?,
+		0
+	);
+	assert_eq!(
+		scalar_i64(
+			&database,
+			"SELECT count(*) FROM authorization_roles WHERE id = '00000000-0000-0000-0000-000000000341' AND NOT active",
+		)
+		.await?,
+		1
+	);
+	database.close().await?;
+	Ok(())
+}
+
+#[serial]
+#[tokio::test]
 async fn custom_role_and_assignment_backfill_use_canonical_grants() -> Result<()> {
 	let database = init_authorization_test_db().await?;
 	sqlx::raw_sql(

@@ -33,7 +33,7 @@ use xml::import_sections::{
 	c_safety_report::parse_c_safety_report, d_patient::parse_d_patient,
 	e_reaction::parse_e_reactions,
 };
-use xml::validation::validate_e2b_xml;
+use xml::validation::{normalize_e2b_xml_for_import, validate_e2b_xml_for_import};
 use xml::{
 	extract_safety_report_id_from_xml, import_e2b_xml, CImportSettings,
 	XmlImportRequest, XmlValidationReport,
@@ -294,7 +294,8 @@ async fn import_single_xml(
 	product_presave_id: Uuid,
 	product_id: String,
 ) -> Result<ImportedCaseSummary> {
-	let validation_report = validate_e2b_xml(&xml, None);
+	let xml = normalize_e2b_xml_for_import(&xml)?;
+	let validation_report = validate_e2b_xml_for_import(&xml, None);
 	match validation_report {
 		Ok(report) if report.ok => {}
 		Ok(report) => {
@@ -809,7 +810,8 @@ pub async fn validate_xml(
 		move |_ctx, _mm, _scope| {
 			Box::pin(async move {
 				let payload = read_xml_multipart(multipart).await?;
-				let report = validate_e2b_xml(&payload.bytes, None)?;
+				let xml = normalize_e2b_xml_for_import(&payload.bytes)?;
+				let report = validate_e2b_xml_for_import(&xml, None)?;
 				Ok((StatusCode::OK, Json(DataRestResult { data: report })))
 			})
 		},

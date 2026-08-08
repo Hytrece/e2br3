@@ -153,12 +153,15 @@ fn cioms_reaction_description(data: &CiomsCaseData) -> String {
 	let mut entries = Vec::new();
 	for reaction in &data.reactions {
 		let outcome = reaction_outcome_text(reaction.outcome.as_deref());
+		let reported = reaction
+			.primary_source_reaction
+			.as_deref()
+			.filter(|text| !text.trim().is_empty())
+			.map(|text| format!("Reported term: {text}"));
 		entries.push(join_present(
 			&[
-				Some(format!(
-					"Reaction {}: {}",
-					reaction.sequence_number, reaction.primary_source_reaction
-				)),
+				Some(format!("Reaction {}", reaction.sequence_number)),
+				reported,
 				(!outcome.is_empty()).then(|| format!("Outcome: {outcome}")),
 			],
 			" | ",

@@ -1,4 +1,5 @@
 use super::helpers as g_helpers;
+use crate::error::Error;
 use crate::import_sections::shared::ImportIdMap;
 use crate::Result;
 use lib_core::ctx::Ctx;
@@ -94,10 +95,8 @@ async fn import_drugs(
 					.investigational_product_blinded,
 				mpid: drug.mpid,
 				mpid_version: drug.mpid_version,
-				// MFDS G product XML mapping is deferred until a verified local
-				// canonical element path exists; do not alias base MPID values.
-				mfds_mpid_version: None,
-				mfds_mpid: None,
+				mfds_mpid_version: drug.mfds_mpid_version,
+				mfds_mpid: drug.mfds_mpid,
 				phpid: drug.phpid,
 				phpid_version: drug.phpid_version,
 				obtain_drug_country: drug.obtain_drug_country,
@@ -166,10 +165,8 @@ async fn import_drugs(
 					substance_name: sub.substance_name,
 					substance_termid: sub.substance_termid,
 					substance_termid_version: sub.substance_termid_version,
-					// MFDS G substance XML mapping is deferred until a verified
-					// local canonical element path exists; do not alias base terms.
-					mfds_version: None,
-					mfds_id: None,
+					mfds_version: sub.mfds_version,
+					mfds_id: sub.mfds_id,
 					strength_value: sub.strength_value,
 					strength_unit: sub.strength_unit,
 				},
@@ -189,7 +186,9 @@ async fn import_drugs(
 					number_of_units: dose.number_of_units,
 					frequency_unit: dose.frequency_unit,
 					first_administration_date: dose.start_date,
+					first_administration_date_raw: dose.start_date_raw,
 					last_administration_date: dose.end_date,
+					last_administration_date_raw: dose.end_date_raw,
 					duration_value: dose.duration_value,
 					duration_unit: dose.duration_unit,
 					continuing: None,
@@ -290,11 +289,26 @@ async fn import_drug_reaction_assessments(
 	let observations = g_helpers::parse_drug_observations(xml)?;
 	let mut assessment_map: HashMap<(Uuid, Uuid), Uuid> = HashMap::new();
 	for obs in &observations {
-		let drug_id = drug_map.resolve(obs.drug_xml_id, Some(obs.drug_sequence));
-		let reaction_id = reaction_map.resolve(obs.reaction_xml_id, None);
-		let (Some(drug_id), Some(reaction_id)) = (drug_id, reaction_id) else {
-			continue;
-		};
+		let drug_id = drug_map
+			.resolve(obs.drug_xml_id.clone(), Some(obs.drug_sequence))
+			.ok_or_else(|| Error::InvalidXml {
+				message: format!(
+					"ICH.G.k.9.i: unresolved drug reference {:?}",
+					obs.drug_xml_id
+				),
+				line: None,
+				column: None,
+			})?;
+		let reaction_id = reaction_map
+			.resolve(obs.reaction_xml_id.clone(), None)
+			.ok_or_else(|| Error::InvalidXml {
+				message: format!(
+					"ICH.G.k.9.i: unresolved reaction reference {:?}",
+					obs.reaction_xml_id
+				),
+				line: None,
+				column: None,
+			})?;
 
 		let key = (drug_id, reaction_id);
 		let _assessment_id = if let Some(id) = assessment_map.get(&key) {
@@ -338,11 +352,27 @@ async fn import_drug_reaction_assessments(
 	let relatedness = g_helpers::parse_relatedness_assessments(xml)?;
 	let mut seq_map: HashMap<(Uuid, Uuid), i32> = HashMap::new();
 	for rel in relatedness {
-		let drug_id = drug_map.resolve(rel.drug_xml_id, None);
-		let reaction_id = reaction_map.resolve(rel.reaction_xml_id, None);
-		let (Some(drug_id), Some(reaction_id)) = (drug_id, reaction_id) else {
-			continue;
-		};
+		let drug_id =
+			drug_map
+				.resolve(rel.drug_xml_id.clone(), None)
+				.ok_or_else(|| Error::InvalidXml {
+					message: format!(
+						"ICH.G.k.9.i.2: unresolved drug reference {:?}",
+						rel.drug_xml_id
+					),
+					line: None,
+					column: None,
+				})?;
+		let reaction_id = reaction_map
+			.resolve(rel.reaction_xml_id.clone(), None)
+			.ok_or_else(|| Error::InvalidXml {
+				message: format!(
+					"ICH.G.k.9.i.2: unresolved reaction reference {:?}",
+					rel.reaction_xml_id
+				),
+				line: None,
+				column: None,
+			})?;
 
 		let key = (drug_id, reaction_id);
 		let assessment_id = if let Some(id) = assessment_map.get(&key) {

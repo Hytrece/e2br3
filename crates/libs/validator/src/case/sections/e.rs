@@ -23,7 +23,6 @@ fn decimal_text(value: Option<Decimal>) -> Option<String> {
 	value.map(|value| value.to_string())
 }
 
-/// ICH.E.i.1.1a.REQUIRED
 /// ICH.E.i.1.1a.LENGTH.MAX
 fn e_i_1_1a(
 	idx: usize,
@@ -31,15 +30,8 @@ fn e_i_1_1a(
 	issues: &mut Vec<ValidationIssue>,
 ) {
 	let path = format!("reactions.{idx}.primarySourceReaction");
-	let value = reaction.map(|reaction| reaction.primary_source_reaction.as_str());
-	require(
-		issues,
-		"ICH.E.i.1.1a.REQUIRED",
-		&path,
-		SECTION,
-		"[E.i.1.1a] is required.",
-		has_text(value),
-	);
+	let value =
+		reaction.and_then(|reaction| reaction.primary_source_reaction.as_deref());
 	max_length(
 		issues,
 		"ICH.E.i.1.1a.LENGTH.MAX",
@@ -67,7 +59,7 @@ fn e_i_1_1b(
 		&path,
 		SECTION,
 		"[E.i.1.1b] is required when [E.i.1.1a] is provided.",
-		has_text(Some(reaction.primary_source_reaction.as_str()))
+		has_text(reaction.primary_source_reaction.as_deref())
 			&& !has_text(reaction.reaction_language.as_deref()),
 	);
 	reject_when(
@@ -769,7 +761,7 @@ mod tests {
 			id: Uuid::nil(),
 			case_id: Uuid::nil(),
 			sequence_number: 1,
-			primary_source_reaction: String::new(),
+			primary_source_reaction: None,
 			primary_source_reaction_translation: None,
 			reaction_language: None,
 			reaction_meddra_version: None,
@@ -919,7 +911,7 @@ mod tests {
 	#[test]
 	fn max_length_rules_cover_e_reaction_text_fields() {
 		let mut reaction = reaction();
-		reaction.primary_source_reaction = "R".repeat(251);
+		reaction.primary_source_reaction = Some("R".repeat(251));
 		reaction.reaction_language = Some("LANG".to_string());
 		reaction.primary_source_reaction_translation = Some("T".repeat(251));
 		reaction.reaction_meddra_version = Some("V".repeat(5));
@@ -986,7 +978,7 @@ mod tests {
 		collect_ich_issues(&empty_ctx(), &mut issues);
 
 		let mut reaction = reaction();
-		reaction.primary_source_reaction = "Headache".to_string();
+		reaction.primary_source_reaction = Some("Headache".to_string());
 		reaction.outcome = Some("9".to_string());
 		let mut ctx = empty_ctx();
 		ctx.reactions.push(reaction);
@@ -994,12 +986,7 @@ mod tests {
 
 		let mut out = issues
 			.into_iter()
-			.filter(|issue| {
-				matches!(
-					issue.code.as_str(),
-					"ICH.E.i.1.1a.REQUIRED" | "ICH.E.i.7.ALLOWED.VALUE"
-				)
-			})
+			.filter(|issue| issue.code == "ICH.E.i.7.ALLOWED.VALUE")
 			.map(|issue| {
 				(
 					issue.code,
@@ -1016,26 +1003,15 @@ mod tests {
 
 		assert_eq!(
 			out,
-			vec![
-				(
-					"ICH.E.i.1.1a.REQUIRED".to_string(),
-					"[E.i.1.1a] is required.".to_string(),
-					"reactions.0.primarySourceReaction".to_string(),
-					Some("reactions.0.primarySourceReaction".to_string()),
-					"reactions".to_string(),
-					"E.i".to_string(),
-					true,
-				),
-				(
-					"ICH.E.i.7.ALLOWED.VALUE".to_string(),
-					"Dictionary allowed values constraint.".to_string(),
-					"reactions.0.reactionOutcome".to_string(),
-					Some("reactions.0.reactionOutcome".to_string()),
-					"reactions".to_string(),
-					"E.i".to_string(),
-					true,
-				),
-			],
+			vec![(
+				"ICH.E.i.7.ALLOWED.VALUE".to_string(),
+				"Dictionary allowed values constraint.".to_string(),
+				"reactions.0.reactionOutcome".to_string(),
+				Some("reactions.0.reactionOutcome".to_string()),
+				"reactions".to_string(),
+				"E.i".to_string(),
+				true,
+			),],
 		);
 	}
 }

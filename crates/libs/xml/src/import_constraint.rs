@@ -63,7 +63,8 @@ where
 	F: for<'a> Fn(FieldInput<'a>) -> Vec<InputIssue>,
 {
 	let number = value
-		.map(str::parse::<serde_json::Number>)
+		.map(normalize_decimal_lexeme)
+		.map(|value| value.parse::<serde_json::Number>())
 		.transpose()
 		.map_err(|_| Error::InvalidXml {
 			message: format!("{field}: invalid numeric value"),
@@ -78,4 +79,26 @@ where
 		None,
 		check_field,
 	)
+}
+
+pub(crate) fn normalize_decimal_lexeme(value: &str) -> String {
+	let trimmed = value.trim();
+	match trimmed.as_bytes() {
+		[b'.', ..] => format!("0{trimmed}"),
+		[b'-', b'.', ..] => format!("-0{}", &trimmed[1..]),
+		[b'+', b'.', ..] => format!("+0{}", &trimmed[1..]),
+		_ => trimmed.to_string(),
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::normalize_decimal_lexeme;
+
+	#[test]
+	fn accepts_xml_decimal_leading_point() {
+		assert_eq!(normalize_decimal_lexeme(".5"), "0.5");
+		assert_eq!(normalize_decimal_lexeme("-.5"), "-0.5");
+		assert_eq!(normalize_decimal_lexeme(" 1.5 "), "1.5");
+	}
 }

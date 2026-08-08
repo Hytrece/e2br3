@@ -1,6 +1,5 @@
 use crate::common::{date, fixture};
 use rust_decimal::Decimal;
-use sqlx::types::Uuid;
 use xml::import_sections::e_reaction::parse_e_reactions;
 
 #[test]
@@ -12,13 +11,13 @@ fn import_e_section_all_fields_from_scenario6() {
 
 	let first = &reactions[0];
 	assert_eq!(
-		first.xml_id,
-		Some(
-			Uuid::parse_str("154eb889-958b-45f2-a02f-42d4d6f4657f")
-				.expect("valid uuid"),
-		)
+		first.xml_id.as_deref(),
+		Some("154eb889-958b-45f2-a02f-42d4d6f4657f")
 	);
-	assert_eq!(first.primary_source_reaction, "consciência alterada");
+	assert_eq!(
+		first.primary_source_reaction.as_deref(),
+		Some("consciência alterada")
+	);
 	assert_eq!(
 		first.primary_source_reaction_translation.as_deref(),
 		Some("Altered Consciousness")
@@ -59,13 +58,13 @@ fn import_e_section_all_fields_from_scenario6() {
 
 	let second = &reactions[1];
 	assert_eq!(
-		second.xml_id,
-		Some(
-			Uuid::parse_str("2baa28d6-c9e8-4e6c-93e9-5b860b314220")
-				.expect("valid uuid"),
-		)
+		second.xml_id.as_deref(),
+		Some("2baa28d6-c9e8-4e6c-93e9-5b860b314220")
 	);
-	assert_eq!(second.primary_source_reaction, "Reaction 7");
+	assert_eq!(
+		second.primary_source_reaction.as_deref(),
+		Some("Reaction 7")
+	);
 	assert_eq!(second.primary_source_reaction_translation, None);
 	assert_eq!(second.reaction_language, None);
 	assert_eq!(second.reaction_meddra_version.as_deref(), Some("12.0"));
@@ -103,4 +102,36 @@ fn import_e_section_all_fields_from_scenario6() {
 	assert_eq!(second.outcome.as_deref(), Some("3"));
 	assert_eq!(second.medical_confirmation, None);
 	assert_eq!(second.country_code, None);
+}
+
+#[test]
+fn import_fda_scenario5_code_only_reactions() {
+	for fixture_name in [
+		"FAERS2022Scenario5-1.xml",
+		"FAERS2022Scenario5-2.xml",
+		"FAERS2022Scenario5-3.xml",
+	] {
+		let reactions = parse_e_reactions(&fixture(fixture_name)).expect("parse");
+		assert_eq!(reactions.len(), 2, "{fixture_name}");
+		assert!(
+			reactions
+				.iter()
+				.all(|reaction| reaction.primary_source_reaction.is_none()),
+			"{fixture_name}"
+		);
+		assert_eq!(
+			reactions
+				.iter()
+				.map(|reaction| reaction.reaction_meddra_code.as_deref())
+				.collect::<Vec<_>>(),
+			vec![Some("10027940"), Some("10009896")],
+			"{fixture_name}"
+		);
+		assert!(
+			reactions.iter().all(|reaction| {
+				reaction.reaction_meddra_version.as_deref() == Some("25.0")
+			}),
+			"{fixture_name}"
+		);
+	}
 }

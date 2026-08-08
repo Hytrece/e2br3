@@ -286,8 +286,27 @@ impl AuthorizationMigrationService {
 			{
 				Some(*id)
 			} else if let Ok(id) = Uuid::parse_str(&legacy_role) {
-				sqlx::query_scalar::<_, bool>("SELECT EXISTS (SELECT 1 FROM authorization_roles r JOIN permission_profiles p ON p.id = r.id AND p.organization_id = r.organization_id WHERE r.id = $1 AND r.organization_id = $2 AND r.active AND NOT r.built_in AND p.active AND NOT p.built_in)")
-					.bind(id).bind(organization_id).fetch_one(&mut **transaction).await?.then_some(id)
+				let custom_role = sqlx::query_as::<_, (bool, bool, bool)>(
+					"SELECT r.active, p.active, r.built_in FROM authorization_roles r JOIN permission_profiles p ON p.id = r.id AND p.organization_id = r.organization_id WHERE r.id = $1 AND r.organization_id = $2",
+				)
+				.bind(id)
+				.bind(organization_id)
+				.fetch_optional(&mut **transaction)
+				.await?;
+				match custom_role {
+					Some((role_active, profile_active, false))
+						if role_active && profile_active =>
+					{
+						Some(id)
+					}
+					Some((_, _, false)) => {
+						// A role can be deactivated while its legacy user.role value
+						// remains. Drop the normalized assignment below and keep
+						// authorization fail-closed without aborting startup.
+						continue;
+					}
+					_ => None,
+				}
 			} else {
 				None
 			};

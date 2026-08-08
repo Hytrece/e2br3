@@ -671,10 +671,7 @@ async fn create_case_from_intake_authorized(
 			ReactionForCreate {
 				case_id,
 				sequence_number: 1,
-				primary_source_reaction: non_empty(
-					data.reaction_meddra_code.as_deref(),
-				)
-				.unwrap_or_else(|| "Intake reaction".to_string()),
+				primary_source_reaction: None,
 				primary_source_reaction_translation: None,
 				reaction_language: None,
 				reaction_meddra_code: non_empty(

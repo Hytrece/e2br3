@@ -1,20 +1,19 @@
 use crate::error::Error;
 use crate::import_sections::shared::{
-	first_attr, first_text, normalize_code, parse_uuid_opt,
+	first_attr, first_text, normalize_code, parse_xml_id_opt,
 };
 use crate::Result;
 use lib_core::model::drug::DrugAdditionalInfoCodeEntry;
 use libxml::parser::Parser;
 use libxml::xpath::Context;
 use rust_decimal::Decimal;
-use sqlx::types::Uuid;
 use std::collections::HashMap;
 
 #[derive(Debug)]
 pub(crate) struct DrugObservationImport {
-	pub(crate) drug_xml_id: Option<Uuid>,
+	pub(crate) drug_xml_id: Option<String>,
 	pub(crate) drug_sequence: i32,
-	pub(crate) reaction_xml_id: Option<Uuid>,
+	pub(crate) reaction_xml_id: Option<String>,
 	pub(crate) administration_start_interval_value: Option<Decimal>,
 	pub(crate) administration_start_interval_unit: Option<String>,
 	pub(crate) last_dose_interval_value: Option<Decimal>,
@@ -25,8 +24,8 @@ pub(crate) struct DrugObservationImport {
 
 #[derive(Debug)]
 pub(crate) struct RelatednessImport {
-	pub(crate) drug_xml_id: Option<Uuid>,
-	pub(crate) reaction_xml_id: Option<Uuid>,
+	pub(crate) drug_xml_id: Option<String>,
+	pub(crate) reaction_xml_id: Option<String>,
 	pub(crate) source_of_assessment: Option<String>,
 	pub(crate) method_of_assessment: Option<String>,
 	pub(crate) method_of_assessment_kr1: Option<String>,
@@ -253,7 +252,7 @@ pub(crate) fn parse_drug_observations(
 	for (didx, drug_node) in drug_nodes.into_iter().enumerate() {
 		let drug_sequence = (didx + 1) as i32;
 		let drug_xml_id =
-			parse_uuid_opt(first_attr(&mut xpath, &drug_node, "hl7:id", "root"));
+			parse_xml_id_opt(first_attr(&mut xpath, &drug_node, "hl7:id", "root"));
 		let obs_nodes = xpath
 			.findnodes(
 				"hl7:outboundRelationship2[@typeCode='PERT']/hl7:observation[hl7:code[@code='31']]",
@@ -275,14 +274,14 @@ pub(crate) fn parse_drug_observations(
 				column: None,
 			})?;
 		let mut administration_start_map: HashMap<
-			Uuid,
+			String,
 			(Option<Decimal>, Option<String>),
 		> = HashMap::new();
-		let mut last_dose_map: HashMap<Uuid, (Option<Decimal>, Option<String>)> =
+		let mut last_dose_map: HashMap<String, (Option<Decimal>, Option<String>)> =
 			HashMap::new();
 		for rel in time_rels {
 			let rel_type = rel.get_attribute("typeCode");
-			let reaction_id = parse_uuid_opt(first_attr(
+			let reaction_id = parse_xml_id_opt(first_attr(
 				&mut xpath,
 				&rel,
 				"hl7:actReference/hl7:id",
@@ -311,7 +310,7 @@ pub(crate) fn parse_drug_observations(
 
 		for obs in obs_nodes {
 			let reaction_recurred = None;
-			let reaction_xml_id = parse_uuid_opt(first_attr(
+			let reaction_xml_id = parse_xml_id_opt(first_attr(
 				&mut xpath,
 				&obs,
 				"hl7:outboundRelationship1[@typeCode='REFR']/hl7:actReference/hl7:id",
@@ -321,15 +320,17 @@ pub(crate) fn parse_drug_observations(
 				administration_start_interval_value,
 				administration_start_interval_unit,
 			) = reaction_xml_id
-				.and_then(|id| administration_start_map.get(&id).cloned())
+				.as_ref()
+				.and_then(|id| administration_start_map.get(id).cloned())
 				.unwrap_or((None, None));
 			let (last_dose_interval_value, last_dose_interval_unit) =
 				reaction_xml_id
-					.and_then(|id| last_dose_map.get(&id).cloned())
+					.as_ref()
+					.and_then(|id| last_dose_map.get(id).cloned())
 					.unwrap_or((None, None));
 			let rechallenge_action = read_g_k_9_i_4(&mut xpath, &obs);
 			observations.push(DrugObservationImport {
-				drug_xml_id,
+				drug_xml_id: drug_xml_id.clone(),
 				drug_sequence,
 				reaction_xml_id,
 				administration_start_interval_value,
@@ -370,13 +371,13 @@ pub(crate) fn parse_relatedness_assessments(
 		let result_of_assessment_kr1_null_flavor =
 			read_g_k_9_i_2_r_3_kr_1_null_flavor(&mut xpath, &node);
 		let result_of_assessment_kr2 = read_g_k_9_i_2_r_3_kr_2(&mut xpath, &node);
-		let reaction_xml_id = parse_uuid_opt(first_attr(
+		let reaction_xml_id = parse_xml_id_opt(first_attr(
 			&mut xpath,
 			&node,
 			"hl7:causalityAssessment/hl7:subject1/hl7:adverseEffectReference/hl7:id",
 			"root",
 		));
-		let drug_xml_id = parse_uuid_opt(first_attr(
+		let drug_xml_id = parse_xml_id_opt(first_attr(
 			&mut xpath,
 			&node,
 			"hl7:causalityAssessment/hl7:subject2/hl7:productUseReference/hl7:id",

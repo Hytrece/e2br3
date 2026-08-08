@@ -45,8 +45,8 @@ mod types;
 mod tests;
 
 pub use ack::{
-	apply_gateway_ack_by_remote, get_ack_download,
-	get_submission_dispatch_state, list_submission_events,
+	apply_gateway_ack_by_remote, get_ack_download, get_submission_dispatch_state,
+	list_submission_events,
 };
 pub use create::{create_submission_idempotent, get_submission, list_by_case};
 pub use persistence::list_submission_history;

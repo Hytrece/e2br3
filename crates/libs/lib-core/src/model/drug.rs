@@ -343,9 +343,13 @@ pub struct DosageInformation {
 
 	// G.k.4.r.4 - Date/Time of First Administration
 	pub first_administration_date: Option<Date>,
+	/// Original HL7 TS lexical value when the date has partial precision.
+	pub first_administration_date_raw: Option<String>,
 
 	// G.k.4.r.5 - Date/Time of Last Administration
 	pub last_administration_date: Option<Date>,
+	/// Original HL7 TS lexical value when the date has partial precision.
+	pub last_administration_date_raw: Option<String>,
 
 	// G.k.4.r.6 - Duration
 	pub duration_value: Option<Decimal>,
@@ -396,14 +400,24 @@ pub struct DosageInformationForCreate {
 	pub frequency_unit: Option<String>,
 	#[serde(
 		default,
-		deserialize_with = "crate::serde::flex_date::deserialize_option_date"
+		deserialize_with = "crate::serde::flex_date::deserialize_option_date_with_partial_precision"
 	)]
 	pub first_administration_date: Option<Date>,
 	#[serde(
 		default,
-		deserialize_with = "crate::serde::flex_date::deserialize_option_date"
+		deserialize_with = "crate::serde::flex_date::deserialize_optional_partial_ts_raw"
+	)]
+	pub first_administration_date_raw: Option<String>,
+	#[serde(
+		default,
+		deserialize_with = "crate::serde::flex_date::deserialize_option_date_with_partial_precision"
 	)]
 	pub last_administration_date: Option<Date>,
+	#[serde(
+		default,
+		deserialize_with = "crate::serde::flex_date::deserialize_optional_partial_ts_raw"
+	)]
+	pub last_administration_date_raw: Option<String>,
 	pub duration_value: Option<Decimal>,
 	pub duration_unit: Option<String>,
 	pub continuing: Option<bool>,
@@ -433,14 +447,24 @@ pub struct DosageInformationForUpdate {
 	pub frequency_unit: Option<String>,
 	#[serde(
 		default,
-		deserialize_with = "crate::serde::flex_date::deserialize_option_date"
+		deserialize_with = "crate::serde::flex_date::deserialize_option_date_with_partial_precision"
 	)]
 	pub first_administration_date: Option<Date>,
 	#[serde(
 		default,
-		deserialize_with = "crate::serde::flex_date::deserialize_option_date"
+		deserialize_with = "crate::serde::flex_date::deserialize_optional_partial_ts_raw"
+	)]
+	pub first_administration_date_raw: Option<String>,
+	#[serde(
+		default,
+		deserialize_with = "crate::serde::flex_date::deserialize_option_date_with_partial_precision"
 	)]
 	pub last_administration_date: Option<Date>,
+	#[serde(
+		default,
+		deserialize_with = "crate::serde::flex_date::deserialize_optional_partial_ts_raw"
+	)]
+	pub last_administration_date_raw: Option<String>,
 	pub duration_value: Option<Decimal>,
 	pub duration_unit: Option<String>,
 	pub continuing: Option<bool>,

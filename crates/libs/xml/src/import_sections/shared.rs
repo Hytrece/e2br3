@@ -11,16 +11,12 @@ use time::Month;
 
 #[derive(Debug, Default)]
 pub(crate) struct ImportIdMap {
-	by_xml_id: HashMap<Uuid, Uuid>,
+	by_xml_id: HashMap<String, Uuid>,
 	by_sequence: Vec<Uuid>,
 }
 
 impl ImportIdMap {
-	pub(crate) fn first(&self) -> Option<Uuid> {
-		self.by_sequence.first().copied()
-	}
-
-	pub(crate) fn insert_xml_id(&mut self, xml_id: Uuid, id: Uuid) {
+	pub(crate) fn insert_xml_id(&mut self, xml_id: String, id: Uuid) {
 		self.by_xml_id.insert(xml_id, id);
 	}
 
@@ -30,7 +26,7 @@ impl ImportIdMap {
 
 	pub(crate) fn resolve(
 		&self,
-		xml_id: Option<Uuid>,
+		xml_id: Option<String>,
 		sequence: Option<i32>,
 	) -> Option<Uuid> {
 		if let Some(id) = xml_id.and_then(|id| self.by_xml_id.get(&id).copied()) {
@@ -44,7 +40,23 @@ impl ImportIdMap {
 				}
 			}
 		}
-		self.first()
+		None
+	}
+}
+
+#[cfg(test)]
+mod import_id_map_tests {
+	use super::ImportIdMap;
+	use sqlx::types::Uuid;
+
+	#[test]
+	fn unresolved_reference_does_not_fall_back_to_first_row() {
+		let mut map = ImportIdMap::default();
+		map.push_sequence(Uuid::new_v4());
+
+		assert_eq!(map.resolve(Some("unknown".to_string()), None), None);
+		assert_eq!(map.resolve(None, None), None);
+		assert_eq!(map.resolve(None, Some(2)), None);
 	}
 }
 
@@ -131,12 +143,12 @@ pub(crate) fn parse_bool_value(value: Option<String>) -> Option<bool> {
 	}
 }
 
-pub(crate) fn parse_uuid_opt(value: Option<String>) -> Option<Uuid> {
+pub(crate) fn parse_xml_id_opt(value: Option<String>) -> Option<String> {
 	let value = value?.trim().to_string();
 	if value.is_empty() {
 		return None;
 	}
-	Uuid::parse_str(&value).ok()
+	Some(value)
 }
 
 pub(crate) fn normalize_code(
@@ -363,6 +375,19 @@ mod tests {
 		let extracted = extract_safety_report_id(xml).expect("extract C.1.1");
 
 		assert_eq!(extracted, "CASE-C-1-1");
+	}
+
+	#[test]
+	fn extract_safety_report_id_from_official_fda_scenario_2_has_no_nul() {
+		let xml = include_bytes!(concat!(
+			env!("CARGO_MANIFEST_DIR"),
+			"/../../../docs/exporter/fda/FAERS2022Scenario2.xml"
+		));
+
+		let extracted = extract_safety_report_id(xml).expect("extract C.1.1");
+
+		assert_eq!(extracted, "US-APHARMA-8744554B-UPDATE-TESTING222");
+		assert!(!extracted.contains('\0'));
 	}
 
 	#[test]

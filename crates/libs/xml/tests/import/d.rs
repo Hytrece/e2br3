@@ -22,7 +22,10 @@ fn import_d_section_all_fields_from_scenario6() {
 	assert_eq!(patient.age_group, None);
 	assert_eq!(patient.weight_kg, Some(decimal("50")));
 	assert_eq!(patient.height_cm, Some(decimal("160")));
-	assert_eq!(patient.race_codes, ["C16352"]);
+	assert_eq!(
+		patient.race_codes,
+		["C16352", "C41259", "C41260", "C41219", "C41261"]
+	);
 	assert_eq!(patient.race_code_null_flavor, None);
 	assert_eq!(patient.ethnicity_code.as_deref(), Some("C17459"));
 	assert_eq!(patient.ethnicity_code_null_flavor, None);
@@ -86,4 +89,15 @@ fn import_d_section_parses_repeated_race_codes() {
 		.expect("race codes create a patient section");
 	assert_eq!(patient.race_codes, ["C16352", "C41259"]);
 	assert_eq!(patient.race_code_null_flavor, None);
+}
+
+#[test]
+fn import_d_section_exists_when_only_birth_date_is_present() {
+	let xml = br#"<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3"><primaryRole><player1><birthTime value="19800102"/></player1></primaryRole></MCCI_IN200100UV01>"#;
+
+	let patient = parse_d_patient(xml)
+		.expect("parse")
+		.expect("the patient node defines section D");
+
+	assert_eq!(patient.birth_date, Some(date(1980, 1, 2)));
 }

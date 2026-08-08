@@ -8,7 +8,7 @@ CREATE TABLE reactions (
     sequence_number INTEGER NOT NULL,  -- For ordering multiple reactions
 
     -- E.i.1.1 - Reaction/Event as Reported
-    primary_source_reaction VARCHAR(250) NOT NULL,
+    primary_source_reaction VARCHAR(250),
     -- E.i.1.2 - Reaction/Event as Reported by Primary Source (translation)
     primary_source_reaction_translation VARCHAR(250),
 

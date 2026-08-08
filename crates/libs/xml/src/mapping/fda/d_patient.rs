@@ -3,6 +3,8 @@
 pub struct DPatientPaths;
 
 impl DPatientPaths {
+	pub const PATIENT_NODE: &'static str = "//hl7:primaryRole";
+
 	// D.1 Patient initials/name
 	pub const PATIENT_NAME: &'static str = "//hl7:primaryRole/hl7:player1/hl7:name";
 	pub const PATIENT_NAME_NULL_FLAVOR: &'static str =

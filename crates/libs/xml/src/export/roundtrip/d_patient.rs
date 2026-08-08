@@ -119,25 +119,26 @@ pub fn patch_d_patient(raw_xml: &[u8], patch: &DPatientPatch) -> Result<String> 
 /// e2b:FDA.D.1
 fn write_d_1(xpath: &mut Context, value: Option<&str>) {
 	if let Some(value) = value {
-		set_text_first(xpath, "//hl7:primaryRole/hl7:player1/hl7:name", value);
+		let path = "//hl7:primaryRole/hl7:player1/hl7:name";
+		remove_attr_first(xpath, path, "nullFlavor");
+		set_text_first(xpath, path, value);
 	}
 }
 
 /// e2b:D.2.1
 fn write_d_2_1(xpath: &mut Context, value: Option<Date>) {
 	if let Some(value) = value {
-		set_attr_first(
-			xpath,
-			"//hl7:primaryRole/hl7:player1/hl7:birthTime",
-			"value",
-			&fmt_date(value),
-		);
+		let path = "//hl7:primaryRole/hl7:player1/hl7:birthTime";
+		remove_attr_first(xpath, path, "nullFlavor");
+		set_attr_first(xpath, path, "value", &fmt_date(value));
 	}
 }
 
 /// e2b:D.2.2a
 fn write_d_2_2a(xpath: &mut Context, value: &str) {
-	set_attr_first(xpath, "//hl7:subjectOf2/hl7:observation[hl7:code[@code='3' and @codeSystem='2.16.840.1.113883.3.989.2.1.1.19']]/hl7:value", "value", value);
+	let path = "//hl7:subjectOf2/hl7:observation[hl7:code[@code='3' and @codeSystem='2.16.840.1.113883.3.989.2.1.1.19']]/hl7:value";
+	remove_attr_first(xpath, path, "nullFlavor");
+	set_attr_first(xpath, path, "value", value);
 }
 
 /// e2b:D.2.2b
@@ -149,23 +150,24 @@ fn write_d_2_2b(xpath: &mut Context, value: Option<&str>) {
 
 /// e2b:D.3
 fn write_d_3(xpath: &mut Context, value: &str) {
-	set_attr_first(xpath, "//hl7:subjectOf2/hl7:observation[hl7:code[@code='7' and @codeSystem='2.16.840.1.113883.3.989.2.1.1.19']]/hl7:value", "value", value);
+	let path = "//hl7:subjectOf2/hl7:observation[hl7:code[@code='7' and @codeSystem='2.16.840.1.113883.3.989.2.1.1.19']]/hl7:value";
+	remove_attr_first(xpath, path, "nullFlavor");
+	set_attr_first(xpath, path, "value", value);
 }
 
 /// e2b:D.4
 fn write_d_4(xpath: &mut Context, value: &str) {
-	set_attr_first(xpath, "//hl7:subjectOf2/hl7:observation[hl7:code[@code='17' and @codeSystem='2.16.840.1.113883.3.989.2.1.1.19']]/hl7:value", "value", value);
+	let path = "//hl7:subjectOf2/hl7:observation[hl7:code[@code='17' and @codeSystem='2.16.840.1.113883.3.989.2.1.1.19']]/hl7:value";
+	remove_attr_first(xpath, path, "nullFlavor");
+	set_attr_first(xpath, path, "value", value);
 }
 
 /// e2b:D.5
 fn write_d_5(xpath: &mut Context, value: Option<&str>) {
 	if let Some(value) = value {
-		set_attr_first(
-			xpath,
-			"//hl7:primaryRole/hl7:player1/hl7:administrativeGenderCode",
-			"code",
-			value,
-		);
+		let path = "//hl7:primaryRole/hl7:player1/hl7:administrativeGenderCode";
+		remove_attr_first(xpath, path, "nullFlavor");
+		set_attr_first(xpath, path, "code", value);
 	}
 }
 
@@ -325,5 +327,38 @@ mod tests {
 			)
 			.expect("sex codes")
 			.is_empty());
+	}
+
+	#[test]
+	fn values_clear_stale_null_flavor_attributes() {
+		let raw = br#"<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <primaryRole><player1><name nullFlavor="UNK"/><birthTime nullFlavor="UNK"/><administrativeGenderCode nullFlavor="UNK"/></player1>
+    <subjectOf2><observation><code code="3" codeSystem="2.16.840.1.113883.3.989.2.1.1.19"/><value xsi:type="PQ" nullFlavor="NI"/></observation></subjectOf2>
+    <subjectOf2><observation><code code="7" codeSystem="2.16.840.1.113883.3.989.2.1.1.19"/><value xsi:type="PQ" value="59" nullFlavor="NI"/></observation></subjectOf2>
+    <subjectOf2><observation><code code="17" codeSystem="2.16.840.1.113883.3.989.2.1.1.19"/><value xsi:type="PQ" value="153" nullFlavor="NI"/></observation></subjectOf2>
+  </primaryRole>
+</MCCI_IN200100UV01>"#;
+		let patch = DPatientPatch {
+			patient_name: Some("AB"),
+			sex: Some("1"),
+			birth_date: Some(
+				Date::from_calendar_date(1980, time::Month::January, 2).unwrap(),
+			),
+			age_value: Some("81"),
+			age_unit: Some("a"),
+			weight_kg: Some("59"),
+			height_cm: Some("153"),
+			date_of_death: None,
+			autopsy_performed: None,
+			autopsy_performed_null_flavor: None,
+			reported_causes: &[],
+			autopsy_causes: &[],
+		};
+		let xml = patch_d_patient(raw, &patch).expect("patch D");
+		assert!(!xml.contains("value=\"59\" nullFlavor="));
+		assert!(!xml.contains("value=\"153\" nullFlavor="));
+		assert!(!xml.contains("name nullFlavor=\"UNK\""));
+		assert!(!xml.contains("birthTime nullFlavor=\"UNK\""));
+		assert!(!xml.contains("administrativeGenderCode nullFlavor=\"UNK\""));
 	}
 }

@@ -3,12 +3,13 @@
 use crate::error::Error;
 use crate::import_constraint;
 use crate::mapping::fda::g_drug::GDrugPaths;
+use crate::mapping::mfds::g_drug::GMfdsDrugPaths;
 use crate::Result;
 use libxml::parser::Parser;
 use libxml::tree::Node;
 use libxml::xpath::Context;
 use rust_decimal::Decimal;
-use sqlx::types::Uuid;
+use std::collections::HashMap;
 
 mod helpers;
 mod runtime;
@@ -16,12 +17,14 @@ pub(crate) use runtime::import_section_g;
 
 #[derive(Debug)]
 pub struct GDrugImport {
-	pub xml_id: Option<Uuid>,
+	pub xml_id: Option<String>,
 	pub sequence_number: i32,
 	pub medicinal_product: String,
 	pub drug_characterization: String,
 	pub mpid: Option<String>,
 	pub mpid_version: Option<String>,
+	pub mfds_mpid: Option<String>,
+	pub mfds_mpid_version: Option<String>,
 	pub phpid: Option<String>,
 	pub phpid_version: Option<String>,
 	pub investigational_product_blinded: Option<bool>,
@@ -76,6 +79,8 @@ pub struct GDrugSubstanceImport {
 	pub substance_name: Option<String>,
 	pub substance_termid: Option<String>,
 	pub substance_termid_version: Option<String>,
+	pub mfds_id: Option<String>,
+	pub mfds_version: Option<String>,
 	pub strength_value: Option<Decimal>,
 	pub strength_unit: Option<String>,
 }
@@ -86,8 +91,10 @@ pub struct GDrugDosageImport {
 	pub frequency_unit: Option<String>,
 	pub number_of_units: Option<Decimal>,
 	pub start_date: Option<sqlx::types::time::Date>,
+	pub start_date_raw: Option<String>,
 	pub start_date_null_flavor: Option<String>,
 	pub end_date: Option<sqlx::types::time::Date>,
+	pub end_date_raw: Option<String>,
 	pub end_date_null_flavor: Option<String>,
 	pub duration_value: Option<Decimal>,
 	pub duration_unit: Option<String>,
@@ -158,14 +165,17 @@ pub fn parse_g_drugs(xml: &[u8]) -> Result<Vec<GDrugImport>> {
 			column: None,
 		}
 	})?;
+	let drug_roles = read_drug_roles(&mut xpath)?;
 
 	let mut imports: Vec<GDrugImport> = Vec::new();
 	for (idx, node) in drug_nodes.into_iter().enumerate() {
-		let xml_id = read_xml_id(&mut xpath, &node);
+		let xml_id = read_xml_id(&mut xpath, &node, idx + 1)?;
 		let name1 = read_g_k_2_2(&mut xpath, &node, idx + 1)?;
-		let drug_characterization = read_g_k_1(&mut xpath, &node)?;
+		let drug_characterization = read_g_k_1(&drug_roles, &xml_id, idx + 1)?;
 		let mpid = read_g_k_2_1_1a(&mut xpath, &node)?;
 		let mpid_version = read_g_k_2_1_1b(&mut xpath, &node)?;
+		let mfds_mpid = read_g_k_2_1_kr_1b(&mut xpath, &node)?;
+		let mfds_mpid_version = read_g_k_2_1_kr_1a(&mut xpath, &node)?;
 		let phpid = read_g_k_2_1_2a(&mut xpath, &node)?;
 		let phpid_version = read_g_k_2_1_2b(&mut xpath, &node)?;
 		let investigational_product_blinded = read_fda_g_k_1_a(&mut xpath, &node)?;
@@ -246,12 +256,16 @@ pub fn parse_g_drugs(xml: &[u8]) -> Result<Vec<GDrugImport>> {
 			let sub_name = read_g_k_2_3_r_1(&mut xpath, &sub)?;
 			let termid = read_g_k_2_3_r_2b(&mut xpath, &sub)?;
 			let termid_version = read_g_k_2_3_r_2a(&mut xpath, &sub)?;
+			let mfds_id = read_g_k_2_3_r_1_kr_1b(&mut xpath, &sub)?;
+			let mfds_version = read_g_k_2_3_r_1_kr_1a(&mut xpath, &sub)?;
 			let strength_value = read_g_k_2_3_r_3a(&mut xpath, &sub)?;
 			let strength_unit = read_g_k_2_3_r_3b(&mut xpath, &sub)?;
 			substances.push(GDrugSubstanceImport {
 				substance_name: sub_name,
 				substance_termid: termid,
 				substance_termid_version: termid_version,
+				mfds_id,
+				mfds_version,
 				strength_value,
 				strength_unit,
 			});
@@ -263,9 +277,9 @@ pub fn parse_g_drugs(xml: &[u8]) -> Result<Vec<GDrugImport>> {
 			let dosage_text = read_g_k_4_r_8(&mut xpath, &dose)?;
 			let frequency_unit = read_g_k_4_r_3(&mut xpath, &dose)?;
 			let number_of_units = read_g_k_4_r_2(&mut xpath, &dose)?;
-			let (start_date, start_date_null_flavor) =
+			let (start_date, start_date_raw, start_date_null_flavor) =
 				read_g_k_4_r_4(&mut xpath, &dose)?;
-			let (end_date, end_date_null_flavor) =
+			let (end_date, end_date_raw, end_date_null_flavor) =
 				read_g_k_4_r_5(&mut xpath, &dose)?;
 			let duration_value = read_g_k_4_r_6a(&mut xpath, &dose)?;
 			let duration_unit = read_g_k_4_r_6b(&mut xpath, &dose)?;
@@ -289,8 +303,10 @@ pub fn parse_g_drugs(xml: &[u8]) -> Result<Vec<GDrugImport>> {
 				frequency_unit,
 				number_of_units,
 				start_date,
+				start_date_raw,
 				start_date_null_flavor,
 				end_date,
+				end_date_raw,
 				end_date_null_flavor,
 				duration_value,
 				duration_unit,
@@ -356,12 +372,14 @@ pub fn parse_g_drugs(xml: &[u8]) -> Result<Vec<GDrugImport>> {
 		}
 
 		imports.push(GDrugImport {
-			xml_id,
+			xml_id: Some(xml_id),
 			sequence_number: (idx + 1) as i32,
 			medicinal_product: name1,
 			drug_characterization,
 			mpid,
 			mpid_version,
+			mfds_mpid,
+			mfds_mpid_version,
 			phpid,
 			phpid_version,
 			investigational_product_blinded,
@@ -390,13 +408,36 @@ pub fn parse_g_drugs(xml: &[u8]) -> Result<Vec<GDrugImport>> {
 	Ok(imports)
 }
 
-fn read_xml_id(xpath: &mut Context, node: &Node) -> Option<Uuid> {
-	parse_uuid_opt(first_attr(xpath, node, GDrugPaths::XML_ID_ROOT))
+fn read_xml_id(xpath: &mut Context, node: &Node, index: usize) -> Result<String> {
+	let value =
+		first_attr(xpath, node, GDrugPaths::XML_ID_ROOT).ok_or_else(|| {
+			invalid_field(
+				"G.k.1",
+				format!("product reference id missing for drug index {index}"),
+			)
+		})?;
+	let value = value.trim();
+	if value.is_empty() {
+		return Err(invalid_field(
+			"G.k.1",
+			format!("product reference id empty for drug index {index}"),
+		));
+	}
+	Ok(value.to_string())
 }
 
 /// e2b:G.k.1
-fn read_g_k_1(_xpath: &mut Context, _node: &Node) -> Result<String> {
-	let value = "1".to_string();
+fn read_g_k_1(
+	drug_roles: &HashMap<String, String>,
+	xml_id: &str,
+	index: usize,
+) -> Result<String> {
+	let value = drug_roles.get(xml_id).cloned().ok_or_else(|| {
+		invalid_field(
+			"G.k.1",
+			format!("drug characterization missing for drug index {index}"),
+		)
+	})?;
 	import_constraint::string(
 		"drugCharacterization",
 		Some(&value),
@@ -404,6 +445,38 @@ fn read_g_k_1(_xpath: &mut Context, _node: &Node) -> Result<String> {
 		input_contracts::generated::g::g_k_1,
 	)?;
 	Ok(value)
+}
+
+fn read_drug_roles(xpath: &mut Context) -> Result<HashMap<String, String>> {
+	let nodes = find_nodes(xpath, GDrugPaths::DRUG_ROLE_NODE, None)?;
+	let mut roles = HashMap::new();
+	for node in nodes {
+		let reference = first_attr(xpath, &node, GDrugPaths::DRUG_ROLE_PRODUCT_REF)
+			.ok_or_else(|| invalid_field("G.k.1", "product reference id missing"))?;
+		let reference = reference.trim();
+		if reference.is_empty() {
+			return Err(invalid_field("G.k.1", "product reference id empty"));
+		}
+		let value = first_attr(xpath, &node, GDrugPaths::DRUG_ROLE_CODE)
+			.ok_or_else(|| {
+				invalid_field("G.k.1", "drug characterization missing")
+			})?;
+		import_constraint::string(
+			"drugCharacterization",
+			Some(&value),
+			None,
+			input_contracts::generated::g::g_k_1,
+		)?;
+		if let Some(previous) = roles.insert(reference.to_string(), value.clone()) {
+			if previous != value {
+				return Err(invalid_field(
+					"G.k.1",
+					format!("conflicting drug characterizations for {reference}"),
+				));
+			}
+		}
+	}
+	Ok(roles)
 }
 
 /// e2b:G.k.2.2
@@ -446,6 +519,24 @@ fn read_g_k_2_1_1b(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
 		input_contracts::generated::g::g_k_2_1_1a,
 	)?;
 	Ok(value)
+}
+
+/// e2b:G.k.2.1.KR.1a
+fn read_g_k_2_1_kr_1a(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
+	input_string(
+		first_attr(xpath, node, GMfdsDrugPaths::MPID_VERSION),
+		"mfdsMpidVersion",
+		input_contracts::generated::g::mfds_g_k_2_1_kr_1a,
+	)
+}
+
+/// e2b:G.k.2.1.KR.1b
+fn read_g_k_2_1_kr_1b(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
+	input_string(
+		first_attr(xpath, node, GMfdsDrugPaths::MPID),
+		"mfdsMpid",
+		input_contracts::generated::g::mfds_g_k_2_1_kr_1b,
+	)
 }
 
 /// e2b:G.k.2.1.2a
@@ -669,6 +760,30 @@ fn read_g_k_2_3_r_2b(xpath: &mut Context, node: &Node) -> Result<Option<String>>
 	)
 }
 
+/// e2b:G.k.2.3.r.1.KR.1a
+fn read_g_k_2_3_r_1_kr_1a(
+	xpath: &mut Context,
+	node: &Node,
+) -> Result<Option<String>> {
+	input_string(
+		first_attr(xpath, node, GMfdsDrugPaths::SUBSTANCE_VERSION),
+		"activeSubstances[].mfdsVersion",
+		input_contracts::generated::g::mfds_g_k_2_3_r_1_kr_1a,
+	)
+}
+
+/// e2b:G.k.2.3.r.1.KR.1b
+fn read_g_k_2_3_r_1_kr_1b(
+	xpath: &mut Context,
+	node: &Node,
+) -> Result<Option<String>> {
+	input_string(
+		first_attr(xpath, node, GMfdsDrugPaths::SUBSTANCE_ID),
+		"activeSubstances[].mfdsId",
+		input_contracts::generated::g::mfds_g_k_2_3_r_1_kr_1b,
+	)
+}
+
 /// e2b:G.k.2.3.r.3a
 fn read_g_k_2_3_r_3a(xpath: &mut Context, node: &Node) -> Result<Option<Decimal>> {
 	decimal(
@@ -727,7 +842,11 @@ fn read_g_k_4_r_3(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
 fn read_g_k_4_r_4(
 	xpath: &mut Context,
 	node: &Node,
-) -> Result<(Option<sqlx::types::time::Date>, Option<String>)> {
+) -> Result<(
+	Option<sqlx::types::time::Date>,
+	Option<String>,
+	Option<String>,
+)> {
 	date_pair(
 		first_attr(xpath, node, GDrugPaths::DOSAGE_START_DATE),
 		first_attr(xpath, node, GDrugPaths::DOSAGE_START_DATE_NULL_FLAVOR).or_else(
@@ -749,7 +868,11 @@ fn read_g_k_4_r_4(
 fn read_g_k_4_r_5(
 	xpath: &mut Context,
 	node: &Node,
-) -> Result<(Option<sqlx::types::time::Date>, Option<String>)> {
+) -> Result<(
+	Option<sqlx::types::time::Date>,
+	Option<String>,
+	Option<String>,
+)> {
 	date_pair(
 		first_attr(xpath, node, GDrugPaths::DOSAGE_END_DATE),
 		first_attr(xpath, node, GDrugPaths::DOSAGE_END_DATE_NULL_FLAVOR).or_else(
@@ -1226,8 +1349,11 @@ fn decimal(
 		input_contracts::FieldInput<'a>,
 	) -> Vec<input_contracts::InputIssue>,
 ) -> Result<Option<Decimal>> {
-	import_constraint::number_string(field, value.as_deref(), check)?;
-	Ok(value.and_then(|value| value.parse().ok()))
+	let normalized = value
+		.as_deref()
+		.map(import_constraint::normalize_decimal_lexeme);
+	import_constraint::number_string(field, normalized.as_deref(), check)?;
+	Ok(normalized.and_then(|value| value.parse().ok()))
 }
 
 fn input_string(
@@ -1273,51 +1399,92 @@ fn date_pair(
 	check: impl for<'a> Fn(
 		input_contracts::FieldInput<'a>,
 	) -> Vec<input_contracts::InputIssue>,
-) -> Result<(Option<sqlx::types::time::Date>, Option<String>)> {
+) -> Result<(
+	Option<sqlx::types::time::Date>,
+	Option<String>,
+	Option<String>,
+)> {
 	let (value, null_flavor) =
 		input_string_pair(value, null_flavor, field, null_flavor_field, check)?;
-	let date = value
-		.map(|value| {
-			parse_date(value).ok_or_else(|| invalid_field(field, "invalid date"))
-		})
-		.transpose()?;
-	Ok((date, null_flavor))
+	let Some(value) = value else {
+		return Ok((None, None, null_flavor));
+	};
+	let (date, raw) =
+		parse_date(value).ok_or_else(|| invalid_field(field, "invalid date"))?;
+	Ok((date, raw, null_flavor))
 }
 
-fn parse_uuid_opt(value: Option<String>) -> Option<Uuid> {
-	let value = value?.trim().to_string();
-	if value.is_empty() {
+fn parse_date(
+	value: String,
+) -> Option<(Option<sqlx::types::time::Date>, Option<String>)> {
+	let raw = value.trim().to_string();
+	let digits: String = raw.chars().filter(|c| c.is_ascii_digit()).collect();
+	let (year, month, day) = match digits.len() {
+		4 => (digits[0..4].parse().ok()?, 1, 1),
+		6 => (digits[0..4].parse().ok()?, digits[4..6].parse().ok()?, 1),
+		_ if digits.len() >= 8 => (
+			digits[0..4].parse().ok()?,
+			digits[4..6].parse().ok()?,
+			digits[6..8].parse().ok()?,
+		),
+		_ => return None,
+	};
+	let month = time::Month::try_from(month).ok()?;
+	let date = sqlx::types::time::Date::from_calendar_date(year, month, day).ok()?;
+	let partial = matches!(digits.len(), 4 | 6);
+	if partial && !raw.bytes().all(|byte| byte.is_ascii_digit()) {
 		return None;
 	}
-	Uuid::parse_str(&value).ok()
-}
-
-fn parse_date(value: String) -> Option<sqlx::types::time::Date> {
-	let digits: String = value.chars().filter(|c| c.is_ascii_digit()).collect();
-	if digits.len() < 8 {
-		return None;
-	}
-	let y: i32 = digits[0..4].parse().ok()?;
-	let m: u8 = digits[4..6].parse().ok()?;
-	let d: u8 = digits[6..8].parse().ok()?;
-	let month = time::Month::try_from(m).ok()?;
-	sqlx::types::time::Date::from_calendar_date(y, month, d).ok()
+	let raw = partial.then_some(raw);
+	Some(((!partial).then_some(date), raw))
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
 
+	const TEST_DRUG_ID: &str = "3c91b4d5-e039-4a7a-9c30-67671b0ef9e4";
+
+	#[test]
+	fn parses_partial_hl7_ts_dates_without_losing_precision() {
+		let (date, raw) = parse_date("200304".to_string()).expect("partial date");
+		assert_eq!(date, None);
+		assert_eq!(raw.as_deref(), Some("200304"));
+	}
+
+	#[test]
+	fn rejects_separated_partial_hl7_ts_dates_instead_of_dropping_them() {
+		assert!(parse_date("2003-04".to_string()).is_none());
+	}
+
+	fn with_drug_role(xml: &str) -> String {
+		let xml = xml.replacen(
+			"<substanceAdministration>",
+			&format!("<substanceAdministration><id root=\"{TEST_DRUG_ID}\"/>"),
+			1,
+		);
+		xml.replacen(
+			"</MCCI_IN200100UV01>",
+			&format!(
+				"<component><causalityAssessment><code code=\"20\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.19\"/><value code=\"1\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.13\"/><subject2><productUseReference><id root=\"{TEST_DRUG_ID}\"/></productUseReference></subject2></causalityAssessment></component></MCCI_IN200100UV01>"
+			),
+			1,
+		)
+	}
+
 	#[test]
 	fn applies_field_type_and_length_defenses() {
 		let overlong_version = format!(
-			r#"<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3"><subjectOf2><organizer><code code="4" codeSystem="2.16.840.1.113883.3.989.2.1.1.20"/><component><substanceAdministration><consumable><instanceOfKind><kindOfProduct><name>Drug A</name><code code="x" codeSystemVersion="{}"/></kindOfProduct></instanceOfKind></consumable></substanceAdministration></component></organizer></subjectOf2></MCCI_IN200100UV01>"#,
+			r#"<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3"><subjectOf2><organizer><code code="4" codeSystem="2.16.840.1.113883.3.989.2.1.1.20"/><component><substanceAdministration><consumable><instanceOfKind><kindOfProduct><name>Drug A</name><asIdentifiedEntity><id extension="MPID-1"/><code code="MPID" codeSystemVersion="{}"/></asIdentifiedEntity></kindOfProduct></instanceOfKind></consumable></substanceAdministration></component></organizer></subjectOf2></MCCI_IN200100UV01>"#,
 			"1".repeat(1001)
 		);
 		let invalid_decimal = br#"<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3"><subjectOf2><organizer><code code="4" codeSystem="2.16.840.1.113883.3.989.2.1.1.20"/><component><substanceAdministration><consumable><instanceOfKind><kindOfProduct><name>Drug A</name></kindOfProduct></instanceOfKind></consumable><outboundRelationship2 typeCode="COMP"><substanceAdministration><doseQuantity value="not-a-number"/></substanceAdministration></outboundRelationship2></substanceAdministration></component></organizer></subjectOf2></MCCI_IN200100UV01>"#;
 
-		assert!(parse_g_drugs(overlong_version.as_bytes()).is_err());
-		assert!(parse_g_drugs(invalid_decimal).is_err());
+		assert!(parse_g_drugs(with_drug_role(&overlong_version).as_bytes()).is_err());
+		assert!(parse_g_drugs(
+			with_drug_role(std::str::from_utf8(invalid_decimal).unwrap()).as_bytes()
+		)
+		.is_err());
 	}
 
 	#[test]
@@ -1350,7 +1517,8 @@ mod tests {
 		"#
 			);
 
-			let drugs = parse_g_drugs(xml.as_bytes()).expect("parse");
+			let drugs =
+				parse_g_drugs(with_drug_role(&xml).as_bytes()).expect("parse");
 			let dosage = &drugs[0].dosages[0];
 
 			assert_eq!(dosage.number_of_units, Some(Decimal::new(5, 1)));
@@ -1361,7 +1529,10 @@ mod tests {
 	#[test]
 	fn imports_dosage_null_flavors_into_companions() {
 		let xml = br#"<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3"><subjectOf2><organizer><code code="4" codeSystem="2.16.840.1.113883.3.989.2.1.1.20"/><component><substanceAdministration><consumable><instanceOfKind><kindOfProduct><name>Drug A</name></kindOfProduct></instanceOfKind></consumable><outboundRelationship2 typeCode="COMP"><substanceAdministration><routeCode nullFlavor="ASKU"/><consumable><instanceOfKind><kindOfProduct><formCode nullFlavor="UNK"/></kindOfProduct></instanceOfKind></consumable><outboundRelationship2 typeCode="COMP"><observation><code code="G.k.4.r.11"/><value nullFlavor="NASK"/></observation></outboundRelationship2></substanceAdministration></outboundRelationship2></substanceAdministration></component></organizer></subjectOf2></MCCI_IN200100UV01>"#;
-		let drugs = parse_g_drugs(xml).expect("parse");
+		let drugs = parse_g_drugs(
+			with_drug_role(std::str::from_utf8(xml).unwrap()).as_bytes(),
+		)
+		.expect("parse");
 		let dosage = &drugs[0].dosages[0];
 		assert_eq!(dosage.route_null_flavor.as_deref(), Some("ASKU"));
 		assert_eq!(dosage.dose_form_null_flavor.as_deref(), Some("UNK"));
@@ -1372,7 +1543,10 @@ mod tests {
 	fn rejects_batch_lot_null_flavor() {
 		let xml = br#"<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3"><subjectOf2><organizer><code code="4" codeSystem="2.16.840.1.113883.3.989.2.1.1.20"/><component><substanceAdministration><consumable><instanceOfKind><kindOfProduct><name>Drug A</name></kindOfProduct></instanceOfKind></consumable><outboundRelationship2 typeCode="COMP"><substanceAdministration><consumable><instanceOfKind><productInstanceInstance><lotNumberText nullFlavor="UNK"/></productInstanceInstance></instanceOfKind></consumable></substanceAdministration></outboundRelationship2></substanceAdministration></component></organizer></subjectOf2></MCCI_IN200100UV01>"#;
 
-		let err = parse_g_drugs(xml).expect_err("G.k.4.r.7 nullFlavor should fail");
+		let err = parse_g_drugs(
+			with_drug_role(std::str::from_utf8(xml).unwrap()).as_bytes(),
+		)
+		.expect_err("G.k.4.r.7 nullFlavor should fail");
 		match err {
 			Error::InvalidXml { message, .. } => {
 				assert!(message.contains("G.k.4.r.7 does not permit nullFlavor"));
@@ -1399,5 +1573,64 @@ mod tests {
 			.codes
 			.iter()
 			.any(|code| code.element == "device_problem")));
+	}
+
+	#[test]
+	fn maps_drug_characterization_by_product_reference() {
+		let first_id = "3c91b4d5-e039-4a7a-9c30-67671b0ef9e4";
+		let second_id = "4c91b4d5-e039-4a7a-9c30-67671b0ef9e5";
+		let xml = format!(
+			r#"<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3"><subjectOf2><organizer><code code="4" codeSystem="2.16.840.1.113883.3.989.2.1.1.20"/><component><substanceAdministration><id root="{first_id}"/><consumable><instanceOfKind><kindOfProduct><name>Drug A</name></kindOfProduct></instanceOfKind></consumable></substanceAdministration></component><component><substanceAdministration><id root="{second_id}"/><consumable><instanceOfKind><kindOfProduct><name>Drug B</name></kindOfProduct></instanceOfKind></consumable></substanceAdministration></component></organizer></subjectOf2><component><causalityAssessment><code code="20" codeSystem="2.16.840.1.113883.3.989.2.1.1.19"/><value code="3" codeSystem="2.16.840.1.113883.3.989.2.1.1.13"/><subject2><productUseReference><id root="{second_id}"/></productUseReference></subject2></causalityAssessment></component><component><causalityAssessment><code code="20" codeSystem="2.16.840.1.113883.3.989.2.1.1.19"/><value code="1" codeSystem="2.16.840.1.113883.3.989.2.1.1.13"/><subject2><productUseReference><id root="{first_id}"/></productUseReference></subject2></causalityAssessment></component></MCCI_IN200100UV01>"#
+		);
+
+		let drugs = parse_g_drugs(xml.as_bytes()).expect("parse");
+		assert_eq!(drugs[0].drug_characterization, "1");
+		assert_eq!(drugs[1].drug_characterization, "3");
+	}
+
+	#[test]
+	fn accepts_non_uuid_product_reference_ids() {
+		let xml = r#"<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3"><subjectOf2><organizer><code code="4" codeSystem="2.16.840.1.113883.3.989.2.1.1.20"/><component><substanceAdministration><id root="d-id1"/><consumable><instanceOfKind><kindOfProduct><name>Drug A</name></kindOfProduct></instanceOfKind></consumable></substanceAdministration></component><component><substanceAdministration><id root="d-id2"/><consumable><instanceOfKind><kindOfProduct><name>Drug B</name></kindOfProduct></instanceOfKind></consumable></substanceAdministration></component></organizer></subjectOf2><component><causalityAssessment><code code="20" codeSystem="2.16.840.1.113883.3.989.2.1.1.19"/><value code="3" codeSystem="2.16.840.1.113883.3.989.2.1.1.13"/><subject2><productUseReference><id root="d-id2"/></productUseReference></subject2></causalityAssessment></component><component><causalityAssessment><code code="20" codeSystem="2.16.840.1.113883.3.989.2.1.1.19"/><value code="1" codeSystem="2.16.840.1.113883.3.989.2.1.1.13"/><subject2><productUseReference><id root="d-id1"/></productUseReference></subject2></causalityAssessment></component></MCCI_IN200100UV01>"#;
+
+		let drugs = parse_g_drugs(xml.as_bytes()).expect("parse");
+		assert_eq!(drugs[0].xml_id.as_deref(), Some("d-id1"));
+		assert_eq!(drugs[1].xml_id.as_deref(), Some("d-id2"));
+		assert_eq!(drugs[0].drug_characterization, "1");
+		assert_eq!(drugs[1].drug_characterization, "3");
+	}
+
+	#[test]
+	fn preserves_mfds_product_and_substance_identifiers() {
+		let xml = format!(
+			r#"<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3"><subjectOf2><organizer><code code="4" codeSystem="2.16.840.1.113883.3.989.2.1.1.20"/><component><substanceAdministration><id root="{TEST_DRUG_ID}"/><consumable><instanceOfKind><kindOfProduct><code code="200200143" codeSystem="2.16.840.1.113883.3.989.5.1.10.2.1" codeSystemVersion="20240101"/><name>Drug A</name><ingredient><ingredientSubstance><code code="M084105" codeSystem="2.16.840.1.113883.3.989.5.1.10.2.2" codeSystemVersion="20240102"/><name>Substance A</name></ingredientSubstance></ingredient></kindOfProduct></instanceOfKind></consumable></substanceAdministration></component></organizer></subjectOf2><component><causalityAssessment><code code="20" codeSystem="2.16.840.1.113883.3.989.2.1.1.19"/><value code="1" codeSystem="2.16.840.1.113883.3.989.2.1.1.13"/><subject2><productUseReference><id root="{TEST_DRUG_ID}"/></productUseReference></subject2></causalityAssessment></component></MCCI_IN200100UV01>"#
+		);
+
+		let drugs = parse_g_drugs(xml.as_bytes()).expect("parse");
+		assert_eq!(drugs[0].mpid, None);
+		assert_eq!(drugs[0].mfds_mpid.as_deref(), Some("200200143"));
+		assert_eq!(drugs[0].mfds_mpid_version.as_deref(), Some("20240101"));
+		assert_eq!(drugs[0].substances[0].substance_termid, None);
+		assert_eq!(drugs[0].substances[0].mfds_id.as_deref(), Some("M084105"));
+		assert_eq!(
+			drugs[0].substances[0].mfds_version.as_deref(),
+			Some("20240102")
+		);
+	}
+
+	#[test]
+	fn imports_official_mfds_drug_roles_and_regional_identifiers() {
+		let xml = include_bytes!(concat!(
+			env!("CARGO_MANIFEST_DIR"),
+			"/../../../docs/exporter/mfds/1-1_ExampleCase_literature_KR_initial_v1_0_샘플.xml"
+		));
+
+		let drugs = parse_g_drugs(xml).expect("parse official MFDS sample");
+
+		assert_eq!(drugs.len(), 2);
+		assert_eq!(drugs[0].drug_characterization, "1");
+		assert_eq!(drugs[1].drug_characterization, "3");
+		assert_eq!(drugs[0].mfds_mpid.as_deref(), Some("200200143"));
+		assert_eq!(drugs[0].substances[0].mfds_id.as_deref(), Some("M084105"));
+		assert_eq!(drugs[1].substances[0].mfds_id.as_deref(), Some("M222875"));
 	}
 }

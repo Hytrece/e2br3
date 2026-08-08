@@ -85,6 +85,19 @@ pub fn parse_d_patient(xml: &[u8]) -> Result<Option<DPatientImport>> {
 		column: None,
 	})?;
 	let _ = xpath.register_namespace("hl7", "urn:hl7-org:v3");
+	let patient_exists = xpath
+		.findnodes(DPatientPaths::PATIENT_NODE, None)
+		.map_err(|_| Error::InvalidXml {
+			message: "Failed to query patient information".to_string(),
+			line: None,
+			column: None,
+		})?
+		.into_iter()
+		.next()
+		.is_some();
+	if !patient_exists {
+		return Ok(None);
+	}
 
 	let header = crate::import_sections::shared::extract_message_header(xml)?;
 	let authority = infer_regulatory_authority_from_receivers(
@@ -109,23 +122,6 @@ pub fn parse_d_patient(xml: &[u8]) -> Result<Option<DPatientImport>> {
 	let concomitant_therapy = read_d_7_3(&mut xpath)?;
 	let (race_codes, race_code_null_flavor) = read_fda_d_11_r_1(&mut xpath)?;
 	let (ethnicity_code, ethnicity_code_null_flavor) = read_fda_d_12(&mut xpath)?;
-
-	if patient_initials.is_none()
-		&& sex.is_none()
-		&& age_at_time_of_onset.is_none()
-		&& gestation_period.is_none()
-		&& weight_kg.is_none()
-		&& height_cm.is_none()
-		&& patient_initials_null_flavor.is_none()
-		&& birth_date_null_flavor.is_none()
-		&& sex_null_flavor.is_none()
-		&& last_menstrual_period_date_null_flavor.is_none()
-		&& race_codes.is_empty()
-		&& race_code_null_flavor.is_none()
-		&& ethnicity_code_null_flavor.is_none()
-	{
-		return Ok(None);
-	}
 
 	Ok(Some(DPatientImport {
 		patient_initials,

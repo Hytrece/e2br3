@@ -4,6 +4,7 @@ use crate::import_sections::shared::{
 	first_attr, first_text, first_text_root, first_value_root, normalize_code,
 	normalize_iso2, telecom_first_in_node,
 };
+use crate::mapping::mfds::c_safety_report::CMfdsSafetyReportPaths;
 use crate::mfds::codes::{KR_C_3_1_1, KR_C_5_4_1};
 use crate::Result;
 use lib_core::model::receiver::ReceiverInformationForUpdate;
@@ -59,6 +60,7 @@ pub(crate) struct PrimarySourceImport {
 	pub(crate) email_null_flavor: Option<String>,
 	pub(crate) qualification: Option<String>,
 	pub(crate) qualification_null_flavor: Option<String>,
+	pub(crate) qualification_kr1: Option<String>,
 	pub(crate) primary_source_regulatory: Option<String>,
 }
 
@@ -712,7 +714,7 @@ fn read_c_2_r_4(
 	xpath: &mut Context,
 	node: &libxml::tree::Node,
 ) -> Result<(Option<String>, Option<String>)> {
-	let path = ".//hl7:assignedPerson/hl7:asQualifiedEntity/hl7:code";
+	let path = ".//hl7:assignedPerson/hl7:asQualifiedEntity/hl7:code[@codeSystem='2.16.840.1.113883.3.989.2.1.1.6' or @nullFlavor]";
 	let value = first_attr(xpath, node, path, "code");
 	let null_flavor = first_attr(xpath, node, path, "nullFlavor");
 	import_constraint::string(
@@ -728,6 +730,26 @@ fn read_c_2_r_4(
 		input_contracts::generated::c::c_2_r_4,
 	)?;
 	Ok((value, null_flavor))
+}
+
+/// e2b:C.2.r.4.KR.1
+fn read_c_2_r_4_kr_1(
+	xpath: &mut Context,
+	node: &libxml::tree::Node,
+) -> Result<Option<String>> {
+	let value = first_attr(
+		xpath,
+		node,
+		CMfdsSafetyReportPaths::QUALIFICATION_KR1_CODE,
+		"code",
+	);
+	import_constraint::string(
+		"qualificationKr1",
+		value.as_deref(),
+		None,
+		input_contracts::generated::c::mfds_c_2_r_4_kr_1,
+	)?;
+	Ok(value)
 }
 
 /// e2b:C.2.r.5
@@ -803,6 +825,7 @@ pub(crate) fn parse_primary_sources(xml: &[u8]) -> Result<Vec<PrimarySourceImpor
 		let country_code = read_c_2_r_5(&mut xpath, &node)?;
 		let (qualification, qualification_null_flavor) =
 			read_c_2_r_4(&mut xpath, &node)?;
+		let qualification_kr1 = read_c_2_r_4_kr_1(&mut xpath, &node)?;
 		let primary_source_regulatory = read_c_2_r_3(&mut xpath, &node)?;
 
 		let has_importable_content = [
@@ -833,6 +856,7 @@ pub(crate) fn parse_primary_sources(xml: &[u8]) -> Result<Vec<PrimarySourceImpor
 			email_null_flavor.as_ref(),
 			qualification.as_ref(),
 			qualification_null_flavor.as_ref(),
+			qualification_kr1.as_ref(),
 			primary_source_regulatory.as_ref(),
 		]
 		.into_iter()
@@ -870,6 +894,7 @@ pub(crate) fn parse_primary_sources(xml: &[u8]) -> Result<Vec<PrimarySourceImpor
 			email_null_flavor,
 			qualification,
 			qualification_null_flavor,
+			qualification_kr1,
 			primary_source_regulatory,
 		});
 	}
@@ -1031,6 +1056,22 @@ mod tests {
 			primary_sources[0].qualification_null_flavor.as_deref(),
 			Some("UNK")
 		);
+	}
+
+	#[test]
+	fn primary_source_import_preserves_mfds_qualification() {
+		let xml = primary_source_xml(
+			r#"<assignedPerson>
+	<asQualifiedEntity><code code="1" codeSystem="2.16.840.1.113883.3.989.5.1.10.1.1"/></asQualifiedEntity>
+	<asQualifiedEntity><code code="3" codeSystem="2.16.840.1.113883.3.989.2.1.1.6"/></asQualifiedEntity>
+</assignedPerson>"#,
+		);
+
+		let primary_sources = parse_primary_sources(xml.as_bytes()).expect("parse");
+
+		assert_eq!(primary_sources.len(), 1);
+		assert_eq!(primary_sources[0].qualification.as_deref(), Some("3"));
+		assert_eq!(primary_sources[0].qualification_kr1.as_deref(), Some("1"));
 	}
 
 	#[test]

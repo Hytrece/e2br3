@@ -112,15 +112,19 @@ pub(crate) fn reaction_fragment_for_authority(
 		out.push_str(&xml_escape(version));
 		out.push_str("\"");
 	}
-	out.push_str("><originalText");
-	if let Some(lang) = write_e_i_1_1b(reaction) {
-		out.push_str(" language=\"");
-		out.push_str(&xml_escape(lang));
-		out.push_str("\"");
+	if let Some(text) = write_e_i_1_1a(reaction) {
+		out.push_str("><originalText");
+		if let Some(lang) = write_e_i_1_1b(reaction) {
+			out.push_str(" language=\"");
+			out.push_str(&xml_escape(lang));
+			out.push_str("\"");
+		}
+		out.push_str(">");
+		out.push_str(&xml_escape(text));
+		out.push_str("</originalText></value>");
+	} else {
+		out.push_str("/>");
 	}
-	out.push_str(">");
-	out.push_str(&write_e_i_1_1a(reaction));
-	out.push_str("</originalText></value>");
 	if let Some(country) = write_e_i_9(reaction) {
 		let country = country.trim();
 		if !country.is_empty() {
@@ -189,8 +193,11 @@ pub(crate) fn reaction_fragment_for_authority(
 }
 
 /// e2b:E.i.1.1a
-fn write_e_i_1_1a(value: &Reaction) -> String {
-	xml_escape(&value.primary_source_reaction)
+fn write_e_i_1_1a(value: &Reaction) -> Option<&str> {
+	value
+		.primary_source_reaction
+		.as_deref()
+		.filter(|text| !text.trim().is_empty())
 }
 
 /// e2b:E.i.1.1b
@@ -480,14 +487,13 @@ mod split_null_flavor_tests {
 }
 
 fn observation_rel_translation(reaction: &Reaction) -> String {
-	let text = reaction
+	let Some(text) = reaction
 		.primary_source_reaction_translation
 		.as_deref()
 		.filter(|v| !v.trim().is_empty())
-		.unwrap_or_else(|| reaction.primary_source_reaction.as_str());
-	if text.trim().is_empty() {
+	else {
 		return String::new();
-	}
+	};
 	let mut out = String::new();
 	out.push_str("<outboundRelationship2 typeCode=\"PERT\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code code=\"30\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.19\"/><value xsi:type=\"ED\"");
 	if let Some(lang) = reaction.reaction_language.as_deref() {
@@ -581,7 +587,7 @@ mod meddra_requirement_tests {
 			id: Uuid::new_v4(),
 			case_id: Uuid::new_v4(),
 			sequence_number: 1,
-			primary_source_reaction: "Headache".to_string(),
+			primary_source_reaction: Some("Headache".to_string()),
 			primary_source_reaction_translation: None,
 			reaction_language: Some("en".to_string()),
 			reaction_meddra_version: Some("24.1".to_string()),
@@ -650,6 +656,21 @@ mod meddra_requirement_tests {
 			assert!(message.contains("ICH.E.i.2.1b.REQUIRED"));
 			assert!(message.contains("reaction sequence 1"));
 		}
+	}
+
+	#[test]
+	fn export_omits_absent_reported_text_without_inventing_null_flavor() {
+		let mut reaction = reaction();
+		reaction.primary_source_reaction = None;
+		reaction.primary_source_reaction_translation = None;
+		reaction.reaction_language = None;
+
+		let xml = export_e_reactions_xml(&[reaction]).expect("reaction XML");
+		assert!(!xml.contains("<originalText"));
+		assert!(!xml.contains("<code code=\"30\""));
+		assert!(!xml.contains("<value xsi:type=\"CE\" nullFlavor="));
+		assert!(xml.contains("code=\"10019211\""));
+		assert!(xml.contains("codeSystemVersion=\"24.1\""));
 	}
 
 	#[test]

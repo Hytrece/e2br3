@@ -38,7 +38,7 @@ pub struct Reaction {
 	pub sequence_number: i32,
 
 	// E.i.1.1 - Reaction as reported
-	pub primary_source_reaction: String,
+	pub primary_source_reaction: Option<String>,
 	// E.i.1.2 - Reaction/Event as reported by primary source for translation
 	pub primary_source_reaction_translation: Option<String>,
 	pub reaction_language: Option<String>,
@@ -120,7 +120,7 @@ pub struct Reaction {
 pub struct ReactionForCreate {
 	pub case_id: Uuid,
 	pub sequence_number: i32,
-	pub primary_source_reaction: String,
+	pub primary_source_reaction: Option<String>,
 	pub primary_source_reaction_translation: Option<String>,
 	pub reaction_language: Option<String>,
 	pub reaction_meddra_code: Option<String>,

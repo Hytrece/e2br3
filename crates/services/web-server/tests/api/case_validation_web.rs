@@ -2149,7 +2149,7 @@ async fn test_c1_date_ordering_business_rules() -> Result<()> {
 		.filter_map(|issue| issue["code"].as_str())
 		.collect::<Vec<_>>();
 	assert!(
-		codes.contains(&"ICH.C.1.4.AFTER_C.1.2.FORBIDDEN"),
+		!codes.contains(&"ICH.C.1.4.AFTER_C.1.2.FORBIDDEN"),
 		"{codes:?}"
 	);
 	assert!(
@@ -2157,7 +2157,7 @@ async fn test_c1_date_ordering_business_rules() -> Result<()> {
 		"{codes:?}"
 	);
 	assert!(
-		codes.contains(&"ICH.C.1.5.AFTER_C.1.2.FORBIDDEN"),
+		!codes.contains(&"ICH.C.1.5.AFTER_C.1.2.FORBIDDEN"),
 		"{codes:?}"
 	);
 

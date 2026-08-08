@@ -38,6 +38,74 @@ pub fn default_xsd_path() -> Option<PathBuf> {
 		.find(|candidate| candidate.exists())
 }
 
+/// Treat supported empty optional XML attributes as absent before validating
+/// or persisting an imported document.
+pub fn normalize_e2b_xml_for_import(xml: &[u8]) -> Result<Vec<u8>> {
+	let xml_str = std::str::from_utf8(xml).map_err(|err| Error::InvalidXml {
+		message: format!("XML not valid UTF-8: {err}"),
+		line: None,
+		column: None,
+	})?;
+	let parser = Parser::default();
+	let doc = parser
+		.parse_string(xml_str)
+		.map_err(|err| Error::InvalidXml {
+			message: format!("XML parse error: {err}"),
+			line: None,
+			column: None,
+		})?;
+	let mut xpath =
+		libxml::xpath::Context::new(&doc).map_err(|_| Error::InvalidXml {
+			message: "Failed to initialize XPath context".to_string(),
+			line: None,
+			column: None,
+		})?;
+	let _ = xpath.register_namespace("hl7", "urn:hl7-org:v3");
+	let empty_c_1_8_1_ids = xpath
+		.findnodes(
+			"//hl7:controlActProcess/hl7:subject/hl7:investigationEvent/hl7:id[@root='2.16.840.1.113883.3.989.2.1.3.2' and @extension and normalize-space(@extension)='']",
+			None,
+		)
+		.map_err(|_| Error::InvalidXml {
+			message: "Failed to query C.1.8.1 identifier".to_string(),
+			line: None,
+			column: None,
+		})?;
+	let empty_code_system_versions = xpath
+		.findnodes(
+			"//hl7:code[@codeSystemVersion and normalize-space(@codeSystemVersion)=''] | //hl7:value[@codeSystemVersion and normalize-space(@codeSystemVersion)='']",
+			None,
+		)
+		.map_err(|_| Error::InvalidXml {
+			message: "Failed to query empty codeSystemVersion attributes".to_string(),
+			line: None,
+			column: None,
+		})?;
+	if empty_c_1_8_1_ids.is_empty() && empty_code_system_versions.is_empty() {
+		return Ok(xml.to_vec());
+	}
+	for mut node in empty_c_1_8_1_ids {
+		node.remove_attribute_no_ns("extension").map_err(|err| {
+			Error::InvalidXml {
+				message: format!("Failed to remove empty C.1.8.1 extension: {err}"),
+				line: None,
+				column: None,
+			}
+		})?;
+	}
+	for mut node in empty_code_system_versions {
+		node.remove_attribute_no_ns("codeSystemVersion")
+			.map_err(|err| Error::InvalidXml {
+				message: format!(
+					"Failed to remove empty codeSystemVersion attribute: {err}"
+				),
+				line: None,
+				column: None,
+			})?;
+	}
+	Ok(doc.to_string().into_bytes())
+}
+
 pub fn validate_e2b_xml(
 	xml: &[u8],
 	config: Option<XmlValidatorConfig>,
@@ -70,6 +138,37 @@ pub fn validate_e2b_xml(
 
 	report.ok = no_blocking_errors(&report.errors);
 	Ok(report)
+}
+
+/// Validate inbound documents while accepting the MFDS causality extension
+/// that carries the Korean result alongside the standard coded value.
+pub fn validate_e2b_xml_for_import(
+	xml: &[u8],
+	config: Option<XmlValidatorConfig>,
+) -> Result<XmlValidationReport> {
+	let mut report = validate_e2b_xml(xml, config)?;
+	if has_mfds_causality_extension(xml) {
+		for error in &mut report.errors {
+			if is_mfds_extra_value_error(&error.message) {
+				error.blocking = Some(false);
+			}
+		}
+		report.ok = no_blocking_errors(&report.errors);
+	}
+	Ok(report)
+}
+
+fn has_mfds_causality_extension(xml: &[u8]) -> bool {
+	let Ok(xml) = std::str::from_utf8(xml) else {
+		return false;
+	};
+	xml.contains("<causalityAssessment")
+		&& xml.contains("codeSystem=\"2.16.840.1.113883.3.989.5.1.10.1.5\"")
+}
+
+fn is_mfds_extra_value_error(message: &str) -> bool {
+	message.contains("Element '{urn:hl7-org:v3}value': This element is not expected")
+		&& message.contains("Expected is one of ( {urn:hl7-org:v3}methodCode")
 }
 
 fn no_blocking_errors(errors: &[XmlValidationError]) -> bool {

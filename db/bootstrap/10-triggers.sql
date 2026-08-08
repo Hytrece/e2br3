@@ -200,7 +200,12 @@ BEGIN
     END IF;
 
     -- Serialize inserts so each row references the exact previous row.
-    LOCK TABLE audit_logs IN SHARE ROW EXCLUSIVE MODE;
+    -- A relation lock here can deadlock with an audited write that already
+    -- holds a source-table lock.  The transaction-scoped advisory lock keeps
+    -- the hash-chain invariant without joining the table-lock graph.
+    PERFORM pg_advisory_xact_lock(
+        hashtextextended('e2br3.audit_logs.hash_chain', 0)
+    );
 
     SELECT entry_hash
       INTO v_prev_hash

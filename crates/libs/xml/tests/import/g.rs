@@ -1,5 +1,4 @@
 use crate::common::{date, decimal, fixture};
-use sqlx::types::Uuid;
 use xml::import_sections::g_drug::parse_g_drugs;
 
 fn g_fixture(name: &str) -> Vec<u8> {
@@ -19,11 +18,8 @@ fn import_g_section_all_fields_from_scenario6() {
 
 	let first = &drugs[0];
 	assert_eq!(
-		first.xml_id,
-		Some(
-			Uuid::parse_str("3c91b4d5-e039-4a7a-9c30-67671b0ef9e4")
-				.expect("valid uuid"),
-		)
+		first.xml_id.as_deref(),
+		Some("3c91b4d5-e039-4a7a-9c30-67671b0ef9e4")
 	);
 	assert_eq!(first.sequence_number, 1);
 	assert_eq!(first.medicinal_product, "Drug A");
@@ -32,7 +28,7 @@ fn import_g_section_all_fields_from_scenario6() {
 	assert_eq!(first.mpid_version.as_deref(), Some("2014110112"));
 	assert_eq!(first.phpid, None);
 	assert_eq!(first.phpid_version, None);
-	assert_eq!(first.investigational_product_blinded, None);
+	assert_eq!(first.investigational_product_blinded, Some(true));
 	assert_eq!(first.obtain_drug_country.as_deref(), Some("US"));
 	assert_eq!(
 		first.drug_authorization_number.as_deref(),

@@ -403,14 +403,16 @@ impl CaseDuplicateBmc {
 				LEFT JOIN safety_report_identification s
 				       ON s.case_id = c.id
 				LEFT JOIN LATERAL (
-				    SELECT organization
+				    SELECT organization,
+				           organization_null_flavor
 				      FROM primary_sources
 				     WHERE case_id = c.id
 				     ORDER BY sequence_number
 				     LIMIT 1
 				) ps ON true
 				LEFT JOIN LATERAL (
-				    SELECT sponsor_study_number
+				    SELECT sponsor_study_number,
+				           sponsor_study_number_null_flavor
 				      FROM study_information
 				     WHERE case_id = c.id
 				     LIMIT 1
@@ -418,7 +420,8 @@ impl CaseDuplicateBmc {
 				LEFT JOIN patient_information p
 				       ON p.case_id = c.id
 				LEFT JOIN LATERAL (
-				    SELECT identifier_value
+				    SELECT identifier_value,
+				           identifier_value_null_flavor
 				      FROM patient_identifiers
 				     WHERE patient_id = p.id
 				       AND (identifier_type_code = '4'
@@ -431,7 +434,8 @@ impl CaseDuplicateBmc {
 				LEFT JOIN LATERAL (
 				    SELECT reaction_meddra_code,
 				           reaction_meddra_version,
-				           start_date
+				           start_date,
+				           start_date_null_flavor
 				      FROM reactions
 				     WHERE case_id = c.id
 				     ORDER BY sequence_number

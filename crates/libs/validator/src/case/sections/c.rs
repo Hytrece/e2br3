@@ -267,7 +267,6 @@ fn c_1_3(report: &SafetyReportIdentification, issues: &mut Vec<ValidationIssue>)
 
 /// ICH.C.1.4.REQUIRED
 /// ICH.C.1.4.FUTURE_DATE.FORBIDDEN
-/// ICH.C.1.4.AFTER_C.1.2.FORBIDDEN
 /// ICH.C.1.4.AFTER_C.1.5.FORBIDDEN
 fn c_1_4(report: &SafetyReportIdentification, issues: &mut Vec<ValidationIssue>) {
 	const PATH: &str = "safetyReportIdentification.dateFirstReceivedFromSource";
@@ -289,17 +288,6 @@ fn c_1_4(report: &SafetyReportIdentification, issues: &mut Vec<ValidationIssue>)
 	);
 	reject_when(
 		issues,
-		"ICH.C.1.4.AFTER_C.1.2.FORBIDDEN",
-		PATH,
-		"case-identification",
-		"[C.1.4] cannot be later than [C.1.2].",
-		is_later_than(
-			report.date_first_received_from_source,
-			e2b_datetime_date(report.transmission_date.as_deref()),
-		),
-	);
-	reject_when(
-		issues,
 		"ICH.C.1.4.AFTER_C.1.5.FORBIDDEN",
 		PATH,
 		"case-identification",
@@ -313,7 +301,6 @@ fn c_1_4(report: &SafetyReportIdentification, issues: &mut Vec<ValidationIssue>)
 
 /// ICH.C.1.5.REQUIRED
 /// ICH.C.1.5.FUTURE_DATE.FORBIDDEN
-/// ICH.C.1.5.AFTER_C.1.2.FORBIDDEN
 fn c_1_5(report: &SafetyReportIdentification, issues: &mut Vec<ValidationIssue>) {
 	const PATH: &str = "safetyReportIdentification.dateOfMostRecentInformation";
 	required_field(
@@ -331,17 +318,6 @@ fn c_1_5(report: &SafetyReportIdentification, issues: &mut Vec<ValidationIssue>)
 		"case-identification",
 		"[C.1.5] must not be later than today.",
 		DateValues::One(report.date_of_most_recent_information),
-	);
-	reject_when(
-		issues,
-		"ICH.C.1.5.AFTER_C.1.2.FORBIDDEN",
-		PATH,
-		"case-identification",
-		"[C.1.5] cannot be later than [C.1.2].",
-		is_later_than(
-			report.date_of_most_recent_information,
-			e2b_datetime_date(report.transmission_date.as_deref()),
-		),
 	);
 }
 
@@ -3190,6 +3166,22 @@ mod golden_c1_value_tests {
 			Some(Date::from_calendar_date(2020, Month::January, 1).unwrap());
 		report.fulfil_expedited_criteria = Some(true);
 		assert_eq!(snapshot(report), Vec::new());
+	}
+
+	#[test]
+	fn c1_information_dates_may_follow_creation_date() {
+		let mut report = base_report();
+		report.transmission_date = Some("20140714151617-0500".to_string());
+		report.date_first_received_from_source =
+			Some(Date::from_calendar_date(2022, Month::June, 14).unwrap());
+		report.date_of_most_recent_information =
+			Some(Date::from_calendar_date(2022, Month::June, 14).unwrap());
+		let mut issues = Vec::new();
+
+		c_1_4(&report, &mut issues);
+		c_1_5(&report, &mut issues);
+
+		assert!(issues.is_empty(), "{issues:?}");
 	}
 
 	#[test]

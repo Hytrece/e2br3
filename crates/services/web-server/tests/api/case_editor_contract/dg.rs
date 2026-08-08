@@ -66,3 +66,117 @@ async fn g_k_3_2_patch_survives_row_reload() -> Result<()> {
 	);
 	Ok(())
 }
+
+#[serial]
+#[tokio::test]
+async fn device_subresources_survive_dg_row_reload() -> Result<()> {
+	let mm = init_test_mm().await?;
+	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
+	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
+	let cookie = cookie_header(&token.to_string());
+	let app = web_server::app(mm);
+	let case_id = create_case_for_editor(
+		&app,
+		&cookie,
+		&format!("EDITOR-DG-DEVICE-{}", Uuid::new_v4()),
+		&["fda", "mfds"],
+	)
+	.await?;
+
+	let (status, body) = post_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/drugs"),
+		json!({
+			"data": {
+				"case_id": case_id,
+				"sequence_number": 1,
+				"drug_characterization": "1",
+				"medicinal_product": "Device drug"
+			}
+		}),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::CREATED, "{body}");
+	let drug_id = body["data"]["id"].as_str().ok_or("missing drug id")?;
+
+	let (status, body) = post_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/drugs/{drug_id}/devices"),
+		json!({
+			"data": {
+				"drug_id": drug_id,
+				"sequence_number": 1,
+				"malfunction": true,
+				"device_brand_name": "Imported Brand",
+				"common_device_name_null_flavor": "NI"
+			}
+		}),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::CREATED, "{body}");
+	let device_id = body["data"]["id"].as_str().ok_or("missing device id")?;
+
+	let (status, body) = post_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/drugs/{drug_id}/devices/{device_id}/codes"),
+		json!({
+			"data": {
+				"device_id": device_id,
+				"element": "device_problem",
+				"sequence_number": 1,
+				"value_code": "1234567"
+			}
+		}),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::CREATED, "{body}");
+
+	let (status, body) = post_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/drugs/{drug_id}/device-characteristics"),
+		json!({
+			"data": {
+				"drug_id": drug_id,
+				"sequence_number": 1,
+				"code": "KR_DVC_MFR",
+				"value_type": "ST",
+				"value_value": "Imported Maker"
+			}
+		}),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::CREATED, "{body}");
+
+	let (status, body) = get_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/editor/pages/DG/rows/{drug_id}"),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK, "{body}");
+	assert_eq!(
+		body["data"]["drug"]["fdaDevices"][0]["device_brand_name"],
+		json!("Imported Brand")
+	);
+	assert_eq!(
+		body["data"]["drug"]["fdaDevices"][0]["common_device_name_null_flavor"],
+		json!("NI")
+	);
+	assert_eq!(
+		body["data"]["drug"]["fdaDevices"][0]["deviceProblemCodes"][0]["value_code"],
+		json!("1234567")
+	);
+	assert_eq!(
+		body["data"]["drug"]["deviceCharacteristics"][0]["code"],
+		json!("KR_DVC_MFR")
+	);
+	assert_eq!(
+		body["data"]["drug"]["deviceCharacteristics"][0]["value_value"],
+		json!("Imported Maker")
+	);
+	Ok(())
+}

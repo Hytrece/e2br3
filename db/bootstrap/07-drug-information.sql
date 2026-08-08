@@ -155,9 +155,11 @@ CREATE TABLE dosage_information (
 
     -- G.k.4.r.4 - Date/Time of First Administration
     first_administration_date DATE,
+    first_administration_date_raw TEXT,
 
     -- G.k.4.r.5 - Date/Time of Last Administration
     last_administration_date DATE,
+    last_administration_date_raw TEXT,
 
     -- G.k.4.r.6 - Duration of Drug Administration
     duration_value DECIMAL(10,2),

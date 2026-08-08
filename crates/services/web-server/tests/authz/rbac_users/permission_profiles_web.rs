@@ -154,6 +154,59 @@ async fn test_system_admin_permission_profiles_require_target_organization(
 	Ok(())
 }
 
+#[serial]
+#[tokio::test]
+async fn test_system_admin_cross_org_profile_read_is_not_found() -> Result<()> {
+	let mm = init_test_mm().await?;
+	let source = seed_org_with_users(&mm, "sourcepwd", "sourceview").await?;
+	let target = seed_org_with_users(&mm, "targetpwd", "targetview").await?;
+	let system_admin = insert_user(
+		&mm,
+		source.org_id,
+		ROLE_SYSTEM_ADMIN,
+		system_user_id(),
+		Some("systempwd"),
+	)
+	.await?;
+	let token = generate_web_token(&system_admin.email, system_admin.token_salt)?;
+	let cookie = cookie_header(&token.to_string());
+	let app = web_server::app(mm);
+	let create = Request::builder()
+		.method("POST")
+		.uri(format!(
+			"/api/admin/permission-profiles?organization_id={}",
+			source.org_id
+		))
+		.header("cookie", &cookie)
+		.header("content-type", "application/json")
+		.body(Body::from(
+			json!({
+				"data": {
+					"name": format!("Cross-org source role {}", Uuid::new_v4()),
+					"privileges": []
+				}
+			})
+			.to_string(),
+		))?;
+	let created = app.clone().oneshot(create).await?;
+	assert_eq!(created.status(), StatusCode::CREATED);
+	let created_body = to_bytes(created.into_body(), usize::MAX).await?;
+	let profile: serde_json::Value = serde_json::from_slice(&created_body)?;
+	let profile_id = profile["id"].as_str().ok_or("profile id missing")?;
+
+	let read = Request::builder()
+		.method("GET")
+		.uri(format!(
+			"/api/admin/permission-profiles/{profile_id}?organization_id={}",
+			target.org_id
+		))
+		.header("cookie", cookie)
+		.body(Body::empty())?;
+	let read = app.oneshot(read).await?;
+	assert_eq!(read.status(), StatusCode::NOT_FOUND);
+	Ok(())
+}
+
 #[tokio::test]
 async fn test_permission_profiles_are_scoped_by_organization_for_sponsor_admins(
 ) -> Result<()> {

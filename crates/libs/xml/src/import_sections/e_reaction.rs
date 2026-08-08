@@ -2,7 +2,7 @@
 
 use crate::error::Error;
 use crate::import_constraint;
-use crate::import_sections::shared::ImportIdMap;
+use crate::import_sections::shared::{parse_xml_id_opt, ImportIdMap};
 use crate::mapping::fda::e_reaction::EReactionPaths;
 use crate::Result;
 use lib_core::ctx::Ctx;
@@ -18,8 +18,8 @@ use time::Month;
 
 #[derive(Debug)]
 pub struct EReactionImport {
-	pub xml_id: Option<Uuid>,
-	pub primary_source_reaction: String,
+	pub xml_id: Option<String>,
+	pub primary_source_reaction: Option<String>,
 	pub primary_source_reaction_translation: Option<String>,
 	pub reaction_language: Option<String>,
 	pub reaction_meddra_version: Option<String>,
@@ -102,14 +102,14 @@ pub fn parse_e_reactions(xml: &[u8]) -> Result<Vec<EReactionImport>> {
 		})?;
 
 	let mut imports: Vec<EReactionImport> = Vec::new();
-	for (idx, node) in nodes.into_iter().enumerate() {
-		let xml_id = parse_uuid_opt(first_attr(
+	for node in nodes {
+		let xml_id = parse_xml_id_opt(first_attr(
 			&mut xpath,
 			&node,
 			EReactionPaths::XML_ID_ROOT,
 		));
 		let translation_text = read_e_i_1_1b(&mut xpath, &node)?;
-		let primary = read_e_i_1_1a(&mut xpath, &node, idx)?;
+		let primary = read_e_i_1_1a(&mut xpath, &node)?;
 		let reaction_meddra_version = read_e_i_2_1a(&mut xpath, &node)?;
 		let reaction_meddra_code = read_e_i_2_1b(&mut xpath, &node)?;
 		let reaction_language = read_e_i_1_2(&mut xpath, &node)?;
@@ -241,25 +241,12 @@ pub fn parse_e_reactions(xml: &[u8]) -> Result<Vec<EReactionImport>> {
 }
 
 /// e2b:E.i.1.1a
-fn read_e_i_1_1a(xpath: &mut Context, node: &Node, index: usize) -> Result<String> {
-	let value =
-		first_text(xpath, node, EReactionPaths::PRIMARY_TEXT).ok_or_else(|| {
-			Error::InvalidXml {
-				message: format!(
-					"ICH.E.i.1.1a.REQUIRED: reaction text missing for sequence {}",
-					index + 1
-				),
-				line: None,
-				column: None,
-			}
-		})?;
-	import_constraint::string(
+fn read_e_i_1_1a(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
+	input_string(
+		first_text(xpath, node, EReactionPaths::PRIMARY_TEXT),
 		"primarySourceReaction",
-		Some(&value),
-		None,
 		input_contracts::generated::e::e_i_1_1a,
-	)?;
-	Ok(value)
+	)
 }
 
 /// e2b:E.i.1.1b
@@ -928,14 +915,6 @@ mod split_null_flavor_tests {
 			.expect_err("unsupported UCUM unit must not be stored");
 		assert!(format!("{error}").contains("ICH.E.i.6b.ALLOWED.VALUE"));
 	}
-}
-
-fn parse_uuid_opt(value: Option<String>) -> Option<Uuid> {
-	let value = value?.trim().to_string();
-	if value.is_empty() {
-		return None;
-	}
-	Uuid::parse_str(&value).ok()
 }
 
 fn parse_date(value: String) -> Option<Date> {

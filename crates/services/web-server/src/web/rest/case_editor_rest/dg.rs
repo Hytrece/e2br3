@@ -2,7 +2,9 @@ use super::common::*;
 use lib_core::model::drug::{
 	DosageInformationForCreate, DosageInformationForUpdate,
 	DrugActiveSubstanceForCreate, DrugActiveSubstanceForUpdate,
-	DrugIndicationForCreate, DrugIndicationForUpdate,
+	DrugDeviceCharacteristicBmc, DrugDeviceCharacteristicFilter,
+	DrugIndicationForCreate, DrugIndicationForUpdate, FdaDeviceCodeBmc,
+	FdaDeviceCodeFilter, FdaDeviceInformationBmc, FdaDeviceInformationFilter,
 };
 use lib_core::model::drug_reaction_assessment::{
 	DrugReactionAssessmentForCreate, DrugReactionAssessmentForUpdate,
@@ -85,7 +87,15 @@ const DOSAGE_ALIASES: &[(&str, &[&str])] = &[
 	("number_of_units", &["numberOfUnits"]),
 	("frequency_unit", &["frequencyUnit"]),
 	("first_administration_date", &["firstAdministrationDate"]),
+	(
+		"first_administration_date_raw",
+		&["firstAdministrationDate", "first_administration_date"],
+	),
 	("last_administration_date", &["lastAdministrationDate"]),
+	(
+		"last_administration_date_raw",
+		&["lastAdministrationDate", "last_administration_date"],
+	),
 	("duration_value", &["durationValue"]),
 	("duration_unit", &["durationUnit"]),
 	("continuing", &["continuing"]),
@@ -673,6 +683,24 @@ impl FromDrugIdFilter for DrugIndicationFilter {
 	}
 }
 
+impl FromDrugIdFilter for DrugDeviceCharacteristicFilter {
+	fn from_drug_id(drug_id: Uuid) -> Self {
+		Self {
+			drug_id: Some(uuid_eq(drug_id)),
+			..Default::default()
+		}
+	}
+}
+
+impl FromDrugIdFilter for FdaDeviceInformationFilter {
+	fn from_drug_id(drug_id: Uuid) -> Self {
+		Self {
+			drug_id: Some(uuid_eq(drug_id)),
+			..Default::default()
+		}
+	}
+}
+
 async fn load_editor_dg_row_detail(
 	ctx: &lib_core::ctx::Ctx,
 	mm: &ModelManager,
@@ -697,11 +725,20 @@ async fn load_editor_dg_row_detail(
 	let dosage_information = dosage_information
 		.into_iter()
 		.map(|dosage| {
-			let first_administration_date =
-				ci_date(dosage.first_administration_date);
-			let last_administration_date = ci_date(dosage.last_administration_date);
+			let first_administration_date = dosage
+				.first_administration_date_raw
+				.clone()
+				.filter(|value| !value.trim().is_empty())
+				.or_else(|| ci_date(dosage.first_administration_date));
+			let last_administration_date = dosage
+				.last_administration_date_raw
+				.clone()
+				.filter(|value| !value.trim().is_empty())
+				.or_else(|| ci_date(dosage.last_administration_date));
 			let mut value = json!(dosage);
 			if let Value::Object(ref mut map) = value {
+				map.remove("first_administration_date_raw");
+				map.remove("last_administration_date_raw");
 				map.insert(
 					"first_administration_date".to_string(),
 					json!(first_administration_date),
@@ -721,6 +758,50 @@ async fn load_editor_dg_row_detail(
 		Some(ListOptions::default()),
 	)
 	.await?;
+	let device_characteristics = DrugDeviceCharacteristicBmc::list(
+		ctx,
+		mm,
+		drug_id_filter::<DrugDeviceCharacteristicFilter>(drug_id),
+		Some(ListOptions::default()),
+	)
+	.await?;
+	let fda_devices = FdaDeviceInformationBmc::list(
+		ctx,
+		mm,
+		drug_id_filter::<FdaDeviceInformationFilter>(drug_id),
+		Some(ListOptions::default()),
+	)
+	.await?;
+	let mut fda_devices_with_codes = Vec::with_capacity(fda_devices.len());
+	for device in fda_devices {
+		let codes = FdaDeviceCodeBmc::list(
+			ctx,
+			mm,
+			Some(vec![FdaDeviceCodeFilter {
+				device_id: Some(uuid_eq(device.id)),
+				..Default::default()
+			}]),
+			Some(ListOptions::default()),
+		)
+		.await?;
+		let mut value = json!(device);
+		if let Value::Object(ref mut map) = value {
+			for (element, key) in [
+				("follow_up_type", "followUpTypes"),
+				("device_problem", "deviceProblemCodes"),
+				("remedial_action", "remedialActions"),
+			] {
+				map.insert(
+					key.to_string(),
+					json!(codes
+						.iter()
+						.filter(|code| code.element == element)
+						.collect::<Vec<_>>()),
+				);
+			}
+		}
+		fda_devices_with_codes.push(value);
+	}
 	let assessments =
 		DrugReactionAssessmentBmc::list_by_drug(ctx, mm, drug_id).await?;
 	let mut drug_reaction_assessments = Vec::new();
@@ -798,6 +879,11 @@ async fn load_editor_dg_row_detail(
 		map.insert("activeSubstances".to_string(), json!(active_substances));
 		map.insert("dosageInformation".to_string(), json!(dosage_information));
 		map.insert("indications".to_string(), json!(indications));
+		map.insert(
+			"deviceCharacteristics".to_string(),
+			json!(device_characteristics),
+		);
+		map.insert("fdaDevices".to_string(), json!(fda_devices_with_codes));
 		map.insert(
 			"drugReactionAssessments".to_string(),
 			json!(drug_reaction_assessments),

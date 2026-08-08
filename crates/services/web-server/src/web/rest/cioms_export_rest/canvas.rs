@@ -260,10 +260,17 @@ pub(super) fn is_basic_data_ordering(settings: &CiomsSettings) -> bool {
 pub(super) fn basic_repeated_item_rows(data: &CiomsCaseData) -> Vec<String> {
 	let mut rows = Vec::new();
 	for reaction in &data.reactions {
-		rows.push(format!(
-			"Type: Reaction; Sequence: {}; Value: {}",
-			reaction.sequence_number, reaction.primary_source_reaction
-		));
+		let mut row =
+			format!("Type: Reaction; Sequence: {}", reaction.sequence_number);
+		if let Some(text) = reaction
+			.primary_source_reaction
+			.as_deref()
+			.filter(|text| !text.trim().is_empty())
+		{
+			row.push_str("; Value: ");
+			row.push_str(text);
+		}
+		rows.push(row);
 	}
 	for drug in &data.drugs {
 		rows.push(format!(

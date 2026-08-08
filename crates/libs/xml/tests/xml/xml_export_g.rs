@@ -77,9 +77,11 @@ fn export_g_drug_basic() {
 		first_administration_date: Some(
 			Date::from_calendar_date(2024, Month::January, 1).unwrap(),
 		),
+		first_administration_date_raw: None,
 		last_administration_date: Some(
 			Date::from_calendar_date(2024, Month::January, 2).unwrap(),
 		),
+		last_administration_date_raw: None,
 		duration_value: Some(1.into()),
 		duration_unit: Some("d".to_string()),
 		batch_lot_number: Some("LOT1".to_string()),

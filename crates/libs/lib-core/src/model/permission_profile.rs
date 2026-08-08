@@ -67,7 +67,9 @@ impl PermissionProfileBmc {
 			sqlx::query(
 				"SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))",
 			)
-			.bind(organization_id),
+			// Keep this statement's bind type text. The XML importer uses the
+			// same cached SQL with a composite text lock key.
+			.bind(organization_id.to_string()),
 		)
 		.await?;
 		let (count,) = dbx
@@ -155,6 +157,13 @@ impl PermissionProfileBmc {
 			.await
 		{
 			Ok(row) => row,
+			Err(crate::model::store::dbx::Error::Sqlx(sqlx::Error::RowNotFound)) => {
+				dbx.rollback_txn().await?;
+				return Err(crate::model::Error::EntityUuidNotFound {
+					entity: "permission_profile",
+					id,
+				});
+			}
 			Err(err) => {
 				dbx.rollback_txn().await?;
 				return Err(crate::model::Error::Store(err.to_string()));

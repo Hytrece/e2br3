@@ -48,19 +48,7 @@ pub fn apply_c_safety_report_import_settings(
 			message: "C.1.4 cannot be later than C.1.5".to_string(),
 		});
 	}
-	if report.date_of_most_recent_information > transmission_date_as_date(report)? {
-		return Err(Error::InvalidImportRequest {
-			message: "C.1.5 cannot be later than C.1.2".to_string(),
-		});
-	}
 	Ok(())
-}
-
-fn transmission_date_as_date(report: &CSafetyReportImport) -> Result<Date> {
-	lib_core::serde::flex_date::e2b_datetime_date(&report.transmission_date)
-		.ok_or_else(|| Error::InvalidImportRequest {
-			message: "C.1.2 has an invalid transmission date".to_string(),
-		})
 }
 
 fn format_e2b_datetime(date: Date) -> String {
@@ -447,7 +435,7 @@ async fn import_c_3_primary_sources(
 					email_null_flavor: primary.email_null_flavor.clone(),
 					qualification: primary.qualification.clone(),
 					qualification_null_flavor: primary.qualification_null_flavor.clone(),
-					qualification_kr1: None,
+					qualification_kr1: primary.qualification_kr1.clone(),
 					primary_source_regulatory: primary.primary_source_regulatory.clone(),
 				},
 			)
@@ -490,7 +478,7 @@ async fn import_c_3_primary_sources(
 				email_null_flavor: primary.email_null_flavor,
 				qualification: primary.qualification,
 				qualification_null_flavor: primary.qualification_null_flavor,
-				qualification_kr1: None,
+				qualification_kr1: primary.qualification_kr1,
 				primary_source_regulatory: primary.primary_source_regulatory,
 			},
 		)
@@ -961,7 +949,7 @@ mod tests {
 	}
 
 	#[test]
-	fn import_most_recent_date_setting_rejects_invalid_order() {
+	fn import_preserves_most_recent_date_later_than_creation_date() {
 		let import_date = date(2024, Month::February, 1);
 		let mut report = report();
 
@@ -978,6 +966,11 @@ mod tests {
 			import_date,
 		);
 
-		assert!(result.is_err());
+		assert!(result.is_ok());
+		assert_eq!(
+			report.date_of_most_recent_information,
+			date(2024, Month::February, 1)
+		);
+		assert_eq!(report.transmission_date, "20240110000000");
 	}
 }

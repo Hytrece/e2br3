@@ -54,3 +54,22 @@ fn import_settings_update_only_enabled_c1_dates_to_import_date() {
 	assert_eq!(report.date_first_received_from_source, import_date);
 	assert_eq!(report.date_of_most_recent_information, import_date);
 }
+
+#[test]
+fn import_settings_preserve_official_inbound_dates() {
+	let xml = fixture("FAERS2022Scenario5-1.xml");
+	let mut report = parse_c_safety_report(&xml)
+		.expect("parse")
+		.expect("section C should exist");
+
+	apply_c_safety_report_import_settings(
+		&mut report,
+		&CImportSettings::default(),
+		date(2026, 8, 7),
+	)
+	.expect("inbound source dates must not block import");
+
+	assert_eq!(report.transmission_date, "20140714151617");
+	assert_eq!(report.date_first_received_from_source, date(2022, 6, 14));
+	assert_eq!(report.date_of_most_recent_information, date(2022, 6, 14));
+}

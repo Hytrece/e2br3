@@ -1054,10 +1054,16 @@ pub(super) fn render_cioms_continuation_pages(
 
 	let mut reaction_rows = Vec::new();
 	for reaction in &data.reactions {
-		let mut values = vec![format!(
-			"E.i.1 Reaction/Event as Reported by Primary Source: {}",
-			reaction.primary_source_reaction
-		)];
+		let mut values = Vec::new();
+		if let Some(text) = reaction
+			.primary_source_reaction
+			.as_deref()
+			.filter(|text| !text.trim().is_empty())
+		{
+			values.push(format!(
+				"E.i.1 Reaction/Event as Reported by Primary Source: {text}"
+			));
+		}
 		if let Some(translation) =
 			reaction.primary_source_reaction_translation.as_deref()
 		{

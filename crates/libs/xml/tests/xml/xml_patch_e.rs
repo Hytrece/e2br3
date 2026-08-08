@@ -1,9 +1,9 @@
 use lib_core::model::reaction::Reaction;
-use xml::raw::patch::patch_e_reactions;
 use libxml::parser::Parser;
 use libxml::xpath::Context;
 use sqlx::types::Uuid;
 use time::{Month, OffsetDateTime};
+use xml::raw::patch::patch_e_reactions;
 
 #[test]
 fn patch_e_reaction_updates_raw_xml() {
@@ -20,7 +20,7 @@ fn patch_e_reaction_updates_raw_xml() {
 		id: Uuid::new_v4(),
 		case_id: Uuid::new_v4(),
 		sequence_number: 1,
-		primary_source_reaction: "Headache".to_string(),
+		primary_source_reaction: Some("Headache".to_string()),
 		primary_source_reaction_translation: None,
 		reaction_language: Some("en".to_string()),
 		reaction_meddra_version: Some("24.1".to_string()),
@@ -89,7 +89,7 @@ fn patch_e_reaction_uses_comp_nodes_for_sxpr_effective_time() {
 		id: Uuid::new_v4(),
 		case_id: Uuid::new_v4(),
 		sequence_number: 1,
-		primary_source_reaction: "Headache".to_string(),
+		primary_source_reaction: Some("Headache".to_string()),
 		primary_source_reaction_translation: None,
 		reaction_language: Some("en".to_string()),
 		reaction_meddra_version: Some("24.1".to_string()),

@@ -5,6 +5,12 @@ pub struct GDrugPaths;
 impl GDrugPaths {
 	pub const DRUG_NODE: &'static str =
 		"//hl7:subjectOf2/hl7:organizer[hl7:code[@code='4' and @codeSystem='2.16.840.1.113883.3.989.2.1.1.20']]/hl7:component/hl7:substanceAdministration";
+	pub const DRUG_ROLE_NODE: &'static str =
+		"//hl7:component/hl7:causalityAssessment[hl7:code[@code='20' and @codeSystem='2.16.840.1.113883.3.989.2.1.1.19'] and hl7:value[@codeSystem='2.16.840.1.113883.3.989.2.1.1.13']]";
+	pub const DRUG_ROLE_CODE: &'static str =
+		"hl7:value[@codeSystem='2.16.840.1.113883.3.989.2.1.1.13']/@code";
+	pub const DRUG_ROLE_PRODUCT_REF: &'static str =
+		"hl7:subject2/hl7:productUseReference/hl7:id/@root";
 
 	pub const XML_ID_ROOT: &'static str = "hl7:id/@root";
 	pub const PRODUCT_NAME_1: &'static str =
@@ -12,9 +18,9 @@ impl GDrugPaths {
 	pub const PRODUCT_NAME_2: &'static str =
 		"hl7:consumable/hl7:instanceOfKind/hl7:kindOfProduct/hl7:name[2]";
 	pub const MPID: &'static str =
-		"(hl7:consumable/hl7:instanceOfKind/hl7:kindOfProduct/hl7:asIdentifiedEntity[hl7:code[@code='MPID']]/hl7:id/@extension | hl7:consumable/hl7:instanceOfKind/hl7:kindOfProduct/hl7:code/@code)[1]";
+		"(hl7:consumable/hl7:instanceOfKind/hl7:kindOfProduct/hl7:asIdentifiedEntity[hl7:code[@code='MPID']]/hl7:id/@extension | hl7:consumable/hl7:instanceOfKind/hl7:kindOfProduct/hl7:code[not(@codeSystem='2.16.840.1.113883.3.989.5.1.10.2.1')]/@code)[1]";
 	pub const MPID_VERSION: &'static str =
-		"(hl7:consumable/hl7:instanceOfKind/hl7:kindOfProduct/hl7:asIdentifiedEntity[hl7:code[@code='MPID']]/hl7:code/@codeSystemVersion | hl7:consumable/hl7:instanceOfKind/hl7:kindOfProduct/hl7:code/@codeSystemVersion)[1]";
+		"(hl7:consumable/hl7:instanceOfKind/hl7:kindOfProduct/hl7:asIdentifiedEntity[hl7:code[@code='MPID']]/hl7:code/@codeSystemVersion | hl7:consumable/hl7:instanceOfKind/hl7:kindOfProduct/hl7:code[not(@codeSystem='2.16.840.1.113883.3.989.5.1.10.2.1')]/@codeSystemVersion)[1]";
 	pub const PHPID: &'static str =
 		"(hl7:consumable/hl7:instanceOfKind/hl7:kindOfProduct/hl7:asIdentifiedEntity[hl7:code[@code='PhPID' or @code='PHPID']]/hl7:id/@extension)[1]";
 	pub const PHPID_VERSION: &'static str =
@@ -63,9 +69,9 @@ impl GDrugPaths {
 		"hl7:consumable/hl7:instanceOfKind/hl7:kindOfProduct/hl7:ingredient";
 	pub const SUBSTANCE_NAME: &'static str = "hl7:ingredientSubstance/hl7:name";
 	pub const SUBSTANCE_TERMID: &'static str =
-		"hl7:ingredientSubstance/hl7:code/@code";
+		"hl7:ingredientSubstance/hl7:code[not(@codeSystem='2.16.840.1.113883.3.989.5.1.10.2.2')]/@code";
 	pub const SUBSTANCE_TERMID_VERSION: &'static str =
-		"hl7:ingredientSubstance/hl7:code/@codeSystemVersion";
+		"hl7:ingredientSubstance/hl7:code[not(@codeSystem='2.16.840.1.113883.3.989.5.1.10.2.2')]/@codeSystemVersion";
 	pub const SUBSTANCE_STRENGTH_VALUE: &'static str =
 		"hl7:quantity/hl7:numerator/@value";
 	pub const SUBSTANCE_STRENGTH_UNIT: &'static str =

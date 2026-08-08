@@ -94,6 +94,7 @@ impl PresaveAuthorizationKind {
 #[derive(Debug, FromRow)]
 struct PresaveFacts {
 	organization_id: Uuid,
+	sender_presave_id: Option<Uuid>,
 }
 
 #[derive(Debug, FromRow)]
@@ -249,6 +250,7 @@ impl<'tx> AuthorizationFactLoader<'tx> {
 			kind,
 			id,
 			facts.organization_id,
+			facts.sender_presave_id,
 		)))
 	}
 
@@ -267,6 +269,7 @@ impl<'tx> AuthorizationFactLoader<'tx> {
 			kind,
 			id,
 			facts.organization_id,
+			facts.sender_presave_id,
 		)))
 	}
 
@@ -277,8 +280,12 @@ impl<'tx> AuthorizationFactLoader<'tx> {
 		for_update: bool,
 	) -> Result<PresaveFacts, AuthorizationFactLoadError> {
 		let lock = if for_update { " FOR UPDATE" } else { "" };
+		let sender_presave_id = match kind {
+			PresaveAuthorizationKind::Product => "sender_presave_id",
+			_ => "NULL::uuid AS sender_presave_id",
+		};
 		let sql = format!(
-			"SELECT organization_id FROM {} WHERE id = $1{lock}",
+			"SELECT organization_id, {sender_presave_id} FROM {} WHERE id = $1{lock}",
 			kind.table()
 		);
 		self.dbx
@@ -900,11 +907,17 @@ fn presave_evaluated(
 	kind: PresaveAuthorizationKind,
 	id: Uuid,
 	organization_id: Uuid,
+	sender_presave_id: Option<Uuid>,
 ) -> EvaluatedContext {
 	EvaluatedContext {
 		organization_id: Some(organization_id),
 		target_fingerprint: format!("presave:{}:{id}", kind.fingerprint()),
-		within_principal_scope: presave_within_scope(snapshot, kind, id),
+		within_principal_scope: presave_within_scope(
+			snapshot,
+			kind,
+			id,
+			sender_presave_id,
+		),
 		lifecycle_compatible: false,
 		parent_authorized: false,
 		every_target_authorized: false,
@@ -916,6 +929,7 @@ fn presave_within_scope(
 	snapshot: &RequestAuthorizationSnapshot,
 	kind: PresaveAuthorizationKind,
 	id: Uuid,
+	sender_presave_id: Option<Uuid>,
 ) -> bool {
 	let identifier = id.to_string();
 	match kind {
@@ -924,6 +938,12 @@ fn presave_within_scope(
 		}
 		PresaveAuthorizationKind::Product => {
 			scope_allows(snapshot.scope().product_ids(), &[identifier])
+				&& sender_presave_id.is_none_or(|sender_id| {
+					scope_allows(
+						snapshot.scope().sender_ids(),
+						&[sender_id.to_string()],
+					)
+				})
 		}
 		PresaveAuthorizationKind::Study => {
 			scope_allows(snapshot.scope().study_ids(), &[identifier])
@@ -994,6 +1014,8 @@ mod tests {
 	fn snapshot(
 		organization_revision: i64,
 		principal_revision: i64,
+		sender_ids: Vec<String>,
+		product_ids: Vec<String>,
 	) -> RequestAuthorizationSnapshot {
 		let organization_id = Uuid::new_v4();
 		RequestAuthorizationSnapshot::new(
@@ -1002,7 +1024,7 @@ mod tests {
 			Uuid::new_v4(),
 			IdentityTraits::new(Some(BuiltInIdentityKind::OperationalUser)),
 			BTreeSet::<GrantId>::new(),
-			PrincipalScope::new(Vec::new(), Vec::new(), Vec::new(), false, None),
+			PrincipalScope::new(sender_ids, product_ids, Vec::new(), false, None),
 			PolicySnapshotVersion::new(
 				"a".repeat(64),
 				organization_id,
@@ -1017,7 +1039,7 @@ mod tests {
 
 	#[test]
 	fn mutation_facts_reject_a_stale_policy_snapshot() {
-		let snapshot = snapshot(4, 7);
+		let snapshot = snapshot(4, 7, Vec::new(), Vec::new());
 
 		let error = ensure_current_revisions(&snapshot, 5, 7)
 			.expect_err("changed organization revision must be stale");
@@ -1030,6 +1052,34 @@ mod tests {
 				snapshot_principal_revision: 7,
 				current_principal_revision: 7,
 			}
+		));
+	}
+
+	#[test]
+	fn product_presave_requires_its_linked_sender_scope() {
+		let allowed_sender_id = Uuid::new_v4();
+		let blocked_sender_id = Uuid::new_v4();
+		let product_id = Uuid::new_v4();
+		let snapshot =
+			snapshot(1, 1, vec![allowed_sender_id.to_string()], Vec::new());
+
+		assert!(presave_within_scope(
+			&snapshot,
+			PresaveAuthorizationKind::Product,
+			product_id,
+			Some(allowed_sender_id),
+		));
+		assert!(presave_within_scope(
+			&snapshot,
+			PresaveAuthorizationKind::Product,
+			product_id,
+			None,
+		));
+		assert!(!presave_within_scope(
+			&snapshot,
+			PresaveAuthorizationKind::Product,
+			product_id,
+			Some(blocked_sender_id),
 		));
 	}
 }

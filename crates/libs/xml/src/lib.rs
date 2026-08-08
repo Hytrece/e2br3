@@ -31,5 +31,6 @@ pub use parser::parse_e2b_xml;
 pub use types::ParsedE2b;
 pub use types::{XmlImportResult, XmlValidationError, XmlValidationReport};
 pub use validation::{
-	default_xsd_path, validate_e2b_xml, validate_e2b_xml_basic, XmlValidatorConfig,
+	default_xsd_path, validate_e2b_xml, validate_e2b_xml_basic,
+	validate_e2b_xml_for_import, XmlValidatorConfig,
 };

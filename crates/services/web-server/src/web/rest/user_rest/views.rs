@@ -20,28 +20,29 @@ pub(super) async fn user_views(
 	users
 		.into_iter()
 		.map(|user| {
-			let role_id = role_assignments
+			let role = role_assignments
 				.get(&(user.id, user.organization_id))
 				.copied()
-				.ok_or_else(|| {
-					Error::Model(lib_core::model::Error::Store(format!(
-						"missing role assignment for user {}",
-						user.id
-					)))
-				})?;
-			user_view_with_role(user, role_id)
+				.map(role_for_assignment)
+				// Inactive legacy users have no effective authorization assignment;
+				// this role is display-only and never feeds authorization.
+				.or_else(|| (!user.active).then(|| canonical_role(&user.role)))
+				// A role can be deactivated while an existing assignment remains. Do
+				// not turn that stale display record into a 500; authorization still
+				// fails closed because inactive roles are excluded from snapshots.
+				.unwrap_or_else(|| canonical_role(&user.role));
+			user_view_with_role(user, role)
 		})
 		.collect()
 }
 
-fn user_view_with_role(user: User, assigned_role_id: Uuid) -> Result<UserView> {
+fn user_view_with_role(user: User, role: String) -> Result<UserView> {
 	let active = user_is_effectively_active(&user);
 	let access_sender_ids = user.access_sender_ids.clone();
 	let access_product_ids = user.access_product_ids.clone();
 	let access_study_ids = user.access_study_ids.clone();
 	let access_blind_allowed = user.access_blind_allowed;
 	let active_sender_identifier = user.active_sender_identifier.clone();
-	let role = role_for_assignment(assigned_role_id);
 	Ok(UserView {
 		id: user.id,
 		organization_id: user.organization_id,
