@@ -2,12 +2,39 @@
 CREATE OR REPLACE FUNCTION app_settings_default_value()
 RETURNS JSONB
 LANGUAGE SQL
-IMMUTABLE
+STABLE
 AS $$
+    WITH default_meddra AS (
+        SELECT
+            CASE language
+                WHEN 'en' THEN 'English'
+                WHEN 'ko' THEN 'Korean'
+                ELSE initcap(language)
+            END AS language_label,
+            version
+        FROM terminology_releases
+        WHERE dictionary = 'meddra'
+          AND status = 'active'
+        ORDER BY
+            (language = 'en' AND version = '28.1') DESC,
+            (language = 'en') DESC,
+            string_to_array(version, '.')::int[] DESC,
+            activated_at DESC NULLS LAST,
+            updated_at DESC
+        LIMIT 1
+    )
+    -- Fresh bootstrap can run before the licensed catalog is loaded; the
+    -- deployment preflight still requires MedDRA 28.1 English in production.
     SELECT jsonb_build_object(
         'timezone', 'Asia/Seoul',
-        'meddra_language', 'English',
-        'meddra_version', '28.1',
+        'meddra_language', COALESCE(
+            (SELECT language_label FROM default_meddra),
+            'English'
+        ),
+        'meddra_version', COALESCE(
+            (SELECT version FROM default_meddra),
+            '28.1'
+        ),
         'idf_version', '3.0',
         'orientation', 'Landscape',
         'data_ordering', 'Primary data will appear first',

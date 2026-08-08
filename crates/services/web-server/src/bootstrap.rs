@@ -23,42 +23,6 @@ const DEMO_CRO_ADMIN_EMAIL: &str = "demo.cro.admin@example.com";
 const DEMO_CRO_ADMIN_USERNAME: &str = "demo_cro_admin";
 const DEMO_COMPANY_ADMIN_EMAIL: &str = "demo.company.admin@example.com";
 const DEMO_COMPANY_ADMIN_USERNAME: &str = "demo_company_admin";
-const DEFAULT_ADMIN_SETTINGS_JSON: &str = r#"{
-    "timezone": "Asia/Seoul",
-    "meddra_language": "English",
-    "meddra_version": "28.1",
-    "idf_version": "3.0",
-    "orientation": "Landscape",
-    "data_ordering": "Primary data will appear first",
-    "upload_excel_template_without_element_label": false,
-    "notation": false,
-    "apply_comments_on_exported_xml": false,
-    "apply_sender_info_to_imported_cases": false,
-    "import_date_update": {
-        "date_of_creation": false,
-        "most_recent_info_date": false,
-        "report_first_received_date": false
-    },
-    "appendices": ["ICH"],
-    "case_number_setting": "AE Row No.",
-    "case_number_identifier": "ICSR",
-    "case_number_padding": 6,
-    "case_number_sequence_condition": "Per sender",
-    "case_number_format_fields": ["AE Row No."],
-    "workflow_enabled": false,
-    "workflow": {
-        "statuses": [{
-            "name": "Saved",
-            "editable": true,
-            "description": "Default state",
-            "due_days": 0,
-            "allowed_roles": ["sponsor_admin_cro"]
-        }]
-    },
-    "idle_session_minutes": 60,
-    "session_warning_minutes": 5
-}"#;
-
 pub async fn bootstrap_admin_user(mm: &ModelManager) -> Result<()> {
 	let root_ctx = Ctx::root_ctx();
 	migrate_legacy_demo_user(mm).await?;
@@ -265,7 +229,7 @@ async fn sync_org(
 				INSERT INTO app_settings (
 					organization_id, key, value, updated_by
 				)
-				SELECT id, 'system', $6::jsonb, $5
+				SELECT id, 'system', app_settings_default_value(), $5
 				FROM synced_org
 				ON CONFLICT (organization_id, key) DO NOTHING
 				"#,
@@ -274,8 +238,7 @@ async fn sync_org(
 			.bind(name)
 			.bind(org_type)
 			.bind(contact_email)
-			.bind(root_ctx.user_id())
-			.bind(DEFAULT_ADMIN_SETTINGS_JSON),
+			.bind(root_ctx.user_id()),
 		)
 		.await;
 	match result {
