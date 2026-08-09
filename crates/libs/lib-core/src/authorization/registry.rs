@@ -1206,7 +1206,7 @@ fn canonical_actions() -> Vec<ActionPolicyInput> {
 		action(
 			"terminology.list",
 			DecisionStage::ContextRequired(Collection(ResourceKind::Terminology)),
-			&["admin.read"],
+			&[],
 			&[],
 			&[],
 			Read,

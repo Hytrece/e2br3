@@ -262,6 +262,12 @@ fn authenticated_profile_action_is_subject_only_without_a_role_grant() {
 }
 
 #[test]
+fn authenticated_users_can_read_reference_terminology_without_admin_access() {
+	let action = policy_registry().action("terminology.list").unwrap();
+	assert!(action.required_grants.is_empty());
+}
+
+#[test]
 fn every_action_required_grant_is_a_pdf_grant() {
 	let registry = policy_registry();
 	assert!(registry.actions().all(|action| action

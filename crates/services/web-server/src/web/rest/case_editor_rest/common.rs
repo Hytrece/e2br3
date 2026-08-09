@@ -281,7 +281,7 @@ pub(super) fn string_field(
 				return None;
 			}
 			if let Some(value) = value.as_str() {
-				return Some(value.to_string());
+				return (!value.trim().is_empty()).then(|| value.to_string());
 			}
 			return Some(value.to_string());
 		}
@@ -348,6 +348,25 @@ pub(super) fn row_model_value(
 	aliases: &[(&str, &[&str])],
 	extra: &[(&str, Value)],
 ) -> Value {
+	fn omit_blank_strings(value: &mut Value) {
+		match value {
+			Value::Object(map) => {
+				map.retain(|_, value| {
+					!value.as_str().is_some_and(|value| value.trim().is_empty())
+				});
+				for value in map.values_mut() {
+					omit_blank_strings(value);
+				}
+			}
+			Value::Array(values) => {
+				for value in values {
+					omit_blank_strings(value);
+				}
+			}
+			_ => {}
+		}
+	}
+
 	let mut map = row.clone();
 	for (target, aliases) in aliases {
 		insert_alias(&mut map, target, aliases);
@@ -355,7 +374,9 @@ pub(super) fn row_model_value(
 	for (key, value) in extra {
 		map.insert((*key).to_string(), value.clone());
 	}
-	Value::Object(map)
+	let mut value = Value::Object(map);
+	omit_blank_strings(&mut value);
+	value
 }
 
 pub(super) fn parse_row_model<T: serde::de::DeserializeOwned>(
@@ -975,6 +996,28 @@ mod canonical_row_persistence_tests {
 		let model = value.as_object().expect("model object");
 
 		assert_eq!(model.get("drug_name"), Some(&Value::Null));
+		assert_eq!(model.get("drug_name_null_flavor"), Some(&json!("UNK")));
+	}
+
+	#[test]
+	fn blank_text_is_omitted_instead_of_reaching_char_columns() {
+		let row = json!({ "drugName": " \t", "drugNameNullFlavor": "UNK" })
+			.as_object()
+			.expect("row object")
+			.clone();
+		let value = row_model_value(
+			"DH",
+			"",
+			&row,
+			&[
+				("drug_name", &["drugName"]),
+				("drug_name_null_flavor", &["drugNameNullFlavor"]),
+			],
+			&[],
+		);
+		let model = value.as_object().expect("model object");
+
+		assert!(!model.contains_key("drug_name"));
 		assert_eq!(model.get("drug_name_null_flavor"), Some(&json!("UNK")));
 	}
 

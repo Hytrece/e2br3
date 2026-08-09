@@ -104,7 +104,7 @@ fn r0020(xpath: &mut Context, errors: &mut Vec<XmlValidationError>) {
 }
 
 fn r0021(xpath: &mut Context, errors: &mut Vec<XmlValidationError>) {
-	reject(xpath, errors, "R0021", "//hl7:PORR_IN049016UV[not(.//hl7:relatedInvestigation[hl7:code[@code='2']]/hl7:subjectOf2/hl7:controlActEvent/hl7:priorityNumber/@value='1')]", true);
+	reject(xpath, errors, "R0021", "//hl7:PORR_IN049016UV[not(.//hl7:outboundRelationship[hl7:relatedInvestigation/hl7:code[@code='2']]/hl7:priorityNumber/@value='1')]", true);
 }
 
 fn r0022(xpath: &mut Context, errors: &mut Vec<XmlValidationError>) {
@@ -304,6 +304,16 @@ mod tests {
 			.iter()
 			.any(|error| error.code.as_deref() == Some("R0021")
 				&& error.blocking == Some(true)));
+	}
+
+	#[test]
+	fn r0021_accepts_exported_primary_reporter_structure() {
+		let doc = Parser::default().parse_string(br#"<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3"><PORR_IN049016UV><controlActProcess><subject><investigationEvent><outboundRelationship><priorityNumber value="1"/><relatedInvestigation><code code="2"/></relatedInvestigation></outboundRelationship></investigationEvent></subject></controlActProcess></PORR_IN049016UV></MCCI_IN200100UV01>"#).unwrap();
+		let mut xpath = Context::new(&doc).unwrap();
+		xpath.register_namespace("hl7", "urn:hl7-org:v3").unwrap();
+		let mut errors = vec![];
+		r0021(&mut xpath, &mut errors);
+		assert!(errors.is_empty());
 	}
 
 	#[test]

@@ -1649,6 +1649,26 @@ async fn apply_dm_page_rows_patch(
 				),
 			})
 	}
+	fn patch_decimal_field(
+		page_id: &str,
+		row: &Map<String, Value>,
+		request_path: &str,
+		paths: &[&str],
+	) -> Result<Option<Option<Decimal>>> {
+		let Some(value) = value_at_path(row, paths) else {
+			return Ok(None);
+		};
+		if value.is_null() {
+			return Ok(Some(None));
+		}
+		Decimal::from_str(&value.to_string())
+			.map(|value| Some(Some(value)))
+			.map_err(|_| Error::BadRequest {
+				message: format!(
+					"{page_id}.{request_path} must be a decimal number or null"
+				),
+			})
+	}
 	fn date_field(
 		page_id: &str,
 		row: &Map<String, Value>,
@@ -1676,11 +1696,11 @@ async fn apply_dm_page_rows_patch(
 	) -> Option<String> {
 		value_at_path(row, paths)
 			.filter(|value| !value.is_null())
-			.map(|value| {
-				value
-					.as_str()
-					.map(ToOwned::to_owned)
-					.unwrap_or_else(|| value.to_string())
+			.and_then(|value| {
+				value.as_str().map_or_else(
+					|| Some(value.to_string()),
+					|value| (!value.trim().is_empty()).then(|| value.to_owned()),
+				)
 			})
 	}
 	fn canonical_string_field(
@@ -1759,12 +1779,12 @@ async fn apply_dm_page_rows_patch(
 				patient,
 				&["patientBirthDateNullFlavor"],
 			),
-			age_at_time_of_onset: Some(decimal_field(
+			age_at_time_of_onset: patch_decimal_field(
 				page_id,
 				patient,
 				"patientAge.value",
 				age_paths,
-			)?),
+			)?,
 			age_unit: nested_string_field(patient, &["patientAge.unit"]),
 			gestation_period: decimal_field(
 				page_id,
@@ -1777,18 +1797,18 @@ async fn apply_dm_page_rows_patch(
 				&["gestationPeriod.unit"],
 			),
 			age_group: string_field(patient, &["patientAgeGroup"]),
-			weight_kg: Some(decimal_field(
+			weight_kg: patch_decimal_field(
 				page_id,
 				patient,
 				"patientWeight.value",
 				weight_paths,
-			)?),
-			height_cm: Some(decimal_field(
+			)?,
+			height_cm: patch_decimal_field(
 				page_id,
 				patient,
 				"patientHeight.value",
 				height_paths,
-			)?),
+			)?,
 			sex,
 			sex_null_flavor,
 			race_codes,
@@ -2191,12 +2211,12 @@ async fn apply_dm_page_rows_patch(
 					parent,
 					&["parentBirthDateNullFlavor"],
 				),
-				parent_age: Some(decimal_field(
+				parent_age: patch_decimal_field(
 					page_id,
 					parent,
 					"parentInformation.parentAge.value",
 					&["parentAge.value"],
-				)?),
+				)?,
 				parent_age_unit: nested_string_field(parent, &["parentAge.unit"]),
 				last_menstrual_period_date: date_field(
 					page_id,

@@ -122,6 +122,15 @@ const REACTION_ROW_ALIASES: &[(&str, &[&str])] = &[
 	("sequence_number", &["sequenceNumber"]),
 ];
 
+fn reaction_sequence_number(row: &serde_json::Map<String, Value>) -> Result<i32> {
+	i32_field(row, &["sequenceNumber", "sequence_number"])
+		.filter(|sequence_number| *sequence_number > 0)
+		.ok_or_else(|| Error::BadRequest {
+			message: "AE.reaction.sequenceNumber must be a positive integer"
+				.to_string(),
+		})
+}
+
 async fn load_editor_ae_list_rows(
 	ctx: &lib_core::ctx::Ctx,
 	mm: &ModelManager,
@@ -262,10 +271,7 @@ repeatable_page_row_create_handler!(
 	aliases: REACTION_ROW_ALIASES,
 	extras: |case_id, row| [
 		("case_id", json!(case_id)),
-		(
-			"sequence_number",
-			json!(i32_field(row, &["sequenceNumber"]).unwrap_or(1)),
-		),
+		("sequence_number", json!(reaction_sequence_number(row)?)),
 	],
 	build_response: build_editor_ae_page_row_response,
 );
@@ -286,3 +292,21 @@ repeatable_page_row_delete_restore_handlers!(
 	bmc: ReactionBmc,
 	build_response: build_editor_ae_page_row_response,
 );
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn reaction_create_requires_an_explicit_positive_sequence_number() {
+		let missing = json!({}).as_object().unwrap().clone();
+		let zero = json!({ "sequenceNumber": 0 }).as_object().unwrap().clone();
+		let valid = json!({ "sequenceNumber": 2 }).as_object().unwrap().clone();
+		let persisted = json!({ "sequence_number": 3 }).as_object().unwrap().clone();
+
+		assert!(reaction_sequence_number(&missing).is_err());
+		assert!(reaction_sequence_number(&zero).is_err());
+		assert_eq!(reaction_sequence_number(&valid).unwrap(), 2);
+		assert_eq!(reaction_sequence_number(&persisted).unwrap(), 3);
+	}
+}
