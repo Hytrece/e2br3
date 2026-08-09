@@ -717,9 +717,6 @@ pub(crate) fn drug_fragment(
 	out.push_str(
 		"<consumable typeCode=\"CSM\"><instanceOfKind classCode=\"INST\"><kindOfProduct classCode=\"MMAT\" determinerCode=\"KIND\">",
 	);
-	out.push_str("<name>");
-	out.push_str(&xml_escape(product_name));
-	out.push_str("</name>");
 	if matches!(authority, RegulatoryAuthority::Mfds)
 		&& (write_g_k_2_1_kr_1b(drug).is_some()
 			|| write_g_k_2_1_kr_1a(drug).is_some())
@@ -737,6 +734,9 @@ pub(crate) fn drug_fragment(
 		}
 		out.push_str("/>");
 	}
+	out.push_str("<name>");
+	out.push_str(&xml_escape(product_name));
+	out.push_str("</name>");
 	if write_g_k_2_1_1b(drug).is_some() || write_g_k_2_1_1a(drug).is_some() {
 		out.push_str("<asIdentifiedEntity classCode=\"IDENT\"><id");
 		if let Some(mpid) = write_g_k_2_1_1b(drug) {
@@ -2115,6 +2115,11 @@ mod tests {
 		assert!(xml.contains(
 			"<code codeSystem=\"2.16.840.1.113883.3.989.5.1.10.2.1\" code=\"KR-MPID\" codeSystemVersion=\"KR-V1\"/>"
 		));
+		assert!(
+			xml.find("code=\"KR-MPID\"").unwrap()
+				< xml.find("<name>Drug A</name>").unwrap(),
+			"MFDS product code must precede name per the E2B(R3) XSD"
+		);
 		assert!(xml.contains(
 			"<code codeSystem=\"2.16.840.1.113883.3.989.5.1.10.2.2\" code=\"KR-SUB\" codeSystemVersion=\"KR-SV1\"/>"
 		));

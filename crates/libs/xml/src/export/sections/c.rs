@@ -109,9 +109,7 @@ pub(crate) async fn apply_primary_source_section(
 	xpath: &mut Context,
 	authority: lib_core::regulatory::RegulatoryAuthority,
 ) -> Result<()> {
-	let Some(primary) = fetch_primary_source(mm, case_id).await? else {
-		return Ok(());
-	};
+	let primary = fetch_primary_source(mm, case_id).await?;
 	apply_primary_source_values(doc, parser, xpath, &primary, authority)
 }
 

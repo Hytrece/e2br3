@@ -109,7 +109,7 @@ fn c_2_r_4(xpath: &mut Context, errors: &mut Vec<XmlValidationError>) {
 }
 
 fn c_2_r_5(xpath: &mut Context, errors: &mut Vec<XmlValidationError>) {
-	common::reject(xpath, errors, "C.2.r.5", "//hl7:PORR_IN049016UV[count(.//hl7:relatedInvestigation[hl7:code[@code='2']]/hl7:subjectOf2/hl7:controlActEvent/hl7:priorityNumber[@value='1']) != 1] | //hl7:relatedInvestigation[hl7:code[@code='2']]/hl7:subjectOf2/hl7:controlActEvent/hl7:priorityNumber[not(@value='1')]", "Each ICSR must flag exactly one primary source with value 1.");
+	common::reject(xpath, errors, "C.2.r.5", "//hl7:PORR_IN049016UV[count(.//hl7:outboundRelationship[hl7:relatedInvestigation/hl7:code[@code='2']]/hl7:priorityNumber[@value='1']) != 1] | //hl7:outboundRelationship[hl7:relatedInvestigation/hl7:code[@code='2']]/hl7:priorityNumber[not(@value='1')]", "Each ICSR must flag exactly one primary source with value 1.");
 }
 
 fn c_3_1(xpath: &mut Context, errors: &mut Vec<XmlValidationError>) {
@@ -160,6 +160,31 @@ fn c_5_4(xpath: &mut Context, errors: &mut Vec<XmlValidationError>) {
 mod tests {
 	use super::*;
 	use libxml::parser::Parser;
+
+	fn c_2_r_5_errors(xml: &[u8]) -> Vec<XmlValidationError> {
+		let doc = Parser::default().parse_string(xml).unwrap();
+		let mut xpath = Context::new(&doc).unwrap();
+		xpath.register_namespace("hl7", "urn:hl7-org:v3").unwrap();
+		let mut errors = Vec::new();
+		c_2_r_5(&mut xpath, &mut errors);
+		errors
+	}
+
+	#[test]
+	fn c_2_r_5_accepts_priority_on_source_relationship() {
+		let xml = br#"<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3"><PORR_IN049016UV><controlActProcess><subject><investigationEvent><outboundRelationship><priorityNumber value="1"/><relatedInvestigation><code code="2"/></relatedInvestigation></outboundRelationship></investigationEvent></subject></controlActProcess></PORR_IN049016UV></MCCI_IN200100UV01>"#;
+		assert!(c_2_r_5_errors(xml).is_empty());
+	}
+
+	#[test]
+	fn c_2_r_5_rejects_missing_and_duplicate_primary_markers() {
+		let missing = br#"<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3"><PORR_IN049016UV><controlActProcess><subject><investigationEvent><outboundRelationship><relatedInvestigation><code code="2"/></relatedInvestigation></outboundRelationship></investigationEvent></subject></controlActProcess></PORR_IN049016UV></MCCI_IN200100UV01>"#;
+		let duplicate = br#"<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3"><PORR_IN049016UV><controlActProcess><subject><investigationEvent><outboundRelationship><priorityNumber value="1"/><relatedInvestigation><code code="2"/></relatedInvestigation></outboundRelationship><outboundRelationship><priorityNumber value="1"/><relatedInvestigation><code code="2"/></relatedInvestigation></outboundRelationship></investigationEvent></subject></controlActProcess></PORR_IN049016UV></MCCI_IN200100UV01>"#;
+		let invalid = br#"<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3"><PORR_IN049016UV><controlActProcess><subject><investigationEvent><outboundRelationship><priorityNumber value="2"/><relatedInvestigation><code code="2"/></relatedInvestigation></outboundRelationship></investigationEvent></subject></controlActProcess></PORR_IN049016UV></MCCI_IN200100UV01>"#;
+		assert_eq!(c_2_r_5_errors(missing).len(), 1);
+		assert_eq!(c_2_r_5_errors(duplicate).len(), 1);
+		assert_eq!(c_2_r_5_errors(invalid).len(), 1);
+	}
 
 	#[test]
 	fn c_rules_emit_official_codes() {

@@ -26,6 +26,7 @@ pub(crate) async fn apply_section_n(
 			line: None,
 			column: None,
 		})?;
+	let report_id = required_report_id(report.safety_report_id.as_deref())?;
 
 	write_n_1_1(xpath, &header.message_type);
 	write_n_1_2(xpath, header.batch_number.as_deref());
@@ -46,7 +47,7 @@ pub(crate) async fn apply_section_n(
 		})?;
 	write_n_1_4(doc, parser, xpath, batch_receiver)?;
 	write_n_1_5(xpath, Some(export_time));
-	write_n_2_r_1(xpath, &header.message_number);
+	write_n_2_r_1(xpath, report_id);
 	write_n_2_r_2(xpath, &header.message_sender_identifier);
 	write_n_2_r_3(xpath, &header.message_receiver_identifier);
 	write_n_2_r_4(xpath, message_date);
@@ -82,6 +83,17 @@ pub(crate) async fn apply_section_n(
 		);
 	}
 	Ok(())
+}
+
+fn required_report_id(report_id: Option<&str>) -> Result<&str> {
+	report_id
+		.map(str::trim)
+		.filter(|value| !value.is_empty())
+		.ok_or_else(|| Error::InvalidXml {
+			message: "safety_report_identification.safety_report_id is required for N.2.r.1 export".to_string(),
+			line: None,
+			column: None,
+		})
 }
 
 /// e2b:N.1.1
@@ -209,18 +221,51 @@ pub(crate) async fn fetch_message_header(
 pub(crate) async fn fetch_primary_source(
 	mm: &ModelManager,
 	case_id: sqlx::types::Uuid,
-) -> Result<Option<PrimarySource>> {
-	let sql = "SELECT * FROM primary_sources WHERE case_id = $1 AND deleted = false ORDER BY sequence_number LIMIT 1";
-	mm.dbx()
-		.fetch_optional(sqlx::query_as::<_, PrimarySource>(sql).bind(case_id))
+) -> Result<PrimarySource> {
+	let sql = "SELECT * FROM primary_sources WHERE case_id = $1 AND deleted = false AND primary_source_regulatory = '1' ORDER BY sequence_number";
+	let sources = mm
+		.dbx()
+		.fetch_all(sqlx::query_as::<_, PrimarySource>(sql).bind(case_id))
 		.await
-		.map_err(|e| Error::Model(lib_core::model::Error::Store(format!("{e}"))))
+		.map_err(|e| Error::Model(lib_core::model::Error::Store(format!("{e}"))))?;
+	require_single_primary_source(sources)
+}
+
+fn require_single_primary_source<T>(mut sources: Vec<T>) -> Result<T> {
+	if sources.len() != 1 {
+		return Err(Error::InvalidXml {
+			message: format!(
+				"C.2.r.5 requires exactly one primary source marked 1; found {}",
+				sources.len()
+			),
+			line: None,
+			column: None,
+		});
+	}
+	Ok(sources.remove(0))
 }
 
 #[cfg(test)]
 mod date_tests {
 	use super::*;
 	use time::OffsetDateTime;
+
+	#[test]
+	fn n_2_r_1_requires_nonblank_c_1_1() {
+		assert_eq!(
+			required_report_id(Some(" KR-CASE-1 ")).unwrap(),
+			"KR-CASE-1"
+		);
+		assert!(required_report_id(None).is_err());
+		assert!(required_report_id(Some("  ")).is_err());
+	}
+
+	#[test]
+	fn c_2_r_5_requires_exactly_one_selected_source() {
+		assert_eq!(require_single_primary_source(vec![7]).unwrap(), 7);
+		assert!(require_single_primary_source::<u8>(vec![]).is_err());
+		assert!(require_single_primary_source(vec![1, 2]).is_err());
+	}
 
 	#[test]
 	fn n_1_5_includes_utc_offset_and_n_2_r_4_preserves_c_1_2() {
