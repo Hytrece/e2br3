@@ -15,6 +15,7 @@ use lib_core::model::reaction::{ReactionBmc, ReactionForCreate};
 use lib_core::model::safety_report::{
 	SafetyReportIdentificationBmc, SafetyReportIdentificationForCreate,
 };
+use lib_core::model::store::set_full_context_from_ctx_dbx;
 use lib_core::model::ModelManager;
 use lib_core::regulatory::RegulatoryAuthority;
 use lib_rest_core::prelude::*;
@@ -442,6 +443,41 @@ pub async fn create_case_from_intake(
 }
 
 async fn create_case_from_intake_authorized(
+	ctx: &lib_core::ctx::Ctx,
+	mm: &ModelManager,
+	data: CaseFromIntakeInput,
+) -> Result<(
+	axum::http::StatusCode,
+	Json<DataRestResult<CaseFromIntakeResult>>,
+)> {
+	let tx_mm = mm.new_with_txn().map_err(Error::Model)?;
+	let dbx = tx_mm.dbx();
+	dbx.begin_txn()
+		.await
+		.map_err(lib_core::model::Error::from)
+		.map_err(Error::Model)?;
+	if let Err(error) = set_full_context_from_ctx_dbx(dbx, ctx).await {
+		let _ = dbx.rollback_txn().await;
+		return Err(Error::Model(error));
+	}
+
+	let result = create_case_from_intake_in_txn(ctx, &tx_mm, data).await;
+	match result {
+		Ok(response) => {
+			dbx.commit_txn()
+				.await
+				.map_err(lib_core::model::Error::from)
+				.map_err(Error::Model)?;
+			Ok(response)
+		}
+		Err(error) => {
+			let _ = dbx.rollback_txn().await;
+			Err(error)
+		}
+	}
+}
+
+async fn create_case_from_intake_in_txn(
 	ctx: &lib_core::ctx::Ctx,
 	mm: &ModelManager,
 	data: CaseFromIntakeInput,

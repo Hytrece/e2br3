@@ -2,6 +2,8 @@ use crate::common::{cookie_header, init_test_mm, seed_org_with_users, Result};
 use axum::body::{to_bytes, Body};
 use axum::http::{Request, StatusCode};
 use lib_auth::token::generate_web_token;
+use lib_core::ctx::ROLE_SPONSOR_ADMIN_CRO;
+use lib_core::model::store::set_full_context_dbx;
 use serde_json::{json, Value};
 use serial_test::serial;
 use tower::ServiceExt;
@@ -541,6 +543,52 @@ async fn test_case_from_intake_requires_product_id() -> Result<()> {
 	let (status, body) =
 		post_json(&app, &cookie, "/api/cases/from-intake", override_body).await?;
 	assert_eq!(status, StatusCode::BAD_REQUEST, "{body:?}");
+
+	Ok(())
+}
+
+#[serial]
+#[tokio::test]
+async fn test_case_from_intake_rolls_back_shell_when_patient_create_fails(
+) -> Result<()> {
+	let mm = init_test_mm().await?;
+	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
+	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
+	let cookie = cookie_header(&token.to_string());
+	let app = web_server::app(mm.clone());
+	let safety_report_id = format!("INTAKE-{}", Uuid::new_v4());
+	let dg_prd_key = format!("ROLLBACK-{safety_report_id}");
+
+	let body = json!({
+		"data": intake_data(&safety_report_id, 143, "1", json!({
+			"allow_duplicate_override": true,
+			"dg_prd_key": dg_prd_key,
+			"sex_d5": "9"
+		}))
+	});
+	let (status, _) =
+		post_json(&app, &cookie, "/api/cases/from-intake", body).await?;
+	assert_ne!(status, StatusCode::CREATED);
+
+	mm.dbx().begin_txn().await?;
+	set_full_context_dbx(
+		mm.dbx(),
+		seed.admin.id,
+		seed.org_id,
+		ROLE_SPONSOR_ADMIN_CRO,
+	)
+	.await?;
+	let (count,) = mm
+		.dbx()
+		.fetch_one(
+			sqlx::query_as::<_, (i64,)>(
+				"SELECT COUNT(*) FROM cases WHERE dg_prd_key = $1",
+			)
+			.bind(&dg_prd_key),
+		)
+		.await?;
+	mm.dbx().rollback_txn().await?;
+	assert_eq!(count, 0, "failed intake must not leave a case shell");
 
 	Ok(())
 }
