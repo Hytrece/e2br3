@@ -46,6 +46,55 @@ pub fn extract_safety_report_id_from_xml(xml: &[u8]) -> Result<String> {
 	shared::extract_safety_report_id(xml)
 }
 
+fn validate_import_message_header(
+	header: &shared::MessageHeaderExtract,
+	safety_report_id: &str,
+	transmission_date: &str,
+) -> Result<(String, String, String, String)> {
+	let required = |value: &Option<String>, field: &str| {
+		value
+			.as_deref()
+			.map(str::trim)
+			.filter(|value| !value.is_empty())
+			.map(str::to_owned)
+			.ok_or_else(|| Error::InvalidImportRequest {
+				message: format!("message header {field} missing"),
+			})
+	};
+	let message_number = required(&header.message_number, "number")?;
+	let message_sender = required(&header.message_sender, "sender")?;
+	let message_receiver = required(&header.message_receiver, "receiver")?;
+	let message_date = header
+		.message_date
+		.clone()
+		.and_then(shared::normalize_message_date)
+		.ok_or_else(|| Error::InvalidImportRequest {
+			message: "message header date missing or invalid".to_string(),
+		})?;
+
+	if message_number != safety_report_id.trim() {
+		return Err(Error::InvalidImportRequest {
+			message: "message header number must equal C.1.1".to_string(),
+		});
+	}
+	let transmission_digits: String = transmission_date
+		.chars()
+		.filter(|c| c.is_ascii_digit())
+		.collect();
+	if transmission_digits.len() < 14 || message_date != transmission_digits[..14] {
+		return Err(Error::InvalidImportRequest {
+			message: "message header date must equal C.1.2".to_string(),
+		});
+	}
+
+	Ok((
+		message_number,
+		message_sender,
+		message_receiver,
+		message_date,
+	))
+}
+
 pub async fn import_e2b_xml(
 	ctx: &Ctx,
 	mm: &ModelManager,
@@ -87,6 +136,12 @@ async fn import_e2b_xml_in_txn(
 			message: "C.1 safety report section missing".to_string(),
 		})?;
 	let header_extract = shared::extract_message_header(&req.xml)?;
+	let (message_number, message_sender, message_receiver, message_date) =
+		validate_import_message_header(
+			&header_extract,
+			&safety_report_id,
+			&transmission_date,
+		)?;
 	// Serialize imports for the same organization/report ID. The lock is held
 	// by the outer import transaction, so the recheck below closes the race
 	// between the REST decision query and case creation.
@@ -183,29 +238,6 @@ async fn import_e2b_xml_in_txn(
 	)
 	.await?;
 
-	let message_number = header_extract.message_number.clone().ok_or_else(|| {
-		Error::InvalidImportRequest {
-			message: "message header number missing".to_string(),
-		}
-	})?;
-	let message_sender = header_extract.message_sender.clone().ok_or_else(|| {
-		Error::InvalidImportRequest {
-			message: "message header sender missing".to_string(),
-		}
-	})?;
-	let message_receiver =
-		header_extract.message_receiver.clone().ok_or_else(|| {
-			Error::InvalidImportRequest {
-				message: "message header receiver missing".to_string(),
-			}
-		})?;
-	let message_date = header_extract
-		.message_date
-		.clone()
-		.and_then(shared::normalize_message_date)
-		.ok_or_else(|| Error::InvalidImportRequest {
-			message: "message header date missing or invalid".to_string(),
-		})?;
 	let message_number =
 		shared::make_import_message_number(&message_number, case_id);
 	let has_header = MessageHeaderBmc::get_by_case(ctx, &mm, case_id)
@@ -323,4 +355,54 @@ async fn import_e2b_xml_in_txn(
 		xml_key: None,
 		parsed_json_id: Some(version_id.to_string()),
 	})
+}
+
+#[cfg(test)]
+mod tests {
+	use super::validate_import_message_header;
+	use crate::import_sections::shared::MessageHeaderExtract;
+
+	fn header(number: &str, date: &str) -> MessageHeaderExtract {
+		MessageHeaderExtract {
+			message_number: Some(number.to_string()),
+			message_sender: Some("sender".to_string()),
+			message_receiver: Some("receiver".to_string()),
+			message_date: Some(date.to_string()),
+			batch_number: None,
+			batch_sender: None,
+			batch_receiver: None,
+		}
+	}
+
+	#[test]
+	fn rejects_message_number_mismatch() {
+		let error = validate_import_message_header(
+			&header("message-id", "20260809000000"),
+			"case-id",
+			"20260809000000",
+		)
+		.expect_err("mismatched N.2.r.1 must block import");
+		assert!(error.to_string().contains("must equal C.1.1"));
+	}
+
+	#[test]
+	fn rejects_message_date_mismatch() {
+		let error = validate_import_message_header(
+			&header("case-id", "20260808000000"),
+			"case-id",
+			"20260809000000",
+		)
+		.expect_err("mismatched N.2.r.4 must block import");
+		assert!(error.to_string().contains("must equal C.1.2"));
+	}
+
+	#[test]
+	fn accepts_complete_matching_message_header() {
+		validate_import_message_header(
+			&header("case-id", "20260809000000"),
+			"case-id",
+			"20260809000000",
+		)
+		.expect("matching message header");
+	}
 }
