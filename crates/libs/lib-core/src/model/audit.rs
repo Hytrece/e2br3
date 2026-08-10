@@ -382,20 +382,8 @@ impl AuditLogBmc {
 					UNION
 					SELECT child.record_id
 					  FROM {} child
-					  JOIN records parent ON EXISTS (
-						SELECT 1
-						  FROM jsonb_each_text(
-							COALESCE(child.new_values, '{{}}'::jsonb)
-							|| COALESCE(child.old_values, '{{}}'::jsonb)
-						  ) field
-						 WHERE field.key = ANY(ARRAY[
-							'case_id', 'death_info_id', 'device_id', 'drug_id',
-							'drug_reaction_assessment_id', 'e_signature_id',
-							'narrative_id', 'parent_id', 'patient_id', 'reaction_id',
-							'study_information_id', 'submission_id'
-						 ])
-						   AND field.value = parent.record_id::text
-					  )
+					  JOIN records parent ON child.parent_record_ids
+						@> ARRAY[parent.record_id]
 				 )
 				 SELECT l.*, audit_user_display(l.user_id) AS user_display
 				   FROM {} l
