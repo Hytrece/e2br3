@@ -435,7 +435,7 @@
     "backend": {
       "status": "mapped",
       "model": "DosageInformation",
-      "field": "first_administration_date",
+      "field": "first_administration_date / first_administration_date_raw",
       "file": "crates/libs/lib-core/src/model/drug.rs",
       "evidence": "DosageInformation.first_administration_date is annotated as G.k.4.r.4."
     },
@@ -460,7 +460,7 @@
     "backend": {
       "status": "mapped",
       "model": "DosageInformation",
-      "field": "last_administration_date",
+      "field": "last_administration_date / last_administration_date_raw",
       "file": "crates/libs/lib-core/src/model/drug.rs",
       "evidence": "DosageInformation.last_administration_date is annotated as G.k.4.r.5."
     },

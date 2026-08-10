@@ -681,6 +681,27 @@
     "local_only": true
   },
   {
+    "id": "presave.product.local.presave.product.frontend.activeSubstances",
+    "e2br3_code": "local.presave.product.frontend.activeSubstances",
+    "label": "activeSubstances",
+    "section": "G",
+    "authority": "ICH",
+    "status": "not_applicable",
+    "backend": {
+      "status": "not_applicable"
+    },
+    "frontend": {
+      "status": "mapped",
+      "section": "product",
+      "field": "activeSubstances",
+      "file": "components/presave/ProductForm.tsx",
+      "evidence": "ProductPresaveData.activeSubstances exposes the presave value."
+    },
+    "action": "",
+    "notes": "",
+    "local_only": true
+  },
+  {
     "id": "presave.product.local.presave.product.frontend.productDeleted",
     "e2br3_code": "local.presave.product.frontend.productDeleted",
     "label": "productDeleted",
@@ -738,27 +759,6 @@
       "field": "sender",
       "file": "components/presave/ProductForm.tsx",
       "evidence": "ProductPresaveData.sender exposes the presave value."
-    },
-    "action": "",
-    "notes": "",
-    "local_only": true
-  },
-  {
-    "id": "presave.product.local.presave.product.frontend.activeSubstances",
-    "e2br3_code": "local.presave.product.frontend.activeSubstances",
-    "label": "activeSubstances",
-    "section": "G",
-    "authority": "ICH",
-    "status": "not_applicable",
-    "backend": {
-      "status": "not_applicable"
-    },
-    "frontend": {
-      "status": "mapped",
-      "section": "product",
-      "field": "activeSubstances",
-      "file": "components/presave/ProductForm.tsx",
-      "evidence": "ProductPresaveData.activeSubstances exposes the presave value."
     },
     "action": "",
     "notes": "",

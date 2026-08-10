@@ -72,6 +72,30 @@
     "notes": ""
   },
   {
+    "id": "presave.study.C.5.4.KR.1",
+    "e2br3_code": "C.5.4.KR.1",
+    "label": "Other Studies Type",
+    "section": "C",
+    "authority": "MFDS",
+    "status": "complete",
+    "backend": {
+      "status": "mapped",
+      "model": "StudyPresave",
+      "field": "study_type_reaction_kr1",
+      "file": "crates/libs/lib-core/src/model/presave.rs",
+      "evidence": "StudyPresave.study_type_reaction_kr1 persists the presave value."
+    },
+    "frontend": {
+      "status": "mapped",
+      "section": "study",
+      "field": "studyTypeReactionKr1",
+      "file": "components/presave/StudyForm.tsx",
+      "evidence": "StudyPresaveData.studyTypeReactionKr1 exposes the presave value."
+    },
+    "action": "",
+    "notes": ""
+  },
+  {
     "id": "presave.study.FDA.C.5.5a",
     "e2br3_code": "FDA.C.5.5a",
     "label": "IND Number Where AE Occurred",
@@ -242,6 +266,31 @@
     "local_only": true
   },
   {
+    "id": "presave.study.local.presave.study.fdaCrossReportedIndNumbers.indNumberNullFlavor",
+    "e2br3_code": "local.presave.study.fdaCrossReportedIndNumbers.indNumberNullFlavor",
+    "label": "fdaCrossReportedIndNumbers[].indNumberNullFlavor",
+    "section": "C",
+    "authority": "ICH",
+    "status": "not_applicable",
+    "backend": {
+      "status": "mapped",
+      "model": "StudyPresaveFdaCrossReportedIndNumber",
+      "field": "ind_number_null_flavor",
+      "file": "crates/libs/lib-core/src/model/presave.rs",
+      "evidence": "StudyPresaveFdaCrossReportedIndNumber.ind_number_null_flavor persists the presave value."
+    },
+    "frontend": {
+      "status": "mapped",
+      "section": "study",
+      "field": "fdaCrossReportedIndNumbers[].indNumberNullFlavor",
+      "file": "components/presave/StudyForm.tsx",
+      "evidence": "StudyPresaveData.fdaCrossReportedIndNumbers[].indNumberNullFlavor exposes the presave value."
+    },
+    "action": "",
+    "notes": "",
+    "local_only": true
+  },
+  {
     "id": "presave.study.local.presave.study.productPresaveId",
     "e2br3_code": "local.presave.study.productPresaveId",
     "label": "productPresaveId",
@@ -292,6 +341,31 @@
     "local_only": true
   },
   {
+    "id": "presave.study.local.presave.study.sponsorStudyNumberNullFlavor",
+    "e2br3_code": "local.presave.study.sponsorStudyNumberNullFlavor",
+    "label": "sponsorStudyNumberNullFlavor",
+    "section": "C",
+    "authority": "ICH",
+    "status": "not_applicable",
+    "backend": {
+      "status": "mapped",
+      "model": "StudyPresave",
+      "field": "sponsor_study_number_null_flavor",
+      "file": "crates/libs/lib-core/src/model/presave.rs",
+      "evidence": "StudyPresave.sponsor_study_number_null_flavor persists the presave value."
+    },
+    "frontend": {
+      "status": "mapped",
+      "section": "study",
+      "field": "sponsorStudyNumberNullFlavor",
+      "file": "components/presave/StudyForm.tsx",
+      "evidence": "StudyPresaveData.sponsorStudyNumberNullFlavor exposes the presave value."
+    },
+    "action": "",
+    "notes": "",
+    "local_only": true
+  },
+  {
     "id": "presave.study.local.presave.study.studyNameNotation",
     "e2br3_code": "local.presave.study.studyNameNotation",
     "label": "studyNameNotation",
@@ -311,6 +385,81 @@
       "field": "studyNameNotation",
       "file": "components/presave/StudyForm.tsx",
       "evidence": "StudyPresaveData.studyNameNotation exposes the presave value."
+    },
+    "action": "",
+    "notes": "",
+    "local_only": true
+  },
+  {
+    "id": "presave.study.local.presave.study.studyNameNullFlavor",
+    "e2br3_code": "local.presave.study.studyNameNullFlavor",
+    "label": "studyNameNullFlavor",
+    "section": "C",
+    "authority": "ICH",
+    "status": "not_applicable",
+    "backend": {
+      "status": "mapped",
+      "model": "StudyPresave",
+      "field": "study_name_null_flavor",
+      "file": "crates/libs/lib-core/src/model/presave.rs",
+      "evidence": "StudyPresave.study_name_null_flavor persists the presave value."
+    },
+    "frontend": {
+      "status": "mapped",
+      "section": "study",
+      "field": "studyNameNullFlavor",
+      "file": "components/presave/StudyForm.tsx",
+      "evidence": "StudyPresaveData.studyNameNullFlavor exposes the presave value."
+    },
+    "action": "",
+    "notes": "",
+    "local_only": true
+  },
+  {
+    "id": "presave.study.local.presave.study.studyRegistrationNumbers.countryCodeNullFlavor",
+    "e2br3_code": "local.presave.study.studyRegistrationNumbers.countryCodeNullFlavor",
+    "label": "studyRegistrationNumbers[].countryCodeNullFlavor",
+    "section": "C",
+    "authority": "ICH",
+    "status": "not_applicable",
+    "backend": {
+      "status": "mapped",
+      "model": "StudyPresaveRegistrationNumber",
+      "field": "country_code_null_flavor",
+      "file": "crates/libs/lib-core/src/model/presave.rs",
+      "evidence": "StudyPresaveRegistrationNumber.country_code_null_flavor persists the presave value."
+    },
+    "frontend": {
+      "status": "mapped",
+      "section": "study",
+      "field": "studyRegistrationNumbers[].countryCodeNullFlavor",
+      "file": "components/presave/StudyForm.tsx",
+      "evidence": "StudyPresaveData.studyRegistrationNumbers[].countryCodeNullFlavor exposes the presave value."
+    },
+    "action": "",
+    "notes": "",
+    "local_only": true
+  },
+  {
+    "id": "presave.study.local.presave.study.studyRegistrationNumbers.registrationNumberNullFlavor",
+    "e2br3_code": "local.presave.study.studyRegistrationNumbers.registrationNumberNullFlavor",
+    "label": "studyRegistrationNumbers[].registrationNumberNullFlavor",
+    "section": "C",
+    "authority": "ICH",
+    "status": "not_applicable",
+    "backend": {
+      "status": "mapped",
+      "model": "StudyPresaveRegistrationNumber",
+      "field": "registration_number_null_flavor",
+      "file": "crates/libs/lib-core/src/model/presave.rs",
+      "evidence": "StudyPresaveRegistrationNumber.registration_number_null_flavor persists the presave value."
+    },
+    "frontend": {
+      "status": "mapped",
+      "section": "study",
+      "field": "studyRegistrationNumbers[].registrationNumberNullFlavor",
+      "file": "components/presave/StudyForm.tsx",
+      "evidence": "StudyPresaveData.studyRegistrationNumbers[].registrationNumberNullFlavor exposes the presave value."
     },
     "action": "",
     "notes": "",

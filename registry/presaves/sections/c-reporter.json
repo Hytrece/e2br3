@@ -574,5 +574,18 @@
     "frontend": {"status": "mapped", "section": "reporter", "field": "reporterTelephoneNullFlavor", "file": "../frontend/E2BR3-frontend/components/presave/ReporterForm.tsx", "evidence": "ReporterForm and ReporterPresaveData bind reporter.reporterTelephoneNullFlavor."},
     "action": "",
     "notes": "Dedicated local persistence companion for official E2B element C.2.r.2.7."
+  },
+  {
+    "id": "C.2.r.local.reporterEmailNullFlavor",
+    "e2br3_code": "C.2.r.local.reporterEmailNullFlavor",
+    "label": "Reporter Email NullFlavor",
+    "section": "C",
+    "authority": "ICH",
+    "status": "complete",
+    "local_only": true,
+    "backend": {"status": "mapped", "model": "ReporterPresave", "field": "reporter_email_null_flavor", "file": "crates/libs/lib-core/src/model/presave.rs", "evidence": "ReporterPresave.reporter_email_null_flavor stores the FDA.C.2.r.2.8 nullFlavor."},
+    "frontend": {"status": "mapped", "section": "reporter", "field": "reporterEmailNullFlavor", "file": "../frontend/E2BR3-frontend/components/presave/ReporterForm.tsx", "evidence": "ReporterForm and ReporterPresaveData bind reporter.reporterEmailNullFlavor."},
+    "action": "",
+    "notes": "Dedicated persistence companion for official element FDA.C.2.r.2.8."
   }
 ]

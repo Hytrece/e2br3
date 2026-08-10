@@ -93,8 +93,13 @@ NESTED_FRONTEND_FIELDS = {
         ),
     },
     "study": {
-        "studyRegistrationNumbers": ("registrationNumber", "countryCode"),
-        "fdaCrossReportedIndNumbers": ("indNumber",),
+        "studyRegistrationNumbers": (
+            "registrationNumber",
+            "registrationNumberNullFlavor",
+            "countryCode",
+            "countryCodeNullFlavor",
+        ),
+        "fdaCrossReportedIndNumbers": ("indNumber", "indNumberNullFlavor"),
     },
 }
 
@@ -159,6 +164,7 @@ TRANSFER_SPECS = {
         TransferSpec("StudyPresave", "study_name", "StudyInformation", "study_name", (transfer_call("studyInformation.studyName", "d.studyName"),)),
         TransferSpec("StudyPresave", "sponsor_study_number", "StudyInformation", "sponsor_study_number", (transfer_call("studyInformation.sponsorStudyNumber", "d.sponsorStudyNumber"),)),
         TransferSpec("StudyPresave", "study_type_reaction", "StudyInformation", "study_type_reaction", (transfer_call("studyInformation.studyTypeReaction", "d.studyTypeReaction"),)),
+        TransferSpec("StudyPresave", "study_type_reaction_kr1", "StudyInformation", "study_type_reaction_kr1", (transfer_call("studyInformation.studyTypeReactionKr1", "d.studyTypeReactionKr1"),)),
         TransferSpec("StudyPresave", "fda_ind_number_occurred", "StudyInformation", "fda_ind_number_occurred", (transfer_call("studyInformation.fdaIndNumberOccurred", "d.fdaIndNumberOccurred"),)),
         TransferSpec("StudyPresave", "fda_pre_anda_number_occurred", "StudyInformation", "fda_pre_anda_number_occurred", (transfer_call("studyInformation.fdaPreAndaNumberOccurred", "d.fdaPreAndaNumberOccurred"),)),
         TransferSpec("StudyPresaveRegistrationNumber", "registration_number", "StudyRegistrationNumber", "registration_number", (r"d\.studyRegistrationNumbers\.filter", value_assignment("registrationNumber", "registration.registrationNumber"), transfer_call("studyInformation.studyRegistrationNumbers.${index}.registrationNumber", "registration.registrationNumber"))),
@@ -201,6 +207,7 @@ REPORTER_FRONTEND_TO_BACKEND = {
     "reporterPostcode": "postcode",
     "reporterTelephone": "telephone",
     "reporterEmail": "reporter_email",
+    "reporterEmailNullFlavor": "reporter_email_null_flavor",
     "reporterCountry": "country_code",
     "qualification": "qualification",
     "qualificationKr1": "qualification_kr1",
@@ -220,6 +227,7 @@ REPORTER_FRONTEND_TO_BACKEND = {
 }
 PRIMARY_SOURCE_FRONTEND_TO_BACKEND = dict(REPORTER_FRONTEND_TO_BACKEND)
 PRIMARY_SOURCE_FRONTEND_TO_BACKEND["reporterEmail"] = "email"
+PRIMARY_SOURCE_FRONTEND_TO_BACKEND["reporterEmailNullFlavor"] = "email_null_flavor"
 REPORTER_TRANSFER_FILE = (
     "../frontend/E2BR3-frontend/app/(protected)/[authority]/case/[id]/detail/"
     "RP/model/rpModel.ts"

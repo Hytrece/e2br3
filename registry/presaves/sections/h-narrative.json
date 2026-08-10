@@ -71,5 +71,30 @@
     "action": "",
     "notes": "",
     "local_only": true
+  },
+  {
+    "id": "presave.narrative.local.presave.narrative.templateTitle",
+    "e2br3_code": "local.presave.narrative.templateTitle",
+    "label": "templateTitle",
+    "section": "H",
+    "authority": "ICH",
+    "status": "not_applicable",
+    "backend": {
+      "status": "mapped",
+      "model": "NarrativePresave",
+      "field": "template_title",
+      "file": "crates/libs/lib-core/src/model/presave.rs",
+      "evidence": "NarrativePresave.template_title persists the presave value."
+    },
+    "frontend": {
+      "status": "mapped",
+      "section": "narrative",
+      "field": "templateTitle",
+      "file": "components/presave/NarrativeForm.tsx",
+      "evidence": "NarrativePresaveData.templateTitle exposes the presave value."
+    },
+    "action": "",
+    "notes": "",
+    "local_only": true
   }
 ]
