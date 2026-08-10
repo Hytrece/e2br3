@@ -14,8 +14,7 @@ pub fn set_token_cookie(
 	organization_id: Uuid,
 	salt: Uuid,
 ) -> Result<()> {
-	// Email is not globally unique. Bind the selected tenant into the signed
-	// identity so a token can never resolve to another same-email account.
+	// Bind the selected organization to the global account's signed session.
 	let identity = format!("{email}|{organization_id}");
 	let token = generate_web_token(&identity, salt)?;
 

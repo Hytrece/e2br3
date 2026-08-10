@@ -10,7 +10,6 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 use tower_cookies::Cookies;
 use tracing::debug;
-use uuid::Uuid;
 
 // region:    --- Login
 pub async fn api_login_handler(
@@ -23,29 +22,16 @@ pub async fn api_login_handler(
 	let LoginPayload {
 		email,
 		pwd: pwd_clear,
-		organization_id,
 	} = payload;
-	// -- Get the user (set auth email in-session to satisfy RLS).
-	let user: UserForLogin = match organization_id {
-		Some(organization_id) => UserBmc::auth_login_by_email_and_organization(
-			&mm,
-			&email,
-			organization_id,
-		)
+	let user: UserForLogin = UserBmc::auth_login_by_email(&mm, &email)
 		.await
-		.map_err(Error::Model)?,
-		None => UserBmc::auth_login_by_email(&mm, &email)
-			.await
-			.map_err(Error::Model)?,
-	}
-	.ok_or(Error::LoginFailEmailNotFound)?;
+		.map_err(Error::Model)?
+		.ok_or(Error::LoginFailEmailNotFound)?;
 	let user_id = user.id;
 
-	// Reject malformed/legacy accounts that cannot build an authenticated context.
 	Ctx::new(user.id, user.organization_id, user.role.clone())
 		.map_err(|_| Error::LoginFailUserCtxCreate { user_id })?;
 
-	// -- Validate the password.
 	let Some(pwd) = user.pwd.clone() else {
 		return Err(Error::LoginFailUserHasNoPwd { user_id });
 	};
@@ -94,8 +80,6 @@ pub async fn api_login_handler(
 pub struct LoginPayload {
 	email: String,
 	pwd: String,
-	#[serde(alias = "organizationId")]
-	organization_id: Option<Uuid>,
 }
 // endregion: --- Login
 

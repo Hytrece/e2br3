@@ -212,6 +212,11 @@ async fn apply_test_authorization_isolation_migration() -> Result<()> {
 			))
 			.execute(&pool)
 			.await?;
+			sqlx::raw_sql(include_str!(
+				"../../../../../db/migrations/20260810_global_user_identity.sql"
+			))
+			.execute(&pool)
+			.await?;
 			pool.close().await;
 			Ok::<(), sqlx::Error>(())
 		})

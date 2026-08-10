@@ -662,21 +662,11 @@ impl UserBmc {
 		let scoped_mm = mm.new_with_txn()?;
 		scoped_mm.dbx().begin_txn().await.map_err(Error::Dbx)?;
 		set_full_context_from_ctx_dbx(scoped_mm.dbx(), ctx).await?;
-		// Same-email accounts in other organizations are separate principals,
-		// but belong in the account's organization picker.
-		scoped_mm
-			.dbx()
-			.execute(
-				query(
-					"SELECT set_config('app.auth_email', (SELECT email FROM users WHERE id = $1), true)",
-				)
-				.bind(user_id),
-			)
-			.await?;
 		let organizations = scoped_mm
 			.dbx()
-			.fetch_all(sqlx::query_as::<_, Organization>(
-				r#"
+			.fetch_all(
+				sqlx::query_as::<_, Organization>(
+					r#"
 					SELECT
 						o.id,
 						o.name,
@@ -693,20 +683,16 @@ impl UserBmc {
 						o.updated_at,
 						o.created_by,
 						o.updated_by
-					FROM organizations o
-					WHERE o.active = true
-					  AND (
-						  o.id = current_organization_id()
-						  OR EXISTS (
-							  SELECT 1 FROM users member_user
-							  WHERE member_user.organization_id = o.id
-								AND lower(btrim(member_user.email)) = lower(btrim(current_setting('app.auth_email', true)))
-							    AND member_user.active = true
-						  )
-					  )
+					FROM user_organization_memberships membership
+					JOIN organizations o ON o.id = membership.organization_id
+					WHERE membership.user_id = $1
+					  AND membership.active = true
+					  AND o.active = true
 					ORDER BY o.name, o.id
 					"#,
-			))
+				)
+				.bind(user_id),
+			)
 			.await?;
 		scoped_mm.dbx().commit_txn().await.map_err(Error::Dbx)?;
 		Ok(organizations)
@@ -1023,9 +1009,6 @@ impl UserBmc {
 		Self::auth_by_email_exact(mm, &Self::normalize_email(email)).await
 	}
 
-	/// Resolve an active account when the same email exists in more than one
-	/// organization. The organization is part of the login identity, not a
-	/// caller-controlled post-authentication switch.
 	pub async fn auth_by_email_and_organization(
 		mm: &ModelManager,
 		email: &str,
@@ -1044,19 +1027,6 @@ impl UserBmc {
 		email: &str,
 	) -> Result<Option<UserForLogin>> {
 		Self::auth_login_by_email_exact(mm, &Self::normalize_email(email)).await
-	}
-
-	pub async fn auth_login_by_email_and_organization(
-		mm: &ModelManager,
-		email: &str,
-		organization_id: Uuid,
-	) -> Result<Option<UserForLogin>> {
-		Self::auth_login_by_email_and_organization_exact(
-			mm,
-			&Self::normalize_email(email),
-			organization_id,
-		)
-		.await
 	}
 
 	pub async fn verify_password(
@@ -1095,7 +1065,7 @@ impl UserBmc {
 				query(
 					"SELECT set_config('app.current_user_id', $1, true),
 					        set_config('app.current_organization_id', $2, true),
-					        set_config('app.platform_isolation_bypass', 'false', true),
+					        set_config('app.platform_isolation_bypass', 'true', true),
 					        set_config('app.auth_email', $3, true)",
 				)
 				.bind(SYSTEM_USER_ID)
@@ -1153,7 +1123,7 @@ impl UserBmc {
 				query(
 					"SELECT set_config('app.current_user_id', $1, true),
 					        set_config('app.current_organization_id', $2, true),
-					        set_config('app.platform_isolation_bypass', 'false', true),
+					        set_config('app.platform_isolation_bypass', 'true', true),
 					        set_config('app.auth_email', $3, true)",
 				)
 				.bind(SYSTEM_USER_ID)
@@ -1170,18 +1140,38 @@ impl UserBmc {
 			.fetch_optional(
 				sqlx::query_as::<_, UserForAuth>(
 					r#"
-				SELECT id, organization_id, email, username,
-				       lower(trim(role)) AS role, token_salt
-				FROM users
-				WHERE lower(btrim(email)) = $1
-				  AND organization_id = $2
-				  AND active = true
+				SELECT u.id, $2::uuid AS organization_id, u.email, u.username,
+				       CASE role.identity_kind
+				           WHEN 'platform_administrator' THEN 'system_admin'
+				           WHEN 'sponsor_cro_administrator' THEN 'sponsor_admin_cro'
+				           WHEN 'sponsor_company_administrator' THEN 'sponsor_admin_company'
+				           WHEN 'operational_user' THEN 'user'
+				           ELSE assignment.role_id::text
+				       END AS role,
+				       u.token_salt
+				FROM users u
+				JOIN user_role_assignments assignment
+				  ON assignment.user_id = u.id
+				 AND assignment.organization_id = $2
+				 AND assignment.active = true
+				JOIN authorization_roles role
+				  ON role.id = assignment.role_id
+				 AND role.active = true
+				 AND role.deleted_at IS NULL
+				WHERE lower(btrim(u.email)) = $1
+				  AND u.active = true
 				  AND EXISTS (
 					  SELECT 1 FROM organizations o
-					  WHERE o.id = users.organization_id AND o.active = true
+					  WHERE o.id = $2 AND o.active = true
 				  )
-				  AND (access_start_at IS NULL OR access_start_at <= now())
-				  AND (access_end_at IS NULL OR access_end_at >= now())
+				  AND EXISTS (
+					  SELECT 1 FROM user_organization_memberships membership
+					  WHERE membership.user_id = u.id
+					    AND membership.organization_id = $2
+					    AND membership.active = true
+				  )
+				  AND (u.access_start_at IS NULL OR u.access_start_at <= now())
+				  AND (u.access_end_at IS NULL OR u.access_end_at >= now())
 				LIMIT 1
 				"#,
 				)
@@ -1209,7 +1199,15 @@ impl UserBmc {
 		if let Err(err) = mm
 			.dbx()
 			.execute(
-				query("SELECT set_config('app.auth_email', $1, true)").bind(email),
+				query(
+					"SELECT set_config('app.current_user_id', $1, true),
+					        set_config('app.current_organization_id', $2, true),
+					        set_config('app.platform_isolation_bypass', 'true', true),
+					        set_config('app.auth_email', $3, true)",
+				)
+				.bind(SYSTEM_USER_ID)
+				.bind(SYSTEM_ORG_ID)
+				.bind(email),
 			)
 			.await
 		{
@@ -1250,59 +1248,6 @@ impl UserBmc {
 		};
 		mm.dbx().commit_txn().await.map_err(Error::Dbx)?;
 		Ok((users.len() == 1).then(|| users.remove(0)))
-	}
-
-	async fn auth_login_by_email_and_organization_exact(
-		mm: &ModelManager,
-		email: &str,
-		organization_id: Uuid,
-	) -> Result<Option<UserForLogin>> {
-		let mm = mm.new_with_txn()?;
-		mm.dbx().begin_txn().await.map_err(Error::Dbx)?;
-		if let Err(err) = mm
-			.dbx()
-			.execute(
-				query("SELECT set_config('app.auth_email', $1, true)").bind(email),
-			)
-			.await
-		{
-			mm.dbx().rollback_txn().await.map_err(Error::Dbx)?;
-			return Err(err.into());
-		}
-		let user = match mm
-			.dbx()
-			.fetch_optional(
-				sqlx::query_as::<_, UserForLogin>(
-					r#"
-				SELECT id, organization_id, email, username,
-				       lower(trim(role)) AS role, must_change_password,
-				       pwd, pwd_salt, token_salt
-				FROM users
-				WHERE lower(btrim(email)) = $1
-				  AND organization_id = $2
-				  AND active = true
-				  AND EXISTS (
-					  SELECT 1 FROM organizations o
-					  WHERE o.id = users.organization_id AND o.active = true
-				  )
-				  AND (access_start_at IS NULL OR access_start_at <= now())
-				  AND (access_end_at IS NULL OR access_end_at >= now())
-				LIMIT 1
-				"#,
-				)
-				.bind(email)
-				.bind(organization_id),
-			)
-			.await
-		{
-			Ok(user) => user,
-			Err(err) => {
-				mm.dbx().rollback_txn().await.map_err(Error::Dbx)?;
-				return Err(err.into());
-			}
-		};
-		mm.dbx().commit_txn().await.map_err(Error::Dbx)?;
-		Ok(user)
 	}
 }
 

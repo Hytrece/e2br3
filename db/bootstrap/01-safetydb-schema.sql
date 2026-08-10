@@ -85,13 +85,12 @@ CREATE TABLE IF NOT EXISTS users (
     )
 );
 
--- An identity may be provisioned once per organization.  The same email and
--- username are therefore valid in separate organizations but remain unique
--- within each tenant.
-CREATE UNIQUE INDEX IF NOT EXISTS users_organization_email_unique
-    ON users (organization_id, lower(btrim(email)));
-CREATE UNIQUE INDEX IF NOT EXISTS users_organization_username_unique
-    ON users (organization_id, lower(btrim(username)));
+-- A login identity is global. Organization access is granted through
+-- user_organization_memberships, not by duplicating the users row.
+CREATE UNIQUE INDEX IF NOT EXISTS users_email_unique
+    ON users (lower(btrim(email)));
+CREATE UNIQUE INDEX IF NOT EXISTS users_username_unique
+    ON users (lower(btrim(username)));
 
 CREATE TABLE IF NOT EXISTS user_organization_memberships (
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -2197,7 +2196,7 @@ CREATE POLICY users_org_isolation_select ON users
     USING (
         organization_id = current_organization_id()
         OR is_current_user_admin()
-        OR lower(btrim(email)) = lower(btrim(current_setting('app.auth_email', true)))
+        OR id = NULLIF(current_setting('app.current_user_id', true), '')::UUID
     );
 
 -- Only admins can create/update/delete users
@@ -2258,13 +2257,6 @@ CREATE POLICY orgs_select ON organizations
             WHERE membership.organization_id = organizations.id
               AND membership.user_id = NULLIF(current_setting('app.current_user_id', true), '')::UUID
               AND membership.active = true
-        )
-        OR EXISTS (
-            SELECT 1
-            FROM users same_email_user
-            WHERE same_email_user.organization_id = organizations.id
-              AND lower(btrim(same_email_user.email)) = lower(btrim(current_setting('app.auth_email', true)))
-              AND same_email_user.active = true
         )
     );
 

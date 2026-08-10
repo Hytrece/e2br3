@@ -505,7 +505,7 @@ pub async fn update_current_user_organization(
 	)
 	.await?
 	.ok_or_else(|| Error::AccessDenied {
-		required_role: "same_email_organization_account".to_string(),
+		required_role: "active_organization_membership".to_string(),
 	})?;
 	token::set_token_cookie(
 		&cookies,
@@ -556,7 +556,7 @@ pub async fn get_current_user_routing(
 		)
 		.await?
 		.ok_or_else(|| Error::AccessDenied {
-			required_role: "same_email_organization_account".to_string(),
+			required_role: "active_organization_membership".to_string(),
 		})?;
 		Ctx::new(
 			target_account.id,

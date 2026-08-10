@@ -19,7 +19,10 @@ pub(super) async fn user_views(
 		UserBmc::role_assignments_for_users(ctx, mm, &user_ids).await?;
 	users
 		.into_iter()
-		.map(|user| {
+		.map(|mut user| {
+			if user.id == ctx.user_id() {
+				user.organization_id = ctx.organization_id();
+			}
 			let role = role_assignments
 				.get(&(user.id, user.organization_id))
 				.copied()
