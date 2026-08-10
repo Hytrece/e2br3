@@ -3,16 +3,7 @@ use libxml::xpath::Context;
 
 pub(super) fn run(xpath: &mut Context, errors: &mut Vec<XmlValidationError>) {
 	let now = time::OffsetDateTime::now_utc();
-	let now = format!(
-		"{:04}{:02}{:02}{:02}{:02}{:02}",
-		now.year(),
-		now.month() as u8,
-		now.day(),
-		now.hour(),
-		now.minute(),
-		now.second()
-	);
-	c_1_2(xpath, errors, &now);
+	c_1_2(xpath, errors, now);
 	r0009(xpath, errors);
 	r0010(xpath, errors);
 	r0012(xpath, errors);
@@ -55,8 +46,18 @@ pub(super) fn run(xpath: &mut Context, errors: &mut Vec<XmlValidationError>) {
 	c_3_4_8(xpath, errors);
 }
 
-fn c_1_2(xpath: &mut Context, errors: &mut Vec<XmlValidationError>, now: &str) {
-	reject(xpath, errors, "C.1.2", &format!("//hl7:PORR_IN049016UV/hl7:controlActProcess/hl7:effectiveTime/@value[number(substring(.,1,14)) > {now}]"), true);
+fn c_1_2(
+	xpath: &mut Context,
+	errors: &mut Vec<XmlValidationError>,
+	now: time::OffsetDateTime,
+) {
+	super::reject_future_datetime(
+		xpath,
+		errors,
+		"C.1.2",
+		"//hl7:PORR_IN049016UV/hl7:controlActProcess/hl7:effectiveTime/@value",
+		now,
+	);
 }
 
 fn r0009(xpath: &mut Context, errors: &mut Vec<XmlValidationError>) {
@@ -313,6 +314,17 @@ mod tests {
 		xpath.register_namespace("hl7", "urn:hl7-org:v3").unwrap();
 		let mut errors = vec![];
 		r0021(&mut xpath, &mut errors);
+		assert!(errors.is_empty());
+	}
+
+	#[test]
+	fn offset_timestamp_is_compared_as_instant() {
+		let doc = Parser::default().parse_string(br#"<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3"><PORR_IN049016UV><controlActProcess><effectiveTime value="20260810172527+0900"/></controlActProcess></PORR_IN049016UV></MCCI_IN200100UV01>"#).unwrap();
+		let mut xpath = Context::new(&doc).unwrap();
+		xpath.register_namespace("hl7", "urn:hl7-org:v3").unwrap();
+		let mut errors = vec![];
+		let now = super::super::parse_hl7_datetime("20260810113146").unwrap();
+		c_1_2(&mut xpath, &mut errors, now);
 		assert!(errors.is_empty());
 	}
 

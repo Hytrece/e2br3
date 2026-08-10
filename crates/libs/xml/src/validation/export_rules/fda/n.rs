@@ -6,17 +6,8 @@ pub(super) fn run(xpath: &mut Context, errors: &mut Vec<XmlValidationError>) {
 	r0007(xpath, errors);
 	r0100(xpath, errors);
 	let now = time::OffsetDateTime::now_utc();
-	let now = format!(
-		"{:04}{:02}{:02}{:02}{:02}{:02}",
-		now.year(),
-		now.month() as u8,
-		now.day(),
-		now.hour(),
-		now.minute(),
-		now.second()
-	);
-	n_1_5(xpath, errors, &now);
-	n_2_r_4(xpath, errors, &now);
+	n_1_5(xpath, errors, now);
+	n_2_r_4(xpath, errors, now);
 }
 
 fn r0006(xpath: &mut Context, errors: &mut Vec<XmlValidationError>) {
@@ -31,12 +22,32 @@ fn r0100(xpath: &mut Context, errors: &mut Vec<XmlValidationError>) {
 	reject(xpath, errors, "R0100", "/hl7:MCCI_IN200100UV01/hl7:PORR_IN049016UV[hl7:sender/hl7:device/hl7:id/@extension != /hl7:MCCI_IN200100UV01/hl7:sender/hl7:device/hl7:id/@extension]", true);
 }
 
-fn n_1_5(xpath: &mut Context, errors: &mut Vec<XmlValidationError>, now: &str) {
-	reject(xpath, errors, "N.1.5", &format!("/hl7:MCCI_IN200100UV01/hl7:creationTime/@value[number(substring(.,1,14)) > {now}]"), true);
+fn n_1_5(
+	xpath: &mut Context,
+	errors: &mut Vec<XmlValidationError>,
+	now: time::OffsetDateTime,
+) {
+	super::reject_future_datetime(
+		xpath,
+		errors,
+		"N.1.5",
+		"/hl7:MCCI_IN200100UV01/hl7:creationTime/@value",
+		now,
+	);
 }
 
-fn n_2_r_4(xpath: &mut Context, errors: &mut Vec<XmlValidationError>, now: &str) {
-	reject(xpath, errors, "N.2.r.4", &format!("/hl7:MCCI_IN200100UV01/hl7:PORR_IN049016UV/hl7:creationTime/@value[number(substring(.,1,14)) > {now}]"), true);
+fn n_2_r_4(
+	xpath: &mut Context,
+	errors: &mut Vec<XmlValidationError>,
+	now: time::OffsetDateTime,
+) {
+	super::reject_future_datetime(
+		xpath,
+		errors,
+		"N.2.r.4",
+		"/hl7:MCCI_IN200100UV01/hl7:PORR_IN049016UV/hl7:creationTime/@value",
+		now,
+	);
 }
 
 fn reject(
@@ -86,7 +97,24 @@ mod tests {
 		let mut xpath = Context::new(&doc).unwrap();
 		xpath.register_namespace("hl7", "urn:hl7-org:v3").unwrap();
 		let mut errors = vec![];
-		n_1_5(&mut xpath, &mut errors, "20260807120000");
+		let now = super::super::parse_hl7_datetime("20260807120000").unwrap();
+		n_1_5(&mut xpath, &mut errors, now);
 		assert_eq!(errors[0].code.as_deref(), Some("N.1.5"));
+	}
+
+	#[test]
+	fn offset_timestamp_is_compared_as_instant() {
+		let doc = Parser::default()
+			.parse_string(
+				br#"<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3"><creationTime value="20260810174219+0900"/><PORR_IN049016UV><creationTime value="20260810172527+0900"/></PORR_IN049016UV></MCCI_IN200100UV01>"#,
+			)
+			.unwrap();
+		let mut xpath = Context::new(&doc).unwrap();
+		xpath.register_namespace("hl7", "urn:hl7-org:v3").unwrap();
+		let mut errors = vec![];
+		let now = super::super::parse_hl7_datetime("20260810113146").unwrap();
+		n_1_5(&mut xpath, &mut errors, now);
+		n_2_r_4(&mut xpath, &mut errors, now);
+		assert!(errors.is_empty());
 	}
 }
