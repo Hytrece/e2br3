@@ -51,6 +51,25 @@ class CaseEditorInputFuzzerTests(unittest.TestCase):
         self.assertEqual(fuzzer.candidate_count({"roundTripValue": 1}, 17), 8)
         self.assertEqual(fuzzer.candidate_count({"roundTripValue": ["x"]}, 17), 14)
 
+    def test_nullflavor_error_candidates_and_value_conflict(self) -> None:
+        field = {
+            "code": "D.1.nullFlavor",
+            "payloadPath": "patientBirthDateNullFlavor",
+            "roundTripValue": "UNK",
+            "constraint": {"status": "verified", "invalidValue": "ZZZ"},
+            "_allowedNullFlavors": ["UNK"],
+            "_nullFlavorPartnerPath": "patientBirthDate",
+            "_nullFlavorPartnerValue": "20000101",
+        }
+        rng = random.Random(1)
+        self.assertEqual(fuzzer.candidate_count(field, 17), 14)
+        for ordinal in (0, 5, 8, 9, 10, 11, 12):
+            self.assertTrue(fuzzer.nullflavor_invalid_candidate(field, fuzzer.field_value(field, rng, ordinal)))
+        mutation = {"patientBirthDateNullFlavor": "UNK"}
+        self.assertTrue(fuzzer.add_nullflavor_partner(field, mutation, 13))
+        self.assertEqual(mutation["patientBirthDate"], "20000101")
+        self.assertEqual(fuzzer.candidate_kind(field, 13), "nullflavor_with_value")
+
 
 if __name__ == "__main__":
     unittest.main()

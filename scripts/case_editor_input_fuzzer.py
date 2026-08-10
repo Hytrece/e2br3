@@ -80,6 +80,7 @@ NESTED_AUDIT_TABLES = {
 BASE_CANDIDATES = 8
 STRING_CANDIDATES = 14
 LENGTH_CANDIDATES = 17
+NULLFLAVOR_CANDIDATES = 14
 MAX_LENGTH_RE = re.compile(
     r'max_length\(\s*&mut issues,\s*"([^"]+)",\s*input\.value,\s*(\d+)',
     re.DOTALL,
@@ -90,6 +91,13 @@ CANDIDATE_KINDS = (
     "unicode_rtl", "unicode_zero_width", "unicode_emoji_sequence",
     "unicode_lone_surrogate", "encoding_edges", "length_max",
     "length_max_plus_one", "length_oversize",
+)
+NULLFLAVOR_CANDIDATE_KINDS = (
+    "nullflavor_verified_invalid", "nullflavor_null", "nullflavor_allowed",
+    "nullflavor_alternate", "nullflavor_blank", "nullflavor_unknown",
+    "nullflavor_number", "nullflavor_object", "nullflavor_disallowed_token",
+    "nullflavor_lowercase", "nullflavor_overlong", "nullflavor_array",
+    "nullflavor_boolean", "nullflavor_with_value",
 )
 
 
@@ -227,7 +235,19 @@ def field_value(field: dict[str, Any], rng: random.Random, ordinal: int) -> Any:
             return "nullflavor-not-valid"
         if ordinal == 6:
             return 1
-        return {"unexpected": "nullFlavor"}
+        if ordinal == 7:
+            return {"unexpected": "nullFlavor"}
+        if ordinal == 8:
+            return next((token for token in NULL_FLAVOR_TOKENS if token not in allowed), "ZZZ")
+        if ordinal == 9:
+            return str(baseline).lower()
+        if ordinal == 10:
+            return "NULLFLAVOR-" + "X" * 128
+        if ordinal == 11:
+            return [baseline]
+        if ordinal == 12:
+            return True
+        return baseline
     if ordinal == 0 and invalid is not None:
         return invalid
     if ordinal == 1:
@@ -298,15 +318,25 @@ def field_value(field: dict[str, Any], rng: random.Random, ordinal: int) -> Any:
 def candidate_count(field: dict[str, Any], requested: int) -> int:
     baseline = field.get("roundTripValue")
     available = BASE_CANDIDATES
-    if not is_nullflavor_field(field) and isinstance(baseline, (str, list)):
-        available = STRING_CANDIDATES
-    if isinstance(baseline, str) and isinstance(field.get("_maxLength"), int):
+    if is_nullflavor_field(field):
+        available = NULLFLAVOR_CANDIDATES
+    elif isinstance(baseline, str) and isinstance(field.get("_maxLength"), int):
         available = LENGTH_CANDIDATES
+    elif isinstance(baseline, (str, list)):
+        available = STRING_CANDIDATES
     return min(requested, available)
 
 
-def candidate_kind(ordinal: int) -> str:
-    return CANDIDATE_KINDS[ordinal]
+def candidate_kind(field: dict[str, Any], ordinal: int) -> str:
+    return (NULLFLAVOR_CANDIDATE_KINDS if is_nullflavor_field(field) else CANDIDATE_KINDS)[ordinal]
+
+
+def add_nullflavor_partner(field: dict[str, Any], mutation: dict[str, Any], ordinal: int) -> bool:
+    path = field.get("_nullFlavorPartnerPath")
+    if ordinal != 13 or not isinstance(path, str):
+        return False
+    set_path(mutation, path, copy.deepcopy(field.get("_nullFlavorPartnerValue")))
+    return True
 
 
 def length_expectation(field: dict[str, Any], ordinal: int) -> str | None:
@@ -541,6 +571,8 @@ def expand_null_flavor_contracts(
                 continue
             if existing is not None:
                 existing["_allowedNullFlavors"] = allowed
+                existing["_nullFlavorPartnerPath"] = base["payloadPath"]
+                existing["_nullFlavorPartnerValue"] = base.get("roundTripValue", "FUZZ-VALUE")
                 continue
             official_code = base["code"]
             authority = str(base.get("authority", "ICH")).upper()
@@ -570,6 +602,8 @@ def expand_null_flavor_contracts(
                     "payloadPath": payload_path,
                     "nullFlavorPartnerCode": official_code,
                     "_allowedNullFlavors": allowed,
+                    "_nullFlavorPartnerPath": base["payloadPath"],
+                    "_nullFlavorPartnerValue": base.get("roundTripValue", "FUZZ-VALUE"),
                     "_derivedNullFlavor": True,
                     **({"_fixedPayload": fixed_payload} if fixed_payload else {}),
                 }
@@ -908,6 +942,7 @@ def main(args: argparse.Namespace) -> int:
                 candidate = field_value(field, rng, ordinal)
                 mutation = copy.deepcopy(baseline_for([field]))
                 set_path(mutation, leaf_path(payload_path), candidate)
+                nullflavor_with_value = add_nullflavor_partner(field, mutation, ordinal)
                 if page == "DG" and "drugReactionAssessments[]" in payload_path and reaction_id:
                     set_path(mutation, "drugReactionAssessments[].reactionId", reaction_id)
                 if root:
@@ -939,17 +974,18 @@ def main(args: argparse.Namespace) -> int:
                     classification = "INCONCLUSIVE"
                 else:
                     classification = "SERVER_ERROR" if status >= 500 else "UNEXPECTED_STATUS"
-                invalid_nullflavor = nullflavor_invalid_candidate(field, candidate)
+                invalid_nullflavor = nullflavor_invalid_candidate(field, candidate) or nullflavor_with_value
                 expectation = length_expectation(field, ordinal)
                 detail: dict[str, Any] = {
                     "candidate": redacted(candidate),
-                    "candidate_kind": candidate_kind(ordinal),
+                    "candidate_kind": candidate_kind(field, ordinal),
                     "rule_code": field.get("constraint", {}).get("ruleCode"),
                 }
                 if expectation:
                     detail.update({"expected_outcome": expectation, "max_length": field["_maxLength"]})
                 if is_nullflavor_field(field):
                     detail["nullflavor_expected_reject"] = invalid_nullflavor
+                    detail["nullflavor_value_conflict"] = nullflavor_with_value
                 if status == 200:
                     read_status, actual = readback(page, owner, projection_leaf(field, owner), row_route, row_ids.get(owner))
                     detail.update({"readback_status": read_status, "readback": redacted(actual), "row_id_present": bool(row_ids.get(owner))})
@@ -1067,7 +1103,7 @@ def main(args: argparse.Namespace) -> int:
     with artifact.open("w", encoding="utf-8") as handle:
         for event in events:
             handle.write(json.dumps({"seed": args.seed, "commit": commit_sha(), **asdict(event)}, sort_keys=True) + "\n")
-        handle.write(json.dumps({"kind": "run", "seed": args.seed, "cases": len(events), "interrupted": interrupted, "artifact": str(artifact), "contract": str(contract_path), "candidate_schema_version": 2, "derived_null_flavors": derived_null_flavors, "max_length_fields": max_length_fields, "null_flavor_only": args.null_flavor_only, "surface": "api", "validator_excluded": not args.run_gates, "frontend_gate": "run" if args.run_gates else "not_run"}, sort_keys=True) + "\n")
+        handle.write(json.dumps({"kind": "run", "seed": args.seed, "cases": len(events), "interrupted": interrupted, "artifact": str(artifact), "contract": str(contract_path), "candidate_schema_version": 3, "derived_null_flavors": derived_null_flavors, "max_length_fields": max_length_fields, "null_flavor_only": args.null_flavor_only, "surface": "api", "validator_excluded": not args.run_gates, "frontend_gate": "run" if args.run_gates else "not_run"}, sort_keys=True) + "\n")
     counts: dict[str, int] = {}
     for event in events:
         counts[event.classification] = counts.get(event.classification, 0) + 1
