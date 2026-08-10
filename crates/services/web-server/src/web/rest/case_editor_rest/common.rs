@@ -99,6 +99,56 @@ pub(super) fn uuid_eq(id: Uuid) -> OpValsValue {
 	OpValsValue::from(vec![OpValValue::Eq(json!(id.to_string()))])
 }
 
+pub(super) async fn next_child_sequence(
+	ctx: &lib_core::ctx::Ctx,
+	mm: &ModelManager,
+	table: &'static str,
+	parent_column: &'static str,
+	parent_id: Uuid,
+	active_only: bool,
+) -> Result<i32> {
+	let deleted_filter = if active_only {
+		" AND deleted = false"
+	} else {
+		""
+	};
+	let sql = format!(
+		"SELECT COALESCE(MAX(sequence_number), 0) + 1 FROM {table} WHERE {parent_column} = $1{deleted_filter}"
+	);
+	lib_rest_core::with_rls_read(mm, ctx, |dbx| {
+		Box::pin(async move {
+			dbx.fetch_one(sqlx::query_as::<_, (i32,)>(&sql).bind(parent_id))
+				.await
+				.map_err(lib_core::model::Error::from)
+				.map_err(Error::from)
+				.map(|(sequence,)| sequence)
+		})
+	})
+	.await
+}
+
+pub(super) fn child_row_has_content(row: &Map<String, Value>) -> bool {
+	row.iter().any(|(key, value)| {
+		if matches!(
+			key.as_str(),
+			"id" | "deleted"
+				| "_delete" | "sequenceNumber"
+				| "drugReactionAssessmentId"
+				| "reactionId"
+				| "_deleteAssessment"
+		) {
+			return false;
+		}
+		match value {
+			Value::Null => false,
+			Value::String(value) => !value.trim().is_empty(),
+			Value::Array(values) => !values.is_empty(),
+			Value::Object(values) => !values.is_empty(),
+			Value::Bool(_) | Value::Number(_) => true,
+		}
+	})
+}
+
 pub(super) fn direct_section_response(
 	case_id: Uuid,
 	data: Value,

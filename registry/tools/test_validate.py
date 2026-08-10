@@ -720,9 +720,7 @@ pub struct PatientInformation {
             "\n".join(result.errors),
         )
 
-    def test_unmapped_null_flavor_columns_are_not_reported_as_missing(self):
-        # The in-band pattern derives the flavor from the base field at the API layer,
-        # so an unmapped support column must stay opt-in rather than demand a row.
+    def test_null_flavor_column_requires_its_base_element_mapping(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             source_dir = root / "crates/libs/lib-core/src/model"
@@ -735,7 +733,10 @@ pub struct PatientInformation {
                 backend_models={"PatientInformation": "crates/libs/lib-core/src/model/patient.rs"},
             )
 
-        self.assertNotIn("patient_initial_null_flavor", "\n".join(result.errors))
+        self.assertIn(
+            "missing nullFlavor companion mapping: PatientInformation.patient_initial_null_flavor",
+            "\n".join(result.errors),
+        )
 
     def test_rejects_frontend_field_present_in_source_but_missing_from_registry(self):
         with tempfile.TemporaryDirectory() as tmp:

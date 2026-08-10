@@ -6,7 +6,9 @@ use serde_json::Value;
 pub struct StudyRegistrationNumberForRestCreate {
 	pub sequence_number: i32,
 	pub registration_number: Option<String>,
+	pub registration_number_null_flavor: Option<String>,
 	pub country_code: Option<String>,
+	pub country_code_null_flavor: Option<String>,
 	pub deleted: Option<bool>,
 }
 
@@ -19,7 +21,9 @@ impl StudyRegistrationNumberForRestCreate {
 			study_presave_id,
 			sequence_number: self.sequence_number,
 			registration_number: self.registration_number,
+			registration_number_null_flavor: self.registration_number_null_flavor,
 			country_code: self.country_code,
+			country_code_null_flavor: self.country_code_null_flavor,
 			deleted: self.deleted,
 		}
 	}
@@ -110,7 +114,8 @@ pub async fn create_study_presave(
 				{
 					super::input_contract::fda_ind_detail(row, index)?;
 					if row.sequence_number.is_none()
-						|| row.ind_number.is_none()
+						|| (row.ind_number.is_none()
+							&& row.ind_number_null_flavor.is_none())
 						|| row.deleted
 					{
 						return Err(Error::BadRequest {
@@ -193,21 +198,23 @@ pub async fn list_study_presaves(
 	let ctx = ctx_w.0;
 	let product_ids =
 		parse_scope_filter(query.product_ids.as_deref(), "productIds")?;
+	let show_all = can_manage_all_presaves(&snapshot);
 	with_authorized_presave_collection(&ctx, &snapshot, &mm, |ctx, mm, scope| {
 		Box::pin(async move {
 			let entities = StudyPresaveBmc::list(ctx, mm, None).await?;
 			let products = ProductPresaveBmc::list(ctx, mm, None).await?;
-			let entities =
+			let entities = (if show_all {
+				entities
+			} else {
 				filter_study_presaves_for_scope(scope, entities, &products)
-					.into_iter()
-					.filter(|study| {
-						product_ids.as_ref().is_none_or(|ids| {
-							study
-								.product_presave_id
-								.is_some_and(|id| ids.contains(&id))
-						})
-					})
-					.collect();
+			})
+			.into_iter()
+			.filter(|study| {
+				product_ids.as_ref().is_none_or(|ids| {
+					study.product_presave_id.is_some_and(|id| ids.contains(&id))
+				})
+			})
+			.collect();
 			Ok(rest_ok(entities))
 		})
 	})
@@ -376,7 +383,9 @@ pub struct StudyRegistrationNumberDetailsForUpdate {
 	pub deleted: bool,
 	pub sequence_number: Option<i32>,
 	pub registration_number: Option<String>,
+	pub registration_number_null_flavor: Option<String>,
 	pub country_code: Option<String>,
+	pub country_code_null_flavor: Option<String>,
 }
 
 impl StudyRegistrationNumberDetailsForUpdate {
@@ -384,7 +393,9 @@ impl StudyRegistrationNumberDetailsForUpdate {
 		StudyPresaveRegistrationNumberForUpdate {
 			sequence_number: self.sequence_number,
 			registration_number: self.registration_number,
+			registration_number_null_flavor: self.registration_number_null_flavor,
 			country_code: self.country_code,
+			country_code_null_flavor: self.country_code_null_flavor,
 			deleted: None,
 		}
 	}
@@ -403,7 +414,9 @@ impl StudyRegistrationNumberDetailsForUpdate {
 				}
 			})?,
 			registration_number: self.registration_number,
+			registration_number_null_flavor: self.registration_number_null_flavor,
 			country_code: self.country_code,
+			country_code_null_flavor: self.country_code_null_flavor,
 			deleted: None,
 		})
 	}
@@ -417,6 +430,7 @@ pub struct StudyFdaCrossReportedIndNumberDetailsForUpdate {
 	pub deleted: bool,
 	pub sequence_number: Option<i32>,
 	pub ind_number: Option<String>,
+	pub ind_number_null_flavor: Option<String>,
 }
 
 impl StudyFdaCrossReportedIndNumberDetailsForUpdate {
@@ -424,6 +438,7 @@ impl StudyFdaCrossReportedIndNumberDetailsForUpdate {
 		StudyPresaveFdaCrossReportedIndNumberForUpdate {
 			sequence_number: self.sequence_number,
 			ind_number: self.ind_number,
+			ind_number_null_flavor: self.ind_number_null_flavor,
 			deleted: None,
 		}
 	}
@@ -441,10 +456,8 @@ impl StudyFdaCrossReportedIndNumberDetailsForUpdate {
 							.to_string(),
 				}
 			})?,
-			ind_number: self.ind_number.ok_or_else(|| Error::BadRequest {
-				message: "FDA cross-reported IND create requires ind_number"
-					.to_string(),
-			})?,
+			ind_number: self.ind_number,
+			ind_number_null_flavor: self.ind_number_null_flavor,
 			deleted: None,
 		})
 	}
@@ -798,10 +811,11 @@ async fn preflight_study_fda_cross_reported_ind_number_detail(
 			"study_presave_fda_cross_reported_ind_numbers",
 		)?;
 	} else if !item.deleted
-		&& (item.sequence_number.is_none() || item.ind_number.is_none())
+		&& (item.sequence_number.is_none()
+			|| (item.ind_number.is_none() && item.ind_number_null_flavor.is_none()))
 	{
 		return Err(Error::BadRequest {
-			message: "FDA cross-reported IND create requires sequence_number and ind_number".to_string(),
+			message: "FDA cross-reported IND create requires sequence_number and ind_number or nullFlavor".to_string(),
 		});
 	}
 	Ok(())

@@ -638,6 +638,12 @@ pub fn g_k_4_r_3(input: crate::FieldInput<'_>) -> Vec<crate::InputIssue> {
 /// ICH.G.k.4.r.4.NULLFLAVOR.ALLOWED
 pub fn g_k_4_r_4(input: crate::FieldInput<'_>) -> Vec<crate::InputIssue> {
 	let mut issues = Vec::new();
+	crate::helpers::format(
+		&mut issues,
+		"ICH.G.k.4.r.4.DATE.FORMAT",
+		input.value,
+		crate::FormatName::E2bDatetime,
+	);
 	crate::helpers::null_flavor(
 		&mut issues,
 		"ICH.G.k.4.r.4.NULLFLAVOR.ALLOWED",
@@ -650,6 +656,12 @@ pub fn g_k_4_r_4(input: crate::FieldInput<'_>) -> Vec<crate::InputIssue> {
 /// ICH.G.k.4.r.5.NULLFLAVOR.ALLOWED
 pub fn g_k_4_r_5(input: crate::FieldInput<'_>) -> Vec<crate::InputIssue> {
 	let mut issues = Vec::new();
+	crate::helpers::format(
+		&mut issues,
+		"ICH.G.k.4.r.5.DATE.FORMAT",
+		input.value,
+		crate::FormatName::E2bDatetime,
+	);
 	crate::helpers::null_flavor(
 		&mut issues,
 		"ICH.G.k.4.r.5.NULLFLAVOR.ALLOWED",

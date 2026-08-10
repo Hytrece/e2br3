@@ -410,12 +410,6 @@ async fn apply_ci_rows_patch(
 		],
 	)?;
 
-	let contract_row = rows
-		.iter()
-		.map(|(key, value)| (key.clone(), value.clone()))
-		.collect::<Map<String, Value>>();
-	validate_row_payload("CI", "CI", &contract_row, None)?;
-
 	if let Some(row) = optional_row_object("CI", rows, "safetyReportIdentification")?
 	{
 		fn patch_string(
@@ -425,6 +419,9 @@ async fn apply_ci_rows_patch(
 			match row.get(key) {
 				None => Ok(PatchValue::Missing),
 				Some(Value::Null) => Ok(PatchValue::Null),
+				Some(Value::String(value)) if value.trim().is_empty() => {
+					Ok(PatchValue::Missing)
+				}
 				Some(Value::String(value)) => Ok(PatchValue::Value(value.clone())),
 				Some(_) => Err(Error::BadRequest {
 					message: format!(
@@ -453,6 +450,9 @@ async fn apply_ci_rows_patch(
 			key: &str,
 		) -> Result<Option<sqlx::types::time::Date>> {
 			let value = row.get(key).cloned().unwrap_or(Value::Null);
+			if value.as_str().is_some_and(|value| value.trim().is_empty()) {
+				return Ok(None);
+			}
 			serde_json::from_value::<CiDatePatchValue>(json!({ "value": value }))
 				.map(|value| value.value)
 				.map_err(|err| Error::BadRequest {
@@ -543,10 +543,7 @@ async fn apply_ci_rows_patch(
 		let patches =
 			serde_json::from_value::<Vec<CiDocumentRowPatch>>(value.clone())
 				.map_err(|err| ci_row_error("documentsHeldBySender", err))?;
-		for (index, patch) in patches.into_iter().enumerate() {
-			let sequence_number = patch
-				.sequence_number
-				.unwrap_or_else(|| i32::try_from(index + 1).unwrap_or(i32::MAX));
+		for patch in patches {
 			if let Some(id) = patch.id {
 				let current = DocumentsHeldBySenderBmc::get(ctx, mm, id).await?;
 				if current.case_id != case_id {
@@ -595,7 +592,17 @@ async fn apply_ci_rows_patch(
 						media_type: patch.media_type,
 						representation: patch.representation,
 						compression: patch.compression,
-						sequence_number,
+						sequence_number: patch.sequence_number.unwrap_or(
+							next_child_sequence(
+								ctx,
+								mm,
+								"documents_held_by_sender",
+								"case_id",
+								case_id,
+								true,
+							)
+							.await?,
+						),
 					},
 				)
 				.await?;
@@ -607,7 +614,7 @@ async fn apply_ci_rows_patch(
 		let patches =
 			serde_json::from_value::<Vec<CiOtherIdentifierRowPatch>>(value.clone())
 				.map_err(|err| ci_row_error("otherCaseIdentifiers", err))?;
-		for (index, patch) in patches.into_iter().enumerate() {
+		for patch in patches {
 			if let Some(id) = patch.id {
 				let current = OtherCaseIdentifierBmc::get(ctx, mm, id).await?;
 				if current.case_id != case_id {
@@ -648,8 +655,16 @@ async fn apply_ci_rows_patch(
 					mm,
 					OtherCaseIdentifierForCreate {
 						case_id,
-						sequence_number: patch.sequence_number.unwrap_or_else(
-							|| i32::try_from(index + 1).unwrap_or(i32::MAX),
+						sequence_number: patch.sequence_number.unwrap_or(
+							next_child_sequence(
+								ctx,
+								mm,
+								"other_case_identifiers",
+								"case_id",
+								case_id,
+								true,
+							)
+							.await?,
 						),
 						source_of_identifier: source,
 						case_identifier,
@@ -664,7 +679,7 @@ async fn apply_ci_rows_patch(
 		let patches =
 			serde_json::from_value::<Vec<CiLinkedReportRowPatch>>(value.clone())
 				.map_err(|err| ci_row_error("linkedReports", err))?;
-		for (index, patch) in patches.into_iter().enumerate() {
+		for patch in patches {
 			if let Some(id) = patch.id {
 				let current = LinkedReportNumberBmc::get(ctx, mm, id).await?;
 				if current.case_id != case_id {
@@ -704,8 +719,16 @@ async fn apply_ci_rows_patch(
 					mm,
 					LinkedReportNumberForCreate {
 						case_id,
-						sequence_number: patch.sequence_number.unwrap_or_else(
-							|| i32::try_from(index + 1).unwrap_or(i32::MAX),
+						sequence_number: patch.sequence_number.unwrap_or(
+							next_child_sequence(
+								ctx,
+								mm,
+								"linked_report_numbers",
+								"case_id",
+								case_id,
+								true,
+							)
+							.await?,
 						),
 						linked_report_number,
 					},
@@ -719,7 +742,7 @@ async fn apply_ci_rows_patch(
 		let patches =
 			serde_json::from_value::<Vec<CiSourceDocumentRowPatch>>(value.clone())
 				.map_err(|err| ci_row_error("sourceDocuments", err))?;
-		for (index, patch) in patches.into_iter().enumerate() {
+		for patch in patches {
 			if let Some(id) = patch.id {
 				let current = SourceDocumentBmc::get(ctx, mm, id).await?;
 				if current.case_id != case_id {
@@ -750,8 +773,16 @@ async fn apply_ci_rows_patch(
 						source_document_name: patch.source_document_name,
 						source_document_base64: patch.source_document_base64,
 						source_document_media_type: patch.source_document_media_type,
-						sequence_number: patch.sequence_number.unwrap_or_else(
-							|| i32::try_from(index + 1).unwrap_or(i32::MAX),
+						sequence_number: patch.sequence_number.unwrap_or(
+							next_child_sequence(
+								ctx,
+								mm,
+								"source_documents",
+								"case_id",
+								case_id,
+								false,
+							)
+							.await?,
 						),
 					},
 				)
@@ -1442,7 +1473,7 @@ async fn apply_si_page_rows_patch(
 				),
 			});
 		};
-		for (index, value) in registrations.iter().enumerate() {
+		for (_index, value) in registrations.iter().enumerate() {
 			let registration =
 				as_object(page_id, "studyRegistrationNumbers", value)?;
 			let id = uuid_field(registration, &["id"]);
@@ -1487,19 +1518,29 @@ async fn apply_si_page_rows_patch(
 					.into());
 				}
 				StudyRegistrationNumberBmc::update(ctx, mm, id, update).await?;
-			} else if let Some(registration_number) = update.registration_number {
+			} else if update.registration_number.is_some()
+				|| update.registration_number_null_flavor.is_some()
+			{
 				StudyRegistrationNumberBmc::create(
 					ctx,
 					mm,
 					StudyRegistrationNumberForCreate {
 						study_information_id: study_id,
-						registration_number,
+						registration_number: update.registration_number,
 						registration_number_null_flavor: update
 							.registration_number_null_flavor,
 						country_code: update.country_code,
 						country_code_null_flavor: update.country_code_null_flavor,
-						sequence_number: update.sequence_number.unwrap_or_else(
-							|| i32::try_from(index + 1).unwrap_or(i32::MAX),
+						sequence_number: update.sequence_number.unwrap_or(
+							next_child_sequence(
+								ctx,
+								mm,
+								"study_registration_numbers",
+								"study_information_id",
+								study_id,
+								true,
+							)
+							.await?,
 						),
 					},
 				)
@@ -1517,7 +1558,7 @@ async fn apply_si_page_rows_patch(
 					),
 				});
 			};
-			for (index, value) in numbers.iter().enumerate() {
+			for (_index, value) in numbers.iter().enumerate() {
 				let number = as_object(
 					page_id,
 					"studyInformation.fdaCrossReportedIndNumbers",
@@ -1568,8 +1609,16 @@ async fn apply_si_page_rows_patch(
 							study_information_id: study_id,
 							ind_number: update.ind_number,
 							ind_number_null_flavor: update.ind_number_null_flavor,
-							sequence_number: update.sequence_number.unwrap_or_else(
-								|| i32::try_from(index + 1).unwrap_or(i32::MAX),
+							sequence_number: update.sequence_number.unwrap_or(
+								next_child_sequence(
+									ctx,
+									mm,
+									"study_fda_cross_reported_inds",
+									"study_information_id",
+									study_id,
+									true,
+								)
+								.await?,
 							),
 						},
 					)
@@ -1678,6 +1727,9 @@ async fn apply_dm_page_rows_patch(
 		let Some(value) = value_at_path(row, paths) else {
 			return Ok(None);
 		};
+		if value.as_str().is_some_and(|value| value.trim().is_empty()) {
+			return Ok(None);
+		}
 		serde_json::from_value::<CiDatePatchValue>(json!({"value": value}))
 			.map(|parsed| parsed.value)
 			.map_err(|err| Error::BadRequest {
@@ -1896,7 +1948,7 @@ async fn apply_dm_page_rows_patch(
 				),
 			});
 		};
-		for (index, value) in episodes.iter().enumerate() {
+		for (_index, value) in episodes.iter().enumerate() {
 			let episode = as_object(page_id, "medicalHistoryEpisodes", value)?;
 			let id = uuid_field(episode, &["id"]);
 			if bool_field(episode, &["deleted"]) == Some(true) {
@@ -1949,9 +2001,17 @@ async fn apply_dm_page_rows_patch(
 					MedicalHistoryEpisodeForCreate {
 						patient_id,
 						sequence_number: i32_field(episode, &["sequenceNumber"])
-							.unwrap_or_else(|| {
-								i32::try_from(index + 1).unwrap_or(i32::MAX)
-							}),
+							.unwrap_or(
+								next_child_sequence(
+									ctx,
+									mm,
+									"medical_history_episodes",
+									"patient_id",
+									patient_id,
+									true,
+								)
+								.await?,
+							),
 						meddra_code,
 						start_date_null_flavor,
 						continuing_null_flavor,
@@ -1970,7 +2030,7 @@ async fn apply_dm_page_rows_patch(
 				message: format!("{page_id}.patientIdentifiers must be an array"),
 			});
 		};
-		for (index, value) in identifier_rows.iter().enumerate() {
+		for (_index, value) in identifier_rows.iter().enumerate() {
 			let identifier = as_object(page_id, "patientIdentifiers", value)?;
 			let id = uuid_field(identifier, &["id"]);
 			if bool_field(identifier, &["deleted"]) == Some(true) {
@@ -2004,9 +2064,17 @@ async fn apply_dm_page_rows_patch(
 					PatientIdentifierForCreate {
 						patient_id,
 						sequence_number: i32_field(identifier, &["sequenceNumber"])
-							.unwrap_or_else(|| {
-								i32::try_from(index + 1).unwrap_or(i32::MAX)
-							}),
+							.unwrap_or(
+								next_child_sequence(
+									ctx,
+									mm,
+									"patient_identifiers",
+									"patient_id",
+									patient_id,
+									true,
+								)
+								.await?,
+							),
 						identifier_type_code,
 						identifier_value: update.identifier_value,
 						identifier_value_null_flavor: update
@@ -2089,7 +2157,7 @@ async fn apply_dm_page_rows_patch(
 				message: format!("{page_id}.reportedCauses must be an array"),
 			});
 		};
-		for (index, value) in causes.iter().enumerate() {
+		for (_index, value) in causes.iter().enumerate() {
 			let cause = as_object(page_id, "reportedCauses", value)?;
 			let id = uuid_field(cause, &["id"]);
 			if bool_field(cause, &["deleted"]) == Some(true) {
@@ -2112,9 +2180,17 @@ async fn apply_dm_page_rows_patch(
 					ReportedCauseOfDeathForCreate {
 						death_info_id,
 						sequence_number: i32_field(cause, &["sequenceNumber"])
-							.unwrap_or_else(|| {
-								i32::try_from(index + 1).unwrap_or(i32::MAX)
-							}),
+							.unwrap_or(
+								next_child_sequence(
+									ctx,
+									mm,
+									"reported_causes_of_death",
+									"death_info_id",
+									death_info_id,
+									true,
+								)
+								.await?,
+							),
 						meddra_version: update.meddra_version,
 						meddra_code: update.meddra_code,
 						comments: update.comments,
@@ -2131,7 +2207,7 @@ async fn apply_dm_page_rows_patch(
 				message: format!("{page_id}.autopsyCauses must be an array"),
 			});
 		};
-		for (index, value) in causes.iter().enumerate() {
+		for (_index, value) in causes.iter().enumerate() {
 			let cause = as_object(page_id, "autopsyCauses", value)?;
 			let id = uuid_field(cause, &["id"]);
 			if bool_field(cause, &["deleted"]) == Some(true) {
@@ -2154,9 +2230,17 @@ async fn apply_dm_page_rows_patch(
 					AutopsyCauseOfDeathForCreate {
 						death_info_id,
 						sequence_number: i32_field(cause, &["sequenceNumber"])
-							.unwrap_or_else(|| {
-								i32::try_from(index + 1).unwrap_or(i32::MAX)
-							}),
+							.unwrap_or(
+								next_child_sequence(
+									ctx,
+									mm,
+									"autopsy_causes_of_death",
+									"death_info_id",
+									death_info_id,
+									true,
+								)
+								.await?,
+							),
 						meddra_version: update.meddra_version,
 						meddra_code: update.meddra_code,
 						comments: update.comments,
@@ -2307,7 +2391,7 @@ async fn apply_dm_page_rows_patch(
 				"{page_id}.parentInfo is required before parent medical history"
 			),
 		})?;
-		for (index, value) in history_rows.iter().enumerate() {
+		for (_index, value) in history_rows.iter().enumerate() {
 			let history = as_object(page_id, "parentMedicalHistory", value)?;
 			let id = uuid_field(history, &["id"]);
 			if bool_field(history, &["deleted"]) == Some(true) {
@@ -2353,9 +2437,17 @@ async fn apply_dm_page_rows_patch(
 					ParentMedicalHistoryForCreate {
 						parent_id,
 						sequence_number: i32_field(history, &["sequenceNumber"])
-							.unwrap_or_else(|| {
-								i32::try_from(index + 1).unwrap_or(i32::MAX)
-							}),
+							.unwrap_or(
+								next_child_sequence(
+									ctx,
+									mm,
+									"parent_medical_history",
+									"parent_id",
+									parent_id,
+									true,
+								)
+								.await?,
+							),
 						meddra_code,
 						start_date_null_flavor,
 						continuing_null_flavor,
@@ -2392,7 +2484,7 @@ async fn apply_dm_page_rows_patch(
 				"{page_id}.parentInfo is required before parent past drug history"
 			),
 		})?;
-		for (index, value) in drug_rows.iter().enumerate() {
+		for (_index, value) in drug_rows.iter().enumerate() {
 			let drug = as_object(page_id, "parentPastDrugs", value)?;
 			let id = uuid_field(drug, &["id"]);
 			if bool_field(drug, &["deleted"]) == Some(true) {
@@ -2458,9 +2550,17 @@ async fn apply_dm_page_rows_patch(
 					ParentPastDrugHistoryForCreate {
 						parent_id,
 						sequence_number: i32_field(drug, &["sequenceNumber"])
-							.unwrap_or_else(|| {
-								i32::try_from(index + 1).unwrap_or(i32::MAX)
-							}),
+							.unwrap_or(
+								next_child_sequence(
+									ctx,
+									mm,
+									"parent_past_drug_history",
+									"parent_id",
+									parent_id,
+									true,
+								)
+								.await?,
+							),
 						drug_name: update.drug_name,
 						mpid: update.mpid,
 						mpid_version: update.mpid_version,
@@ -2600,7 +2700,17 @@ async fn apply_nr_page_rows_patch(
 					SenderDiagnosisForCreate {
 						narrative_id: narrative.id,
 						sequence_number: i32_field(diagnosis, &["sequenceNumber"])
-							.unwrap_or((index + 1) as i32),
+							.unwrap_or(
+								next_child_sequence(
+									ctx,
+									mm,
+									"sender_diagnoses",
+									"narrative_id",
+									narrative.id,
+									true,
+								)
+								.await?,
+							),
 						diagnosis_meddra_version: string_field(
 							diagnosis,
 							&["diagnosisMeddraVersion"],
@@ -2654,7 +2764,17 @@ async fn apply_nr_page_rows_patch(
 					CaseSummaryInformationForCreate {
 						narrative_id: narrative.id,
 						sequence_number: i32_field(summary, &["sequenceNumber"])
-							.unwrap_or((index + 1) as i32),
+							.unwrap_or(
+								next_child_sequence(
+									ctx,
+									mm,
+									"case_summary_information",
+									"narrative_id",
+									narrative.id,
+									true,
+								)
+								.await?,
+							),
 						language_code: string_field(summary, &["languageCode"]),
 						summary_text: string_field(summary, &["summaryText"]),
 					},

@@ -1159,7 +1159,7 @@ fn c_5_1_r_1(
 		issues,
 		"ICH.C.5.1.r.1.LENGTH.MAX",
 		&path,
-		Some(registration.registration_number.as_str()),
+		registration.registration_number.as_deref(),
 		50,
 	);
 }
@@ -2184,7 +2184,7 @@ fn mfds_receiver_rules(
 		{
 			push_business_violation(
 				issues,
-				trimmed(Some(registration.registration_number.as_str())).is_none()
+				trimmed(registration.registration_number.as_deref()).is_none()
 					|| trimmed(registration.registration_number_null_flavor.as_deref()).is_some(),
 				"MFDS.C.5.1.r.1.NULLFLAVOR.FORBIDDEN",
 				format!("studyInformation.0.registrations.{idx}.registrationNumber"),
@@ -2705,7 +2705,7 @@ mod golden_c1_value_tests {
 		StudyRegistrationNumber {
 			id: Uuid::nil(),
 			study_information_id,
-			registration_number,
+			registration_number: Some(registration_number),
 			registration_number_null_flavor: None,
 			country_code,
 			country_code_null_flavor: None,

@@ -604,8 +604,9 @@
       },
       "roundTripValue": "NASK",
       "constraint": {
-        "status": "not_applicable",
-        "reason": "The field has no Input Contract for reporterEmailNullFlavor."
+        "status": "verified",
+        "ruleCode": "FDA.C.2.r.2.8.NULLFLAVOR.ALLOWED",
+        "invalidValue": "ZZZ"
       },
       "businessValidation": {
         "status": "not_applicable",

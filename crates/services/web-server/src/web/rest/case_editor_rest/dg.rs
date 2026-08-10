@@ -153,6 +153,20 @@ const ASSESSMENT_ALIASES: &[(&str, &[&str])] = &[
 	("dechallenge_result", &["dechallengeResult"]),
 ];
 
+fn reject_unscoped_blind_write(
+	blind_allowed: bool,
+	row: &Map<String, Value>,
+) -> Result<()> {
+	if bool_field(row, &["investigationalProductBlinded"]) == Some(true)
+		&& !blind_allowed
+	{
+		return Err(Error::PermissionDenied {
+			required_permission: "Case.BlindData".to_string(),
+		});
+	}
+	Ok(())
+}
+
 const RELATEDNESS_ALIASES: &[(&str, &[&str])] = &[
 	("source_of_assessment", &["sourceOfAssessment"]),
 	("method_of_assessment", &["methodOfAssessment"]),
@@ -221,7 +235,7 @@ async fn persist_active_substances(
 				)?;
 				DrugActiveSubstanceBmc::update(ctx, mm, id, update).await?;
 			}
-		} else if !deleted {
+		} else if !deleted && child_row_has_content(row) {
 			let model = row_model_value(
 				"DG",
 				"activeSubstances[].",
@@ -231,8 +245,17 @@ async fn persist_active_substances(
 					("drug_id", json!(drug_id)),
 					(
 						"sequence_number",
-						json!(i32_field(row, &["sequenceNumber"])
-							.unwrap_or((index + 1) as i32)),
+						json!(i32_field(row, &["sequenceNumber"]).unwrap_or(
+							next_child_sequence(
+								ctx,
+								mm,
+								"drug_active_substances",
+								"drug_id",
+								drug_id,
+								true,
+							)
+							.await?,
+						)),
 					),
 				],
 			);
@@ -253,6 +276,7 @@ macro_rules! persist_drug_children {
 		$fn_name:ident,
 		key: $key:literal,
 		aliases: $aliases:expr,
+		table: $table:literal,
 		bmc: $bmc:ident,
 		create: $create:ty,
 		update: $update:ty
@@ -310,7 +334,7 @@ macro_rules! persist_drug_children {
 							parse_row_model::<$update>("DG", $key, model)?;
 						$bmc::update(ctx, mm, id, update).await?;
 					}
-				} else if !deleted {
+				} else if !deleted && child_row_has_content(row) {
 					let model = row_model_value(
 						"DG",
 						concat!($key, "[]."),
@@ -324,7 +348,17 @@ macro_rules! persist_drug_children {
 									row,
 									&["sequenceNumber"]
 								)
-								.unwrap_or((index + 1) as i32)),
+								.unwrap_or(
+									next_child_sequence(
+										ctx,
+										mm,
+										$table,
+										"drug_id",
+										drug_id,
+										true,
+									)
+									.await?,
+								)),
 							),
 						],
 					);
@@ -343,6 +377,7 @@ persist_drug_children!(
 	persist_dosage_information,
 	key: "dosageInformation",
 	aliases: DOSAGE_ALIASES,
+	table: "dosage_information",
 	bmc: DosageInformationBmc,
 	create: DosageInformationForCreate,
 	update: DosageInformationForUpdate
@@ -352,6 +387,7 @@ persist_drug_children!(
 	persist_indications,
 	key: "indications",
 	aliases: INDICATION_ALIASES,
+	table: "drug_indications",
 	bmc: DrugIndicationBmc,
 	create: DrugIndicationForCreate,
 	update: DrugIndicationForUpdate
@@ -379,6 +415,11 @@ async fn persist_drug_reaction_assessments(
 				"invalid DG.drug.drugReactionAssessments[{index}] payload: expected an object"
 			),
 		})?;
+		let delete_assessment =
+			bool_field(row, &["_deleteAssessment"]).unwrap_or(false);
+		if !delete_assessment && !child_row_has_content(row) {
+			continue;
+		}
 		let assessment_id = string_field(row, &["drugReactionAssessmentId"])
 			.map(|value| {
 				Uuid::parse_str(&value).map_err(|_| Error::BadRequest {
@@ -424,8 +465,6 @@ async fn persist_drug_reaction_assessments(
 			})?;
 		ReactionBmc::get_in_case(ctx, mm, case_id, reaction_id).await?;
 
-		let delete_assessment =
-			bool_field(row, &["_deleteAssessment"]).unwrap_or(false);
 		if delete_assessment {
 			let assessment = persisted_assessment.ok_or_else(|| Error::BadRequest {
 				message: format!(
@@ -548,8 +587,17 @@ async fn persist_drug_reaction_assessments(
 					("drug_reaction_assessment_id", json!(assessment_id)),
 					(
 						"sequence_number",
-						json!(i32_field(row, &["sequenceNumber"])
-							.unwrap_or((index + 1) as i32)),
+						json!(i32_field(row, &["sequenceNumber"]).unwrap_or(
+							next_child_sequence(
+								ctx,
+								mm,
+								"relatedness_assessments",
+								"drug_reaction_assessment_id",
+								assessment_id,
+								true,
+							)
+							.await?,
+						)),
 					),
 				],
 			);
@@ -953,6 +1001,7 @@ pub async fn create_editor_dg_page_row(
 	Json(request): Json<CaseEditorPagePatchRequest>,
 ) -> Result<(axum::http::StatusCode, Json<Value>)> {
 	let ctx = ctx_w.0;
+	let blind_allowed = snapshot.scope().blind_allowed();
 	lib_rest_core::with_authorized_case_child_mutation(
 		&ctx,
 		&snapshot,
@@ -966,6 +1015,7 @@ pub async fn create_editor_dg_page_row(
 				)?;
 				let row = required_row_object("DG", &request.rows, "drug")?;
 				validate_row_payload("DG", "drug", row, None)?;
+				reject_unscoped_blind_write(blind_allowed, row)?;
 
 				let model = row_model_value(
 					"DG",
@@ -1031,6 +1081,7 @@ pub async fn patch_editor_dg_page_row(
 	Json(request): Json<CaseEditorPagePatchRequest>,
 ) -> Result<(axum::http::StatusCode, Json<Value>)> {
 	let ctx = ctx_w.0;
+	let blind_allowed = snapshot.scope().blind_allowed();
 	lib_rest_core::with_authorized_case_child_mutation(
 		&ctx,
 		&snapshot,
@@ -1046,6 +1097,7 @@ pub async fn patch_editor_dg_page_row(
 
 				let row = required_row_object("DG", &request.rows, "drug")?;
 				validate_row_payload("DG", "drug", row, None)?;
+				reject_unscoped_blind_write(blind_allowed, row)?;
 
 				let model = row_model_value("DG", "", row, DRUG_ROW_ALIASES, &[]);
 				let update = parse_row_model::<DrugInformationForUpdate>(
@@ -1077,6 +1129,22 @@ pub async fn patch_editor_dg_page_row(
 		},
 	)
 	.await
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn blind_write_requires_blind_permission() {
+		let row = serde_json::json!({
+			"investigationalProductBlinded": true
+		});
+		assert!(
+			reject_unscoped_blind_write(false, row.as_object().unwrap()).is_err()
+		);
+		assert!(reject_unscoped_blind_write(true, row.as_object().unwrap()).is_ok());
+	}
 }
 
 repeatable_page_row_delete_restore_handlers!(

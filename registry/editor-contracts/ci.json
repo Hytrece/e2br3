@@ -463,8 +463,9 @@
       },
       "roundTripValue": "NI",
       "constraint": {
-        "status": "not_applicable",
-        "reason": "The catalog has no portable constraint binding for this FDA companion null flavor."
+        "status": "verified",
+        "ruleCode": "FDA.C.1.12.NULLFLAVOR.ALLOWED",
+        "invalidValue": "ZZZ"
       },
       "businessValidation": {
         "status": "not_applicable",

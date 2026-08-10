@@ -612,7 +612,7 @@ pub struct StudyInformationFilter {
 pub struct StudyRegistrationNumber {
 	pub id: Uuid,
 	pub study_information_id: Uuid,
-	pub registration_number: String,
+	pub registration_number: Option<String>,
 	pub registration_number_null_flavor: Option<String>,
 	pub country_code: Option<String>,
 	pub country_code_null_flavor: Option<String>,
@@ -627,7 +627,7 @@ pub struct StudyRegistrationNumber {
 #[derive(Fields, Deserialize)]
 pub struct StudyRegistrationNumberForCreate {
 	pub study_information_id: Uuid,
-	pub registration_number: String,
+	pub registration_number: Option<String>,
 	pub registration_number_null_flavor: Option<String>,
 	pub country_code: Option<String>,
 	pub country_code_null_flavor: Option<String>,

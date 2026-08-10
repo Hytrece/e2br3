@@ -508,6 +508,14 @@ pub(super) fn deny_presave_scope() -> Error {
 	}
 }
 
+pub(super) fn can_manage_all_presaves(snapshot: &AuthorizationSnapshotW) -> bool {
+	snapshot
+		.grants()
+		.iter()
+		.any(|grant| grant.as_str() == "info.edit")
+		|| snapshot.identity().is_platform_administrator()
+}
+
 pub(super) fn presave_case_link_conflict(message: &str) -> Error {
 	model::Error::Conflict {
 		message: message.to_string(),

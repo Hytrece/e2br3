@@ -219,7 +219,7 @@ ALTER TABLE safety_report_identification
 CREATE TABLE study_registration_numbers (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     study_information_id UUID NOT NULL REFERENCES study_information(id) ON DELETE CASCADE,
-    registration_number VARCHAR(50) NOT NULL,
+    registration_number VARCHAR(50),
     registration_number_null_flavor VARCHAR(4) CHECK (registration_number_null_flavor IN ('ASKU', 'NASK')),
     country_code VARCHAR(2),  -- ISO 3166-1 alpha-2
     country_code_null_flavor VARCHAR(4) CHECK (country_code_null_flavor IN ('ASKU', 'NASK')),

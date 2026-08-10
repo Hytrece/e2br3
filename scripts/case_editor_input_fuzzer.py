@@ -1,0 +1,932 @@
+#!/usr/bin/env python3
+"""Seeded case-editor input-contract/save/audit fuzzer.
+
+One synthetic case per run. Each owner row is created once, then one field is
+mutated at a time so audit deltas stay attributable to a single input.
+"""
+
+from __future__ import annotations
+
+import argparse
+import copy
+import hashlib
+import json
+import os
+import random
+import re
+import subprocess
+import sys
+import time
+import uuid
+from dataclasses import asdict, dataclass
+from decimal import Decimal, InvalidOperation
+from pathlib import Path
+from typing import Any
+
+from rbac_rls_blackbox import ApiClient, commit_sha, guard_target, response_summary
+
+
+DEFAULT_CONTRACT = Path(__file__).resolve().parents[1] / "../frontend/E2BR3-frontend/lib/case-editor/generated/editorContracts.json"
+DEFAULT_NULL_FLAVOR_PAIRS = Path(__file__).resolve().parents[1] / "../frontend/E2BR3-frontend/lib/case-save/pages/null-flavor-pairs.ts"
+ROW_PAGES = {"AE": "reaction", "DG": "drug", "DH": "pastDrugHistory", "LB": "testResult", "LR": "literatureReference"}
+NULL_FLAVOR_TOKENS = (
+    "NI", "INV", "DER", "OTH", "NINF", "PINF", "UNC", "MSK",
+    "NA", "UNK", "ASKU", "NAV", "QS", "TRC", "NP",
+)
+AUDIT_TABLES = {
+    "patientInformation": "patient_information",
+    "patientIdentifiers": "patient_identifiers",
+    "medicalHistoryEpisodes": "medical_history_episodes",
+    "reportedCauses": "reported_causes_of_death",
+    "autopsyCauses": "autopsy_causes_of_death",
+    "deathInfo": "patient_death_information",
+    "studyInformation": "study_information",
+    "studyRegistrationNumbers": "study_registration_numbers",
+    "parentInfo": "parent_information",
+    "parentMedicalHistory": "parent_medical_history",
+    "parentPastDrugs": "parent_past_drug_history",
+    "dosageInformation": "dosage_information",
+    "drugInformation": "drug_information",
+    "reactions": "reactions",
+    "reaction": "reactions",
+    "drug": "drug_information",
+    "pastDrugHistory": "past_drug_history",
+    "testResult": "test_results",
+    "literatureReference": "literature_references",
+    "primarySources": "primary_sources",
+    "senderInformation": "sender_information",
+    "receiverInformation": "receiver_information",
+    "messageHeaders": "message_headers",
+    "sourceDocuments": "source_documents",
+    "otherCaseIdentifiers": "other_case_identifiers",
+    "linkedReportNumbers": "linked_report_numbers",
+    "documentsHeldBySender": "documents_held_by_sender",
+    "linkedReports": "linked_report_numbers",
+    "caseSummaryInformation": "case_summary_information",
+    "narrative": "narrative_information",
+    "senderDiagnoses": "sender_diagnoses",
+}
+NESTED_AUDIT_TABLES = {
+    "dosageInformation[]": "dosage_information",
+    "indications[]": "drug_indications",
+    "drugReactionAssessments[]": "relatedness_assessments",
+}
+
+
+@dataclass
+class Event:
+    kind: str
+    field: str | None
+    page: str | None
+    owner: str | None
+    mutation: str | None
+    classification: str
+    http_status: int | None
+    response: dict[str, Any]
+
+
+def unwrap(value: Any) -> Any:
+    if isinstance(value, dict) and set(value) == {"data"}:
+        return value["data"]
+    return value.get("data") if isinstance(value, dict) and "data" in value else value
+
+
+def object_id(value: Any) -> str | None:
+    if isinstance(value, dict):
+        for key in ("id", "caseId", "rowId"):
+            candidate = value.get(key)
+            if isinstance(candidate, str) and re.fullmatch(r"[0-9a-fA-F-]{36}", candidate):
+                return candidate
+        for child in value.values():
+            found = object_id(child)
+            if found:
+                return found
+    if isinstance(value, list):
+        for child in value:
+            found = object_id(child)
+            if found:
+                return found
+    return None
+
+
+def set_path(target: dict[str, Any], path: str, value: Any) -> None:
+    """Set camelCase payload path; [] means one repeat row."""
+    parts = [part for part in path.split(".") if part]
+    if parts and parts[0] == "[]":
+        parts.pop(0)
+    current: Any = target
+    for index, part in enumerate(parts):
+        repeated = part.endswith("[]")
+        key = part[:-2] if repeated else part
+        last = index == len(parts) - 1
+        if repeated:
+            if last:
+                current[key] = value if isinstance(value, list) else [value]
+                return
+            values = current.setdefault(key, [{}])
+            if not isinstance(values, list):
+                values = [{}]
+                current[key] = values
+            if not values:
+                values.append({})
+            current = values[0]
+        elif last:
+            current[key] = value
+        else:
+            child = current.get(key)
+            if not isinstance(child, dict):
+                child = {}
+                current[key] = child
+            current = child
+
+
+def get_path(value: Any, path: str) -> Any:
+    parts = [part for part in path.split(".") if part and part != "[]"]
+    def walk(current: Any, remaining: list[str]) -> Any:
+        if isinstance(current, list):
+            return [walk(item, remaining) for item in current]
+        if not remaining:
+            return current
+        if not isinstance(current, dict):
+            return None
+        part, *rest = remaining
+        if part in current:
+            return walk(current[part], rest)
+        normalized = snake(part)
+        return walk(next((candidate for key, candidate in current.items() if snake(str(key)) == normalized), None), rest)
+
+    return walk(value, parts)
+
+
+def leaf_path(payload_path: str) -> str:
+    return payload_path.removeprefix("[]").lstrip(".")
+
+
+def projection_leaf(field: dict[str, Any], owner: str) -> str:
+    """Use backend projection names for readback/audit, payload names for PATCH."""
+    path = str(field.get("projectionPath") or field.get("payloadPath") or "")
+    for prefix in (f"{owner}[].", f"{owner}."):
+        if path.startswith(prefix):
+            return path[len(prefix) :]
+    return leaf_path(path)
+
+
+def field_value(field: dict[str, Any], rng: random.Random, ordinal: int) -> Any:
+    """Grammar-guided candidates, not arbitrary bytes."""
+    baseline = field.get("roundTripValue")
+    constraint = field.get("constraint", {})
+    invalid = constraint.get("invalidValue")
+    path = field.get("payloadPath", "")
+    code = field.get("code", "")
+    if is_nullflavor_field(field):
+        allowed = tuple(field.get("_allowedNullFlavors", ()))
+        if ordinal == 0:
+            return invalid if invalid is not None else "ZZZ"
+        if ordinal == 1:
+            return None
+        if ordinal == 2:
+            return baseline
+        if ordinal == 3:
+            return next(
+                (token for token in allowed if token != baseline),
+                next(token for token in NULL_FLAVOR_TOKENS if token not in allowed),
+            )
+        if ordinal == 4:
+            return ""
+        if ordinal == 5:
+            return "nullflavor-not-valid"
+        if ordinal == 6:
+            return 1
+        return {"unexpected": "nullFlavor"}
+    if ordinal == 0 and invalid is not None:
+        return invalid
+    if ordinal == 1:
+        return None
+    if ordinal == 2:
+        if isinstance(baseline, bool):
+            return "not-a-boolean"
+        if isinstance(baseline, (int, float)) and not isinstance(baseline, bool):
+            return "not-a-number"
+        return "   "
+    if ordinal == 3:
+        if isinstance(baseline, bool):
+            return rng.choice([True, False])
+        if "date" in code.lower() or "date" in path.lower():
+            return rng.choice(["00000000", "99999999", "not-a-date"])
+        if isinstance(baseline, list):
+            return [f"fuzz-{rng.randrange(1_000_000)}"]
+        if isinstance(baseline, (int, float)) and not isinstance(baseline, bool):
+            return rng.choice([-1, 0, 2**31 - 1, 2**31])
+        return f"<p>fuzz-{rng.randrange(1_000_000)} <strong>rich</strong></p>"
+    if ordinal == 4:
+        return ""
+    if ordinal == 5:
+        if isinstance(baseline, list):
+            return ["한글🙂"]
+        if isinstance(baseline, bool):
+            return 1
+        return f"한글🙂-{rng.randrange(1_000_000)}"
+    if ordinal == 6:
+        if isinstance(baseline, list):
+            return ["\t\n"]
+        if isinstance(baseline, bool):
+            return 0
+        return "\x00\t\n"
+    if ordinal == 7:
+        if isinstance(baseline, list):
+            return {"unexpected": "object"}
+        if isinstance(baseline, bool):
+            return 1
+        if isinstance(baseline, (int, float)) and not isinstance(baseline, bool):
+            return {"unexpected": "object"}
+        return ["unexpected", "array"]
+    if isinstance(baseline, bool):
+        return rng.choice([True, False])
+    if isinstance(baseline, list):
+        return [f"fuzz-{rng.randrange(1_000_000)}"]
+    if isinstance(baseline, (int, float)) and not isinstance(baseline, bool):
+        return rng.randrange(-1000, 1001)
+    length = rng.choice([0, 1, 8, 64, 255, 1024])
+    return "" if length == 0 else "fuzz-" + "".join(rng.choice("abcdef0123456789") for _ in range(max(1, length - 5)))
+
+
+def is_nullflavor_field(field: dict[str, Any]) -> bool:
+    path = str(field.get("payloadPath", ""))
+    code = str(field.get("code", ""))
+    return (
+        field.get("constraint", {}).get("status") == "verified"
+        and ("nullflavor" in path.lower() or "nullflavor" in code.lower())
+    )
+
+
+def nullflavor_invalid_candidate(field: dict[str, Any], candidate: Any) -> bool:
+    if not is_nullflavor_field(field):
+        return False
+    if candidate is None or candidate == "":
+        return False
+    allowed = field.get("_allowedNullFlavors")
+    if allowed:
+        return candidate not in allowed
+    invalid = field.get("constraint", {}).get("invalidValue")
+    return candidate == (invalid if invalid is not None else "ZZZ")
+
+
+def snake(value: str) -> str:
+    value = re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", value)
+    return re.sub(r"[^a-zA-Z0-9]+", "_", value).strip("_").lower()
+
+
+AUDIT_FIELD_ALIASES = {
+    "documentDescription": "title",
+    "includedDocument": "document_base64",
+    "source": "source_of_identifier",
+    "caseIdentifier": "case_identifier",
+    "nullificationAmendmentCode": "nullification_code",
+    "worldwideUniqueId": "worldwide_unique_id",
+    "additionalDocumentsAvailable": "additional_documents_available",
+    "otherCaseIdentifiersExist": "other_case_identifiers_exist",
+    "combinationProductReportIndicator": "combination_product_report_indicator",
+    "localCriteriaReportType": "local_criteria_report_type",
+}
+
+
+def audit_key_matches(changed: dict[str, Any], payload_path: str) -> bool:
+    raw_leaf = leaf_path(payload_path).split(".")[-1]
+    candidates = {snake(raw_leaf), snake(AUDIT_FIELD_ALIASES.get(raw_leaf, raw_leaf))}
+    for key in changed:
+        candidate = snake(str(key))
+        if any(candidate == leaf or candidate in leaf or leaf in candidate for leaf in candidates if leaf):
+            return True
+    return False
+
+
+def audit_log_complete(log: dict[str, Any]) -> bool:
+    """Minimum append-only record shape for Part 11-oriented evidence."""
+    action = log.get("action")
+    required = ("user_id", "organization_id", "created_at", "action", "changed_fields", "prev_hash", "entry_hash")
+    if not all(log.get(key) is not None for key in required):
+        return False
+    changed = log["changed_fields"] if isinstance(log["changed_fields"], dict) else {}
+    old_values = log["old_values"] if isinstance(log["old_values"], dict) else {}
+    new_values = log["new_values"] if isinstance(log["new_values"], dict) else {}
+    return all(
+        isinstance(delta, dict)
+        and "old" in delta
+        and "new" in delta
+        and (action == "CREATE" or key in old_values)
+        and (action == "DELETE" or key in new_values)
+        for key, delta in changed.items()
+    )
+
+
+def redacted(value: Any) -> dict[str, Any]:
+    raw = json.dumps(value, sort_keys=True, default=str)
+    return {"type": type(value).__name__, "length": len(raw), "fingerprint": hashlib.sha256(raw.encode()).hexdigest()[:12]}
+
+
+def values_equal(candidate: Any, actual: Any) -> bool:
+    """Treat API decimal strings (e.g. 64.50) as the numeric input they represent."""
+    if isinstance(actual, list):
+        return any(values_equal(candidate, item) for item in actual)
+    if candidate == actual:
+        return True
+    if isinstance(candidate, (int, float)) and not isinstance(candidate, bool) and isinstance(actual, str):
+        try:
+            return Decimal(str(candidate)) == Decimal(actual)
+        except InvalidOperation:
+            return False
+    return False
+
+
+def is_blank_candidate(value: Any) -> bool:
+    return isinstance(value, str) and not value.strip()
+
+
+def contract_rows(contract: list[dict[str, Any]], page: str) -> list[dict[str, Any]]:
+    return [
+        field
+        for field in next((item["fields"] for item in contract if item["pageId"] == page), [])
+        if field.get("constraint", {}).get("status") == "verified"
+        and field.get("roundTripValue") is not None
+        and field.get("payloadPath")
+    ]
+
+
+def load_null_flavor_pairs(path: Path) -> dict[str, list[dict[str, str]]]:
+    source = path.read_text(encoding="utf-8")
+    match = re.search(r"const PAIRS:[^=]+=\s*(\{.*?\n\});", source, re.DOTALL)
+    if not match:
+        raise ValueError(f"could not parse NullFlavor pairs from {path}")
+    return json.loads(match.group(1))
+
+
+def load_dictionary_null_flavors(root: Path) -> dict[str, list[str]]:
+    result: dict[str, list[str]] = {}
+    for name in ("ich-e2br3.json", "fda-regional.json", "mfds-regional.json"):
+        value = json.loads((root / "registry/dictionary" / name).read_text(encoding="utf-8"))
+        for entry in value.get("entries", value):
+            flavors = entry.get("null_flavors")
+            if flavors:
+                result[entry["code"]] = flavors
+    return result
+
+
+def replace_path_leaf(path: str, replacement_path: str) -> str:
+    replacement = replacement_path.rsplit(".", 1)[-1]
+    return f"{path.rsplit('.', 1)[0]}.{replacement}" if "." in path else replacement
+
+
+def null_flavor_projection(base: dict[str, Any], pair: dict[str, str]) -> str:
+    path = str(base.get("projectionPath") or base["payloadPath"])
+    prefix, separator, leaf = path.rpartition(".")
+    leaf = leaf.removesuffix("[]")
+    null_leaf = "race_code_null_flavor" if leaf == "race_codes" else f"{leaf}_null_flavor"
+    return f"{prefix}{separator}{null_leaf}"
+
+
+def expand_null_flavor_contracts(
+    contract: list[dict[str, Any]],
+    pairs_by_page: dict[str, list[dict[str, str]]],
+    allowed_by_code: dict[str, list[str]],
+) -> int:
+    identifier_codes = {
+        "gpMedicalRecordNumber": ("D.1.1.1", "1"),
+        "specialistRecordNumber": ("D.1.1.2", "2"),
+        "hospitalRecordNumber": ("D.1.1.3", "3"),
+        "investigationNumber": ("D.1.1.4", "4"),
+    }
+    derived = 0
+    unresolved: list[str] = []
+    for page in contract:
+        page_id = page["pageId"]
+        fields = page["fields"]
+        for pair in pairs_by_page.get(page_id, []):
+            existing = next(
+                (
+                    field
+                    for field in fields
+                    if str(field.get("payloadPath", "")).endswith(pair["nullFlavor"])
+                ),
+                None,
+            )
+            candidates = [
+                field
+                for field in fields
+                if str(field.get("frontendPath", "")).endswith(pair["value"])
+                or str(field.get("payloadPath", "")).removesuffix("[]") == pair["value"]
+            ]
+            base = min(
+                candidates,
+                key=lambda field: (
+                    str(field.get("payloadPath", "")).removesuffix("[]") != pair["value"],
+                    len(str(field.get("frontendPath", ""))),
+                ),
+                default=None,
+            )
+            fixed_payload: dict[str, Any] | None = None
+            if base is None and page_id == "DM" and pair["value"] in identifier_codes:
+                code, identifier_type = identifier_codes[pair["value"]]
+                base = {
+                    "code": code,
+                    "authority": "ICH",
+                    "frontendPath": f"patientInformation.{pair['value']}",
+                    "projectionPath": "patientIdentifiers[].identifier_value",
+                    "patch": {"kind": "rows", "owner": "patientIdentifiers"},
+                    "payloadPath": "[].identifierValue",
+                }
+                fixed_payload = {"identifierTypeCode": identifier_type}
+            if base is None and page_id == "DG" and pair["value"] == "drugReactionAssessments[].resultOfAssessmentKr1":
+                base = {
+                    "code": "G.k.9.i.2.r.3.KR.1",
+                    "authority": "MFDS",
+                    "frontendPath": f"drugs[].{pair['value']}",
+                    "projectionPath": "drug.drugReactionAssessments[].result_of_assessment_kr1",
+                    "patch": {"kind": "row", "owner": "drug"},
+                    "payloadPath": pair["value"],
+                }
+            if base is None:
+                unresolved.append(f"{page_id}:{pair['value']}")
+                continue
+            allowed = allowed_by_code.get(base["code"], [])
+            if not allowed:
+                unresolved.append(f"{page_id}:{base['code']}:dictionary")
+                continue
+            if existing is not None:
+                existing["_allowedNullFlavors"] = allowed
+                continue
+            official_code = base["code"]
+            authority = str(base.get("authority", "ICH")).upper()
+            rule_prefix = official_code if official_code.startswith(f"{authority}.") else f"{authority}.{official_code}"
+            payload_path = (
+                "[].identifierValueNullFlavor"
+                if fixed_payload
+                else replace_path_leaf(base["payloadPath"], pair["nullFlavor"])
+            )
+            projection_path = (
+                "patientIdentifiers[].identifier_value_null_flavor"
+                if fixed_payload
+                else null_flavor_projection(base, pair)
+            )
+            fields.append(
+                {
+                    **base,
+                    "code": f"{official_code}.nullFlavor",
+                    "frontendPath": replace_path_leaf(base["frontendPath"], pair["nullFlavor"]),
+                    "projectionPath": projection_path,
+                    "roundTripValue": allowed[0],
+                    "constraint": {
+                        "status": "verified",
+                        "ruleCode": f"{rule_prefix}.NULLFLAVOR.ALLOWED",
+                        "invalidValue": "ZZZ",
+                    },
+                    "payloadPath": payload_path,
+                    "nullFlavorPartnerCode": official_code,
+                    "_allowedNullFlavors": allowed,
+                    "_derivedNullFlavor": True,
+                    **({"_fixedPayload": fixed_payload} if fixed_payload else {}),
+                }
+            )
+            derived += 1
+    if unresolved:
+        raise ValueError(f"unresolved NullFlavor pairs: {', '.join(unresolved)}")
+    return derived
+
+
+def baseline_for(fields: list[dict[str, Any]], minimal: bool = False) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    if minimal:
+        concrete = [field for field in fields if not is_nullflavor_field(field)]
+        fields = (concrete or fields)[:2]
+    for field in fields:
+        for path, value in field.get("_fixedPayload", {}).items():
+            set_path(result, path, copy.deepcopy(value))
+        set_path(result, field["payloadPath"], copy.deepcopy(field["roundTripValue"]))
+    return result
+
+
+def owner_patch(owner: str, row: dict[str, Any], array_owner: bool) -> dict[str, Any]:
+    return {owner: [row] if array_owner else row}
+
+
+def authorities_for(fields: list[dict[str, Any]]) -> list[str]:
+    values = {str(field.get("authority", "ICH")).lower() for field in fields}
+    return sorted(values or {"ich"})
+
+
+def extract_row_id(projection: Any, owner: str) -> str | None:
+    rows = projection.get("rows", projection) if isinstance(projection, dict) else projection
+    if isinstance(rows, dict):
+        value = rows.get(owner)
+        if isinstance(value, list) and value:
+            return value[0].get("id") if isinstance(value[0], dict) else None
+        if isinstance(value, dict):
+            return value.get("id")
+    return None
+
+
+def created_row_id(value: Any) -> str | None:
+    if isinstance(value, dict):
+        candidate = value.get("rowId")
+        if isinstance(candidate, str) and re.fullmatch(r"[0-9a-fA-F-]{36}", candidate):
+            return candidate
+        candidate = value.get("id")
+        if isinstance(candidate, str) and re.fullmatch(r"[0-9a-fA-F-]{36}", candidate):
+            return candidate
+        for child in value.values():
+            found = created_row_id(child)
+            if found:
+                return found
+    if isinstance(value, list):
+        for child in value:
+            found = created_row_id(child)
+            if found:
+                return found
+    return None
+
+
+def run_gate(command: list[str], cwd: Path, timeout: float) -> tuple[str, dict[str, Any]]:
+    try:
+        result = subprocess.run(
+            command,
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as error:
+        return "GATE_BLOCKED", {"command": command, "error": type(error).__name__}
+    return (
+        "GATE_PASS" if result.returncode == 0 else "GATE_FAIL",
+        {
+            "command": command,
+            "exit_code": result.returncode,
+            "stdout_fingerprint": hashlib.sha256(result.stdout.encode()).hexdigest()[:12],
+            "stderr_fingerprint": hashlib.sha256(result.stderr.encode()).hexdigest()[:12],
+        },
+    )
+
+
+def main(args: argparse.Namespace) -> int:
+    guard_target(args.base_url, args.allow_remote)
+    if not args.password and not args.dry_run:
+        raise SystemExit("set E2BR3_ADMIN_PASSWORD")
+    contract_path = Path(args.contract).resolve()
+    contract = json.loads(contract_path.read_text())
+    derived_null_flavors = expand_null_flavor_contracts(
+        contract,
+        load_null_flavor_pairs(Path(args.null_flavor_pairs).resolve()),
+        load_dictionary_null_flavors(Path(__file__).resolve().parents[1]),
+    )
+    pages = [page.strip().upper() for page in args.pages.split(",") if page.strip()]
+    rng = random.Random(args.seed)
+    started = time.monotonic()
+    events: list[Event] = []
+    interrupted: str | None = None
+    client = ApiClient(args.base_url, args.timeout)
+    case_id: str | None = None
+    request_count = 0
+    reaction_id: str | None = None
+
+    def page_fields(page: str) -> list[dict[str, Any]]:
+        fields = contract_rows(contract, page)
+        return [field for field in fields if is_nullflavor_field(field)] if args.null_flavor_only else fields
+
+    def add(event: Event) -> None:
+        events.append(event)
+
+    def request(method: str, path: str, payload: dict[str, Any] | None = None) -> tuple[int | None, Any, dict[str, Any]]:
+        nonlocal interrupted, request_count
+        if request_count >= args.max_actions:
+            interrupted = interrupted or "max_actions"
+            return None, None, {}
+        if time.monotonic() - started >= args.deadline_seconds:
+            interrupted = interrupted or "deadline"
+            return None, None, {}
+        request_count += 1
+        status, body, transport = client.request(method, path, payload)
+        summary = response_summary(status, body)
+        try:
+            error_value = json.loads(body)
+            detail = error_value.get("error", {}).get("data", {}).get("detail") if isinstance(error_value, dict) else None
+            if isinstance(detail, dict):
+                for key in ("rule_code", "path", "message"):
+                    if isinstance(detail.get(key), str):
+                        summary[f"error_{key}"] = detail[key] if key != "message" else f"<fp:{hashlib.sha256(detail[key].encode()).hexdigest()[:12]}>"
+        except (UnicodeDecodeError, json.JSONDecodeError, AttributeError):
+            pass
+        if transport:
+            summary["transport_error"] = transport
+            interrupted = interrupted or "transport_error"
+        if status == 429:
+            interrupted = interrupted or "rate_limited"
+        if status is not None and status >= 500:
+            interrupted = interrupted or "server_error"
+        try:
+            value = json.loads(body)
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            value = None
+        return status, unwrap(value), summary
+
+    if args.dry_run:
+        total = 0
+        for page in pages:
+            fields = page_fields(page)
+            groups: dict[str, list[dict[str, Any]]] = {}
+            for field in fields:
+                groups.setdefault(field["patch"]["owner"], []).append(field)
+            total += len(fields) * args.values_per_field
+            print(f"{page}: fields={len(fields)} owners={len(groups)} mutations={len(fields) * args.values_per_field}")
+        print(f"seed={args.seed} total_mutations={total} derived_null_flavors={derived_null_flavors} contract={contract_path}")
+        return 0
+
+    status, _, summary = request(
+        "POST",
+        "/auth/v1/login",
+        {"email": args.email, "pwd": args.password},
+    )
+    add(Event("login", None, None, None, None, "PASS" if status == 200 else "FAIL", status, summary))
+    if status != 200:
+        interrupted = interrupted or "login_failed"
+
+    if not interrupted:
+        status, created, summary = request(
+            "POST",
+            "/api/cases",
+            {"data": {"safetyReportIdentification": {"safetyReportId": f"CASE-FUZZ-{uuid.uuid4()}"}, "status": "draft"}},
+        )
+        case_id = object_id(created)
+        add(Event("create", None, None, None, None, "PASS" if status == 201 and case_id else "FAIL", status, summary))
+        if not case_id:
+            interrupted = interrupted or "case_create_failed"
+
+    chain_before: int | None = None
+    if case_id and not interrupted:
+        status, value, _ = request("GET", "/api/audit-logs/verify-integrity")
+        if status == 200 and isinstance(value, dict):
+            chain_before = value.get("broken_rows", value.get("brokenRows"))
+
+    def audit_logs(owner: str | None = None, row_id: str | None = None, field_path: str = "") -> list[dict[str, Any]]:
+        nested_table = next((table for prefix, table in NESTED_AUDIT_TABLES.items() if field_path.startswith(prefix)), None)
+        if nested_table:
+            status, value, _ = request("GET", f"/api/audit-logs/by-record/cases/{case_id}")
+            if status != 200:
+                return []
+            return [log for log in value if isinstance(log, dict) and log.get("table_name") == nested_table] if isinstance(value, list) else []
+        table = AUDIT_TABLES.get(owner or "")
+        target = f"{table}/{row_id}" if table and row_id else f"cases/{case_id}"
+        status, value, _ = request("GET", f"/api/audit-logs/by-record/{target}")
+        if status != 200:
+            return []
+        if isinstance(value, list):
+            return value
+        logs = value.get("items", value.get("data", value)) if isinstance(value, dict) else []
+        return logs if isinstance(logs, list) else []
+
+    def readback(page: str, owner: str, payload_path: str, row_route: bool, row_id: str | None) -> tuple[int | None, Any]:
+        route = f"/api/cases/{case_id}/editor/pages/{page}"
+        if row_route:
+            status, value, _ = request("GET", f"{route}/rows/{row_id or ''}")
+            current = value.get("data", value) if isinstance(value, dict) else value
+            current = current.get(owner, current) if isinstance(current, dict) else current
+        else:
+            status, value, _ = request("GET", route)
+            rows = value.get("rows", {}) if isinstance(value, dict) else {}
+            current = rows.get(owner) if isinstance(rows, dict) else None
+            if isinstance(current, list):
+                current = next((row for row in current if isinstance(row, dict) and row.get("id") == row_id), current[0] if current else None)
+        return status, get_path(current, leaf_path(payload_path))
+
+    for page in pages:
+        if interrupted or not case_id:
+            break
+        fields = page_fields(page)
+        groups: dict[str, list[dict[str, Any]]] = {}
+        for field in fields:
+            groups.setdefault(field["patch"]["owner"], []).append(field)
+        setup_groups: dict[str, list[dict[str, Any]]] = {}
+        for field in contract_rows(contract, page):
+            setup_groups.setdefault(field["patch"]["owner"], []).append(field)
+        if not fields:
+            add(Event("page", None, page, None, None, "SKIPPED", None, {"reason": "no_verified_contract_fields"}))
+            continue
+        route = f"/api/cases/{case_id}/editor/pages/{page}"
+        row_route = page in ROW_PAGES
+        row_ids: dict[str, str | None] = {}
+        owner_ready: dict[str, bool] = {}
+        owner_items = list(groups.items())
+        if page == "SI":
+            owner_items.sort(key=lambda item: 0 if item[0] == "studyInformation" else 1)
+        if page == "DM":
+            owner_items.sort(key=lambda item: {"patientInformation": 0, "parentInfo": 1}.get(item[0], 2))
+        for owner, owner_fields in owner_items:
+            if page == "CI" and owner == "safetyReportIdentification":
+                status, projection, summary = request("GET", route)
+                row_ids[owner] = extract_row_id(projection, owner) if status == 200 else None
+                owner_ready[owner] = status == 200 and bool(row_ids[owner])
+                add(Event("baseline", None, page, owner, None, "PASS" if owner_ready[owner] else "BASELINE_REJECTED", status, {**summary, "reason": "reuse case-created safety report row"}))
+                continue
+            baseline_fields = [field for field in setup_groups.get(owner, owner_fields) if field.get("code") != "C.1.1"]
+            baseline = baseline_for(baseline_fields, minimal=True)
+            if page == "AE" and owner == "reaction":
+                # AE create contract requires an explicit positive sequence.
+                baseline.setdefault("sequenceNumber", 1)
+                baseline.setdefault("reactionMeddraVersionLLT", "26.0")
+                baseline.setdefault("reactionMeddraCodeLLT", "10000001")
+            if page == "DG" and owner == "drug":
+                baseline.setdefault("drugCharacterization", "1")
+                baseline.setdefault("medicinalProduct", "Fuzz product")
+            if row_route:
+                status, value, summary = request("POST", f"{route}/rows", {"authorities": authorities_for(owner_fields), "rows": {owner: baseline}})
+                row_ids[owner] = created_row_id(value)
+                owner_ready[owner] = status == 201 and bool(row_ids[owner])
+                if page == "AE" and owner == "reaction":
+                    reaction_id = row_ids[owner]
+                add(Event("row_create", None, page, owner, None, "PASS" if status == 201 else "BASELINE_REJECTED", status, summary))
+            else:
+                array_owner = any(str(field["payloadPath"]).startswith("[]") for field in owner_fields)
+                status, _, summary = request("PATCH", route, {"authorities": authorities_for(owner_fields), "rows": owner_patch(owner, baseline, array_owner)})
+                owner_ready[owner] = status == 200
+                add(Event("baseline", None, page, owner, None, "PASS" if status == 200 else "BASELINE_REJECTED", status, summary))
+                status, projection, _ = request("GET", route)
+                if status == 200:
+                    row_ids[owner] = extract_row_id(projection, owner)
+            if interrupted:
+                break
+
+        for field in fields:
+            if interrupted:
+                break
+            owner = field["patch"]["owner"]
+            payload_path = field["payloadPath"]
+            array_owner = str(payload_path).startswith("[]")
+            if not owner_ready.get(owner, False):
+                add(Event("mutation", field["code"], page, owner, None, "SKIPPED_BASELINE", None, {"reason": "owner baseline did not save"}))
+                continue
+            for ordinal in range(args.values_per_field):
+                if interrupted:
+                    break
+                candidate = field_value(field, rng, ordinal)
+                mutation = copy.deepcopy(baseline_for([field]))
+                set_path(mutation, leaf_path(payload_path), candidate)
+                if page == "DG" and "drugReactionAssessments[]" in payload_path and reaction_id:
+                    set_path(mutation, "drugReactionAssessments[].reactionId", reaction_id)
+                if row_ids.get(owner):
+                    mutation["id"] = row_ids[owner]
+                audit_path = projection_leaf(field, owner)
+                logs_before = audit_logs(owner, row_ids.get(owner), audit_path)
+                if row_route:
+                    status, value, summary = request(
+                        "PATCH", f"{route}/rows/{row_ids.get(owner, '')}", {"authorities": authorities_for([field]), "rows": {owner: mutation}}
+                    )
+                else:
+                    status, value, summary = request(
+                        "PATCH", route, {"authorities": authorities_for([field]), "rows": owner_patch(owner, mutation, array_owner)}
+                    )
+                if status == 200:
+                    classification = "SAVE_ACCEPTED"
+                elif status == 422:
+                    classification = "CONSTRAINT_REJECTED"
+                elif status in {400, 401, 403, 404}:
+                    classification = "BACKEND_REJECTED"
+                elif status == 409:
+                    classification = "CONFLICT_REJECTED"
+                elif status is None:
+                    classification = "INCONCLUSIVE"
+                else:
+                    classification = "SERVER_ERROR" if status >= 500 else "UNEXPECTED_STATUS"
+                invalid_nullflavor = nullflavor_invalid_candidate(field, candidate)
+                detail: dict[str, Any] = {"candidate": redacted(candidate), "rule_code": field.get("constraint", {}).get("ruleCode")}
+                if is_nullflavor_field(field):
+                    detail["nullflavor_expected_reject"] = invalid_nullflavor
+                if status == 200:
+                    read_status, actual = readback(page, owner, projection_leaf(field, owner), row_route, row_ids.get(owner))
+                    detail.update({"readback_status": read_status, "readback": redacted(actual), "row_id_present": bool(row_ids.get(owner))})
+                    if read_status != 200:
+                        classification = "INCONCLUSIVE"
+                    elif values_equal(candidate, actual):
+                        logs_after = audit_logs(owner, row_ids.get(owner), audit_path)
+                        changed = [log for log in logs_after if log not in logs_before and isinstance(log, dict)]
+                        changed_fields = [
+                            log.get("changedFields", log.get("changed_fields", {}))
+                            for log in changed
+                            if isinstance(log.get("changedFields", log.get("changed_fields", {})), dict)
+                        ]
+                        field_match = any(audit_key_matches(fields_map, audit_path) for fields_map in changed_fields)
+                        matched_logs = [
+                            log for log in changed
+                            if audit_key_matches(log.get("changedFields", log.get("changed_fields", {})), audit_path)
+                        ]
+                        audit_complete = any(audit_log_complete(log) for log in matched_logs)
+                        if not changed and (
+                            candidate is None
+                            or is_blank_candidate(candidate)
+                            or values_equal(candidate, field.get("roundTripValue"))
+                        ):
+                            classification = "NOOP_ACCEPTED"
+                        elif not changed or not field_match or not audit_complete:
+                            classification = "AUDIT_MISMATCH"
+                        detail.update({"audit_new_logs": len(changed), "audit_field_match": field_match, "audit_complete": audit_complete, "audit_path": audit_path, "audit_changed_keys": sorted({str(key) for fields_map in changed_fields for key in fields_map})})
+                    else:
+                        if is_blank_candidate(candidate):
+                            logs_after = audit_logs(owner, row_ids.get(owner), audit_path)
+                            changed = [log for log in logs_after if log not in logs_before and isinstance(log, dict)]
+                            classification = "AUDIT_MISMATCH" if changed else "SAVE_NORMALIZED"
+                            detail["audit_new_logs"] = len(changed)
+                        else:
+                            classification = "NOOP_ACCEPTED" if candidate is None else "SAVE_READBACK_MISMATCH"
+                elif status == 422:
+                    logs_after = audit_logs(owner, row_ids.get(owner), audit_path)
+                    changed = [log for log in logs_after if log not in logs_before and isinstance(log, dict)]
+                    detail["audit_new_logs"] = len(changed)
+                    if changed:
+                        classification = "AUDIT_MISMATCH"
+                if invalid_nullflavor:
+                    if status in {400, 422}:
+                        classification = "NULLFLAVOR_REJECTED"
+                    elif status == 200:
+                        classification = "FAIL"
+                    elif status is None:
+                        classification = "INCONCLUSIVE"
+                    else:
+                        classification = "UNEXPECTED_STATUS"
+                add(Event("mutation", field["code"], page, owner, f"value_{ordinal}", classification, status, {**summary, **detail}))
+
+    if case_id and not interrupted:
+        status, value, summary = request("GET", "/api/audit-logs/verify-integrity")
+        broken = value.get("broken_rows", value.get("brokenRows")) if isinstance(value, dict) else None
+        if status == 200 and broken == 0:
+            chain_classification = "PASS"
+        elif status == 200 and chain_before is not None and broken == chain_before:
+            chain_classification = "AUDIT_CHAIN_PREEXISTING"
+        else:
+            chain_classification = "AUDIT_MISMATCH"
+        add(Event("audit_chain", None, None, None, None, chain_classification, status, {**summary, "broken_rows": broken, "broken_rows_before": chain_before}))
+
+    if args.run_gates:
+        backend_root = Path(__file__).resolve().parents[1]
+        frontend_root = contract_path.parents[3]
+        classification, detail = run_gate(
+            ["cargo", "test", "-p", "validator", "--lib"],
+            backend_root,
+            args.gate_timeout,
+        )
+        add(Event("validator_gate", None, None, None, None, classification, None, detail))
+        classification, detail = run_gate(
+            [
+                "env",
+                f"E2BR3_BACKEND_ROOT={backend_root}",
+                "npm",
+                "run",
+                "test:editor-contracts",
+                "--",
+                "--runInBand",
+            ],
+            frontend_root,
+            args.gate_timeout,
+        )
+        add(Event("frontend_gate", None, None, None, None, classification, None, detail))
+
+    out_dir = Path(args.artifact_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    artifact = out_dir / f"case-editor-{args.seed}.jsonl"
+    with artifact.open("w", encoding="utf-8") as handle:
+        for event in events:
+            handle.write(json.dumps({"seed": args.seed, "commit": commit_sha(), **asdict(event)}, sort_keys=True) + "\n")
+        handle.write(json.dumps({"kind": "run", "seed": args.seed, "cases": len(events), "interrupted": interrupted, "artifact": str(artifact), "contract": str(contract_path), "derived_null_flavors": derived_null_flavors, "null_flavor_only": args.null_flavor_only, "surface": "api", "validator_excluded": not args.run_gates, "frontend_gate": "run" if args.run_gates else "not_run"}, sort_keys=True) + "\n")
+    counts: dict[str, int] = {}
+    for event in events:
+        counts[event.classification] = counts.get(event.classification, 0) + 1
+    print(f"events={len(events)} counts={json.dumps(counts, sort_keys=True)} artifact={artifact}")
+    return 2 if interrupted else 1 if any(event.classification in {"FAIL", "GATE_FAIL", "SERVER_ERROR", "AUDIT_MISMATCH", "UNEXPECTED_STATUS", "SAVE_READBACK_MISMATCH"} for event in events) else 0
+
+
+def parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--base-url", default=os.getenv("E2BR3_BASE_URL", "http://127.0.0.1:8080"))
+    parser.add_argument("--email", default=os.getenv("E2BR3_ADMIN_EMAIL", "demo.cro.admin@example.com"))
+    parser.add_argument("--password", default=os.getenv("E2BR3_ADMIN_PASSWORD", "welcome"))
+    parser.add_argument("--seed", type=int, default=int(time.time()))
+    # DH needs the DM patient row; create it immediately after DM before later
+    # page mutations can make the case setup harder to authorize.
+    parser.add_argument("--pages", default="CI,RP,SD,LR,SI,DM,DH,NR,AE,LB,DG")
+    parser.add_argument("--values-per-field", type=int, default=5)
+    parser.add_argument("--max-actions", type=int, default=1200)
+    parser.add_argument("--deadline-seconds", type=float, default=180)
+    parser.add_argument("--timeout", type=float, default=20)
+    parser.add_argument("--contract", default=str(DEFAULT_CONTRACT))
+    parser.add_argument("--null-flavor-pairs", default=str(DEFAULT_NULL_FLAVOR_PAIRS))
+    parser.add_argument("--null-flavor-only", action="store_true")
+    parser.add_argument("--artifact-dir", default="tmp/rbac-rls-fuzz/case-editor-contract")
+    parser.add_argument("--allow-remote", action="store_true")
+    parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--run-gates", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument("--gate-timeout", type=float, default=180)
+    return parser
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main(parser().parse_args()))
+    except KeyboardInterrupt:
+        sys.exit(2)

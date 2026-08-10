@@ -261,6 +261,7 @@ macro_rules! reporter {
 		check_text!(
 			"reporterEmail",
 			$data.reporter_email,
+			$data.reporter_email_null_flavor,
 			input_contracts::generated::c::fda_c_2_r_2_8
 		);
 		// ICH.C.2.r.3-4 / MFDS.C.2.r.4.KR.1
@@ -447,11 +448,13 @@ macro_rules! study_parent {
 		check_text!(
 			"studyName",
 			$data.study_name,
+			$data.study_name_null_flavor,
 			input_contracts::generated::c::c_5_2
 		);
 		check_text!(
 			"sponsorStudyNumber",
 			$data.sponsor_study_number,
+			$data.sponsor_study_number_null_flavor,
 			input_contracts::generated::c::c_5_3
 		);
 		check_text!(
@@ -488,20 +491,22 @@ pub(super) fn study_update(data: &StudyPresaveForUpdate) -> Result<()> {
 
 fn registration_values(
 	registration_number: Option<&str>,
+	registration_number_null_flavor: Option<&str>,
 	country_code: Option<&str>,
+	country_code_null_flavor: Option<&str>,
 	path: &str,
 ) -> Result<()> {
 	// ICH.C.5.1.r.1-2
 	check(
 		&format!("{path}.registrationNumber"),
 		text(registration_number),
-		None,
+		registration_number_null_flavor,
 		input_contracts::generated::c::c_5_1_r_1,
 	)?;
 	check(
 		&format!("{path}.countryCode"),
 		text(country_code),
-		None,
+		country_code_null_flavor,
 		input_contracts::generated::c::c_5_1_r_2,
 	)
 }
@@ -512,7 +517,9 @@ pub(super) fn registration_detail(
 ) -> Result<()> {
 	registration_values(
 		data.registration_number.as_deref(),
+		data.registration_number_null_flavor.as_deref(),
 		data.country_code.as_deref(),
+		data.country_code_null_flavor.as_deref(),
 		&format!("registrationNumbers.{index}"),
 	)
 }
@@ -522,7 +529,9 @@ pub(super) fn registration_create(
 ) -> Result<()> {
 	registration_values(
 		data.registration_number.as_deref(),
+		data.registration_number_null_flavor.as_deref(),
 		data.country_code.as_deref(),
+		data.country_code_null_flavor.as_deref(),
 		"registrationNumber",
 	)
 }
@@ -532,7 +541,9 @@ pub(super) fn registration_update(
 ) -> Result<()> {
 	registration_values(
 		data.registration_number.as_deref(),
+		data.registration_number_null_flavor.as_deref(),
 		data.country_code.as_deref(),
+		data.country_code_null_flavor.as_deref(),
 		"registrationNumber",
 	)
 }
@@ -545,7 +556,7 @@ pub(super) fn fda_ind_detail(
 	check(
 		&format!("fdaCrossReportedInds.{index}.indNumber"),
 		text(data.ind_number.as_deref()),
-		None,
+		data.ind_number_null_flavor.as_deref(),
 		input_contracts::generated::c::fda_c_5_6_r,
 	)
 }
@@ -595,6 +606,48 @@ mod tests {
 			reporter_create(&data),
 			Err(Error::ConstraintViolation(_))
 		));
+	}
+
+	#[test]
+	fn presave_null_flavor_pairs_accept_nf_only_and_reject_conflicts() {
+		assert!(reporter_create(&ReporterPresaveForCreate {
+			reporter_email_null_flavor: Some("NASK".into()),
+			..Default::default()
+		})
+		.is_ok());
+		assert!(matches!(
+			reporter_create(&ReporterPresaveForCreate {
+				reporter_email: Some("reporter@example.test".into()),
+				reporter_email_null_flavor: Some("NASK".into()),
+				..Default::default()
+			}),
+			Err(Error::ConstraintViolation(_))
+		));
+		assert!(study_update(&StudyPresaveForUpdate {
+			study_name_null_flavor: Some("ASKU".into()),
+			sponsor_study_number_null_flavor: Some("NASK".into()),
+			..Default::default()
+		})
+		.is_ok());
+		assert!(
+			registration_update(&StudyPresaveRegistrationNumberForUpdate {
+				registration_number_null_flavor: Some("ASKU".into()),
+				country_code_null_flavor: Some("NASK".into()),
+				..Default::default()
+			})
+			.is_ok()
+		);
+		assert!(fda_ind_detail(
+			&StudyFdaCrossReportedIndNumberDetailsForUpdate {
+				id: None,
+				deleted: false,
+				sequence_number: Some(1),
+				ind_number: None,
+				ind_number_null_flavor: Some("NA".into()),
+			},
+			0,
+		)
+		.is_ok());
 	}
 
 	#[test]

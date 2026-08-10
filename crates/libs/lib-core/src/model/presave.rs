@@ -1576,6 +1576,7 @@ pub struct ReporterPresave {
 	pub telephone: Option<String>,
 	pub telephone_null_flavor: Option<String>,
 	pub reporter_email: Option<String>,
+	pub reporter_email_null_flavor: Option<String>,
 	pub country_code: Option<String>,
 	pub qualification: Option<String>,
 	// MFDS.C.2.r.4.KR.1 - Other health professional type
@@ -1614,6 +1615,7 @@ pub struct ReporterPresaveForCreate {
 	pub telephone: Option<String>,
 	pub telephone_null_flavor: Option<String>,
 	pub reporter_email: Option<String>,
+	pub reporter_email_null_flavor: Option<String>,
 	pub country_code: Option<String>,
 	pub qualification: Option<String>,
 	// MFDS.C.2.r.4.KR.1 - Other health professional type
@@ -1648,6 +1650,7 @@ struct ReporterPresaveForInsert {
 	telephone: Option<String>,
 	telephone_null_flavor: Option<String>,
 	reporter_email: Option<String>,
+	reporter_email_null_flavor: Option<String>,
 	country_code: Option<String>,
 	qualification: Option<String>,
 	qualification_kr1: Option<String>,
@@ -1684,6 +1687,7 @@ impl IntoOrgScopedCreate for ReporterPresaveForCreate {
 			telephone: self.telephone,
 			telephone_null_flavor: self.telephone_null_flavor,
 			reporter_email: self.reporter_email,
+			reporter_email_null_flavor: self.reporter_email_null_flavor,
 			country_code: self.country_code,
 			qualification: self.qualification,
 			qualification_kr1: self.qualification_kr1,
@@ -1720,6 +1724,7 @@ pub struct ReporterPresaveForUpdate {
 	pub telephone: Option<String>,
 	pub telephone_null_flavor: Option<String>,
 	pub reporter_email: Option<String>,
+	pub reporter_email_null_flavor: Option<String>,
 	pub country_code: Option<String>,
 	pub qualification: Option<String>,
 	// MFDS.C.2.r.4.KR.1 - Other health professional type
@@ -1752,6 +1757,7 @@ impl ReporterPresaveBmc {
 			data.state_null_flavor.as_deref(),
 			data.postcode_null_flavor.as_deref(),
 			data.telephone_null_flavor.as_deref(),
+			data.reporter_email_null_flavor.as_deref(),
 			data.qualification_null_flavor.as_deref(),
 		)?;
 		Self::validate_identity(
@@ -1824,6 +1830,7 @@ impl ReporterPresaveBmc {
 			data.state_null_flavor.as_deref(),
 			data.postcode_null_flavor.as_deref(),
 			data.telephone_null_flavor.as_deref(),
+			data.reporter_email_null_flavor.as_deref(),
 			data.qualification_null_flavor.as_deref(),
 		)?;
 		if data.deleted != Some(true) {
@@ -1904,6 +1911,7 @@ impl ReporterPresaveBmc {
 		state_null_flavor: Option<&str>,
 		postcode_null_flavor: Option<&str>,
 		telephone_null_flavor: Option<&str>,
+		reporter_email_null_flavor: Option<&str>,
 		qualification_null_flavor: Option<&str>,
 	) -> Result<()> {
 		const ELEMENT_ALLOWED: &[NullFlavor] =
@@ -1941,6 +1949,7 @@ impl ReporterPresaveBmc {
 			("state_null_flavor", state_null_flavor),
 			("postcode_null_flavor", postcode_null_flavor),
 			("telephone_null_flavor", telephone_null_flavor),
+			("reporter_email_null_flavor", reporter_email_null_flavor),
 		] {
 			validate_null_flavor_set(field, value, ELEMENT_ALLOWED)?;
 		}
@@ -1986,8 +1995,10 @@ pub struct StudyPresave {
 	pub deleted: bool,
 	pub product_presave_id: Option<Uuid>,
 	pub study_name: Option<String>,
+	pub study_name_null_flavor: Option<String>,
 	pub study_name_notation: Option<String>,
 	pub sponsor_study_number: Option<String>,
+	pub sponsor_study_number_null_flavor: Option<String>,
 	pub sponsor_study_number_kind: Option<String>,
 	pub study_type_reaction: Option<String>,
 	pub study_type_reaction_kr1: Option<String>,
@@ -2006,8 +2017,10 @@ pub struct StudyPresave {
 pub struct StudyPresaveForCreate {
 	pub product_presave_id: Option<Uuid>,
 	pub study_name: Option<String>,
+	pub study_name_null_flavor: Option<String>,
 	pub study_name_notation: Option<String>,
 	pub sponsor_study_number: Option<String>,
+	pub sponsor_study_number_null_flavor: Option<String>,
 	pub sponsor_study_number_kind: Option<String>,
 	pub study_type_reaction: Option<String>,
 	pub study_type_reaction_kr1: Option<String>,
@@ -2022,8 +2035,10 @@ struct StudyPresaveForInsert {
 	organization_id: Uuid,
 	product_presave_id: Option<Uuid>,
 	study_name: Option<String>,
+	study_name_null_flavor: Option<String>,
 	study_name_notation: Option<String>,
 	sponsor_study_number: Option<String>,
+	sponsor_study_number_null_flavor: Option<String>,
 	sponsor_study_number_kind: Option<String>,
 	study_type_reaction: Option<String>,
 	study_type_reaction_kr1: Option<String>,
@@ -2041,8 +2056,10 @@ impl IntoOrgScopedCreate for StudyPresaveForCreate {
 			organization_id,
 			product_presave_id: self.product_presave_id,
 			study_name: self.study_name,
+			study_name_null_flavor: self.study_name_null_flavor,
 			study_name_notation: self.study_name_notation,
 			sponsor_study_number: self.sponsor_study_number,
+			sponsor_study_number_null_flavor: self.sponsor_study_number_null_flavor,
 			sponsor_study_number_kind: self.sponsor_study_number_kind,
 			study_type_reaction: self.study_type_reaction,
 			study_type_reaction_kr1: self.study_type_reaction_kr1,
@@ -2074,8 +2091,10 @@ pub struct StudyPresaveForUpdate {
 	pub deleted: Option<bool>,
 	pub product_presave_id: Option<Uuid>,
 	pub study_name: Option<String>,
+	pub study_name_null_flavor: Option<String>,
 	pub study_name_notation: Option<String>,
 	pub sponsor_study_number: Option<String>,
+	pub sponsor_study_number_null_flavor: Option<String>,
 	pub sponsor_study_number_kind: Option<String>,
 	pub study_type_reaction: Option<String>,
 	pub study_type_reaction_kr1: Option<String>,
@@ -2124,7 +2143,9 @@ impl StudyPresaveBmc {
 		Self::validate_identity(
 			data.product_presave_id,
 			data.sponsor_study_number.as_deref(),
+			data.sponsor_study_number_null_flavor.as_deref(),
 			data.study_name.as_deref(),
+			data.study_name_null_flavor.as_deref(),
 			data.study_type_reaction.as_deref(),
 		)?;
 		Self::ensure_unique_identity(
@@ -2187,6 +2208,14 @@ impl StudyPresaveBmc {
 				.or(current.sponsor_study_number.as_deref());
 			let study_name =
 				data.study_name.as_deref().or(current.study_name.as_deref());
+			let study_name_null_flavor = data
+				.study_name_null_flavor
+				.as_deref()
+				.or(current.study_name_null_flavor.as_deref());
+			let sponsor_study_number_null_flavor = data
+				.sponsor_study_number_null_flavor
+				.as_deref()
+				.or(current.sponsor_study_number_null_flavor.as_deref());
 			let study_type_reaction = data
 				.study_type_reaction
 				.as_deref()
@@ -2194,7 +2223,9 @@ impl StudyPresaveBmc {
 			Self::validate_identity(
 				product_presave_id,
 				sponsor_study_number,
+				sponsor_study_number_null_flavor,
 				study_name,
+				study_name_null_flavor,
 				study_type_reaction,
 			)?;
 			Self::ensure_unique_identity(
@@ -2216,13 +2247,17 @@ impl StudyPresaveBmc {
 	fn validate_identity(
 		product_presave_id: Option<Uuid>,
 		sponsor_study_number: Option<&str>,
+		sponsor_study_number_null_flavor: Option<&str>,
 		study_name: Option<&str>,
+		study_name_null_flavor: Option<&str>,
 		study_type_reaction: Option<&str>,
 	) -> Result<()> {
 		require_identity(
 			product_presave_id.is_some()
-				&& normalized_text(sponsor_study_number).is_some()
-				&& normalized_text(study_name).is_some()
+				&& (normalized_text(sponsor_study_number).is_some()
+					|| normalized_text(sponsor_study_number_null_flavor).is_some())
+				&& (normalized_text(study_name).is_some()
+					|| normalized_text(study_name_null_flavor).is_some())
 				&& normalized_text(study_type_reaction).is_some(),
 			"study presave requires product_presave_id, sponsor_study_number, study_name, and study_type_reaction",
 		)
@@ -2257,7 +2292,9 @@ pub struct StudyPresaveRegistrationNumber {
 	pub study_presave_id: Uuid,
 	pub sequence_number: i32,
 	pub registration_number: Option<String>,
+	pub registration_number_null_flavor: Option<String>,
 	pub country_code: Option<String>,
+	pub country_code_null_flavor: Option<String>,
 	pub deleted: bool,
 	pub created_at: OffsetDateTime,
 	pub updated_at: OffsetDateTime,
@@ -2270,7 +2307,9 @@ pub struct StudyPresaveRegistrationNumberForCreate {
 	pub study_presave_id: Uuid,
 	pub sequence_number: i32,
 	pub registration_number: Option<String>,
+	pub registration_number_null_flavor: Option<String>,
 	pub country_code: Option<String>,
+	pub country_code_null_flavor: Option<String>,
 	pub deleted: Option<bool>,
 }
 
@@ -2278,7 +2317,9 @@ pub struct StudyPresaveRegistrationNumberForCreate {
 pub struct StudyPresaveRegistrationNumberForUpdate {
 	pub sequence_number: Option<i32>,
 	pub registration_number: Option<String>,
+	pub registration_number_null_flavor: Option<String>,
 	pub country_code: Option<String>,
+	pub country_code_null_flavor: Option<String>,
 	pub deleted: Option<bool>,
 }
 
@@ -2395,7 +2436,8 @@ pub struct StudyPresaveFdaCrossReportedIndNumber {
 	pub id: Uuid,
 	pub study_presave_id: Uuid,
 	pub sequence_number: i32,
-	pub ind_number: String,
+	pub ind_number: Option<String>,
+	pub ind_number_null_flavor: Option<String>,
 	pub deleted: bool,
 	pub created_at: OffsetDateTime,
 	pub updated_at: OffsetDateTime,
@@ -2407,7 +2449,8 @@ pub struct StudyPresaveFdaCrossReportedIndNumber {
 pub struct StudyPresaveFdaCrossReportedIndNumberForCreate {
 	pub study_presave_id: Uuid,
 	pub sequence_number: i32,
-	pub ind_number: String,
+	pub ind_number: Option<String>,
+	pub ind_number_null_flavor: Option<String>,
 	pub deleted: Option<bool>,
 }
 
@@ -2415,6 +2458,7 @@ pub struct StudyPresaveFdaCrossReportedIndNumberForCreate {
 pub struct StudyPresaveFdaCrossReportedIndNumberForUpdate {
 	pub sequence_number: Option<i32>,
 	pub ind_number: Option<String>,
+	pub ind_number_null_flavor: Option<String>,
 	pub deleted: Option<bool>,
 }
 

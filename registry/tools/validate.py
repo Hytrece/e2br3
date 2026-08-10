@@ -295,18 +295,20 @@ def extract_backend_inventory(root: Path, backend_models: dict[str, str]) -> set
 
 
 def extract_backend_null_flavor_columns(root: Path, backend_models: dict[str, str]) -> set[str]:
-    """Real `*_null_flavor` columns, which rows may map but are never required to.
-
-    Most nullFlavors are in-band: the base field carries either a value or the flavor
-    token, and the frontend API layer splits them apart at save time, so the base
-    field's row already accounts for the column. A few fields instead have their own
-    dedicated nullFlavor input and column; those rows map here so joins resolve.
-    """
+    """Return dedicated `*_null_flavor` storage columns."""
     return {
         backend_key(model_name, field_name)
         for model_name, field_name in iter_backend_model_fields(root, backend_models)
         if field_name.endswith("_null_flavor")
     }
+
+
+def null_flavor_base_keys(null_flavor_key: str) -> tuple[str, ...]:
+    model, field_name = null_flavor_key.split(".", 1)
+    base = field_name.removesuffix("_null_flavor")
+    if null_flavor_key == "PatientInformation.race_code_null_flavor":
+        return (f"{model}.race_codes",)
+    return (f"{model}.{base}",)
 
 
 def load_json(path: Path, result: ValidationResult) -> Any:
@@ -839,6 +841,9 @@ def validate_registry(
         }
         for key in sorted(source_backend - registry_backend):
             result.add(f"missing backend mapping: {key}")
+        for key in sorted(support_columns - registry_backend):
+            if not any(base in registry_backend for base in null_flavor_base_keys(key)):
+                result.add(f"missing nullFlavor companion mapping: {key}")
         for key in sorted(registry_backend - source_backend - support_columns):
             result.add(f"unknown backend mapping: {key}")
 

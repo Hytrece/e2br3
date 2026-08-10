@@ -1373,7 +1373,10 @@ pub(crate) async fn apply_study_section(
 
 	let mut auth_xml = String::new();
 	for reg in &registrations {
-		if reg.registration_number.trim().is_empty()
+		if reg
+			.registration_number
+			.as_deref()
+			.is_none_or(|value| value.trim().is_empty())
 			&& reg.registration_number_null_flavor.is_none()
 		{
 			continue;
@@ -1438,7 +1441,11 @@ pub(crate) async fn apply_study_section(
 
 /// e2b:C.5.1.r.1
 fn write_c_5_1_r_1(value: &StudyRegistrationNumber) -> String {
-	if value.registration_number.trim().is_empty() {
+	let Some(registration_number) = value
+		.registration_number
+		.as_deref()
+		.filter(|value| !value.trim().is_empty())
+	else {
 		return value
 			.registration_number_null_flavor
 			.as_deref()
@@ -1449,10 +1456,10 @@ fn write_c_5_1_r_1(value: &StudyRegistrationNumber) -> String {
 				)
 			})
 			.unwrap_or_default();
-	}
+	};
 	format!(
 		"<id extension=\"{}\" root=\"2.16.840.1.113883.3.989.2.1.3.6\"/>",
-		xml_escape(&value.registration_number)
+		xml_escape(registration_number)
 	)
 }
 
@@ -1661,7 +1668,7 @@ mod study_writer_strictness_tests {
 		StudyRegistrationNumber {
 			id: sqlx::types::Uuid::nil(),
 			study_information_id: sqlx::types::Uuid::nil(),
-			registration_number: String::new(),
+			registration_number: Some(String::new()),
 			registration_number_null_flavor: None,
 			country_code: None,
 			country_code_null_flavor: None,

@@ -180,10 +180,15 @@ pub(super) fn validate_direct_rows(
 	rows: &BTreeMap<String, Value>,
 	fda: bool,
 ) -> Result<()> {
+	for (key, value) in rows {
+		reject_control_characters(value, &format!("{section}.{key}"))?;
+	}
 	let normalized = match section {
-		"CI" => optional_row_object(section, rows, "safetyReportIdentification")?
-			.map(|row| {
-				normalized_direct_object(
+		"CI" => {
+			let mut normalized =
+				optional_row_object(section, rows, "safetyReportIdentification")?
+					.map(|row| {
+						normalized_direct_object(
 					row,
 					&[
 						("safetyReportId", &["safetyReportId", "safety_report_id"]),
@@ -277,7 +282,61 @@ pub(super) fn validate_direct_rows(
 						),
 					],
 				)
-			}),
+					})
+					.unwrap_or_default();
+			for (owner, aliases) in [
+				(
+					"documentsHeldBySender",
+					&[
+						(
+							"documentDescription",
+							&["documentDescription", "document_description"][..],
+						),
+						(
+							"includedDocument",
+							&["includedDocument", "included_document"][..],
+						),
+					][..],
+				),
+				(
+					"otherCaseIdentifiers",
+					&[
+						("source", &["source"][..]),
+						(
+							"caseIdentifier",
+							&["caseIdentifier", "case_identifier"][..],
+						),
+					][..],
+				),
+				(
+					"linkedReports",
+					&[(
+						"linkedReportNumber",
+						&["linkedReportNumber", "linked_report_number"][..],
+					)][..],
+				),
+			] {
+				let Some(value) = rows.get(owner) else {
+					continue;
+				};
+				let Some(items) = value.as_array() else {
+					return Err(Error::BadRequest {
+						message: format!("{section}.{owner} must be an array"),
+					});
+				};
+				let mut normalized_items = Vec::with_capacity(items.len());
+				for value in items {
+					let row = as_object(section, owner, value)?;
+					if bool_field(row, &["deleted", "_delete"]) == Some(true) {
+						continue;
+					}
+					normalized_items
+						.push(Value::Object(normalized_direct_object(row, aliases)));
+				}
+				normalized.insert(owner.to_string(), Value::Array(normalized_items));
+			}
+			(!normalized.is_empty()).then_some(normalized)
+		}
 		"RP" => {
 			let Some(value) = rows.get("primarySources") else {
 				return Ok(());
@@ -385,6 +444,10 @@ pub(super) fn validate_direct_rows(
 						),
 						("reporterCountry", &["reporterCountry", "country_code"]),
 						("reporterEmail", &["reporterEmail", "email"]),
+						(
+							"reporterEmailNullFlavor",
+							&["reporterEmailNullFlavor", "email_null_flavor"],
+						),
 						("qualification", &["qualification"]),
 						(
 							"qualificationNullFlavor",
@@ -1282,12 +1345,41 @@ pub(crate) fn validate_row_payload(
 
 fn validate_row_payload_with_indexes(
 	section: &str,
-	_row_key: &str,
+	row_key: &str,
 	row: &Map<String, Value>,
 	changed_paths: Option<&BTreeSet<String>>,
 	outer_indexes: &[usize],
 ) -> Result<()> {
+	reject_control_characters(&Value::Object(row.clone()), row_key)?;
 	validate_section_fields(section, row, changed_paths, outer_indexes, false)
+}
+
+fn reject_control_characters(value: &Value, path: &str) -> Result<()> {
+	match value {
+		Value::String(text)
+			if text.chars().any(|character| {
+				character.is_control() && !matches!(character, '\t' | '\n' | '\r')
+			}) =>
+		{
+			return Err(violation(
+				"INPUT.CONTROL_CHAR.REJECTED",
+				path,
+				"control characters are not allowed",
+			));
+		}
+		Value::Array(values) => {
+			for (index, value) in values.iter().enumerate() {
+				reject_control_characters(value, &format!("{path}.{index}"))?;
+			}
+		}
+		Value::Object(fields) => {
+			for (key, value) in fields {
+				reject_control_characters(value, &format!("{path}.{key}"))?;
+			}
+		}
+		_ => {}
+	}
+	Ok(())
 }
 
 #[cfg(test)]
@@ -1333,6 +1425,45 @@ mod input_contract_save_tests {
 	}
 
 	#[test]
+	fn input_contract_save_rejects_nul_before_persistence() {
+		let row = Map::from_iter([("reporterEmail".to_string(), json!("bad\u{0}"))]);
+		let detail = constraint_violation(
+			validate_row_payload("RP", "primarySources", &row, None).unwrap_err(),
+		);
+		assert_eq!(detail.rule_code, "INPUT.CONTROL_CHAR.REJECTED");
+
+		let direct = BTreeMap::from([(
+			"linkedReports".to_string(),
+			json!([{ "linkedReportNumber": "bad\u{0}" }]),
+		)]);
+		let detail = constraint_violation(
+			validate_direct_rows("CI", &direct, false).unwrap_err(),
+		);
+		assert_eq!(detail.rule_code, "INPUT.CONTROL_CHAR.REJECTED");
+	}
+
+	#[test]
+	fn direct_companion_null_flavors_are_contract_validated() {
+		let ci = BTreeMap::from([(
+			"safetyReportIdentification".to_string(),
+			json!({ "combinationProductReportIndicatorNullFlavor": "ZZZ" }),
+		)]);
+		assert!(matches!(
+			validate_direct_rows("CI", &ci, true),
+			Err(Error::ConstraintViolation(_))
+		));
+
+		let rp = BTreeMap::from([(
+			"primarySources".to_string(),
+			json!([{ "reporterEmailNullFlavor": "ZZZ" }]),
+		)]);
+		assert!(matches!(
+			validate_direct_rows("RP", &rp, true),
+			Err(Error::ConstraintViolation(_))
+		));
+	}
+
+	#[test]
 	fn input_contract_save_preserves_nested_concrete_indexes() {
 		let drug = Map::from_iter([(
 			"dosageInformation".to_string(),
@@ -1374,6 +1505,15 @@ mod input_contract_save_tests {
 			}]),
 		)]);
 		validate_row_payload("DG", "drug", &drug, None).unwrap();
+
+		let invalid_token = Map::from_iter([(
+			"dosageInformation".to_string(),
+			json!([{ "firstAdministrationDate": "NI" }]),
+		)]);
+		let detail = constraint_violation(
+			validate_row_payload("DG", "drug", &invalid_token, None).unwrap_err(),
+		);
+		assert_eq!(detail.rule_code, "ICH.G.k.4.r.4.DATE.FORMAT");
 	}
 
 	#[test]
