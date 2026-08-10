@@ -67,6 +67,7 @@ AUDIT_TABLES = {
     "senderDiagnoses": "sender_diagnoses",
 }
 NESTED_AUDIT_TABLES = {
+    "fdaCrossReportedIndNumbers[]": "study_fda_cross_reported_inds",
     "activeSubstances[]": "drug_active_substances",
     "dosageInformation[]": "dosage_information",
     "indications[]": "drug_indications",
@@ -164,6 +165,16 @@ def get_path(value: Any, path: str) -> Any:
 
 def leaf_path(payload_path: str) -> str:
     return payload_path.removeprefix("[]").lstrip(".")
+
+
+def nested_root(payload_path: str) -> str | None:
+    parts: list[str] = []
+    for part in leaf_path(payload_path).split("."):
+        parts.append(part)
+        if part.endswith("[]"):
+            root = ".".join(parts)
+            return root if any(path.startswith(root) for path in NESTED_AUDIT_TABLES) else None
+    return None
 
 
 def projection_leaf(field: dict[str, Any], owner: str) -> str:
@@ -330,10 +341,10 @@ def redacted(value: Any) -> dict[str, Any]:
 
 def values_equal(candidate: Any, actual: Any) -> bool:
     """Treat API decimal strings (e.g. 64.50) as the numeric input they represent."""
-    if isinstance(actual, list):
-        return any(values_equal(candidate, item) for item in actual)
     if candidate == actual:
         return True
+    if isinstance(actual, list):
+        return any(values_equal(candidate, item) for item in actual)
     if isinstance(candidate, (int, float)) and not isinstance(candidate, bool) and isinstance(actual, str):
         try:
             return Decimal(str(candidate)) == Decimal(actual)
@@ -612,7 +623,10 @@ def main(args: argparse.Namespace) -> int:
         summary = response_summary(status, body)
         try:
             error_value = json.loads(body)
-            detail = error_value.get("error", {}).get("data", {}).get("detail") if isinstance(error_value, dict) else None
+            error = error_value.get("error", {}) if isinstance(error_value, dict) else {}
+            if isinstance(error.get("code"), str):
+                summary["error_code"] = error["code"]
+            detail = error.get("data", {}).get("detail") if isinstance(error, dict) else None
             if isinstance(detail, dict):
                 for key in ("rule_code", "path", "message"):
                     if isinstance(detail.get(key), str):
@@ -687,7 +701,7 @@ def main(args: argparse.Namespace) -> int:
         logs = value.get("items", value.get("data", value)) if isinstance(value, dict) else []
         return logs if isinstance(logs, list) else []
 
-    def readback(page: str, owner: str, payload_path: str, row_route: bool, row_id: str | None) -> tuple[int | None, Any]:
+    def read_current(page: str, owner: str, row_route: bool, row_id: str | None) -> tuple[int | None, Any]:
         route = f"/api/cases/{case_id}/editor/pages/{page}"
         if row_route:
             status, value, _ = request("GET", f"{route}/rows/{row_id or ''}")
@@ -699,6 +713,10 @@ def main(args: argparse.Namespace) -> int:
             current = rows.get(owner) if isinstance(rows, dict) else None
             if isinstance(current, list):
                 current = next((row for row in current if isinstance(row, dict) and row.get("id") == row_id), current[0] if current else None)
+        return status, current
+
+    def readback(page: str, owner: str, payload_path: str, row_route: bool, row_id: str | None) -> tuple[int | None, Any]:
+        status, current = read_current(page, owner, row_route, row_id)
         return status, get_path(current, leaf_path(payload_path))
 
     for page in pages:
@@ -778,6 +796,7 @@ def main(args: argparse.Namespace) -> int:
             if interrupted:
                 break
 
+        nested_row_ids: dict[tuple[str, str], str | None] = {}
         for field in fields:
             if interrupted:
                 break
@@ -787,6 +806,27 @@ def main(args: argparse.Namespace) -> int:
             if not owner_ready.get(owner, False):
                 add(Event("mutation", field["code"], page, owner, None, "SKIPPED_BASELINE", None, {"reason": "owner baseline did not save"}))
                 continue
+            root = nested_root(payload_path)
+            if root and (owner, root) not in nested_row_ids:
+                root_fields = [candidate for candidate in fields if candidate["patch"]["owner"] == owner and nested_root(candidate["payloadPath"]) == root]
+                nested_baseline = baseline_for(root_fields, minimal=True)
+                if page == "DG" and root.startswith("drugReactionAssessments[]") and reaction_id:
+                    set_path(nested_baseline, "drugReactionAssessments[].reactionId", reaction_id)
+                if row_ids.get(owner):
+                    nested_baseline["id"] = row_ids[owner]
+                if row_route:
+                    status, _, summary = request("PATCH", f"{route}/rows/{row_ids.get(owner, '')}", {"authorities": authorities_for(root_fields), "rows": {owner: nested_baseline}})
+                else:
+                    status, _, summary = request("PATCH", route, {"authorities": authorities_for(root_fields), "rows": owner_patch(owner, nested_baseline, array_owner)})
+                read_status, current = read_current(page, owner, row_route, row_ids.get(owner))
+                nested_row_ids[(owner, root)] = object_id(get_path(current, root)) if read_status == 200 else None
+                ready = status == 200 and bool(nested_row_ids[(owner, root)])
+                add(Event("nested_baseline", field["code"], page, owner, None, "PASS" if ready else "BASELINE_REJECTED", status, summary))
+                if not ready:
+                    continue
+            if root and not nested_row_ids.get((owner, root)):
+                add(Event("mutation", field["code"], page, owner, None, "SKIPPED_BASELINE", None, {"reason": "nested row baseline did not save"}))
+                continue
             for ordinal in range(args.values_per_field):
                 if interrupted:
                     break
@@ -795,9 +835,12 @@ def main(args: argparse.Namespace) -> int:
                 set_path(mutation, leaf_path(payload_path), candidate)
                 if page == "DG" and "drugReactionAssessments[]" in payload_path and reaction_id:
                     set_path(mutation, "drugReactionAssessments[].reactionId", reaction_id)
+                if root:
+                    set_path(mutation, f"{root}.id", nested_row_ids[(owner, root)])
                 if row_ids.get(owner):
                     mutation["id"] = row_ids[owner]
                 audit_path = projection_leaf(field, owner)
+                before_status, before_actual = readback(page, owner, projection_leaf(field, owner), row_route, row_ids.get(owner))
                 logs_before = audit_logs(owner, row_ids.get(owner), audit_path)
                 if row_route:
                     status, value, summary = request(
@@ -811,10 +854,12 @@ def main(args: argparse.Namespace) -> int:
                     classification = "SAVE_ACCEPTED"
                 elif status == 422:
                     classification = "CONSTRAINT_REJECTED"
-                elif status in {400, 401, 403, 404}:
+                elif status == 400:
                     classification = "BACKEND_REJECTED"
                 elif status == 409:
                     classification = "CONFLICT_REJECTED"
+                elif status in {401, 403, 404}:
+                    classification = "UNEXPECTED_STATUS"
                 elif status is None:
                     classification = "INCONCLUSIVE"
                 else:
@@ -855,18 +900,37 @@ def main(args: argparse.Namespace) -> int:
                         if is_blank_candidate(candidate):
                             logs_after = audit_logs(owner, row_ids.get(owner), audit_path)
                             changed = [log for log in logs_after if log not in logs_before and isinstance(log, dict)]
-                            classification = "AUDIT_MISMATCH" if changed else "SAVE_NORMALIZED"
-                            detail["audit_new_logs"] = len(changed)
+                            matched_logs = [log for log in changed if audit_key_matches(log.get("changedFields", log.get("changed_fields", {})), audit_path)]
+                            audit_complete = any(audit_log_complete(log) for log in matched_logs)
+                            classification = "SAVE_NORMALIZED" if not changed or audit_complete else "AUDIT_MISMATCH"
+                            detail.update({"audit_new_logs": len(changed), "audit_complete": audit_complete})
                         else:
                             classification = "NOOP_ACCEPTED" if candidate is None else "SAVE_READBACK_MISMATCH"
-                elif status == 422:
+                elif status in {400, 409, 422}:
+                    read_status, actual = readback(page, owner, projection_leaf(field, owner), row_route, row_ids.get(owner))
                     logs_after = audit_logs(owner, row_ids.get(owner), audit_path)
                     changed = [log for log in logs_after if log not in logs_before and isinstance(log, dict)]
-                    detail["audit_new_logs"] = len(changed)
+                    structured_error = summary.get("error_code") != "SERVICE_ERROR" and bool(
+                        summary.get("error_code") or summary.get("error_rule_code") or summary.get("error_path") or summary.get("detail_type") == "dict"
+                    )
+                    detail.update({
+                        "before_readback_status": before_status,
+                        "before_readback": redacted(before_actual),
+                        "readback_status": read_status,
+                        "readback": redacted(actual),
+                        "audit_new_logs": len(changed),
+                        "structured_error": structured_error,
+                    })
                     if changed:
                         classification = "AUDIT_MISMATCH"
+                    elif before_status != 200 or read_status != 200:
+                        classification = "INCONCLUSIVE"
+                    elif before_actual != actual:
+                        classification = "SAVE_READBACK_MISMATCH"
+                    elif not structured_error:
+                        classification = "UNEXPECTED_STATUS"
                 if invalid_nullflavor:
-                    if status in {400, 422}:
+                    if status in {400, 422} and classification in {"BACKEND_REJECTED", "CONSTRAINT_REJECTED"}:
                         classification = "NULLFLAVOR_REJECTED"
                     elif status == 200:
                         classification = "FAIL"
@@ -922,7 +986,12 @@ def main(args: argparse.Namespace) -> int:
     for event in events:
         counts[event.classification] = counts.get(event.classification, 0) + 1
     print(f"events={len(events)} counts={json.dumps(counts, sort_keys=True)} artifact={artifact}")
-    return 2 if interrupted else 1 if any(event.classification in {"FAIL", "GATE_FAIL", "SERVER_ERROR", "AUDIT_MISMATCH", "UNEXPECTED_STATUS", "SAVE_READBACK_MISMATCH"} for event in events) else 0
+    failures = {
+        "AUDIT_MISMATCH", "BASELINE_REJECTED", "FAIL", "GATE_FAIL",
+        "INCONCLUSIVE", "SERVER_ERROR", "SKIPPED_BASELINE",
+        "UNEXPECTED_STATUS", "SAVE_READBACK_MISMATCH",
+    }
+    return 2 if interrupted else 1 if any(event.classification in failures for event in events) else 0
 
 
 def parser() -> argparse.ArgumentParser:
