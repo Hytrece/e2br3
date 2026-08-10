@@ -14,11 +14,11 @@ CREATE TABLE patient_information (
 
     -- D.2.2 - Age Information
     age_at_time_of_onset DECIMAL(5,2),
-    age_unit VARCHAR(10),  -- UCUM: 10.a/a/mo/wk/d/h (decade/year/month/week/day/hour)
+    age_unit VARCHAR(50),  -- E2B contract max; UCUM examples: 10.a/a/mo/wk/d/h
 
     -- D.2.2.1 - Gestation Period (for fetal cases)
     gestation_period DECIMAL(5,2),
-    gestation_period_unit VARCHAR(20),  -- UCUM: mo, wk, d, {Trimester}
+    gestation_period_unit VARCHAR(50),  -- E2B contract max; UCUM examples: mo, wk, d, {Trimester}
 
     -- D.2.3 - Patient Age Group (E2B(R3) codes)
     age_group VARCHAR(1) CHECK (age_group IN ('1', '2', '3', '4', '5', '6')),
@@ -286,7 +286,7 @@ CREATE TABLE parent_information (
 
     -- D.10.2 - Parent Age
     parent_age DECIMAL(5,2),
-    parent_age_unit VARCHAR(10),  -- UCUM: 10.a/a/mo/wk/d (no hour unit for parents)
+    parent_age_unit VARCHAR(50),  -- E2B contract max; UCUM examples: 10.a/a/mo/wk/d
 
     -- D.10.3 - Last Menstrual Period Date
     last_menstrual_period_date DATE,

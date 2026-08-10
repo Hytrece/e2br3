@@ -1771,12 +1771,17 @@ async fn apply_dm_page_rows_patch(
 	) -> Option<Vec<String>> {
 		let value = value_at_path(row, paths)?;
 		if let Some(value) = value.as_str() {
-			return Some(vec![value.to_string()]);
+			return Some(
+				(!value.trim().is_empty())
+					.then(|| vec![value.to_string()])
+					.unwrap_or_default(),
+			);
 		}
 		value.as_array().map(|values| {
 			values
 				.iter()
 				.filter_map(Value::as_str)
+				.filter(|value| !value.trim().is_empty())
 				.map(ToOwned::to_owned)
 				.collect()
 		})

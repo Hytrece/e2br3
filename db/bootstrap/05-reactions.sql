@@ -76,7 +76,7 @@ CREATE TABLE reactions (
 
     -- E.i.6 - Duration of Reaction/Event
     duration_value DECIMAL(10,2),
-    duration_unit VARCHAR(3),  -- 800-805 codes
+    duration_unit VARCHAR(50),  -- E2B contract max; commonly 800-805 codes
 
     -- E.i.7 - Outcome of Reaction/Event at Time of Last Observation
     outcome VARCHAR(1) CHECK (outcome IN ('0', '1', '2', '3', '4', '5')),

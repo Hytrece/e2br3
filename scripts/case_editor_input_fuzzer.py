@@ -67,9 +67,13 @@ AUDIT_TABLES = {
     "senderDiagnoses": "sender_diagnoses",
 }
 NESTED_AUDIT_TABLES = {
+    "activeSubstances[]": "drug_active_substances",
     "dosageInformation[]": "dosage_information",
     "indications[]": "drug_indications",
-    "drugReactionAssessments[]": "relatedness_assessments",
+    "drugReactionAssessments[].sourceOfAssessment": "relatedness_assessments",
+    "drugReactionAssessments[].methodOfAssessment": "relatedness_assessments",
+    "drugReactionAssessments[].resultOfAssessment": "relatedness_assessments",
+    "drugReactionAssessments[]": "drug_reaction_assessments",
 }
 
 
@@ -711,6 +715,26 @@ def main(args: argparse.Namespace) -> int:
             add(Event("page", None, page, None, None, "SKIPPED", None, {"reason": "no_verified_contract_fields"}))
             continue
         route = f"/api/cases/{case_id}/editor/pages/{page}"
+        if page == "DG" and reaction_id is None:
+            reaction_status, reaction_value, reaction_summary = request(
+                "POST",
+                f"/api/cases/{case_id}/editor/pages/AE/rows",
+                {
+                    "authorities": ["ich"],
+                    "rows": {
+                        "reaction": {
+                            "sequenceNumber": 1,
+                            "primarySourceReaction": "Fuzz reaction",
+                            "reactionMeddraVersionLLT": "26.0",
+                            "reactionMeddraCodeLLT": "10000001",
+                        }
+                    },
+                },
+            )
+            reaction_id = created_row_id(reaction_value)
+            add(Event("dependency_create", None, page, "reaction", None, "PASS" if reaction_status == 201 and reaction_id else "BASELINE_REJECTED", reaction_status, reaction_summary))
+            if reaction_id is None:
+                continue
         row_route = page in ROW_PAGES
         row_ids: dict[str, str | None] = {}
         owner_ready: dict[str, bool] = {}

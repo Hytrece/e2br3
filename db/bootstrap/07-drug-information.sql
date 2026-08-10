@@ -163,7 +163,7 @@ CREATE TABLE dosage_information (
 
     -- G.k.4.r.6 - Duration of Drug Administration
     duration_value DECIMAL(10,2),
-    duration_unit VARCHAR(3),  -- 800-805 codes
+    duration_unit VARCHAR(50),  -- E2B contract max; commonly 800-805 codes
     continuing BOOLEAN,
 
     -- G.k.4.r.7 - Batch/Lot Number
@@ -351,11 +351,11 @@ CREATE TABLE drug_reaction_assessments (
 
     -- G.k.9.i.3.1a/b - Time Interval between Beginning of Drug Administration and Start of Reaction / Event
     administration_start_interval_value DECIMAL(10,2),
-    administration_start_interval_unit VARCHAR(3),  -- 800-805 (decade, year, month, week, day, hour)
+    administration_start_interval_unit VARCHAR(50),  -- E2B contract max; commonly 800-805
 
     -- G.k.9.i.3.2a/b - Time Interval between Last Dose of Drug and Start of Reaction / Event
     last_dose_interval_value DECIMAL(10,2),
-    last_dose_interval_unit VARCHAR(3),  -- 800-805 (decade, year, month, week, day, hour)
+    last_dose_interval_unit VARCHAR(50),  -- E2B contract max; commonly 800-805
 
     -- G.k.9.i.4.r.1 - Did Reaction Recur on Readministration - Action
     recurrence_action VARCHAR(1) CHECK (recurrence_action IN ('1', '2', '3', '4')),
