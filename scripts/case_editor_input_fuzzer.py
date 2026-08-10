@@ -17,6 +17,7 @@ import re
 import subprocess
 import sys
 import time
+import unicodedata
 import uuid
 from dataclasses import asdict, dataclass
 from decimal import Decimal, InvalidOperation
@@ -76,6 +77,20 @@ NESTED_AUDIT_TABLES = {
     "drugReactionAssessments[].resultOfAssessment": "relatedness_assessments",
     "drugReactionAssessments[]": "drug_reaction_assessments",
 }
+BASE_CANDIDATES = 8
+STRING_CANDIDATES = 14
+LENGTH_CANDIDATES = 17
+MAX_LENGTH_RE = re.compile(
+    r'max_length\(\s*&mut issues,\s*"([^"]+)",\s*input\.value,\s*(\d+)',
+    re.DOTALL,
+)
+CANDIDATE_KINDS = (
+    "verified_invalid", "null", "primitive_or_blank", "boundary", "blank",
+    "unicode_basic", "control_chars", "type_mismatch", "unicode_nfd",
+    "unicode_rtl", "unicode_zero_width", "unicode_emoji_sequence",
+    "unicode_lone_surrogate", "encoding_edges", "length_max",
+    "length_max_plus_one", "length_oversize",
+)
 
 
 @dataclass
@@ -255,6 +270,21 @@ def field_value(field: dict[str, Any], rng: random.Random, ordinal: int) -> Any:
         if isinstance(baseline, (int, float)) and not isinstance(baseline, bool):
             return {"unexpected": "object"}
         return ["unexpected", "array"]
+    unicode_values = (
+        unicodedata.normalize("NFD", "한글"),
+        "\u202bעברית العربية\u202c",
+        "A\u200b\u200c\u200d\ufeffB",
+        "👨‍👩‍👧‍👦" * 64,
+        "\ud800",
+        "\x7f\u0080\ufffd\U0010ffff",
+    )
+    if 8 <= ordinal < 14:
+        value = unicode_values[ordinal - 8]
+        return [value] if isinstance(baseline, list) else value
+    if 14 <= ordinal < 17 and isinstance(baseline, str) and isinstance(field.get("_maxLength"), int):
+        limit = field["_maxLength"]
+        length = (limit, limit + 1, limit + min(max(limit, 64), 4096))[ordinal - 14]
+        return "X" * length
     if isinstance(baseline, bool):
         return rng.choice([True, False])
     if isinstance(baseline, list):
@@ -263,6 +293,49 @@ def field_value(field: dict[str, Any], rng: random.Random, ordinal: int) -> Any:
         return rng.randrange(-1000, 1001)
     length = rng.choice([0, 1, 8, 64, 255, 1024])
     return "" if length == 0 else "fuzz-" + "".join(rng.choice("abcdef0123456789") for _ in range(max(1, length - 5)))
+
+
+def candidate_count(field: dict[str, Any], requested: int) -> int:
+    baseline = field.get("roundTripValue")
+    available = BASE_CANDIDATES
+    if not is_nullflavor_field(field) and isinstance(baseline, (str, list)):
+        available = STRING_CANDIDATES
+    if isinstance(baseline, str) and isinstance(field.get("_maxLength"), int):
+        available = LENGTH_CANDIDATES
+    return min(requested, available)
+
+
+def candidate_kind(ordinal: int) -> str:
+    return CANDIDATE_KINDS[ordinal]
+
+
+def length_expectation(field: dict[str, Any], ordinal: int) -> str | None:
+    if not isinstance(field.get("_maxLength"), int):
+        return None
+    if ordinal == 14:
+        return "accept"
+    if ordinal in {15, 16}:
+        return "reject"
+    return None
+
+
+def load_max_lengths(root: Path) -> dict[str, int]:
+    limits: dict[str, int] = {}
+    for path in sorted((root / "crates/libs/input-contracts/src/generated").glob("*.rs")):
+        for rule_code, limit in MAX_LENGTH_RE.findall(path.read_text(encoding="utf-8")):
+            limits[rule_code] = int(limit)
+    return limits
+
+
+def apply_max_lengths(contract: list[dict[str, Any]], limits: dict[str, int]) -> int:
+    matched = 0
+    for page in contract:
+        for field in page.get("fields", []):
+            rule_code = field.get("constraint", {}).get("ruleCode")
+            if isinstance(field.get("roundTripValue"), str) and rule_code in limits:
+                field["_maxLength"] = limits[rule_code]
+                matched += 1
+    return matched
 
 
 def is_nullflavor_field(field: dict[str, Any]) -> bool:
@@ -588,6 +661,7 @@ def main(args: argparse.Namespace) -> int:
         raise SystemExit("set E2BR3_ADMIN_PASSWORD")
     contract_path = Path(args.contract).resolve()
     contract = json.loads(contract_path.read_text())
+    max_length_fields = apply_max_lengths(contract, load_max_lengths(Path(__file__).resolve().parents[1]))
     derived_null_flavors = expand_null_flavor_contracts(
         contract,
         load_null_flavor_pairs(Path(args.null_flavor_pairs).resolve()),
@@ -653,9 +727,10 @@ def main(args: argparse.Namespace) -> int:
             groups: dict[str, list[dict[str, Any]]] = {}
             for field in fields:
                 groups.setdefault(field["patch"]["owner"], []).append(field)
-            total += len(fields) * args.values_per_field
-            print(f"{page}: fields={len(fields)} owners={len(groups)} mutations={len(fields) * args.values_per_field}")
-        print(f"seed={args.seed} total_mutations={total} derived_null_flavors={derived_null_flavors} contract={contract_path}")
+            mutations = sum(candidate_count(field, args.values_per_field) for field in fields)
+            total += mutations
+            print(f"{page}: fields={len(fields)} owners={len(groups)} mutations={mutations}")
+        print(f"seed={args.seed} total_mutations={total} derived_null_flavors={derived_null_flavors} max_length_fields={max_length_fields} contract={contract_path}")
         return 0
 
     status, _, summary = request(
@@ -827,7 +902,7 @@ def main(args: argparse.Namespace) -> int:
             if root and not nested_row_ids.get((owner, root)):
                 add(Event("mutation", field["code"], page, owner, None, "SKIPPED_BASELINE", None, {"reason": "nested row baseline did not save"}))
                 continue
-            for ordinal in range(args.values_per_field):
+            for ordinal in range(candidate_count(field, args.values_per_field)):
                 if interrupted:
                     break
                 candidate = field_value(field, rng, ordinal)
@@ -865,7 +940,14 @@ def main(args: argparse.Namespace) -> int:
                 else:
                     classification = "SERVER_ERROR" if status >= 500 else "UNEXPECTED_STATUS"
                 invalid_nullflavor = nullflavor_invalid_candidate(field, candidate)
-                detail: dict[str, Any] = {"candidate": redacted(candidate), "rule_code": field.get("constraint", {}).get("ruleCode")}
+                expectation = length_expectation(field, ordinal)
+                detail: dict[str, Any] = {
+                    "candidate": redacted(candidate),
+                    "candidate_kind": candidate_kind(ordinal),
+                    "rule_code": field.get("constraint", {}).get("ruleCode"),
+                }
+                if expectation:
+                    detail.update({"expected_outcome": expectation, "max_length": field["_maxLength"]})
                 if is_nullflavor_field(field):
                     detail["nullflavor_expected_reject"] = invalid_nullflavor
                 if status == 200:
@@ -938,6 +1020,10 @@ def main(args: argparse.Namespace) -> int:
                         classification = "INCONCLUSIVE"
                     else:
                         classification = "UNEXPECTED_STATUS"
+                if expectation == "accept" and status != 200:
+                    classification = "FAIL"
+                elif expectation == "reject" and status not in {400, 422}:
+                    classification = "FAIL"
                 add(Event("mutation", field["code"], page, owner, f"value_{ordinal}", classification, status, {**summary, **detail}))
 
     if case_id and not interrupted:
@@ -981,7 +1067,7 @@ def main(args: argparse.Namespace) -> int:
     with artifact.open("w", encoding="utf-8") as handle:
         for event in events:
             handle.write(json.dumps({"seed": args.seed, "commit": commit_sha(), **asdict(event)}, sort_keys=True) + "\n")
-        handle.write(json.dumps({"kind": "run", "seed": args.seed, "cases": len(events), "interrupted": interrupted, "artifact": str(artifact), "contract": str(contract_path), "derived_null_flavors": derived_null_flavors, "null_flavor_only": args.null_flavor_only, "surface": "api", "validator_excluded": not args.run_gates, "frontend_gate": "run" if args.run_gates else "not_run"}, sort_keys=True) + "\n")
+        handle.write(json.dumps({"kind": "run", "seed": args.seed, "cases": len(events), "interrupted": interrupted, "artifact": str(artifact), "contract": str(contract_path), "candidate_schema_version": 2, "derived_null_flavors": derived_null_flavors, "max_length_fields": max_length_fields, "null_flavor_only": args.null_flavor_only, "surface": "api", "validator_excluded": not args.run_gates, "frontend_gate": "run" if args.run_gates else "not_run"}, sort_keys=True) + "\n")
     counts: dict[str, int] = {}
     for event in events:
         counts[event.classification] = counts.get(event.classification, 0) + 1
@@ -1003,7 +1089,7 @@ def parser() -> argparse.ArgumentParser:
     # DH needs the DM patient row; create it immediately after DM before later
     # page mutations can make the case setup harder to authorize.
     parser.add_argument("--pages", default="CI,RP,SD,LR,SI,DM,DH,NR,AE,LB,DG")
-    parser.add_argument("--values-per-field", type=int, default=5)
+    parser.add_argument("--values-per-field", type=int, default=LENGTH_CANDIDATES, help="upper bound; only candidates applicable to each field are used")
     parser.add_argument("--max-actions", type=int, default=1200)
     parser.add_argument("--deadline-seconds", type=float, default=180)
     parser.add_argument("--timeout", type=float, default=20)
