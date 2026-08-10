@@ -181,13 +181,6 @@ fn read_d_2_1(xpath: &mut Context) -> Result<(Option<Date>, Option<String>)> {
 
 /// e2b:D.2.2a
 fn read_d_2_2a(xpath: &mut Context) -> Result<Option<Decimal>> {
-	if first_value_root(xpath, DPatientPaths::AGE_NULL_FLAVOR).is_some() {
-		return Err(Error::InvalidXml {
-			message: "D.2.2a does not permit nullFlavor".to_string(),
-			line: None,
-			column: None,
-		});
-	}
 	let raw = first_value_root(xpath, DPatientPaths::AGE_VALUE);
 	import_constraint::number_string(
 		"patientAge.value",
@@ -235,13 +228,6 @@ fn read_d_2_3(xpath: &mut Context) -> Result<Option<String>> {
 
 /// e2b:D.3
 fn read_d_3(xpath: &mut Context) -> Result<Option<Decimal>> {
-	if first_value_root(xpath, DPatientPaths::WEIGHT_NULL_FLAVOR).is_some() {
-		return Err(Error::InvalidXml {
-			message: "D.3 does not permit nullFlavor".to_string(),
-			line: None,
-			column: None,
-		});
-	}
 	input_decimal(
 		first_value_root(xpath, DPatientPaths::WEIGHT_VALUE),
 		"patientWeight.value",
@@ -251,13 +237,6 @@ fn read_d_3(xpath: &mut Context) -> Result<Option<Decimal>> {
 
 /// e2b:D.4
 fn read_d_4(xpath: &mut Context) -> Result<Option<Decimal>> {
-	if first_value_root(xpath, DPatientPaths::HEIGHT_NULL_FLAVOR).is_some() {
-		return Err(Error::InvalidXml {
-			message: "D.4 does not permit nullFlavor".to_string(),
-			line: None,
-			column: None,
-		});
-	}
 	input_decimal(
 		first_value_root(xpath, DPatientPaths::HEIGHT_VALUE),
 		"patientHeight.value",
@@ -327,13 +306,13 @@ fn read_fda_d_11_r_1(xpath: &mut Context) -> Result<(Vec<String>, Option<String>
 		.filter(|value| !value.is_empty())
 		.collect::<Vec<_>>();
 	let null_flavor = first_value_root(xpath, DPatientPaths::RACE_CODE_NULL_FLAVOR);
-	if !race_codes.is_empty() && null_flavor.is_some() {
-		return Err(Error::InvalidXml {
-			message: "FDA.D.11.r.1 race codes and NullFlavor cannot both be set"
-				.to_string(),
-			line: None,
-			column: None,
-		});
+	if !race_codes.is_empty() {
+		import_constraint::string(
+			"raceCodes",
+			Some(&race_codes[0]),
+			null_flavor.as_deref(),
+			input_contracts::generated::d::fda_d_11_r_1,
+		)?;
 	}
 	for (index, value) in race_codes.iter().enumerate() {
 		import_constraint::string(
@@ -456,7 +435,7 @@ mod tests {
 	use super::*;
 
 	#[test]
-	fn rejects_null_flavor_on_numeric_only_fields() {
+	fn leaves_numeric_null_flavor_rules_to_business_validation() {
 		for code in ["3", "7", "17"] {
 			let xml = format!(
 				r#"<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
@@ -467,7 +446,7 @@ mod tests {
 </MCCI_IN200100UV01>"#
 			);
 
-			assert!(parse_d_patient(xml.as_bytes()).is_err(), "code {code}");
+			assert!(parse_d_patient(xml.as_bytes()).is_ok(), "code {code}");
 		}
 	}
 

@@ -33,20 +33,13 @@ pub fn apply_c_safety_report_import_settings(
 	import_date: Date,
 ) -> Result<()> {
 	if settings.update_date_of_creation {
-		report.transmission_date = format_e2b_datetime(import_date);
+		report.transmission_date = Some(format_e2b_datetime(import_date));
 	}
 	if settings.update_most_recent_info_date {
-		report.date_of_most_recent_information = import_date;
+		report.date_of_most_recent_information = Some(import_date);
 	}
 	if settings.update_report_first_received_date {
-		report.date_first_received_from_source = import_date;
-	}
-	if report.date_first_received_from_source
-		> report.date_of_most_recent_information
-	{
-		return Err(Error::InvalidImportRequest {
-			message: "C.1.4 cannot be later than C.1.5".to_string(),
-		});
+		report.date_first_received_from_source = Some(import_date);
 	}
 	Ok(())
 }
@@ -128,6 +121,7 @@ async fn import_c_1_safety_report(
 					date_first_received_from_source,
 					date_of_most_recent_information,
 					fulfil_expedited_criteria,
+					fulfil_expedited_criteria_null_flavor,
 					local_criteria_report_type,
 					combination_product_report_indicator,
 					combination_product_report_indicator_null_flavor,
@@ -143,7 +137,7 @@ async fn import_c_1_safety_report(
 					updated_at,
 					created_by
 				) VALUES (
-					$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,NOW(),NOW(),$20
+					$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,NOW(),NOW(),$21
 				)
 				ON CONFLICT (case_id) DO UPDATE SET
 					safety_report_id = EXCLUDED.safety_report_id,
@@ -153,6 +147,7 @@ async fn import_c_1_safety_report(
 					date_first_received_from_source = EXCLUDED.date_first_received_from_source,
 					date_of_most_recent_information = EXCLUDED.date_of_most_recent_information,
 					fulfil_expedited_criteria = EXCLUDED.fulfil_expedited_criteria,
+					fulfil_expedited_criteria_null_flavor = EXCLUDED.fulfil_expedited_criteria_null_flavor,
 					local_criteria_report_type = EXCLUDED.local_criteria_report_type,
 					combination_product_report_indicator = EXCLUDED.combination_product_report_indicator,
 					combination_product_report_indicator_null_flavor = EXCLUDED.combination_product_report_indicator_null_flavor,
@@ -165,7 +160,7 @@ async fn import_c_1_safety_report(
 					nullification_reason = EXCLUDED.nullification_reason,
 					receiver_organization = EXCLUDED.receiver_organization,
 					updated_at = NOW(),
-					updated_by = $20",
+					updated_by = $21",
 			)
 			.bind(case_id)
 			.bind(safety_report_id)
@@ -175,6 +170,7 @@ async fn import_c_1_safety_report(
 			.bind(report.date_first_received_from_source)
 			.bind(report.date_of_most_recent_information)
 			.bind(report.fulfil_expedited_criteria)
+			.bind(report.fulfil_expedited_criteria_null_flavor)
 			.bind(report.local_criteria_report_type)
 			.bind(report.combination_product_report_indicator)
 			.bind(report.combination_product_report_indicator_null_flavor)
@@ -265,11 +261,11 @@ async fn import_c_2_sender_information(
 			SenderInformationForCreate {
 				case_id,
 				source_sender_presave_id,
-				sender_type: Some(sender.sender_type.clone()),
+				sender_type: sender.sender_type.clone(),
 				health_professional_type_kr1: sender
 					.health_professional_type_kr1
 					.clone(),
-				organization_name: Some(sender.organization_name.clone()),
+				organization_name: sender.organization_name.clone(),
 				department: sender.department.clone(),
 				street_address: sender.street_address.clone(),
 				city: sender.city.clone(),
@@ -294,9 +290,9 @@ async fn import_c_2_sender_information(
 		sender_id,
 		SenderInformationForUpdate {
 			source_sender_presave_id,
-			sender_type: Some(sender.sender_type),
+			sender_type: sender.sender_type,
 			health_professional_type_kr1: sender.health_professional_type_kr1,
-			organization_name: Some(sender.organization_name),
+			organization_name: sender.organization_name,
 			department: sender.department,
 			street_address: sender.street_address,
 			city: sender.city,
@@ -345,9 +341,9 @@ async fn sender_import_from_presave(
 		})?;
 
 	Ok(c_helpers::SenderImport {
-		sender_type,
+		sender_type: Some(sender_type),
 		health_professional_type_kr1: None,
-		organization_name,
+		organization_name: Some(organization_name),
 		department: responsible
 			.as_ref()
 			.and_then(|person| person.department.clone()),
@@ -644,8 +640,7 @@ async fn import_c_4_literature_references(
 	let references = c_helpers::parse_literature_references(xml)?;
 	for (idx, entry) in references.into_iter().enumerate() {
 		let seq = (idx + 1) as i32;
-		let reference_text = (!entry.reference_text.trim().is_empty())
-			.then(|| entry.reference_text.clone());
+		let reference_text = entry.reference_text.clone();
 		let existing: Option<Uuid> = mm
 			.dbx()
 			.fetch_optional(
@@ -909,11 +904,12 @@ mod tests {
 
 	fn report() -> CSafetyReportImport {
 		CSafetyReportImport {
-			transmission_date: "20240110000000".to_string(),
-			report_type: "1".to_string(),
-			date_first_received_from_source: date(2024, Month::January, 5),
-			date_of_most_recent_information: date(2024, Month::January, 8),
-			fulfil_expedited_criteria: false,
+			transmission_date: Some("20240110000000".to_string()),
+			report_type: Some("1".to_string()),
+			date_first_received_from_source: Some(date(2024, Month::January, 5)),
+			date_of_most_recent_information: Some(date(2024, Month::January, 8)),
+			fulfil_expedited_criteria: Some(false),
+			fulfil_expedited_criteria_null_flavor: None,
 			additional_documents_available: None,
 			local_criteria_report_type: None,
 			combination_product_report_indicator: None,
@@ -928,7 +924,7 @@ mod tests {
 	}
 
 	#[test]
-	fn import_date_settings_reject_c1_dates_out_of_order() {
+	fn import_date_settings_leave_date_order_to_business_validation() {
 		let import_date = date(2024, Month::February, 1);
 		let mut report = report();
 
@@ -945,7 +941,7 @@ mod tests {
 			import_date,
 		);
 
-		assert!(result.is_err());
+		assert!(result.is_ok());
 	}
 
 	#[test]
@@ -969,8 +965,8 @@ mod tests {
 		assert!(result.is_ok());
 		assert_eq!(
 			report.date_of_most_recent_information,
-			date(2024, Month::February, 1)
+			Some(date(2024, Month::February, 1))
 		);
-		assert_eq!(report.transmission_date, "20240110000000");
+		assert_eq!(report.transmission_date.as_deref(), Some("20240110000000"));
 	}
 }

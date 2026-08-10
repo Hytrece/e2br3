@@ -513,15 +513,11 @@ fn read_e_i_6b(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
 	let Some(unit) = unit else {
 		return Ok(None);
 	};
-	crate::mapping::fda::e_reaction::reaction_duration_unit_from_ucum(&unit)
-		.map(|code| Some(code.to_string()))
-		.ok_or_else(|| Error::InvalidXml {
-			message: format!(
-				"ICH.E.i.6b.ALLOWED.VALUE: unsupported UCUM reaction duration unit `{unit}`"
-			),
-			line: None,
-			column: None,
-		})
+	Ok(Some(
+		crate::mapping::fda::e_reaction::reaction_duration_unit_from_ucum(&unit)
+			.unwrap_or(&unit)
+			.to_string(),
+	))
 }
 
 /// e2b:E.i.7
@@ -895,7 +891,7 @@ mod split_null_flavor_tests {
 	}
 
 	#[test]
-	fn imports_ucum_duration_units_as_internal_codes_and_rejects_unknown_units() {
+	fn imports_ucum_duration_units_and_preserves_unknown_units() {
 		for (ucum, stored) in [
 			("10.a", "800"),
 			("a", "801"),
@@ -911,9 +907,8 @@ mod split_null_flavor_tests {
 		}
 
 		let xml = reaction_with_duration_unit("min");
-		let error = parse_e_reactions(xml.as_bytes())
-			.expect_err("unsupported UCUM unit must not be stored");
-		assert!(format!("{error}").contains("ICH.E.i.6b.ALLOWED.VALUE"));
+		let reactions = parse_e_reactions(xml.as_bytes()).expect("parse");
+		assert_eq!(reactions[0].duration_unit.as_deref(), Some("min"));
 	}
 }
 

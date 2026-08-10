@@ -76,11 +76,9 @@ fn import_f_section_rejects_test_date_value_and_null_flavor_together() {
 	let xml = scenario6_with_first_test_date_value_and_null_flavor();
 
 	let err = parse_f_test_results(xml.as_bytes()).unwrap_err();
-	assert!(
-		err.to_string()
-			.contains("value and nullFlavor cannot both be present"),
-		"unexpected error: {err}"
-	);
+	assert!(err
+		.to_string()
+		.contains("value and nullFlavor cannot both be present"));
 }
 
 fn scenario6_with_first_test_date_null_flavor() -> String {

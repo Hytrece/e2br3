@@ -572,10 +572,10 @@ fn duplicate_key_from_xml(
 	Ok((
 		XmlImportIncomingKey {
 			safety_report_id,
-			transmission_date: c_report.transmission_date,
+			transmission_date: c_report.transmission_date.unwrap_or_default(),
 		},
 		CaseDuplicateKey {
-			report_type: Some(c_report.report_type),
+			report_type: c_report.report_type,
 			reporter_organization: None,
 			reporter_organization_null_flavor: None,
 			sponsor_study_number: None,

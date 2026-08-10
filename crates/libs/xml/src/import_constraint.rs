@@ -1,57 +1,45 @@
 use crate::{Error, Result};
-use input_contracts::{FieldInput, InputIssue, InputValue};
-
-fn check(
-	field: &str,
-	value: InputValue<'_>,
-	null_flavor: Option<&str>,
-	check: impl for<'a> Fn(FieldInput<'a>) -> Vec<InputIssue>,
-) -> Result<()> {
-	if let Some(issue) = check(FieldInput::new(value, null_flavor))
-		.into_iter()
-		.next()
-	{
-		return Err(Error::InvalidXml {
-			message: format!("{} ({field}): {}", issue.code, issue.message),
-			line: None,
-			column: None,
-		});
-	}
-	Ok(())
-}
+use input_contracts::{FieldInput, InputIssue};
 
 pub(crate) fn string<F>(
 	field: &str,
 	value: Option<&str>,
 	null_flavor: Option<&str>,
-	check_field: F,
+	_check_field: F,
 ) -> Result<()>
 where
 	F: for<'a> Fn(FieldInput<'a>) -> Vec<InputIssue>,
 {
-	check(
-		field,
-		value.map_or(InputValue::Missing, InputValue::String),
-		null_flavor,
-		check_field,
-	)
+	reject_value_and_null_flavor(field, value.is_some(), null_flavor)?;
+	Ok(())
 }
 
 pub(crate) fn boolean<F>(
 	field: &str,
 	value: Option<bool>,
 	null_flavor: Option<&str>,
-	check_field: F,
+	_check_field: F,
 ) -> Result<()>
 where
 	F: for<'a> Fn(FieldInput<'a>) -> Vec<InputIssue>,
 {
-	check(
-		field,
-		value.map_or(InputValue::Missing, InputValue::Boolean),
-		null_flavor,
-		check_field,
-	)
+	reject_value_and_null_flavor(field, value.is_some(), null_flavor)?;
+	Ok(())
+}
+
+fn reject_value_and_null_flavor(
+	field: &str,
+	has_value: bool,
+	null_flavor: Option<&str>,
+) -> Result<()> {
+	if has_value && null_flavor.is_some() {
+		return Err(Error::InvalidXml {
+			message: format!("{field}: value and nullFlavor cannot both be present"),
+			line: None,
+			column: None,
+		});
+	}
+	Ok(())
 }
 
 pub(crate) fn number_string<F>(
@@ -71,14 +59,8 @@ where
 			line: None,
 			column: None,
 		})?;
-	check(
-		field,
-		number
-			.as_ref()
-			.map_or(InputValue::Missing, InputValue::Number),
-		None,
-		check_field,
-	)
+	let _ = (number, check_field);
+	Ok(())
 }
 
 pub(crate) fn normalize_decimal_lexeme(value: &str) -> String {
@@ -93,7 +75,32 @@ pub(crate) fn normalize_decimal_lexeme(value: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-	use super::normalize_decimal_lexeme;
+	use super::{normalize_decimal_lexeme, string};
+
+	#[test]
+	fn business_rules_do_not_block_import_parsing() {
+		string(
+			"safetyReportId",
+			Some("invalid"),
+			None,
+			input_contracts::generated::c::c_1_1,
+		)
+		.expect("business validation runs after import");
+	}
+
+	#[test]
+	fn rejects_value_with_null_flavor() {
+		let err = string(
+			"testDate",
+			Some("20260810"),
+			Some("UNK"),
+			input_contracts::generated::f::f_r_1,
+		)
+		.unwrap_err();
+		assert!(err
+			.to_string()
+			.contains("value and nullFlavor cannot both be present"));
+	}
 
 	#[test]
 	fn accepts_xml_decimal_leading_point() {

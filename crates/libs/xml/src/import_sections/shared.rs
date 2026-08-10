@@ -333,6 +333,25 @@ pub(crate) fn extract_safety_report_id(xml: &[u8]) -> Result<String> {
 		})?;
 	for value in candidates {
 		if !value.trim().is_empty() {
+			let message_number = xpath
+				.findvalues("//hl7:PORR_IN049016UV/hl7:id/@extension", None)
+				.map_err(|_| Error::InvalidXml {
+					message: "Failed to query N.2.r.1 message number".to_string(),
+					line: None,
+					column: None,
+				})?
+				.into_iter()
+				.find(|candidate| !candidate.trim().is_empty());
+			if message_number
+				.as_deref()
+				.is_some_and(|number| number.trim() != value.trim())
+			{
+				return Err(Error::InvalidXml {
+					message: "N.2.r.1 must be identical to C.1.1".to_string(),
+					line: None,
+					column: None,
+				});
+			}
 			import_constraint::string(
 				"safetyReportId",
 				Some(&value),
@@ -356,11 +375,11 @@ mod tests {
 	use crate::import_sections::d_patient::helpers::parse_patient_death;
 
 	#[test]
-	fn extract_safety_report_id_prefers_investigation_event_c_1_1() {
+	fn extract_safety_report_id_reads_matching_c_1_1_and_n_2_r_1() {
 		let xml = br#"
 			<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3">
 				<PORR_IN049016UV>
-					<id root="2.16.840.1.113883.3.989.2.1.3.1" extension="MESSAGE-ID"/>
+					<id root="2.16.840.1.113883.3.989.2.1.3.1" extension="CASE-C-1-1"/>
 					<controlActProcess>
 						<subject>
 							<investigationEvent classCode="INVSTG" moodCode="EVN">
@@ -378,16 +397,37 @@ mod tests {
 	}
 
 	#[test]
-	fn extract_safety_report_id_from_official_fda_scenario_2_has_no_nul() {
+	fn extract_safety_report_id_rejects_n_2_r_1_mismatch() {
+		let xml = br#"
+			<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3">
+				<PORR_IN049016UV>
+					<id extension="MESSAGE-ID"/>
+					<controlActProcess><subject>
+						<investigationEvent classCode="INVSTG" moodCode="EVN">
+							<id root="2.16.840.1.113883.3.989.2.1.3.1" extension="CASE-ID"/>
+						</investigationEvent>
+					</subject></controlActProcess>
+				</PORR_IN049016UV>
+			</MCCI_IN200100UV01>
+		"#;
+
+		let err = extract_safety_report_id(xml).unwrap_err();
+		assert!(err
+			.to_string()
+			.contains("N.2.r.1 must be identical to C.1.1"));
+	}
+
+	#[test]
+	fn rejects_nonconformant_fda_scenario_2_identifiers() {
 		let xml = include_bytes!(concat!(
 			env!("CARGO_MANIFEST_DIR"),
 			"/../../../docs/exporter/fda/FAERS2022Scenario2.xml"
 		));
 
-		let extracted = extract_safety_report_id(xml).expect("extract C.1.1");
-
-		assert_eq!(extracted, "US-APHARMA-8744554B-UPDATE-TESTING222");
-		assert!(!extracted.contains('\0'));
+		let err = extract_safety_report_id(xml).unwrap_err();
+		assert!(err
+			.to_string()
+			.contains("N.2.r.1 must be identical to C.1.1"));
 	}
 
 	#[test]

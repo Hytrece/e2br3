@@ -514,14 +514,6 @@ fn read_d_8_r_1(
 	let path = format!("{PRODUCT}/hl7:name");
 	let value = first_text(xpath, node, &path);
 	let null_flavor = first_attr(xpath, node, &path, "nullFlavor");
-	if value.is_some() && null_flavor.is_some() {
-		return Err(Error::InvalidXml {
-			message: "ICH.D.8.r.1: value and nullFlavor cannot both be set"
-				.to_string(),
-			line: None,
-			column: None,
-		});
-	}
 	import_constraint::string(
 		"drugName",
 		value.as_deref(),
@@ -899,13 +891,6 @@ fn read_d_10_2_2a(
 	node: &libxml::tree::Node,
 ) -> Result<Option<Decimal>> {
 	let path = "hl7:subjectOf2/hl7:observation[hl7:code[@code='3']]/hl7:value";
-	if first_attr(xpath, node, path, "nullFlavor").is_some() {
-		return Err(Error::InvalidXml {
-			message: "D.10.2.2a does not permit nullFlavor".to_string(),
-			line: None,
-			column: None,
-		});
-	}
 	input_number(
 		first_attr(xpath, node, path, "value"),
 		"parentInformation.parentAge.value",
@@ -1097,13 +1082,6 @@ fn read_d_10_8_r_1(
 	node: &libxml::tree::Node,
 ) -> Result<Option<String>> {
 	let path = format!("{PRODUCT}/hl7:name");
-	if first_attr(xpath, node, &path, "nullFlavor").is_some() {
-		return Err(Error::InvalidXml {
-			message: "D.10.8.r.1 does not permit nullFlavor".to_string(),
-			line: None,
-			column: None,
-		});
-	}
 	input_string(
 		first_text(xpath, node, &path),
 		"parentInformation.pastDrugHistory[].drugName",
@@ -1402,18 +1380,18 @@ mod tests {
 	use super::*;
 
 	#[test]
-	fn parse_parent_rejects_null_flavor_on_age_value() {
+	fn parse_parent_leaves_age_null_flavor_to_business_validation() {
 		let xml = br#"<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
   <primaryRole><player1><role><code code="PRN"/>
     <subjectOf2><observation><code code="3"/><value xsi:type="PQ" nullFlavor="UNK"/></observation></subjectOf2>
   </role></player1></primaryRole>
 </MCCI_IN200100UV01>"#;
 
-		assert!(parse_parent_information(xml).is_err());
+		assert!(parse_parent_information(xml).is_ok());
 	}
 
 	#[test]
-	fn parse_parent_rejects_null_flavor_on_past_drug_name() {
+	fn parse_parent_leaves_drug_name_null_flavor_to_business_validation() {
 		let xml = br#"<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
   <primaryRole><player1><role><code code="PRN"/>
     <subjectOf2><organizer><code code="2"/><component><substanceAdministration>
@@ -1422,7 +1400,7 @@ mod tests {
   </role></player1></primaryRole>
 </MCCI_IN200100UV01>"#;
 
-		assert!(parse_parent_information(xml).is_err());
+		assert!(parse_parent_information(xml).is_ok());
 	}
 
 	#[test]

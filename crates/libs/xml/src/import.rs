@@ -46,10 +46,8 @@ pub fn extract_safety_report_id_from_xml(xml: &[u8]) -> Result<String> {
 	shared::extract_safety_report_id(xml)
 }
 
-fn validate_import_message_header(
+fn read_import_message_header(
 	header: &shared::MessageHeaderExtract,
-	safety_report_id: &str,
-	transmission_date: &str,
 ) -> Result<(String, String, String, String)> {
 	let required = |value: &Option<String>, field: &str| {
 		value
@@ -71,21 +69,6 @@ fn validate_import_message_header(
 		.ok_or_else(|| Error::InvalidImportRequest {
 			message: "message header date missing or invalid".to_string(),
 		})?;
-
-	if message_number != safety_report_id.trim() {
-		return Err(Error::InvalidImportRequest {
-			message: "message header number must equal C.1.1".to_string(),
-		});
-	}
-	let transmission_digits: String = transmission_date
-		.chars()
-		.filter(|c| c.is_ascii_digit())
-		.collect();
-	if transmission_digits.len() < 14 || message_date != transmission_digits[..14] {
-		return Err(Error::InvalidImportRequest {
-			message: "message header date must equal C.1.2".to_string(),
-		});
-	}
 
 	Ok((
 		message_number,
@@ -130,18 +113,11 @@ async fn import_e2b_xml_in_txn(
 	let product_presave_id = req.product_presave_id;
 	let parsed = parse_e2b_xml(&req.xml)?;
 	let safety_report_id = shared::extract_safety_report_id(&req.xml)?;
-	let transmission_date = parse_c_safety_report(&req.xml)?
-		.map(|report| report.transmission_date)
-		.ok_or_else(|| Error::InvalidImportRequest {
-			message: "C.1 safety report section missing".to_string(),
-		})?;
+	let transmission_date =
+		parse_c_safety_report(&req.xml)?.and_then(|report| report.transmission_date);
 	let header_extract = shared::extract_message_header(&req.xml)?;
 	let (message_number, message_sender, message_receiver, message_date) =
-		validate_import_message_header(
-			&header_extract,
-			&safety_report_id,
-			&transmission_date,
-		)?;
+		read_import_message_header(&header_extract)?;
 	// Serialize imports for the same organization/report ID. The lock is held
 	// by the outer import transaction, so the recheck below closes the race
 	// between the REST decision query and case creation.
@@ -359,7 +335,7 @@ async fn import_e2b_xml_in_txn(
 
 #[cfg(test)]
 mod tests {
-	use super::validate_import_message_header;
+	use super::read_import_message_header;
 	use crate::import_sections::shared::MessageHeaderExtract;
 
 	fn header(number: &str, date: &str) -> MessageHeaderExtract {
@@ -375,34 +351,14 @@ mod tests {
 	}
 
 	#[test]
-	fn rejects_message_number_mismatch() {
-		let error = validate_import_message_header(
-			&header("message-id", "20260809000000"),
-			"case-id",
-			"20260809000000",
-		)
-		.expect_err("mismatched N.2.r.1 must block import");
-		assert!(error.to_string().contains("must equal C.1.1"));
+	fn header_reader_does_not_duplicate_c_1_1_import_check() {
+		read_import_message_header(&header("message-id", "20260809000000"))
+			.expect("read header");
 	}
 
 	#[test]
-	fn rejects_message_date_mismatch() {
-		let error = validate_import_message_header(
-			&header("case-id", "20260808000000"),
-			"case-id",
-			"20260809000000",
-		)
-		.expect_err("mismatched N.2.r.4 must block import");
-		assert!(error.to_string().contains("must equal C.1.2"));
-	}
-
-	#[test]
-	fn accepts_complete_matching_message_header() {
-		validate_import_message_header(
-			&header("case-id", "20260809000000"),
-			"case-id",
-			"20260809000000",
-		)
-		.expect("matching message header");
+	fn reads_complete_message_header() {
+		read_import_message_header(&header("case-id", "20260809000000"))
+			.expect("read header");
 	}
 }

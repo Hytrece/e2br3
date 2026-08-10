@@ -1,5 +1,4 @@
 use xml::import_sections::f_test_result::parse_f_test_results;
-use xml::Error as XmlError;
 
 #[test]
 fn import_f_test_basic() {
@@ -38,7 +37,7 @@ fn import_f_test_basic() {
 }
 
 #[test]
-fn import_f_test_requires_test_name() {
+fn import_f_test_allows_missing_test_name() {
 	let xml = br#"<?xml version="1.0" encoding="utf-8"?>
 <MCCI_IN200100UV01 xmlns="urn:hl7-org:v3" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
 	<PORR_IN049016UV>
@@ -54,6 +53,7 @@ fn import_f_test_requires_test_name() {
 											<code code="3" codeSystem="2.16.840.1.113883.3.989.2.1.1.20"/>
 											<component>
 												<observation>
+													<effectiveTime value="20260810"/>
 													<value value="25" unit="U/L"/>
 												</observation>
 											</component>
@@ -69,11 +69,7 @@ fn import_f_test_requires_test_name() {
 	</PORR_IN049016UV>
 </MCCI_IN200100UV01>"#;
 
-	let err = parse_f_test_results(xml).expect_err("missing test name should fail");
-	match err {
-		XmlError::InvalidXml { message, .. } => {
-			assert!(message.contains("ICH.F.r.2.1.REQUIRED"));
-		}
-		other => panic!("unexpected error type: {other:?}"),
-	}
+	let tests =
+		parse_f_test_results(xml).expect("missing name is not a parse error");
+	assert_eq!(tests[0].test_name, "");
 }

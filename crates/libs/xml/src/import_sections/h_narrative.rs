@@ -217,20 +217,14 @@ pub(crate) async fn import_section_h(
 
 /// e2b:H.1
 fn read_h_1(xpath: &mut Context) -> Result<String> {
-	let value = first_text_root(xpath, HNarrativePaths::CASE_NARRATIVE).ok_or_else(
-		|| Error::InvalidXml {
-			message: "ICH.H.1.REQUIRED: case narrative missing".to_string(),
-			line: None,
-			column: None,
-		},
-	)?;
+	let value = first_text_root(xpath, HNarrativePaths::CASE_NARRATIVE);
 	import_constraint::string(
 		"caseNarrative",
-		Some(&value),
+		value.as_deref(),
 		None,
 		input_contracts::generated::h::h_1,
 	)?;
-	Ok(value)
+	Ok(value.unwrap_or_default())
 }
 
 /// e2b:H.2

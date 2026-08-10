@@ -13,9 +13,9 @@ use libxml::tree::NodeType;
 use libxml::xpath::Context;
 
 pub(crate) struct SenderImport {
-	pub(crate) sender_type: String,
+	pub(crate) sender_type: Option<String>,
 	pub(crate) health_professional_type_kr1: Option<String>,
-	pub(crate) organization_name: String,
+	pub(crate) organization_name: Option<String>,
 	pub(crate) department: Option<String>,
 	pub(crate) street_address: Option<String>,
 	pub(crate) city: Option<String>,
@@ -77,7 +77,7 @@ pub(crate) struct LinkedReportImport {
 
 #[derive(Debug)]
 pub(crate) struct LiteratureImport {
-	pub(crate) reference_text: String,
+	pub(crate) reference_text: Option<String>,
 	pub(crate) reference_text_null_flavor: Option<String>,
 	pub(crate) document_base64: Option<String>,
 	pub(crate) file_name: Option<String>,
@@ -141,7 +141,7 @@ fn sender_string(
 fn read_c_3_1(
 	xpath: &mut Context,
 	node: Option<&libxml::tree::Node>,
-) -> Result<String> {
+) -> Result<Option<String>> {
 	let raw = node.and_then(|node| {
 		first_attr(
 			xpath,
@@ -150,18 +150,13 @@ fn read_c_3_1(
 			"code",
 		)
 	});
-	let value = raw.ok_or_else(|| Error::InvalidXml {
-		message: "ICH.C.3.1.REQUIRED: sender type missing".to_string(),
-		line: None,
-		column: None,
-	})?;
 	import_constraint::string(
 		"senderType",
-		Some(&value),
+		raw.as_deref(),
 		None,
 		input_contracts::generated::c::c_3_1,
 	)?;
-	Ok(value)
+	Ok(raw)
 }
 
 /// e2b:C.3.1.KR.1
@@ -190,12 +185,11 @@ fn read_c_3_1_kr_1(
 fn read_c_3_2(
 	xpath: &mut Context,
 	node: Option<&libxml::tree::Node>,
-) -> Result<String> {
-	let value = node.and_then(|node| first_text(xpath, node, "./hl7:representedOrganization/hl7:assignedEntity/hl7:representedOrganization/hl7:name"))
-		.ok_or_else(|| Error::InvalidXml { message: "ICH.C.3.2.REQUIRED: sender organization missing".to_string(), line: None, column: None })?;
+) -> Result<Option<String>> {
+	let value = node.and_then(|node| first_text(xpath, node, "./hl7:representedOrganization/hl7:assignedEntity/hl7:representedOrganization/hl7:name"));
 	import_constraint::string(
 		"organizationName",
-		Some(&value),
+		value.as_deref(),
 		None,
 		input_contracts::generated::c::c_3_2,
 	)?;
@@ -1027,7 +1021,7 @@ mod tests {
 	}
 
 	#[test]
-	fn primary_source_import_rejects_country_null_flavor() {
+	fn primary_source_import_leaves_country_null_flavor_to_business_validation() {
 		let xml = primary_source_xml(
 			r#"<assignedPerson>
   <asQualifiedEntity><code nullFlavor="UNK"/></asQualifiedEntity>
@@ -1035,9 +1029,8 @@ mod tests {
 </assignedPerson>
 <telecom nullFlavor="NASK"/>"#,
 		);
-		let error = parse_primary_sources(xml.as_bytes())
-			.expect_err("country nullFlavor must fail");
-		assert!(error.to_string().contains("C.2.r.3.NULLFLAVOR.FORBIDDEN"));
+		parse_primary_sources(xml.as_bytes())
+			.expect("business validation runs later");
 	}
 
 	#[test]
@@ -1081,8 +1074,8 @@ mod tests {
 		let sender = parse_sender_information(&xml)
 			.expect("parse sender")
 			.expect("sender should exist");
-		assert_eq!(sender.sender_type, "1");
-		assert_eq!(sender.organization_name, "Big Pharma");
+		assert_eq!(sender.sender_type.as_deref(), Some("1"));
+		assert_eq!(sender.organization_name.as_deref(), Some("Big Pharma"));
 		assert_eq!(sender.department.as_deref(), Some("Management"));
 		assert_eq!(
 			sender.street_address.as_deref(),
@@ -1437,8 +1430,8 @@ pub(crate) fn parse_literature_references(
 fn read_c_4_r_1(
 	xpath: &mut Context,
 	node: &libxml::tree::Node,
-	index: usize,
-) -> Result<(String, Option<String>)> {
+	_index: usize,
+) -> Result<(Option<String>, Option<String>)> {
 	let null_flavor = first_attr(
 		xpath,
 		node,
@@ -1447,16 +1440,10 @@ fn read_c_4_r_1(
 	)
 	.or_else(|| first_attr(xpath, node, "hl7:title", "nullFlavor"));
 	let text = first_text(xpath, node, "hl7:bibliographicDesignationText")
-		.or_else(|| first_text(xpath, node, "hl7:title"))
-		.or_else(|| null_flavor.as_ref().map(|_| String::new()))
-		.ok_or_else(|| Error::InvalidXml {
-			message: format!("ICH.C.4.r.REQUIRED: literature reference text missing for sequence {}", index + 1),
-			line: None,
-			column: None,
-		})?;
+		.or_else(|| first_text(xpath, node, "hl7:title"));
 	import_constraint::string(
 		"referenceText",
-		Some(&text),
+		text.as_deref(),
 		null_flavor.as_deref(),
 		input_contracts::generated::c::c_4_r_1,
 	)?;

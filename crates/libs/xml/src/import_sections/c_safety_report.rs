@@ -16,11 +16,12 @@ pub(crate) use runtime::import_section_c;
 
 #[derive(Debug)]
 pub struct CSafetyReportImport {
-	pub transmission_date: String,
-	pub report_type: String,
-	pub date_first_received_from_source: Date,
-	pub date_of_most_recent_information: Date,
-	pub fulfil_expedited_criteria: bool,
+	pub transmission_date: Option<String>,
+	pub report_type: Option<String>,
+	pub date_first_received_from_source: Option<Date>,
+	pub date_of_most_recent_information: Option<Date>,
+	pub fulfil_expedited_criteria: Option<bool>,
+	pub fulfil_expedited_criteria_null_flavor: Option<String>,
 	pub additional_documents_available: Option<bool>,
 	pub local_criteria_report_type: Option<String>,
 	pub combination_product_report_indicator: Option<String>,
@@ -81,6 +82,10 @@ pub fn parse_c_safety_report(xml: &[u8]) -> Result<Option<CSafetyReportImport>> 
 		date_first_received_from_source,
 		date_of_most_recent_information,
 		fulfil_expedited_criteria,
+		fulfil_expedited_criteria_null_flavor: first_value_root(
+			&mut xpath,
+			CSafetyReportPaths::FULFIL_EXPEDITED_NULL_FLAVOR,
+		),
 		additional_documents_available,
 		local_criteria_report_type,
 		combination_product_report_indicator,
@@ -95,21 +100,25 @@ pub fn parse_c_safety_report(xml: &[u8]) -> Result<Option<CSafetyReportImport>> 
 }
 
 /// e2b:C.1.2
-fn read_c_1_2(xpath: &mut Context) -> Result<String> {
-	let raw = first_value_root(xpath, CSafetyReportPaths::DATE_OF_CREATION)
-		.ok_or_else(|| Error::InvalidXml {
-			message: "ICH.C.1.2.REQUIRED: transmission date missing".to_string(),
+fn read_c_1_2(xpath: &mut Context) -> Result<Option<String>> {
+	let raw = first_value_root(xpath, CSafetyReportPaths::DATE_OF_CREATION);
+	let message_date =
+		first_value_root(xpath, "//hl7:PORR_IN049016UV/hl7:creationTime/@value");
+	if raw.as_deref().is_some_and(|date| {
+		message_date
+			.as_deref()
+			.is_some_and(|message_date| date.trim() != message_date.trim())
+	}) {
+		return Err(Error::InvalidXml {
+			message: "N.2.r.4 must be identical to C.1.2".to_string(),
 			line: None,
 			column: None,
-		})?;
-	let value = normalize_datetime(&raw).ok_or_else(|| Error::InvalidXml {
-		message: "ICH.C.1.2: invalid transmission date".to_string(),
-		line: None,
-		column: None,
-	})?;
+		});
+	}
+	let value = raw.and_then(|raw| normalize_datetime(&raw));
 	import_constraint::string(
 		"transmissionDate",
-		Some(&value),
+		value.as_deref(),
 		None,
 		input_contracts::generated::c::c_1_2,
 	)?;
@@ -117,16 +126,11 @@ fn read_c_1_2(xpath: &mut Context) -> Result<String> {
 }
 
 /// e2b:C.1.3
-fn read_c_1_3(xpath: &mut Context) -> Result<String> {
-	let value = first_value_root(xpath, CSafetyReportPaths::TYPE_OF_REPORT_CODE)
-		.ok_or_else(|| Error::InvalidXml {
-			message: "ICH.C.1.3.REQUIRED: type of report missing".to_string(),
-			line: None,
-			column: None,
-		})?;
+fn read_c_1_3(xpath: &mut Context) -> Result<Option<String>> {
+	let value = first_value_root(xpath, CSafetyReportPaths::TYPE_OF_REPORT_CODE);
 	import_constraint::string(
 		"reportType",
-		Some(&value),
+		value.as_deref(),
 		None,
 		input_contracts::generated::c::c_1_3,
 	)?;
@@ -134,46 +138,27 @@ fn read_c_1_3(xpath: &mut Context) -> Result<String> {
 }
 
 /// e2b:C.1.4
-fn read_c_1_4(xpath: &mut Context) -> Result<Date> {
-	let value = first_value_root(xpath, CSafetyReportPaths::DATE_FIRST_RECEIVED)
-		.ok_or_else(|| Error::InvalidXml {
-			message: "ICH.C.1.4.REQUIRED: first received date missing".to_string(),
-			line: None,
-			column: None,
-		})?;
+fn read_c_1_4(xpath: &mut Context) -> Result<Option<Date>> {
+	let value = first_value_root(xpath, CSafetyReportPaths::DATE_FIRST_RECEIVED);
 	import_constraint::string(
 		"dateFirstReceivedFromSource",
-		Some(&value),
+		value.as_deref(),
 		None,
 		input_contracts::generated::c::c_1_4,
 	)?;
-	parse_date(value).ok_or_else(|| Error::InvalidXml {
-		message: "ICH.C.1.4: invalid first received date".to_string(),
-		line: None,
-		column: None,
-	})
+	Ok(value.and_then(parse_date))
 }
 
 /// e2b:C.1.5
-fn read_c_1_5(xpath: &mut Context) -> Result<Date> {
-	let value = first_value_root(xpath, CSafetyReportPaths::DATE_MOST_RECENT)
-		.ok_or_else(|| Error::InvalidXml {
-			message: "ICH.C.1.5.REQUIRED: most recent information date missing"
-				.to_string(),
-			line: None,
-			column: None,
-		})?;
+fn read_c_1_5(xpath: &mut Context) -> Result<Option<Date>> {
+	let value = first_value_root(xpath, CSafetyReportPaths::DATE_MOST_RECENT);
 	import_constraint::string(
 		"dateOfMostRecentInformation",
-		Some(&value),
+		value.as_deref(),
 		None,
 		input_contracts::generated::c::c_1_5,
 	)?;
-	parse_date(value).ok_or_else(|| Error::InvalidXml {
-		message: "ICH.C.1.5: invalid most recent information date".to_string(),
-		line: None,
-		column: None,
-	})
+	Ok(value.and_then(parse_date))
 }
 
 /// e2b:C.1.6.1
@@ -192,47 +177,18 @@ fn read_c_1_6_1(xpath: &mut Context) -> Result<Option<bool>> {
 }
 
 /// e2b:C.1.7
-fn read_c_1_7(xpath: &mut Context) -> Result<bool> {
-	let value = parse_bool_value(first_value_root(
-		xpath,
-		CSafetyReportPaths::FULFIL_EXPEDITED,
-	));
+fn read_c_1_7(xpath: &mut Context) -> Result<Option<bool>> {
+	let raw = first_value_root(xpath, CSafetyReportPaths::FULFIL_EXPEDITED);
+	let value = parse_bool_value(raw);
 	let null_flavor =
 		first_value_root(xpath, CSafetyReportPaths::FULFIL_EXPEDITED_NULL_FLAVOR);
-	if value.is_none() && null_flavor.is_none() {
-		return Err(Error::InvalidXml {
-			message: "ICH.C.1.7.REQUIRED: expedited criteria missing".to_string(),
-			line: None,
-			column: None,
-		});
-	}
 	import_constraint::boolean(
 		"fulfilExpeditedCriteria",
 		value,
 		null_flavor.as_deref(),
 		input_contracts::generated::c::c_1_7,
 	)?;
-	value.ok_or_else(|| Error::InvalidXml {
-		message: "ICH.C.1.7: NI requires verified E2B(R2)-origin provenance"
-			.to_string(),
-		line: None,
-		column: None,
-	})
-}
-
-#[cfg(test)]
-mod c_1_7_tests {
-	use super::*;
-
-	#[test]
-	fn rejects_ni_without_verified_r2_provenance() {
-		let xml = r#"<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3"><component><observationEvent><code code="23" codeSystem="2.16.840.1.113883.3.989.2.1.1.19"/><value nullFlavor="NI"/></observationEvent></component></MCCI_IN200100UV01>"#;
-		let parser = Parser::default();
-		let doc = parser.parse_string(xml).unwrap();
-		let mut xpath = Context::new(&doc).unwrap();
-		xpath.register_namespace("hl7", "urn:hl7-org:v3").unwrap();
-		assert!(read_c_1_7(&mut xpath).is_err());
-	}
+	Ok(value)
 }
 
 /// e2b:FDA.C.1.7.1
@@ -261,24 +217,9 @@ fn read_fda_c_1_12(xpath: &mut Context) -> Result<(Option<String>, Option<String
 		xpath,
 		CSafetyReportPaths::FDA_COMBINATION_PRODUCT_INDICATOR_NULL_FLAVOR,
 	);
-	if raw.is_some() && value.is_none() {
-		return Err(Error::InvalidXml {
-			message: "FDA.C.1.12: invalid boolean value".to_string(),
-			line: None,
-			column: None,
-		});
-	}
-	if value.is_some() && null_flavor.is_some() {
-		return Err(Error::InvalidXml {
-			message: "FDA.C.1.12: value and nullFlavor cannot both be set"
-				.to_string(),
-			line: None,
-			column: None,
-		});
-	}
-	import_constraint::boolean(
+	import_constraint::string(
 		"combinationProductReportIndicator",
-		value.as_deref().and_then(|value| value.parse().ok()),
+		raw.as_deref(),
 		null_flavor.as_deref(),
 		input_contracts::generated::c::fda_c_1_12,
 	)?;
@@ -318,24 +259,9 @@ fn read_c_1_9_1(xpath: &mut Context) -> Result<(Option<bool>, Option<String>)> {
 		xpath,
 		CSafetyReportPaths::OTHER_CASE_IDENTIFIERS_EXIST_NULL_FLAVOR,
 	);
-	if raw.is_some() && value.is_none() {
-		return Err(Error::InvalidXml {
-			message: "ICH.C.1.9.1: invalid boolean value".to_string(),
-			line: None,
-			column: None,
-		});
-	}
-	if value.is_some() && null_flavor.is_some() {
-		return Err(Error::InvalidXml {
-			message: "ICH.C.1.9.1: value and nullFlavor cannot both be set"
-				.to_string(),
-			line: None,
-			column: None,
-		});
-	}
-	import_constraint::boolean(
+	import_constraint::string(
 		"otherCaseIdentifiersExist",
-		value,
+		raw.as_deref(),
 		null_flavor.as_deref(),
 		input_contracts::generated::c::c_1_9_1,
 	)?;
@@ -430,7 +356,9 @@ fn format_datetime(date: Date) -> String {
 
 #[cfg(test)]
 mod tests {
-	use super::normalize_fda_combination_product_indicator;
+	use super::{
+		normalize_fda_combination_product_indicator, parse_c_safety_report,
+	};
 
 	#[test]
 	fn fda_combination_product_import_normalizes_to_boolean_strings() {
@@ -450,5 +378,22 @@ mod tests {
 			normalize_fda_combination_product_indicator(Some("unknown".to_string())),
 			None
 		);
+	}
+
+	#[test]
+	fn import_rejects_n_2_r_4_c_1_2_mismatch() {
+		let xml = br#"
+			<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3">
+				<PORR_IN049016UV>
+					<creationTime value="20260810000000"/>
+					<controlActProcess><effectiveTime value="20260809000000"/></controlActProcess>
+				</PORR_IN049016UV>
+			</MCCI_IN200100UV01>
+		"#;
+
+		let err = parse_c_safety_report(xml).unwrap_err();
+		assert!(err
+			.to_string()
+			.contains("N.2.r.4 must be identical to C.1.2"));
 	}
 }

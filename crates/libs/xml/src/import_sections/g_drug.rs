@@ -409,35 +409,17 @@ pub fn parse_g_drugs(xml: &[u8]) -> Result<Vec<GDrugImport>> {
 }
 
 fn read_xml_id(xpath: &mut Context, node: &Node, index: usize) -> Result<String> {
-	let value =
-		first_attr(xpath, node, GDrugPaths::XML_ID_ROOT).ok_or_else(|| {
-			invalid_field(
-				"G.k.1",
-				format!("product reference id missing for drug index {index}"),
-			)
-		})?;
-	let value = value.trim();
-	if value.is_empty() {
-		return Err(invalid_field(
-			"G.k.1",
-			format!("product reference id empty for drug index {index}"),
-		));
-	}
-	Ok(value.to_string())
+	Ok(first_attr(xpath, node, GDrugPaths::XML_ID_ROOT)
+		.unwrap_or_else(|| format!("import-drug-{index}")))
 }
 
 /// e2b:G.k.1
 fn read_g_k_1(
 	drug_roles: &HashMap<String, String>,
 	xml_id: &str,
-	index: usize,
+	_index: usize,
 ) -> Result<String> {
-	let value = drug_roles.get(xml_id).cloned().ok_or_else(|| {
-		invalid_field(
-			"G.k.1",
-			format!("drug characterization missing for drug index {index}"),
-		)
-	})?;
+	let value = drug_roles.get(xml_id).cloned().unwrap_or_default();
 	import_constraint::string(
 		"drugCharacterization",
 		Some(&value),
@@ -451,16 +433,13 @@ fn read_drug_roles(xpath: &mut Context) -> Result<HashMap<String, String>> {
 	let nodes = find_nodes(xpath, GDrugPaths::DRUG_ROLE_NODE, None)?;
 	let mut roles = HashMap::new();
 	for node in nodes {
-		let reference = first_attr(xpath, &node, GDrugPaths::DRUG_ROLE_PRODUCT_REF)
-			.ok_or_else(|| invalid_field("G.k.1", "product reference id missing"))?;
-		let reference = reference.trim();
-		if reference.is_empty() {
-			return Err(invalid_field("G.k.1", "product reference id empty"));
-		}
-		let value = first_attr(xpath, &node, GDrugPaths::DRUG_ROLE_CODE)
-			.ok_or_else(|| {
-				invalid_field("G.k.1", "drug characterization missing")
-			})?;
+		let Some(reference) =
+			first_attr(xpath, &node, GDrugPaths::DRUG_ROLE_PRODUCT_REF)
+		else {
+			continue;
+		};
+		let value =
+			first_attr(xpath, &node, GDrugPaths::DRUG_ROLE_CODE).unwrap_or_default();
 		import_constraint::string(
 			"drugCharacterization",
 			Some(&value),
@@ -480,14 +459,9 @@ fn read_drug_roles(xpath: &mut Context) -> Result<HashMap<String, String>> {
 }
 
 /// e2b:G.k.2.2
-fn read_g_k_2_2(xpath: &mut Context, node: &Node, index: usize) -> Result<String> {
+fn read_g_k_2_2(xpath: &mut Context, node: &Node, _index: usize) -> Result<String> {
 	let value =
-		first_text(xpath, node, GDrugPaths::PRODUCT_NAME_1).ok_or_else(|| {
-			invalid_field(
-				"G.k.2.2",
-				format!("medicinal product name missing for drug index {index}"),
-			)
-		})?;
+		first_text(xpath, node, GDrugPaths::PRODUCT_NAME_1).unwrap_or_default();
 	import_constraint::string(
 		"medicinalProduct",
 		Some(&value),
@@ -568,9 +542,6 @@ fn read_g_k_2_1_2b(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
 fn read_fda_g_k_1_a(xpath: &mut Context, node: &Node) -> Result<Option<bool>> {
 	let raw = first_attr(xpath, node, GDrugPaths::INVESTIGATIONAL_BLINDED);
 	let value = raw.clone().and_then(parse_bool);
-	if raw.is_some() && value.is_none() {
-		return Err(invalid_field("G.k.2.5", "invalid boolean value"));
-	}
 	import_constraint::boolean(
 		"investigationalProductBlinded",
 		value,
@@ -910,13 +881,6 @@ fn read_g_k_4_r_6b(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
 
 /// e2b:G.k.4.r.7
 fn read_g_k_4_r_7(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
-	if first_attr(xpath, node, GDrugPaths::DOSAGE_BATCH_LOT_NULL_FLAVOR).is_some() {
-		return Err(Error::InvalidXml {
-			message: "G.k.4.r.7 does not permit nullFlavor".to_string(),
-			line: None,
-			column: None,
-		});
-	}
 	input_string(
 		first_text(xpath, node, GDrugPaths::DOSAGE_BATCH_LOT),
 		"dosageInformation[].batchNumber",
@@ -1129,9 +1093,6 @@ fn read_device_characteristic_value_display_name(
 fn read_fda_g_k_12_r_1(xpath: &mut Context, node: &Node) -> Result<Option<bool>> {
 	let raw = first_attr(xpath, node, GDrugPaths::DEVICE_MALFUNCTION);
 	let value = raw.clone().and_then(parse_bool);
-	if raw.is_some() && value.is_none() {
-		return Err(invalid_field("FDA.G.k.12.r.1", "invalid boolean value"));
-	}
 	Ok(value)
 }
 
@@ -1376,12 +1337,6 @@ fn input_string_pair(
 		input_contracts::FieldInput<'a>,
 	) -> Vec<input_contracts::InputIssue>,
 ) -> Result<(Option<String>, Option<String>)> {
-	if value.is_some() && null_flavor.is_some() {
-		return Err(invalid_field(
-			field,
-			"value and nullFlavor cannot both be set",
-		));
-	}
 	import_constraint::string(
 		field,
 		value.as_deref(),
@@ -1409,8 +1364,9 @@ fn date_pair(
 	let Some(value) = value else {
 		return Ok((None, None, null_flavor));
 	};
-	let (date, raw) =
-		parse_date(value).ok_or_else(|| invalid_field(field, "invalid date"))?;
+	let Some((date, raw)) = parse_date(value) else {
+		return Ok((None, None, null_flavor));
+	};
 	Ok((date, raw, null_flavor))
 }
 
@@ -1473,14 +1429,14 @@ mod tests {
 	}
 
 	#[test]
-	fn applies_field_type_and_length_defenses() {
+	fn leaves_length_validation_later_but_rejects_unparseable_numbers() {
 		let overlong_version = format!(
 			r#"<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3"><subjectOf2><organizer><code code="4" codeSystem="2.16.840.1.113883.3.989.2.1.1.20"/><component><substanceAdministration><consumable><instanceOfKind><kindOfProduct><name>Drug A</name><asIdentifiedEntity><id extension="MPID-1"/><code code="MPID" codeSystemVersion="{}"/></asIdentifiedEntity></kindOfProduct></instanceOfKind></consumable></substanceAdministration></component></organizer></subjectOf2></MCCI_IN200100UV01>"#,
 			"1".repeat(1001)
 		);
 		let invalid_decimal = br#"<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3"><subjectOf2><organizer><code code="4" codeSystem="2.16.840.1.113883.3.989.2.1.1.20"/><component><substanceAdministration><consumable><instanceOfKind><kindOfProduct><name>Drug A</name></kindOfProduct></instanceOfKind></consumable><outboundRelationship2 typeCode="COMP"><substanceAdministration><doseQuantity value="not-a-number"/></substanceAdministration></outboundRelationship2></substanceAdministration></component></organizer></subjectOf2></MCCI_IN200100UV01>"#;
 
-		assert!(parse_g_drugs(with_drug_role(&overlong_version).as_bytes()).is_err());
+		assert!(parse_g_drugs(with_drug_role(&overlong_version).as_bytes()).is_ok());
 		assert!(parse_g_drugs(
 			with_drug_role(std::str::from_utf8(invalid_decimal).unwrap()).as_bytes()
 		)
@@ -1540,19 +1496,11 @@ mod tests {
 	}
 
 	#[test]
-	fn rejects_batch_lot_null_flavor() {
+	fn leaves_batch_lot_null_flavor_to_business_validation() {
 		let xml = br#"<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3"><subjectOf2><organizer><code code="4" codeSystem="2.16.840.1.113883.3.989.2.1.1.20"/><component><substanceAdministration><consumable><instanceOfKind><kindOfProduct><name>Drug A</name></kindOfProduct></instanceOfKind></consumable><outboundRelationship2 typeCode="COMP"><substanceAdministration><consumable><instanceOfKind><productInstanceInstance><lotNumberText nullFlavor="UNK"/></productInstanceInstance></instanceOfKind></consumable></substanceAdministration></outboundRelationship2></substanceAdministration></component></organizer></subjectOf2></MCCI_IN200100UV01>"#;
 
-		let err = parse_g_drugs(
-			with_drug_role(std::str::from_utf8(xml).unwrap()).as_bytes(),
-		)
-		.expect_err("G.k.4.r.7 nullFlavor should fail");
-		match err {
-			Error::InvalidXml { message, .. } => {
-				assert!(message.contains("G.k.4.r.7 does not permit nullFlavor"));
-			}
-			other => panic!("unexpected error type: {other:?}"),
-		}
+		parse_g_drugs(with_drug_role(std::str::from_utf8(xml).unwrap()).as_bytes())
+			.expect("business validation runs later");
 	}
 
 	#[test]

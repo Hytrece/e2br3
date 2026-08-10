@@ -2,19 +2,32 @@ use crate::common::{date, fixture};
 use xml::import_sections::c_safety_report::parse_c_safety_report;
 use xml::{apply_c_safety_report_import_settings, CImportSettings};
 
+fn conformant_scenario6() -> Vec<u8> {
+	String::from_utf8(fixture("FAERS2022Scenario6.xml"))
+		.expect("utf-8 fixture")
+		.replacen("20140614151617-0500", "20220614151617-0500", 1)
+		.into_bytes()
+}
+
 #[test]
 fn import_c_section_all_fields_from_scenario6() {
-	let xml = fixture("FAERS2022Scenario6.xml");
+	let xml = conformant_scenario6();
 
 	let report = parse_c_safety_report(&xml)
 		.expect("parse")
 		.expect("section C should exist");
 
-	assert_eq!(report.transmission_date, "20220614151617");
-	assert_eq!(report.report_type, "1");
-	assert_eq!(report.date_first_received_from_source, date(2022, 6, 14));
-	assert_eq!(report.date_of_most_recent_information, date(2022, 6, 14));
-	assert!(report.fulfil_expedited_criteria);
+	assert_eq!(report.transmission_date.as_deref(), Some("20220614151617"));
+	assert_eq!(report.report_type.as_deref(), Some("1"));
+	assert_eq!(
+		report.date_first_received_from_source,
+		Some(date(2022, 6, 14))
+	);
+	assert_eq!(
+		report.date_of_most_recent_information,
+		Some(date(2022, 6, 14))
+	);
+	assert_eq!(report.fulfil_expedited_criteria, Some(true));
 	assert_eq!(report.additional_documents_available, Some(true));
 	assert_eq!(report.local_criteria_report_type.as_deref(), Some("1"));
 	assert_eq!(
@@ -32,7 +45,7 @@ fn import_c_section_all_fields_from_scenario6() {
 
 #[test]
 fn import_settings_update_only_enabled_c1_dates_to_import_date() {
-	let xml = fixture("FAERS2022Scenario6.xml");
+	let xml = conformant_scenario6();
 	let mut report = parse_c_safety_report(&xml)
 		.expect("parse")
 		.expect("section C should exist");
@@ -50,9 +63,9 @@ fn import_settings_update_only_enabled_c1_dates_to_import_date() {
 	)
 	.expect("import date settings should keep required dates valid");
 
-	assert_eq!(report.transmission_date, "20220614000000");
-	assert_eq!(report.date_first_received_from_source, import_date);
-	assert_eq!(report.date_of_most_recent_information, import_date);
+	assert_eq!(report.transmission_date.as_deref(), Some("20220614000000"));
+	assert_eq!(report.date_first_received_from_source, Some(import_date));
+	assert_eq!(report.date_of_most_recent_information, Some(import_date));
 }
 
 #[test]
@@ -69,7 +82,13 @@ fn import_settings_preserve_official_inbound_dates() {
 	)
 	.expect("inbound source dates must not block import");
 
-	assert_eq!(report.transmission_date, "20140714151617");
-	assert_eq!(report.date_first_received_from_source, date(2022, 6, 14));
-	assert_eq!(report.date_of_most_recent_information, date(2022, 6, 14));
+	assert_eq!(report.transmission_date.as_deref(), Some("20140714151617"));
+	assert_eq!(
+		report.date_first_received_from_source,
+		Some(date(2022, 6, 14))
+	);
+	assert_eq!(
+		report.date_of_most_recent_information,
+		Some(date(2022, 6, 14))
+	);
 }

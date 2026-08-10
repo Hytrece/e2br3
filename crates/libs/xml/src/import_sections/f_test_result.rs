@@ -5,7 +5,6 @@ use crate::import_constraint;
 use crate::mapping::fda::f_test_result::FTestResultPaths;
 use crate::Result;
 use lib_core::ctx::Ctx;
-use lib_core::e2b::null_flavor::E2bNullFlavorValue;
 use lib_core::model::store::set_full_context_dbx;
 use lib_core::model::test_result::{TestResultBmc, TestResultForCreate};
 use lib_core::model::ModelManager;
@@ -64,9 +63,9 @@ pub fn parse_f_test_results(xml: &[u8]) -> Result<Vec<FTestResultImport>> {
 			})?;
 
 	let mut items = Vec::new();
-	for (idx, node) in nodes.into_iter().enumerate() {
-		let test_name = read_f_r_2_1(&mut xpath, &node, idx)?;
+	for node in nodes {
 		let (test_date, test_date_null_flavor) = read_f_r_1(&mut xpath, &node)?;
+		let test_name = read_f_r_2_1(&mut xpath, &node)?;
 		let (test_result_value, test_result_qualifier) =
 			read_f_r_3_2(&mut xpath, &node)?;
 
@@ -151,37 +150,19 @@ fn read_f_r_1(
 		None,
 		input_contracts::generated::f::f_r_1,
 	)?;
-	let field = E2bNullFlavorValue::from_parts(value, null_flavor.as_deref())
-		.map_err(|err| Error::InvalidXml {
-			message: format!("Invalid F.r.1 test date nullFlavor: {err}"),
-			line: None,
-			column: None,
-		})?;
-	Ok(field
-		.map(E2bNullFlavorValue::into_parts)
-		.unwrap_or_default())
+	Ok((value, null_flavor))
 }
 
 /// e2b:F.r.2.1
-fn read_f_r_2_1(xpath: &mut Context, node: &Node, index: usize) -> Result<String> {
-	let value =
-		first_text(xpath, node, FTestResultPaths::TEST_NAME).ok_or_else(|| {
-			Error::InvalidXml {
-				message: format!(
-					"ICH.F.r.2.1.REQUIRED: test name missing for sequence {}",
-					index + 1
-				),
-				line: None,
-				column: None,
-			}
-		})?;
+fn read_f_r_2_1(xpath: &mut Context, node: &Node) -> Result<String> {
+	let value = first_text(xpath, node, FTestResultPaths::TEST_NAME);
 	import_constraint::string(
 		"testName",
-		Some(&value),
+		value.as_deref(),
 		None,
 		input_contracts::generated::f::f_r_2_1,
 	)?;
-	Ok(value)
+	Ok(value.unwrap_or_default())
 }
 
 /// e2b:F.r.2.2a
@@ -216,17 +197,6 @@ fn read_f_r_3_2(
 	xpath: &mut Context,
 	node: &Node,
 ) -> Result<(Option<String>, Option<String>)> {
-	if let Some(null_flavor) =
-		first_attr(xpath, node, FTestResultPaths::RESULT_NULL_FLAVOR)
-	{
-		return Err(Error::InvalidXml {
-			message: format!(
-				"F.r.3.2 does not allow top-level nullFlavor {null_flavor}; NINF/PINF are interval-bound qualifiers"
-			),
-			line: None,
-			column: None,
-		});
-	}
 	let center = first_attr(xpath, node, FTestResultPaths::RESULT_VALUE);
 	let low_value = first_attr(xpath, node, FTestResultPaths::RESULT_LOW_VALUE);
 	let low_null = first_attr(xpath, node, FTestResultPaths::RESULT_LOW_NULL_FLAVOR);
@@ -256,12 +226,7 @@ fn read_f_r_3_2(
 		|| high_value.is_some()
 		|| high_null.is_some()
 	{
-		return Err(Error::InvalidXml {
-			message: "F.r.3.2 interval must be NINF..value or value..PINF"
-				.to_string(),
-			line: None,
-			column: None,
-		});
+		(None, None)
 	} else {
 		(None, None)
 	};
@@ -400,11 +365,17 @@ mod tests {
 	use super::parse_f_test_results;
 
 	#[test]
-	fn rejects_top_level_test_result_null_flavor() {
+	fn imports_missing_test_name_for_later_business_validation() {
+		let xml = br#"<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3"><organizer><code code="3" codeSystem="2.16.840.1.113883.3.989.2.1.1.20"/><component><observation><effectiveTime value="20260810"/></observation></component></organizer></MCCI_IN200100UV01>"#;
+		let results =
+			parse_f_test_results(xml).expect("missing name is not a parse error");
+		assert_eq!(results[0].test_name, "");
+	}
+
+	#[test]
+	fn leaves_top_level_test_result_null_flavor_to_business_validation() {
 		let xml = br#"<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3"><organizer><code code="3" codeSystem="2.16.840.1.113883.3.989.2.1.1.20"/><component><observation><code><originalText>Result</originalText></code><value nullFlavor="NINF"/></observation></component></organizer></MCCI_IN200100UV01>"#;
-		let error =
-			parse_f_test_results(xml).expect_err("top-level nullFlavor must fail");
-		assert!(error.to_string().contains("interval-bound qualifiers"));
+		parse_f_test_results(xml).expect("business validation runs later");
 	}
 
 	#[test]

@@ -1,6 +1,5 @@
 use super::helpers::{
-	e2b_datetime_date, max_length, reject_future_date, reject_when, require,
-	valid_e2b_datetime, DateValues,
+	max_length, reject_future_date, reject_when, require, DateValues,
 };
 use crate::{has_text, RegulatoryAuthority, ValidationContext, ValidationIssue};
 use lib_core::model::message_header::MessageHeader;
@@ -36,44 +35,6 @@ fn push_business_violation(
 	if violated {
 		crate::push_business_issue(issues, code, path, message);
 	}
-}
-
-/// ICH.N.2.r.1.MATCH.C.1.1
-fn n_2_r_1_matches_c_1_1(
-	header: &MessageHeader,
-	validation_ctx: &ValidationContext,
-	issues: &mut Vec<ValidationIssue>,
-) {
-	let safety_report_id = validation_ctx
-		.safety_report
-		.as_ref()
-		.and_then(|report| trimmed(report.safety_report_id.as_deref()));
-	push_business_violation(
-		issues,
-		safety_report_id.is_some_and(|value| value != header.message_number.trim()),
-		"ICH.N.2.r.1.MATCH.C.1.1",
-		"messageHeader.messageNumber",
-		"N.2.r.1 must be identical to C.1.1.",
-	);
-}
-
-/// ICH.C.1.2.MATCH.N.2.r.4
-fn c_1_2_matches_n_2_r_4(
-	header: &MessageHeader,
-	validation_ctx: &ValidationContext,
-	issues: &mut Vec<ValidationIssue>,
-) {
-	let transmission_date = validation_ctx
-		.safety_report
-		.as_ref()
-		.and_then(|report| trimmed(report.transmission_date.as_deref()));
-	push_business_violation(
-		issues,
-		transmission_date.is_some_and(|value| value != header.message_date.trim()),
-		"ICH.C.1.2.MATCH.N.2.r.4",
-		"safetyReportIdentification.transmissionDate",
-		"C.1.2 must be identical to N.2.r.4.",
-	);
 }
 
 /// FDA.R0004
@@ -292,20 +253,6 @@ fn n_1_5(header: &MessageHeader, issues: &mut Vec<ValidationIssue>) {
 	);
 }
 
-/// ICH.N.2.r.1.LENGTH.MAX
-fn n_2_r_1(header: &MessageHeader, issues: &mut Vec<ValidationIssue>) {
-	const PATH: &str = "messageHeader.messageNumber";
-	max_length(
-		issues,
-		"ICH.N.2.r.1.LENGTH.MAX",
-		PATH,
-		SECTION,
-		MAX_LENGTH_MESSAGE,
-		Some(header.message_number.as_str()),
-		100,
-	);
-}
-
 /// ICH.N.2.r.2.REQUIRED
 /// ICH.N.2.r.2.LENGTH.MAX
 fn n_2_r_2(header: &MessageHeader, issues: &mut Vec<ValidationIssue>) {
@@ -352,29 +299,6 @@ fn n_2_r_3(header: &MessageHeader, issues: &mut Vec<ValidationIssue>) {
 	);
 }
 
-/// ICH.N.2.r.4.ALLOWED.VALUE
-/// ICH.N.2.r.4.FUTURE_DATE.FORBIDDEN
-fn n_2_r_4(header: &MessageHeader, issues: &mut Vec<ValidationIssue>) {
-	const PATH: &str = "messageHeader.messageDate";
-	let value = header.message_date.trim();
-	reject_when(
-		issues,
-		"ICH.N.2.r.4.ALLOWED.VALUE",
-		PATH,
-		SECTION,
-		ALLOWED_VALUE_MESSAGE,
-		!value.is_empty() && !valid_e2b_datetime(value),
-	);
-	reject_future_date(
-		issues,
-		"ICH.N.2.r.4.FUTURE_DATE.FORBIDDEN",
-		PATH,
-		SECTION,
-		"[N.2.r.4] Message date must not be later than today.",
-		DateValues::One(e2b_datetime_date(Some(header.message_date.as_str()))),
-	);
-}
-
 pub(crate) fn collect(
 	issues: &mut Vec<ValidationIssue>,
 	authority: RegulatoryAuthority,
@@ -382,8 +306,6 @@ pub(crate) fn collect(
 ) {
 	collect_ich_issues(validation_ctx, issues);
 	if let Some(header) = validation_ctx.message_header.as_ref() {
-		n_2_r_1_matches_c_1_1(header, validation_ctx, issues);
-		c_1_2_matches_n_2_r_4(header, validation_ctx, issues);
 		if authority == RegulatoryAuthority::Fda {
 			fda_n_routing(header, issues);
 		} else if authority == RegulatoryAuthority::Mfds {
@@ -402,10 +324,8 @@ pub(crate) fn collect_ich_issues(
 		n_1_3(header, issues);
 		n_1_4(header, issues);
 		n_1_5(header, issues);
-		n_2_r_1(header, issues);
 		n_2_r_2(header, issues);
 		n_2_r_3(header, issues);
-		n_2_r_4(header, issues);
 	}
 }
 
@@ -545,7 +465,7 @@ mod tests {
 	}
 
 	#[test]
-	fn cross_section_identifiers_and_dates_must_match() {
+	fn export_derived_message_fields_are_not_case_validation_inputs() {
 		let mut ctx = empty_ctx();
 		ctx.safety_report = Some(safety_report());
 		ctx.message_header = Some(message_header());
@@ -553,10 +473,10 @@ mod tests {
 		let mut issues = Vec::new();
 		collect(&mut issues, RegulatoryAuthority::Ich, &ctx);
 
-		assert!(issues
+		assert!(!issues
 			.iter()
 			.any(|issue| issue.code == "ICH.N.2.r.1.MATCH.C.1.1"));
-		assert!(issues
+		assert!(!issues
 			.iter()
 			.any(|issue| issue.code == "ICH.C.1.2.MATCH.N.2.r.4"));
 	}
@@ -642,16 +562,10 @@ mod tests {
 
 		assert_eq!(
 			out,
-			vec![
-				(
-					"ICH.N.1.5.FUTURE_DATE.FORBIDDEN".to_string(),
-					"messageHeader.batchTransmissionDate".to_string()
-				),
-				(
-					"ICH.N.2.r.4.FUTURE_DATE.FORBIDDEN".to_string(),
-					"messageHeader.messageDate".to_string()
-				),
-			]
+			vec![(
+				"ICH.N.1.5.FUTURE_DATE.FORBIDDEN".to_string(),
+				"messageHeader.batchTransmissionDate".to_string()
+			)]
 		);
 	}
 
@@ -681,20 +595,6 @@ mod tests {
 				.iter()
 				.any(|issue| issue.code == "ICH.N.1.1.ALLOWED.VALUE"));
 		}
-	}
-
-	#[test]
-	fn datetime_format_rule_flags_invalid_message_date() {
-		let mut ctx = empty_ctx();
-		let mut header = message_header();
-		header.message_date = "not-a-date".to_string();
-		ctx.message_header = Some(header);
-
-		let mut issues = Vec::new();
-		collect_ich_issues(&ctx, &mut issues);
-		assert!(issues
-			.iter()
-			.any(|issue| issue.code == "ICH.N.2.r.4.ALLOWED.VALUE"));
 	}
 
 	#[test]
@@ -737,10 +637,6 @@ mod tests {
 				(
 					"ICH.N.1.4.LENGTH.MAX".to_string(),
 					"messageHeader.batchReceiverIdentifier".to_string()
-				),
-				(
-					"ICH.N.2.r.1.LENGTH.MAX".to_string(),
-					"messageHeader.messageNumber".to_string()
 				),
 				(
 					"ICH.N.2.r.2.LENGTH.MAX".to_string(),
