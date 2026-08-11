@@ -258,19 +258,8 @@ fn write_g_k_6a(value: &DrugInformation) -> Option<&rust_decimal::Decimal> {
 }
 
 /// e2b:G.k.6b
-fn write_g_k_6b(value: &DrugInformation) -> Result<Option<&'static str>> {
-	let Some(unit) = value.gestation_period_exposure_unit.as_deref() else {
-		return Ok(None);
-	};
-	normalize_gestation_unit(unit)
-		.map(Some)
-		.ok_or_else(|| Error::InvalidXml {
-			message: format!(
-				"ICH.G.k.6b.ALLOWED.VALUE: unsupported gestation unit `{unit}`"
-			),
-			line: None,
-			column: None,
-		})
+fn write_g_k_6b(value: &DrugInformation) -> Option<&'static str> {
+	normalize_gestation_unit(value.gestation_period_exposure_unit.as_deref()?)
 }
 
 /// e2b:G.k.11
@@ -457,19 +446,8 @@ fn write_g_k_4_r_6a(value: &DosageInformation) -> Option<&rust_decimal::Decimal>
 }
 
 /// e2b:G.k.4.r.6b
-fn write_g_k_4_r_6b(value: &DosageInformation) -> Result<Option<&'static str>> {
-	let Some(unit) = value.duration_unit.as_deref() else {
-		return Ok(None);
-	};
-	normalize_time_unit(unit)
-		.map(Some)
-		.ok_or_else(|| Error::InvalidXml {
-			message: format!(
-				"ICH.G.k.4.r.6b.ALLOWED.VALUE: unsupported duration unit `{unit}`"
-			),
-			line: None,
-			column: None,
-		})
+fn write_g_k_4_r_6b(value: &DosageInformation) -> Option<&'static str> {
+	normalize_time_unit(value.duration_unit.as_deref()?)
 }
 
 /// e2b:G.k.4.r.7
@@ -1029,7 +1007,7 @@ pub(crate) fn drug_fragment(
 			out.push_str(&xml_escape(&decimal_text(v)));
 			out.push_str("\"");
 		}
-		if let Some(u) = write_g_k_6b(drug)? {
+		if let Some(u) = write_g_k_6b(drug) {
 			out.push_str(" unit=\"");
 			out.push_str(&xml_escape(u));
 			out.push_str("\"");
@@ -1147,7 +1125,7 @@ pub(crate) fn drug_fragment(
 			if let Some(width) = write_g_k_4_r_6a(dose) {
 				out.push_str(&xml_escape(&decimal_text(width)));
 				out.push_str("\"");
-				if let Some(unit) = write_g_k_4_r_6b(dose)? {
+				if let Some(unit) = write_g_k_4_r_6b(dose) {
 					out.push_str(" unit=\"");
 					out.push_str(&xml_escape(unit));
 					out.push_str("\"");
@@ -1572,18 +1550,16 @@ fn write_g_k_9_i_1(value: &DrugReactionAssessment) -> String {
 }
 
 pub(crate) fn causality_role_fragment(drug: &DrugInformation) -> Result<String> {
-	let role_code = write_g_k_1(drug)
-		.ok_or_else(|| crate::error::Error::InvalidXml {
-			message: format!(
-				"ICH.G.k.1.REQUIRED: drug characterization missing or invalid for drug sequence {}",
-				drug.sequence_number
-			),
-			line: None,
-			column: None,
-		})?;
-	let display = drug_characterization_display_name(role_code);
+	let (role, display) = write_g_k_1(drug)
+		.map(|code| {
+			(
+				format!("code=\"{code}\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.13\""),
+				format!(" displayName=\"{}\"", drug_characterization_display_name(code)),
+			)
+		})
+		.unwrap_or_else(|| ("nullFlavor=\"NI\"".to_string(), String::new()));
 	Ok(format!(
-		"<component typeCode=\"COMP\"><causalityAssessment classCode=\"OBS\" moodCode=\"EVN\"><code code=\"20\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.19\" displayName=\"interventionCharacterization\"/><value xsi:type=\"CE\" code=\"{role_code}\" displayName=\"{display}\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.13\"/><subject2 typeCode=\"SUBJ\"><productUseReference classCode=\"SBADM\" moodCode=\"EVN\"><id root=\"{drug_id}\"/></productUseReference></subject2></causalityAssessment></component>",
+		"<component typeCode=\"COMP\"><causalityAssessment classCode=\"OBS\" moodCode=\"EVN\"><code code=\"20\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.19\" displayName=\"interventionCharacterization\"/><value xsi:type=\"CE\" {role}{display}/><subject2 typeCode=\"SUBJ\"><productUseReference classCode=\"SBADM\" moodCode=\"EVN\"><id root=\"{drug_id}\"/></productUseReference></subject2></causalityAssessment></component>",
 		drug_id = drug.id
 	))
 }

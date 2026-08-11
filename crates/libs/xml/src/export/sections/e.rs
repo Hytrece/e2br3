@@ -87,7 +87,7 @@ pub(crate) fn reaction_fragment_for_authority(
 			out.push_str("<comp xsi:type=\"IVL_TS\" operator=\"A\"><width value=\"");
 			out.push_str(&xml_escape(&width.to_string()));
 			out.push_str("\"");
-			if let Some(unit) = write_e_i_6b(reaction)? {
+			if let Some(unit) = write_e_i_6b(reaction) {
 				out.push_str(" unit=\"");
 				out.push_str(&xml_escape(unit));
 				out.push_str("\"");
@@ -96,21 +96,18 @@ pub(crate) fn reaction_fragment_for_authority(
 		}
 		out.push_str("</effectiveTime>");
 	}
-	let meddracode = write_e_i_2_1b(reaction).ok_or_else(|| Error::InvalidXml {
-		message: format!(
-			"ICH.E.i.2.1b.REQUIRED: MedDRA code missing for reaction sequence {}",
-			reaction.sequence_number
-		),
-		line: None,
-		column: None,
-	})?;
-	out.push_str("<value xsi:type=\"CE\" code=\"");
-	out.push_str(&xml_escape(meddracode));
-	out.push_str("\" codeSystem=\"2.16.840.1.113883.6.163\"");
-	if let Some(version) = write_e_i_2_1a(reaction) {
-		out.push_str(" codeSystemVersion=\"");
-		out.push_str(&xml_escape(version));
-		out.push_str("\"");
+	out.push_str("<value xsi:type=\"CE\"");
+	if let Some(meddracode) = write_e_i_2_1b(reaction) {
+		out.push_str(" code=\"");
+		out.push_str(&xml_escape(meddracode));
+		out.push_str("\" codeSystem=\"2.16.840.1.113883.6.163\"");
+		if let Some(version) = write_e_i_2_1a(reaction) {
+			out.push_str(" codeSystemVersion=\"");
+			out.push_str(&xml_escape(version));
+			out.push_str("\"");
+		}
+	} else {
+		out.push_str(" nullFlavor=\"NI\"");
 	}
 	if let Some(text) = write_e_i_1_1a(reaction) {
 		out.push_str("><originalText");
@@ -181,10 +178,7 @@ pub(crate) fn reaction_fragment_for_authority(
 		reaction.expectedness.as_deref(),
 	);
 	append_extension_code(&mut out, "AE_SEVERITY", reaction.severity.as_deref());
-	out.push_str(&write_e_i_7(
-		reaction.outcome.as_deref(),
-		reaction.sequence_number,
-	)?);
+	out.push_str(&write_e_i_7(reaction.outcome.as_deref()));
 	if let Some(value) = write_e_i_8(reaction) {
 		out.push_str(&observation_rel_bool("24", value));
 	}
@@ -316,24 +310,14 @@ fn write_e_i_6a(value: &Reaction) -> Option<&rust_decimal::Decimal> {
 }
 
 /// e2b:E.i.6b
-fn write_e_i_6b(value: &Reaction) -> Result<Option<&'static str>> {
-	let Some(unit) = value.duration_unit.as_deref() else {
-		return Ok(None);
-	};
+fn write_e_i_6b(value: &Reaction) -> Option<&'static str> {
+	let unit = value.duration_unit.as_deref()?;
 	crate::mapping::fda::e_reaction::reaction_duration_unit_to_ucum(unit)
-		.map(Some)
-		.ok_or_else(|| Error::InvalidXml {
-			message: format!(
-				"ICH.E.i.6b.ALLOWED.VALUE: unsupported internal reaction duration unit `{unit}`"
-			),
-			line: None,
-			column: None,
-		})
 }
 
 /// e2b:E.i.7
-fn write_e_i_7(value: Option<&str>, sequence_number: i32) -> Result<String> {
-	observation_rel_outcome(value, sequence_number)
+fn write_e_i_7(value: Option<&str>) -> String {
+	observation_rel_outcome(value)
 }
 
 /// e2b:E.i.8
@@ -431,24 +415,16 @@ fn append_time_boundary_fragment(
 	}
 }
 
-fn observation_rel_outcome(
-	value: Option<&str>,
-	sequence_number: i32,
-) -> Result<String> {
-	let code = normalize_outcome_code(value).ok_or_else(|| Error::InvalidXml {
-		message: format!(
-			"ICH.E.i.7.REQUIRED: reaction outcome missing or invalid for reaction sequence {}",
-			sequence_number
-		),
-		line: None,
-		column: None,
-	})?;
+fn observation_rel_outcome(value: Option<&str>) -> String {
+	let Some(code) = normalize_outcome_code(value) else {
+		return "<outboundRelationship2 typeCode=\"PERT\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code code=\"27\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.19\"/><value xsi:type=\"CE\" nullFlavor=\"NI\"/></observation></outboundRelationship2>".to_string();
+	};
 	let display_name = outcome_display_name(code);
-	Ok(format!(
+	format!(
 		"<outboundRelationship2 typeCode=\"PERT\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code code=\"27\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.19\"/><value xsi:type=\"CE\" code=\"{}\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.11\" displayName=\"{}\"/></observation></outboundRelationship2>",
 		xml_escape(code),
 		xml_escape(display_name)
-	))
+	)
 }
 
 fn observation_rel_required_intervention(
@@ -645,16 +621,14 @@ mod meddra_requirement_tests {
 	}
 
 	#[test]
-	fn export_rejects_missing_or_blank_meddra_code() {
+	fn export_uses_ni_for_missing_or_blank_meddra_code() {
 		for code in [None, Some("  ".to_string())] {
 			let mut reaction = reaction();
 			reaction.reaction_meddra_code = code;
 
-			let err = export_e_reactions_xml(&[reaction])
-				.expect_err("missing MedDRA code should fail before XML is emitted");
-			let message = format!("{err}");
-			assert!(message.contains("ICH.E.i.2.1b.REQUIRED"));
-			assert!(message.contains("reaction sequence 1"));
+			let xml = export_e_reactions_xml(&[reaction])
+				.expect("semantic MedDRA issue must not block export");
+			assert!(xml.contains("<value xsi:type=\"CE\" nullFlavor=\"NI\""));
 		}
 	}
 
@@ -716,7 +690,7 @@ mod meddra_requirement_tests {
 	}
 
 	#[test]
-	fn exports_internal_duration_codes_as_ucum_and_rejects_unknown_codes() {
+	fn exports_internal_duration_codes_as_ucum_and_omits_unknown_units() {
 		let mut reaction = reaction();
 		reaction.duration_value = Some(1.into());
 		for (stored, ucum) in [
@@ -734,8 +708,9 @@ mod meddra_requirement_tests {
 		}
 
 		reaction.duration_unit = Some("d".to_string());
-		let error = export_e_reactions_xml(&[reaction])
-			.expect_err("raw or unknown units must not pass through");
-		assert!(format!("{error}").contains("ICH.E.i.6b.ALLOWED.VALUE"));
+		let xml = export_e_reactions_xml(&[reaction])
+			.expect("semantic unit issue must not block export");
+		assert!(xml.contains("<width value=\"1\"/>"));
+		assert!(!xml.contains("unit=\"d\""));
 	}
 }

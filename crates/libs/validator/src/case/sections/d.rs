@@ -1736,11 +1736,11 @@ fn fda_d_1(
 		&& validation_ctx.patient.as_ref().is_none_or(|patient| {
 			patient.patient_initials.as_deref().map(str::trim) != Some("AGGREGATE")
 		}) {
-		push_business_issue(
+		crate::push_business_warning(
 			issues,
-			"FDA.D.1.AGGREGATE.REQUIRED",
+			"FDA.W0010",
 			"patientInformation.patientInitials",
-			"Linked IND study reports must identify the patient as AGGREGATE",
+			"Linked IND study reports should identify the patient as AGGREGATE",
 		);
 	}
 }
@@ -1825,16 +1825,16 @@ fn fda_d_11_d_12_na(
 		|| matches!(null_flavor, Some("NA"))
 	{
 		if patient.race_code_null_flavor.as_deref().map(str::trim) != Some("NA") {
-			push_business_issue(
+			crate::push_business_warning(
 				issues,
-				"FDA.D.11.NA.REQUIRED",
+				"FDA.W0003",
 				"patientInformation.raceCodeNullFlavor",
-				"Race must use null flavor NA for aggregate or unavailable patients",
+				"Race should use null flavor NA for aggregate or unavailable patients",
 			);
 		}
 		if patient.ethnicity_code_null_flavor.as_deref().map(str::trim) != Some("NA")
 		{
-			push_business_issue(issues, "FDA.D.12.NA.REQUIRED", "patientInformation.ethnicityCodeNullFlavor", "Ethnicity must use null flavor NA for aggregate or unavailable patients");
+			crate::push_business_warning(issues, "FDA.W0004", "patientInformation.ethnicityCodeNullFlavor", "Ethnicity should use null flavor NA for aggregate or unavailable patients");
 		}
 	}
 }

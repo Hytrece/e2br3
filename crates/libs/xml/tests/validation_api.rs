@@ -1,3 +1,4 @@
+use lib_core::regulatory::RegulatoryAuthority;
 use xml::validation::{
 	default_xsd_path, normalize_e2b_xml_for_import, validate_e2b_xml,
 	validate_e2b_xml_basic, validate_e2b_xml_for_import, validate_e2b_xml_xsd,
@@ -58,6 +59,30 @@ fn mfds_import_accepts_korean_causality_result_value() {
 	assert!(report.errors.iter().any(|error| {
 		error.blocking == Some(false)
 			&& error.message.contains("Element '{urn:hl7-org:v3}value'")
+	}));
+}
+
+#[test]
+fn xml_validation_does_not_run_case_business_rules() {
+	let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+		.join("../../../docs/exporter/fda/FAERS2022Scenario6.xml");
+	let source = std::fs::read_to_string(path)
+		.expect("FDA fixture")
+		.replace("US-APHARMA-8744554B", "invalid");
+	let config = XmlValidatorConfig {
+		authority: Some(RegulatoryAuthority::Fda),
+		..Default::default()
+	};
+	let export_report = validate_e2b_xml(source.as_bytes(), Some(config.clone()))
+		.expect("validate export");
+	assert!(!export_report.errors.iter().any(|error| {
+		matches!(error.code.as_deref(), Some("C.1.1" | "C.1.8.1"))
+	}));
+	let report = validate_e2b_xml_for_import(source.as_bytes(), Some(config))
+		.expect("validate import structure");
+	assert!(report.ok, "unexpected blocking errors: {:?}", report.errors);
+	assert!(!report.errors.iter().any(|error| {
+		matches!(error.code.as_deref(), Some("C.1.1" | "C.1.8.1"))
 	}));
 }
 

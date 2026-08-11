@@ -154,14 +154,9 @@ async fn apply_patient_section(
 		if let Some(v) = patient.age_at_time_of_onset.as_ref() {
 			set_attr_first(xpath, age_xpath, "value", &v.normalize().to_string());
 			if let Some(unit) = patient.age_unit.as_deref() {
-				let unit = normalize_time_unit(unit).ok_or_else(|| {
-					Error::InvalidXml {
-					message: format!("ICH.D.2.2b.ALLOWED.VALUE: unsupported age unit `{unit}`"),
-					line: None,
-					column: None,
+				if let Some(unit) = normalize_time_unit(unit) {
+					set_attr_first(xpath, age_xpath, "unit", unit);
 				}
-				})?;
-				set_attr_first(xpath, age_xpath, "unit", unit);
 			}
 			remove_attr_first(xpath, age_xpath, "nullFlavor");
 		}
@@ -266,14 +261,9 @@ async fn apply_patient_section(
 			write_d_2_2_1a(xpath, v);
 		}
 		if let Some(v) = patient.gestation_period_unit.as_deref() {
-			let unit = normalize_gestation_unit(v).ok_or_else(|| {
-				Error::InvalidXml {
-				message: format!("ICH.D.2.2.1b.ALLOWED.VALUE: unsupported gestation unit `{v}`"),
-				line: None,
-				column: None,
+			if let Some(unit) = normalize_gestation_unit(v) {
+				write_d_2_2_1b(xpath, unit);
 			}
-			})?;
-			write_d_2_2_1b(xpath, unit);
 		}
 	}
 	if let Some(v) = patient.age_group.as_deref() {
@@ -486,14 +476,11 @@ async fn apply_patient_section(
 				write_d_10_2_2a(xpath, age_value_xpath, v);
 			}
 			if let Some(v) = parent.parent_age_unit.as_deref() {
-				let unit = normalize_time_unit(v)
+				if let Some(unit) = normalize_time_unit(v)
 					.filter(|unit| matches!(*unit, "a" | "10.a"))
-					.ok_or_else(|| Error::InvalidXml {
-					message: format!("ICH.D.10.2.2b.ALLOWED.VALUE: unsupported parent age unit `{v}`"),
-					line: None,
-					column: None,
-				})?;
-				write_d_10_2_2b(xpath, age_value_xpath, unit);
+				{
+					write_d_10_2_2b(xpath, age_value_xpath, unit);
+				}
 			}
 			remove_attr_first(xpath, age_value_xpath, "nullFlavor");
 		}

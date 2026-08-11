@@ -663,6 +663,16 @@ pub(crate) fn collect_mfds_issues(
 	validation_ctx: &ValidationContext,
 	issues: &mut Vec<ValidationIssue>,
 ) {
+	for (idx, reaction) in validation_ctx.reactions.iter().enumerate() {
+		if reaction.country_code.as_deref().map(str::trim) == Some("EU") {
+			push_business_issue(
+				issues,
+				"MFDS.E.i.9.EU.FORBIDDEN",
+				format!("reactions.{idx}.reactionCountry"),
+				"MFDS does not allow EU as [E.i.9].",
+			);
+		}
+	}
 	let receiver = validation_ctx
 		.message_header
 		.as_ref()
@@ -755,6 +765,19 @@ mod tests {
 			relatedness_assessments: Vec::new(),
 			patient_identifiers: Vec::new(),
 		}
+	}
+
+	#[test]
+	fn mfds_rejects_eu_reaction_country() {
+		let mut ctx = empty_ctx();
+		let mut row = reaction();
+		row.country_code = Some("EU".to_string());
+		ctx.reactions = vec![row];
+		let mut issues = Vec::new();
+		collect_mfds_issues(&ctx, &mut issues);
+		assert!(issues
+			.iter()
+			.any(|issue| issue.code == "MFDS.E.i.9.EU.FORBIDDEN"));
 	}
 
 	fn reaction() -> Reaction {

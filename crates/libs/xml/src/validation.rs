@@ -111,6 +111,23 @@ pub fn validate_e2b_xml(
 	config: Option<XmlValidatorConfig>,
 ) -> Result<XmlValidationReport> {
 	let config = config.unwrap_or_default();
+	let mut report = validate_e2b_xml_structure(xml, &config)?;
+	if report.errors.is_empty() {
+		if let Some(authority) = config.authority {
+			report
+				.errors
+				.append(&mut validate_export_rules(xml, authority)?);
+		}
+	}
+
+	report.ok = no_blocking_errors(&report.errors);
+	Ok(report)
+}
+
+fn validate_e2b_xml_structure(
+	xml: &[u8],
+	config: &XmlValidatorConfig,
+) -> Result<XmlValidationReport> {
 	let mut report = validate_e2b_xml_basic(xml, Some(config.clone()))?;
 
 	if let Some(xsd_path) = config.xsd_path.as_ref() {
@@ -128,25 +145,18 @@ pub fn validate_e2b_xml(
 			column: None,
 		});
 	}
-	if report.errors.is_empty() {
-		if let Some(authority) = config.authority {
-			report
-				.errors
-				.append(&mut validate_export_rules(xml, authority)?);
-		}
-	}
-
 	report.ok = no_blocking_errors(&report.errors);
 	Ok(report)
 }
 
-/// Validate inbound documents while accepting the MFDS causality extension
-/// that carries the Korean result alongside the standard coded value.
+/// Validate inbound XML structure without running outbound integrity checks.
+/// Accepts the MFDS causality extension that carries the Korean result.
 pub fn validate_e2b_xml_for_import(
 	xml: &[u8],
 	config: Option<XmlValidatorConfig>,
 ) -> Result<XmlValidationReport> {
-	let mut report = validate_e2b_xml(xml, config)?;
+	let config = config.unwrap_or_default();
+	let mut report = validate_e2b_xml_structure(xml, &config)?;
 	if has_mfds_causality_extension(xml) {
 		for error in &mut report.errors {
 			if is_mfds_extra_value_error(&error.message) {

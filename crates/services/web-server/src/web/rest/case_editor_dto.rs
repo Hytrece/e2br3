@@ -121,6 +121,7 @@ pub struct CaseEditorCiRowsDto {
 pub struct CaseEditorCiSafetyReportDto {
 	pub id: Uuid,
 	pub safety_report_id: Option<String>,
+	pub safety_report_version: i32,
 	pub transmission_date: Option<String>,
 	pub report_type: Option<String>,
 	pub date_first_received_from_source: Option<String>,

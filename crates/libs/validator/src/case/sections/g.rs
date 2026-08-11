@@ -5,11 +5,11 @@ use super::helpers::{
 	warn_when, DateValues,
 };
 use crate::{
-	has_text, is_fda_ind_message_receiver, is_fda_postmarket_batch_receiver,
-	is_fda_premarket_message_receiver, is_mfds_clinical_trial_receiver,
-	is_mfds_compassionate_use_receiver, is_mfds_domestic_receiver,
-	is_mfds_foreign_postmarket_receiver, list_fda_devices, FdaValidationContext,
-	MfdsValidationContext, RegulatoryAuthority, ValidationContext, ValidationIssue,
+	has_text, is_fda_postmarket_batch_receiver, is_fda_premarket_message_receiver,
+	is_mfds_clinical_trial_receiver, is_mfds_compassionate_use_receiver,
+	is_mfds_domestic_receiver, is_mfds_foreign_postmarket_receiver,
+	list_fda_devices, FdaValidationContext, MfdsValidationContext,
+	RegulatoryAuthority, ValidationContext, ValidationIssue,
 };
 use lib_core::ctx::Ctx;
 use lib_core::model::drug::{
@@ -1724,26 +1724,54 @@ fn fda_g_k_1_route(
 		.as_ref()
 		.map(|header| header.message_receiver_identifier.as_str());
 	let role = first.drug_characterization.trim();
-	if is_fda_ind_message_receiver(message_receiver) {
-		let report_type_is_study = validation_ctx
-			.safety_report
-			.as_ref()
-			.and_then(|report| report.report_type.as_deref())
-			.map(str::trim)
-			== Some("2");
-		if report_type_is_study {
+	if message_receiver == Some(crate::FDA_MSG_RECEIVER_CDER) {
+		if !matches!(role, "1" | "3" | "4") {
+			crate::push_business_issue(
+				issues,
+				"FDA.R0069",
+				"drugs.0.drugCharacterization",
+				"FDA postmarket drug characterization must be 1, 3, or 4.",
+			);
+		}
+		if !matches!(role, "1" | "3" | "4") {
+			crate::push_business_warning(
+				issues,
+				"FDA.W0005",
+				"drugs.0.drugCharacterization",
+				"FDA recommends drug characterization 1, 3, or 4 for CDER reports.",
+			);
+		}
+		return;
+	}
+	let report_type_is_study = validation_ctx
+		.safety_report
+		.as_ref()
+		.and_then(|report| report.report_type.as_deref())
+		.map(str::trim)
+		== Some("2");
+	if report_type_is_study {
+		let rule = match message_receiver {
+			Some(
+				crate::FDA_MSG_RECEIVER_CDER_IND | crate::FDA_MSG_RECEIVER_CBER_IND,
+			) => Some(("FDA.R0070", &["1", "3"][..])),
+			Some(crate::FDA_MSG_RECEIVER_CDER_IND_EXEMPT_BA_BE) => {
+				Some(("FDA.R0071", &["1", "3", "4"][..]))
+			}
+			_ => None,
+		};
+		if let Some((code, allowed)) = rule {
 			for (idx, drug) in validation_ctx.drugs.iter().enumerate() {
-				if !matches!(drug.drug_characterization.trim(), "1" | "2" | "3") {
+				if !allowed.contains(&drug.drug_characterization.trim()) {
 					crate::push_business_issue(
 						issues,
-						"FDA.G.k.1.ROUTE",
+						code,
 						format!("drugs.{idx}.drugCharacterization"),
 						"Drug characterization is not valid for the selected FDA route.",
 					);
 				}
 			}
+			return;
 		}
-		return;
 	}
 	let vaers = [batch_receiver, message_receiver]
 		.into_iter()
@@ -2017,11 +2045,11 @@ pub(crate) async fn collect_fda_issues(
 					&& has_text(Some(&code.value_code))
 			});
 			if local_criteria == Some("4") && !has_remedial {
-				crate::push_business_issue(
+				crate::push_business_warning(
 					issues,
-					"FDA.G.K.12.R.11.REQUIRED",
+					"FDA.W0007",
 					format!("{path}.remedialActions.0.valueCode"),
-					"A remedial action is required for each malfunctioning device in a 5-day report.",
+					"A remedial action should be provided for each malfunctioning device in a 5-day report.",
 				);
 			}
 		}

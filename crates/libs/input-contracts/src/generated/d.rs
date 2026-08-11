@@ -835,7 +835,7 @@ pub fn d_7_1_r_5(input: crate::FieldInput<'_>) -> Vec<crate::InputIssue> {
 /// ICH.D.7.1.r.6.ALLOWED.VALUE
 pub fn d_7_1_r_6(input: crate::FieldInput<'_>) -> Vec<crate::InputIssue> {
 	let mut issues = Vec::new();
-	crate::helpers::true_marker(&mut issues, "ICH.D.7.1.r.6.ALLOWED.VALUE", input);
+	crate::helpers::boolean(&mut issues, "ICH.D.7.1.r.6.ALLOWED.VALUE", input.value);
 	issues
 }
 
@@ -861,7 +861,7 @@ pub fn d_7_2(input: crate::FieldInput<'_>) -> Vec<crate::InputIssue> {
 /// ICH.D.7.3.ALLOWED.VALUE
 pub fn d_7_3(input: crate::FieldInput<'_>) -> Vec<crate::InputIssue> {
 	let mut issues = Vec::new();
-	crate::helpers::true_marker(&mut issues, "ICH.D.7.3.ALLOWED.VALUE", input);
+	crate::helpers::boolean(&mut issues, "ICH.D.7.3.ALLOWED.VALUE", input.value);
 	issues
 }
 

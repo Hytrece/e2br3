@@ -30,7 +30,7 @@ fn reject(
 	if super::matches(xpath, expression) {
 		errors.push(XmlValidationError {
 			message: format!(
-				"{authority} format cannot contain {regional_authority} regional fields."
+				"XML for {authority} contains {regional_authority} regional fields."
 			),
 			code: None,
 			section: Some("xml".to_string()),

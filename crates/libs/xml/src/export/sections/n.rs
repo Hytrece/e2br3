@@ -21,12 +21,15 @@ pub(crate) async fn apply_section_n(
 		.transmission_date
 		.as_deref()
 		.filter(|value| !value.trim().is_empty())
-		.ok_or_else(|| Error::InvalidXml {
-			message: "safety_report_identification.transmission_date is required for N.2.r.4 export".to_string(),
-			line: None,
-			column: None,
-		})?;
-	let report_id = required_report_id(report.safety_report_id.as_deref())?;
+		.map(str::to_string)
+		.unwrap_or_else(|| fmt_datetime(export_time));
+	let report_id = report
+		.safety_report_id
+		.as_deref()
+		.map(str::trim)
+		.filter(|value| !value.is_empty())
+		.map(str::to_string)
+		.unwrap_or_else(|| case_id.to_string());
 
 	write_n_1_1(xpath, &header.message_type);
 	write_n_1_2(xpath, header.batch_number.as_deref());
@@ -40,17 +43,13 @@ pub(crate) async fn apply_section_n(
 		.batch_receiver_identifier
 		.as_deref()
 		.filter(|val| !val.trim().is_empty())
-		.ok_or_else(|| Error::InvalidXml {
-			message: "message_headers.batch_receiver_identifier is required for section N export".to_string(),
-			line: None,
-			column: None,
-		})?;
+		.unwrap_or(&header.message_receiver_identifier);
 	write_n_1_4(doc, parser, xpath, batch_receiver)?;
 	write_n_1_5(xpath, Some(export_time));
-	write_n_2_r_1(xpath, report_id);
+	write_n_2_r_1(xpath, &report_id);
 	write_n_2_r_2(xpath, &header.message_sender_identifier);
 	write_n_2_r_3(xpath, &header.message_receiver_identifier);
-	write_n_2_r_4(xpath, message_date);
+	write_n_2_r_4(xpath, &message_date);
 
 	if let Some(receiver) = fetch_receiver_information(mm, case_id).await? {
 		ensure_top_level_receiver_agent_nodes(
@@ -83,17 +82,6 @@ pub(crate) async fn apply_section_n(
 		);
 	}
 	Ok(())
-}
-
-fn required_report_id(report_id: Option<&str>) -> Result<&str> {
-	report_id
-		.map(str::trim)
-		.filter(|value| !value.is_empty())
-		.ok_or_else(|| Error::InvalidXml {
-			message: "safety_report_identification.safety_report_id is required for N.2.r.1 export".to_string(),
-			line: None,
-			column: None,
-		})
 }
 
 /// e2b:N.1.1
@@ -168,6 +156,12 @@ fn write_n_2_r_1(xpath: &mut Context, message_number: &str) {
 		"extension",
 		message_number,
 	);
+	set_attr_first(
+		xpath,
+		"/hl7:MCCI_IN200100UV01/hl7:PORR_IN049016UV/hl7:controlActProcess/hl7:subject/hl7:investigationEvent/hl7:id[@root='2.16.840.1.113883.3.989.2.1.3.1']",
+		"extension",
+		message_number,
+	);
 }
 
 /// e2b:N.2.r.2
@@ -221,51 +215,20 @@ pub(crate) async fn fetch_message_header(
 pub(crate) async fn fetch_primary_source(
 	mm: &ModelManager,
 	case_id: sqlx::types::Uuid,
-) -> Result<PrimarySource> {
+) -> Result<Option<PrimarySource>> {
 	let sql = "SELECT * FROM primary_sources WHERE case_id = $1 AND deleted = false AND primary_source_regulatory = '1' ORDER BY sequence_number";
 	let sources = mm
 		.dbx()
 		.fetch_all(sqlx::query_as::<_, PrimarySource>(sql).bind(case_id))
 		.await
 		.map_err(|e| Error::Model(lib_core::model::Error::Store(format!("{e}"))))?;
-	require_single_primary_source(sources)
-}
-
-fn require_single_primary_source<T>(mut sources: Vec<T>) -> Result<T> {
-	if sources.len() != 1 {
-		return Err(Error::InvalidXml {
-			message: format!(
-				"C.2.r.5 requires exactly one primary source marked 1; found {}",
-				sources.len()
-			),
-			line: None,
-			column: None,
-		});
-	}
-	Ok(sources.remove(0))
+	Ok(sources.into_iter().next())
 }
 
 #[cfg(test)]
 mod date_tests {
 	use super::*;
 	use time::OffsetDateTime;
-
-	#[test]
-	fn n_2_r_1_requires_nonblank_c_1_1() {
-		assert_eq!(
-			required_report_id(Some(" KR-CASE-1 ")).unwrap(),
-			"KR-CASE-1"
-		);
-		assert!(required_report_id(None).is_err());
-		assert!(required_report_id(Some("  ")).is_err());
-	}
-
-	#[test]
-	fn c_2_r_5_requires_exactly_one_selected_source() {
-		assert_eq!(require_single_primary_source(vec![7]).unwrap(), 7);
-		assert!(require_single_primary_source::<u8>(vec![]).is_err());
-		assert!(require_single_primary_source(vec![1, 2]).is_err());
-	}
 
 	#[test]
 	fn n_1_5_includes_utc_offset_and_n_2_r_4_preserves_c_1_2() {

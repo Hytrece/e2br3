@@ -42,38 +42,12 @@ pub async fn export_case_xml_with_options(
 	case_id: sqlx::types::Uuid,
 	options: ExportXmlOptions,
 ) -> Result<String> {
-	let case = CaseBmc::get(ctx, mm, case_id).await.map_err(Error::from)?;
-	let has_dirty = case.dirty_c
-		|| case.dirty_d
-		|| case.dirty_e
-		|| case.dirty_f
-		|| case.dirty_g
-		|| case.dirty_h;
-	if case.status != "validated" {
-		if let Some(raw_xml) = case.raw_xml.as_deref() {
-			if !has_dirty {
-				return Ok(apply_export_xml_options(
-					String::from_utf8_lossy(raw_xml).to_string(),
-					options,
-				));
-			}
-		}
-		if !matches!(case.status.as_str(), "reviewed" | "locked") {
-			return Err(Error::InvalidXml {
-				message: "Only validated cases can be exported".to_string(),
-				line: None,
-				column: None,
-			});
-		}
-	}
-
 	serialize_case_xml_for_authority(ctx, mm, case_id, options.authority)
 		.await
 		.map(|xml| apply_export_xml_options(xml, options))
 }
 
-/// Serializes the current case data without applying workflow eligibility policy.
-/// Callers that deliver an export to users must use [`export_case_xml`] instead.
+/// Serializes the current case data as an ICH payload.
 pub async fn serialize_case_xml(
 	ctx: &Ctx,
 	mm: &ModelManager,

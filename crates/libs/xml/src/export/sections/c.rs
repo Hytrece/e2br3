@@ -109,7 +109,9 @@ pub(crate) async fn apply_primary_source_section(
 	xpath: &mut Context,
 	authority: lib_core::regulatory::RegulatoryAuthority,
 ) -> Result<()> {
-	let primary = fetch_primary_source(mm, case_id).await?;
+	let Some(primary) = fetch_primary_source(mm, case_id).await? else {
+		return Ok(());
+	};
 	apply_primary_source_values(doc, parser, xpath, &primary, authority)
 }
 
@@ -456,17 +458,10 @@ fn ensure_primary_source_author_nodes(
 		primary.reporter_middle_name.as_deref(),
 		primary.reporter_middle_name_null_flavor.as_deref(),
 	);
-	if middle_name && !given_name {
-		return Err(Error::InvalidXml {
-			message:
-				"C.2.r.1.3 requires C.2.r.1.2 value or nullFlavor for XML position"
-					.to_string(),
-			line: None,
-			column: None,
-		});
-	}
 	let given = given_name.then_some("<given/>").unwrap_or_default();
-	let middle = middle_name.then_some("<given/>").unwrap_or_default();
+	let middle = (middle_name && given_name)
+		.then_some("<given/>")
+		.unwrap_or_default();
 	let family = present(
 		primary.reporter_family_name.as_deref(),
 		primary.reporter_family_name_null_flavor.as_deref(),
@@ -714,37 +709,20 @@ fn write_attachment_text(
 	representation: Option<&str>,
 	compression: Option<&str>,
 	authority: lib_core::regulatory::RegulatoryAuthority,
-	field_code: &str,
+	_field_code: &str,
 ) -> Result<String> {
 	let Some(document) = document.filter(|value| !value.trim().is_empty()) else {
 		return Ok(String::new());
 	};
 	let file_name = file_name.map(str::trim).filter(|value| !value.is_empty());
-	let media_type = media_type
+	let mut media_type = media_type
 		.map(str::trim)
 		.filter(|value| !value.is_empty())
 		.unwrap_or("application/octet-stream");
 	if authority == lib_core::regulatory::RegulatoryAuthority::Fda {
-		let file_name = file_name.ok_or_else(|| Error::InvalidXml {
-			message: format!("FDA {field_code} attachment file name is required"),
-			line: None,
-			column: None,
-		})?;
-		let expected = lib_core::regulatory::fda_attachment_media_type(file_name)
-			.ok_or_else(|| Error::InvalidXml {
-				message: format!(
-					"FDA {field_code} attachment file type is not supported: {file_name}"
-				),
-				line: None,
-				column: None,
-			})?;
-		if !media_type.eq_ignore_ascii_case(expected) {
-			return Err(Error::InvalidXml {
-				message: format!("FDA {field_code} attachment media type '{media_type}' does not match file name '{file_name}'"),
-				line: None,
-				column: None,
-			});
-		}
+		media_type = file_name
+			.and_then(lib_core::regulatory::fda_attachment_media_type)
+			.unwrap_or(media_type);
 	}
 	let reference = file_name
 		.map(|value| format!("<reference value=\"{}\"/>", xml_escape(value)))
@@ -794,15 +772,6 @@ pub fn export_c_safety_report_patch(
 	sender: Option<&SenderInformation>,
 	authority: lib_core::regulatory::RegulatoryAuthority,
 ) -> Result<String> {
-	if report.fulfil_expedited_criteria_null_flavor.is_some() {
-		return Err(Error::InvalidXml {
-			message:
-				"ICH.C.1.7 NI export requires verified E2B(R2)-origin provenance"
-					.to_string(),
-			line: None,
-			column: None,
-		});
-	}
 	let patch = CSafetyReportPatch {
 		report_unique_id: report.safety_report_id.as_deref().unwrap_or(""),
 		transmission_date: report.transmission_date.as_deref(),
@@ -1204,7 +1173,7 @@ mod primary_source_null_flavor_tests {
 	}
 
 	#[test]
-	fn fda_attachment_keeps_file_name_and_checks_media_type() {
+	fn fda_attachment_keeps_file_name_and_infers_media_type() {
 		let authority = lib_core::regulatory::RegulatoryAuthority::Fda;
 		let xml = write_attachment_text(
 			Some("QUJD"),
@@ -1217,7 +1186,7 @@ mod primary_source_null_flavor_tests {
 		)
 		.expect("valid FDA attachment");
 		assert!(xml.contains("<reference value=\"report.pdf\"/>QUJD"));
-		assert!(write_attachment_text(
+		let corrected = write_attachment_text(
 			Some("QUJD"),
 			Some("report.pdf"),
 			Some("text/plain"),
@@ -1226,7 +1195,8 @@ mod primary_source_null_flavor_tests {
 			authority,
 			"C.4.r.2",
 		)
-		.is_err());
+		.expect("semantic media mismatch must not block export");
+		assert!(corrected.contains("mediaType=\"application/pdf\""));
 	}
 
 	#[test]

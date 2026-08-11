@@ -278,7 +278,7 @@ pub fn c_1_8_2(input: crate::FieldInput<'_>) -> Vec<crate::InputIssue> {
 /// ICH.C.1.9.1.NULLFLAVOR.ALLOWED
 pub fn c_1_9_1(input: crate::FieldInput<'_>) -> Vec<crate::InputIssue> {
 	let mut issues = Vec::new();
-	crate::helpers::true_marker(&mut issues, "ICH.C.1.9.1.ALLOWED.VALUE", input);
+	crate::helpers::boolean(&mut issues, "ICH.C.1.9.1.ALLOWED.VALUE", input.value);
 	crate::helpers::null_flavor(
 		&mut issues,
 		"ICH.C.1.9.1.NULLFLAVOR.ALLOWED",
@@ -529,12 +529,6 @@ pub fn c_2_r_3(input: crate::FieldInput<'_>) -> Vec<crate::InputIssue> {
 		"ICH.C.2.r.3.LENGTH.MAX",
 		input.value,
 		2,
-	);
-	crate::helpers::null_flavor(
-		&mut issues,
-		"ICH.C.2.r.3.NULLFLAVOR.FORBIDDEN",
-		input.null_flavor,
-		&[],
 	);
 	issues
 }

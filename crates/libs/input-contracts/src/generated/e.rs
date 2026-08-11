@@ -4,7 +4,7 @@
 /// FDA.E.i.3.2h.NULLFLAVOR.ALLOWED
 pub fn fda_e_i_3_2h(input: crate::FieldInput<'_>) -> Vec<crate::InputIssue> {
 	let mut issues = Vec::new();
-	crate::helpers::true_marker(&mut issues, "FDA.E.i.3.2h.ALLOWED.VALUE", input);
+	crate::helpers::boolean(&mut issues, "FDA.E.i.3.2h.ALLOWED.VALUE", input.value);
 	crate::helpers::null_flavor(
 		&mut issues,
 		"FDA.E.i.3.2h.NULLFLAVOR.ALLOWED",
@@ -111,7 +111,7 @@ pub fn e_i_3_1(input: crate::FieldInput<'_>) -> Vec<crate::InputIssue> {
 /// ICH.E.i.3.2a.NULLFLAVOR.ALLOWED
 pub fn e_i_3_2a(input: crate::FieldInput<'_>) -> Vec<crate::InputIssue> {
 	let mut issues = Vec::new();
-	crate::helpers::true_marker(&mut issues, "ICH.E.i.3.2a.ALLOWED.VALUE", input);
+	crate::helpers::boolean(&mut issues, "ICH.E.i.3.2a.ALLOWED.VALUE", input.value);
 	crate::helpers::null_flavor(
 		&mut issues,
 		"ICH.E.i.3.2a.NULLFLAVOR.ALLOWED",
@@ -125,7 +125,7 @@ pub fn e_i_3_2a(input: crate::FieldInput<'_>) -> Vec<crate::InputIssue> {
 /// ICH.E.i.3.2b.NULLFLAVOR.ALLOWED
 pub fn e_i_3_2b(input: crate::FieldInput<'_>) -> Vec<crate::InputIssue> {
 	let mut issues = Vec::new();
-	crate::helpers::true_marker(&mut issues, "ICH.E.i.3.2b.ALLOWED.VALUE", input);
+	crate::helpers::boolean(&mut issues, "ICH.E.i.3.2b.ALLOWED.VALUE", input.value);
 	crate::helpers::null_flavor(
 		&mut issues,
 		"ICH.E.i.3.2b.NULLFLAVOR.ALLOWED",
@@ -139,7 +139,7 @@ pub fn e_i_3_2b(input: crate::FieldInput<'_>) -> Vec<crate::InputIssue> {
 /// ICH.E.i.3.2c.NULLFLAVOR.ALLOWED
 pub fn e_i_3_2c(input: crate::FieldInput<'_>) -> Vec<crate::InputIssue> {
 	let mut issues = Vec::new();
-	crate::helpers::true_marker(&mut issues, "ICH.E.i.3.2c.ALLOWED.VALUE", input);
+	crate::helpers::boolean(&mut issues, "ICH.E.i.3.2c.ALLOWED.VALUE", input.value);
 	crate::helpers::null_flavor(
 		&mut issues,
 		"ICH.E.i.3.2c.NULLFLAVOR.ALLOWED",
@@ -153,7 +153,7 @@ pub fn e_i_3_2c(input: crate::FieldInput<'_>) -> Vec<crate::InputIssue> {
 /// ICH.E.i.3.2d.NULLFLAVOR.ALLOWED
 pub fn e_i_3_2d(input: crate::FieldInput<'_>) -> Vec<crate::InputIssue> {
 	let mut issues = Vec::new();
-	crate::helpers::true_marker(&mut issues, "ICH.E.i.3.2d.ALLOWED.VALUE", input);
+	crate::helpers::boolean(&mut issues, "ICH.E.i.3.2d.ALLOWED.VALUE", input.value);
 	crate::helpers::null_flavor(
 		&mut issues,
 		"ICH.E.i.3.2d.NULLFLAVOR.ALLOWED",
@@ -167,7 +167,7 @@ pub fn e_i_3_2d(input: crate::FieldInput<'_>) -> Vec<crate::InputIssue> {
 /// ICH.E.i.3.2e.NULLFLAVOR.ALLOWED
 pub fn e_i_3_2e(input: crate::FieldInput<'_>) -> Vec<crate::InputIssue> {
 	let mut issues = Vec::new();
-	crate::helpers::true_marker(&mut issues, "ICH.E.i.3.2e.ALLOWED.VALUE", input);
+	crate::helpers::boolean(&mut issues, "ICH.E.i.3.2e.ALLOWED.VALUE", input.value);
 	crate::helpers::null_flavor(
 		&mut issues,
 		"ICH.E.i.3.2e.NULLFLAVOR.ALLOWED",
@@ -181,7 +181,7 @@ pub fn e_i_3_2e(input: crate::FieldInput<'_>) -> Vec<crate::InputIssue> {
 /// ICH.E.i.3.2f.NULLFLAVOR.ALLOWED
 pub fn e_i_3_2f(input: crate::FieldInput<'_>) -> Vec<crate::InputIssue> {
 	let mut issues = Vec::new();
-	crate::helpers::true_marker(&mut issues, "ICH.E.i.3.2f.ALLOWED.VALUE", input);
+	crate::helpers::boolean(&mut issues, "ICH.E.i.3.2f.ALLOWED.VALUE", input.value);
 	crate::helpers::null_flavor(
 		&mut issues,
 		"ICH.E.i.3.2f.NULLFLAVOR.ALLOWED",

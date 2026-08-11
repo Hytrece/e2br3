@@ -208,6 +208,10 @@ pub fn routes_cases(mm: ModelManager) -> Router {
 			"/cases/from-intake",
 			axum::routing::post(case_intake_rest::create_case_from_intake),
 		)
+		.route(
+			"/cases/{source_case_id}/follow-up",
+			axum::routing::post(case_rest::create_follow_up_case_guarded),
+		)
 		.merge(rest_collection_item_routes(
 			"/cases",
 			"/cases/{id}",

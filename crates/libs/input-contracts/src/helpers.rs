@@ -1,4 +1,4 @@
-use crate::{FieldInput, FormatName, InputIssue, InputValue, NumericShape};
+use crate::{FormatName, InputIssue, InputValue, NumericShape};
 use base64::engine::{general_purpose, Engine};
 
 pub(crate) fn max_length(
@@ -52,24 +52,6 @@ pub(crate) fn boolean(
 		InputValue::Missing | InputValue::Boolean(_)
 	) {
 		push(issues, code, "must be a boolean".to_string());
-	}
-}
-
-pub(crate) fn true_marker(
-	issues: &mut Vec<InputIssue>,
-	code: &'static str,
-	input: FieldInput<'_>,
-) {
-	let valid = if present(input.null_flavor).is_some() {
-		matches!(normalized(input.value), InputValue::Missing)
-	} else {
-		matches!(
-			normalized(input.value),
-			InputValue::Missing | InputValue::Boolean(true)
-		)
-	};
-	if !valid {
-		push(issues, code, "must be true when present".to_string());
 	}
 }
 

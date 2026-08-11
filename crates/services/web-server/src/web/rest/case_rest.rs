@@ -18,6 +18,7 @@ use lib_core::model::reaction::{Reaction, ReactionBmc};
 use lib_core::model::safety_report::{
 	SafetyReportIdentificationBmc, SafetyReportIdentificationForCreate,
 };
+use lib_core::model::store::set_full_context_from_ctx_dbx;
 use lib_core::model::ModelManager;
 use lib_core::regulatory::RegulatoryAuthority;
 use lib_core::report_due::{
@@ -855,6 +856,13 @@ pub struct CaseReadResult {
 	pub workflow_block_reason: Option<&'static str>,
 }
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CaseFollowUpCreateResult {
+	pub case_id: Uuid,
+	pub safety_report_version: i32,
+}
+
 // -- Shared helper (used by case_workflow_rest)
 
 pub async fn case_to_read_result(
@@ -891,6 +899,161 @@ pub async fn create_case_guarded(
 		move |ctx, mm| Box::pin(create_case_authorized(ctx, mm, data)),
 	)
 	.await
+}
+
+/// POST /api/cases/{source_case_id}/follow-up
+pub async fn create_follow_up_case_guarded(
+	State(mm): State<ModelManager>,
+	ctx_w: CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
+	Path(source_case_id): Path<Uuid>,
+) -> Result<(
+	axum::http::StatusCode,
+	Json<DataRestResult<CaseFollowUpCreateResult>>,
+)> {
+	let ctx = ctx_w.0;
+	lib_rest_core::with_authorized_case_create(
+		&ctx,
+		&snapshot,
+		&mm,
+		move |ctx, mm| {
+			Box::pin(create_follow_up_case_authorized(ctx, mm, source_case_id))
+		},
+	)
+	.await
+}
+
+async fn create_follow_up_case_authorized(
+	ctx: &Ctx,
+	mm: &ModelManager,
+	source_case_id: Uuid,
+) -> Result<(
+	axum::http::StatusCode,
+	Json<DataRestResult<CaseFollowUpCreateResult>>,
+)> {
+	let tx_mm = mm.new_with_txn().map_err(Error::Model)?;
+	let dbx = tx_mm.dbx();
+	dbx.begin_txn()
+		.await
+		.map_err(lib_core::model::Error::from)
+		.map_err(Error::Model)?;
+	if let Err(error) = set_full_context_from_ctx_dbx(dbx, ctx).await {
+		let _ = dbx.rollback_txn().await;
+		return Err(Error::Model(error));
+	}
+
+	let result = create_follow_up_case_in_txn(ctx, &tx_mm, source_case_id).await;
+	match result {
+		Ok(response) => {
+			dbx.commit_txn()
+				.await
+				.map_err(lib_core::model::Error::from)
+				.map_err(Error::Model)?;
+			Ok(response)
+		}
+		Err(error) => {
+			let _ = dbx.rollback_txn().await;
+			Err(error)
+		}
+	}
+}
+
+async fn create_follow_up_case_in_txn(
+	ctx: &Ctx,
+	mm: &ModelManager,
+	source_case_id: Uuid,
+) -> Result<(
+	axum::http::StatusCode,
+	Json<DataRestResult<CaseFollowUpCreateResult>>,
+)> {
+	let source_case = CaseBmc::get(ctx, mm, source_case_id).await?;
+	let source_report =
+		SafetyReportIdentificationBmc::get_by_case(ctx, mm, source_case_id)
+			.await
+			.map_err(Error::Model)?;
+	let safety_report_id = source_report
+		.safety_report_id
+		.as_deref()
+		.map(str::trim)
+		.filter(|value| !value.is_empty())
+		.ok_or_else(|| Error::BadRequest {
+			message: "source case C.1.1 safety report ID is required".to_string(),
+		})?
+		.to_string();
+
+	// Serialize version allocation for this report within the transaction.
+	mm.dbx()
+		.execute(
+			sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))")
+				.bind(&safety_report_id),
+		)
+		.await
+		.map_err(lib_core::model::Error::from)
+		.map_err(Error::Model)?;
+	let next_version = next_case_version(ctx, mm, &safety_report_id).await?;
+
+	let case_create = InternalCaseForCreate {
+		organization_id: source_case.organization_id,
+		dg_prd_key: source_case.dg_prd_key,
+		status: Some("draft".to_string()),
+		review_receivers_json: None,
+		workflow_routes_json: None,
+		mfds_report_type: source_case.mfds_report_type,
+		fda_report_type: source_case.fda_report_type,
+		report_year: source_case.report_year,
+		import_authority: source_case.import_authority,
+	};
+	validate_case_create_payload(&case_create)?;
+	let case_id = CaseBmc::create(ctx, mm, case_create).await?;
+	let transmission_date =
+		crate::web::rest::case_export_rest::format_message_timestamp_utc_pub(
+			OffsetDateTime::now_utc(),
+		);
+	SafetyReportIdentificationBmc::create(
+		ctx,
+		mm,
+		SafetyReportIdentificationForCreate {
+			case_id,
+			safety_report_id: Some(safety_report_id),
+			version: Some(next_version),
+			transmission_date: Some(transmission_date),
+			report_type: source_report.report_type,
+			date_first_received_from_source: source_report
+				.date_first_received_from_source,
+			date_of_most_recent_information: source_report
+				.date_of_most_recent_information,
+			fulfil_expedited_criteria: source_report.fulfil_expedited_criteria,
+			fulfil_expedited_criteria_null_flavor: source_report
+				.fulfil_expedited_criteria_null_flavor,
+			local_criteria_report_type: source_report.local_criteria_report_type,
+			combination_product_report_indicator: source_report
+				.combination_product_report_indicator,
+			combination_product_report_indicator_null_flavor: source_report
+				.combination_product_report_indicator_null_flavor,
+			first_sender_type: source_report.first_sender_type,
+			additional_documents_available: source_report
+				.additional_documents_available,
+			other_case_identifiers_exist: source_report.other_case_identifiers_exist,
+			other_case_identifiers_exist_null_flavor: source_report
+				.other_case_identifiers_exist_null_flavor,
+			worldwide_unique_id: source_report.worldwide_unique_id,
+			nullification_code: None,
+			nullification_reason: None,
+			receiver_organization: source_report.receiver_organization,
+		},
+	)
+	.await
+	.map_err(Error::Model)?;
+
+	Ok((
+		axum::http::StatusCode::CREATED,
+		Json(DataRestResult {
+			data: CaseFollowUpCreateResult {
+				case_id,
+				safety_report_version: next_version,
+			},
+		}),
+	))
 }
 
 async fn create_case_authorized(

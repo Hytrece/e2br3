@@ -6,7 +6,7 @@ pub async fn create_submission(
 	case_id: Uuid,
 	authority: SubmissionAuthority,
 ) -> Result<SubmissionRecord> {
-	assert_case_ready_for_submission(ctx, mm, case_id, authority).await?;
+	assert_case_not_submitted(ctx, mm, case_id).await?;
 
 	let ctx_clone = ctx.clone();
 	let mm_clone = mm.clone();
@@ -185,7 +185,7 @@ pub async fn create_submission(
 					     dirty_h = false,
 					     updated_at = now()
 					 WHERE id = $1
-					   AND status = 'validated'",
+					   AND status <> 'submitted'",
 			)
 			.bind(case_id)
 			.bind(ctx.user_id())
@@ -197,10 +197,7 @@ pub async fn create_submission(
 	if updated == 0 {
 		let _ = mm.dbx().rollback_txn().await;
 		return Err(Error::BadRequest {
-			message: format!(
-				"case must be in 'validated' status before {} submission",
-				authority.as_str().to_ascii_uppercase()
-			),
+			message: "case has already been submitted".to_string(),
 		});
 	}
 
@@ -322,9 +319,7 @@ pub async fn create_submission_idempotent(
 	let record = match create_submission(ctx, mm, case_id, authority).await {
 		Ok(record) => record,
 		Err(err) => {
-			if normalized_key.is_some()
-				&& is_case_not_validated_for_submission_error(&err)
-			{
+			if normalized_key.is_some() && is_case_already_submitted_error(&err) {
 				if let Some(existing_id) = wait_for_submission_idempotency(
 					ctx,
 					mm,
@@ -362,11 +357,9 @@ pub async fn create_submission_idempotent(
 	Ok(record)
 }
 
-pub(super) fn is_case_not_validated_for_submission_error(err: &Error) -> bool {
+pub(super) fn is_case_already_submitted_error(err: &Error) -> bool {
 	match err {
-		Error::BadRequest { message } => {
-			message.contains("case must be in 'validated' status before")
-		}
+		Error::BadRequest { message } => message.contains("already been submitted"),
 		_ => false,
 	}
 }
@@ -389,19 +382,15 @@ pub(super) async fn wait_for_submission_idempotency(
 	Ok(None)
 }
 
-pub async fn assert_case_ready_for_submission(
+pub async fn assert_case_not_submitted(
 	ctx: &Ctx,
 	mm: &ModelManager,
 	case_id: Uuid,
-	authority: SubmissionAuthority,
 ) -> Result<()> {
 	let case = CaseBmc::get(ctx, mm, case_id).await?;
-	if !case.status.eq_ignore_ascii_case("validated") {
+	if case.status.eq_ignore_ascii_case("submitted") {
 		return Err(Error::BadRequest {
-			message: format!(
-				"case must be in 'validated' status before {} submission",
-				authority.as_str().to_ascii_uppercase()
-			),
+			message: "case has already been submitted".to_string(),
 		});
 	}
 	Ok(())

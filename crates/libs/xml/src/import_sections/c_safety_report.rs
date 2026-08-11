@@ -259,9 +259,9 @@ fn read_c_1_9_1(xpath: &mut Context) -> Result<(Option<bool>, Option<String>)> {
 		xpath,
 		CSafetyReportPaths::OTHER_CASE_IDENTIFIERS_EXIST_NULL_FLAVOR,
 	);
-	import_constraint::string(
+	import_constraint::boolean(
 		"otherCaseIdentifiersExist",
-		raw.as_deref(),
+		value,
 		null_flavor.as_deref(),
 		input_contracts::generated::c::c_1_9_1,
 	)?;

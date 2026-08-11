@@ -149,6 +149,108 @@ fn intake_patient_initials(safety_report_id: &str) -> String {
 	format!("P{}", suffix.to_ascii_uppercase())
 }
 
+#[serial]
+#[tokio::test]
+async fn test_follow_up_creation_preserves_scope_and_allocates_versions(
+) -> Result<()> {
+	let mm = init_test_mm().await?;
+	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
+	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
+	let cookie = cookie_header(&token.to_string());
+	let app = web_server::app(mm.clone());
+	let safety_report_id = format!("FOLLOW-UP-{}", Uuid::new_v4());
+	let product_id = format!("PRODUCT-{}", Uuid::new_v4());
+
+	let (status, source_body) = post_json(
+		&app,
+		&cookie,
+		"/api/cases",
+		json!({
+			"data": {
+				"status": "draft",
+				"dgPrdKey": product_id,
+				"safetyReportIdentification": {
+					"safetyReportId": safety_report_id
+				}
+			}
+		}),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::CREATED, "{source_body:?}");
+	let source_case_id = Uuid::parse_str(
+		source_body["data"]["id"]
+			.as_str()
+			.ok_or("missing source case id")?,
+	)?;
+
+	mm.dbx().begin_txn().await?;
+	set_full_context_dbx(
+		mm.dbx(),
+		seed.admin.id,
+		seed.org_id,
+		ROLE_SPONSOR_ADMIN_CRO,
+	)
+	.await?;
+	mm.dbx()
+		.execute(
+			sqlx::query("UPDATE cases SET import_authority = 'mfds' WHERE id = $1")
+				.bind(source_case_id),
+		)
+		.await?;
+	mm.dbx().commit_txn().await?;
+
+	let mut follow_up_ids = Vec::new();
+	for expected_version in [2, 3] {
+		let (status, body) = post_json(
+			&app,
+			&cookie,
+			&format!("/api/cases/{source_case_id}/follow-up"),
+			json!({}),
+		)
+		.await?;
+		assert_eq!(status, StatusCode::CREATED, "{body:?}");
+		assert_eq!(body["data"]["safetyReportVersion"], expected_version);
+		follow_up_ids.push(Uuid::parse_str(
+			body["data"]["caseId"]
+				.as_str()
+				.ok_or("missing follow-up case id")?,
+		)?);
+	}
+
+	mm.dbx().begin_txn().await?;
+	set_full_context_dbx(
+		mm.dbx(),
+		seed.admin.id,
+		seed.org_id,
+		ROLE_SPONSOR_ADMIN_CRO,
+	)
+	.await?;
+	let rows = mm
+		.dbx()
+		.fetch_all(
+			sqlx::query_as::<_, (Uuid, Option<String>, Option<String>, i32)>(
+				"SELECT c.id, c.import_authority, c.dg_prd_key, s.version
+				   FROM cases c
+				   JOIN safety_report_identification s ON s.case_id = c.id
+				  WHERE s.safety_report_id = $1
+				  ORDER BY s.version",
+			)
+			.bind(&safety_report_id),
+		)
+		.await?;
+	mm.dbx().commit_txn().await?;
+
+	assert_eq!(rows.len(), 3);
+	assert_eq!(rows[1].0, follow_up_ids[0]);
+	assert_eq!(rows[2].0, follow_up_ids[1]);
+	for (_, authority, product, _) in &rows[1..] {
+		assert_eq!(authority.as_deref(), Some("mfds"));
+		assert_eq!(product.as_deref(), Some(product_id.as_str()));
+	}
+
+	Ok(())
+}
+
 fn intake_data(
 	safety_report_id: &str,
 	day_of_year: u32,

@@ -369,6 +369,21 @@ pub(crate) fn collect(
 ) {
 	collect_ich_issues(validation_ctx, issues);
 	if authority == RegulatoryAuthority::Mfds {
+		for (idx, test) in validation_ctx.tests.iter().enumerate() {
+			if test
+				.test_date_null_flavor
+				.as_deref()
+				.map(str::trim)
+				.is_some_and(|value| value != "MSK")
+			{
+				crate::push_business_issue(
+					issues,
+					"MFDS.F.r.1.NULLFLAVOR.ALLOWED",
+					format!("testResults.{idx}.testDateNullFlavor"),
+					"MFDS only allows MSK as the [F.r.1] nullFlavor.",
+				);
+			}
+		}
 		f_r_7(validation_ctx, issues);
 	}
 }
@@ -501,6 +516,19 @@ mod golden_f_required_tests {
 			created_by: Uuid::nil(),
 			updated_by: None,
 		}
+	}
+
+	#[test]
+	fn mfds_only_allows_msk_test_date_null_flavor() {
+		let mut ctx = empty_ctx();
+		let mut row = test_result();
+		row.test_date_null_flavor = Some("UNK".to_string());
+		ctx.tests = vec![row];
+		let mut issues = Vec::new();
+		collect(&mut issues, RegulatoryAuthority::Mfds, &ctx);
+		assert!(issues
+			.iter()
+			.any(|issue| issue.code == "MFDS.F.r.1.NULLFLAVOR.ALLOWED"));
 	}
 
 	fn codes_for(test: TestResult) -> Vec<String> {

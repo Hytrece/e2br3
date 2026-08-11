@@ -447,7 +447,7 @@ pub fn g_k_2_4(input: crate::FieldInput<'_>) -> Vec<crate::InputIssue> {
 /// ICH.G.k.2.5.ALLOWED.VALUE
 pub fn g_k_2_5(input: crate::FieldInput<'_>) -> Vec<crate::InputIssue> {
 	let mut issues = Vec::new();
-	crate::helpers::true_marker(&mut issues, "ICH.G.k.2.5.ALLOWED.VALUE", input);
+	crate::helpers::boolean(&mut issues, "ICH.G.k.2.5.ALLOWED.VALUE", input.value);
 	issues
 }
 

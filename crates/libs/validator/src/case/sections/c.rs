@@ -2235,6 +2235,29 @@ pub(crate) fn collect_mfds_issues(
 	mfds_ctx: &MfdsValidationContext,
 	issues: &mut Vec<ValidationIssue>,
 ) {
+	if let Some(report) = validation_ctx.safety_report.as_ref() {
+		push_business_violation(
+			issues,
+			report.additional_documents_available.is_none(),
+			"ICH.C.1.6.1.REQUIRED",
+			"safetyReportIdentification.additionalDocumentsAvailable",
+			"MFDS requires [C.1.6.1].",
+		);
+		push_business_violation(
+			issues,
+			!has_text(report.worldwide_unique_id.as_deref()),
+			"ICH.C.1.8.1.REQUIRED",
+			"safetyReportIdentification.worldwideUniqueId",
+			"MFDS requires [C.1.8.1].",
+		);
+		push_business_violation(
+			issues,
+			!has_text(report.first_sender_type.as_deref()),
+			"ICH.C.1.8.2.REQUIRED",
+			"safetyReportIdentification.firstSenderType",
+			"MFDS requires [C.1.8.2].",
+		);
+	}
 	mfds_receiver_rules(validation_ctx, issues);
 	let domestic = is_mfds_domestic_receiver(
 		validation_ctx
@@ -3116,6 +3139,28 @@ mod golden_c1_value_tests {
 			"MFDS.C.2.r.4.KR.1.REQUIRED",
 			"MFDS.C.3.1.KR.1.REQUIRED",
 			"MFDS.C.5.4.KR.1.REQUIRED",
+		] {
+			assert!(issues.iter().any(|issue| issue.code == code), "{code}");
+		}
+	}
+
+	#[test]
+	fn mfds_requires_core_c_fields() {
+		let ctx = ctx_with(base_report());
+		let mfds_ctx = MfdsValidationContext {
+			senders: Vec::new(),
+			studies: Vec::new(),
+			active_substances: Vec::new(),
+			relatedness: Vec::new(),
+			past_drugs: Vec::new(),
+			parent_past_drugs: Vec::new(),
+		};
+		let mut issues = Vec::new();
+		collect_mfds_issues(&ctx, &mfds_ctx, &mut issues);
+		for code in [
+			"ICH.C.1.6.1.REQUIRED",
+			"ICH.C.1.8.1.REQUIRED",
+			"ICH.C.1.8.2.REQUIRED",
 		] {
 			assert!(issues.iter().any(|issue| issue.code == code), "{code}");
 		}

@@ -114,6 +114,7 @@ async fn load_editor_ci_data(
 			Ok(entity) => Some(CaseEditorCiSafetyReportDto {
 				id: entity.id,
 				safety_report_id: entity.safety_report_id,
+				safety_report_version: entity.version,
 				transmission_date: entity.transmission_date,
 				report_type: entity.report_type,
 				date_first_received_from_source: ci_date(

@@ -1,5 +1,5 @@
 use crate::{Error, Result};
-use input_contracts::{FieldInput, InputIssue};
+use input_contracts::{FieldInput, InputIssue, InputValue};
 
 pub(crate) fn string<F>(
 	field: &str,
@@ -11,7 +11,13 @@ where
 	F: for<'a> Fn(FieldInput<'a>) -> Vec<InputIssue>,
 {
 	reject_value_and_null_flavor(field, value.is_some(), null_flavor)?;
-	Ok(())
+	reject_input_issues(
+		field,
+		_check_field(FieldInput::new(
+			value.map(InputValue::String).unwrap_or(InputValue::Missing),
+			null_flavor,
+		)),
+	)
 }
 
 pub(crate) fn boolean<F>(
@@ -24,7 +30,15 @@ where
 	F: for<'a> Fn(FieldInput<'a>) -> Vec<InputIssue>,
 {
 	reject_value_and_null_flavor(field, value.is_some(), null_flavor)?;
-	Ok(())
+	reject_input_issues(
+		field,
+		_check_field(FieldInput::new(
+			value
+				.map(InputValue::Boolean)
+				.unwrap_or(InputValue::Missing),
+			null_flavor,
+		)),
+	)
 }
 
 fn reject_value_and_null_flavor(
@@ -35,6 +49,17 @@ fn reject_value_and_null_flavor(
 	if has_value && null_flavor.is_some() {
 		return Err(Error::InvalidXml {
 			message: format!("{field}: value and nullFlavor cannot both be present"),
+			line: None,
+			column: None,
+		});
+	}
+	Ok(())
+}
+
+fn reject_input_issues(field: &str, issues: Vec<InputIssue>) -> Result<()> {
+	if let Some(issue) = issues.into_iter().next() {
+		return Err(Error::InvalidXml {
+			message: format!("{field}: {}: {}", issue.code, issue.message),
 			line: None,
 			column: None,
 		});
@@ -59,8 +84,16 @@ where
 			line: None,
 			column: None,
 		})?;
-	let _ = (number, check_field);
-	Ok(())
+	reject_input_issues(
+		field,
+		check_field(FieldInput::new(
+			number
+				.as_ref()
+				.map(InputValue::Number)
+				.unwrap_or(InputValue::Missing),
+			None,
+		)),
+	)
 }
 
 pub(crate) fn normalize_decimal_lexeme(value: &str) -> String {
@@ -86,6 +119,18 @@ mod tests {
 			input_contracts::generated::c::c_1_1,
 		)
 		.expect("business validation runs after import");
+	}
+
+	#[test]
+	fn storage_contracts_block_unstorable_values() {
+		let err = string(
+			"safetyReportId",
+			Some(&"X".repeat(101)),
+			None,
+			input_contracts::generated::c::c_1_1,
+		)
+		.unwrap_err();
+		assert!(err.to_string().contains("ICH.C.1.1.LENGTH.MAX"));
 	}
 
 	#[test]

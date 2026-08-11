@@ -1429,14 +1429,14 @@ mod tests {
 	}
 
 	#[test]
-	fn leaves_length_validation_later_but_rejects_unparseable_numbers() {
+	fn rejects_unstorable_lengths_and_unparseable_numbers() {
 		let overlong_version = format!(
 			r#"<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3"><subjectOf2><organizer><code code="4" codeSystem="2.16.840.1.113883.3.989.2.1.1.20"/><component><substanceAdministration><consumable><instanceOfKind><kindOfProduct><name>Drug A</name><asIdentifiedEntity><id extension="MPID-1"/><code code="MPID" codeSystemVersion="{}"/></asIdentifiedEntity></kindOfProduct></instanceOfKind></consumable></substanceAdministration></component></organizer></subjectOf2></MCCI_IN200100UV01>"#,
 			"1".repeat(1001)
 		);
 		let invalid_decimal = br#"<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3"><subjectOf2><organizer><code code="4" codeSystem="2.16.840.1.113883.3.989.2.1.1.20"/><component><substanceAdministration><consumable><instanceOfKind><kindOfProduct><name>Drug A</name></kindOfProduct></instanceOfKind></consumable><outboundRelationship2 typeCode="COMP"><substanceAdministration><doseQuantity value="not-a-number"/></substanceAdministration></outboundRelationship2></substanceAdministration></component></organizer></subjectOf2></MCCI_IN200100UV01>"#;
 
-		assert!(parse_g_drugs(with_drug_role(&overlong_version).as_bytes()).is_ok());
+		assert!(parse_g_drugs(with_drug_role(&overlong_version).as_bytes()).is_err());
 		assert!(parse_g_drugs(
 			with_drug_role(std::str::from_utf8(invalid_decimal).unwrap()).as_bytes()
 		)

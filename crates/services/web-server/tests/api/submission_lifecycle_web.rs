@@ -642,15 +642,17 @@ async fn mark_case_validated(
 
 #[serial]
 #[tokio::test]
-async fn test_submission_requires_case_validated_status() -> Result<()> {
+async fn test_submission_does_not_require_case_validated_status() -> Result<()> {
 	clear_esg_env();
+	configure_mock_esg_transport().await?;
 	let mm = init_test_mm().await?;
 	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
 	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
 	let cookie = cookie_header(&token.to_string());
-	let app = web_server::app(mm);
+	let app = web_server::app(mm.clone());
 
 	let case_id = create_case(&app, &cookie, seed.org_id).await?;
+	seed_rule_clean_case(&mm, &app, &cookie, case_id).await?;
 	let (status, body) = post_json(
 		&app,
 		&cookie,
@@ -658,19 +660,15 @@ async fn test_submission_requires_case_validated_status() -> Result<()> {
 		valid_compliance_payload(),
 	)
 	.await?;
-	assert_eq!(status, StatusCode::BAD_REQUEST, "{body:?}");
-	assert!(
-		body.to_string()
-			.contains("case must be in 'validated' status"),
-		"{body:?}"
-	);
+	assert_eq!(status, StatusCode::CREATED, "{body:?}");
 
+	clear_esg_env();
 	Ok(())
 }
 
 #[serial]
 #[tokio::test]
-async fn test_manual_export_statuses_follow_workflow_eligibility() -> Result<()> {
+async fn test_manual_export_is_not_blocked_by_workflow_status() -> Result<()> {
 	clear_esg_env();
 	std::env::set_var("E2BR3_EXPORT_VALIDATE_FDA", "0");
 	let mm = init_test_mm().await?;
@@ -709,17 +707,12 @@ async fn test_manual_export_statuses_follow_workflow_eligibility() -> Result<()>
 		let response_status = res.status();
 		let body = to_bytes(res.into_body(), usize::MAX).await?;
 
-		if status == "draft" {
-			assert_eq!(response_status, StatusCode::BAD_REQUEST);
-			assert!(String::from_utf8_lossy(&body).contains("Only validated cases"));
-		} else {
-			assert_eq!(
-				response_status,
-				StatusCode::OK,
-				"status={status} body={}",
-				String::from_utf8_lossy(&body)
-			);
-		}
+		assert_eq!(
+			response_status,
+			StatusCode::OK,
+			"status={status} body={}",
+			String::from_utf8_lossy(&body)
+		);
 	}
 
 	Ok(())
@@ -1597,7 +1590,7 @@ async fn test_submission_idempotency_key_reuses_submission_when_enabled(
 		assert!(
 			body2
 				.to_string()
-				.contains("case must be in 'validated' status"),
+				.contains("case has already been submitted"),
 			"{body2:?}"
 		);
 		clear_esg_env();
