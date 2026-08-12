@@ -1612,6 +1612,8 @@ struct MessageHeaderDoc {
 #[derive(serde::Serialize, serde::Deserialize, ToSchema)]
 struct MessageHeaderForCreateDoc {
 	case_id: String,
+	batch_sender_identifier: Option<String>,
+	batch_receiver_identifier: Option<String>,
 	batch_transmission_date: Option<String>,
 	message_number: String,
 	message_sender_identifier: String,

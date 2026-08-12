@@ -7,9 +7,17 @@ pub(crate) async fn export_patch(
 	case_id: sqlx::types::Uuid,
 	raw_xml: &[u8],
 ) -> Result<String> {
-	let narrative = NarrativeInformationBmc::get_by_case(ctx, mm, case_id)
-		.await
-		.map_err(Error::from)?;
+	let Some(narrative) =
+		NarrativeInformationBmc::get_by_case_optional(ctx, mm, case_id).await?
+	else {
+		return std::str::from_utf8(raw_xml)
+			.map(str::to_owned)
+			.map_err(|err| Error::InvalidXml {
+				message: format!("XML not valid UTF-8: {err}"),
+				line: None,
+				column: None,
+			});
+	};
 	patch_h_narrative(raw_xml, &narrative)
 }
 

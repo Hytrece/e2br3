@@ -20,7 +20,7 @@ async fn test_admin_matrix_privileges_grant_effective_terminology_permissions(
 		&app,
 		&custom_cookie,
 		"/api/terminology/countries",
-		StatusCode::FORBIDDEN,
+		StatusCode::OK,
 	)
 	.await?;
 

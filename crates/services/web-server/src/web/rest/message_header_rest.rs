@@ -38,6 +38,18 @@ fn create_constraint_fields(data: &MessageHeaderForCreate) -> Map<String, Value>
 			Value::String(data.message_date.clone()),
 		),
 	]);
+	if let Some(value) = &data.batch_sender_identifier {
+		fields.insert(
+			"batchSenderIdentifier".to_string(),
+			Value::String(value.clone()),
+		);
+	}
+	if let Some(value) = &data.batch_receiver_identifier {
+		fields.insert(
+			"batchReceiverIdentifier".to_string(),
+			Value::String(value.clone()),
+		);
+	}
 	if let Some(value) = data.batch_transmission_date {
 		fields.insert(
 			"batchTransmissionDate".to_string(),

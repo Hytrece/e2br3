@@ -137,6 +137,70 @@ async fn test_export_submission_matrix_privileges_grant_effective_xml_export_per
 		"export_submission.can_edit should pass XML export permission check: {value:?}"
 	);
 
+	let case_id = create_case(
+		&app,
+		&admin_cookie,
+		&format!("EXPORT-AUTHZ-{}", Uuid::new_v4().simple()),
+		None,
+	)
+	.await?;
+	create_message_header(&app, &admin_cookie, case_id, "SENDER-01").await?;
+	let (status, value) = request_json(
+		&app,
+		"PUT",
+		&admin_cookie,
+		format!("/api/cases/{case_id}/message-header"),
+		Some(json!({
+			"data": {
+				"batch_number": format!("BATCH-{case_id}"),
+				"batch_sender_identifier": "SENDER-01",
+				"batch_receiver_identifier": "RECV-01",
+				"batch_transmission_date": [2024, 32, 1, 1, 1, 0, 0, 0, 0]
+			}
+		})),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK, "{value:?}");
+	let receiver_selection = json!({
+		"data": {
+			"authority": "ich",
+			"batch_receiver_identifier": "RECV-01",
+			"message_receiver_identifier": "RECV-01",
+			"outbound_message_header": {
+				"batch_number": format!("BATCH-{case_id}"),
+				"batch_sender_identifier": "SENDER-01",
+				"batch_receiver_identifier": "RECV-01",
+				"batch_transmission_date": "20240201010101",
+				"message_number": format!("MSG-{case_id}"),
+				"message_sender_identifier": "SENDER-01",
+				"message_receiver_identifier": "RECV-01",
+				"message_date": "20240201010101"
+			}
+		}
+	});
+	let (status, value) = request_json(
+		&app,
+		"PUT",
+		&no_export_cookie,
+		format!("/api/cases/{case_id}/submission-receiver"),
+		Some(receiver_selection.clone()),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::FORBIDDEN, "{value:?}");
+	let (status, value) = request_json(
+		&app,
+		"PUT",
+		&edit_cookie,
+		format!("/api/cases/{case_id}/submission-receiver"),
+		Some(receiver_selection),
+	)
+	.await?;
+	assert_eq!(
+		status,
+		StatusCode::OK,
+		"export_submission.can_edit must prepare a draft case for XML export: {value:?}"
+	);
+
 	Ok(())
 }
 #[serial]

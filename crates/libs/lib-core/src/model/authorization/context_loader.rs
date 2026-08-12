@@ -1077,7 +1077,10 @@ fn case_lifecycle_allows(facts: &CaseFacts, kind: CaseMutationKind) -> bool {
 			!matches!(status.as_str(), "locked" | "deleted" | "archived")
 		}
 		CaseMutationKind::SubmissionReceiver => {
-			matches!(status.as_str(), "reviewed" | "validated" | "locked")
+			matches!(
+				status.as_str(),
+				"draft" | "reviewed" | "validated" | "locked"
+			)
 		}
 		CaseMutationKind::WorkflowTransition => status != "locked",
 	}
@@ -1137,6 +1140,37 @@ mod tests {
 			None,
 			"test".into(),
 		)
+	}
+
+	#[test]
+	fn draft_allows_export_receiver_preparation_without_changing_submission_lifecycle(
+	) {
+		let facts = CaseFacts {
+			organization_id: Uuid::new_v4(),
+			status: "draft".into(),
+			sender_identifiers: Vec::new(),
+			product_identifiers: Vec::new(),
+			study_identifiers: Vec::new(),
+			has_blinded_data: false,
+		};
+
+		assert!(case_lifecycle_allows(
+			&facts,
+			CaseMutationKind::SubmissionReceiver
+		));
+		assert!(case_lifecycle_allows(&facts, CaseMutationKind::Submission));
+		let locked = CaseFacts {
+			status: "locked".into(),
+			..facts
+		};
+		assert!(case_lifecycle_allows(
+			&locked,
+			CaseMutationKind::SubmissionReceiver
+		));
+		assert!(!case_lifecycle_allows(
+			&locked,
+			CaseMutationKind::Submission
+		));
 	}
 
 	#[test]

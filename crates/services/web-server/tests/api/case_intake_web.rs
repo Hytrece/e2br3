@@ -358,7 +358,7 @@ async fn test_case_intake_duplicate_check_and_create() -> Result<()> {
 	let safety_report_id = format!("INTAKE-{}", Uuid::new_v4());
 
 	let intake_body = json!({
-		"data": intake_data(&safety_report_id, 120, "1", json!({}))
+		"data": intake_data(&safety_report_id, 120, "1", json!({ "authority": "ich" }))
 	});
 	let (status, body) =
 		post_json(&app, &cookie, "/api/cases/from-intake", intake_body).await?;
@@ -398,14 +398,54 @@ async fn test_case_intake_duplicate_check_and_create() -> Result<()> {
 		header_body["data"]["case_id"].as_str(),
 		Some(case_id.as_str())
 	);
-	assert!(header_body["data"]["message_sender_identifier"]
-		.as_str()
-		.map(|v| !v.trim().is_empty())
-		.unwrap_or(false));
-	assert!(header_body["data"]["message_receiver_identifier"]
-		.as_str()
-		.map(|v| !v.trim().is_empty())
-		.unwrap_or(false));
+	let expected_sender = std::env::var("E2BR3_DEFAULT_MESSAGE_SENDER")?;
+	let expected_receiver = std::env::var("E2BR3_DEFAULT_MESSAGE_RECEIVER_ICH")?;
+	assert_eq!(
+		header_body["data"]["batch_sender_identifier"].as_str(),
+		Some(expected_sender.as_str())
+	);
+	assert_eq!(
+		header_body["data"]["message_sender_identifier"].as_str(),
+		Some(expected_sender.as_str())
+	);
+	assert_eq!(
+		header_body["data"]["batch_receiver_identifier"].as_str(),
+		Some(expected_receiver.as_str())
+	);
+	assert_eq!(
+		header_body["data"]["message_receiver_identifier"].as_str(),
+		Some(expected_receiver.as_str())
+	);
+
+	Ok(())
+}
+
+#[serial]
+#[tokio::test]
+async fn test_ich_export_without_narrative_reaches_xml_validation() -> Result<()> {
+	let mm = init_test_mm().await?;
+	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
+	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
+	let cookie = cookie_header(&token.to_string());
+	let app = web_server::app(mm);
+	let safety_report_id = format!("INTAKE-NO-NARRATIVE-{}", Uuid::new_v4());
+	let intake_body = json!({
+		"data": intake_data(&safety_report_id, 121, "1", json!({ "authority": "ich" }))
+	});
+	let (status, body) =
+		post_json(&app, &cookie, "/api/cases/from-intake", intake_body).await?;
+	assert_eq!(status, StatusCode::CREATED, "{body:?}");
+	let case_id = extract_case_id(&body)?;
+
+	let (status, xml) = get_bytes(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/export/xml?authority=ich"),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK, "{}", String::from_utf8_lossy(&xml));
+	let xml = String::from_utf8(xml)?;
+	assert!(xml.contains("<text/>"), "{xml}");
 
 	Ok(())
 }

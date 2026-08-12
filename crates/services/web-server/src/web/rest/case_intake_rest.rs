@@ -527,6 +527,8 @@ async fn create_case_from_intake_in_txn(
 	let profile_enum = data.authority;
 	let message_sender_identifier = message_sender_identifier()?;
 	let message_receiver_identifier = message_receiver_identifier(profile_enum)?;
+	let batch_sender_identifier = message_sender_identifier.clone();
+	let batch_receiver_identifier = message_receiver_identifier.clone();
 
 	let generated_case_number = if safety_report_id.trim().is_empty() {
 		let generated = generate_case_number(ctx, mm).await.map_err(Error::Model)?;
@@ -563,6 +565,8 @@ async fn create_case_from_intake_in_txn(
 		&mm,
 		MessageHeaderForCreate {
 			case_id,
+			batch_sender_identifier: Some(batch_sender_identifier),
+			batch_receiver_identifier: Some(batch_receiver_identifier),
 			batch_transmission_date: Some(now),
 			message_number: format!("MSG-{case_id}"),
 			message_sender_identifier,
