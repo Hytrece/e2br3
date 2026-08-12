@@ -42,6 +42,25 @@ pub(crate) fn allowed_values(
 	}
 }
 
+pub(crate) fn identifier(
+	issues: &mut Vec<InputIssue>,
+	code: &'static str,
+	value: InputValue<'_>,
+) {
+	let valid = match normalized(value) {
+		InputValue::Missing => true,
+		InputValue::String(value) => !value.chars().any(char::is_control),
+		_ => false,
+	};
+	if !valid {
+		push(
+			issues,
+			code,
+			"must not contain control characters".to_string(),
+		);
+	}
+}
+
 pub(crate) fn boolean(
 	issues: &mut Vec<InputIssue>,
 	code: &'static str,
@@ -219,7 +238,10 @@ fn valid_e2b_datetime(value: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-	use super::{valid_decimal, valid_dotted_version, valid_e2b_datetime};
+	use super::{
+		identifier, valid_decimal, valid_dotted_version, valid_e2b_datetime,
+	};
+	use crate::InputValue;
 
 	#[test]
 	fn primitive_contracts_cover_boundaries() {
@@ -230,5 +252,12 @@ mod tests {
 		assert!(!valid_dotted_version("2"));
 		assert!(valid_e2b_datetime("20240229123059+0900"));
 		assert!(!valid_e2b_datetime("20230229"));
+		let mut issues = Vec::new();
+		identifier(
+			&mut issues,
+			"ICH.G.k.2.1.1b.ALLOWED.VALUE",
+			InputValue::String("MPID\0"),
+		);
+		assert_eq!(issues.len(), 1);
 	}
 }

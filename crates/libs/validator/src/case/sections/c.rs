@@ -1074,7 +1074,7 @@ fn c_1_9_1_r_2(
 	);
 	allowed(
 		issues,
-		"ICH.C.1.9.1.r.2.ALLOWED.VALUE",
+		"ICH.C.1.9.1.r.2.PROFILE",
 		&path,
 		valid_ich_identifier(vocabulary, value),
 	);

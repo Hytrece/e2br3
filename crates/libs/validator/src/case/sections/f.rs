@@ -258,7 +258,7 @@ fn f_r_3_3(idx: usize, test: &TestResult, issues: &mut Vec<ValidationIssue>) {
 	);
 	reject_when(
 		issues,
-		"ICH.F.r.3.3.ALLOWED.VALUE",
+		"ICH.F.r.3.3.VOCABULARY",
 		&path,
 		SECTION,
 		ALLOWED_VALUE_MESSAGE,
@@ -378,7 +378,7 @@ pub(crate) fn collect(
 			{
 				crate::push_business_issue(
 					issues,
-					"MFDS.F.r.1.NULLFLAVOR.ALLOWED",
+					"MFDS.F.r.1.NULLFLAVOR.VOCABULARY",
 					format!("testResults.{idx}.testDateNullFlavor"),
 					"MFDS only allows MSK as the [F.r.1] nullFlavor.",
 				);
@@ -528,7 +528,7 @@ mod golden_f_required_tests {
 		collect(&mut issues, RegulatoryAuthority::Mfds, &ctx);
 		assert!(issues
 			.iter()
-			.any(|issue| issue.code == "MFDS.F.r.1.NULLFLAVOR.ALLOWED"));
+			.any(|issue| issue.code == "MFDS.F.r.1.NULLFLAVOR.VOCABULARY"));
 	}
 
 	fn codes_for(test: TestResult) -> Vec<String> {

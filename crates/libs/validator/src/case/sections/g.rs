@@ -664,7 +664,7 @@ fn g_k_2_3_r_3b(
 		let path = format!("drugs.{drug_idx}.activeSubstances.{idx}.strengthUnit");
 		allowed(
 			issues,
-			"ICH.G.k.2.3.r.3b.ALLOWED.VALUE",
+			"ICH.G.k.2.3.r.3b.VOCABULARY",
 			&path,
 			valid_ucum(substance.strength_unit.as_deref()),
 		);
@@ -771,7 +771,7 @@ fn g_k_4_r_3(
 	if let Some(path) = dosage_path(nested, "frequencyUnit") {
 		allowed(
 			issues,
-			"ICH.G.k.4.r.3.ALLOWED.VALUE",
+			"ICH.G.k.4.r.3.VOCABULARY",
 			&path,
 			dosage
 				.frequency_unit
@@ -3262,7 +3262,7 @@ mod golden_g_required_tests {
 			assert!(
 				!codes_for(&ctx)
 					.iter()
-					.any(|code| code == "ICH.G.k.4.r.3.ALLOWED.VALUE"),
+					.any(|code| code == "ICH.G.k.4.r.3.VOCABULARY"),
 				"approved unit {unit} was rejected"
 			);
 		}
@@ -3280,7 +3280,7 @@ mod golden_g_required_tests {
 
 		assert!(codes_for(&ctx)
 			.iter()
-			.any(|code| code == "ICH.G.k.4.r.3.ALLOWED.VALUE"));
+			.any(|code| code == "ICH.G.k.4.r.3.VOCABULARY"));
 	}
 
 	#[test]

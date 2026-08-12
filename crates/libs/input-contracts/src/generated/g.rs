@@ -318,6 +318,7 @@ pub fn g_k_2_1_1a(input: crate::FieldInput<'_>) -> Vec<crate::InputIssue> {
 }
 
 /// ICH.G.k.2.1.1b.LENGTH.MAX
+/// ICH.G.k.2.1.1b.ALLOWED.VALUE
 pub fn g_k_2_1_1b(input: crate::FieldInput<'_>) -> Vec<crate::InputIssue> {
 	let mut issues = Vec::new();
 	crate::helpers::max_length(
@@ -325,6 +326,11 @@ pub fn g_k_2_1_1b(input: crate::FieldInput<'_>) -> Vec<crate::InputIssue> {
 		"ICH.G.k.2.1.1b.LENGTH.MAX",
 		input.value,
 		1000,
+	);
+	crate::helpers::identifier(
+		&mut issues,
+		"ICH.G.k.2.1.1b.ALLOWED.VALUE",
+		input.value,
 	);
 	issues
 }
@@ -342,6 +348,7 @@ pub fn g_k_2_1_2a(input: crate::FieldInput<'_>) -> Vec<crate::InputIssue> {
 }
 
 /// ICH.G.k.2.1.2b.LENGTH.MAX
+/// ICH.G.k.2.1.2b.ALLOWED.VALUE
 pub fn g_k_2_1_2b(input: crate::FieldInput<'_>) -> Vec<crate::InputIssue> {
 	let mut issues = Vec::new();
 	crate::helpers::max_length(
@@ -349,6 +356,11 @@ pub fn g_k_2_1_2b(input: crate::FieldInput<'_>) -> Vec<crate::InputIssue> {
 		"ICH.G.k.2.1.2b.LENGTH.MAX",
 		input.value,
 		250,
+	);
+	crate::helpers::identifier(
+		&mut issues,
+		"ICH.G.k.2.1.2b.ALLOWED.VALUE",
+		input.value,
 	);
 	issues
 }
@@ -390,6 +402,7 @@ pub fn g_k_2_3_r_2a(input: crate::FieldInput<'_>) -> Vec<crate::InputIssue> {
 }
 
 /// ICH.G.k.2.3.r.2b.LENGTH.MAX
+/// ICH.G.k.2.3.r.2b.ALLOWED.VALUE
 pub fn g_k_2_3_r_2b(input: crate::FieldInput<'_>) -> Vec<crate::InputIssue> {
 	let mut issues = Vec::new();
 	crate::helpers::max_length(
@@ -397,6 +410,11 @@ pub fn g_k_2_3_r_2b(input: crate::FieldInput<'_>) -> Vec<crate::InputIssue> {
 		"ICH.G.k.2.3.r.2b.LENGTH.MAX",
 		input.value,
 		100,
+	);
+	crate::helpers::identifier(
+		&mut issues,
+		"ICH.G.k.2.3.r.2b.ALLOWED.VALUE",
+		input.value,
 	);
 	issues
 }

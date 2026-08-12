@@ -64,7 +64,7 @@ fn e_i_1_1b(
 	);
 	reject_when(
 		issues,
-		"ICH.E.i.1.1b.ALLOWED.VALUE",
+		"ICH.E.i.1.1b.VOCABULARY",
 		&path,
 		SECTION,
 		ALLOWED_VALUE_MESSAGE,

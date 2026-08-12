@@ -1629,7 +1629,7 @@ fn fda_d_11(
 	);
 	reject_when(
 		issues,
-		"FDA.D.11.NULLFLAVOR.ALLOWED",
+		"FDA.D.11.NULLFLAVOR.ROUTE",
 		"patientInformation.raceCodeNullFlavor",
 		SECTION,
 		"FDA D.11 null flavor is not allowed for this reporting route.",
@@ -1680,7 +1680,7 @@ fn fda_d_12(
 	);
 	reject_when(
 		issues,
-		"FDA.D.12.NULLFLAVOR.ALLOWED",
+		"FDA.D.12.NULLFLAVOR.ROUTE",
 		"patientInformation.ethnicityCodeNullFlavor",
 		SECTION,
 		"FDA D.12 null flavor is not allowed for this reporting route.",
@@ -3368,10 +3368,10 @@ mod golden_companion_tests {
 		fda_d_12(Some(&patient), true, &mut issues);
 		assert!(issues
 			.iter()
-			.any(|issue| issue.code == "FDA.D.11.NULLFLAVOR.ALLOWED"));
+			.any(|issue| issue.code == "FDA.D.11.NULLFLAVOR.ROUTE"));
 		assert!(issues
 			.iter()
-			.any(|issue| issue.code == "FDA.D.12.NULLFLAVOR.ALLOWED"));
+			.any(|issue| issue.code == "FDA.D.12.NULLFLAVOR.ROUTE"));
 	}
 
 	#[test]

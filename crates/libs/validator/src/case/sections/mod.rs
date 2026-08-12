@@ -50,7 +50,16 @@ pub(crate) async fn collect_section_issues(
 	h::collect(&mut issues, authority, validation_ctx);
 	n::collect(&mut issues, authority, validation_ctx);
 	collect_meddra_version_issues(validation_ctx, &mut issues);
+	retain_case_business_rules(&mut issues);
 	Ok(issues)
+}
+
+fn retain_case_business_rules(issues: &mut Vec<ValidationIssue>) {
+	issues.retain(|issue| {
+		!issue.code.ends_with(".LENGTH.MAX")
+			&& !issue.code.ends_with(".ALLOWED.VALUE")
+			&& !issue.code.ends_with(".NULLFLAVOR.ALLOWED")
+	});
 }
 
 fn has_multiple_values<'a>(values: impl IntoIterator<Item = &'a str>) -> bool {
@@ -349,6 +358,29 @@ mod tests {
 	fn detects_multiple_non_empty_meddra_versions() {
 		assert!(!has_multiple_values(["26.1", " 26.1 ", ""]));
 		assert!(has_multiple_values(["26.1", "27.0"]));
+	}
+
+	#[test]
+	fn case_output_excludes_input_contract_rules() {
+		let mut issues = Vec::new();
+		for code in [
+			"ICH.C.1.1.LENGTH.MAX",
+			"ICH.C.1.3.ALLOWED.VALUE",
+			"ICH.D.1.NULLFLAVOR.ALLOWED",
+			"ICH.C.1.3.REQUIRED",
+		] {
+			crate::push_field_issue(
+				&mut issues,
+				code,
+				"safetyReportIdentification.reportType",
+				"case-identification",
+				code,
+				true,
+			);
+		}
+		retain_case_business_rules(&mut issues);
+		assert_eq!(issues.len(), 1);
+		assert_eq!(issues[0].code, "ICH.C.1.3.REQUIRED");
 	}
 
 	#[test]

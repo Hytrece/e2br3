@@ -423,6 +423,7 @@ pub fn d_10_8_r_2a(input: crate::FieldInput<'_>) -> Vec<crate::InputIssue> {
 }
 
 /// ICH.D.10.8.r.2b.LENGTH.MAX
+/// ICH.D.10.8.r.2b.ALLOWED.VALUE
 pub fn d_10_8_r_2b(input: crate::FieldInput<'_>) -> Vec<crate::InputIssue> {
 	let mut issues = Vec::new();
 	crate::helpers::max_length(
@@ -430,6 +431,11 @@ pub fn d_10_8_r_2b(input: crate::FieldInput<'_>) -> Vec<crate::InputIssue> {
 		"ICH.D.10.8.r.2b.LENGTH.MAX",
 		input.value,
 		1000,
+	);
+	crate::helpers::identifier(
+		&mut issues,
+		"ICH.D.10.8.r.2b.ALLOWED.VALUE",
+		input.value,
 	);
 	issues
 }
@@ -447,6 +453,7 @@ pub fn d_10_8_r_3a(input: crate::FieldInput<'_>) -> Vec<crate::InputIssue> {
 }
 
 /// ICH.D.10.8.r.3b.LENGTH.MAX
+/// ICH.D.10.8.r.3b.ALLOWED.VALUE
 pub fn d_10_8_r_3b(input: crate::FieldInput<'_>) -> Vec<crate::InputIssue> {
 	let mut issues = Vec::new();
 	crate::helpers::max_length(
@@ -454,6 +461,11 @@ pub fn d_10_8_r_3b(input: crate::FieldInput<'_>) -> Vec<crate::InputIssue> {
 		"ICH.D.10.8.r.3b.LENGTH.MAX",
 		input.value,
 		250,
+	);
+	crate::helpers::identifier(
+		&mut issues,
+		"ICH.D.10.8.r.3b.ALLOWED.VALUE",
+		input.value,
 	);
 	issues
 }
@@ -897,6 +909,7 @@ pub fn d_8_r_2a(input: crate::FieldInput<'_>) -> Vec<crate::InputIssue> {
 }
 
 /// ICH.D.8.r.2b.LENGTH.MAX
+/// ICH.D.8.r.2b.ALLOWED.VALUE
 pub fn d_8_r_2b(input: crate::FieldInput<'_>) -> Vec<crate::InputIssue> {
 	let mut issues = Vec::new();
 	crate::helpers::max_length(
@@ -904,6 +917,11 @@ pub fn d_8_r_2b(input: crate::FieldInput<'_>) -> Vec<crate::InputIssue> {
 		"ICH.D.8.r.2b.LENGTH.MAX",
 		input.value,
 		1000,
+	);
+	crate::helpers::identifier(
+		&mut issues,
+		"ICH.D.8.r.2b.ALLOWED.VALUE",
+		input.value,
 	);
 	issues
 }
@@ -921,6 +939,7 @@ pub fn d_8_r_3a(input: crate::FieldInput<'_>) -> Vec<crate::InputIssue> {
 }
 
 /// ICH.D.8.r.3b.LENGTH.MAX
+/// ICH.D.8.r.3b.ALLOWED.VALUE
 pub fn d_8_r_3b(input: crate::FieldInput<'_>) -> Vec<crate::InputIssue> {
 	let mut issues = Vec::new();
 	crate::helpers::max_length(
@@ -928,6 +947,11 @@ pub fn d_8_r_3b(input: crate::FieldInput<'_>) -> Vec<crate::InputIssue> {
 		"ICH.D.8.r.3b.LENGTH.MAX",
 		input.value,
 		250,
+	);
+	crate::helpers::identifier(
+		&mut issues,
+		"ICH.D.8.r.3b.ALLOWED.VALUE",
+		input.value,
 	);
 	issues
 }

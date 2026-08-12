@@ -118,14 +118,14 @@ fn mfds_n_routing(header: &MessageHeader, issues: &mut Vec<ValidationIssue>) {
 	push_business_violation(
 		issues,
 		batch_receiver.is_some_and(|value| !MFDS_KNOWN_RECEIVERS.contains(&value)),
-		"MFDS.N.1.4.ALLOWED.VALUE",
+		"MFDS.N.1.4.ROUTE",
 		"messageHeader.batchReceiverIdentifier",
 		"MFDS N.1.4 must use an official MFDS operational or test receiver identifier.",
 	);
 	push_business_violation(
 		issues,
 		message_receiver.is_some_and(|value| !MFDS_KNOWN_RECEIVERS.contains(&value)),
-		"MFDS.N.2.r.3.ALLOWED.VALUE",
+		"MFDS.N.2.r.3.ROUTE",
 		"messageHeader.messageReceiverIdentifier",
 		"MFDS N.2.r.3 must use an official MFDS operational or test receiver identifier.",
 	);
@@ -509,7 +509,7 @@ mod tests {
 		mfds_n_routing(&header, &mut issues);
 		assert!(issues
 			.iter()
-			.any(|issue| issue.code == "MFDS.N.2.r.3.ALLOWED.VALUE"));
+			.any(|issue| issue.code == "MFDS.N.2.r.3.ROUTE"));
 		assert!(issues.iter().any(|issue| issue.code == "MFDS.N.ROUTE.PAIR"));
 	}
 

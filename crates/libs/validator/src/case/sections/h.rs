@@ -247,7 +247,7 @@ fn h_5_r_1b(
 	);
 	reject_when(
 		issues,
-		"ICH.H.5.r.1b.ALLOWED.VALUE",
+		"ICH.H.5.r.1b.VOCABULARY",
 		&path,
 		SECTION,
 		ALLOWED_VALUE_MESSAGE,
