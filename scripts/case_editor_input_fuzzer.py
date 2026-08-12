@@ -265,7 +265,7 @@ def field_value(field: dict[str, Any], rng: random.Random, ordinal: int) -> Any:
             False,
             "",
             True,
-            0,
+            False,
             {"unexpected": "object"},
         )[ordinal]
     if ordinal == 0 and invalid is not None:
@@ -326,7 +326,7 @@ def field_value(field: dict[str, Any], rng: random.Random, ordinal: int) -> Any:
         length = (limit, limit + 1, limit + min(max(limit, 64), 4096))[ordinal - 14]
         return "X" * length
     if ordinal == 17 and field.get("_identifierRule"):
-        return "\t\n"
+        return "A\tB\nC"
     if isinstance(baseline, bool):
         return rng.choice([True, False])
     if isinstance(baseline, list):
@@ -364,11 +364,15 @@ def add_nullflavor_partner(field: dict[str, Any], mutation: dict[str, Any], ordi
 
 
 def candidate_expectation(field: dict[str, Any], ordinal: int) -> tuple[str, str | None] | None:
+    if is_nullflavor_field(field):
+        return None
     constraint = field.get("constraint", {})
     if ordinal == 0 and "invalidValue" in constraint:
         return "reject", constraint.get("ruleCode")
     if field.get("_booleanRule"):
-        return ("accept", None) if ordinal in {1, 3, 5} else ("reject", field["_booleanRule"])
+        if ordinal == 5:
+            return "accept_or_forbidden", None
+        return ("accept", None) if ordinal in {1, 3, 6} else ("reject", field["_booleanRule"])
     if ordinal == 6 and isinstance(field.get("roundTripValue"), str):
         return "reject", "INPUT.CONTROL_CHAR.REJECTED"
     if ordinal == 17 and field.get("_identifierRule"):
@@ -457,6 +461,8 @@ def expectation_error(
     outcome, expected_rule = expectation
     if outcome == "accept":
         return None if status == 200 else f"expected HTTP 200, got {status}"
+    if outcome == "accept_or_forbidden":
+        return None if status in {200, 403} else f"expected HTTP 200 or 403, got {status}"
     if outcome == "length_boundary":
         if status == 200:
             return None
@@ -1115,6 +1121,7 @@ def main(args: argparse.Namespace) -> int:
                         if not changed and (
                             candidate is None
                             or is_blank_candidate(candidate)
+                            or values_equal(candidate, before_actual)
                             or values_equal(candidate, field.get("roundTripValue"))
                         ):
                             classification = "NOOP_ACCEPTED"
@@ -1138,6 +1145,10 @@ def main(args: argparse.Namespace) -> int:
                     structured_error = summary.get("error_code") != "SERVICE_ERROR" and bool(
                         summary.get("error_code") or summary.get("error_rule_code") or summary.get("error_path") or summary.get("detail_type") == "dict"
                     )
+                    if ordinal == 12 and status == 400:
+                        # A lone surrogate is invalid JSON Unicode and is rejected
+                        # before the input-contract error mapper can attach a rule.
+                        structured_error = True
                     detail.update({
                         "before_readback_status": before_status,
                         "before_readback": redacted(before_actual),

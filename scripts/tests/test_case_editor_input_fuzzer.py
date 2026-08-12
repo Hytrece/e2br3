@@ -78,14 +78,17 @@ class CaseEditorInputFuzzerTests(unittest.TestCase):
         contract = [{"fields": [field, boolean]}]
         self.assertEqual(fuzzer.apply_generated_rules(contract, identifiers, booleans), (1, 1))
         self.assertEqual(fuzzer.candidate_count(field, 99), 18)
-        self.assertEqual(fuzzer.field_value(field, random.Random(1), 17), "\t\n")
+        self.assertEqual(fuzzer.field_value(field, random.Random(1), 17), "A\tB\nC")
         self.assertEqual(
             fuzzer.candidate_expectation(field, 17),
             ("reject", "ICH.D.10.8.r.2b.ALLOWED.VALUE"),
         )
         self.assertFalse(fuzzer.field_value(boolean, random.Random(1), 3))
         self.assertTrue(fuzzer.field_value(boolean, random.Random(1), 5))
+        self.assertFalse(fuzzer.field_value(boolean, random.Random(1), 6))
         self.assertEqual(fuzzer.candidate_expectation(boolean, 3), ("accept", None))
+        self.assertEqual(fuzzer.candidate_expectation(boolean, 5), ("accept_or_forbidden", None))
+        self.assertEqual(fuzzer.candidate_expectation(boolean, 6), ("accept", None))
         self.assertEqual(
             fuzzer.candidate_expectation(boolean, 2),
             ("reject", "ICH.C.1.9.1.ALLOWED.VALUE"),
@@ -100,6 +103,7 @@ class CaseEditorInputFuzzerTests(unittest.TestCase):
         self.assertIsNotNone(fuzzer.expectation_error(("reject", "RULE"), 422, "OTHER"))
         self.assertIsNone(fuzzer.expectation_error(("length_boundary", "LENGTH"), 422, "FORMAT"))
         self.assertIsNotNone(fuzzer.expectation_error(("length_boundary", "LENGTH"), 422, "LENGTH"))
+        self.assertIsNone(fuzzer.expectation_error(("accept_or_forbidden", None), 403, None))
 
     def test_nullflavor_error_candidates_and_value_conflict(self) -> None:
         field = {

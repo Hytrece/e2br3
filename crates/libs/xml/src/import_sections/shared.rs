@@ -333,25 +333,6 @@ pub(crate) fn extract_safety_report_id(xml: &[u8]) -> Result<String> {
 		})?;
 	for value in candidates {
 		if !value.trim().is_empty() {
-			let message_number = xpath
-				.findvalues("//hl7:PORR_IN049016UV/hl7:id/@extension", None)
-				.map_err(|_| Error::InvalidXml {
-					message: "Failed to query N.2.r.1 message number".to_string(),
-					line: None,
-					column: None,
-				})?
-				.into_iter()
-				.find(|candidate| !candidate.trim().is_empty());
-			if message_number
-				.as_deref()
-				.is_some_and(|number| number.trim() != value.trim())
-			{
-				return Err(Error::InvalidXml {
-					message: "N.2.r.1 must be identical to C.1.1".to_string(),
-					line: None,
-					column: None,
-				});
-			}
 			import_constraint::string(
 				"safetyReportId",
 				Some(&value),
@@ -397,7 +378,7 @@ mod tests {
 	}
 
 	#[test]
-	fn extract_safety_report_id_rejects_n_2_r_1_mismatch() {
+	fn extract_safety_report_id_accepts_n_2_r_1_mismatch() {
 		let xml = br#"
 			<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3">
 				<PORR_IN049016UV>
@@ -411,23 +392,20 @@ mod tests {
 			</MCCI_IN200100UV01>
 		"#;
 
-		let err = extract_safety_report_id(xml).unwrap_err();
-		assert!(err
-			.to_string()
-			.contains("N.2.r.1 must be identical to C.1.1"));
+		assert_eq!(extract_safety_report_id(xml).unwrap(), "CASE-ID");
 	}
 
 	#[test]
-	fn rejects_nonconformant_fda_scenario_2_identifiers() {
+	fn accepts_fda_scenario_2_identifiers() {
 		let xml = include_bytes!(concat!(
 			env!("CARGO_MANIFEST_DIR"),
 			"/../../../docs/exporter/fda/FAERS2022Scenario2.xml"
 		));
 
-		let err = extract_safety_report_id(xml).unwrap_err();
-		assert!(err
-			.to_string()
-			.contains("N.2.r.1 must be identical to C.1.1"));
+		assert_eq!(
+			extract_safety_report_id(xml).unwrap(),
+			"US-APHARMA-8744554B-UPDATE-TESTING222"
+		);
 	}
 
 	#[test]

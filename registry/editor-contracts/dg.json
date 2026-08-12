@@ -617,8 +617,8 @@
       "roundTripValue": "20200101",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.G.k.4.r.4.NULLFLAVOR.ALLOWED",
-        "invalidValue": "NI"
+        "ruleCode": "ICH.G.k.4.r.4.DATE.FORMAT",
+        "invalidValue": "not-a-date"
       },
       "payloadPath": "dosageInformation[].firstAdministrationDate"
     },
@@ -634,8 +634,8 @@
       "roundTripValue": "20200102",
       "constraint": {
         "status": "verified",
-        "ruleCode": "ICH.G.k.4.r.5.NULLFLAVOR.ALLOWED",
-        "invalidValue": "NI"
+        "ruleCode": "ICH.G.k.4.r.5.DATE.FORMAT",
+        "invalidValue": "not-a-date"
       },
       "payloadPath": "dosageInformation[].lastAdministrationDate"
     },

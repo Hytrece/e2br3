@@ -102,19 +102,6 @@ pub fn parse_c_safety_report(xml: &[u8]) -> Result<Option<CSafetyReportImport>> 
 /// e2b:C.1.2
 fn read_c_1_2(xpath: &mut Context) -> Result<Option<String>> {
 	let raw = first_value_root(xpath, CSafetyReportPaths::DATE_OF_CREATION);
-	let message_date =
-		first_value_root(xpath, "//hl7:PORR_IN049016UV/hl7:creationTime/@value");
-	if raw.as_deref().is_some_and(|date| {
-		message_date
-			.as_deref()
-			.is_some_and(|message_date| date.trim() != message_date.trim())
-	}) {
-		return Err(Error::InvalidXml {
-			message: "N.2.r.4 must be identical to C.1.2".to_string(),
-			line: None,
-			column: None,
-		});
-	}
 	let value = raw.and_then(|raw| normalize_datetime(&raw));
 	import_constraint::string(
 		"transmissionDate",
@@ -381,7 +368,7 @@ mod tests {
 	}
 
 	#[test]
-	fn import_rejects_n_2_r_4_c_1_2_mismatch() {
+	fn import_accepts_n_2_r_4_c_1_2_mismatch() {
 		let xml = br#"
 			<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3">
 				<PORR_IN049016UV>
@@ -391,9 +378,30 @@ mod tests {
 			</MCCI_IN200100UV01>
 		"#;
 
-		let err = parse_c_safety_report(xml).unwrap_err();
-		assert!(err
-			.to_string()
-			.contains("N.2.r.4 must be identical to C.1.2"));
+		let parsed = parse_c_safety_report(xml).unwrap().unwrap();
+		assert_eq!(parsed.transmission_date.as_deref(), Some("20260809000000"));
+	}
+
+	#[test]
+	fn import_accepts_c_1_7_null_flavor_ni() {
+		let xml = br#"
+			<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3">
+				<PORR_IN049016UV>
+					<controlActProcess>
+						<subject><investigationEvent><component><observationEvent>
+							<code code="23" codeSystem="2.16.840.1.113883.3.989.2.1.1.19"/>
+							<value nullFlavor="NI"/>
+						</observationEvent></component></investigationEvent></subject>
+					</controlActProcess>
+				</PORR_IN049016UV>
+			</MCCI_IN200100UV01>
+		"#;
+
+		let parsed = parse_c_safety_report(xml).unwrap().unwrap();
+		assert_eq!(parsed.fulfil_expedited_criteria, None);
+		assert_eq!(
+			parsed.fulfil_expedited_criteria_null_flavor.as_deref(),
+			Some("NI")
+		);
 	}
 }

@@ -258,6 +258,19 @@ mod tests {
 			"ICH.G.k.2.1.1b.ALLOWED.VALUE",
 			InputValue::String("MPID\0"),
 		);
+		assert!(crate::generated::c::mfds_c_5_4_kr_1(crate::FieldInput {
+			value: InputValue::String("4"),
+			null_flavor: None,
+		})
+		.is_empty());
+		assert_eq!(
+			crate::generated::c::mfds_c_5_4_kr_1(crate::FieldInput {
+				value: InputValue::String("0"),
+				null_flavor: None,
+			})[0]
+				.code,
+			"MFDS.C.5.4.KR.1.ALLOWED.VALUE"
+		);
 		assert_eq!(issues.len(), 1);
 	}
 }

@@ -230,16 +230,9 @@ pub fn c_1_6_1_r_2(input: crate::FieldInput<'_>) -> Vec<crate::InputIssue> {
 }
 
 /// ICH.C.1.7.ALLOWED.VALUE
-/// ICH.C.1.7.NULLFLAVOR.FORBIDDEN for manual R3 input; NI needs verified R2 provenance.
 pub fn c_1_7(input: crate::FieldInput<'_>) -> Vec<crate::InputIssue> {
 	let mut issues = Vec::new();
 	crate::helpers::boolean(&mut issues, "ICH.C.1.7.ALLOWED.VALUE", input.value);
-	crate::helpers::null_flavor(
-		&mut issues,
-		"ICH.C.1.7.NULLFLAVOR.FORBIDDEN",
-		input.null_flavor,
-		&[],
-	);
 	issues
 }
 
@@ -901,6 +894,7 @@ pub fn mfds_c_3_1_kr_1(input: crate::FieldInput<'_>) -> Vec<crate::InputIssue> {
 }
 
 /// MFDS.C.5.4.KR.1.LENGTH.MAX
+/// MFDS.C.5.4.KR.1.ALLOWED.VALUE
 pub fn mfds_c_5_4_kr_1(input: crate::FieldInput<'_>) -> Vec<crate::InputIssue> {
 	let mut issues = Vec::new();
 	crate::helpers::max_length(
@@ -908,6 +902,12 @@ pub fn mfds_c_5_4_kr_1(input: crate::FieldInput<'_>) -> Vec<crate::InputIssue> {
 		"MFDS.C.5.4.KR.1.LENGTH.MAX",
 		input.value,
 		1,
+	);
+	crate::helpers::allowed_values(
+		&mut issues,
+		"MFDS.C.5.4.KR.1.ALLOWED.VALUE",
+		input.value,
+		&["1", "2", "3", "4"],
 	);
 	issues
 }

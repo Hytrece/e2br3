@@ -70,8 +70,6 @@ CREATE TABLE safety_report_identification (
 CREATE INDEX idx_safety_report_id_case ON safety_report_identification(case_id);
 CREATE INDEX idx_safety_report_identification_report_id ON safety_report_identification(safety_report_id);
 CREATE INDEX idx_safety_report_id_worldwide ON safety_report_identification(worldwide_unique_id);
-CREATE UNIQUE INDEX idx_safety_report_identification_report_version
-    ON safety_report_identification(safety_report_id, version);
 
 -- ============================================================================
 -- SECTION C.3: Sender Information (MANDATORY fields)

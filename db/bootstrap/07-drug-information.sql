@@ -18,7 +18,7 @@ CREATE TABLE drug_information (
     -- G.k.2.3.r - Substance/Specified Substance (repeating - handled in separate table)
 
     -- G.k.2.4.r - Identification of the Pharmaceutical Product (MPID)
-    mpid VARCHAR(100),
+    mpid VARCHAR(1000),
     mpid_version VARCHAR(10),
 
     -- G.k.2.1.KR.1a/b - MFDS medicinal product fields
@@ -26,7 +26,7 @@ CREATE TABLE drug_information (
     mfds_mpid VARCHAR(10),
 
     -- G.k.2.5 - PhPID (Pharmaceutical Product Identifier)
-    phpid VARCHAR(100),
+    phpid VARCHAR(250),
     phpid_version VARCHAR(10),
 
     -- G.k.2.5 - Investigational Product Blinded
@@ -175,19 +175,19 @@ CREATE TABLE dosage_information (
 	-- G.k.4.r.9.1 - Pharmaceutical Dose Form
 	dose_form VARCHAR(200),
 	dose_form_null_flavor VARCHAR(4) CHECK (dose_form_null_flavor IN ('UNK', 'ASKU', 'NASK')),
-    dose_form_termid VARCHAR(50),
+    dose_form_termid VARCHAR(100),
     dose_form_termid_version VARCHAR(10),
 
 	-- G.k.4.r.10 - Route of Administration
 	route_of_administration VARCHAR(200),  -- G.k.4.r.10.1 free text
 	route_of_administration_null_flavor VARCHAR(4) CHECK (route_of_administration_null_flavor IN ('UNK', 'ASKU', 'NASK')),
-    route_termid VARCHAR(50),
+    route_termid VARCHAR(100),
     route_termid_version VARCHAR(10),
 
 	-- G.k.4.r.11 - Parent Route of Administration
-	parent_route VARCHAR(50),
+	parent_route VARCHAR(60),
 	parent_route_null_flavor VARCHAR(4) CHECK (parent_route_null_flavor IN ('UNK', 'ASKU', 'NASK')),
-    parent_route_termid VARCHAR(50),
+    parent_route_termid VARCHAR(100),
     parent_route_termid_version VARCHAR(10),
 
     -- Null Flavor Support (E2B(R3) compliant: NI, UNK, ASKU, NASK, MSK)
@@ -401,7 +401,7 @@ CREATE TABLE relatedness_assessments (
     method_of_assessment_kr1 VARCHAR(10),
 
     -- G.k.9.i.2.r.3 - Result of Assessment
-    result_of_assessment VARCHAR(50),
+    result_of_assessment VARCHAR(60),
     -- MFDS.G.k.9.i.2.r.3.KR.1 - WHO-UMC coded result
     result_of_assessment_kr1 VARCHAR(10),
     result_of_assessment_kr1_null_flavor VARCHAR(10) CHECK (result_of_assessment_kr1_null_flavor IN ('NA')),

@@ -161,11 +161,11 @@ CREATE TABLE past_drug_history (
     mfds_medicinal_product_id VARCHAR(10),
 
     -- D.8.r.2 - MPID (Medicinal Product ID)
-    mpid VARCHAR(200),
+    mpid VARCHAR(1000),
     mpid_version VARCHAR(10),
 
     -- D.8.r.3 - PhPID (Pharmaceutical Product ID)
-    phpid VARCHAR(200),
+    phpid VARCHAR(250),
     phpid_version VARCHAR(10),
 
     -- D.8.r.4 - Start Date
@@ -375,13 +375,13 @@ CREATE TABLE parent_past_drug_history (
 	drug_name VARCHAR(500),
 
     -- D.10.8.r.2 - MPID (Medicinal Product ID)
-    mpid VARCHAR(100),
+    mpid VARCHAR(1000),
     mpid_version VARCHAR(10),
     mfds_medicinal_product_version VARCHAR(20),
     mfds_medicinal_product_id VARCHAR(10),
 
     -- D.10.8.r.3 - PhPID (Pharmaceutical Product ID)
-    phpid VARCHAR(100),
+    phpid VARCHAR(250),
     phpid_version VARCHAR(10),
 
     -- D.10.8.r.4 - Start Date
