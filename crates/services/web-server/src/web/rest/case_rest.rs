@@ -1,6 +1,10 @@
 use crate::web::rest::compliance::{
 	capture_e_signature, ComplianceActionInput, ESignatureInput,
 };
+use crate::web::rest::{
+	case_editor_dto::CaseFollowUpPagePatchRequest,
+	case_editor_rest::apply_follow_up_page_patches,
+};
 use axum::extract::{Path, State};
 use axum::Json;
 use lib_core::ctx::Ctx;
@@ -18,7 +22,6 @@ use lib_core::model::reaction::{Reaction, ReactionBmc};
 use lib_core::model::safety_report::{
 	SafetyReportIdentificationBmc, SafetyReportIdentificationForCreate,
 };
-use lib_core::model::store::set_full_context_from_ctx_dbx;
 use lib_core::model::ModelManager;
 use lib_core::regulatory::RegulatoryAuthority;
 use lib_core::report_due::{
@@ -34,7 +37,7 @@ use lib_rest_core::{
 };
 use lib_web::middleware::mw_auth::CtxW;
 use serde::{Deserialize, Serialize};
-use serde_json::{Map, Value};
+use serde_json::{json, Map, Value};
 use sqlx::{types::time::OffsetDateTime, FromRow};
 use uuid::Uuid;
 use validator::validate_case_for_authority;
@@ -907,17 +910,25 @@ pub async fn create_follow_up_case_guarded(
 	ctx_w: CtxW,
 	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 	Path(source_case_id): Path<Uuid>,
+	Json(pages): Json<CaseFollowUpPagePatchRequest>,
 ) -> Result<(
 	axum::http::StatusCode,
 	Json<DataRestResult<CaseFollowUpCreateResult>>,
 )> {
 	let ctx = ctx_w.0;
+	let blind_allowed = snapshot.scope().blind_allowed();
 	lib_rest_core::with_authorized_case_create(
 		&ctx,
 		&snapshot,
 		&mm,
 		move |ctx, mm| {
-			Box::pin(create_follow_up_case_authorized(ctx, mm, source_case_id))
+			Box::pin(create_follow_up_case_authorized(
+				ctx,
+				mm,
+				source_case_id,
+				pages,
+				blind_allowed,
+			))
 		},
 	)
 	.await
@@ -927,41 +938,21 @@ async fn create_follow_up_case_authorized(
 	ctx: &Ctx,
 	mm: &ModelManager,
 	source_case_id: Uuid,
+	pages: CaseFollowUpPagePatchRequest,
+	blind_allowed: bool,
 ) -> Result<(
 	axum::http::StatusCode,
 	Json<DataRestResult<CaseFollowUpCreateResult>>,
 )> {
-	let tx_mm = mm.new_with_txn().map_err(Error::Model)?;
-	let dbx = tx_mm.dbx();
-	dbx.begin_txn()
-		.await
-		.map_err(lib_core::model::Error::from)
-		.map_err(Error::Model)?;
-	if let Err(error) = set_full_context_from_ctx_dbx(dbx, ctx).await {
-		let _ = dbx.rollback_txn().await;
-		return Err(Error::Model(error));
-	}
-
-	let result = create_follow_up_case_in_txn(ctx, &tx_mm, source_case_id).await;
-	match result {
-		Ok(response) => {
-			dbx.commit_txn()
-				.await
-				.map_err(lib_core::model::Error::from)
-				.map_err(Error::Model)?;
-			Ok(response)
-		}
-		Err(error) => {
-			let _ = dbx.rollback_txn().await;
-			Err(error)
-		}
-	}
+	create_follow_up_case_in_txn(ctx, mm, source_case_id, pages, blind_allowed).await
 }
 
 async fn create_follow_up_case_in_txn(
 	ctx: &Ctx,
 	mm: &ModelManager,
 	source_case_id: Uuid,
+	mut pages: CaseFollowUpPagePatchRequest,
+	blind_allowed: bool,
 ) -> Result<(
 	axum::http::StatusCode,
 	Json<DataRestResult<CaseFollowUpCreateResult>>,
@@ -1014,7 +1005,7 @@ async fn create_follow_up_case_in_txn(
 		mm,
 		SafetyReportIdentificationForCreate {
 			case_id,
-			safety_report_id: Some(safety_report_id),
+			safety_report_id: Some(safety_report_id.clone()),
 			version: Some(next_version),
 			transmission_date: Some(transmission_date),
 			report_type: source_report.report_type,
@@ -1044,6 +1035,16 @@ async fn create_follow_up_case_in_txn(
 	)
 	.await
 	.map_err(Error::Model)?;
+	if let Some(report) = pages
+		.ci
+		.rows
+		.get_mut("safetyReportIdentification")
+		.and_then(Value::as_object_mut)
+	{
+		report.insert("safetyReportId".to_string(), json!(safety_report_id));
+		report.insert("safetyReportVersion".to_string(), json!(next_version));
+	}
+	apply_follow_up_page_patches(ctx, mm, case_id, pages, blind_allowed).await?;
 
 	Ok((
 		axum::http::StatusCode::CREATED,

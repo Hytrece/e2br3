@@ -993,6 +993,49 @@ async fn build_editor_dg_page_row_response(
 	)
 }
 
+pub(crate) async fn apply_editor_dg_page_row_create(
+	ctx: &lib_core::ctx::Ctx,
+	mm: &ModelManager,
+	case_id: Uuid,
+	request: &CaseEditorPagePatchRequest,
+	blind_allowed: bool,
+) -> Result<(Uuid, Option<String>)> {
+	let requested_authorities =
+		validate_request_projection_context(request.authorities.as_deref())?;
+	let row = required_row_object("DG", &request.rows, "drug")?;
+	validate_row_payload("DG", "drug", row, None)?;
+	reject_unscoped_blind_write(blind_allowed, row)?;
+
+	let model = row_model_value(
+		"DG",
+		"",
+		row,
+		DRUG_ROW_ALIASES,
+		&[
+			("case_id", json!(case_id)),
+			(
+				"sequence_number",
+				json!(i32_field(row, &["sequenceNumber"]).unwrap_or(1)),
+			),
+			(
+				"drug_characterization",
+				json!(string_field(
+					row,
+					&["drugCharacterization", "drugRole", "drug_characterization",],
+				)
+				.unwrap_or_else(|| "1".to_string())),
+			),
+		],
+	);
+	let create = parse_row_model::<DrugInformationForCreate>("DG", "drug", model)?;
+	let row_id = DrugInformationBmc::create(ctx, mm, create).await?;
+	persist_active_substances(ctx, mm, row_id, row).await?;
+	persist_dosage_information(ctx, mm, row_id, row).await?;
+	persist_indications(ctx, mm, row_id, row).await?;
+	persist_drug_reaction_assessments(ctx, mm, case_id, row_id, row).await?;
+	Ok((row_id, requested_authorities))
+}
+
 pub async fn create_editor_dg_page_row(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
@@ -1010,46 +1053,14 @@ pub async fn create_editor_dg_page_row(
 		"editor/DG/drug",
 		move |ctx, mm| {
 			Box::pin(async move {
-				let requested_authorities = validate_request_projection_context(
-					request.authorities.as_deref(),
-				)?;
-				let row = required_row_object("DG", &request.rows, "drug")?;
-				validate_row_payload("DG", "drug", row, None)?;
-				reject_unscoped_blind_write(blind_allowed, row)?;
-
-				let model = row_model_value(
-					"DG",
-					"",
-					row,
-					DRUG_ROW_ALIASES,
-					&[
-						("case_id", json!(case_id)),
-						(
-							"sequence_number",
-							json!(i32_field(row, &["sequenceNumber"],).unwrap_or(1)),
-						),
-						(
-							"drug_characterization",
-							json!(string_field(
-								row,
-								&[
-									"drugCharacterization",
-									"drugRole",
-									"drug_characterization",
-								],
-							)
-							.unwrap_or_else(|| "1".to_string())),
-						),
-					],
-				);
-				let create = parse_row_model::<DrugInformationForCreate>(
-					"DG", "drug", model,
-				)?;
-				let row_id = DrugInformationBmc::create(ctx, mm, create).await?;
-				persist_active_substances(ctx, mm, row_id, row).await?;
-				persist_dosage_information(ctx, mm, row_id, row).await?;
-				persist_indications(ctx, mm, row_id, row).await?;
-				persist_drug_reaction_assessments(ctx, mm, case_id, row_id, row)
+				let (row_id, requested_authorities) =
+					apply_editor_dg_page_row_create(
+						ctx,
+						mm,
+						case_id,
+						&request,
+						blind_allowed,
+					)
 					.await?;
 				mark_editor_validation_summary_stale(
 					ctx,

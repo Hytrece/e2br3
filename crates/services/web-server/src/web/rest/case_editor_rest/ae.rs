@@ -264,6 +264,7 @@ async fn build_editor_ae_page_row_response(
 
 repeatable_page_row_create_handler!(
 	create_editor_ae_page_row,
+	apply: apply_editor_ae_page_row_create,
 	section: "AE",
 	row_key: "reaction",
 	bmc: ReactionBmc,

@@ -218,6 +218,34 @@ pub struct CaseEditorPagePatchRequest {
 	pub rows: BTreeMap<String, Value>,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct CaseFollowUpRowPatchRequest {
+	pub client_row_id: Option<String>,
+	pub request: CaseEditorPagePatchRequest,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct CaseFollowUpPagePatchRequest {
+	pub ci: CaseEditorPagePatchRequest,
+	pub rp: CaseEditorPagePatchRequest,
+	pub sd: CaseEditorPagePatchRequest,
+	pub si: CaseEditorPagePatchRequest,
+	pub dm: CaseEditorPagePatchRequest,
+	pub nr: CaseEditorPagePatchRequest,
+	#[serde(default)]
+	pub lr: Vec<CaseFollowUpRowPatchRequest>,
+	#[serde(default)]
+	pub dh: Vec<CaseFollowUpRowPatchRequest>,
+	#[serde(default)]
+	pub ae: Vec<CaseFollowUpRowPatchRequest>,
+	#[serde(default)]
+	pub lb: Vec<CaseFollowUpRowPatchRequest>,
+	#[serde(default)]
+	pub dg: Vec<CaseFollowUpRowPatchRequest>,
+}
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CaseEditorAeListRowDto {

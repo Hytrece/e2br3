@@ -831,17 +831,10 @@ async fn patch_editor_ci_page_projection_authorized(
 	axum::http::StatusCode,
 	Json<CaseEditorPageProjectionResponse>,
 )> {
+	let has_rows = !request.rows.is_empty();
 	let requested_authorities =
-		validate_request_projection_context(request.authorities.as_deref())?;
-	let fda = request
-		.authorities
-		.as_deref()
-		.unwrap_or_default()
-		.iter()
-		.any(|authority| authority.eq_ignore_ascii_case("fda"));
-	validate_direct_rows("CI", &request.rows, fda)?;
-	if !request.rows.is_empty() {
-		apply_ci_rows_patch(&ctx, &mm, case_id, &request.rows).await?;
+		apply_editor_direct_page_patch(ctx, mm, case_id, "CI", request).await?;
+	if has_rows {
 		mark_editor_validation_summary_stale(
 			ctx,
 			mm,
@@ -959,41 +952,15 @@ async fn patch_direct_page_projection_authorized(
 	mm: &ModelManager,
 	case_id: Uuid,
 	page_id: &'static str,
-	mut request: CaseEditorPagePatchRequest,
+	request: CaseEditorPagePatchRequest,
 ) -> Result<(
 	axum::http::StatusCode,
 	Json<CaseEditorPageProjectionResponse>,
 )> {
+	let has_rows = !request.rows.is_empty();
 	let requested_authorities =
-		validate_request_projection_context(request.authorities.as_deref())?;
-	let fda = request
-		.authorities
-		.as_deref()
-		.unwrap_or_default()
-		.iter()
-		.any(|authority| authority.eq_ignore_ascii_case("fda"));
-	if page_id == "SI"
-		&& !request
-			.authorities
-			.as_deref()
-			.unwrap_or_default()
-			.iter()
-			.any(|authority| authority.eq_ignore_ascii_case("mfds"))
-	{
-		if let Some(study) = request
-			.rows
-			.get_mut("studyInformation")
-			.and_then(Value::as_object_mut)
-		{
-			study.remove("studyTypeReactionKr1");
-			study.remove("study_type_reaction_kr1");
-		}
-	}
-	validate_direct_rows(page_id, &request.rows, fda)?;
-
-	if !request.rows.is_empty() {
-		apply_direct_page_rows_patch(ctx, mm, case_id, page_id, &request.rows)
-			.await?;
+		apply_editor_direct_page_patch(ctx, mm, case_id, page_id, request).await?;
+	if has_rows {
 		mark_editor_validation_summary_stale(
 			ctx,
 			mm,
@@ -1025,6 +992,50 @@ async fn patch_direct_page_projection_authorized(
 	)
 	.await?;
 	Ok((axum::http::StatusCode::OK, Json(projection)))
+}
+
+pub(crate) async fn apply_editor_direct_page_patch(
+	ctx: &lib_core::ctx::Ctx,
+	mm: &ModelManager,
+	case_id: Uuid,
+	page_id: &'static str,
+	mut request: CaseEditorPagePatchRequest,
+) -> Result<Option<String>> {
+	let requested_authorities =
+		validate_request_projection_context(request.authorities.as_deref())?;
+	let fda = request
+		.authorities
+		.as_deref()
+		.unwrap_or_default()
+		.iter()
+		.any(|authority| authority.eq_ignore_ascii_case("fda"));
+	if page_id == "SI"
+		&& !request
+			.authorities
+			.as_deref()
+			.unwrap_or_default()
+			.iter()
+			.any(|authority| authority.eq_ignore_ascii_case("mfds"))
+	{
+		if let Some(study) = request
+			.rows
+			.get_mut("studyInformation")
+			.and_then(Value::as_object_mut)
+		{
+			study.remove("studyTypeReactionKr1");
+			study.remove("study_type_reaction_kr1");
+		}
+	}
+	validate_direct_rows(page_id, &request.rows, fda)?;
+	if !request.rows.is_empty() {
+		if page_id == "CI" {
+			apply_ci_rows_patch(ctx, mm, case_id, &request.rows).await?;
+		} else {
+			apply_direct_page_rows_patch(ctx, mm, case_id, page_id, &request.rows)
+				.await?;
+		}
+	}
+	Ok(requested_authorities)
 }
 
 async fn apply_direct_page_rows_patch(

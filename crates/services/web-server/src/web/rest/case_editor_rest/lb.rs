@@ -148,6 +148,7 @@ async fn build_editor_lb_page_row_response(
 
 repeatable_page_row_create_handler!(
 	create_editor_lb_page_row,
+	apply: apply_editor_lb_page_row_create,
 	section: "LB",
 	row_key: "testResult",
 	bmc: TestResultBmc,

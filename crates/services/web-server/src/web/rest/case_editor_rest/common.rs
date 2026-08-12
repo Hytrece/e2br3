@@ -597,6 +597,7 @@ macro_rules! repeatable_page_row_read_handler {
 macro_rules! repeatable_page_row_create_handler {
 	(
 		$fn_name:ident,
+		apply: $apply_fn:ident,
 		section: $section:expr,
 		row_key: $row_key:expr,
 		bmc: $bmc:ident,
@@ -605,6 +606,23 @@ macro_rules! repeatable_page_row_create_handler {
 		extras_fn: $extras_fn:ident,
 		build_response: $build_response:ident $(,)?
 	) => {
+		pub(crate) async fn $apply_fn(
+			ctx: &lib_core::ctx::Ctx,
+			mm: &ModelManager,
+			case_id: Uuid,
+			request: &CaseEditorPagePatchRequest,
+		) -> Result<(Uuid, Option<String>)> {
+			let requested_authorities =
+				validate_request_projection_context(request.authorities.as_deref())?;
+			let row = required_row_object($section, &request.rows, $row_key)?;
+			validate_row_payload($section, $row_key, row, None)?;
+			let extras = $extras_fn(ctx, mm, case_id, row).await?;
+			let value = row_model_value($section, "", row, $aliases, &extras);
+			let create = parse_row_model::<$model>($section, $row_key, value)?;
+			let row_id = $bmc::create(ctx, mm, create).await?;
+			Ok((row_id, requested_authorities))
+		}
+
 		pub async fn $fn_name(
 			State(mm): State<ModelManager>,
 			ctx_w: CtxW,
@@ -620,14 +638,8 @@ macro_rules! repeatable_page_row_create_handler {
 				case_id,
 				concat!("editor/", $section, "/", $row_key),
 				move |ctx, mm| Box::pin(async move {
-					let requested_authorities =
-						validate_request_projection_context(request.authorities.as_deref())?;
-					let row = required_row_object($section, &request.rows, $row_key)?;
-					validate_row_payload($section, $row_key, row, None)?;
-					let extras = $extras_fn(ctx, mm, case_id, row).await?;
-					let value = row_model_value($section, "", row, $aliases, &extras);
-					let create = parse_row_model::<$model>($section, $row_key, value)?;
-					let row_id = $bmc::create(ctx, mm, create).await?;
+					let (row_id, requested_authorities) =
+						$apply_fn(ctx, mm, case_id, &request).await?;
 					mark_editor_validation_summary_stale(
 						ctx,
 						mm,
@@ -646,6 +658,7 @@ macro_rules! repeatable_page_row_create_handler {
 	};
 	(
 		$fn_name:ident,
+		apply: $apply_fn:ident,
 		section: $section:expr,
 		row_key: $row_key:expr,
 		bmc: $bmc:ident,
@@ -654,6 +667,27 @@ macro_rules! repeatable_page_row_create_handler {
 		extras: |$case_id:ident, $row:ident| $extras:expr,
 		build_response: $build_response:ident $(,)?
 	) => {
+		pub(crate) async fn $apply_fn(
+			ctx: &lib_core::ctx::Ctx,
+			mm: &ModelManager,
+			case_id: Uuid,
+			request: &CaseEditorPagePatchRequest,
+		) -> Result<(Uuid, Option<String>)> {
+			let requested_authorities =
+				validate_request_projection_context(request.authorities.as_deref())?;
+			let row = required_row_object($section, &request.rows, $row_key)?;
+			validate_row_payload($section, $row_key, row, None)?;
+			let extras = {
+				let $case_id = case_id;
+				let $row = row;
+				$extras
+			};
+			let value = row_model_value($section, "", row, $aliases, &extras);
+			let create = parse_row_model::<$model>($section, $row_key, value)?;
+			let row_id = $bmc::create(ctx, mm, create).await?;
+			Ok((row_id, requested_authorities))
+		}
+
 		pub async fn $fn_name(
 			State(mm): State<ModelManager>,
 			ctx_w: CtxW,
@@ -669,18 +703,8 @@ macro_rules! repeatable_page_row_create_handler {
 				case_id,
 				concat!("editor/", $section, "/", $row_key),
 				move |ctx, mm| Box::pin(async move {
-					let requested_authorities =
-						validate_request_projection_context(request.authorities.as_deref())?;
-					let row = required_row_object($section, &request.rows, $row_key)?;
-					validate_row_payload($section, $row_key, row, None)?;
-					let extras = {
-						let $case_id = case_id;
-						let $row = row;
-						$extras
-					};
-					let value = row_model_value($section, "", row, $aliases, &extras);
-					let create = parse_row_model::<$model>($section, $row_key, value)?;
-					let row_id = $bmc::create(ctx, mm, create).await?;
+					let (row_id, requested_authorities) =
+						$apply_fn(ctx, mm, case_id, &request).await?;
 					mark_editor_validation_summary_stale(
 						ctx,
 						mm,

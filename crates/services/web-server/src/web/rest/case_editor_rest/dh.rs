@@ -221,6 +221,7 @@ async fn verify_editor_dh_page_row(
 
 repeatable_page_row_create_handler!(
 	create_editor_dh_page_row,
+	apply: apply_editor_dh_page_row_create,
 	section: "DH",
 	row_key: "pastDrugHistory",
 	bmc: PastDrugHistoryBmc,

@@ -127,6 +127,7 @@ repeatable_page_row_read_handler!(
 
 repeatable_page_row_create_handler!(
 	create_editor_lr_page_row,
+	apply: apply_editor_lr_page_row_create,
 	section: "LR",
 	row_key: "literatureReference",
 	bmc: LiteratureReferenceBmc,

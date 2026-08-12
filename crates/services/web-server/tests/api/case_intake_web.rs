@@ -149,6 +149,23 @@ fn intake_patient_initials(safety_report_id: &str) -> String {
 	format!("P{}", suffix.to_ascii_uppercase())
 }
 
+fn follow_up_pages(authority: &str) -> Value {
+	let direct = || json!({ "authorities": [authority], "rows": {} });
+	json!({
+		"ci": direct(),
+		"rp": direct(),
+		"sd": direct(),
+		"si": direct(),
+		"dm": direct(),
+		"nr": direct(),
+		"lr": [],
+		"dh": [],
+		"ae": [],
+		"lb": [],
+		"dg": []
+	})
+}
+
 #[serial]
 #[tokio::test]
 async fn test_follow_up_creation_preserves_scope_and_allocates_versions(
@@ -199,13 +216,72 @@ async fn test_follow_up_creation_preserves_scope_and_allocates_versions(
 		.await?;
 	mm.dbx().commit_txn().await?;
 
+	let mut invalid_pages = follow_up_pages("mfds");
+	invalid_pages["ae"] = json!([
+		{
+			"clientRowId": "index-0",
+			"request": {
+				"authorities": ["mfds"],
+				"rows": { "reaction": {
+					"sequenceNumber": 1,
+					"primarySourceReaction": "Headache",
+					"meddraVersion": "27.0",
+					"meddraCode": "10019211"
+				} }
+			}
+		},
+		{
+			"clientRowId": "index-0",
+			"request": {
+				"authorities": ["mfds"],
+				"rows": { "reaction": {
+					"sequenceNumber": 2,
+					"primarySourceReaction": "Nausea",
+					"meddraVersion": "27.0",
+					"meddraCode": "10028813"
+				} }
+			}
+		}
+	]);
+	let (status, body) = post_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{source_case_id}/follow-up"),
+		invalid_pages,
+	)
+	.await?;
+	assert_eq!(status, StatusCode::BAD_REQUEST, "{body:?}");
+
+	mm.dbx().begin_txn().await?;
+	set_full_context_dbx(
+		mm.dbx(),
+		seed.admin.id,
+		seed.org_id,
+		ROLE_SPONSOR_ADMIN_CRO,
+	)
+	.await?;
+	let (case_count,) = mm
+		.dbx()
+		.fetch_one(
+			sqlx::query_as::<_, (i64,)>(
+				"SELECT count(*) FROM safety_report_identification WHERE safety_report_id = $1",
+			)
+			.bind(&safety_report_id),
+		)
+		.await?;
+	mm.dbx().commit_txn().await?;
+	assert_eq!(
+		case_count, 1,
+		"failed follow-up must roll back the case shell"
+	);
+
 	let mut follow_up_ids = Vec::new();
 	for expected_version in [2, 3] {
 		let (status, body) = post_json(
 			&app,
 			&cookie,
 			&format!("/api/cases/{source_case_id}/follow-up"),
-			json!({}),
+			follow_up_pages("mfds"),
 		)
 		.await?;
 		assert_eq!(status, StatusCode::CREATED, "{body:?}");
