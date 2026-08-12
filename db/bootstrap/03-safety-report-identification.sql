@@ -405,7 +405,7 @@ CREATE TABLE other_case_identifiers (
     sequence_number INTEGER NOT NULL,
 
     -- C.1.9.1.r.1 - Source of the Case Identifier
-    source_of_identifier VARCHAR(60) NOT NULL,
+    source_of_identifier VARCHAR(100) NOT NULL,
 
     -- C.1.9.1.r.2 - Case Identifier
     case_identifier VARCHAR(100) NOT NULL,

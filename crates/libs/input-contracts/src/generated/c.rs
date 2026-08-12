@@ -870,6 +870,7 @@ pub fn c_5_4(input: crate::FieldInput<'_>) -> Vec<crate::InputIssue> {
 }
 
 /// MFDS.C.2.r.4.KR.1.LENGTH.MAX
+/// MFDS.C.2.r.4.KR.1.ALLOWED.VALUE
 pub fn mfds_c_2_r_4_kr_1(input: crate::FieldInput<'_>) -> Vec<crate::InputIssue> {
 	let mut issues = Vec::new();
 	crate::helpers::max_length(
@@ -877,6 +878,12 @@ pub fn mfds_c_2_r_4_kr_1(input: crate::FieldInput<'_>) -> Vec<crate::InputIssue>
 		"MFDS.C.2.r.4.KR.1.LENGTH.MAX",
 		input.value,
 		1,
+	);
+	crate::helpers::allowed_values(
+		&mut issues,
+		"MFDS.C.2.r.4.KR.1.ALLOWED.VALUE",
+		input.value,
+		&["1", "2"],
 	);
 	issues
 }

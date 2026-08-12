@@ -321,8 +321,8 @@
       "roundTripValue": "2",
       "constraint": {
         "status": "verified",
-        "ruleCode": "MFDS.C.2.r.4.KR.1.LENGTH.MAX",
-        "invalidValue": "XX"
+        "ruleCode": "MFDS.C.2.r.4.KR.1.ALLOWED.VALUE",
+        "invalidValue": "0"
       },
       "businessValidation": {
         "status": "verified",

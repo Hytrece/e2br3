@@ -105,6 +105,11 @@ class CaseEditorInputFuzzerTests(unittest.TestCase):
         self.assertIsNotNone(fuzzer.expectation_error(("length_boundary", "LENGTH"), 422, "LENGTH"))
         self.assertIsNone(fuzzer.expectation_error(("accept_or_forbidden", None), 403, None))
 
+    def test_normalization_requires_audit_only_when_value_changes(self) -> None:
+        self.assertEqual(fuzzer.normalized_classification("old", "old", False), "NOOP_ACCEPTED")
+        self.assertEqual(fuzzer.normalized_classification("new", "old", True), "SAVE_NORMALIZED")
+        self.assertEqual(fuzzer.normalized_classification("new", "old", False), "AUDIT_MISMATCH")
+
     def test_nullflavor_error_candidates_and_value_conflict(self) -> None:
         field = {
             "code": "D.1.nullFlavor",

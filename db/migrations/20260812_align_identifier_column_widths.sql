@@ -18,3 +18,6 @@ ALTER TABLE dosage_information
 
 ALTER TABLE relatedness_assessments
     ALTER COLUMN result_of_assessment TYPE VARCHAR(60);
+
+ALTER TABLE other_case_identifiers
+    ALTER COLUMN source_of_identifier TYPE VARCHAR(100);

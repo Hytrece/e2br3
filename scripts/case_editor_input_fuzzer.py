@@ -122,6 +122,12 @@ class Event:
     response: dict[str, Any]
 
 
+def normalized_classification(actual: Any, before: Any, audit_complete: bool) -> str:
+    if values_equal(actual, before):
+        return "NOOP_ACCEPTED"
+    return "SAVE_NORMALIZED" if audit_complete else "AUDIT_MISMATCH"
+
+
 def unwrap(value: Any) -> Any:
     if isinstance(value, dict) and set(value) == {"data"}:
         return value["data"]
@@ -507,6 +513,7 @@ AUDIT_FIELD_ALIASES = {
     "includedDocument": "document_base64",
     "source": "source_of_identifier",
     "caseIdentifier": "case_identifier",
+    "reporterCountry": "country_code",
     "nullificationAmendmentCode": "nullification_code",
     "worldwideUniqueId": "worldwide_unique_id",
     "additionalDocumentsAvailable": "additional_documents_available",
@@ -1134,7 +1141,7 @@ def main(args: argparse.Namespace) -> int:
                             changed = [log for log in logs_after if log not in logs_before and isinstance(log, dict)]
                             matched_logs = [log for log in changed if audit_key_matches(log.get("changedFields", log.get("changed_fields", {})), audit_path)]
                             audit_complete = any(audit_log_complete(log) for log in matched_logs)
-                            classification = "SAVE_NORMALIZED" if not changed or audit_complete else "AUDIT_MISMATCH"
+                            classification = normalized_classification(actual, before_actual, audit_complete)
                             detail.update({"audit_new_logs": len(changed), "audit_complete": audit_complete})
                         else:
                             classification = "NOOP_ACCEPTED" if candidate is None else "SAVE_READBACK_MISMATCH"
@@ -1175,6 +1182,8 @@ def main(args: argparse.Namespace) -> int:
                     else:
                         classification = "UNEXPECTED_STATUS"
                 mismatch = expectation_error(expectation, status, summary.get("error_rule_code"))
+                if expectation and expectation[0] == "accept_or_forbidden" and status == 403:
+                    classification = "AUTHORIZATION_BLOCKED"
                 if mismatch:
                     detail["expectation_error"] = mismatch
                     if classification not in {
