@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import collections
+import fnmatch
 import hashlib
 import http.cookiejar
 import io
@@ -12,6 +13,7 @@ import json
 import os
 import sys
 import urllib.error
+import urllib.parse
 import urllib.request
 import uuid
 import zipfile
@@ -237,21 +239,44 @@ def classify_error(message: str | None, http_status: int | None) -> str:
 	return "other"
 
 
-def load_config(path: Path) -> tuple[str, list[Actor], dict[str, list[Path]]]:
+def load_config(path: Path) -> tuple[str, list[Actor], dict[str, list[Any]]]:
 	config = json.loads(path.read_text())
 	actors = [Actor(**item) for item in config["actors"]]
 	corpora = {
-		authority.lower(): [Path(value) for value in values]
+		authority.lower(): values
 		for authority, values in config["corpora"].items()
 	}
 	return config.get("base_url", "http://localhost:8080"), actors, corpora
 
 
-def corpus_files(paths: list[Path]) -> list[Path]:
-	files: list[Path] = []
-	for path in paths:
-		files.extend(sorted(path.glob("*.xml")) if path.is_dir() else [path])
-	return [path for path in files if path.is_file()]
+def corpus_documents(sources: list[Any]) -> list[tuple[str, bytes, str]]:
+	documents: list[tuple[str, bytes, str]] = []
+	for source in sources:
+		config = {"path": source} if isinstance(source, str) else source
+		expected = config.get("expected", "success")
+		location = config.get("path") or config.get("url")
+		if not location:
+			raise ValueError("corpus source requires path or url")
+		if config.get("url"):
+			with urllib.request.urlopen(location, timeout=120) as response:
+				data = response.read()
+			path = Path(urllib.parse.urlparse(location).path)
+		else:
+			path = Path(location)
+			if path.is_dir():
+				for xml_path in sorted(path.glob("*.xml")):
+					documents.append((xml_path.stem, xml_path.read_bytes(), expected))
+				continue
+			data = path.read_bytes()
+		if path.suffix.lower() != ".zip":
+			documents.append((path.stem, data, expected))
+			continue
+		patterns = config.get("members", ["*.xml"])
+		with zipfile.ZipFile(io.BytesIO(data)) as archive:
+			for member in sorted(archive.namelist()):
+				if not member.endswith("/") and any(fnmatch.fnmatch(member, pattern) for pattern in patterns):
+					documents.append((Path(member).stem, archive.read(member), expected))
+	return documents
 
 
 def login(client: Client, actor: Actor) -> tuple[int | None, str | None]:
@@ -314,31 +339,30 @@ def run(args: argparse.Namespace) -> int:
 
 	primary = actors[0]
 	all_samples: dict[str, list[Sample]] = collections.defaultdict(list)
-	for authority, paths in corpora.items():
-		for path in corpus_files(paths):
-			raw = path.read_bytes()
+	for authority, sources in corpora.items():
+		for source_name, raw, source_expected in corpus_documents(sources):
 			for copy in range(args.copies):
-				token = hashlib.sha256(f"{args.seed}:{authority}:{path}:{copy}".encode()).hexdigest()[:20].upper()
+				token = hashlib.sha256(f"{args.seed}:{authority}:{source_name}:{copy}".encode()).hexdigest()[:20].upper()
 				try:
 					healthy = unique_xml(raw, token)
 				except (ET.ParseError, ValueError) as error:
-					results.append({"actor": primary.label, "authority": authority, "file": str(path), "kind": "corpus_setup", "status": "error", "message": str(error)})
+					results.append({"actor": primary.label, "authority": authority, "file": source_name, "kind": "corpus_setup", "status": "error", "message": str(error)})
 					continue
-				base = Sample(f"healthy-{path.stem}-{copy}.xml", authority, healthy, "healthy", "success")
+				base = Sample(f"healthy-{source_name}-{copy}.xml", authority, healthy, "healthy", source_expected)
 				all_samples[authority].append(base)
 				if copy < args.mutations_per_seed:
-					for kind, expected in (
+					for kind, mutation_expected in (
 						("malformed_xml", "error"), ("invalid_utf8", "error"),
 						("invalid_base64", "error"), ("value_and_nullflavor", "error"),
 						("invalid_date", "error"), ("wrapper_mismatch", "success"),
 						("c17_ni", "success"),
 					):
 						mutation_token = hashlib.sha256(
-							f"{args.seed}:{authority}:{path}:{copy}:{kind}".encode()
+							f"{args.seed}:{authority}:{source_name}:{copy}:{kind}".encode()
 						).hexdigest()[:20].upper()
 						changed = mutate(unique_xml(raw, mutation_token), kind)
 						if changed is not None:
-							all_samples[authority].append(Sample(f"mut-{kind}-{path.stem}-{copy}.xml", authority, changed, kind, expected))
+							all_samples[authority].append(Sample(f"mut-{kind}-{source_name}-{copy}.xml", authority, changed, kind, mutation_expected))
 
 	for authority, samples in all_samples.items():
 		by_name = {sample.name: sample for sample in samples}

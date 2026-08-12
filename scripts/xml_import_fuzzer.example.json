@@ -21,12 +21,19 @@
       "docs/exporter/fda/FAERS2022Scenario1.xml",
       "docs/exporter/fda/FAERS2022Scenario2.xml",
       "docs/exporter/fda/FAERS2022Scenario3.xml",
+      "docs/exporter/fda/FAERS2022Scenario4.xml",
       "docs/exporter/fda/FAERS2022Scenario5-1.xml",
       "docs/exporter/fda/FAERS2022Scenario5-2.xml",
       "docs/exporter/fda/FAERS2022Scenario5-3.xml",
       "docs/exporter/fda/FAERS2022Scenario6.xml",
       "docs/exporter/fda/FAERS2022Scenario7.xml",
       "docs/exporter/fda/FAERS2022Scenario8.xml"
+    ],
+    "ich": [
+      {
+        "url": "https://admin.ich.org/sites/default/files/inline-files/IG_Complete_Package_v1_11_1.zip",
+        "members": ["6_Example Instances/*.xml"]
+      }
     ],
     "mfds": ["docs/exporter/mfds"]
   }

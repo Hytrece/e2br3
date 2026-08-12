@@ -1,6 +1,7 @@
 import io
 import json
 import sys
+import tempfile
 import unittest
 import zipfile
 from pathlib import Path
@@ -48,6 +49,17 @@ class XmlImportFuzzerTests(unittest.TestCase):
         self.assertEqual(fuzzer.imported_rows(body)[0]["sourceFileName"], "one.xml")
         self.assertEqual(fuzzer.classify_error("PgDatabaseError SQLx(", 200), "server_or_raw_db")
         self.assertEqual(fuzzer.classify_error("includedDocument bad", 200), "base64")
+
+    def test_corpus_documents_reads_selected_archive_members(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            archive_path = Path(directory) / "official.zip"
+            with zipfile.ZipFile(archive_path, "w") as archive:
+                archive.writestr("examples/one.xml", b"<one/>")
+                archive.writestr("references/two.xml", b"<two/>")
+            documents = fuzzer.corpus_documents([
+                {"path": str(archive_path), "members": ["examples/*.xml"]}
+            ])
+        self.assertEqual(documents, [("one", b"<one/>", "success")])
 
     def test_structural_signature_is_stable_after_identifier_change(self) -> None:
         original = FIXTURE.read_bytes()
