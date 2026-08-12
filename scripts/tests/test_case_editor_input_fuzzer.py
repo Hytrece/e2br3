@@ -29,18 +29,17 @@ class CaseEditorInputFuzzerTests(unittest.TestCase):
 
     def test_unicode_and_exact_length_candidates(self) -> None:
         field = {"roundTripValue": "base", "_maxLength": 4}
-        rng = random.Random(1)
         self.assertEqual(fuzzer.candidate_count(field, 99), 17)
-        self.assertNotEqual(fuzzer.field_value(field, rng, 8), "한글")
-        self.assertEqual(unicodedata.normalize("NFC", fuzzer.field_value(field, rng, 8)), "한글")
-        self.assertIn("\u202b", fuzzer.field_value(field, rng, 9))
-        self.assertIn("\u200b", fuzzer.field_value(field, rng, 10))
-        self.assertGreater(len(fuzzer.field_value(field, rng, 11)), 64)
-        self.assertEqual(ord(fuzzer.field_value(field, rng, 12)), 0xD800)
-        self.assertIn("\U0010ffff", fuzzer.field_value(field, rng, 13))
-        self.assertEqual(len(fuzzer.field_value(field, rng, 14)), 4)
-        self.assertEqual(len(fuzzer.field_value(field, rng, 15)), 5)
-        self.assertGreater(len(fuzzer.field_value(field, rng, 16)), 5)
+        values = [fuzzer.field_value(field, fuzzer.candidate_rng(1, field, ordinal, 0), ordinal) for ordinal in range(8, 17)]
+        self.assertNotEqual(values[0], unicodedata.normalize("NFC", values[0]))
+        self.assertTrue(any(char in values[1] for char in "\u202b\u202e\u2067"))
+        self.assertTrue(any(char in values[2] for char in "\u200b\u200c\u200d\ufeff\u2060"))
+        self.assertGreater(len(values[3]), 64)
+        self.assertEqual(ord(values[4]), 0xD800)
+        self.assertTrue(any(char in values[5] for char in "\ufffd\ufffe\uffff\U0010ffff"))
+        self.assertEqual(len(values[6]), 4)
+        self.assertEqual(len(values[7]), 5)
+        self.assertGreater(len(values[8]), 5)
         self.assertEqual(fuzzer.candidate_expectation(field, 14), ("length_boundary", None))
         self.assertEqual(fuzzer.candidate_expectation(field, 16), ("reject", None))
 
@@ -78,7 +77,7 @@ class CaseEditorInputFuzzerTests(unittest.TestCase):
         contract = [{"fields": [field, boolean]}]
         self.assertEqual(fuzzer.apply_generated_rules(contract, identifiers, booleans), (1, 1))
         self.assertEqual(fuzzer.candidate_count(field, 99), 18)
-        self.assertEqual(fuzzer.field_value(field, random.Random(1), 17), "A\tB\nC")
+        self.assertTrue(any(char in fuzzer.field_value(field, random.Random(1), 17) for char in "\t\n\r"))
         self.assertEqual(
             fuzzer.candidate_expectation(field, 17),
             ("reject", "ICH.D.10.8.r.2b.ALLOWED.VALUE"),
@@ -109,6 +108,20 @@ class CaseEditorInputFuzzerTests(unittest.TestCase):
         self.assertEqual(fuzzer.normalized_classification("old", "old", False), "NOOP_ACCEPTED")
         self.assertEqual(fuzzer.normalized_classification("new", "old", True), "SAVE_NORMALIZED")
         self.assertEqual(fuzzer.normalized_classification("new", "old", False), "AUDIT_MISMATCH")
+        self.assertEqual(fuzzer.audit_field_key("safetyReportId"), "safety_report_id")
+        self.assertEqual(fuzzer.audit_field_key("reporterCountry"), "country_code")
+
+    def test_seeded_samples_are_reproducible_and_vary(self) -> None:
+        field = {"authority": "ICH", "code": "H.1", "payloadPath": "caseNarrative", "roundTripValue": "base"}
+        first = fuzzer.field_value(field, fuzzer.candidate_rng(11, field, 5, 0), 5)
+        repeated = fuzzer.field_value(field, fuzzer.candidate_rng(11, field, 5, 0), 5)
+        another_seed = fuzzer.field_value(field, fuzzer.candidate_rng(12, field, 5, 0), 5)
+        another_sample = fuzzer.field_value(field, fuzzer.candidate_rng(11, field, 5, 1), 5)
+        self.assertEqual(first, repeated)
+        self.assertNotEqual(first, another_seed)
+        self.assertNotEqual(first, another_sample)
+        self.assertEqual(fuzzer.candidate_sample_count(field, 0, 3), 1)
+        self.assertEqual(fuzzer.candidate_sample_count(field, 5, 3), 3)
 
     def test_nullflavor_error_candidates_and_value_conflict(self) -> None:
         field = {

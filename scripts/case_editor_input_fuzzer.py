@@ -19,6 +19,7 @@ import sys
 import time
 import unicodedata
 import uuid
+import urllib.parse
 from dataclasses import asdict, dataclass
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
@@ -224,6 +225,24 @@ def projection_leaf(field: dict[str, Any], owner: str) -> str:
     return leaf_path(path)
 
 
+def candidate_rng(seed: int, field: dict[str, Any], ordinal: int, sample: int) -> random.Random:
+    identity = "|".join(
+        str(field.get(key, "")) for key in ("authority", "code", "frontendPath", "payloadPath")
+    )
+    digest = hashlib.sha256(f"{seed}|{identity}|{ordinal}|{sample}".encode()).digest()
+    return random.Random(int.from_bytes(digest[:8]))
+
+
+def candidate_sample_count(field: dict[str, Any], ordinal: int, requested: int) -> int:
+    if requested <= 1:
+        return 1
+    if is_nullflavor_field(field):
+        return requested if ordinal in {5, 7, 8, 10} else 1
+    if field.get("_booleanRule"):
+        return requested if ordinal in {2, 7} else 1
+    return 1 if ordinal in {0, 1, 4, 12} else requested
+
+
 def field_value(field: dict[str, Any], rng: random.Random, ordinal: int) -> Any:
     """Grammar-guided candidates, not arbitrary bytes."""
     baseline = field.get("roundTripValue")
@@ -247,33 +266,29 @@ def field_value(field: dict[str, Any], rng: random.Random, ordinal: int) -> Any:
         if ordinal == 4:
             return ""
         if ordinal == 5:
-            return "nullflavor-not-valid"
+            return f"nullflavor-not-valid-{rng.randrange(1_000_000)}"
         if ordinal == 6:
             return 1
         if ordinal == 7:
-            return {"unexpected": "nullFlavor"}
+            return {f"unexpected{rng.randrange(1_000)}": "nullFlavor"}
         if ordinal == 8:
-            return next((token for token in NULL_FLAVOR_TOKENS if token not in allowed), "ZZZ")
+            disallowed = [token for token in NULL_FLAVOR_TOKENS if token not in allowed]
+            return rng.choice(disallowed or ["ZZZ"])
         if ordinal == 9:
             return str(baseline).lower()
         if ordinal == 10:
-            return "NULLFLAVOR-" + "X" * 128
+            return "NULLFLAVOR-" + rng.choice("XYZ") * rng.randrange(64, 257)
         if ordinal == 11:
             return [baseline]
         if ordinal == 12:
             return True
         return baseline
     if field.get("_booleanRule"):
-        return (
-            invalid if invalid is not None else "not-a-boolean",
-            None,
-            "not-a-boolean",
-            False,
-            "",
-            True,
-            False,
-            {"unexpected": "object"},
-        )[ordinal]
+        if ordinal == 2:
+            return f"not-a-boolean-{rng.randrange(1_000_000)}"
+        if ordinal == 7:
+            return {f"unexpected{rng.randrange(1_000)}": "object"}
+        return (invalid if invalid is not None else "not-a-boolean", None, None, False, "", True, False)[ordinal]
     if ordinal == 0 and invalid is not None:
         return invalid
     if ordinal == 1:
@@ -283,7 +298,7 @@ def field_value(field: dict[str, Any], rng: random.Random, ordinal: int) -> Any:
             return "not-a-boolean"
         if isinstance(baseline, (int, float)) and not isinstance(baseline, bool):
             return "not-a-number"
-        return "   "
+        return rng.choice([" ", "  ", "   ", "\t"])
     if ordinal == 3:
         if isinstance(baseline, bool):
             return rng.choice([True, False])
@@ -297,32 +312,34 @@ def field_value(field: dict[str, Any], rng: random.Random, ordinal: int) -> Any:
     if ordinal == 4:
         return ""
     if ordinal == 5:
+        suffix = rng.randrange(1_000_000)
         if isinstance(baseline, list):
-            return ["한글🙂"]
+            return [f"한글🙂-{suffix}"]
         if isinstance(baseline, bool):
             return 1
-        return f"한글🙂-{rng.randrange(1_000_000)}"
+        return f"한글🙂-{suffix}"
     if ordinal == 6:
+        value = "A" + "".join(rng.sample(["\x00", "\t", "\n", "\r", "\x1f", "\x7f"], 3)) + "B"
         if isinstance(baseline, list):
-            return ["\t\n"]
+            return [value]
         if isinstance(baseline, bool):
             return 0
-        return "\x00\t\n"
+        return value + "\x00"
     if ordinal == 7:
         if isinstance(baseline, list):
-            return {"unexpected": "object"}
+            return {f"unexpected{rng.randrange(1_000)}": "object"}
         if isinstance(baseline, bool):
             return 1
         if isinstance(baseline, (int, float)) and not isinstance(baseline, bool):
-            return {"unexpected": "object"}
-        return ["unexpected", "array"]
+            return {f"unexpected{rng.randrange(1_000)}": rng.randrange(1_000)}
+        return ["unexpected", rng.randrange(1_000_000)]
     unicode_values = (
-        unicodedata.normalize("NFD", "한글"),
-        "\u202bעברית العربية\u202c",
-        "A\u200b\u200c\u200d\ufeffB",
-        "👨‍👩‍👧‍👦" * 64,
+        unicodedata.normalize("NFD", rng.choice(["한글", "가나다", "각힣"])),
+        rng.choice(["\u202bעברית العربية\u202c", "\u202eabc123\u202c", "\u2067فارسی\u2069"]),
+        f"A{''.join(rng.sample([chr(0x200B), chr(0x200C), chr(0x200D), chr(0xFEFF), chr(0x2060)], 3))}B",
+        rng.choice(["👨‍👩‍👧‍👦", "🏳️‍🌈", "👩🏽‍💻", "🧑‍🚀"]) * rng.randrange(32, 97),
         "\ud800",
-        "\x7f\u0080\ufffd\U0010ffff",
+        rng.choice(["\x7f\u0080\ufffd\U0010ffff", "\u0085\u009f\ufffd", "\ufffe\uffff\U0010ffff"]),
     )
     if 8 <= ordinal < 14:
         value = unicode_values[ordinal - 8]
@@ -330,9 +347,9 @@ def field_value(field: dict[str, Any], rng: random.Random, ordinal: int) -> Any:
     if 14 <= ordinal < 17 and isinstance(baseline, str) and isinstance(field.get("_maxLength"), int):
         limit = field["_maxLength"]
         length = (limit, limit + 1, limit + min(max(limit, 64), 4096))[ordinal - 14]
-        return "X" * length
+        return rng.choice("XYZ가🙂") * length
     if ordinal == 17 and field.get("_identifierRule"):
-        return "A\tB\nC"
+        return f"A{rng.choice([chr(9), chr(10), chr(13)])}B{rng.choice([chr(9), chr(10)])}C"
     if isinstance(baseline, bool):
         return rng.choice([True, False])
     if isinstance(baseline, list):
@@ -514,6 +531,22 @@ AUDIT_FIELD_ALIASES = {
     "source": "source_of_identifier",
     "caseIdentifier": "case_identifier",
     "reporterCountry": "country_code",
+    "reporterOrganization": "organization",
+    "reporterDepartment": "department",
+    "reporterStreet": "street",
+    "reporterCity": "city",
+    "reporterState": "state",
+    "reporterPostcode": "postcode",
+    "reporterTelephone": "telephone",
+    "reporterEmail": "email",
+    "reporterOrganizationNullFlavor": "organization_null_flavor",
+    "reporterDepartmentNullFlavor": "department_null_flavor",
+    "reporterStreetNullFlavor": "street_null_flavor",
+    "reporterCityNullFlavor": "city_null_flavor",
+    "reporterStateNullFlavor": "state_null_flavor",
+    "reporterPostcodeNullFlavor": "postcode_null_flavor",
+    "reporterTelephoneNullFlavor": "telephone_null_flavor",
+    "reporterEmailNullFlavor": "email_null_flavor",
     "nullificationAmendmentCode": "nullification_code",
     "worldwideUniqueId": "worldwide_unique_id",
     "additionalDocumentsAvailable": "additional_documents_available",
@@ -531,6 +564,11 @@ def audit_key_matches(changed: dict[str, Any], payload_path: str) -> bool:
         if any(candidate == leaf or candidate in leaf or leaf in candidate for leaf in candidates if leaf):
             return True
     return False
+
+
+def audit_field_key(payload_path: str) -> str:
+    raw_leaf = leaf_path(payload_path).split(".")[-1]
+    return snake(AUDIT_FIELD_ALIASES.get(raw_leaf, raw_leaf))
 
 
 def audit_log_complete(log: dict[str, Any]) -> bool:
@@ -806,6 +844,8 @@ def run_gate(command: list[str], cwd: Path, timeout: float) -> tuple[str, dict[s
 
 def main(args: argparse.Namespace) -> int:
     guard_target(args.base_url, args.allow_remote)
+    if args.samples_per_category < 1:
+        raise SystemExit("--samples-per-category must be at least 1")
     if not args.password and not args.dry_run:
         raise SystemExit("set E2BR3_ADMIN_PASSWORD")
     contract_path = Path(args.contract).resolve()
@@ -823,7 +863,6 @@ def main(args: argparse.Namespace) -> int:
         load_dictionary_null_flavors(Path(__file__).resolve().parents[1]),
     )
     pages = [page.strip().upper() for page in args.pages.split(",") if page.strip()]
-    rng = random.Random(args.seed)
     started = time.monotonic()
     events: list[Event] = []
     interrupted: str | None = None
@@ -879,7 +918,11 @@ def main(args: argparse.Namespace) -> int:
             groups: dict[str, list[dict[str, Any]]] = {}
             for field in fields:
                 groups.setdefault(field["patch"]["owner"], []).append(field)
-            mutations = sum(candidate_count(field, args.values_per_field) for field in fields)
+            mutations = sum(
+                candidate_sample_count(field, ordinal, args.samples_per_category)
+                for field in fields
+                for ordinal in range(candidate_count(field, args.values_per_field))
+            )
             total += mutations
             print(f"{page}: fields={len(fields)} owners={len(groups)} mutations={mutations}")
         print(f"seed={args.seed} total_mutations={total} derived_null_flavors={derived_null_flavors} max_length_fields={max_length_fields} identifier_fields={identifier_fields} boolean_fields={boolean_fields} contract={contract_path}")
@@ -920,7 +963,12 @@ def main(args: argparse.Namespace) -> int:
             return [log for log in value if isinstance(log, dict) and log.get("table_name") == nested_table] if isinstance(value, list) else []
         table = AUDIT_TABLES.get(owner or "")
         target = f"{table}/{row_id}" if table and row_id else f"cases/{case_id}"
-        status, value, _ = request("GET", f"/api/audit-logs/by-record/{target}")
+        field_query = (
+            f"?field={urllib.parse.quote(audit_field_key(field_path))}"
+            if table and row_id and field_path
+            else ""
+        )
+        status, value, _ = request("GET", f"/api/audit-logs/by-record/{target}{field_query}")
         if status != 200:
             return []
         if isinstance(value, list):
@@ -1054,10 +1102,19 @@ def main(args: argparse.Namespace) -> int:
             if root and not nested_row_ids.get((owner, root)):
                 add(Event("mutation", field["code"], page, owner, None, "SKIPPED_BASELINE", None, {"reason": "nested row baseline did not save"}))
                 continue
-            for ordinal in range(candidate_count(field, args.values_per_field)):
+            candidates = (
+                (ordinal, sample)
+                for ordinal in range(candidate_count(field, args.values_per_field))
+                for sample in range(candidate_sample_count(field, ordinal, args.samples_per_category))
+            )
+            before_status, before_actual = readback(
+                page, owner, projection_leaf(field, owner), row_route, row_ids.get(owner)
+            )
+            logs_before = audit_logs(owner, row_ids.get(owner), projection_leaf(field, owner))
+            for ordinal, sample in candidates:
                 if interrupted:
                     break
-                candidate = field_value(field, rng, ordinal)
+                candidate = field_value(field, candidate_rng(args.seed, field, ordinal, sample), ordinal)
                 mutation = copy.deepcopy(baseline_for([field]))
                 set_path(mutation, leaf_path(payload_path), candidate)
                 nullflavor_with_value = add_nullflavor_partner(field, mutation, ordinal)
@@ -1068,8 +1125,6 @@ def main(args: argparse.Namespace) -> int:
                 if row_ids.get(owner):
                     mutation["id"] = row_ids[owner]
                 audit_path = projection_leaf(field, owner)
-                before_status, before_actual = readback(page, owner, projection_leaf(field, owner), row_route, row_ids.get(owner))
-                logs_before = audit_logs(owner, row_ids.get(owner), audit_path)
                 if row_route:
                     status, value, summary = request(
                         "PATCH", f"{route}/rows/{row_ids.get(owner, '')}", {"authorities": authorities_for([field]), "rows": {owner: mutation}}
@@ -1097,6 +1152,8 @@ def main(args: argparse.Namespace) -> int:
                 detail: dict[str, Any] = {
                     "candidate": redacted(candidate),
                     "candidate_kind": candidate_kind(field, ordinal),
+                    "candidate_ordinal": ordinal,
+                    "sample_ordinal": sample,
                     "rule_code": field.get("constraint", {}).get("ruleCode"),
                 }
                 if expectation:
@@ -1106,6 +1163,9 @@ def main(args: argparse.Namespace) -> int:
                 if is_nullflavor_field(field):
                     detail["nullflavor_expected_reject"] = invalid_nullflavor
                     detail["nullflavor_value_conflict"] = nullflavor_with_value
+                read_status = None
+                actual = None
+                logs_after = None
                 if status == 200:
                     read_status, actual = readback(page, owner, projection_leaf(field, owner), row_route, row_ids.get(owner))
                     detail.update({"readback_status": read_status, "readback": redacted(actual), "row_id_present": bool(row_ids.get(owner))})
@@ -1190,7 +1250,11 @@ def main(args: argparse.Namespace) -> int:
                         "AUDIT_MISMATCH", "INCONCLUSIVE", "SERVER_ERROR", "SAVE_READBACK_MISMATCH"
                     }:
                         classification = "FAIL"
-                add(Event("mutation", field["code"], page, owner, f"value_{ordinal}", classification, status, {**summary, **detail}))
+                add(Event("mutation", field["code"], page, owner, f"value_{ordinal}_sample_{sample}", classification, status, {**summary, **detail}))
+                if status == 200 and read_status == 200:
+                    before_status, before_actual = read_status, actual
+                if logs_after is not None:
+                    logs_before = logs_after
 
     if case_id and not interrupted:
         status, value, summary = request("GET", "/api/audit-logs/verify-integrity")
@@ -1232,7 +1296,7 @@ def main(args: argparse.Namespace) -> int:
     with artifact.open("w", encoding="utf-8") as handle:
         for event in events:
             handle.write(json.dumps({"seed": args.seed, "commit": commit_sha(), **asdict(event)}, sort_keys=True) + "\n")
-        handle.write(json.dumps({"kind": "run", "seed": args.seed, "cases": len(events), "interrupted": interrupted, "artifact": str(artifact), "contract": str(contract_path), "candidate_schema_version": 4, "derived_null_flavors": derived_null_flavors, "max_length_fields": max_length_fields, "identifier_fields": identifier_fields, "boolean_fields": boolean_fields, "null_flavor_only": args.null_flavor_only, "surface": "api", "validator_excluded": not args.run_gates, "frontend_gate": "run" if args.run_gates else "not_run"}, sort_keys=True) + "\n")
+        handle.write(json.dumps({"kind": "run", "seed": args.seed, "cases": len(events), "requests": request_count, "elapsed_seconds": round(time.monotonic() - started, 3), "interrupted": interrupted, "artifact": str(artifact), "contract": str(contract_path), "candidate_schema_version": 5, "samples_per_category": args.samples_per_category, "derived_null_flavors": derived_null_flavors, "max_length_fields": max_length_fields, "identifier_fields": identifier_fields, "boolean_fields": boolean_fields, "null_flavor_only": args.null_flavor_only, "surface": "api", "validator_excluded": not args.run_gates, "frontend_gate": "run" if args.run_gates else "not_run"}, sort_keys=True) + "\n")
     counts: dict[str, int] = {}
     for event in events:
         counts[event.classification] = counts.get(event.classification, 0) + 1
@@ -1255,8 +1319,14 @@ def parser() -> argparse.ArgumentParser:
     # page mutations can make the case setup harder to authorize.
     parser.add_argument("--pages", default="CI,RP,SD,LR,SI,DM,DH,NR,AE,LB,DG")
     parser.add_argument("--values-per-field", type=int, default=IDENTIFIER_CANDIDATES, help="upper bound; only candidates applicable to each field are used")
-    parser.add_argument("--max-actions", type=int, default=1200)
-    parser.add_argument("--deadline-seconds", type=float, default=180)
+    parser.add_argument(
+        "--samples-per-category",
+        type=int,
+        default=2,
+        help="seeded variants for randomized grammar categories",
+    )
+    parser.add_argument("--max-actions", type=int, default=30000)
+    parser.add_argument("--deadline-seconds", type=float, default=900)
     parser.add_argument("--timeout", type=float, default=20)
     parser.add_argument("--contract", default=str(DEFAULT_CONTRACT))
     parser.add_argument("--null-flavor-pairs", default=str(DEFAULT_NULL_FLAVOR_PAIRS))
