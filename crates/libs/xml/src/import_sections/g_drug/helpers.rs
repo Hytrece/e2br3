@@ -3,7 +3,6 @@ use crate::import_sections::shared::{
 	first_attr, first_text, normalize_code, parse_xml_id_opt,
 };
 use crate::Result;
-use lib_core::model::drug::DrugAdditionalInfoCodeEntry;
 use libxml::parser::Parser;
 use libxml::xpath::Context;
 use rust_decimal::Decimal;
@@ -105,20 +104,6 @@ pub(crate) fn import_fda_specialized_product_category(
 		}
 	}
 	specialized_product_category
-}
-
-/// e2b:FDA.G.k.local.additionalInfoCodesJson
-pub(crate) fn build_drug_additional_info_codes_json(
-	code: Option<&str>,
-) -> Option<serde_json::Value> {
-	let value_code = code?.trim();
-	if value_code.is_empty() {
-		return None;
-	}
-	serde_json::to_value(vec![DrugAdditionalInfoCodeEntry {
-		value_code: Some(value_code.to_string()),
-	}])
-	.ok()
 }
 
 fn read_pause_value(

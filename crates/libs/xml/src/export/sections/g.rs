@@ -967,11 +967,6 @@ pub(crate) fn drug_fragment(
 			out.push_str(&fda_device_fragment(device, &codes));
 		}
 	}
-	for code in write_g_k_10_r(drug) {
-		out.push_str("<outboundRelationship2 typeCode=\"REFR\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code code=\"9\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.19\"/><value xsi:type=\"CE\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.17\" code=\"");
-		out.push_str(&xml_escape(code));
-		out.push_str("\"/></observation></outboundRelationship2>");
-	}
 	out.push_str("</kindOfProduct>");
 	if let Some(country) = write_g_k_2_4(drug) {
 		out.push_str("<subjectOf typeCode=\"SBJ\"><productEvent classCode=\"ACT\" moodCode=\"EVN\"><code code=\"1\" codeSystemVersion=\"1.0\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.18\" displayName=\"retailSupply\"/><performer typeCode=\"PRF\"><assignedEntity classCode=\"ASSIGNED\"><representedOrganization determinerCode=\"INSTANCE\" classCode=\"ORG\"><addr><country>");
@@ -981,6 +976,11 @@ pub(crate) fn drug_fragment(
 	out.push_str("</instanceOfKind></consumable>");
 	for assessment in assessments {
 		out.push_str(&drug_recurrence_fragment(assessment));
+	}
+	for code in write_g_k_10_r(drug) {
+		out.push_str("<outboundRelationship2 typeCode=\"REFR\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code code=\"9\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.19\"/><value xsi:type=\"CE\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.17\" code=\"");
+		out.push_str(&xml_escape(code));
+		out.push_str("\"/></observation></outboundRelationship2>");
 	}
 	if drug.cumulative_dose_first_reaction_value.is_some()
 		|| drug.cumulative_dose_first_reaction_unit.is_some()
@@ -1932,6 +1932,33 @@ mod tests {
 		)
 		.expect("export unblinded drug");
 		assert!(!fragment.contains("displayName=\"blinded\""), "{fragment}");
+	}
+
+	#[test]
+	fn export_g_places_additional_info_after_the_product() {
+		let mut drug = test_drug(Uuid::new_v4(), Uuid::new_v4());
+		drug.fda_additional_info_coded = Some("1".to_string());
+		drug.drug_additional_info_codes_json =
+			Some(serde_json::json!([{ "value_code": "2" }]));
+		let fragment = drug_fragment(
+			&drug,
+			&[],
+			&[],
+			&[],
+			&[],
+			&[],
+			&[],
+			&[],
+			RegulatoryAuthority::Fda,
+		)
+		.expect("export additional information");
+
+		let product_end = fragment.find("</kindOfProduct>").unwrap();
+		let additional_info = fragment.match_indices("<code code=\"9\"");
+		assert_eq!(additional_info.clone().count(), 2, "{fragment}");
+		assert!(additional_info
+			.map(|(index, _)| index)
+			.all(|index| index > product_end));
 	}
 
 	#[test]

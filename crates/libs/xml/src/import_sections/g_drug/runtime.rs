@@ -49,10 +49,6 @@ async fn import_drugs(
 				&drug,
 				&drug.characteristics,
 			);
-		let drug_additional_info_codes_json =
-			g_helpers::build_drug_additional_info_codes_json(
-				drug.fda_additional_info_coded.as_deref(),
-			);
 		let drug_id = DrugInformationBmc::create(
 			ctx,
 			mm,
@@ -103,7 +99,7 @@ async fn import_drugs(
 				fda_additional_info_coded: drug.fda_additional_info_coded,
 				fda_additional_info_coded_null_flavor: drug
 					.fda_additional_info_coded_null_flavor,
-				drug_additional_info_codes_json,
+				drug_additional_info_codes_json: None,
 				drug_additional_information: drug.drug_additional_information,
 				fda_specialized_product_category,
 				fda_other_characterization: None,

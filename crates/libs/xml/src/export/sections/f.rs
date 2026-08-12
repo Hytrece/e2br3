@@ -61,12 +61,18 @@ pub(crate) fn test_result_fragment(result: &TestResult) -> Result<String> {
 		out.push_str(&xml_escape(version));
 		out.push_str("\"");
 	}
-	out.push_str(" displayName=\"");
-	out.push_str(&write_f_r_2_1(result));
-	out.push_str("\">");
-	out.push_str("<originalText>");
-	out.push_str(&write_f_r_2_1(result));
-	out.push_str("</originalText>");
+	let test_name = write_f_r_2_1(result);
+	if !test_name.trim().is_empty() {
+		out.push_str(" displayName=\"");
+		out.push_str(&test_name);
+		out.push_str("\"");
+	}
+	out.push('>');
+	if !test_name.trim().is_empty() {
+		out.push_str("<originalText>");
+		out.push_str(&test_name);
+		out.push_str("</originalText>");
+	}
 	out.push_str("</code>");
 	out.push_str(&write_f_r_1(result)?);
 	if let Some(val) = write_f_r_3_2(result) {
@@ -307,6 +313,14 @@ mod tests {
 		result.test_date_null_flavor = Some("ASKU".to_string());
 		let xml = test_result_fragment(&result).expect("export date NullFlavor");
 		assert!(xml.contains("<effectiveTime nullFlavor=\"ASKU\"/>"));
+
+		result.test_name.clear();
+		result.test_meddra_code = Some("10006824".to_string());
+		let xml =
+			test_result_fragment(&result).expect("export MedDRA-only test name");
+		assert!(xml.contains("<code code=\"10006824\">"));
+		assert!(!xml.contains("displayName=\"\""));
+		assert!(!xml.contains("<originalText></originalText>"));
 	}
 
 	#[test]

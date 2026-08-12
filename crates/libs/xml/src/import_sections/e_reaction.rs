@@ -910,6 +910,17 @@ mod split_null_flavor_tests {
 		let reactions = parse_e_reactions(xml.as_bytes()).expect("parse");
 		assert_eq!(reactions[0].duration_unit.as_deref(), Some("min"));
 	}
+
+	#[test]
+	fn imports_reaction_dates_from_mfds_sxpr_components() {
+		let xml = br#"<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><subjectOf2><observation><code code="29" codeSystem="2.16.840.1.113883.3.989.2.1.1.19"/><effectiveTime xsi:type="SXPR_TS"><comp xsi:type="IVL_TS"><low value="20081009"/><high value="20081201"/></comp><comp xsi:type="IVL_TS" operator="A"><width value="54" unit="d"/></comp></effectiveTime><value xsi:type="CE"><originalText>Reaction</originalText></value></observation></subjectOf2></MCCI_IN200100UV01>"#;
+		let reaction = parse_e_reactions(xml).expect("parse").remove(0);
+
+		assert_eq!(reaction.start_date.unwrap().to_string(), "2008-10-09");
+		assert_eq!(reaction.end_date.unwrap().to_string(), "2008-12-01");
+		assert_eq!(reaction.duration_value.unwrap().to_string(), "54");
+		assert_eq!(reaction.duration_unit.as_deref(), Some("804"));
+	}
 }
 
 fn parse_date(value: String) -> Option<Date> {

@@ -78,12 +78,14 @@ impl EReactionPaths {
 		"hl7:outboundRelationship2/hl7:observation[hl7:code[@code='7']]/hl7:value/@nullFlavor";
 
 	// Dates / duration
-	pub const START_DATE: &'static str = "hl7:effectiveTime/hl7:low/@value";
+	pub const START_DATE: &'static str =
+		"hl7:effectiveTime/hl7:low/@value | hl7:effectiveTime/hl7:comp[@xsi:type='IVL_TS']/hl7:low/@value";
 	pub const START_DATE_NULL_FLAVOR: &'static str =
-		"hl7:effectiveTime/hl7:low/@nullFlavor";
-	pub const END_DATE: &'static str = "hl7:effectiveTime/hl7:high/@value";
+		"hl7:effectiveTime/hl7:low/@nullFlavor | hl7:effectiveTime/hl7:comp[@xsi:type='IVL_TS']/hl7:low/@nullFlavor";
+	pub const END_DATE: &'static str =
+		"hl7:effectiveTime/hl7:high/@value | hl7:effectiveTime/hl7:comp[@xsi:type='IVL_TS']/hl7:high/@value";
 	pub const END_DATE_NULL_FLAVOR: &'static str =
-		"hl7:effectiveTime/hl7:high/@nullFlavor";
+		"hl7:effectiveTime/hl7:high/@nullFlavor | hl7:effectiveTime/hl7:comp[@xsi:type='IVL_TS']/hl7:high/@nullFlavor";
 	pub const DURATION_VALUE: &'static str =
 		"hl7:effectiveTime/hl7:comp[@operator='A']/hl7:width/@value";
 	pub const DURATION_UNIT: &'static str =

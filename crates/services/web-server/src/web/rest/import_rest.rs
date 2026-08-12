@@ -32,7 +32,7 @@ use time::format_description::well_known::Rfc3339;
 use uuid::Uuid;
 use xml::import_sections::{
 	c_safety_report::parse_c_safety_report, d_patient::parse_d_patient,
-	e_reaction::parse_e_reactions,
+	e_reaction::parse_e_reactions, g_drug::parse_g_drugs,
 };
 use xml::validation::{
 	normalize_e2b_xml_for_import, validate_e2b_xml_for_import, XmlValidatorConfig,
@@ -939,6 +939,29 @@ async fn import_xml_authorized(
 	let effective_product_id = selected_product.1.as_str();
 
 	for (entry_name, xml) in entries {
+		if !scope.blind_allowed()
+			&& parse_g_drugs(&xml).is_ok_and(|drugs| {
+				drugs
+					.iter()
+					.any(|drug| drug.investigational_product_blinded == Some(true))
+			}) {
+			let message =
+				"XML contains blinded product data, but the user does not have blind access"
+					.to_string();
+			record_import_history(
+				ctx,
+				mm,
+				&uploaded_file_name,
+				&entry_name,
+				None,
+				None,
+				XmlImportHistoryStatus::Error,
+				Some(&message),
+			)
+			.await?;
+			imported_cases.push(summary_for_decision_error(&entry_name, message));
+			continue;
+		}
 		let decision =
 			match decide_import_entry(ctx, mm, &xml, effective_product_id).await {
 				Ok(decision) => decision,
@@ -1017,7 +1040,9 @@ async fn import_xml_authorized(
 
 #[cfg(test)]
 mod tests {
-	use super::{summary_for_skipped_decision, XmlImportHistoryStatus};
+	use super::{
+		parse_g_drugs, summary_for_skipped_decision, XmlImportHistoryStatus,
+	};
 	use lib_core::model::xml_import_decision::{
 		XmlImportDecision, XmlImportDecisionAction,
 	};
@@ -1045,5 +1070,16 @@ mod tests {
 		assert_eq!(summary.case_id, None);
 		assert_eq!(summary.matched_case_id, Some(matched_case_id.to_string()));
 		assert_eq!(summary.matched_case_version, Some(2));
+	}
+
+	#[test]
+	fn official_fda_scenario_6_contains_blinded_product_data() {
+		let xml = include_bytes!(
+			"../../../../../../docs/exporter/fda/FAERS2022Scenario6.xml"
+		);
+		let drugs = parse_g_drugs(xml).expect("parse official FDA scenario 6");
+		assert!(drugs
+			.iter()
+			.any(|drug| drug.investigational_product_blinded == Some(true)));
 	}
 }
