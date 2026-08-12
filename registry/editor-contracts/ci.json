@@ -159,11 +159,6 @@
         "owner": "documentsHeldBySender"
       },
       "roundTripValue": "Q0ktZG9jdW1lbnQ=",
-      "constraint": {
-        "status": "verified",
-        "ruleCode": "ICH.C.1.6.1.r.2.ALLOWED.VALUE",
-        "invalidValue": "***"
-      },
       "businessValidation": {
         "status": "verified",
         "issuePath": "documentsHeldBySender.0.includedDocument"

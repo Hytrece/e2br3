@@ -40,3 +40,27 @@ pub(crate) enum FormatName {
 	E2bDatetime,
 	Base64,
 }
+
+#[cfg(test)]
+mod tests {
+	use super::{generated, FieldInput, InputValue};
+
+	#[test]
+	fn migrated_business_rules_do_not_reject_input() {
+		assert!(generated::c::c_1_6_1_r_2(FieldInput::new(
+			InputValue::String("not-base64"),
+			None,
+		))
+		.is_empty());
+		assert!(generated::d::d_6(FieldInput::new(
+			InputValue::Missing,
+			Some("NASK"),
+		))
+		.is_empty());
+		assert!(generated::e::e_i_2_1a(FieldInput::new(
+			InputValue::String("15"),
+			None,
+		))
+		.is_empty());
+	}
+}

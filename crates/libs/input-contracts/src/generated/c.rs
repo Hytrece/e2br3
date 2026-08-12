@@ -218,15 +218,8 @@ pub fn c_1_6_1_r_1(input: crate::FieldInput<'_>) -> Vec<crate::InputIssue> {
 }
 
 /// ICH.C.1.6.1.r.2.ALLOWED.VALUE
-pub fn c_1_6_1_r_2(input: crate::FieldInput<'_>) -> Vec<crate::InputIssue> {
-	let mut issues = Vec::new();
-	crate::helpers::format(
-		&mut issues,
-		"ICH.C.1.6.1.r.2.ALLOWED.VALUE",
-		input.value,
-		crate::FormatName::Base64,
-	);
-	issues
+pub fn c_1_6_1_r_2(_input: crate::FieldInput<'_>) -> Vec<crate::InputIssue> {
+	Vec::new()
 }
 
 /// ICH.C.1.7.ALLOWED.VALUE

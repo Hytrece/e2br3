@@ -56,9 +56,14 @@ pub(crate) async fn collect_section_issues(
 
 fn retain_case_business_rules(issues: &mut Vec<ValidationIssue>) {
 	issues.retain(|issue| {
-		!issue.code.ends_with(".LENGTH.MAX")
+		matches!(
+			issue.code.as_str(),
+			"ICH.C.1.6.1.r.2.ALLOWED.VALUE"
+				| "ICH.D.6.NULLFLAVOR.ALLOWED"
+				| "ICH.E.i.2.1a.ALLOWED.VALUE"
+		) || (!issue.code.ends_with(".LENGTH.MAX")
 			&& !issue.code.ends_with(".ALLOWED.VALUE")
-			&& !issue.code.ends_with(".NULLFLAVOR.ALLOWED")
+			&& !issue.code.ends_with(".NULLFLAVOR.ALLOWED"))
 	});
 }
 
@@ -381,6 +386,27 @@ mod tests {
 		retain_case_business_rules(&mut issues);
 		assert_eq!(issues.len(), 1);
 		assert_eq!(issues[0].code, "ICH.C.1.3.REQUIRED");
+	}
+
+	#[test]
+	fn case_output_keeps_migrated_business_rules() {
+		let mut issues = Vec::new();
+		for code in [
+			"ICH.C.1.6.1.r.2.ALLOWED.VALUE",
+			"ICH.D.6.NULLFLAVOR.ALLOWED",
+			"ICH.E.i.2.1a.ALLOWED.VALUE",
+		] {
+			crate::push_field_issue(
+				&mut issues,
+				code,
+				"field",
+				"section",
+				code,
+				true,
+			);
+		}
+		retain_case_business_rules(&mut issues);
+		assert_eq!(issues.len(), 3);
 	}
 
 	#[test]

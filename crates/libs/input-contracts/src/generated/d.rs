@@ -724,7 +724,6 @@ pub fn d_5(input: crate::FieldInput<'_>) -> Vec<crate::InputIssue> {
 }
 
 /// ICH.D.6.ALLOWED.VALUE
-/// ICH.D.6.NULLFLAVOR.ALLOWED
 pub fn d_6(input: crate::FieldInput<'_>) -> Vec<crate::InputIssue> {
 	let mut issues = Vec::new();
 	crate::helpers::format(
@@ -732,12 +731,6 @@ pub fn d_6(input: crate::FieldInput<'_>) -> Vec<crate::InputIssue> {
 		"ICH.D.6.ALLOWED.VALUE",
 		input.value,
 		crate::FormatName::E2bDatetime,
-	);
-	crate::helpers::null_flavor(
-		&mut issues,
-		"ICH.D.6.NULLFLAVOR.ALLOWED",
-		input.null_flavor,
-		&["MSK"],
 	);
 	issues
 }

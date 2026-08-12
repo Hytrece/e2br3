@@ -448,8 +448,18 @@ fn d_5(patient: &PatientInformation, issues: &mut Vec<ValidationIssue>) {
 	);
 }
 
+/// ICH.D.6.NULLFLAVOR.ALLOWED
 /// ICH.D.6.FUTURE_DATE.FORBIDDEN
 fn d_6(patient: &PatientInformation, issues: &mut Vec<ValidationIssue>) {
+	allowed(
+		issues,
+		"ICH.D.6.NULLFLAVOR.ALLOWED",
+		"patientInformation.lastMenstrualPeriodDateNullFlavor",
+		valid_code(
+			patient.last_menstrual_period_date_null_flavor.as_deref(),
+			&["MSK"],
+		),
+	);
 	reject_future_date(
 		issues,
 		"ICH.D.6.FUTURE_DATE.FORBIDDEN",
@@ -3284,6 +3294,21 @@ mod golden_companion_tests {
 					"patientInformation.concomitantTherapy".to_string()
 				),
 			]
+		);
+	}
+
+	#[test]
+	fn d_6_null_flavor_is_a_case_validation_rule() {
+		let mut patient = patient();
+		patient.last_menstrual_period_date_null_flavor = Some("NASK".to_string());
+		let mut issues = Vec::new();
+		d_6(&patient, &mut issues);
+		assert_eq!(
+			issues
+				.iter()
+				.map(|issue| issue.code.as_str())
+				.collect::<Vec<_>>(),
+			vec!["ICH.D.6.NULLFLAVOR.ALLOWED"]
 		);
 	}
 
