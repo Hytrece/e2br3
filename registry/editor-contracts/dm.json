@@ -264,7 +264,7 @@
       "constraint": {
         "status": "verified",
         "ruleCode": "ICH.D.7.3.ALLOWED.VALUE",
-        "invalidValue": false
+        "invalidValue": "not-a-boolean"
       },
       "payloadPath": "concomitantTherapies"
     },
@@ -383,7 +383,7 @@
       "constraint": {
         "status": "verified",
         "ruleCode": "ICH.D.7.1.r.6.ALLOWED.VALUE",
-        "invalidValue": false
+        "invalidValue": "not-a-boolean"
       },
       "payloadPath": "[].familyHistory"
     },

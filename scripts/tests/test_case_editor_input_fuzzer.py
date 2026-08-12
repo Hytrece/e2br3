@@ -41,15 +41,65 @@ class CaseEditorInputFuzzerTests(unittest.TestCase):
         self.assertEqual(len(fuzzer.field_value(field, rng, 14)), 4)
         self.assertEqual(len(fuzzer.field_value(field, rng, 15)), 5)
         self.assertGreater(len(fuzzer.field_value(field, rng, 16)), 5)
-        self.assertEqual(fuzzer.length_expectation(field, 14), "accept")
-        self.assertEqual(fuzzer.length_expectation(field, 16), "reject")
+        self.assertEqual(fuzzer.candidate_expectation(field, 14), ("length_boundary", None))
+        self.assertEqual(fuzzer.candidate_expectation(field, 16), ("reject", None))
 
     def test_generated_max_lengths_and_candidate_caps(self) -> None:
         root = Path(__file__).resolve().parents[2]
         limits = fuzzer.load_max_lengths(root)
         self.assertEqual(limits["ICH.C.1.1.LENGTH.MAX"], 100)
+        contract = [{"fields": [{
+            "authority": "ICH",
+            "code": "C.1.11.1",
+            "roundTripValue": "base",
+            "constraint": {"ruleCode": "ICH.C.1.11.1.ALLOWED.VALUE"},
+        }]}]
+        self.assertEqual(fuzzer.apply_max_lengths(contract, limits), 1)
+        self.assertEqual(contract[0]["fields"][0]["_maxLength"], 1)
         self.assertEqual(fuzzer.candidate_count({"roundTripValue": 1}, 17), 8)
         self.assertEqual(fuzzer.candidate_count({"roundTripValue": ["x"]}, 17), 14)
+
+    def test_generated_identifier_boolean_rules_and_expectations(self) -> None:
+        root = Path(__file__).resolve().parents[2]
+        identifiers = fuzzer.load_generated_rules(root, fuzzer.IDENTIFIER_RE)
+        booleans = fuzzer.load_generated_rules(root, fuzzer.BOOLEAN_RE)
+        field = {
+            "authority": "ICH",
+            "code": "D.10.8.r.2b",
+            "roundTripValue": "base",
+            "constraint": {"invalidValue": "bad", "ruleCode": "ICH.D.10.8.r.2b.ALLOWED.VALUE"},
+        }
+        boolean = {
+            "authority": "ICH",
+            "code": "C.1.9.1",
+            "roundTripValue": True,
+            "constraint": {"invalidValue": "not-a-boolean", "ruleCode": "ICH.C.1.9.1.ALLOWED.VALUE"},
+        }
+        contract = [{"fields": [field, boolean]}]
+        self.assertEqual(fuzzer.apply_generated_rules(contract, identifiers, booleans), (1, 1))
+        self.assertEqual(fuzzer.candidate_count(field, 99), 18)
+        self.assertEqual(fuzzer.field_value(field, random.Random(1), 17), "\t\n")
+        self.assertEqual(
+            fuzzer.candidate_expectation(field, 17),
+            ("reject", "ICH.D.10.8.r.2b.ALLOWED.VALUE"),
+        )
+        self.assertFalse(fuzzer.field_value(boolean, random.Random(1), 3))
+        self.assertTrue(fuzzer.field_value(boolean, random.Random(1), 5))
+        self.assertEqual(fuzzer.candidate_expectation(boolean, 3), ("accept", None))
+        self.assertEqual(
+            fuzzer.candidate_expectation(boolean, 2),
+            ("reject", "ICH.C.1.9.1.ALLOWED.VALUE"),
+        )
+
+    def test_camel_case_rule_code_and_exact_max_expectation(self) -> None:
+        self.assertEqual(
+            fuzzer.summarize_error_detail({"ruleCode": "ICH.C.1.LENGTH.MAX", "message": "bad"})["error_rule_code"],
+            "ICH.C.1.LENGTH.MAX",
+        )
+        self.assertIsNone(fuzzer.expectation_error(("reject", "RULE"), 422, "RULE"))
+        self.assertIsNotNone(fuzzer.expectation_error(("reject", "RULE"), 422, "OTHER"))
+        self.assertIsNone(fuzzer.expectation_error(("length_boundary", "LENGTH"), 422, "FORMAT"))
+        self.assertIsNotNone(fuzzer.expectation_error(("length_boundary", "LENGTH"), 422, "LENGTH"))
 
     def test_nullflavor_error_candidates_and_value_conflict(self) -> None:
         field = {

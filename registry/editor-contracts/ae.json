@@ -167,7 +167,7 @@
       "constraint": {
         "status": "verified",
         "ruleCode": "ICH.E.i.3.2a.ALLOWED.VALUE",
-        "invalidValue": false
+        "invalidValue": "not-a-boolean"
       },
       "payloadPath": "seriousness.criteriaResultsInDeath"
     },
@@ -184,7 +184,7 @@
       "constraint": {
         "status": "verified",
         "ruleCode": "ICH.E.i.3.2b.ALLOWED.VALUE",
-        "invalidValue": false
+        "invalidValue": "not-a-boolean"
       },
       "payloadPath": "seriousness.criteriaLifeThreatening"
     },
@@ -201,7 +201,7 @@
       "constraint": {
         "status": "verified",
         "ruleCode": "ICH.E.i.3.2c.ALLOWED.VALUE",
-        "invalidValue": false
+        "invalidValue": "not-a-boolean"
       },
       "payloadPath": "seriousness.criteriaHospitalization"
     },
@@ -218,7 +218,7 @@
       "constraint": {
         "status": "verified",
         "ruleCode": "ICH.E.i.3.2d.ALLOWED.VALUE",
-        "invalidValue": false
+        "invalidValue": "not-a-boolean"
       },
       "payloadPath": "seriousness.criteriaDisabling"
     },
@@ -235,7 +235,7 @@
       "constraint": {
         "status": "verified",
         "ruleCode": "ICH.E.i.3.2e.ALLOWED.VALUE",
-        "invalidValue": false
+        "invalidValue": "not-a-boolean"
       },
       "payloadPath": "seriousness.criteriaCongenitalAnomaly"
     },
@@ -252,7 +252,7 @@
       "constraint": {
         "status": "verified",
         "ruleCode": "ICH.E.i.3.2f.ALLOWED.VALUE",
-        "invalidValue": false
+        "invalidValue": "not-a-boolean"
       },
       "payloadPath": "seriousness.criteriaOtherMedicallyImportant"
     },
@@ -270,7 +270,7 @@
       "constraint": {
         "status": "verified",
         "ruleCode": "FDA.E.i.3.2h.ALLOWED.VALUE",
-        "invalidValue": false
+        "invalidValue": "not-a-boolean"
       },
       "payloadPath": "requiredIntervention"
     },

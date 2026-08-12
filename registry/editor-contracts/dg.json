@@ -201,7 +201,7 @@
       "constraint": {
         "status": "verified",
         "ruleCode": "ICH.G.k.2.5.ALLOWED.VALUE",
-        "invalidValue": false
+        "invalidValue": "not-a-boolean"
       },
       "payloadPath": "investigationalProductBlinded"
     },

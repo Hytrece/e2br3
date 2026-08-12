@@ -80,9 +80,18 @@ NESTED_AUDIT_TABLES = {
 BASE_CANDIDATES = 8
 STRING_CANDIDATES = 14
 LENGTH_CANDIDATES = 17
+IDENTIFIER_CANDIDATES = 18
 NULLFLAVOR_CANDIDATES = 14
 MAX_LENGTH_RE = re.compile(
     r'max_length\(\s*&mut issues,\s*"([^"]+)",\s*input\.value,\s*(\d+)',
+    re.DOTALL,
+)
+IDENTIFIER_RE = re.compile(
+    r'identifier\(\s*&mut issues,\s*"([^"]+)",\s*input\.value',
+    re.DOTALL,
+)
+BOOLEAN_RE = re.compile(
+    r'boolean\(\s*&mut issues,\s*"([^"]+)",\s*input\.value',
     re.DOTALL,
 )
 CANDIDATE_KINDS = (
@@ -90,7 +99,7 @@ CANDIDATE_KINDS = (
     "unicode_basic", "control_chars", "type_mismatch", "unicode_nfd",
     "unicode_rtl", "unicode_zero_width", "unicode_emoji_sequence",
     "unicode_lone_surrogate", "encoding_edges", "length_max",
-    "length_max_plus_one", "length_oversize",
+    "length_max_plus_one", "length_oversize", "identifier_controls",
 )
 NULLFLAVOR_CANDIDATE_KINDS = (
     "nullflavor_verified_invalid", "nullflavor_null", "nullflavor_allowed",
@@ -248,6 +257,17 @@ def field_value(field: dict[str, Any], rng: random.Random, ordinal: int) -> Any:
         if ordinal == 12:
             return True
         return baseline
+    if field.get("_booleanRule"):
+        return (
+            invalid if invalid is not None else "not-a-boolean",
+            None,
+            "not-a-boolean",
+            False,
+            "",
+            True,
+            0,
+            {"unexpected": "object"},
+        )[ordinal]
     if ordinal == 0 and invalid is not None:
         return invalid
     if ordinal == 1:
@@ -305,6 +325,8 @@ def field_value(field: dict[str, Any], rng: random.Random, ordinal: int) -> Any:
         limit = field["_maxLength"]
         length = (limit, limit + 1, limit + min(max(limit, 64), 4096))[ordinal - 14]
         return "X" * length
+    if ordinal == 17 and field.get("_identifierRule"):
+        return "\t\n"
     if isinstance(baseline, bool):
         return rng.choice([True, False])
     if isinstance(baseline, list):
@@ -320,6 +342,8 @@ def candidate_count(field: dict[str, Any], requested: int) -> int:
     available = BASE_CANDIDATES
     if is_nullflavor_field(field):
         available = NULLFLAVOR_CANDIDATES
+    elif field.get("_identifierRule"):
+        available = IDENTIFIER_CANDIDATES
     elif isinstance(baseline, str) and isinstance(field.get("_maxLength"), int):
         available = LENGTH_CANDIDATES
     elif isinstance(baseline, (str, list)):
@@ -339,13 +363,21 @@ def add_nullflavor_partner(field: dict[str, Any], mutation: dict[str, Any], ordi
     return True
 
 
-def length_expectation(field: dict[str, Any], ordinal: int) -> str | None:
-    if not isinstance(field.get("_maxLength"), int):
-        return None
-    if ordinal == 14:
-        return "accept"
-    if ordinal in {15, 16}:
-        return "reject"
+def candidate_expectation(field: dict[str, Any], ordinal: int) -> tuple[str, str | None] | None:
+    constraint = field.get("constraint", {})
+    if ordinal == 0 and "invalidValue" in constraint:
+        return "reject", constraint.get("ruleCode")
+    if field.get("_booleanRule"):
+        return ("accept", None) if ordinal in {1, 3, 5} else ("reject", field["_booleanRule"])
+    if ordinal == 6 and isinstance(field.get("roundTripValue"), str):
+        return "reject", "INPUT.CONTROL_CHAR.REJECTED"
+    if ordinal == 17 and field.get("_identifierRule"):
+        return "reject", field["_identifierRule"]
+    if isinstance(field.get("_maxLength"), int):
+        if ordinal == 14:
+            return "length_boundary", field.get("_maxLengthRule")
+        if ordinal in {15, 16}:
+            return "reject", field.get("_maxLengthRule")
     return None
 
 
@@ -357,15 +389,85 @@ def load_max_lengths(root: Path) -> dict[str, int]:
     return limits
 
 
+def load_generated_rules(root: Path, pattern: re.Pattern[str]) -> set[str]:
+    rules: set[str] = set()
+    for path in sorted((root / "crates/libs/input-contracts/src/generated").glob("*.rs")):
+        rules.update(pattern.findall(path.read_text(encoding="utf-8")))
+    return rules
+
+
+def field_rule_prefix(field: dict[str, Any]) -> str:
+    authority = str(field.get("authority", "ICH")).upper()
+    code = str(field.get("code", ""))
+    return code if code.upper().startswith(f"{authority}.") else f"{authority}.{code}"
+
+
 def apply_max_lengths(contract: list[dict[str, Any]], limits: dict[str, int]) -> int:
     matched = 0
     for page in contract:
         for field in page.get("fields", []):
-            rule_code = field.get("constraint", {}).get("ruleCode")
+            rule_code = f"{field_rule_prefix(field)}.LENGTH.MAX"
             if isinstance(field.get("roundTripValue"), str) and rule_code in limits:
                 field["_maxLength"] = limits[rule_code]
+                field["_maxLengthRule"] = rule_code
                 matched += 1
     return matched
+
+
+def apply_generated_rules(
+    contract: list[dict[str, Any]], identifier_rules: set[str], boolean_rules: set[str]
+) -> tuple[int, int]:
+    identifiers = booleans = 0
+    for page in contract:
+        for field in page.get("fields", []):
+            rule_code = f"{field_rule_prefix(field)}.ALLOWED.VALUE"
+            if rule_code in identifier_rules:
+                field["_identifierRule"] = rule_code
+                identifiers += 1
+            if rule_code in boolean_rules:
+                field["_booleanRule"] = rule_code
+                booleans += 1
+    return identifiers, booleans
+
+
+def summarize_error_detail(detail: Any) -> dict[str, str]:
+    if not isinstance(detail, dict):
+        return {}
+    summary: dict[str, str] = {}
+    for output_key, input_keys in {
+        "rule_code": ("ruleCode", "rule_code"),
+        "path": ("path",),
+        "message": ("message",),
+    }.items():
+        value = next((detail.get(key) for key in input_keys if isinstance(detail.get(key), str)), None)
+        if value is not None:
+            summary[f"error_{output_key}"] = (
+                value if output_key != "message" else f"<fp:{hashlib.sha256(value.encode()).hexdigest()[:12]}>"
+            )
+    return summary
+
+
+def expectation_error(
+    expectation: tuple[str, str | None] | None,
+    status: int | None,
+    actual_rule: str | None,
+) -> str | None:
+    if expectation is None:
+        return None
+    outcome, expected_rule = expectation
+    if outcome == "accept":
+        return None if status == 200 else f"expected HTTP 200, got {status}"
+    if outcome == "length_boundary":
+        if status == 200:
+            return None
+        if status in {400, 409, 422} and actual_rule and actual_rule != expected_rule:
+            return None
+        return f"exact maximum rejected by {actual_rule or status}"
+    if status not in {400, 409, 422}:
+        return f"expected input rejection, got {status}"
+    if expected_rule and actual_rule != expected_rule:
+        return f"expected {expected_rule}, got {actual_rule or 'no rule code'}"
+    return None
 
 
 def is_nullflavor_field(field: dict[str, Any]) -> bool:
@@ -695,7 +797,13 @@ def main(args: argparse.Namespace) -> int:
         raise SystemExit("set E2BR3_ADMIN_PASSWORD")
     contract_path = Path(args.contract).resolve()
     contract = json.loads(contract_path.read_text())
-    max_length_fields = apply_max_lengths(contract, load_max_lengths(Path(__file__).resolve().parents[1]))
+    backend_root = Path(__file__).resolve().parents[1]
+    max_length_fields = apply_max_lengths(contract, load_max_lengths(backend_root))
+    identifier_fields, boolean_fields = apply_generated_rules(
+        contract,
+        load_generated_rules(backend_root, IDENTIFIER_RE),
+        load_generated_rules(backend_root, BOOLEAN_RE),
+    )
     derived_null_flavors = expand_null_flavor_contracts(
         contract,
         load_null_flavor_pairs(Path(args.null_flavor_pairs).resolve()),
@@ -735,10 +843,7 @@ def main(args: argparse.Namespace) -> int:
             if isinstance(error.get("code"), str):
                 summary["error_code"] = error["code"]
             detail = error.get("data", {}).get("detail") if isinstance(error, dict) else None
-            if isinstance(detail, dict):
-                for key in ("rule_code", "path", "message"):
-                    if isinstance(detail.get(key), str):
-                        summary[f"error_{key}"] = detail[key] if key != "message" else f"<fp:{hashlib.sha256(detail[key].encode()).hexdigest()[:12]}>"
+            summary.update(summarize_error_detail(detail))
         except (UnicodeDecodeError, json.JSONDecodeError, AttributeError):
             pass
         if transport:
@@ -764,7 +869,7 @@ def main(args: argparse.Namespace) -> int:
             mutations = sum(candidate_count(field, args.values_per_field) for field in fields)
             total += mutations
             print(f"{page}: fields={len(fields)} owners={len(groups)} mutations={mutations}")
-        print(f"seed={args.seed} total_mutations={total} derived_null_flavors={derived_null_flavors} max_length_fields={max_length_fields} contract={contract_path}")
+        print(f"seed={args.seed} total_mutations={total} derived_null_flavors={derived_null_flavors} max_length_fields={max_length_fields} identifier_fields={identifier_fields} boolean_fields={boolean_fields} contract={contract_path}")
         return 0
 
     status, _, summary = request(
@@ -975,14 +1080,16 @@ def main(args: argparse.Namespace) -> int:
                 else:
                     classification = "SERVER_ERROR" if status >= 500 else "UNEXPECTED_STATUS"
                 invalid_nullflavor = nullflavor_invalid_candidate(field, candidate) or nullflavor_with_value
-                expectation = length_expectation(field, ordinal)
+                expectation = candidate_expectation(field, ordinal)
                 detail: dict[str, Any] = {
                     "candidate": redacted(candidate),
                     "candidate_kind": candidate_kind(field, ordinal),
                     "rule_code": field.get("constraint", {}).get("ruleCode"),
                 }
                 if expectation:
-                    detail.update({"expected_outcome": expectation, "max_length": field["_maxLength"]})
+                    detail.update({"expected_outcome": expectation[0], "expected_rule_code": expectation[1]})
+                    if isinstance(field.get("_maxLength"), int):
+                        detail["max_length"] = field["_maxLength"]
                 if is_nullflavor_field(field):
                     detail["nullflavor_expected_reject"] = invalid_nullflavor
                     detail["nullflavor_value_conflict"] = nullflavor_with_value
@@ -1056,10 +1163,13 @@ def main(args: argparse.Namespace) -> int:
                         classification = "INCONCLUSIVE"
                     else:
                         classification = "UNEXPECTED_STATUS"
-                if expectation == "accept" and status != 200:
-                    classification = "FAIL"
-                elif expectation == "reject" and status not in {400, 422}:
-                    classification = "FAIL"
+                mismatch = expectation_error(expectation, status, summary.get("error_rule_code"))
+                if mismatch:
+                    detail["expectation_error"] = mismatch
+                    if classification not in {
+                        "AUDIT_MISMATCH", "INCONCLUSIVE", "SERVER_ERROR", "SAVE_READBACK_MISMATCH"
+                    }:
+                        classification = "FAIL"
                 add(Event("mutation", field["code"], page, owner, f"value_{ordinal}", classification, status, {**summary, **detail}))
 
     if case_id and not interrupted:
@@ -1074,7 +1184,6 @@ def main(args: argparse.Namespace) -> int:
         add(Event("audit_chain", None, None, None, None, chain_classification, status, {**summary, "broken_rows": broken, "broken_rows_before": chain_before}))
 
     if args.run_gates:
-        backend_root = Path(__file__).resolve().parents[1]
         frontend_root = contract_path.parents[3]
         classification, detail = run_gate(
             ["cargo", "test", "-p", "validator", "--lib"],
@@ -1103,7 +1212,7 @@ def main(args: argparse.Namespace) -> int:
     with artifact.open("w", encoding="utf-8") as handle:
         for event in events:
             handle.write(json.dumps({"seed": args.seed, "commit": commit_sha(), **asdict(event)}, sort_keys=True) + "\n")
-        handle.write(json.dumps({"kind": "run", "seed": args.seed, "cases": len(events), "interrupted": interrupted, "artifact": str(artifact), "contract": str(contract_path), "candidate_schema_version": 3, "derived_null_flavors": derived_null_flavors, "max_length_fields": max_length_fields, "null_flavor_only": args.null_flavor_only, "surface": "api", "validator_excluded": not args.run_gates, "frontend_gate": "run" if args.run_gates else "not_run"}, sort_keys=True) + "\n")
+        handle.write(json.dumps({"kind": "run", "seed": args.seed, "cases": len(events), "interrupted": interrupted, "artifact": str(artifact), "contract": str(contract_path), "candidate_schema_version": 4, "derived_null_flavors": derived_null_flavors, "max_length_fields": max_length_fields, "identifier_fields": identifier_fields, "boolean_fields": boolean_fields, "null_flavor_only": args.null_flavor_only, "surface": "api", "validator_excluded": not args.run_gates, "frontend_gate": "run" if args.run_gates else "not_run"}, sort_keys=True) + "\n")
     counts: dict[str, int] = {}
     for event in events:
         counts[event.classification] = counts.get(event.classification, 0) + 1
@@ -1125,7 +1234,7 @@ def parser() -> argparse.ArgumentParser:
     # DH needs the DM patient row; create it immediately after DM before later
     # page mutations can make the case setup harder to authorize.
     parser.add_argument("--pages", default="CI,RP,SD,LR,SI,DM,DH,NR,AE,LB,DG")
-    parser.add_argument("--values-per-field", type=int, default=LENGTH_CANDIDATES, help="upper bound; only candidates applicable to each field are used")
+    parser.add_argument("--values-per-field", type=int, default=IDENTIFIER_CANDIDATES, help="upper bound; only candidates applicable to each field are used")
     parser.add_argument("--max-actions", type=int, default=1200)
     parser.add_argument("--deadline-seconds", type=float, default=180)
     parser.add_argument("--timeout", type=float, default=20)

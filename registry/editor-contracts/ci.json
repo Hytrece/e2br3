@@ -288,7 +288,7 @@
       "constraint": {
         "status": "verified",
         "ruleCode": "ICH.C.1.9.1.ALLOWED.VALUE",
-        "invalidValue": false
+        "invalidValue": "not-a-boolean"
       },
       "businessValidation": {
         "status": "verified",
