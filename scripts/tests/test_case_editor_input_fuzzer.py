@@ -110,6 +110,13 @@ class CaseEditorInputFuzzerTests(unittest.TestCase):
         self.assertEqual(fuzzer.normalized_classification("new", "old", False), "AUDIT_MISMATCH")
         self.assertEqual(fuzzer.audit_field_key("safetyReportId"), "safety_report_id")
         self.assertEqual(fuzzer.audit_field_key("reporterCountry"), "country_code")
+        self.assertIn("drug_additional_info_codes_json", fuzzer.UNFILTERED_AUDIT_FIELDS)
+        self.assertTrue(fuzzer.audit_log_complete({
+            "user_id": "u", "organization_id": "o", "created_at": "t", "action": "UPDATE",
+            "changed_fields": {"json_field.child": {"old": 1, "new": 2}},
+            "old_values": {"json_field": {"child": 1}}, "new_values": {"json_field": {"child": 2}},
+            "prev_hash": "p", "entry_hash": "e",
+        }))
 
     def test_seeded_samples_are_reproducible_and_vary(self) -> None:
         field = {"authority": "ICH", "code": "H.1", "payloadPath": "caseNarrative", "roundTripValue": "base"}

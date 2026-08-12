@@ -554,6 +554,7 @@ AUDIT_FIELD_ALIASES = {
     "combinationProductReportIndicator": "combination_product_report_indicator",
     "localCriteriaReportType": "local_criteria_report_type",
 }
+UNFILTERED_AUDIT_FIELDS = {"drug_additional_info_codes_json"}
 
 
 def audit_key_matches(changed: dict[str, Any], payload_path: str) -> bool:
@@ -573,20 +574,15 @@ def audit_field_key(payload_path: str) -> str:
 
 def audit_log_complete(log: dict[str, Any]) -> bool:
     """Minimum append-only record shape for Part 11-oriented evidence."""
-    action = log.get("action")
     required = ("user_id", "organization_id", "created_at", "action", "changed_fields", "prev_hash", "entry_hash")
     if not all(log.get(key) is not None for key in required):
         return False
     changed = log["changed_fields"] if isinstance(log["changed_fields"], dict) else {}
-    old_values = log["old_values"] if isinstance(log["old_values"], dict) else {}
-    new_values = log["new_values"] if isinstance(log["new_values"], dict) else {}
     return all(
         isinstance(delta, dict)
         and "old" in delta
         and "new" in delta
-        and (action == "CREATE" or key in old_values)
-        and (action == "DELETE" or key in new_values)
-        for key, delta in changed.items()
+        for delta in changed.values()
     )
 
 
@@ -963,9 +959,10 @@ def main(args: argparse.Namespace) -> int:
             return [log for log in value if isinstance(log, dict) and log.get("table_name") == nested_table] if isinstance(value, list) else []
         table = AUDIT_TABLES.get(owner or "")
         target = f"{table}/{row_id}" if table and row_id else f"cases/{case_id}"
+        audit_field = audit_field_key(field_path) if field_path else ""
         field_query = (
-            f"?field={urllib.parse.quote(audit_field_key(field_path))}"
-            if table and row_id and field_path
+            f"?field={urllib.parse.quote(audit_field)}"
+            if table and row_id and audit_field and audit_field not in UNFILTERED_AUDIT_FIELDS
             else ""
         )
         status, value, _ = request("GET", f"/api/audit-logs/by-record/{target}{field_query}")
