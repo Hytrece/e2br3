@@ -1276,12 +1276,12 @@ pub struct ProductPresaveForUpdate {
 	pub original_manufacturer: Option<String>,
 	pub product_description: Option<String>,
 	pub mpid: Option<String>,
-	#[serde(rename = "mpidVersionDateNumber")]
+	#[serde(rename = "mpidVersion", alias = "mpidVersionDateNumber")]
 	pub mpid_version: Option<String>,
 	pub mfds_mpid: Option<String>,
 	pub mfds_mpid_version: Option<String>,
 	pub phpid: Option<String>,
-	#[serde(rename = "phpidVersionDateNumber")]
+	#[serde(rename = "phpidVersion", alias = "phpidVersionDateNumber")]
 	pub phpid_version: Option<String>,
 	pub investigational_product_blinded: Option<bool>,
 	pub obtain_drug_country: Option<String>,

@@ -693,6 +693,18 @@ mod tests {
 	}
 
 	#[test]
+	fn product_update_accepts_canonical_version_field_names() {
+		let data =
+			serde_json::from_value::<ProductPresaveForUpdate>(serde_json::json!({
+				"mpidVersion": "20260101",
+				"phpidVersion": "20260202"
+			}))
+			.unwrap();
+		assert_eq!(data.mpid_version.as_deref(), Some("20260101"));
+		assert_eq!(data.phpid_version.as_deref(), Some("20260202"));
+	}
+
+	#[test]
 	fn legacy_local_markers_are_rejected_at_the_rest_boundary() {
 		assert!(matches!(
 			reporter_update(&ReporterPresaveForUpdate {
