@@ -212,17 +212,17 @@ pub(crate) async fn fetch_message_header(
 	}
 }
 
-pub(crate) async fn fetch_primary_source(
+pub(crate) async fn fetch_primary_sources(
 	mm: &ModelManager,
 	case_id: sqlx::types::Uuid,
-) -> Result<Option<PrimarySource>> {
-	let sql = "SELECT * FROM primary_sources WHERE case_id = $1 AND deleted = false AND primary_source_regulatory = '1' ORDER BY sequence_number";
+) -> Result<Vec<PrimarySource>> {
+	let sql = "SELECT * FROM primary_sources WHERE case_id = $1 AND deleted = false ORDER BY sequence_number";
 	let sources = mm
 		.dbx()
 		.fetch_all(sqlx::query_as::<_, PrimarySource>(sql).bind(case_id))
 		.await
 		.map_err(|e| Error::Model(lib_core::model::Error::Store(format!("{e}"))))?;
-	Ok(sources.into_iter().next())
+	Ok(sources)
 }
 
 #[cfg(test)]

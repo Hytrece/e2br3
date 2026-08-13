@@ -198,10 +198,13 @@ async fn import_drugs(
 					route_of_administration_null_flavor: dose.route_null_flavor,
 					route_termid: dose.route_termid,
 					route_termid_version: dose.route_termid_version,
+					route_termid_code_system: dose.route_termid_code_system,
 					parent_route: dose.parent_route,
 					parent_route_null_flavor: dose.parent_route_null_flavor,
 					parent_route_termid: dose.parent_route_termid,
 					parent_route_termid_version: dose.parent_route_termid_version,
+					parent_route_termid_code_system: dose
+						.parent_route_termid_code_system,
 					first_administration_date_null_flavor: dose
 						.start_date_null_flavor,
 					last_administration_date_null_flavor: dose.end_date_null_flavor,

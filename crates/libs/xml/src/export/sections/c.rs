@@ -1,4 +1,4 @@
-use super::n::fetch_primary_source;
+use super::n::fetch_primary_sources;
 use super::*;
 use crate::export::roundtrip::{patch_c_safety_report, CSafetyReportPatch};
 use crate::mfds::codes::KR_C_5_4_1;
@@ -109,10 +109,26 @@ pub(crate) async fn apply_c_2_primary_sources(
 	xpath: &mut Context,
 	authority: lib_core::regulatory::RegulatoryAuthority,
 ) -> Result<()> {
-	let Some(primary) = fetch_primary_source(mm, case_id).await? else {
+	let sources = fetch_primary_sources(mm, case_id).await?;
+	if sources.is_empty() {
 		return Ok(());
-	};
-	apply_c_2_primary_source_values(doc, parser, xpath, &primary, authority)
+	}
+	remove_nodes(
+		xpath,
+		"//hl7:investigationEvent/hl7:outboundRelationship[hl7:relatedInvestigation/hl7:code[@code='2']]",
+	);
+	for (index, primary) in sources.iter().enumerate() {
+		apply_c_2_primary_source_values(
+			doc,
+			parser,
+			xpath,
+			primary,
+			authority,
+			index + 1,
+		)?;
+	}
+	crate::export::roundtrip::reorder_investigation_event_children(xpath);
+	Ok(())
 }
 
 fn apply_c_2_primary_source_values(
@@ -121,9 +137,19 @@ fn apply_c_2_primary_source_values(
 	xpath: &mut Context,
 	primary: &PrimarySource,
 	authority: lib_core::regulatory::RegulatoryAuthority,
+	index: usize,
 ) -> Result<()> {
-	let base = "//hl7:investigationEvent/hl7:outboundRelationship[hl7:relatedInvestigation/hl7:code[@code='2']]/hl7:relatedInvestigation/hl7:subjectOf2/hl7:controlActEvent/hl7:author/hl7:assignedEntity";
-	ensure_primary_source_author_nodes(doc, parser, xpath, primary, authority)?;
+	let relationship = format!("(//hl7:investigationEvent/hl7:outboundRelationship[hl7:relatedInvestigation/hl7:code[@code='2']])[{index}]");
+	let base = format!("{relationship}/hl7:relatedInvestigation/hl7:subjectOf2/hl7:controlActEvent/hl7:author/hl7:assignedEntity");
+	ensure_primary_source_author_nodes(
+		doc,
+		parser,
+		xpath,
+		primary,
+		authority,
+		&relationship,
+		&base,
+	)?;
 	let has_organization = primary
 		.organization
 		.as_deref()
@@ -133,8 +159,8 @@ fn apply_c_2_primary_source_values(
 			.as_deref()
 			.is_some_and(|v| !v.trim().is_empty());
 
-	write_c_2_r_1_1(xpath, base, primary);
-	write_c_2_r_1_2(xpath, base, primary);
+	write_c_2_r_1_1(xpath, &base, primary);
+	write_c_2_r_1_2(xpath, &base, primary);
 	if primary
 		.reporter_middle_name
 		.as_deref()
@@ -160,9 +186,9 @@ fn apply_c_2_primary_source_values(
 				"<given/>",
 			)?;
 		}
-		write_c_2_r_1_3(xpath, base, primary);
+		write_c_2_r_1_3(xpath, &base, primary);
 	}
-	write_c_2_r_1_4(xpath, base, primary);
+	write_c_2_r_1_4(xpath, &base, primary);
 	let has_department = primary
 		.department
 		.as_deref()
@@ -181,7 +207,7 @@ fn apply_c_2_primary_source_values(
 			doc,
 			parser,
 			xpath,
-			base,
+			&base,
 			"<representedOrganization classCode=\"ORG\" determinerCode=\"INSTANCE\"><name/></representedOrganization>",
 		)?;
 	}
@@ -206,22 +232,22 @@ fn apply_c_2_primary_source_values(
 	};
 	write_c_2_r_2_1(xpath, &organization_path, primary);
 	if has_department {
-		write_c_2_r_2_2(xpath, base, primary);
+		write_c_2_r_2_2(xpath, &base, primary);
 	}
-	write_c_2_r_2_3(xpath, base, primary);
-	write_c_2_r_2_4(xpath, base, primary);
-	write_c_2_r_2_5(xpath, base, primary);
-	write_c_2_r_2_6(xpath, base, primary);
-	write_c_2_r_2_7(xpath, base, primary);
+	write_c_2_r_2_3(xpath, &base, primary);
+	write_c_2_r_2_4(xpath, &base, primary);
+	write_c_2_r_2_5(xpath, &base, primary);
+	write_c_2_r_2_6(xpath, &base, primary);
+	write_c_2_r_2_7(xpath, &base, primary);
 	if matches!(authority, lib_core::regulatory::RegulatoryAuthority::Fda) {
-		write_fda_c_2_r_2_8(xpath, base, primary);
+		write_fda_c_2_r_2_8(xpath, &base, primary);
 	} else {
 		remove_nodes(
 			xpath,
 			&format!("{base}/hl7:telecom[starts-with(@value,'mailto:')]"),
 		);
 	}
-	write_c_2_r_3(xpath, base, primary);
+	write_c_2_r_3(xpath, &base, primary);
 	if primary.qualification.is_some() || primary.qualification_null_flavor.is_some()
 	{
 		let path = format!("{base}/hl7:assignedPerson/hl7:asQualifiedEntity");
@@ -239,11 +265,11 @@ fn apply_c_2_primary_source_values(
 			)?;
 		}
 	}
-	write_c_2_r_4(xpath, base, primary);
+	write_c_2_r_4(xpath, &base, primary);
 	if matches!(authority, lib_core::regulatory::RegulatoryAuthority::Mfds) {
-		write_c_2_r_4_kr_1(xpath, base, primary);
+		write_c_2_r_4_kr_1(xpath, &base, primary);
 	}
-	write_c_2_r_5(xpath, primary);
+	write_c_2_r_5(xpath, &relationship, primary);
 
 	Ok(())
 }
@@ -416,9 +442,12 @@ fn write_c_2_r_4_kr_1(_xpath: &mut Context, _base: &str, _value: &PrimarySource)
 }
 
 /// e2b:C.2.r.5
-fn write_c_2_r_5(xpath: &mut Context, value: &PrimarySource) {
+fn write_c_2_r_5(xpath: &mut Context, relationship: &str, value: &PrimarySource) {
+	let path = format!("{relationship}/hl7:priorityNumber");
 	if let Some(priority) = value.primary_source_regulatory.as_deref() {
-		set_attr_first(xpath, "//hl7:investigationEvent/hl7:outboundRelationship[hl7:relatedInvestigation/hl7:code[@code='2']]/hl7:priorityNumber", "value", priority);
+		set_attr_first(xpath, &path, "value", priority);
+	} else {
+		remove_nodes(xpath, &path);
 	}
 }
 
@@ -428,9 +457,9 @@ fn ensure_primary_source_author_nodes(
 	xpath: &mut Context,
 	primary: &PrimarySource,
 	authority: lib_core::regulatory::RegulatoryAuthority,
+	relationship: &str,
+	base: &str,
 ) -> Result<()> {
-	let relationship = "//hl7:investigationEvent/hl7:outboundRelationship[hl7:relatedInvestigation/hl7:code[@code='2']]";
-	let base = "//hl7:investigationEvent/hl7:outboundRelationship[hl7:relatedInvestigation/hl7:code[@code='2']]/hl7:relatedInvestigation/hl7:subjectOf2/hl7:controlActEvent/hl7:author/hl7:assignedEntity";
 	if xpath
 		.findnodes(base, None)
 		.map(|nodes| !nodes.is_empty())
@@ -574,7 +603,6 @@ fn ensure_primary_source_author_nodes(
 				"<outboundRelationship typeCode=\"SPRT\">{priority}<relatedInvestigation classCode=\"INVSTG\" moodCode=\"EVN\"><code code=\"2\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.22\"/>{author}</relatedInvestigation></outboundRelationship>"
 			),
 		)?;
-		crate::export::roundtrip::reorder_investigation_event_children(xpath);
 		return Ok(());
 	}
 
@@ -582,7 +610,7 @@ fn ensure_primary_source_author_nodes(
 		doc,
 		parser,
 		xpath,
-		"//hl7:investigationEvent/hl7:outboundRelationship[hl7:relatedInvestigation/hl7:code[@code='2']]/hl7:relatedInvestigation",
+		&format!("{relationship}/hl7:relatedInvestigation"),
 		&author,
 	)
 }
@@ -923,6 +951,7 @@ mod primary_source_null_flavor_tests {
 			&mut xpath,
 			&primary,
 			lib_core::regulatory::RegulatoryAuthority::Fda,
+			1,
 		)
 		.expect("apply primary source");
 
@@ -993,6 +1022,7 @@ mod primary_source_null_flavor_tests {
 			&mut xpath,
 			&primary,
 			lib_core::regulatory::RegulatoryAuthority::Fda,
+			1,
 		)
 		.expect("apply sparse primary source");
 
@@ -1036,6 +1066,7 @@ mod primary_source_null_flavor_tests {
 			&mut xpath,
 			&source(),
 			lib_core::regulatory::RegulatoryAuthority::Fda,
+			1,
 		)
 		.expect("apply primary source");
 
@@ -1093,6 +1124,7 @@ mod primary_source_null_flavor_tests {
 			&mut xpath,
 			&primary,
 			lib_core::regulatory::RegulatoryAuthority::Ich,
+			1,
 		)
 		.expect("apply null flavor");
 		let path = "//hl7:asQualifiedEntity/hl7:code";
@@ -1112,6 +1144,7 @@ mod primary_source_null_flavor_tests {
 			&mut xpath,
 			&primary,
 			lib_core::regulatory::RegulatoryAuthority::Ich,
+			1,
 		)
 		.expect("apply value");
 		assert_eq!(
@@ -1124,6 +1157,66 @@ mod primary_source_null_flavor_tests {
 				.unwrap(),
 			""
 		);
+	}
+
+	#[test]
+	fn primary_source_export_keeps_repeated_reporters_separate() {
+		let parser = Parser::default();
+		let mut doc = parser
+			.parse_string(crate::export::base_export_skeleton())
+			.expect("parse skeleton");
+		let mut xpath = Context::new(&doc).expect("xpath");
+		xpath.register_namespace("hl7", "urn:hl7-org:v3").unwrap();
+		let mut first = source();
+		first.reporter_given_name = Some("First".to_string());
+		first.reporter_given_name_null_flavor = None;
+		first.qualification = Some("5".to_string());
+		let mut second = source();
+		second.reporter_given_name = Some("Second".to_string());
+		second.reporter_given_name_null_flavor = None;
+		second.qualification = Some("1".to_string());
+		second.primary_source_regulatory = Some("1".to_string());
+
+		for (index, primary) in [&first, &second].into_iter().enumerate() {
+			apply_c_2_primary_source_values(
+				&mut doc,
+				&parser,
+				&mut xpath,
+				primary,
+				lib_core::regulatory::RegulatoryAuthority::Ich,
+				index + 1,
+			)
+			.expect("apply reporter");
+		}
+
+		let relationship = "//hl7:investigationEvent/hl7:outboundRelationship[hl7:relatedInvestigation/hl7:code[@code='2']]";
+		assert_eq!(xpath.findnodes(relationship, None).unwrap().len(), 2);
+		for (index, name, qualification, priority) in
+			[(1, "First", "5", ""), (2, "Second", "1", "1")]
+		{
+			let row = format!("({relationship})[{index}]");
+			assert_eq!(
+				xpath
+					.findvalue(&format!("{row}//hl7:name/hl7:given[1]"), None)
+					.unwrap(),
+				name
+			);
+			assert_eq!(
+				xpath
+					.findvalue(
+						&format!("{row}//hl7:asQualifiedEntity/hl7:code/@code"),
+						None
+					)
+					.unwrap(),
+				qualification
+			);
+			assert_eq!(
+				xpath
+					.findvalue(&format!("{row}/hl7:priorityNumber/@value"), None)
+					.unwrap(),
+				priority
+			);
+		}
 	}
 
 	#[test]
@@ -1142,6 +1235,7 @@ mod primary_source_null_flavor_tests {
 			&mut xpath,
 			&primary,
 			lib_core::regulatory::RegulatoryAuthority::Mfds,
+			1,
 		)
 		.expect("apply primary source");
 
@@ -1167,6 +1261,7 @@ mod primary_source_null_flavor_tests {
 			&mut xpath,
 			&primary,
 			lib_core::regulatory::RegulatoryAuthority::Fda,
+			1,
 		)
 		.expect("apply primary source");
 

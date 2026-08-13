@@ -487,6 +487,10 @@ fn write_g_k_4_r_10_2b(value: &DosageInformation) -> Option<&str> {
 	value.route_termid.as_deref()
 }
 
+fn write_g_k_4_r_10_2_code_system(value: &DosageInformation) -> Option<&str> {
+	value.route_termid_code_system.as_deref()
+}
+
 /// e2b:G.k.4.r.11.1
 fn write_g_k_4_r_11_1(value: &DosageInformation) -> Option<&str> {
 	value.parent_route.as_deref()
@@ -500,6 +504,10 @@ fn write_g_k_4_r_11_2a(value: &DosageInformation) -> Option<&str> {
 /// e2b:G.k.4.r.11.2b
 fn write_g_k_4_r_11_2b(value: &DosageInformation) -> Option<&str> {
 	value.parent_route_termid.as_deref()
+}
+
+fn write_g_k_4_r_11_2_code_system(value: &DosageInformation) -> Option<&str> {
+	value.parent_route_termid_code_system.as_deref()
 }
 
 fn write_fda_g_k_12_device_characteristic(
@@ -708,11 +716,28 @@ pub(crate) fn write_g_k_drug(
 			out.push_str("\"");
 		}
 		out.push_str("/>");
+	} else if matches!(authority, RegulatoryAuthority::Fda)
+		&& (write_g_k_2_1_1b(drug).is_some() || write_g_k_2_1_1a(drug).is_some())
+	{
+		out.push_str("<code codeSystem=\"2.16.840.1.113883.6.69\"");
+		if let Some(code) = write_g_k_2_1_1b(drug) {
+			out.push_str(" code=\"");
+			out.push_str(&xml_escape(code));
+			out.push_str("\"");
+		}
+		if let Some(version) = write_g_k_2_1_1a(drug) {
+			out.push_str(" codeSystemVersion=\"");
+			out.push_str(&xml_escape(version));
+			out.push_str("\"");
+		}
+		out.push_str("/>");
 	}
 	out.push_str("<name>");
 	out.push_str(&xml_escape(product_name));
 	out.push_str("</name>");
-	if write_g_k_2_1_1b(drug).is_some() || write_g_k_2_1_1a(drug).is_some() {
+	if !matches!(authority, RegulatoryAuthority::Fda)
+		&& (write_g_k_2_1_1b(drug).is_some() || write_g_k_2_1_1a(drug).is_some())
+	{
 		out.push_str("<asIdentifiedEntity classCode=\"IDENT\"><id");
 		if let Some(mpid) = write_g_k_2_1_1b(drug) {
 			out.push_str(" extension=\"");
@@ -1139,6 +1164,7 @@ pub(crate) fn write_g_k_drug(
 		}
 		if dose.route_of_administration.is_some()
 			|| dose.route_termid.is_some()
+			|| dose.route_termid_code_system.is_some()
 			|| dose.route_of_administration_null_flavor.is_some()
 		{
 			out.push_str("<routeCode");
@@ -1154,6 +1180,11 @@ pub(crate) fn write_g_k_drug(
 				out.push('"');
 			}
 			if dose.route_of_administration_null_flavor.is_none() {
+				if let Some(code_system) = write_g_k_4_r_10_2_code_system(dose) {
+					out.push_str(" codeSystem=\"");
+					out.push_str(&xml_escape(code_system));
+					out.push('"');
+				}
 				if let Some(ver) = write_g_k_4_r_10_2a(dose) {
 					out.push_str(" codeSystemVersion=\"");
 					out.push_str(&xml_escape(ver));
@@ -1227,6 +1258,7 @@ pub(crate) fn write_g_k_drug(
 			out.push_str("</instanceOfKind></consumable>");
 		}
 		if dose.parent_route_termid.is_some()
+			|| dose.parent_route_termid_code_system.is_some()
 			|| dose.parent_route.is_some()
 			|| dose.parent_route_null_flavor.is_some()
 		{
@@ -1242,6 +1274,11 @@ pub(crate) fn write_g_k_drug(
 				out.push_str("\"");
 			}
 			if dose.parent_route_null_flavor.is_none() {
+				if let Some(code_system) = write_g_k_4_r_11_2_code_system(dose) {
+					out.push_str(" codeSystem=\"");
+					out.push_str(&xml_escape(code_system));
+					out.push('"');
+				}
 				if let Some(ver) = write_g_k_4_r_11_2a(dose) {
 					out.push_str(" codeSystemVersion=\"");
 					out.push_str(&xml_escape(ver));
@@ -1266,14 +1303,14 @@ pub(crate) fn write_g_k_drug(
 	if let Some(action) = write_g_k_8(drug) {
 		out.push_str("<inboundRelationship typeCode=\"CAUS\"><act classCode=\"ACT\" moodCode=\"EVN\"><code code=\"");
 		out.push_str(&xml_escape(action));
-		out.push_str("\"/></act></inboundRelationship>");
+		out.push_str("\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.15\" codeSystemVersion=\"1.0\"/></act></inboundRelationship>");
 	}
 	for ind in indications {
-		out.push_str("<inboundRelationship typeCode=\"RSON\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code code=\"19\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.19\" displayName=\"indication\"/><value xsi:type=\"CE\"");
+		out.push_str("<inboundRelationship typeCode=\"RSON\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code code=\"19\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.19\" codeSystemVersion=\"1.1\" displayName=\"indication\"/><value xsi:type=\"CE\"");
 		if let Some(code) = write_g_k_7_r_2b(ind) {
 			out.push_str(" code=\"");
 			out.push_str(&xml_escape(code));
-			out.push_str("\"");
+			out.push_str("\" codeSystem=\"2.16.840.1.113883.6.163\"");
 		}
 		if let Some(ver) = write_g_k_7_r_2a(ind) {
 			out.push_str(" codeSystemVersion=\"");
@@ -1291,7 +1328,7 @@ pub(crate) fn write_g_k_drug(
 			out.push_str(&xml_escape(null_flavor));
 			out.push_str("\"/>");
 		}
-		out.push_str("</value></observation></inboundRelationship>");
+		out.push_str("</value><performer typeCode=\"PRF\"><assignedEntity classCode=\"ASSIGNED\"><code code=\"3\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.21\" codeSystemVersion=\"1.0\" displayName=\"sourceReporter\"/></assignedEntity></performer></observation></inboundRelationship>");
 	}
 	out.push_str("</substanceAdministration></component></organizer></subjectOf2>");
 	Ok(out)
@@ -1464,7 +1501,7 @@ pub(crate) fn write_g_k_9_causality(
 		.then(|| write_g_k_9_i_2_r_3_kr_2(relatedness))
 		.flatten();
 	if let Some(result) = mfds_result {
-		out.push_str("<value xsi:type=\"CE\" codeSystem=\"2.16.840.1.113883.3.989.5.1.10.1.6\" code=\"");
+		out.push_str("<value xsi:type=\"CE\" codeSystem=\"2.16.840.1.113883.3.989.5.1.10.1.6\" codeSystemVersion=\"1.0\" code=\"");
 		out.push_str(&xml_escape(result));
 		out.push_str("\"/>");
 	} else if matches!(authority, RegulatoryAuthority::Mfds) {
@@ -1475,7 +1512,7 @@ pub(crate) fn write_g_k_9_causality(
 			out.push_str(&xml_escape(null_flavor));
 			out.push_str("\"/>");
 		} else if let Some(result) = write_g_k_9_i_2_r_3_kr_1(relatedness) {
-			out.push_str("<value xsi:type=\"CE\" codeSystem=\"2.16.840.1.113883.3.989.5.1.10.1.5\" code=\"");
+			out.push_str("<value xsi:type=\"CE\" codeSystem=\"2.16.840.1.113883.3.989.5.1.10.1.5\" codeSystemVersion=\"1.0\" code=\"");
 			out.push_str(&xml_escape(result));
 			out.push_str("\"/>");
 		}
@@ -1489,7 +1526,7 @@ pub(crate) fn write_g_k_9_causality(
 		.flatten()
 	{
 		out.push_str(
-			"<methodCode codeSystem=\"2.16.840.1.113883.3.989.5.1.10.1.4\" code=\"",
+			"<methodCode codeSystem=\"2.16.840.1.113883.3.989.5.1.10.1.4\" codeSystemVersion=\"1.0\" code=\"",
 		);
 		out.push_str(&xml_escape(method));
 		out.push_str("\"/>");
@@ -1773,10 +1810,12 @@ mod tests {
 			route_of_administration_null_flavor: None,
 			route_termid: None,
 			route_termid_version: None,
+			route_termid_code_system: None,
 			parent_route: None,
 			parent_route_null_flavor: None,
 			parent_route_termid: None,
 			parent_route_termid_version: None,
+			parent_route_termid_code_system: None,
 			first_administration_date_null_flavor: None,
 			last_administration_date_null_flavor: None,
 			deleted: false,
@@ -1940,6 +1979,63 @@ mod tests {
 	}
 
 	#[test]
+	fn export_fda_g_k_2_1_preserves_ndc_code() {
+		let drug = test_drug(Uuid::new_v4(), Uuid::new_v4());
+		let fragment = write_g_k_drug(
+			&drug,
+			&[],
+			&[],
+			&[],
+			&[],
+			&[],
+			&[],
+			&[],
+			RegulatoryAuthority::Fda,
+		)
+		.expect("export FDA product code");
+
+		assert!(fragment.contains(
+			"<code codeSystem=\"2.16.840.1.113883.6.69\" code=\"BASE-MPID\" codeSystemVersion=\"BASE-V1\"/>"
+		));
+		assert!(!fragment.contains("code=\"MPID\""));
+	}
+
+	#[test]
+	fn export_g_k_7_r_emits_fixed_indication_metadata() {
+		let drug_id = Uuid::new_v4();
+		let drug = test_drug(drug_id, Uuid::new_v4());
+		let indication = DrugIndication {
+			id: Uuid::new_v4(),
+			drug_id,
+			sequence_number: 1,
+			indication_text: Some("Indication".to_string()),
+			indication_text_null_flavor: None,
+			indication_meddra_version: None,
+			indication_meddra_code: None,
+			deleted: false,
+			created_at: OffsetDateTime::UNIX_EPOCH,
+			updated_at: OffsetDateTime::UNIX_EPOCH,
+			created_by: Uuid::nil(),
+			updated_by: None,
+		};
+		let fragment = write_g_k_drug(
+			&drug,
+			&[],
+			&[],
+			&[&indication],
+			&[],
+			&[],
+			&[],
+			&[],
+			RegulatoryAuthority::Fda,
+		)
+		.expect("export indication");
+
+		assert!(fragment.contains("<code code=\"19\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.19\" codeSystemVersion=\"1.1\""));
+		assert!(fragment.contains("<code code=\"3\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.21\" codeSystemVersion=\"1.0\" displayName=\"sourceReporter\"/>"));
+	}
+
+	#[test]
 	fn export_g_places_additional_info_after_the_product() {
 		let mut drug = test_drug(Uuid::new_v4(), Uuid::new_v4());
 		drug.fda_additional_info_coded = Some("1".to_string());
@@ -2099,6 +2195,26 @@ mod tests {
 		assert!(xml.contains("<routeCode nullFlavor=\"ASKU\"/>"));
 		assert!(xml.contains("<formCode nullFlavor=\"UNK\">"));
 		assert!(xml.contains("<value xsi:type=\"CE\" nullFlavor=\"NASK\">"));
+	}
+
+	#[test]
+	fn exports_dosage_route_code_systems() {
+		let case_id = Uuid::new_v4();
+		let drug_id = Uuid::new_v4();
+		let drug = test_drug(drug_id, case_id);
+		let mut dosage = test_dosage(drug_id);
+		dosage.route_termid = Some("001".to_string());
+		dosage.route_termid_code_system = Some("0.4.0.127.0.16.1.1.2.6".to_string());
+		dosage.parent_route_termid = Some("002".to_string());
+		dosage.parent_route_termid_code_system =
+			Some("2.16.840.1.113883.3.989.2.1.1.14".to_string());
+
+		let xml = export_g_drugs_xml(&[drug], &[], &[dosage], &[], &[], &[], &[])
+			.expect("export route code systems");
+		assert!(xml.contains(
+			"<routeCode code=\"001\" codeSystem=\"0.4.0.127.0.16.1.1.2.6\""
+		));
+		assert!(xml.contains("<value xsi:type=\"CE\" code=\"002\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.14\""));
 	}
 
 	#[test]
@@ -2311,9 +2427,9 @@ mod tests {
 			RegulatoryAuthority::Mfds,
 		);
 
-		assert!(xml.contains("methodCode codeSystem=\"2.16.840.1.113883.3.989.5.1.10.1.4\" code=\"1\""));
+		assert!(xml.contains("methodCode codeSystem=\"2.16.840.1.113883.3.989.5.1.10.1.4\" codeSystemVersion=\"1.0\" code=\"1\""));
 		assert!(xml.contains(
-			"codeSystem=\"2.16.840.1.113883.3.989.5.1.10.1.5\" code=\"3\""
+			"codeSystem=\"2.16.840.1.113883.3.989.5.1.10.1.5\" codeSystemVersion=\"1.0\" code=\"3\""
 		));
 		assert!(!xml.contains("free text"));
 

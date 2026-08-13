@@ -54,7 +54,7 @@ pub(crate) fn write_f_r_test_result(result: &TestResult) -> Result<String> {
 	if let Some(code) = write_f_r_2_2b(result) {
 		out.push_str(" code=\"");
 		out.push_str(&xml_escape(code));
-		out.push_str("\"");
+		out.push_str("\" codeSystem=\"2.16.840.1.113883.6.163\"");
 	}
 	if let Some(version) = write_f_r_2_2a(result) {
 		out.push_str(" codeSystemVersion=\"");
@@ -106,7 +106,7 @@ pub(crate) fn write_f_r_test_result(result: &TestResult) -> Result<String> {
 	if let Some(code) = write_f_r_3_1(result) {
 		out.push_str("<interpretationCode code=\"");
 		out.push_str(&xml_escape(code));
-		out.push_str("\"/>");
+		out.push_str("\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.12\"/>");
 	}
 	if let Some(low) = write_f_r_4(result) {
 		out.push_str(
@@ -137,7 +137,7 @@ pub(crate) fn write_f_r_test_result(result: &TestResult) -> Result<String> {
 	}
 	if let Some(value) = write_f_r_7(result) {
 		let val = if value { "true" } else { "false" };
-		out.push_str("<outboundRelationship2 typeCode=\"COMP\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code code=\"11\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.19\"/><value xsi:type=\"BL\" value=\"");
+		out.push_str("<outboundRelationship2 typeCode=\"REFR\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code code=\"25\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.19\"/><value xsi:type=\"BL\" value=\"");
 		out.push_str(val);
 		out.push_str("\"/></observation></outboundRelationship2>");
 	}
@@ -318,7 +318,9 @@ mod tests {
 		result.test_meddra_code = Some("10006824".to_string());
 		let xml =
 			write_f_r_test_result(&result).expect("export MedDRA-only test name");
-		assert!(xml.contains("<code code=\"10006824\">"));
+		assert!(xml.contains(
+			"<code code=\"10006824\" codeSystem=\"2.16.840.1.113883.6.163\">"
+		));
 		assert!(!xml.contains("displayName=\"\""));
 		assert!(!xml.contains("<originalText></originalText>"));
 	}
@@ -367,7 +369,7 @@ mod tests {
 			assert!(
 				xml.find(value_start).expect("typed result value")
 					< xml
-						.find("<interpretationCode code=\"N\"/>")
+						.find("<interpretationCode code=\"N\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.12\"/>")
 						.expect("result interpretation"),
 				"{xml}"
 			);
@@ -382,5 +384,36 @@ mod tests {
 			result.test_result_unit = None;
 			result.result_unstructured = Some("normal".to_string());
 		}
+	}
+
+	#[test]
+	fn exports_f_r_7_official_relationship_and_preserves_false() {
+		let now = OffsetDateTime::now_utc();
+		let result = TestResult {
+			id: Uuid::new_v4(),
+			case_id: Uuid::new_v4(),
+			sequence_number: 1,
+			test_date: None,
+			test_date_null_flavor: None,
+			test_name: "Result".to_string(),
+			test_meddra_version: None,
+			test_meddra_code: None,
+			test_result_code: None,
+			test_result_value: None,
+			test_result_qualifier: None,
+			test_result_unit: None,
+			result_unstructured: None,
+			normal_low_value: None,
+			normal_high_value: None,
+			comments: None,
+			more_info_available: Some(false),
+			deleted: false,
+			created_at: now,
+			updated_at: now,
+			created_by: Uuid::new_v4(),
+			updated_by: None,
+		};
+		let xml = write_f_r_test_result(&result).expect("export F.r.7");
+		assert!(xml.contains("<outboundRelationship2 typeCode=\"REFR\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code code=\"25\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.19\"/><value xsi:type=\"BL\" value=\"false\"/>"));
 	}
 }

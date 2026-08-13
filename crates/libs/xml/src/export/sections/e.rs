@@ -200,7 +200,7 @@ fn write_e_i_1_2(value: &Reaction) -> String {
 		return String::new();
 	};
 	let mut out = String::new();
-	out.push_str("<outboundRelationship2 typeCode=\"PERT\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code code=\"30\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.19\"/><value xsi:type=\"ED\"");
+	out.push_str("<outboundRelationship2 typeCode=\"PERT\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code code=\"30\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.19\" codeSystemVersion=\"1.1\"/><value xsi:type=\"ED\"");
 	if let Some(language) = value.reaction_language.as_deref() {
 		out.push_str(" language=\"");
 		out.push_str(&xml_escape(language));
@@ -232,7 +232,7 @@ fn write_e_i_3_1(value: &Reaction) -> String {
 		return String::new();
 	};
 	format!(
-		"<outboundRelationship2 typeCode=\"PERT\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code code=\"37\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.19\"/><value xsi:type=\"CE\" code=\"{}\"/></observation></outboundRelationship2>",
+		"<outboundRelationship2 typeCode=\"PERT\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code code=\"37\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.19\" codeSystemVersion=\"1.1\"/><value xsi:type=\"CE\" code=\"{}\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.10\" codeSystemVersion=\"1.0\"/></observation></outboundRelationship2>",
 		xml_escape(term_code)
 	)
 }
@@ -354,7 +354,7 @@ fn write_e_i_7(value: Option<&str>) -> String {
 		return "<outboundRelationship2 typeCode=\"PERT\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code code=\"27\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.19\"/><value xsi:type=\"CE\" nullFlavor=\"NI\"/></observation></outboundRelationship2>".to_string();
 	};
 	format!(
-		"<outboundRelationship2 typeCode=\"PERT\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code code=\"27\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.19\"/><value xsi:type=\"CE\" code=\"{code}\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.11\" displayName=\"{display_name}\"/></observation></outboundRelationship2>"
+		"<outboundRelationship2 typeCode=\"PERT\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code code=\"27\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.19\"/><value xsi:type=\"CE\" code=\"{code}\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.11\" codeSystemVersion=\"1.0\" displayName=\"{display_name}\"/></observation></outboundRelationship2>"
 	)
 }
 

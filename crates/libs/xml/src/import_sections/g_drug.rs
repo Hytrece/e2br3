@@ -104,6 +104,7 @@ pub struct GDrugDosageImport {
 	pub route_null_flavor: Option<String>,
 	pub route_termid: Option<String>,
 	pub route_termid_version: Option<String>,
+	pub route_termid_code_system: Option<String>,
 	pub dose_form: Option<String>,
 	pub dose_form_null_flavor: Option<String>,
 	pub dose_form_termid: Option<String>,
@@ -111,6 +112,7 @@ pub struct GDrugDosageImport {
 	pub batch_lot: Option<String>,
 	pub parent_route_termid: Option<String>,
 	pub parent_route_termid_version: Option<String>,
+	pub parent_route_termid_code_system: Option<String>,
 	pub parent_route: Option<String>,
 	pub parent_route_null_flavor: Option<String>,
 }
@@ -288,6 +290,8 @@ pub fn parse_g_drugs(xml: &[u8]) -> Result<Vec<GDrugImport>> {
 			let (route, route_null_flavor) = read_g_k_4_r_10_1(&mut xpath, &dose)?;
 			let route_termid = read_g_k_4_r_10_2b(&mut xpath, &dose)?;
 			let route_termid_version = read_g_k_4_r_10_2a(&mut xpath, &dose)?;
+			let route_termid_code_system =
+				read_g_k_4_r_10_2_code_system(&mut xpath, &dose)?;
 			let (dose_form, dose_form_null_flavor) =
 				read_g_k_4_r_9_1(&mut xpath, &dose)?;
 			let dose_form_termid = read_g_k_4_r_9_2b(&mut xpath, &dose)?;
@@ -295,6 +299,8 @@ pub fn parse_g_drugs(xml: &[u8]) -> Result<Vec<GDrugImport>> {
 			let batch_lot = read_g_k_4_r_7(&mut xpath, &dose)?;
 			let parent_route_termid = read_g_k_4_r_11_2b(&mut xpath, &dose)?;
 			let parent_route_termid_version = read_g_k_4_r_11_2a(&mut xpath, &dose)?;
+			let parent_route_termid_code_system =
+				read_g_k_4_r_11_2_code_system(&mut xpath, &dose)?;
 			let (parent_route, parent_route_null_flavor) =
 				read_g_k_4_r_11_1(&mut xpath, &dose)?;
 
@@ -316,6 +322,7 @@ pub fn parse_g_drugs(xml: &[u8]) -> Result<Vec<GDrugImport>> {
 				route_null_flavor,
 				route_termid,
 				route_termid_version,
+				route_termid_code_system,
 				dose_form,
 				dose_form_null_flavor,
 				dose_form_termid,
@@ -323,6 +330,7 @@ pub fn parse_g_drugs(xml: &[u8]) -> Result<Vec<GDrugImport>> {
 				batch_lot,
 				parent_route_termid,
 				parent_route_termid_version,
+				parent_route_termid_code_system,
 				parent_route,
 				parent_route_null_flavor,
 			});
@@ -961,6 +969,13 @@ fn read_g_k_4_r_10_2b(xpath: &mut Context, node: &Node) -> Result<Option<String>
 	)
 }
 
+fn read_g_k_4_r_10_2_code_system(
+	xpath: &mut Context,
+	node: &Node,
+) -> Result<Option<String>> {
+	Ok(first_attr(xpath, node, GDrugPaths::ROUTE_CODE_SYSTEM))
+}
+
 /// e2b:G.k.4.r.11.1
 fn read_g_k_4_r_11_1(
 	xpath: &mut Context,
@@ -991,6 +1006,17 @@ fn read_g_k_4_r_11_2b(xpath: &mut Context, node: &Node) -> Result<Option<String>
 		"dosageInformation[].parentRouteTermId",
 		input_contracts::generated::g::g_k_4_r_11_2b,
 	)
+}
+
+fn read_g_k_4_r_11_2_code_system(
+	xpath: &mut Context,
+	node: &Node,
+) -> Result<Option<String>> {
+	Ok(first_attr(
+		xpath,
+		node,
+		GDrugPaths::DOSAGE_PARENT_ROUTE_TERMID_CODE_SYSTEM,
+	))
 }
 
 /// e2b:G.k.7.r.1
@@ -1493,6 +1519,24 @@ mod tests {
 		assert_eq!(dosage.route_null_flavor.as_deref(), Some("ASKU"));
 		assert_eq!(dosage.dose_form_null_flavor.as_deref(), Some("UNK"));
 		assert_eq!(dosage.parent_route_null_flavor.as_deref(), Some("NASK"));
+	}
+
+	#[test]
+	fn imports_dosage_route_code_systems() {
+		let xml = br#"<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3"><subjectOf2><organizer><code code="4" codeSystem="2.16.840.1.113883.3.989.2.1.1.20"/><component><substanceAdministration><consumable><instanceOfKind><kindOfProduct><name>Drug A</name></kindOfProduct></instanceOfKind></consumable><outboundRelationship2 typeCode="COMP"><substanceAdministration><routeCode code="001" codeSystem="0.4.0.127.0.16.1.1.2.6"/><outboundRelationship2 typeCode="COMP"><observation><code code="G.k.4.r.11"/><value code="002" codeSystem="2.16.840.1.113883.3.989.2.1.1.14"/></observation></outboundRelationship2></substanceAdministration></outboundRelationship2></substanceAdministration></component></organizer></subjectOf2></MCCI_IN200100UV01>"#;
+		let drugs = parse_g_drugs(
+			with_drug_role(std::str::from_utf8(xml).unwrap()).as_bytes(),
+		)
+		.expect("parse route code systems");
+		let dosage = &drugs[0].dosages[0];
+		assert_eq!(
+			dosage.route_termid_code_system.as_deref(),
+			Some("0.4.0.127.0.16.1.1.2.6")
+		);
+		assert_eq!(
+			dosage.parent_route_termid_code_system.as_deref(),
+			Some("2.16.840.1.113883.3.989.2.1.1.14")
+		);
 	}
 
 	#[test]

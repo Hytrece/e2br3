@@ -386,4 +386,15 @@ mod tests {
 		assert_eq!(results[0].test_result_qualifier.as_deref(), Some("LT"));
 		assert_eq!(results[0].test_result_unit.as_deref(), Some("mg/dL"));
 	}
+
+	#[test]
+	fn imports_f_r_7_official_true_and_false_values() {
+		for (raw, expected) in [("true", true), ("false", false)] {
+			let xml = format!(
+				r#"<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3"><organizer><code code="3" codeSystem="2.16.840.1.113883.3.989.2.1.1.20"/><component><observation><code><originalText>Result</originalText></code><outboundRelationship2 typeCode="REFR"><observation><code code="25" codeSystem="2.16.840.1.113883.3.989.2.1.1.19"/><value value="{raw}"/></observation></outboundRelationship2></observation></component></organizer></MCCI_IN200100UV01>"#
+			);
+			let results = parse_f_test_results(xml.as_bytes()).expect("parse F.r.7");
+			assert_eq!(results[0].more_info_available, Some(expected));
+		}
+	}
 }

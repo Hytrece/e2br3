@@ -112,6 +112,7 @@ const DOSAGE_ALIASES: &[(&str, &[&str])] = &[
 	),
 	("route_termid_version", &["routeTermIdVersion"]),
 	("route_termid", &["routeTermId"]),
+	("route_termid_code_system", &["routeTermIdCodeSystem"]),
 	("parent_route", &["parentRouteOfAdministration"]),
 	(
 		"parent_route_null_flavor",
@@ -119,6 +120,10 @@ const DOSAGE_ALIASES: &[(&str, &[&str])] = &[
 	),
 	("parent_route_termid_version", &["parentRouteTermIdVersion"]),
 	("parent_route_termid", &["parentRouteTermId"]),
+	(
+		"parent_route_termid_code_system",
+		&["parentRouteTermIdCodeSystem"],
+	),
 	(
 		"first_administration_date_null_flavor",
 		&["firstAdministrationDateNullFlavor"],

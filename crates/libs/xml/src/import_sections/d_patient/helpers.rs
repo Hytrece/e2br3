@@ -529,7 +529,9 @@ fn read_d_8_r_1_kr(
 	xpath: &mut Context,
 	node: &libxml::tree::Node,
 ) -> Result<(Option<String>, Option<String>)> {
-	let path = format!("{PRODUCT}/hl7:code");
+	let path = format!(
+		"{PRODUCT}/hl7:code[@codeSystem='2.16.840.1.113883.3.989.5.1.10.2.1']"
+	);
 	Ok((
 		input_string(
 			first_attr(xpath, node, &path, "codeSystemVersion"),
@@ -551,14 +553,18 @@ fn read_d_8_r_2(
 	node: &libxml::tree::Node,
 ) -> Result<(Option<String>, Option<String>)> {
 	let base = format!("{PRODUCT}/hl7:asIdentifiedEntity[hl7:code[@code='MPID']]");
+	let fda_code =
+		format!("{PRODUCT}/hl7:code[@codeSystem='2.16.840.1.113883.6.69']");
 	Ok((
 		input_string(
-			first_value(xpath, node, &format!("{base}/hl7:code/@codeSystemVersion")),
+			first_value(xpath, node, &format!("{base}/hl7:code/@codeSystemVersion"))
+				.or_else(|| first_attr(xpath, node, &fda_code, "codeSystemVersion")),
 			"mpidVersion",
 			input_contracts::generated::d::d_8_r_2a,
 		)?,
 		input_string(
-			first_value(xpath, node, &format!("{base}/hl7:id/@extension")),
+			first_value(xpath, node, &format!("{base}/hl7:id/@extension"))
+				.or_else(|| first_attr(xpath, node, &fda_code, "code")),
 			"mpid",
 			input_contracts::generated::d::d_8_r_2b,
 		)?,
@@ -1421,7 +1427,7 @@ mod tests {
                       <consumable>
                         <instanceOfKind>
                           <kindOfProduct>
-                            <code code="KR-DH-ID" codeSystemVersion="KR-DH-V1"/>
+							<code code="KR-DH-ID" codeSystem="2.16.840.1.113883.3.989.5.1.10.2.1" codeSystemVersion="KR-DH-V1"/>
                             <name>Past DH Drug</name>
                             <asIdentifiedEntity>
                               <id extension="MPID-EXACT"/>
@@ -1462,6 +1468,16 @@ mod tests {
 		assert_eq!(past_drug.mpid_version.as_deref(), Some("MPID-V1"));
 		assert_eq!(past_drug.phpid.as_deref(), Some("PHPID-EXACT"));
 		assert_eq!(past_drug.phpid_version.as_deref(), Some("PHPID-V1"));
+	}
+
+	#[test]
+	fn parse_d_8_r_2_accepts_fda_ndc_code() {
+		let xml = br#"<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3"><organizer><code code="2" codeSystem="2.16.840.1.113883.3.989.2.1.1.20"/><component><substanceAdministration><consumable><instanceOfKind><kindOfProduct><code code="59762-2858" codeSystem="2.16.840.1.113883.6.69" codeSystemVersion="2014110112"/><name>CureAll</name></kindOfProduct></instanceOfKind></consumable></substanceAdministration></component></organizer></MCCI_IN200100UV01>"#;
+
+		let past_drugs = parse_past_drug_history(xml).expect("parse FDA D.8");
+		assert_eq!(past_drugs[0].mpid.as_deref(), Some("59762-2858"));
+		assert_eq!(past_drugs[0].mpid_version.as_deref(), Some("2014110112"));
+		assert_eq!(past_drugs[0].mfds_medicinal_product_id, None);
 	}
 
 	#[test]

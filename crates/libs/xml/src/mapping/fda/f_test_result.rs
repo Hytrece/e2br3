@@ -33,5 +33,5 @@ impl FTestResultPaths {
 	pub const COMMENTS: &'static str =
 		"hl7:outboundRelationship2/hl7:observation[hl7:code[@code='10']]/hl7:value";
 	pub const MORE_INFO: &'static str =
-		"hl7:outboundRelationship2/hl7:observation[hl7:code[@code='11']]/hl7:value/@value";
+		"hl7:outboundRelationship2[@typeCode='REFR']/hl7:observation[hl7:code[@code='25' and @codeSystem='2.16.840.1.113883.3.989.2.1.1.19']]/hl7:value/@value";
 }

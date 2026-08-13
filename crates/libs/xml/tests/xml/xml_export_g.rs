@@ -91,9 +91,13 @@ fn export_g_drug_basic() {
 		dose_form_termid_version: Some("1".to_string()),
 		route_of_administration: Some("PO".to_string()),
 		route_termid_version: Some("1".to_string()),
+		route_termid_code_system: Some("0.4.0.127.0.16.1.1.2.6".to_string()),
 		parent_route: Some("oral".to_string()),
 		parent_route_termid: Some("001".to_string()),
 		parent_route_termid_version: Some("1".to_string()),
+		parent_route_termid_code_system: Some(
+			"2.16.840.1.113883.3.989.2.1.1.14".to_string(),
+		),
 		created_at: OffsetDateTime::now_utc(),
 		updated_at: OffsetDateTime::now_utc(),
 		created_by: Uuid::new_v4(),

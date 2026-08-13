@@ -495,13 +495,7 @@ async fn apply_section_d(
 		)?;
 	}
 
-	apply_d_8_past_drugs(
-		doc,
-		parser,
-		xpath,
-		&past_drugs,
-		matches!(authority, lib_core::regulatory::RegulatoryAuthority::Mfds),
-	)?;
+	apply_d_8_past_drugs(doc, parser, xpath, &past_drugs, authority)?;
 	if !matches!(authority, lib_core::regulatory::RegulatoryAuthority::Fda) {
 		remove_nodes(
 			xpath,
@@ -702,7 +696,9 @@ fn write_d_2_2_1b(xpath: &mut Context, value: &str) {
 
 /// e2b:D.2.3
 fn write_d_2_3(xpath: &mut Context, value: &str) {
-	set_attr_first(xpath, "//hl7:primaryRole/hl7:subjectOf2/hl7:observation[hl7:code[@code='4']]/hl7:value", "code", value);
+	let path = "//hl7:primaryRole/hl7:subjectOf2/hl7:observation[hl7:code[@code='4']]/hl7:value";
+	set_attr_first(xpath, path, "code", value);
+	set_attr_first(xpath, path, "codeSystem", "2.16.840.1.113883.3.989.2.1.1.9");
 }
 
 /// e2b:D.6
@@ -1175,7 +1171,7 @@ fn apply_d_8_past_drugs(
 	parser: &Parser,
 	xpath: &mut Context,
 	past_drugs: &[PastDrugHistory],
-	include_mfds: bool,
+	authority: lib_core::regulatory::RegulatoryAuthority,
 ) -> Result<()> {
 	if past_drugs.is_empty() {
 		return Ok(());
@@ -1201,25 +1197,47 @@ fn apply_d_8_past_drugs(
 		let mut identifiers = String::new();
 		let mfds_product_id = write_d_8_r_1_kr_1b(&drug);
 		let mfds_product_version = write_d_8_r_1_kr_1a(&drug);
-		let mfds_code = if include_mfds
-			&& (mfds_product_id.is_some() || mfds_product_version.is_some())
+		let product_code =
+			if matches!(authority, lib_core::regulatory::RegulatoryAuthority::Mfds)
+				&& (mfds_product_id.is_some() || mfds_product_version.is_some())
+			{
+				let mut attrs = String::from(
+					" codeSystem=\"2.16.840.1.113883.3.989.5.1.10.2.1\"",
+				);
+				if let Some(id) = mfds_product_id {
+					attrs.push_str(&format!(" code=\"{}\"", xml_escape(id)));
+				}
+				if let Some(version) = mfds_product_version {
+					attrs.push_str(&format!(
+						" codeSystemVersion=\"{}\"",
+						xml_escape(version)
+					));
+				}
+				format!("<code{attrs}/>")
+			} else if matches!(
+				authority,
+				lib_core::regulatory::RegulatoryAuthority::Fda
+			) && (write_d_8_r_2b(&drug).is_some()
+				|| write_d_8_r_2a(&drug).is_some())
+			{
+				let mut attrs =
+					String::from(" codeSystem=\"2.16.840.1.113883.6.69\"");
+				if let Some(id) = write_d_8_r_2b(&drug) {
+					attrs.push_str(&format!(" code=\"{}\"", xml_escape(id)));
+				}
+				if let Some(version) = write_d_8_r_2a(&drug) {
+					attrs.push_str(&format!(
+						" codeSystemVersion=\"{}\"",
+						xml_escape(version)
+					));
+				}
+				format!("<code{attrs}/>")
+			} else {
+				String::new()
+			};
+		if !matches!(authority, lib_core::regulatory::RegulatoryAuthority::Fda)
+			&& (write_d_8_r_2b(&drug).is_some() || write_d_8_r_2a(&drug).is_some())
 		{
-			let mut attrs =
-				String::from(" codeSystem=\"2.16.840.1.113883.3.989.5.1.10.2.1\"");
-			if let Some(id) = mfds_product_id {
-				attrs.push_str(&format!(" code=\"{}\"", xml_escape(id)));
-			}
-			if let Some(version) = mfds_product_version {
-				attrs.push_str(&format!(
-					" codeSystemVersion=\"{}\"",
-					xml_escape(version)
-				));
-			}
-			format!("<code{attrs}/>")
-		} else {
-			String::new()
-		};
-		if write_d_8_r_2b(&drug).is_some() || write_d_8_r_2a(&drug).is_some() {
 			let mut code_attrs = String::from(
 				"code=\"MPID\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.4\"",
 			);
@@ -1261,6 +1279,7 @@ fn apply_d_8_past_drugs(
 			let mut value_attrs = String::from("xsi:type=\"CE\"");
 			if let Some(code) = write_d_8_r_6b(&drug) {
 				value_attrs.push_str(&format!(" code=\"{}\"", xml_escape(code)));
+				value_attrs.push_str(" codeSystem=\"2.16.840.1.113883.6.163\"");
 			}
 			if let Some(version) = write_d_8_r_6a(&drug) {
 				value_attrs.push_str(&format!(
@@ -1281,6 +1300,7 @@ fn apply_d_8_past_drugs(
 			let mut value_attrs = String::from("xsi:type=\"CE\"");
 			if let Some(code) = write_d_8_r_7b(&drug) {
 				value_attrs.push_str(&format!(" code=\"{}\"", xml_escape(code)));
+				value_attrs.push_str(" codeSystem=\"2.16.840.1.113883.6.163\"");
 			}
 			if let Some(version) = write_d_8_r_7a(&drug) {
 				value_attrs.push_str(&format!(
@@ -1296,7 +1316,7 @@ fn apply_d_8_past_drugs(
 		};
 
 		let fragment = format!(
-			"<subjectOf2 typeCode=\"SBJ\"><organizer classCode=\"CATEGORY\" moodCode=\"EVN\"><code code=\"2\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.20\" displayName=\"drugHistory\"/><component typeCode=\"COMP\"><substanceAdministration classCode=\"SBADM\" moodCode=\"EVN\">{effective_time}<consumable typeCode=\"CSM\"><instanceOfKind classCode=\"INST\"><kindOfProduct classCode=\"MMAT\" determinerCode=\"KIND\">{mfds_code}{name_fragment}{identifiers}</kindOfProduct></instanceOfKind></consumable>{indication}{reaction}</substanceAdministration></component></organizer></subjectOf2>"
+			"<subjectOf2 typeCode=\"SBJ\"><organizer classCode=\"CATEGORY\" moodCode=\"EVN\"><code code=\"2\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.20\" displayName=\"drugHistory\"/><component typeCode=\"COMP\"><substanceAdministration classCode=\"SBADM\" moodCode=\"EVN\">{effective_time}<consumable typeCode=\"CSM\"><instanceOfKind classCode=\"INST\"><kindOfProduct classCode=\"MMAT\" determinerCode=\"KIND\">{product_code}{name_fragment}{identifiers}</kindOfProduct></instanceOfKind></consumable>{indication}{reaction}</substanceAdministration></component></organizer></subjectOf2>"
 		);
 		append_fragment_child(doc, parser, xpath, "//hl7:primaryRole", &fragment)?;
 	}
@@ -1531,10 +1551,10 @@ mod tests {
 			start_date_null_flavor: None,
 			end_date: None,
 			end_date_null_flavor: None,
-			indication_meddra_version: None,
-			indication_meddra_code: None,
-			reaction_meddra_version: None,
-			reaction_meddra_code: None,
+			indication_meddra_version: Some("27.1".to_string()),
+			indication_meddra_code: Some("10000001".to_string()),
+			reaction_meddra_version: Some("27.1".to_string()),
+			reaction_meddra_code: Some("10000002".to_string()),
 			created_at: OffsetDateTime::UNIX_EPOCH,
 			updated_at: OffsetDateTime::UNIX_EPOCH,
 			created_by: Uuid::nil(),
@@ -1549,8 +1569,14 @@ mod tests {
 			.expect("doc");
 		let mut xpath = Context::new(&doc).expect("xpath");
 		let _ = xpath.register_namespace("hl7", "urn:hl7-org:v3");
-		apply_d_8_past_drugs(&mut doc, &parser, &mut xpath, &[drug], true)
-			.expect("apply");
+		apply_d_8_past_drugs(
+			&mut doc,
+			&parser,
+			&mut xpath,
+			&[drug.clone()],
+			lib_core::regulatory::RegulatoryAuthority::Mfds,
+		)
+		.expect("apply");
 		let fragment = doc.to_string();
 
 		let name = "<name>Past &amp; &lt;drug&gt; \"A\"</name>";
@@ -1571,6 +1597,33 @@ mod tests {
 		assert!(mfds_index < name_index);
 		assert!(name_index < mpid_index);
 		assert!(mpid_index < phpid_index);
+		assert_eq!(
+			fragment
+				.matches("codeSystem=\"2.16.840.1.113883.6.163\"")
+				.count(),
+			2
+		);
+
+		let mut fda_doc = parser
+			.parse_string(
+				"<MCCI_IN200100UV01 xmlns=\"urn:hl7-org:v3\"><primaryRole/></MCCI_IN200100UV01>",
+			)
+			.expect("FDA doc");
+		let mut fda_xpath = Context::new(&fda_doc).expect("FDA xpath");
+		let _ = fda_xpath.register_namespace("hl7", "urn:hl7-org:v3");
+		apply_d_8_past_drugs(
+			&mut fda_doc,
+			&parser,
+			&mut fda_xpath,
+			&[drug],
+			lib_core::regulatory::RegulatoryAuthority::Fda,
+		)
+		.expect("apply FDA");
+		let fda_fragment = fda_doc.to_string();
+		assert!(fda_fragment.contains(
+			"<code codeSystem=\"2.16.840.1.113883.6.69\" code=\"MP&amp;&lt;&gt;&quot;\" codeSystemVersion=\"MPV&amp;&lt;&gt;&quot;\"/>"
+		));
+		assert!(!fda_fragment.contains("code=\"MPID\""));
 	}
 
 	#[test]
@@ -1610,8 +1663,14 @@ mod tests {
 			.expect("doc");
 		let mut xpath = Context::new(&doc).expect("xpath");
 		let _ = xpath.register_namespace("hl7", "urn:hl7-org:v3");
-		apply_d_8_past_drugs(&mut doc, &parser, &mut xpath, &[drug], true)
-			.expect("apply");
+		apply_d_8_past_drugs(
+			&mut doc,
+			&parser,
+			&mut xpath,
+			&[drug],
+			lib_core::regulatory::RegulatoryAuthority::Mfds,
+		)
+		.expect("apply");
 		let fragment = doc.to_string();
 
 		assert!(!fragment.contains("<code code=\"\""));

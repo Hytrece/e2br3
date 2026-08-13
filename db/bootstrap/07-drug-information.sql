@@ -183,12 +183,14 @@ CREATE TABLE dosage_information (
 	route_of_administration_null_flavor VARCHAR(4) CHECK (route_of_administration_null_flavor IN ('UNK', 'ASKU', 'NASK')),
     route_termid VARCHAR(100),
     route_termid_version VARCHAR(10),
+	route_termid_code_system TEXT,
 
 	-- G.k.4.r.11 - Parent Route of Administration
 	parent_route VARCHAR(60),
 	parent_route_null_flavor VARCHAR(4) CHECK (parent_route_null_flavor IN ('UNK', 'ASKU', 'NASK')),
     parent_route_termid VARCHAR(100),
     parent_route_termid_version VARCHAR(10),
+	parent_route_termid_code_system TEXT,
 
     -- Null Flavor Support (E2B(R3) compliant: NI, UNK, ASKU, NASK, MSK)
     first_administration_date_null_flavor VARCHAR(4) CHECK (first_administration_date_null_flavor IN ('MSK', 'ASKU', 'NASK')),
