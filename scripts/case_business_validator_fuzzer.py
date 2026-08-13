@@ -625,6 +625,9 @@ def scenario_catalog(seed: int) -> list[Scenario]:
         Scenario(149, "f-test-meddra-version-format", "ich", "LB", "testResult", "testMeddraVersion", "test_meddra_version", "ICH.F.r.2.2a.ALLOWED.VALUE", "bad", "26.0"),
         Scenario(150, "g-indication-meddra-version-format", "ich", "DG", "drug", "indications[].indicationMeddraVersion", "indications[].indication_meddra_version", "ICH.G.k.7.r.2a.ALLOWED.VALUE", "bad", "26.0", (("indications[].indicationMeddraCode", "10000001"),)),
         Scenario(151, "h-diagnosis-meddra-version-format", "ich", "NR", "senderDiagnoses", "diagnosisMeddraVersion", "diagnosis_meddra_version", "ICH.H.3.r.1a.ALLOWED.VALUE", "bad", "26.0"),
+        Scenario(152, "c4-literature-base64-format", "ich", "LR", "literatureReference", "documentBase64", "document_base64", "ICH.C.4.r.2.ALLOWED.VALUE", "not-base64", "SGVsbG8="),
+        Scenario(153, "fda-literature-file-name-required", "fda", "LR", "literatureReference", "fileName", "file_name", "FDA.C.4.r.2.FILE_NAME.REQUIRED", None, "article.pdf", (("documentBase64", "SGVsbG8="), ("mediaType", "application/pdf"))),
+        Scenario(154, "fda-literature-media-type-match", "fda", "LR", "literatureReference", "mediaType", "media_type", "FDA.C.4.r.2.MEDIA_TYPE.MATCH", "text/plain", "application/pdf", (("documentBase64", "SGVsbG8="), ("fileName", "article.pdf"))),
     ]
 
 
@@ -862,6 +865,13 @@ def main(args: argparse.Namespace) -> int:
             "testUnit": "mg/dL",
             "testResultUnstructured": "Normal",
         }
+        for path, fixture_value in scenario.fixture_values:
+            set_path(payload, path, fixture_value)
+        set_path(payload, scenario.field, value)
+        return payload
+
+    def literature_payload(scenario: Scenario, value: Any) -> dict[str, Any]:
+        payload: dict[str, Any] = {"sequenceNumber": 1, "referenceText": "Business literature"}
         for path, fixture_value in scenario.fixture_values:
             set_path(payload, path, fixture_value)
         set_path(payload, scenario.field, value)
@@ -1197,6 +1207,16 @@ def main(args: argparse.Namespace) -> int:
                 add(edge, scenario, "FAIL", status, {**save_summary, "reason": "ae_fixture_failed"})
                 return
             read_status, current = page_current(case_id, "AE", scenario.owner, owner_id)
+        elif scenario.page == "LR":
+            status, created, save_summary = request("POST", f"/api/cases/{case_id}/editor/pages/LR/rows", {
+                "authorities": [scenario.authority],
+                "rows": {"literatureReference": literature_payload(scenario, value)},
+            })
+            owner_id = created_row_id(created)
+            if status != 201 or not owner_id:
+                add(edge, scenario, "FAIL", status, {**save_summary, "reason": "lr_fixture_failed"})
+                return
+            read_status, current = page_current(case_id, "LR", scenario.owner, owner_id)
         else:
             status, created, save_summary = request("POST", f"/api/cases/{case_id}/editor/pages/LB/rows", {
                 "authorities": [scenario.authority],
