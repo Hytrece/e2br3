@@ -402,12 +402,12 @@ pub(super) fn has_sender_scope_assignment(
 }
 
 pub(super) fn sender_scope_assignment_forbidden_for_ctx(ctx: &Ctx) -> bool {
-	!ctx.is_cro_sponsor_admin()
+	!ctx.is_sponsor_admin()
 }
 
 pub(super) fn sender_scope_assignment_forbidden() -> Error {
 	Error::AccessDenied {
-		required_role: "sender_scope_assignment_cro_admin".to_string(),
+		required_role: "sender_scope_assignment_sponsor_admin".to_string(),
 	}
 }
 
@@ -457,6 +457,15 @@ mod uuid_scope_tests {
 			&None,
 			&Some(ScopeListInput::List(vec![Uuid::new_v4().to_string()])),
 		));
+	}
+
+	#[test]
+	fn both_sponsor_administrators_can_assign_sender_scope() {
+		for role in [ROLE_SPONSOR_ADMIN_CRO, ROLE_SPONSOR_ADMIN_COMPANY] {
+			let ctx = Ctx::new(Uuid::new_v4(), Uuid::new_v4(), role.to_string())
+				.expect("sponsor administrator context");
+			assert!(!sender_scope_assignment_forbidden_for_ctx(&ctx));
+		}
 	}
 
 	#[test]
