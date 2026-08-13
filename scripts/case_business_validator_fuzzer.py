@@ -544,6 +544,31 @@ def scenario_catalog(seed: int) -> list[Scenario]:
         Scenario(68, "d-past-drug-indication-code-required", "ich", "DH", "pastDrugHistory", "indicationMeddraCode", "indication_meddra_code", "ICH.D.8.r.6b.REQUIRED", None, "10000001"),
         Scenario(69, "d-past-drug-reaction-version-required", "ich", "DH", "pastDrugHistory", "reactionMeddraVersion", "reaction_meddra_version", "ICH.D.8.r.7a.REQUIRED", None, "26.0"),
         Scenario(70, "d-past-drug-reaction-code-required", "ich", "DH", "pastDrugHistory", "reactionMeddraCode", "reaction_meddra_code", "ICH.D.8.r.7b.REQUIRED", None, "10000001"),
+        Scenario(71, "d-death-date-future", "ich", "DM", "deathInfo", "dateOfDeath", "date_of_death", "ICH.D.9.1.FUTURE_DATE.FORBIDDEN", "29990303", f"{year}0303"),
+        Scenario(72, "d-autopsy-performed-required", "ich", "DM", "deathInfo", "autopsyPerformed", "autopsy_performed", "ICH.D.9.3.REQUIRED", None, True, (("dateOfDeath", f"{year}0303"),)),
+        Scenario(73, "d-reported-cause-version-required", "ich", "DM", "reportedCauses", "meddraVersion", "meddra_version", "ICH.D.9.2.r.1a.REQUIRED", None, "26.0"),
+        Scenario(74, "d-reported-cause-code-required", "ich", "DM", "reportedCauses", "meddraCode", "meddra_code", "ICH.D.9.2.r.1b.REQUIRED", None, "10000001"),
+        Scenario(75, "d-reported-cause-text-required", "ich", "DM", "reportedCauses", "causeText", "comments", "ICH.D.9.2.r.2.REQUIRED", None, "Reported cause"),
+        Scenario(76, "d-autopsy-cause-version-required", "ich", "DM", "autopsyCauses", "meddraVersion", "meddra_version", "ICH.D.9.4.r.1a.REQUIRED", None, "26.0"),
+        Scenario(77, "d-autopsy-cause-code-required", "ich", "DM", "autopsyCauses", "meddraCode", "meddra_code", "ICH.D.9.4.r.1b.REQUIRED", None, "10000001"),
+        Scenario(78, "d-autopsy-cause-text-required", "ich", "DM", "autopsyCauses", "causeText", "comments", "ICH.D.9.4.r.2.REQUIRED", None, "Autopsy cause"),
+        Scenario(79, "d-parent-birth-date-future", "ich", "DM", "parentInfo", "parentBirthDate", "parent_birth_date", "ICH.D.10.2.1.FUTURE_DATE.FORBIDDEN", "29990303", f"{year}0303"),
+        Scenario(80, "d-parent-age-value-required", "ich", "DM", "parentInfo", "parentAge.value", "parent_age", "ICH.D.10.2.2a.REQUIRED", None, 54, (("parentAge.unit", "a"),)),
+        Scenario(81, "d-parent-age-unit-required", "ich", "DM", "parentInfo", "parentAge.unit", "parent_age_unit", "ICH.D.10.2.2b.REQUIRED", None, "a", (("parentAge.value", 54),)),
+        Scenario(82, "d-parent-birth-age-exclusive", "ich", "DM", "parentInfo", "parentBirthDate", "parent_birth_date", "ICH.D.10.2.EXCLUSIVE", f"{year}0303", None, (("parentAge.value", 54), ("parentAge.unit", "a"))),
+        Scenario(83, "d-parent-lmp-future", "ich", "DM", "parentInfo", "parentLastMenstrualPeriodDate", "last_menstrual_period_date", "ICH.D.10.3.FUTURE_DATE.FORBIDDEN", "29990303", f"{year}0303"),
+        Scenario(84, "d-parent-sex-required", "ich", "DM", "parentInfo", "parentSex", "sex", "ICH.D.10.6.REQUIRED", None, "2", (("parentIdentification", "FUZZ-PARENT"),)),
+        Scenario(85, "d-parent-history-version-required", "ich", "DM", "parentMedicalHistory", "meddraVersion", "meddra_version", "ICH.D.10.7.1.r.1a.REQUIRED", None, "26.0"),
+        Scenario(86, "d-parent-history-code-required", "ich", "DM", "parentMedicalHistory", "meddraCode", "meddra_code", "ICH.D.10.7.1.r.1b.REQUIRED", None, "10000001"),
+        Scenario(87, "d-parent-history-future-date", "ich", "DM", "parentMedicalHistory", "startDate", "start_date", "ICH.D.10.7.1.r.FUTURE_DATE.FORBIDDEN", "29990303", f"{year}0303"),
+        Scenario(88, "d-parent-past-drug-mpid-version-required", "ich", "DM", "parentPastDrugs", "mpidVersion", "mpid_version", "ICH.D.10.8.r.2a.REQUIRED", None, "1"),
+        Scenario(89, "d-parent-past-drug-phpid-version-required", "ich", "DM", "parentPastDrugs", "phpidVersion", "phpid_version", "ICH.D.10.8.r.3a.REQUIRED", None, "1", (("mpid", None), ("mpidVersion", None), ("phpid", f"PHPID-{suffix}"))),
+        Scenario(90, "d-parent-past-drug-future-date", "ich", "DM", "parentPastDrugs", "startDate", "start_date", "ICH.D.10.8.r.FUTURE_DATE.FORBIDDEN", "29990303", f"{year}0303"),
+        Scenario(91, "d-parent-past-drug-identifier-exclusive", "ich", "DM", "parentPastDrugs", "phpid", "phpid", "ICH.D.10.8.MPID_PHPID.EXCLUSIVE", f"PHPID-{suffix}", None, (("phpidVersion", "1"),)),
+        Scenario(92, "d-parent-past-drug-indication-version-required", "ich", "DM", "parentPastDrugs", "indicationMeddraVersion", "indication_meddra_version", "ICH.D.10.8.r.6a.REQUIRED", None, "26.0"),
+        Scenario(93, "d-parent-past-drug-indication-code-required", "ich", "DM", "parentPastDrugs", "indicationMeddraCode", "indication_meddra_code", "ICH.D.10.8.r.6b.REQUIRED", None, "10000001"),
+        Scenario(94, "d-parent-past-drug-reaction-version-required", "ich", "DM", "parentPastDrugs", "reactionMeddraVersion", "reaction_meddra_version", "ICH.D.10.8.r.7a.REQUIRED", None, "26.0"),
+        Scenario(95, "d-parent-past-drug-reaction-code-required", "ich", "DM", "parentPastDrugs", "reactionMeddraCode", "reaction_meddra_code", "ICH.D.10.8.r.7b.REQUIRED", None, "10000001"),
     ]
 
 
@@ -799,6 +824,57 @@ def main(args: argparse.Namespace) -> int:
         set_path(payload, scenario.field, value)
         return payload
 
+    def death_info_payload(scenario: Scenario, value: Any) -> dict[str, Any]:
+        payload: dict[str, Any] = {"autopsyPerformed": True}
+        for path, fixture_value in scenario.fixture_values:
+            set_path(payload, path, fixture_value)
+        set_path(payload, scenario.field, value)
+        return payload
+
+    def death_cause_payload(scenario: Scenario, value: Any) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "meddraVersion": "26.0",
+            "meddraCode": "10000001",
+            "causeText": "Business fuzz cause",
+        }
+        set_path(payload, scenario.field, value)
+        return payload
+
+    def parent_payload(scenario: Scenario, value: Any) -> dict[str, Any]:
+        payload: dict[str, Any] = {"parentSex": "2"}
+        for path, fixture_value in scenario.fixture_values:
+            set_path(payload, path, fixture_value)
+        set_path(payload, scenario.field, value)
+        return payload
+
+    def parent_history_payload(scenario: Scenario, value: Any) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "meddraVersion": "26.0",
+            "meddraCode": "10000001",
+            "startDate": f"{year}0303",
+            "endDate": f"{year}0304",
+            "continuing": True,
+        }
+        set_path(payload, scenario.field, value)
+        return payload
+
+    def parent_past_drug_payload(scenario: Scenario, value: Any) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "drugName": "Parent prior drug",
+            "mpidVersion": "1",
+            "mpid": f"MPID-{args.seed}",
+            "startDate": f"{year}0303",
+            "endDate": f"{year}0304",
+            "indicationMeddraVersion": "26.0",
+            "indicationMeddraCode": "10000001",
+            "reactionMeddraVersion": "26.0",
+            "reactionMeddraCode": "10000001",
+        }
+        for path, fixture_value in scenario.fixture_values:
+            set_path(payload, path, fixture_value)
+        set_path(payload, scenario.field, value)
+        return payload
+
     def past_drug_payload(scenario: Scenario, value: Any) -> dict[str, Any]:
         payload: dict[str, Any] = {
             "sequenceNumber": 1,
@@ -854,14 +930,24 @@ def main(args: argparse.Namespace) -> int:
             owner_id = ci_id
             read_status, current = page_current(case_id, "CI", scenario.owner)
         elif scenario.page == "DM":
-            rows = (
-                {"patientInformation": patient_payload(scenario, value)}
-                if scenario.owner == "patientInformation"
-                else {
-                    "patientInformation": {"patientInitials": "BUSINESS-FUZZ"},
-                    scenario.owner: [medical_history_payload(scenario, value)],
-                }
-            )
+            rows: dict[str, Any] = {"patientInformation": {"patientInitials": "BUSINESS-FUZZ"}}
+            if scenario.owner == "patientInformation":
+                rows[scenario.owner] = patient_payload(scenario, value)
+            elif scenario.owner == "medicalHistoryEpisodes":
+                rows[scenario.owner] = [medical_history_payload(scenario, value)]
+            elif scenario.owner == "deathInfo":
+                rows[scenario.owner] = death_info_payload(scenario, value)
+            elif scenario.owner in {"reportedCauses", "autopsyCauses"}:
+                rows["deathInfo"] = {"dateOfDeath": f"{year}0303", "autopsyPerformed": True}
+                rows[scenario.owner] = [death_cause_payload(scenario, value)]
+            elif scenario.owner == "parentInfo":
+                rows[scenario.owner] = parent_payload(scenario, value)
+            elif scenario.owner == "parentMedicalHistory":
+                rows["parentInfo"] = {"parentSex": "2"}
+                rows[scenario.owner] = [parent_history_payload(scenario, value)]
+            else:
+                rows["parentInfo"] = {"parentSex": "2"}
+                rows[scenario.owner] = [parent_past_drug_payload(scenario, value)]
             status, _, save_summary = request("PATCH", f"/api/cases/{case_id}/editor/pages/DM", {
                 "authorities": [scenario.authority],
                 "rows": rows,
