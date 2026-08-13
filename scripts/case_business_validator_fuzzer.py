@@ -573,7 +573,7 @@ def scenario_catalog(seed: int) -> list[Scenario]:
         Scenario(97, "c1-expedited-criteria-required", "ich", "CI", "safetyReportIdentification", "fulfilExpeditedCriteria", "fulfilExpeditedCriteria", "ICH.C.1.7.REQUIRED", None, True),
         Scenario(98, "c1-other-identifiers-flag-required", "ich", "CI", "safetyReportIdentification", "otherCaseIdentifiersExist", "otherCaseIdentifiersExist", "ICH.C.1.9.1.REQUIRED", None, True),
         Scenario(99, "c1-nullification-reason-required", "ich", "CI", "safetyReportIdentification", "nullificationReason", "nullificationReason", "ICH.C.1.11.2.REQUIRED", None, "Amendment reason", (("nullificationAmendmentCode", "2"),)),
-        Scenario(100, "c1-report-id-profile", "ich", "CI", "safetyReportIdentification", "safetyReportId", "safetyReportId", "ICH.C.1.1.PROFILE", "bad-id", f"KR-BUSINESS-{suffix}"),
+        Scenario(100, "g-assessment-administration-value-required", "ich", "DG", "drug", "drugReactionAssessments[].administrationStartIntervalValue", "drugReactionAssessments[].administrationStartIntervalValue", "ICH.G.k.9.i.3.1a.REQUIRED", None, 1.5, (("drugReactionAssessments[].administrationStartIntervalUnit", "d"),)),
         Scenario(101, "mfds-c1-additional-documents-required", "mfds", "CI", "safetyReportIdentification", "additionalDocumentsAvailable", "additionalDocumentsAvailable", "ICH.C.1.6.1.REQUIRED", None, False),
         Scenario(102, "mfds-c1-worldwide-id-required", "mfds", "CI", "safetyReportIdentification", "worldwideUniqueId", "worldwideUniqueId", "ICH.C.1.8.1.REQUIRED", None, f"KR-BUSINESS-{suffix}"),
         Scenario(103, "mfds-c1-first-sender-required", "mfds", "CI", "safetyReportIdentification", "firstSenderType", "firstSenderType", "ICH.C.1.8.2.REQUIRED", None, "1"),
@@ -591,6 +591,9 @@ def scenario_catalog(seed: int) -> list[Scenario]:
         Scenario(115, "mfds-d-past-drug-phpid-required", "mfds", "DH", "pastDrugHistory", "phpid", "phpid", "MFDS.D.8.r.3b.REQUIRED", None, f"PHPID-{suffix}", (("mpid", None), ("mpidVersion", None), ("phpidVersion", "1"))),
         Scenario(116, "mfds-d-parent-past-drug-mpid-required", "mfds", "DM", "parentPastDrugs", "mpid", "mpid", "MFDS.D.10.8.r.2b.REQUIRED", None, f"MPID-{suffix}", (("mpidVersion", "1"),)),
         Scenario(117, "mfds-d-parent-past-drug-phpid-required", "mfds", "DM", "parentPastDrugs", "phpid", "phpid", "MFDS.D.10.8.r.3b.REQUIRED", None, f"PHPID-{suffix}", (("mpid", None), ("mpidVersion", None), ("phpidVersion", "1"))),
+        Scenario(118, "g-assessment-administration-unit-required", "ich", "DG", "drug", "drugReactionAssessments[].administrationStartIntervalUnit", "drugReactionAssessments[].administrationStartIntervalUnit", "ICH.G.k.9.i.3.1b.REQUIRED", None, "d", (("drugReactionAssessments[].administrationStartIntervalValue", 1.5),)),
+        Scenario(119, "g-assessment-last-dose-value-required", "ich", "DG", "drug", "drugReactionAssessments[].lastDoseIntervalValue", "drugReactionAssessments[].lastDoseIntervalValue", "ICH.G.k.9.i.3.2a.REQUIRED", None, 2.5, (("drugReactionAssessments[].lastDoseIntervalUnit", "d"),)),
+        Scenario(120, "g-assessment-last-dose-unit-required", "ich", "DG", "drug", "drugReactionAssessments[].lastDoseIntervalUnit", "drugReactionAssessments[].lastDoseIntervalUnit", "ICH.G.k.9.i.3.2b.REQUIRED", None, "d", (("drugReactionAssessments[].lastDoseIntervalValue", 2.5),)),
     ]
 
 
@@ -789,7 +792,7 @@ def main(args: argparse.Namespace) -> int:
             set_path(payload, scenario.field, value)
         return payload
 
-    def reaction_payload(scenario: Scenario, value: Any) -> dict[str, Any]:
+    def reaction_payload(scenario: Scenario | None = None, value: Any = None) -> dict[str, Any]:
         payload: dict[str, Any] = {
             "sequenceNumber": 1,
             "primarySourceReaction": "Business fuzz reaction",
@@ -810,9 +813,10 @@ def main(args: argparse.Namespace) -> int:
                 "criteriaOtherMedicallyImportant": True,
             },
         }
-        for path, fixture_value in scenario.fixture_values:
-            set_path(payload, path, fixture_value)
-        set_path(payload, scenario.field, value)
+        if scenario:
+            for path, fixture_value in scenario.fixture_values:
+                set_path(payload, path, fixture_value)
+            set_path(payload, scenario.field, value)
         return payload
 
     def test_result_payload(scenario: Scenario, value: Any) -> dict[str, Any]:
@@ -1085,9 +1089,20 @@ def main(args: argparse.Namespace) -> int:
                 return
             read_status, current = page_current(case_id, "DH", scenario.owner, owner_id)
         elif scenario.page == "DG":
+            payload = drug_payload(scenario, value)
+            if scenario.field.startswith("drugReactionAssessments[]"):
+                status, reaction, save_summary = request("POST", f"/api/cases/{case_id}/editor/pages/AE/rows", {
+                    "authorities": [scenario.authority],
+                    "rows": {"reaction": reaction_payload()},
+                })
+                reaction_id = created_row_id(reaction)
+                if status != 201 or not reaction_id:
+                    add(edge, scenario, "FAIL", status, {**save_summary, "reason": "dg_reaction_fixture_failed"})
+                    return
+                set_path(payload, "drugReactionAssessments[].reactionId", reaction_id)
             status, created, save_summary = request("POST", f"/api/cases/{case_id}/editor/pages/DG/rows", {
                 "authorities": [scenario.authority],
-                "rows": {"drug": drug_payload(scenario, value)},
+                "rows": {"drug": payload},
             })
             owner_id = created_row_id(created)
             if status != 201 or not owner_id:
