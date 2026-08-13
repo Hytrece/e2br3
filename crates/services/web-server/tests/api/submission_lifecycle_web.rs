@@ -1186,7 +1186,6 @@ async fn test_submission_rejects_enabled_esg_without_base_url() -> Result<()> {
 	clear_esg_env();
 	std::env::set_var("FDA_ESG_ENABLED", "1");
 	std::env::set_var("E2BR3_VALIDATOR_TOKEN", "validator-secret");
-	std::env::set_var("E2BR3_SKIP_XML_VALIDATE", "1");
 	let mm = init_test_mm().await?;
 	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
 	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
@@ -1228,7 +1227,6 @@ async fn test_submission_esg_transport_sends_expected_headers_and_payload(
 	std::env::set_var("FDA_ESG_BEARER_TOKEN", "test-esg-token");
 	std::env::set_var("FDA_ESG_API_KEY", "test-esg-api-key");
 	std::env::set_var("E2BR3_VALIDATOR_TOKEN", "validator-secret");
-	std::env::set_var("E2BR3_SKIP_XML_VALIDATE", "1");
 
 	let mm = init_test_mm().await?;
 	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
@@ -1277,7 +1275,6 @@ async fn test_submission_esg_non_success_response_returns_bad_request() -> Resul
 	std::env::set_var("FDA_ESG_ENABLED", "1");
 	std::env::set_var("FDA_ESG_BASE_URL", esg_url);
 	std::env::set_var("E2BR3_VALIDATOR_TOKEN", "validator-secret");
-	std::env::set_var("E2BR3_SKIP_XML_VALIDATE", "1");
 
 	let mm = init_test_mm().await?;
 	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
@@ -1313,7 +1310,6 @@ async fn test_submission_accepts_mfds_route_for_mfds_profile() -> Result<()> {
 	clear_esg_env();
 	configure_mock_as2_transport().await?;
 	std::env::set_var("E2BR3_VALIDATOR_TOKEN", "validator-secret");
-	std::env::set_var("E2BR3_SKIP_XML_VALIDATE", "1");
 	let mm = init_test_mm().await?;
 	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
 	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
@@ -1348,7 +1344,6 @@ async fn test_submission_uses_request_authority_not_case_appendices() -> Result<
 	clear_esg_env();
 	configure_mock_as2_transport().await?;
 	std::env::set_var("E2BR3_VALIDATOR_TOKEN", "validator-secret");
-	std::env::set_var("E2BR3_SKIP_XML_VALIDATE", "1");
 	let mm = init_test_mm().await?;
 	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
 	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
@@ -1397,7 +1392,6 @@ async fn test_submission_rejects_when_as2_submitter_unreachable() -> Result<()> 
 	std::env::set_var("AS2_SUBMITTER_URL", "http://127.0.0.1:9");
 	std::env::set_var("AS2_SUBMITTER_TIMEOUT_SECS", "1");
 	std::env::set_var("E2BR3_VALIDATOR_TOKEN", "validator-secret");
-	std::env::set_var("E2BR3_SKIP_XML_VALIDATE", "1");
 	let mm = init_test_mm().await?;
 	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
 	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
@@ -1445,7 +1439,6 @@ async fn test_internal_ack_callback_updates_submission_by_remote_id() -> Result<
 	configure_mock_esg_transport().await?;
 	std::env::set_var("AS2_CALLBACK_TOKEN", "callback-secret");
 	std::env::set_var("E2BR3_VALIDATOR_TOKEN", "validator-secret");
-	std::env::set_var("E2BR3_SKIP_XML_VALIDATE", "1");
 	let mm = init_test_mm().await?;
 	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
 	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
@@ -1553,7 +1546,6 @@ async fn test_submission_idempotency_key_reuses_submission_when_enabled(
 	clear_esg_env();
 	configure_mock_esg_transport().await?;
 	std::env::set_var("E2BR3_VALIDATOR_TOKEN", "validator-secret");
-	std::env::set_var("E2BR3_SKIP_XML_VALIDATE", "1");
 	let mm = init_test_mm().await?;
 	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
 	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
@@ -1623,7 +1615,6 @@ async fn test_submission_idempotency_key_parallel_requests_single_submission(
 	clear_esg_env();
 	configure_mock_esg_transport().await?;
 	std::env::set_var("E2BR3_VALIDATOR_TOKEN", "validator-secret");
-	std::env::set_var("E2BR3_SKIP_XML_VALIDATE", "1");
 	let mm = init_test_mm().await?;
 	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
 	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
@@ -1785,7 +1776,6 @@ async fn test_internal_reconcile_retries_failed_submission_to_success() -> Resul
 	configure_mock_esg_transport().await?;
 	std::env::set_var("AS2_CALLBACK_TOKEN", "callback-secret");
 	std::env::set_var("E2BR3_VALIDATOR_TOKEN", "validator-secret");
-	std::env::set_var("E2BR3_SKIP_XML_VALIDATE", "1");
 	let mm = init_test_mm().await?;
 	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
 	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
@@ -1913,7 +1903,6 @@ async fn test_internal_reconcile_retries_failed_submission_and_keeps_rejected_on
 	configure_mock_esg_transport().await?;
 	std::env::set_var("AS2_CALLBACK_TOKEN", "callback-secret");
 	std::env::set_var("E2BR3_VALIDATOR_TOKEN", "validator-secret");
-	std::env::set_var("E2BR3_SKIP_XML_VALIDATE", "1");
 	let mm = init_test_mm().await?;
 	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
 	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
@@ -2128,7 +2117,6 @@ async fn test_rust_to_submitter_bridge_payload_and_ack_flow() -> Result<()> {
 	);
 	std::env::set_var("AS2_CALLBACK_TOKEN", "callback-secret");
 	std::env::set_var("E2BR3_VALIDATOR_TOKEN", "validator-secret");
-	std::env::set_var("E2BR3_SKIP_XML_VALIDATE", "1");
 
 	let mm = init_test_mm().await?;
 	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
@@ -2213,7 +2201,6 @@ async fn test_internal_ack_callback_duplicate_payload_is_idempotent() -> Result<
 	configure_mock_esg_transport().await?;
 	std::env::set_var("AS2_CALLBACK_TOKEN", "callback-secret");
 	std::env::set_var("E2BR3_VALIDATOR_TOKEN", "validator-secret");
-	std::env::set_var("E2BR3_SKIP_XML_VALIDATE", "1");
 	let mm = init_test_mm().await?;
 	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
 	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
@@ -2355,7 +2342,6 @@ async fn test_real_java_submitter_integration_mfds() -> Result<()> {
 	);
 	std::env::set_var("AS2_CALLBACK_TOKEN", "callback-secret");
 	std::env::set_var("E2BR3_VALIDATOR_TOKEN", "validator-secret");
-	std::env::set_var("E2BR3_SKIP_XML_VALIDATE", "1");
 
 	let mm = init_test_mm().await?;
 	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;

@@ -292,7 +292,6 @@ async fn test_import_rejects_missing_upload_filename() -> Result<()> {
 #[tokio::test]
 async fn test_import_selected_product_links_first_drug_and_case_product_id(
 ) -> Result<()> {
-	std::env::set_var("E2BR3_SKIP_XML_VALIDATE", "1");
 	let mm = init_test_mm().await?;
 	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
 	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
@@ -610,7 +609,6 @@ async fn test_import_settings_update_enabled_c1_dates() -> Result<()> {
 #[tokio::test]
 async fn test_import_settings_apply_default_sender_only_when_enabled() -> Result<()>
 {
-	std::env::set_var("E2BR3_SKIP_XML_VALIDATE", "1");
 	let mm = init_test_mm().await?;
 	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
 	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
@@ -769,7 +767,6 @@ async fn test_import_settings_apply_default_sender_only_when_enabled() -> Result
 #[tokio::test]
 async fn test_import_settings_apply_product_linked_sender_by_imported_product_id(
 ) -> Result<()> {
-	std::env::set_var("E2BR3_SKIP_XML_VALIDATE", "1");
 	let mm = init_test_mm().await?;
 	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
 	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;

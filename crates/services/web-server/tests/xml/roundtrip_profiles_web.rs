@@ -388,7 +388,6 @@ async fn mark_case_validated(
 #[serial]
 #[tokio::test]
 async fn test_roundtrip_fixtures_import_validate_export_revalidate() -> Result<()> {
-	std::env::set_var("E2BR3_SKIP_XML_VALIDATE", "0");
 	std::env::set_var("E2BR3_XSD_PATH", xsd_path());
 
 	let fixtures = [

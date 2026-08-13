@@ -77,7 +77,6 @@ async fn get_json(
 #[tokio::test]
 async fn test_import_history_uploaded_at_is_rfc3339() -> Result<()> {
 	init_test_env().await?;
-	std::env::set_var("E2BR3_SKIP_XML_VALIDATE", "1");
 
 	let mm = init_test_mm().await?;
 	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;

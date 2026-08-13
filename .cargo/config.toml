@@ -35,6 +35,3 @@ SERVICE_WEB_FOLDER="web-folder/"
 # Skip dev database init (use Docker PostgreSQL instead)
 # Set to "0" if you want init_dev() to run
 SKIP_DEV_INIT="1"
-
-# Skip XML validation on import (demo-only)
-E2BR3_SKIP_XML_VALIDATE="1"

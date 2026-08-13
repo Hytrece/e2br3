@@ -197,7 +197,6 @@ jobs:
           SERVICE_TOKEN_KEY: 9FoHBmkyxbgu_xFoQK7e0jz3RMNVJWgfvbVn712FBNH9LLaAWS3CS6Zpcg6RveiObvCUb6a2z-uAiLjhLh2igw
           SERVICE_TOKEN_DURATION_SEC: "1800"
           SERVICE_WEB_FOLDER: "web-folder/"
-          E2BR3_SKIP_XML_VALIDATE: "0"
           E2BR3_XSD_PATH: docs/exporter/schema/multicacheschemas/MCCI_IN200100UV01.xsd
           E2BR3_MFDS_EXAMPLES_DIR: docs/exporter/mfds
           E2BR3_MFDS_REQUIRE_VALIDATION_OK: "0"

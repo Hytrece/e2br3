@@ -44,7 +44,6 @@
    E2BR3_VALIDATOR_TOKEN=<validator-token>
    E2BR3_SCHEMAS_DIR=/opt/e2br3/schemas
    E2BR3_XSD_PATH=/opt/e2br3/schemas/ich-icsr-v3.0.xsd
-   E2BR3_SKIP_XML_VALIDATE=false
    E2BR3_EXPORT_VALIDATE=true
    E2BR3_DEFAULT_MESSAGE_SENDER=<sender-id>
    E2BR3_DEFAULT_MESSAGE_RECEIVER_FDA=<fda-receiver-id>
