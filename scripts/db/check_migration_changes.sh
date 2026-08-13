@@ -12,6 +12,7 @@ fi
 added_migration=0
 baseline_change=0
 errors=
+changes=$(git diff --name-status --no-renames "${BASE_REF}" "${HEAD_REF}" -- db)
 
 while IFS="$(printf '\t')" read -r status path; do
 	[ -n "${path}" ] || continue
@@ -24,12 +25,12 @@ while IFS="$(printf '\t')" read -r status path; do
 				errors="${errors}\nMigration files are append-only: ${status} ${path}"
 			fi
 			;;
-		db/bootstrap/*.sql)
+		db/bootstrap/*.sql|db/seed/*.sql)
 			baseline_change=1
 			;;
 	esac
 done <<EOF
-$(git diff --name-status --no-renames "${BASE_REF}" "${HEAD_REF}" -- db)
+${changes}
 EOF
 
 if [ -n "${errors}" ]; then
@@ -38,7 +39,7 @@ if [ -n "${errors}" ]; then
 fi
 
 if [ "${baseline_change}" = "1" ] && [ "${added_migration}" = "0" ]; then
-	echo "Bootstrap SQL changed without a new db/migrations/*.sql file." >&2
+	echo "Bootstrap or seed SQL changed without a new db/migrations/*.sql file." >&2
 	exit 1
 fi
 
