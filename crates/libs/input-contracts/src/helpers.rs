@@ -1,5 +1,4 @@
 use crate::{FormatName, InputIssue, InputValue, NumericShape};
-use base64::engine::{general_purpose, Engine};
 
 pub(crate) fn max_length(
 	issues: &mut Vec<InputIssue>,
@@ -107,7 +106,6 @@ pub(crate) fn format(
 		InputValue::Missing => true,
 		InputValue::String(value) => match format {
 			FormatName::E2bDatetime => valid_e2b_datetime(value),
-			FormatName::Base64 => general_purpose::STANDARD.decode(value).is_ok(),
 		},
 		_ => false,
 	};

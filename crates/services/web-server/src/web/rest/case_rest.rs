@@ -614,7 +614,6 @@ fn to_internal_case_for_create(
 		mfds_report_type: data.mfds_report_type,
 		fda_report_type: data.fda_report_type,
 		report_year: data.report_year,
-		import_authority: None,
 	}
 }
 
@@ -895,10 +894,12 @@ pub async fn create_case_guarded(
 ) -> Result<(axum::http::StatusCode, Json<DataRestResult<CaseReadResult>>)> {
 	let ctx = ctx_w.0;
 	let ParamsForCreate { data } = params;
+	let product_key = data.dg_prd_key.clone();
 	lib_rest_core::with_authorized_case_create(
 		&ctx,
 		&snapshot,
 		&mm,
+		product_key.as_deref(),
 		move |ctx, mm| Box::pin(create_case_authorized(ctx, mm, data)),
 	)
 	.await
@@ -921,6 +922,7 @@ pub async fn create_follow_up_case_guarded(
 		&ctx,
 		&snapshot,
 		&mm,
+		None,
 		move |ctx, mm| {
 			Box::pin(create_follow_up_case_authorized(
 				ctx,
@@ -992,7 +994,6 @@ async fn create_follow_up_case_in_txn(
 		mfds_report_type: source_case.mfds_report_type,
 		fda_report_type: source_case.fda_report_type,
 		report_year: source_case.report_year,
-		import_authority: source_case.import_authority,
 	};
 	validate_case_create_payload(&case_create)?;
 	let case_id = CaseBmc::create(ctx, mm, case_create).await?;

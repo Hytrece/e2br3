@@ -200,22 +200,6 @@ async fn test_follow_up_creation_preserves_scope_and_allocates_versions(
 			.ok_or("missing source case id")?,
 	)?;
 
-	mm.dbx().begin_txn().await?;
-	set_full_context_dbx(
-		mm.dbx(),
-		seed.admin.id,
-		seed.org_id,
-		ROLE_SPONSOR_ADMIN_CRO,
-	)
-	.await?;
-	mm.dbx()
-		.execute(
-			sqlx::query("UPDATE cases SET import_authority = 'mfds' WHERE id = $1")
-				.bind(source_case_id),
-		)
-		.await?;
-	mm.dbx().commit_txn().await?;
-
 	let mut invalid_pages = follow_up_pages("mfds");
 	invalid_pages["ae"] = json!([
 		{
@@ -304,8 +288,8 @@ async fn test_follow_up_creation_preserves_scope_and_allocates_versions(
 	let rows = mm
 		.dbx()
 		.fetch_all(
-			sqlx::query_as::<_, (Uuid, Option<String>, Option<String>, i32)>(
-				"SELECT c.id, c.import_authority, c.dg_prd_key, s.version
+				sqlx::query_as::<_, (Uuid, Option<String>, i32)>(
+					"SELECT c.id, c.dg_prd_key, s.version
 				   FROM cases c
 				   JOIN safety_report_identification s ON s.case_id = c.id
 				  WHERE s.safety_report_id = $1
@@ -319,8 +303,7 @@ async fn test_follow_up_creation_preserves_scope_and_allocates_versions(
 	assert_eq!(rows.len(), 3);
 	assert_eq!(rows[1].0, follow_up_ids[0]);
 	assert_eq!(rows[2].0, follow_up_ids[1]);
-	for (_, authority, product, _) in &rows[1..] {
-		assert_eq!(authority.as_deref(), Some("mfds"));
+	for (_, product, _) in &rows[1..] {
 		assert_eq!(product.as_deref(), Some(product_id.as_str()));
 	}
 

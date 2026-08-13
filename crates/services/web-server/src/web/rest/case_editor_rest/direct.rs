@@ -1287,9 +1287,25 @@ async fn apply_sd_page_rows_patch(
 			postcode: string_field(sender, &["postcode"]),
 			country_code: string_field(sender, &["countryCode"]),
 			person_title: string_field(sender, &["personTitle"]),
+			person_title_null_flavor: string_field(
+				sender,
+				&["personTitleNullFlavor"],
+			),
 			person_given_name: string_field(sender, &["personGivenName"]),
+			person_given_name_null_flavor: string_field(
+				sender,
+				&["personGivenNameNullFlavor"],
+			),
 			person_middle_name: string_field(sender, &["personMiddleName"]),
+			person_middle_name_null_flavor: string_field(
+				sender,
+				&["personMiddleNameNullFlavor"],
+			),
 			person_family_name: string_field(sender, &["personFamilyName"]),
+			person_family_name_null_flavor: string_field(
+				sender,
+				&["personFamilyNameNullFlavor"],
+			),
 			telephone: string_field(sender, &["telephone"]),
 			fax: string_field(sender, &["fax"]),
 			email: string_field(sender, &["email"]),
@@ -1325,9 +1341,16 @@ async fn apply_sd_page_rows_patch(
 					postcode: update.postcode,
 					country_code: update.country_code,
 					person_title: update.person_title,
+					person_title_null_flavor: update.person_title_null_flavor,
 					person_given_name: update.person_given_name,
+					person_given_name_null_flavor: update
+						.person_given_name_null_flavor,
 					person_middle_name: update.person_middle_name,
+					person_middle_name_null_flavor: update
+						.person_middle_name_null_flavor,
 					person_family_name: update.person_family_name,
+					person_family_name_null_flavor: update
+						.person_family_name_null_flavor,
 					telephone: update.telephone,
 					fax: update.fax,
 					email: update.email,

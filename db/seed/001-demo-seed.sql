@@ -71,8 +71,8 @@ BEGIN
     -- Keep the demo tenants usable with strict runtime settings from a clean DB.
     INSERT INTO app_settings (organization_id, key, value)
     VALUES
-        (v_org_id, 'system', app_settings_default_value()),
-        (v_company_org_id, 'system', app_settings_default_value())
+        (v_org_id, 'system', jsonb_set(app_settings_default_value(), '{appendices}', '["ICH", "FDA", "MFDS"]'::jsonb)),
+        (v_company_org_id, 'system', jsonb_set(app_settings_default_value(), '{appendices}', '["ICH", "FDA", "MFDS"]'::jsonb))
     ON CONFLICT (organization_id, key) DO NOTHING;
 
     -- Insert demo identities without password hashes.

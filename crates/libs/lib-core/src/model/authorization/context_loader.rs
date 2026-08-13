@@ -687,14 +687,46 @@ impl<'tx> AuthorizationFactLoader<'tx> {
 		}))
 	}
 
-	pub fn case_create_for_verified_mutation(
+	pub async fn case_create_for_verified_mutation(
 		&self,
 		organization_id: Uuid,
-	) -> LockedMutationContext<'tx, Proposed<CaseCreateProposal>> {
-		let within_principal_scope = organization_id
-			== self.snapshot.organization_id()
-			|| self.snapshot.identity().is_platform_administrator();
-		LockedMutationContext::new(EvaluatedContext {
+		product_key: Option<&str>,
+	) -> Result<
+		LockedMutationContext<'tx, Proposed<CaseCreateProposal>>,
+		AuthorizationFactLoadError,
+	> {
+		let (product_identifiers, sender_identifiers) = if let Some(product_key) =
+			product_key.map(str::trim).filter(|value| !value.is_empty())
+		{
+			self.dbx
+				.fetch_one(
+					sqlx::query_as::<_, (Vec<String>, Vec<String>)>(
+						"SELECT COALESCE(array_agg(id::text), ARRAY[]::text[]),
+						        COALESCE(array_agg(sender_presave_id::text)
+						                 FILTER (WHERE sender_presave_id IS NOT NULL), ARRAY[]::text[])
+						   FROM product_presaves
+						  WHERE organization_id = $1
+						    AND product_id = $2
+						    AND deleted = false",
+					)
+					.bind(organization_id)
+					.bind(product_key),
+				)
+				.await?
+		} else {
+			(Vec::new(), Vec::new())
+		};
+		let within_principal_scope =
+			self.snapshot.identity().is_platform_administrator()
+				|| (organization_id == self.snapshot.organization_id()
+					&& scope_allows(
+						self.snapshot.scope().sender_ids(),
+						&sender_identifiers,
+					) && scope_allows(
+					self.snapshot.scope().product_ids(),
+					&product_identifiers,
+				));
+		Ok(LockedMutationContext::new(EvaluatedContext {
 			organization_id: Some(organization_id),
 			target_fingerprint: format!("case:new:{organization_id}"),
 			within_principal_scope,
@@ -702,7 +734,7 @@ impl<'tx> AuthorizationFactLoader<'tx> {
 			parent_authorized: false,
 			every_target_authorized: false,
 			enforced_scope_filter: None,
-		})
+		}))
 	}
 
 	pub async fn case_existing(

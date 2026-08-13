@@ -1200,6 +1200,41 @@ async fn test_case_editor_can_create_assigned_dg_but_denies_unassigned_product(
 	)
 	.await?;
 
+	let editor_case = create_case(
+		&app,
+		&editor_cookie,
+		&format!("SR-DG-EDITOR-{}", Uuid::new_v4()),
+		Some(&assigned_product_key),
+	)
+	.await?;
+	let (status, value) = request_json(
+		&app,
+		"GET",
+		&editor_cookie,
+		format!("/api/cases/{editor_case}"),
+		None,
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK, "{value:?}");
+
+	let (status, value) = request_json(
+		&app,
+		"POST",
+		&editor_cookie,
+		"/api/cases".to_string(),
+		Some(json!({
+			"data": {
+				"safetyReportIdentification": {
+					"safetyReportId": format!("SR-DG-DENIED-{}", Uuid::new_v4())
+				},
+				"status": "draft",
+				"dgPrdKey": unassigned_product_key
+			}
+		})),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::FORBIDDEN, "{value:?}");
+
 	let dg_row = |source_product_presave_id: Uuid, medicinal_product: &str| {
 		json!({
 			"authorities": ["ich"],

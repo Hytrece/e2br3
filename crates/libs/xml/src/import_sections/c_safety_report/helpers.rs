@@ -23,9 +23,13 @@ pub(crate) struct SenderImport {
 	pub(crate) postcode: Option<String>,
 	pub(crate) country_code: Option<String>,
 	pub(crate) person_title: Option<String>,
+	pub(crate) person_title_null_flavor: Option<String>,
 	pub(crate) person_given_name: Option<String>,
+	pub(crate) person_given_name_null_flavor: Option<String>,
 	pub(crate) person_middle_name: Option<String>,
+	pub(crate) person_middle_name_null_flavor: Option<String>,
 	pub(crate) person_family_name: Option<String>,
+	pub(crate) person_family_name_null_flavor: Option<String>,
 	pub(crate) telephone: Option<String>,
 	pub(crate) fax: Option<String>,
 	pub(crate) email: Option<String>,
@@ -137,6 +141,27 @@ fn sender_string(
 	Ok(value)
 }
 
+fn sender_string_with_null_flavor(
+	xpath: &mut Context,
+	node: Option<&libxml::tree::Node>,
+	path: &str,
+	field: &str,
+	check: impl for<'a> Fn(
+		input_contracts::FieldInput<'a>,
+	) -> Vec<input_contracts::InputIssue>,
+) -> Result<(Option<String>, Option<String>)> {
+	let value = sender_text(xpath, node, path);
+	let null_flavor =
+		node.and_then(|node| first_attr(xpath, node, path, "nullFlavor"));
+	import_constraint::string(
+		field,
+		value.as_deref(),
+		null_flavor.as_deref(),
+		check,
+	)?;
+	Ok((value, null_flavor))
+}
+
 /// e2b:C.3.1
 fn read_c_3_1(
 	xpath: &mut Context,
@@ -212,9 +237,11 @@ fn read_c_3_3_1(
 fn read_c_3_3_2(
 	xpath: &mut Context,
 	node: Option<&libxml::tree::Node>,
-) -> Result<Option<String>> {
-	sender_string(
-		sender_text(xpath, node, "./hl7:assignedPerson/hl7:name/hl7:prefix"),
+) -> Result<(Option<String>, Option<String>)> {
+	sender_string_with_null_flavor(
+		xpath,
+		node,
+		"./hl7:assignedPerson/hl7:name/hl7:prefix",
 		"personTitle",
 		input_contracts::generated::c::c_3_3_2,
 	)
@@ -224,9 +251,11 @@ fn read_c_3_3_2(
 fn read_c_3_3_3(
 	xpath: &mut Context,
 	node: Option<&libxml::tree::Node>,
-) -> Result<Option<String>> {
-	sender_string(
-		sender_text(xpath, node, "./hl7:assignedPerson/hl7:name/hl7:given[1]"),
+) -> Result<(Option<String>, Option<String>)> {
+	sender_string_with_null_flavor(
+		xpath,
+		node,
+		"./hl7:assignedPerson/hl7:name/hl7:given[1]",
 		"personGivenName",
 		input_contracts::generated::c::c_3_3_3,
 	)
@@ -236,9 +265,11 @@ fn read_c_3_3_3(
 fn read_c_3_3_4(
 	xpath: &mut Context,
 	node: Option<&libxml::tree::Node>,
-) -> Result<Option<String>> {
-	sender_string(
-		sender_text(xpath, node, "./hl7:assignedPerson/hl7:name/hl7:given[2]"),
+) -> Result<(Option<String>, Option<String>)> {
+	sender_string_with_null_flavor(
+		xpath,
+		node,
+		"./hl7:assignedPerson/hl7:name/hl7:given[2]",
 		"personMiddleName",
 		input_contracts::generated::c::c_3_3_4,
 	)
@@ -248,9 +279,11 @@ fn read_c_3_3_4(
 fn read_c_3_3_5(
 	xpath: &mut Context,
 	node: Option<&libxml::tree::Node>,
-) -> Result<Option<String>> {
-	sender_string(
-		sender_text(xpath, node, "./hl7:assignedPerson/hl7:name/hl7:family"),
+) -> Result<(Option<String>, Option<String>)> {
+	sender_string_with_null_flavor(
+		xpath,
+		node,
+		"./hl7:assignedPerson/hl7:name/hl7:family",
 		"personFamilyName",
 		input_contracts::generated::c::c_3_3_5,
 	)
@@ -406,6 +439,14 @@ pub(crate) fn parse_sender_information(xml: &[u8]) -> Result<Option<SenderImport
 
 	let sender_type = read_c_3_1(&mut xpath, sender_node.as_ref())?;
 	let organization_name = read_c_3_2(&mut xpath, sender_node.as_ref())?;
+	let (person_title, person_title_null_flavor) =
+		read_c_3_3_2(&mut xpath, sender_node.as_ref())?;
+	let (person_given_name, person_given_name_null_flavor) =
+		read_c_3_3_3(&mut xpath, sender_node.as_ref())?;
+	let (person_middle_name, person_middle_name_null_flavor) =
+		read_c_3_3_4(&mut xpath, sender_node.as_ref())?;
+	let (person_family_name, person_family_name_null_flavor) =
+		read_c_3_3_5(&mut xpath, sender_node.as_ref())?;
 
 	Ok(Some(SenderImport {
 		sender_type,
@@ -415,10 +456,14 @@ pub(crate) fn parse_sender_information(xml: &[u8]) -> Result<Option<SenderImport
 		)?,
 		organization_name,
 		department: read_c_3_3_1(&mut xpath, sender_node.as_ref())?,
-		person_title: read_c_3_3_2(&mut xpath, sender_node.as_ref())?,
-		person_given_name: read_c_3_3_3(&mut xpath, sender_node.as_ref())?,
-		person_middle_name: read_c_3_3_4(&mut xpath, sender_node.as_ref())?,
-		person_family_name: read_c_3_3_5(&mut xpath, sender_node.as_ref())?,
+		person_title,
+		person_title_null_flavor,
+		person_given_name,
+		person_given_name_null_flavor,
+		person_middle_name,
+		person_middle_name_null_flavor,
+		person_family_name,
+		person_family_name_null_flavor,
 		street_address: read_c_3_4_1(&mut xpath, sender_node.as_ref())?,
 		city: read_c_3_4_2(&mut xpath, sender_node.as_ref())?,
 		state: read_c_3_4_3(&mut xpath, sender_node.as_ref())?,
@@ -1109,6 +1154,20 @@ mod tests {
 			receiver.and_then(|receiver| receiver.organization_name),
 			None,
 			"receiver ID must not be imported as organization name"
+		);
+	}
+
+	#[test]
+	fn sender_import_preserves_name_null_flavors() {
+		let xml = br#"<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3"><PORR_IN049016UV><controlActProcess><subject><investigationEvent><subjectOf1><controlActEvent><author><assignedEntity><code code="1" codeSystem="2.16.840.1.113883.3.989.2.1.1.7"/><assignedPerson><name><given nullFlavor="MSK"/><family nullFlavor="NASK"/></name></assignedPerson></assignedEntity></author></controlActEvent></subjectOf1></investigationEvent></subject></controlActProcess></PORR_IN049016UV></MCCI_IN200100UV01>"#;
+
+		let sender = parse_sender_information(xml)
+			.expect("parse sender")
+			.expect("sender");
+		assert_eq!(sender.person_given_name_null_flavor.as_deref(), Some("MSK"));
+		assert_eq!(
+			sender.person_family_name_null_flavor.as_deref(),
+			Some("NASK")
 		);
 	}
 }

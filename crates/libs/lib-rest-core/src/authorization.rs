@@ -1205,6 +1205,7 @@ pub async fn with_authorized_case_create<T, F>(
 	request_ctx: &Ctx,
 	snapshot: &RequestAuthorizationSnapshot,
 	mm: &ModelManager,
+	product_key: Option<&str>,
 	operation: F,
 ) -> Result<T>
 where
@@ -1227,8 +1228,13 @@ where
 		return Err(map_fact_load_error(error));
 	}
 	let result = async {
-		let context =
-			loader.case_create_for_verified_mutation(request_ctx.organization_id());
+		let context = loader
+			.case_create_for_verified_mutation(
+				request_ctx.organization_id(),
+				product_key,
+			)
+			.await
+			.map_err(map_fact_load_error)?;
 		let action = policy_registry()
 			.context_action::<Proposed<CaseCreateProposal>>("case.create")
 			.ok_or_else(|| Error::AccessDenied {

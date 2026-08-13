@@ -4,6 +4,7 @@ use libxml::parser::Parser;
 use libxml::xpath::Context;
 
 mod authority;
+mod ich;
 
 /// Validates XML invariants that would make an authority payload internally
 /// inconsistent. Case business rules are intentionally not evaluated here.
@@ -48,6 +49,7 @@ pub fn validate_export_rules(
 		"/hl7:MCCI_IN200100UV01/hl7:PORR_IN049016UV[hl7:creationTime/@value != hl7:controlActProcess/hl7:effectiveTime/@value]",
 		"N.2.r.4 must be identical to C.1.2.",
 	);
+	ich::run(&mut xpath, &mut errors);
 	authority::run(&mut xpath, authority, &mut errors);
 	Ok(errors)
 }
@@ -91,6 +93,7 @@ mod tests {
 		let codes = errors
 			.iter()
 			.filter_map(|error| error.code.as_deref())
+			.filter(|code| code.starts_with("N."))
 			.collect::<Vec<_>>();
 		assert_eq!(codes, ["N.2.r.1", "N.2.r.4"]);
 	}
@@ -98,9 +101,10 @@ mod tests {
 	#[test]
 	fn ignores_case_business_rules() {
 		let xml = br#"<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3"><name code="wrong"/><PORR_IN049016UV><id root="2.16.840.1.113883.3.989.2.1.3.1" extension="not-a-country-profile"/><creationTime value="20990101"/><controlActProcess><effectiveTime value="20990101"/><subject><investigationEvent><id root="2.16.840.1.113883.3.989.2.1.3.1" extension="not-a-country-profile"/></investigationEvent></subject></controlActProcess></PORR_IN049016UV></MCCI_IN200100UV01>"#;
-		assert!(validate_export_rules(xml, RegulatoryAuthority::Ich)
-			.unwrap()
-			.is_empty());
+		let errors = validate_export_rules(xml, RegulatoryAuthority::Ich).unwrap();
+		assert!(!errors.iter().any(|error| {
+			matches!(error.code.as_deref(), Some("C.1.1" | "C.1.2"))
+		}));
 	}
 
 	#[test]
@@ -110,10 +114,27 @@ mod tests {
 			.unwrap()
 			.is_empty());
 		let errors = validate_export_rules(xml, RegulatoryAuthority::Ich).unwrap();
-		assert_eq!(errors.len(), 1);
-		assert_eq!(
-			errors[0].message,
-			"XML for ICH contains FDA regional fields."
-		);
+		assert!(errors.iter().any(
+			|error| error.message == "XML for ICH contains FDA regional fields."
+		));
+	}
+
+	#[test]
+	fn rejects_icsr_without_required_reaction_product_and_narrative() {
+		let xml = br#"<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3"><PORR_IN049016UV><controlActProcess><subject><investigationEvent/></subject></controlActProcess></PORR_IN049016UV></MCCI_IN200100UV01>"#;
+		let errors = validate_export_rules(xml, RegulatoryAuthority::Fda).unwrap();
+		let codes = errors
+			.iter()
+			.filter_map(|error| error.code.as_deref())
+			.collect::<Vec<_>>();
+		assert_eq!(codes, ["E.i.2.1a", "E.i.2.1b", "G.k.1", "H.1"]);
+	}
+
+	#[test]
+	fn accepts_required_ich_case_content() {
+		let xml = br#"<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3"><PORR_IN049016UV><controlActProcess><subject><investigationEvent><text>Case narrative</text><observation><code code="29" codeSystem="2.16.840.1.113883.3.989.2.1.1.19"/><value code="10019211" codeSystem="2.16.840.1.113883.6.163" codeSystemVersion="28.1"/></observation><causalityAssessment><code code="20" codeSystem="2.16.840.1.113883.3.989.2.1.1.19"/><value code="1" codeSystem="2.16.840.1.113883.3.989.2.1.1.13"/></causalityAssessment></investigationEvent></subject></controlActProcess></PORR_IN049016UV></MCCI_IN200100UV01>"#;
+		assert!(validate_export_rules(xml, RegulatoryAuthority::Fda)
+			.unwrap()
+			.is_empty());
 	}
 }

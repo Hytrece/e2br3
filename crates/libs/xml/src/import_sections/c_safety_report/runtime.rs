@@ -273,9 +273,19 @@ async fn import_c_2_sender_information(
 				postcode: sender.postcode.clone(),
 				country_code: sender.country_code.clone(),
 				person_title: sender.person_title.clone(),
+				person_title_null_flavor: sender.person_title_null_flavor.clone(),
 				person_given_name: sender.person_given_name.clone(),
+				person_given_name_null_flavor: sender
+					.person_given_name_null_flavor
+					.clone(),
 				person_middle_name: sender.person_middle_name.clone(),
+				person_middle_name_null_flavor: sender
+					.person_middle_name_null_flavor
+					.clone(),
 				person_family_name: sender.person_family_name.clone(),
+				person_family_name_null_flavor: sender
+					.person_family_name_null_flavor
+					.clone(),
 				telephone: sender.telephone.clone(),
 				fax: sender.fax.clone(),
 				email: sender.email.clone(),
@@ -300,9 +310,13 @@ async fn import_c_2_sender_information(
 			postcode: sender.postcode,
 			country_code: sender.country_code,
 			person_title: sender.person_title,
+			person_title_null_flavor: sender.person_title_null_flavor,
 			person_given_name: sender.person_given_name,
+			person_given_name_null_flavor: sender.person_given_name_null_flavor,
 			person_middle_name: sender.person_middle_name,
+			person_middle_name_null_flavor: sender.person_middle_name_null_flavor,
 			person_family_name: sender.person_family_name,
+			person_family_name_null_flavor: sender.person_family_name_null_flavor,
 			telephone: sender.telephone,
 			fax: sender.fax,
 			email: sender.email,
@@ -355,15 +369,19 @@ async fn sender_import_from_presave(
 		person_title: responsible
 			.as_ref()
 			.and_then(|person| person.person_title.clone()),
+		person_title_null_flavor: None,
 		person_given_name: responsible
 			.as_ref()
 			.and_then(|person| person.person_given_name.clone()),
+		person_given_name_null_flavor: None,
 		person_middle_name: responsible
 			.as_ref()
 			.and_then(|person| person.person_middle_name.clone()),
+		person_middle_name_null_flavor: None,
 		person_family_name: responsible
 			.as_ref()
 			.and_then(|person| person.person_family_name.clone()),
+		person_family_name_null_flavor: None,
 		telephone: sender.telephone,
 		fax: sender.fax,
 		email: sender.email,

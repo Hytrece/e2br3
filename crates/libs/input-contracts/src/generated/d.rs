@@ -281,7 +281,6 @@ pub fn d_10_6(input: crate::FieldInput<'_>) -> Vec<crate::InputIssue> {
 }
 
 /// ICH.D.10.7.1.r.1a.LENGTH.MAX
-/// ICH.D.10.7.1.r.1a.ALLOWED.VALUE
 pub fn d_10_7_1_r_1a(input: crate::FieldInput<'_>) -> Vec<crate::InputIssue> {
 	let mut issues = Vec::new();
 	crate::helpers::max_length(
@@ -289,12 +288,6 @@ pub fn d_10_7_1_r_1a(input: crate::FieldInput<'_>) -> Vec<crate::InputIssue> {
 		"ICH.D.10.7.1.r.1a.LENGTH.MAX",
 		input.value,
 		4,
-	);
-	crate::helpers::numeric(
-		&mut issues,
-		"ICH.D.10.7.1.r.1a.ALLOWED.VALUE",
-		input.value,
-		crate::NumericShape::DottedVersion,
 	);
 	issues
 }
@@ -736,7 +729,6 @@ pub fn d_6(input: crate::FieldInput<'_>) -> Vec<crate::InputIssue> {
 }
 
 /// ICH.D.7.1.r.1a.LENGTH.MAX
-/// ICH.D.7.1.r.1a.ALLOWED.VALUE
 pub fn d_7_1_r_1a(input: crate::FieldInput<'_>) -> Vec<crate::InputIssue> {
 	let mut issues = Vec::new();
 	crate::helpers::max_length(
@@ -744,12 +736,6 @@ pub fn d_7_1_r_1a(input: crate::FieldInput<'_>) -> Vec<crate::InputIssue> {
 		"ICH.D.7.1.r.1a.LENGTH.MAX",
 		input.value,
 		4,
-	);
-	crate::helpers::numeric(
-		&mut issues,
-		"ICH.D.7.1.r.1a.ALLOWED.VALUE",
-		input.value,
-		crate::NumericShape::DottedVersion,
 	);
 	issues
 }

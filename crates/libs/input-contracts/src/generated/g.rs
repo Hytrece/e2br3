@@ -864,7 +864,6 @@ pub fn g_k_7_r_1(input: crate::FieldInput<'_>) -> Vec<crate::InputIssue> {
 }
 
 /// ICH.G.k.7.r.2a.LENGTH.MAX
-/// ICH.G.k.7.r.2a.ALLOWED.VALUE
 pub fn g_k_7_r_2a(input: crate::FieldInput<'_>) -> Vec<crate::InputIssue> {
 	let mut issues = Vec::new();
 	crate::helpers::max_length(
@@ -872,12 +871,6 @@ pub fn g_k_7_r_2a(input: crate::FieldInput<'_>) -> Vec<crate::InputIssue> {
 		"ICH.G.k.7.r.2a.LENGTH.MAX",
 		input.value,
 		4,
-	);
-	crate::helpers::numeric(
-		&mut issues,
-		"ICH.G.k.7.r.2a.ALLOWED.VALUE",
-		input.value,
-		crate::NumericShape::DottedVersion,
 	);
 	issues
 }

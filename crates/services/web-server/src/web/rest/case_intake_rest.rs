@@ -391,10 +391,12 @@ pub async fn check_case_intake_duplicate(
 	Json<DataRestResult<CaseIntakeCheckResult>>,
 )> {
 	let ctx = ctx_w.0;
+	let product_key = params.data.dg_prd_key.clone();
 	lib_rest_core::with_authorized_case_create(
 		&ctx,
 		&snapshot,
 		&mm,
+		product_key.as_deref(),
 		move |ctx, mm| {
 			Box::pin(async move {
 				let data = normalize_intake_check_input(params.data);
@@ -431,10 +433,12 @@ pub async fn create_case_from_intake(
 	Json<DataRestResult<CaseFromIntakeResult>>,
 )> {
 	let ctx = ctx_w.0;
+	let product_key = params.data.dg_prd_key.clone();
 	lib_rest_core::with_authorized_case_create(
 		&ctx,
 		&snapshot,
 		&mm,
+		product_key.as_deref(),
 		move |ctx, mm| {
 			Box::pin(create_case_from_intake_authorized(ctx, mm, params.data))
 		},
@@ -548,7 +552,6 @@ async fn create_case_from_intake_in_txn(
 		mfds_report_type: data.mfds_report_type.clone(),
 		fda_report_type: data.fda_report_type.clone(),
 		report_year: data.report_year.clone(),
-		import_authority: Some(profile_enum.as_str().to_string()),
 	};
 	validate_case_create_payload(&case_create)?;
 	let case_id = CaseBmc::create(ctx, mm, case_create).await?;

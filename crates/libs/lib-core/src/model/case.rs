@@ -38,7 +38,6 @@ pub struct Case {
 	pub mfds_report_type: Option<String>,
 	pub fda_report_type: Option<String>,
 	pub report_year: Option<String>,
-	pub import_authority: Option<String>,
 
 	// Workflow
 	pub created_by: Uuid,
@@ -70,7 +69,6 @@ pub struct CaseForCreate {
 	pub mfds_report_type: Option<String>,
 	pub fda_report_type: Option<String>,
 	pub report_year: Option<String>,
-	pub import_authority: Option<String>,
 }
 
 #[derive(Fields, Deserialize, Default)]
@@ -271,7 +269,6 @@ fn list_view_rows_sql(order_clause: &str, where_clause: &str) -> String {
 		       	 LIMIT 1
 		       ), NULLIF(s.receiver_organization, ''), 'N/A') AS receiver,
 		       CASE WHEN c.raw_xml IS NULL THEN 'Manual' ELSE 'Import' END AS creation_type,
-		       c.import_authority,
 		       c.status = 'reviewed' AS reviewed,
 		       c.status = 'locked' AS locked,
 		       c.status = 'deleted' AS deleted,
@@ -413,7 +410,6 @@ pub struct CaseListViewRow {
 	pub wf_user: String,
 	pub receiver: String,
 	pub creation_type: String,
-	pub import_authority: Option<String>,
 	pub reviewed: bool,
 	pub locked: bool,
 	pub deleted: bool,
@@ -446,7 +442,6 @@ const CASE_SELECT: &str = r#"
 		c.mfds_report_type,
 		c.fda_report_type,
 		c.report_year,
-		c.import_authority,
 		c.created_by,
 		c.updated_by,
 		c.submitted_by,
@@ -506,13 +501,12 @@ impl CaseBmc {
 						mfds_report_type,
 						fda_report_type,
 						report_year,
-						import_authority,
 						created_by,
 						updated_by,
 						created_at,
 						updated_at
 					)
-					VALUES ($1, $2, COALESCE($3, 'draft'), $4, $5, $6, $7, $8, $9, $10, $10, now(), now())
+					VALUES ($1, $2, COALESCE($3, 'draft'), $4, $5, $6, $7, $8, $9, $9, now(), now())
 					RETURNING id",
 				)
 				.bind(case_c.organization_id)
@@ -523,7 +517,6 @@ impl CaseBmc {
 				.bind(case_c.mfds_report_type)
 				.bind(case_c.fda_report_type)
 				.bind(case_c.report_year)
-				.bind(case_c.import_authority)
 				.bind(ctx.user_id()),
 			)
 			.await?;

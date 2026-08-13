@@ -97,9 +97,13 @@ CREATE TABLE sender_information (
 
     -- C.3.3 - Person Responsible for Sending
     person_title VARCHAR(50),
+    person_title_null_flavor VARCHAR(4) CHECK (person_title_null_flavor IN ('MSK', 'ASKU', 'NASK')),
     person_given_name VARCHAR(60),
+    person_given_name_null_flavor VARCHAR(4) CHECK (person_given_name_null_flavor IN ('MSK', 'ASKU', 'NASK')),
     person_middle_name VARCHAR(60),
+    person_middle_name_null_flavor VARCHAR(4) CHECK (person_middle_name_null_flavor IN ('MSK', 'ASKU', 'NASK')),
     person_family_name VARCHAR(60),
+    person_family_name_null_flavor VARCHAR(4) CHECK (person_family_name_null_flavor IN ('MSK', 'ASKU', 'NASK')),
 
     -- C.3.4 - Contact Information
     telephone VARCHAR(33),

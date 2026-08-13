@@ -59,8 +59,14 @@ fn retain_case_business_rules(issues: &mut Vec<ValidationIssue>) {
 		matches!(
 			issue.code.as_str(),
 			"ICH.C.1.6.1.r.2.ALLOWED.VALUE"
+				| "ICH.C.4.r.2.ALLOWED.VALUE"
 				| "ICH.D.6.NULLFLAVOR.ALLOWED"
+				| "ICH.D.7.1.r.1a.ALLOWED.VALUE"
+				| "ICH.D.10.7.1.r.1a.ALLOWED.VALUE"
 				| "ICH.E.i.2.1a.ALLOWED.VALUE"
+				| "ICH.F.r.2.2a.ALLOWED.VALUE"
+				| "ICH.G.k.7.r.2a.ALLOWED.VALUE"
+				| "ICH.H.3.r.1a.ALLOWED.VALUE"
 		) || (!issue.code.ends_with(".LENGTH.MAX")
 			&& !issue.code.ends_with(".ALLOWED.VALUE")
 			&& !issue.code.ends_with(".NULLFLAVOR.ALLOWED"))
@@ -393,8 +399,14 @@ mod tests {
 		let mut issues = Vec::new();
 		for code in [
 			"ICH.C.1.6.1.r.2.ALLOWED.VALUE",
+			"ICH.C.4.r.2.ALLOWED.VALUE",
 			"ICH.D.6.NULLFLAVOR.ALLOWED",
+			"ICH.D.7.1.r.1a.ALLOWED.VALUE",
+			"ICH.D.10.7.1.r.1a.ALLOWED.VALUE",
 			"ICH.E.i.2.1a.ALLOWED.VALUE",
+			"ICH.F.r.2.2a.ALLOWED.VALUE",
+			"ICH.G.k.7.r.2a.ALLOWED.VALUE",
+			"ICH.H.3.r.1a.ALLOWED.VALUE",
 		] {
 			crate::push_field_issue(
 				&mut issues,
@@ -406,7 +418,7 @@ mod tests {
 			);
 		}
 		retain_case_business_rules(&mut issues);
-		assert_eq!(issues.len(), 3);
+		assert_eq!(issues.len(), 9);
 	}
 
 	#[test]

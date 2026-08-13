@@ -33,7 +33,13 @@ pub fn patch_c_safety_report(
 	write_c_1_4(&mut doc, &parser, &mut xpath, patch.date_first_received)?;
 	write_c_1_5(&mut doc, &parser, &mut xpath, patch.date_most_recent)?;
 
-	write_c_1_7(&mut doc, &parser, &mut xpath, patch.fulfil_expedited)?;
+	write_c_1_7(
+		&mut doc,
+		&parser,
+		&mut xpath,
+		patch.fulfil_expedited,
+		patch.fulfil_expedited_null_flavor,
+	)?;
 	write_c_1_6_1(
 		&mut doc,
 		&parser,
@@ -146,7 +152,9 @@ pub fn patch_c_safety_report(
 	if let Some(v) = patch.sender_country_code {
 		write_c_3_4_5(&mut xpath, sender_base, v);
 	}
-	if let Some(v) = patch.sender_person_title {
+	if patch.sender_person_title.is_some()
+		|| patch.sender_person_title_null_flavor.is_some()
+	{
 		if xpath
 			.findnodes(&format!("{sender_base}/hl7:assignedPerson"), None)
 			.map(|nodes| nodes.is_empty())
@@ -189,9 +197,16 @@ pub fn patch_c_safety_report(
 				"<prefix/>",
 			)?;
 		}
-		write_c_3_3_2(&mut xpath, sender_base, v);
+		write_c_3_3_2(
+			&mut xpath,
+			sender_base,
+			patch.sender_person_title,
+			patch.sender_person_title_null_flavor,
+		);
 	}
-	if let Some(v) = patch.sender_person_given_name {
+	if patch.sender_person_given_name.is_some()
+		|| patch.sender_person_given_name_null_flavor.is_some()
+	{
 		if xpath
 			.findnodes(&format!("{sender_base}/hl7:assignedPerson"), None)
 			.map(|nodes| nodes.is_empty())
@@ -234,9 +249,16 @@ pub fn patch_c_safety_report(
 				"<given/>",
 			)?;
 		}
-		write_c_3_3_3(&mut xpath, sender_base, v);
+		write_c_3_3_3(
+			&mut xpath,
+			sender_base,
+			patch.sender_person_given_name,
+			patch.sender_person_given_name_null_flavor,
+		);
 	}
-	if let Some(v) = patch.sender_person_middle_name {
+	if patch.sender_person_middle_name.is_some()
+		|| patch.sender_person_middle_name_null_flavor.is_some()
+	{
 		if xpath
 			.findnodes(
 				&format!("{sender_base}//hl7:assignedPerson/hl7:name/hl7:given[2]"),
@@ -253,9 +275,16 @@ pub fn patch_c_safety_report(
 				"<given/>",
 			)?;
 		}
-		write_c_3_3_4(&mut xpath, sender_base, v);
+		write_c_3_3_4(
+			&mut xpath,
+			sender_base,
+			patch.sender_person_middle_name,
+			patch.sender_person_middle_name_null_flavor,
+		);
 	}
-	if let Some(v) = patch.sender_person_family_name {
+	if patch.sender_person_family_name.is_some()
+		|| patch.sender_person_family_name_null_flavor.is_some()
+	{
 		if xpath
 			.findnodes(&format!("{sender_base}/hl7:assignedPerson"), None)
 			.map(|nodes| nodes.is_empty())
@@ -298,7 +327,12 @@ pub fn patch_c_safety_report(
 				"<family/>",
 			)?;
 		}
-		write_c_3_3_5(&mut xpath, sender_base, v);
+		write_c_3_3_5(
+			&mut xpath,
+			sender_base,
+			patch.sender_person_family_name,
+			patch.sender_person_family_name_null_flavor,
+		);
 	}
 	if let Some(v) = patch.sender_department {
 		write_c_3_3_1(&mut xpath, sender_base, v);
@@ -322,6 +356,7 @@ fn ensure_c_3_nodes(
 ) -> Result<()> {
 	let value =
 		|value: Option<&str>| value.is_some_and(|value| !value.trim().is_empty());
+	let present = |value_, null_flavor| value(value_) || value(null_flavor);
 	let mut ensure = |parent: &str, path: &str, fragment: &str| {
 		if xpath
 			.findnodes(path, None)
@@ -407,9 +442,13 @@ fn ensure_c_3_nodes(
 
 	if [
 		patch.sender_person_title,
+		patch.sender_person_title_null_flavor,
 		patch.sender_person_given_name,
+		patch.sender_person_given_name_null_flavor,
 		patch.sender_person_middle_name,
+		patch.sender_person_middle_name_null_flavor,
 		patch.sender_person_family_name,
+		patch.sender_person_family_name_null_flavor,
 		patch.sender_country_code,
 	]
 	.into_iter()
@@ -423,9 +462,13 @@ fn ensure_c_3_nodes(
 	}
 	if [
 		patch.sender_person_title,
+		patch.sender_person_title_null_flavor,
 		patch.sender_person_given_name,
+		patch.sender_person_given_name_null_flavor,
 		patch.sender_person_middle_name,
+		patch.sender_person_middle_name_null_flavor,
 		patch.sender_person_family_name,
+		patch.sender_person_family_name_null_flavor,
 	]
 	.into_iter()
 	.any(value)
@@ -441,12 +484,21 @@ fn ensure_c_3_nodes(
 			("family", "<family/>"),
 		] {
 			let field_value = match field {
-				"prefix" => patch.sender_person_title,
-				"given[1]" => patch.sender_person_given_name,
-				"family" => patch.sender_person_family_name,
-				_ => None,
+				"prefix" => (
+					patch.sender_person_title,
+					patch.sender_person_title_null_flavor,
+				),
+				"given[1]" => (
+					patch.sender_person_given_name,
+					patch.sender_person_given_name_null_flavor,
+				),
+				"family" => (
+					patch.sender_person_family_name,
+					patch.sender_person_family_name_null_flavor,
+				),
+				_ => (None, None),
 			};
-			if value(field_value) {
+			if present(field_value.0, field_value.1) {
 				ensure(
 					&format!("{base}/hl7:assignedPerson/hl7:name"),
 					&format!("{base}/hl7:assignedPerson/hl7:name/hl7:{field}"),
@@ -454,7 +506,10 @@ fn ensure_c_3_nodes(
 				)?;
 			}
 		}
-		if value(patch.sender_person_middle_name) {
+		if present(
+			patch.sender_person_middle_name,
+			patch.sender_person_middle_name_null_flavor,
+		) {
 			ensure(
 				&format!("{base}/hl7:assignedPerson/hl7:name"),
 				&format!("{base}/hl7:assignedPerson/hl7:name/hl7:given[2]"),
@@ -600,7 +655,8 @@ fn write_c_1_7(
 	doc: &mut Document,
 	parser: &Parser,
 	xpath: &mut Context,
-	fulfil_expedited: bool,
+	fulfil_expedited: Option<bool>,
+	null_flavor: Option<&str>,
 ) -> Result<()> {
 	ensure_observation_event_component(
 		doc,
@@ -611,13 +667,13 @@ fn write_c_1_7(
 		"BL",
 	)?;
 	let path = "//hl7:component/hl7:observationEvent[hl7:code[@code='23' and @codeSystem='2.16.840.1.113883.3.989.2.1.1.19']]/hl7:value";
-	remove_attr_first(xpath, path, "nullFlavor");
-	set_attr_first(
-		xpath,
-		path,
-		"value",
-		if fulfil_expedited { "true" } else { "false" },
-	);
+	if let Some(value) = fulfil_expedited {
+		remove_attr_first(xpath, path, "nullFlavor");
+		set_attr_first(xpath, path, "value", if value { "true" } else { "false" });
+	} else if let Some(null_flavor) = null_flavor {
+		remove_attr_first(xpath, path, "value");
+		set_attr_first(xpath, path, "nullFlavor", null_flavor);
+	}
 	Ok(())
 }
 
@@ -903,39 +959,80 @@ fn write_c_3_3_1(xpath: &mut Context, base: &str, value: &str) {
 }
 
 /// e2b:C.3.3.2
-fn write_c_3_3_2(xpath: &mut Context, base: &str, value: &str) {
-	set_text_first(
+fn write_c_3_3_2(
+	xpath: &mut Context,
+	base: &str,
+	value: Option<&str>,
+	null_flavor: Option<&str>,
+) {
+	set_text_or_null_flavor(
 		xpath,
 		&format!("{base}//hl7:assignedPerson/hl7:name/hl7:prefix"),
 		value,
+		null_flavor,
 	);
 }
 
 /// e2b:C.3.3.3
-fn write_c_3_3_3(xpath: &mut Context, base: &str, value: &str) {
-	set_text_first(
+fn write_c_3_3_3(
+	xpath: &mut Context,
+	base: &str,
+	value: Option<&str>,
+	null_flavor: Option<&str>,
+) {
+	set_text_or_null_flavor(
 		xpath,
 		&format!("{base}//hl7:assignedPerson/hl7:name/hl7:given"),
 		value,
+		null_flavor,
 	);
 }
 
 /// e2b:C.3.3.4
-fn write_c_3_3_4(xpath: &mut Context, base: &str, value: &str) {
-	set_text_first(
+fn write_c_3_3_4(
+	xpath: &mut Context,
+	base: &str,
+	value: Option<&str>,
+	null_flavor: Option<&str>,
+) {
+	set_text_or_null_flavor(
 		xpath,
 		&format!("{base}//hl7:assignedPerson/hl7:name/hl7:given[2]"),
 		value,
+		null_flavor,
 	);
 }
 
 /// e2b:C.3.3.5
-fn write_c_3_3_5(xpath: &mut Context, base: &str, value: &str) {
-	set_text_first(
+fn write_c_3_3_5(
+	xpath: &mut Context,
+	base: &str,
+	value: Option<&str>,
+	null_flavor: Option<&str>,
+) {
+	set_text_or_null_flavor(
 		xpath,
 		&format!("{base}//hl7:assignedPerson/hl7:name/hl7:family"),
 		value,
+		null_flavor,
 	);
+}
+
+fn set_text_or_null_flavor(
+	xpath: &mut Context,
+	path: &str,
+	value: Option<&str>,
+	null_flavor: Option<&str>,
+) {
+	if let Some(value) = value.filter(|value| !value.trim().is_empty()) {
+		remove_attr_first(xpath, path, "nullFlavor");
+		set_text_first(xpath, path, value);
+	} else if let Some(null_flavor) =
+		null_flavor.filter(|value| !value.trim().is_empty())
+	{
+		set_text_first(xpath, path, "");
+		set_attr_first(xpath, path, "nullFlavor", null_flavor);
+	}
 }
 
 /// e2b:C.3.4.1
@@ -1054,7 +1151,8 @@ mod tests {
 			.register_namespace("xsi", "http://www.w3.org/2001/XMLSchema-instance")
 			.unwrap();
 
-		write_c_1_7(&mut doc, &parser, &mut xpath, true).expect("patch C.1.7");
+		write_c_1_7(&mut doc, &parser, &mut xpath, Some(true), None)
+			.expect("patch C.1.7");
 		let value = xpath
 			.findnodes(
 				"//hl7:observationEvent[hl7:code[@code='23']]/hl7:value",
@@ -1066,6 +1164,21 @@ mod tests {
 			.unwrap();
 		assert_eq!(value.get_attribute("value").as_deref(), Some("true"));
 		assert!(value.get_attribute("nullFlavor").is_none());
+		drop(value);
+
+		write_c_1_7(&mut doc, &parser, &mut xpath, None, Some("NI"))
+			.expect("patch C.1.7 nullFlavor");
+		let value = xpath
+			.findnodes(
+				"//hl7:observationEvent[hl7:code[@code='23']]/hl7:value",
+				None,
+			)
+			.unwrap()
+			.into_iter()
+			.next()
+			.unwrap();
+		assert!(value.get_attribute("value").is_none());
+		assert_eq!(value.get_attribute("nullFlavor").as_deref(), Some("NI"));
 	}
 
 	#[test]

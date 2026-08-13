@@ -41,7 +41,7 @@ CREATE TABLE patient_information (
 
     -- D.6 - Last Menstrual Period Date
     last_menstrual_period_date DATE,
-    last_menstrual_period_date_null_flavor VARCHAR(4) CHECK (last_menstrual_period_date_null_flavor IN ('MSK')),
+    last_menstrual_period_date_null_flavor VARCHAR(4) CHECK (last_menstrual_period_date_null_flavor IN ('MSK', 'UNK', 'ASKU', 'NASK')),
 
     -- D.7.2 - Text for Relevant Medical History
     medical_history_text TEXT,  -- Max 10000 chars

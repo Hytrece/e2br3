@@ -778,7 +778,10 @@ pub fn export_c_safety_report_patch(
 		report_type: report.report_type.as_deref().unwrap_or(""),
 		date_first_received: report.date_first_received_from_source,
 		date_most_recent: report.date_of_most_recent_information,
-		fulfil_expedited: report.fulfil_expedited_criteria.unwrap_or(false),
+		fulfil_expedited: report.fulfil_expedited_criteria,
+		fulfil_expedited_null_flavor: report
+			.fulfil_expedited_criteria_null_flavor
+			.as_deref(),
 		additional_documents_available: report.additional_documents_available,
 		other_case_identifiers_exist: report.other_case_identifiers_exist,
 		other_case_identifiers_exist_null_flavor: report
@@ -825,12 +828,20 @@ pub fn export_c_safety_report_patch(
 		sender_postcode: sender.and_then(|s| s.postcode.as_deref()),
 		sender_country_code: sender.and_then(|s| s.country_code.as_deref()),
 		sender_person_title: sender.and_then(|s| s.person_title.as_deref()),
+		sender_person_title_null_flavor: sender
+			.and_then(|s| s.person_title_null_flavor.as_deref()),
 		sender_person_given_name: sender
 			.and_then(|s| s.person_given_name.as_deref()),
+		sender_person_given_name_null_flavor: sender
+			.and_then(|s| s.person_given_name_null_flavor.as_deref()),
 		sender_person_middle_name: sender
 			.and_then(|s| s.person_middle_name.as_deref()),
+		sender_person_middle_name_null_flavor: sender
+			.and_then(|s| s.person_middle_name_null_flavor.as_deref()),
 		sender_person_family_name: sender
 			.and_then(|s| s.person_family_name.as_deref()),
+		sender_person_family_name_null_flavor: sender
+			.and_then(|s| s.person_family_name_null_flavor.as_deref()),
 		sender_telephone: sender.and_then(|s| s.telephone.as_deref()),
 		sender_fax: sender.and_then(|s| s.fax.as_deref()),
 		sender_email: sender.and_then(|s| s.email.as_deref()),
@@ -1250,8 +1261,8 @@ pub(crate) async fn apply_literature_section(
 		let attachment = write_c_4_r_2(&item, authority)?;
 		fragment.push_str(&format!(
 			"<reference typeCode=\"REFR\"><document classCode=\"DOC\" moodCode=\"EVN\"><code code=\"2\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.27\"/>{}{}</document></reference>",
-			bibliographic,
-			attachment
+			attachment,
+			bibliographic
 		));
 	}
 

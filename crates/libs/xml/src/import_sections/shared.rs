@@ -12,11 +12,21 @@ use time::Month;
 #[derive(Debug, Default)]
 pub(crate) struct ImportIdMap {
 	by_xml_id: HashMap<String, Uuid>,
+	by_normalized_xml_id: HashMap<String, Option<Uuid>>,
 	by_sequence: Vec<Uuid>,
 }
 
 impl ImportIdMap {
 	pub(crate) fn insert_xml_id(&mut self, xml_id: String, id: Uuid) {
+		let normalized = normalize_reference_id(&xml_id);
+		self.by_normalized_xml_id
+			.entry(normalized)
+			.and_modify(|existing| {
+				if *existing != Some(id) {
+					*existing = None;
+				}
+			})
+			.or_insert(Some(id));
 		self.by_xml_id.insert(xml_id, id);
 	}
 
@@ -29,8 +39,18 @@ impl ImportIdMap {
 		xml_id: Option<String>,
 		sequence: Option<i32>,
 	) -> Option<Uuid> {
-		if let Some(id) = xml_id.and_then(|id| self.by_xml_id.get(&id).copied()) {
-			return Some(id);
+		if let Some(xml_id) = xml_id {
+			if let Some(id) = self.by_xml_id.get(&xml_id).copied() {
+				return Some(id);
+			}
+			if let Some(id) = self
+				.by_normalized_xml_id
+				.get(&normalize_reference_id(&xml_id))
+				.copied()
+				.flatten()
+			{
+				return Some(id);
+			}
 		}
 		if let Some(seq) = sequence {
 			if seq > 0 {
@@ -42,6 +62,14 @@ impl ImportIdMap {
 		}
 		None
 	}
+}
+
+fn normalize_reference_id(value: &str) -> String {
+	value
+		.chars()
+		.filter(|character| character.is_ascii_alphanumeric())
+		.flat_map(char::to_lowercase)
+		.collect()
 }
 
 #[cfg(test)]
@@ -57,6 +85,24 @@ mod import_id_map_tests {
 		assert_eq!(map.resolve(Some("unknown".to_string()), None), None);
 		assert_eq!(map.resolve(None, None), None);
 		assert_eq!(map.resolve(None, Some(2)), None);
+	}
+
+	#[test]
+	fn resolves_unique_reference_with_different_separators() {
+		let mut map = ImportIdMap::default();
+		let id = Uuid::new_v4();
+		map.insert_xml_id("rid-1".to_string(), id);
+
+		assert_eq!(map.resolve(Some("r-id1".to_string()), None), Some(id));
+	}
+
+	#[test]
+	fn ambiguous_normalized_reference_stays_unresolved() {
+		let mut map = ImportIdMap::default();
+		map.insert_xml_id("rid-1".to_string(), Uuid::new_v4());
+		map.insert_xml_id("r-id1".to_string(), Uuid::new_v4());
+
+		assert_eq!(map.resolve(Some("RID1".to_string()), None), None);
 	}
 }
 

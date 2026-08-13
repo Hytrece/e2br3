@@ -1861,6 +1861,22 @@ CREATE POLICY whodrug_products_delete ON whodrug_products
     FOR DELETE TO e2br3_app_role
     USING (is_current_user_admin());
 
+ALTER TABLE terminology_releases ENABLE ROW LEVEL SECURITY;
+ALTER TABLE terminology_releases FORCE ROW LEVEL SECURITY;
+CREATE POLICY terminology_releases_read ON terminology_releases
+    FOR SELECT TO e2br3_app_role
+    USING (status IN ('validated', 'approved', 'active') OR is_current_user_admin());
+CREATE POLICY terminology_releases_insert ON terminology_releases
+    FOR INSERT TO e2br3_app_role
+    WITH CHECK (is_current_user_admin());
+CREATE POLICY terminology_releases_update ON terminology_releases
+    FOR UPDATE TO e2br3_app_role
+    USING (is_current_user_admin())
+    WITH CHECK (is_current_user_admin());
+CREATE POLICY terminology_releases_delete ON terminology_releases
+    FOR DELETE TO e2br3_app_role
+    USING (is_current_user_admin());
+
 ALTER TABLE controlled_terminology_terms ENABLE ROW LEVEL SECURITY;
 ALTER TABLE controlled_terminology_terms FORCE ROW LEVEL SECURITY;
 CREATE POLICY controlled_terminology_terms_read ON controlled_terminology_terms

@@ -38,7 +38,6 @@ pub(crate) enum NumericShape {
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum FormatName {
 	E2bDatetime,
-	Base64,
 }
 
 #[cfg(test)]
@@ -52,12 +51,42 @@ mod tests {
 			None,
 		))
 		.is_empty());
+		assert!(generated::c::c_4_r_2(FieldInput::new(
+			InputValue::String("not-base64"),
+			None,
+		))
+		.is_empty());
 		assert!(generated::d::d_6(FieldInput::new(
 			InputValue::Missing,
 			Some("NASK"),
 		))
 		.is_empty());
 		assert!(generated::e::e_i_2_1a(FieldInput::new(
+			InputValue::String("15"),
+			None,
+		))
+		.is_empty());
+		assert!(generated::d::d_7_1_r_1a(FieldInput::new(
+			InputValue::String("15"),
+			None,
+		))
+		.is_empty());
+		assert!(generated::d::d_10_7_1_r_1a(FieldInput::new(
+			InputValue::String("15"),
+			None,
+		))
+		.is_empty());
+		assert!(generated::g::g_k_7_r_2a(FieldInput::new(
+			InputValue::String("15"),
+			None,
+		))
+		.is_empty());
+		assert!(generated::f::f_r_2_2a(FieldInput::new(
+			InputValue::String("15"),
+			None,
+		))
+		.is_empty());
+		assert!(generated::h::h_3_r_1a(FieldInput::new(
 			InputValue::String("15"),
 			None,
 		))

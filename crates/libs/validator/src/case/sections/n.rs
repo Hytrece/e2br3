@@ -361,7 +361,6 @@ mod tests {
 			submitted_by: None,
 			submitted_at: None,
 			raw_xml: None,
-			import_authority: None,
 			dirty_c: false,
 			dirty_d: false,
 			dirty_e: false,

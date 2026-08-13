@@ -18,7 +18,6 @@ use lib_core::model::message_header::{
 };
 use lib_core::model::store::set_full_context_dbx;
 use lib_core::model::{self, ModelManager};
-use lib_core::regulatory::RegulatoryAuthority;
 use serde_json::json;
 use sqlx::types::time::Date;
 use sqlx::types::Uuid;
@@ -39,7 +38,6 @@ pub struct XmlImportRequest {
 	pub c_settings: CImportSettings,
 	pub product_presave_id: sqlx::types::Uuid,
 	pub product_id: String,
-	pub import_authority: RegulatoryAuthority,
 }
 
 pub fn extract_safety_report_id_from_xml(xml: &[u8]) -> Result<String> {
@@ -209,7 +207,6 @@ async fn import_e2b_xml_in_txn(
 			mfds_report_type: None,
 			fda_report_type: None,
 			report_year: None,
-			import_authority: Some(req.import_authority.as_str().to_string()),
 		},
 	)
 	.await?;
