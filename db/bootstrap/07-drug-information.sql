@@ -112,6 +112,7 @@ CREATE TABLE drug_active_substances (
     -- G.k.2.3.r.2 - Substance TermID (SUB TermID)
     substance_termid VARCHAR(100),
     substance_termid_version VARCHAR(10),
+	substance_termid_code_system TEXT,
 
     -- G.k.2.3.r.1.KR.1a/b - MFDS substance fields
     mfds_version VARCHAR(20),

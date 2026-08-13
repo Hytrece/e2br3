@@ -11,6 +11,10 @@ impl GDrugPaths {
 		"hl7:value[@codeSystem='2.16.840.1.113883.3.989.2.1.1.13']/@code";
 	pub const DRUG_ROLE_PRODUCT_REF: &'static str =
 		"hl7:subject2/hl7:productUseReference/hl7:id/@root";
+	pub const FDA_OTHER_ROLE_NODE: &'static str =
+		"//hl7:component/hl7:causalityAssessment[hl7:code[@code='20' and @codeSystem='2.16.840.1.113883.3.989.2.1.1.19'] and hl7:value[@codeSystem='2.16.840.1.113883.3.989.5.1.2.1.1.8']]";
+	pub const FDA_OTHER_ROLE_CODE: &'static str =
+		"hl7:value[@codeSystem='2.16.840.1.113883.3.989.5.1.2.1.1.8']/@code";
 
 	pub const XML_ID_ROOT: &'static str = "hl7:id/@root";
 	pub const PRODUCT_NAME_1: &'static str =
@@ -72,6 +76,8 @@ impl GDrugPaths {
 		"hl7:ingredientSubstance/hl7:code[not(@codeSystem='2.16.840.1.113883.3.989.5.1.10.2.2')]/@code";
 	pub const SUBSTANCE_TERMID_VERSION: &'static str =
 		"hl7:ingredientSubstance/hl7:code[not(@codeSystem='2.16.840.1.113883.3.989.5.1.10.2.2')]/@codeSystemVersion";
+	pub const SUBSTANCE_TERMID_CODE_SYSTEM: &'static str =
+		"hl7:ingredientSubstance/hl7:code[not(@codeSystem='2.16.840.1.113883.3.989.5.1.10.2.2')]/@codeSystem";
 	pub const SUBSTANCE_STRENGTH_VALUE: &'static str =
 		"hl7:quantity/hl7:numerator/@value";
 	pub const SUBSTANCE_STRENGTH_UNIT: &'static str =

@@ -102,7 +102,7 @@ async fn import_drugs(
 				drug_additional_info_codes_json: None,
 				drug_additional_information: drug.drug_additional_information,
 				fda_specialized_product_category,
-				fda_other_characterization: None,
+				fda_other_characterization: drug.fda_other_characterization,
 			},
 		)
 		.await?;
@@ -161,6 +161,7 @@ async fn import_drugs(
 					substance_name: sub.substance_name,
 					substance_termid: sub.substance_termid,
 					substance_termid_version: sub.substance_termid_version,
+					substance_termid_code_system: sub.substance_termid_code_system,
 					mfds_version: sub.mfds_version,
 					mfds_id: sub.mfds_id,
 					strength_value: sub.strength_value,

@@ -28,6 +28,7 @@ pub struct GDrugImport {
 	pub phpid: Option<String>,
 	pub phpid_version: Option<String>,
 	pub investigational_product_blinded: Option<bool>,
+	pub fda_other_characterization: Option<String>,
 	pub obtain_drug_country: Option<String>,
 	pub drug_authorization_number: Option<String>,
 	pub manufacturer_name: Option<String>,
@@ -79,6 +80,7 @@ pub struct GDrugSubstanceImport {
 	pub substance_name: Option<String>,
 	pub substance_termid: Option<String>,
 	pub substance_termid_version: Option<String>,
+	pub substance_termid_code_system: Option<String>,
 	pub mfds_id: Option<String>,
 	pub mfds_version: Option<String>,
 	pub strength_value: Option<Decimal>,
@@ -168,6 +170,7 @@ pub fn parse_g_drugs(xml: &[u8]) -> Result<Vec<GDrugImport>> {
 		}
 	})?;
 	let drug_roles = read_drug_roles(&mut xpath)?;
+	let fda_other_roles = read_fda_other_characterizations(&mut xpath)?;
 
 	let mut imports: Vec<GDrugImport> = Vec::new();
 	for (idx, node) in drug_nodes.into_iter().enumerate() {
@@ -180,7 +183,8 @@ pub fn parse_g_drugs(xml: &[u8]) -> Result<Vec<GDrugImport>> {
 		let mfds_mpid_version = read_g_k_2_1_kr_1a(&mut xpath, &node)?;
 		let phpid = read_g_k_2_1_2a(&mut xpath, &node)?;
 		let phpid_version = read_g_k_2_1_2b(&mut xpath, &node)?;
-		let investigational_product_blinded = read_fda_g_k_1_a(&mut xpath, &node)?;
+		let investigational_product_blinded = read_g_k_2_5(&mut xpath, &node)?;
+		let fda_other_characterization = fda_other_roles.get(&xml_id).cloned();
 		let drug_authorization_number = read_g_k_3_1(&mut xpath, &node)?;
 		let manufacturer_name = read_g_k_3_2(&mut xpath, &node)?;
 		let manufacturer_country = read_g_k_3_3(&mut xpath, &node)?;
@@ -258,6 +262,7 @@ pub fn parse_g_drugs(xml: &[u8]) -> Result<Vec<GDrugImport>> {
 			let sub_name = read_g_k_2_3_r_1(&mut xpath, &sub)?;
 			let termid = read_g_k_2_3_r_2b(&mut xpath, &sub)?;
 			let termid_version = read_g_k_2_3_r_2a(&mut xpath, &sub)?;
+			let termid_code_system = read_g_k_2_3_r_2_code_system(&mut xpath, &sub);
 			let mfds_id = read_g_k_2_3_r_1_kr_1b(&mut xpath, &sub)?;
 			let mfds_version = read_g_k_2_3_r_1_kr_1a(&mut xpath, &sub)?;
 			let strength_value = read_g_k_2_3_r_3a(&mut xpath, &sub)?;
@@ -266,6 +271,7 @@ pub fn parse_g_drugs(xml: &[u8]) -> Result<Vec<GDrugImport>> {
 				substance_name: sub_name,
 				substance_termid: termid,
 				substance_termid_version: termid_version,
+				substance_termid_code_system: termid_code_system,
 				mfds_id,
 				mfds_version,
 				strength_value,
@@ -391,6 +397,7 @@ pub fn parse_g_drugs(xml: &[u8]) -> Result<Vec<GDrugImport>> {
 			phpid,
 			phpid_version,
 			investigational_product_blinded,
+			fda_other_characterization,
 			obtain_drug_country,
 			drug_authorization_number,
 			manufacturer_name,
@@ -459,6 +466,42 @@ fn read_drug_roles(xpath: &mut Context) -> Result<HashMap<String, String>> {
 				return Err(invalid_field(
 					"G.k.1",
 					format!("conflicting drug characterizations for {reference}"),
+				));
+			}
+		}
+	}
+	Ok(roles)
+}
+
+/// e2b:FDA.G.k.1.a
+fn read_fda_other_characterizations(
+	xpath: &mut Context,
+) -> Result<HashMap<String, String>> {
+	let nodes = find_nodes(xpath, GDrugPaths::FDA_OTHER_ROLE_NODE, None)?;
+	let mut roles = HashMap::new();
+	for node in nodes {
+		let Some(reference) =
+			first_attr(xpath, &node, GDrugPaths::DRUG_ROLE_PRODUCT_REF)
+		else {
+			continue;
+		};
+		let Some(value) = first_attr(xpath, &node, GDrugPaths::FDA_OTHER_ROLE_CODE)
+		else {
+			continue;
+		};
+		import_constraint::string(
+			"fdaOtherCharacterization",
+			Some(&value),
+			None,
+			input_contracts::generated::g::fda_g_k_1_a,
+		)?;
+		if let Some(previous) = roles.insert(reference.to_string(), value.clone()) {
+			if previous != value {
+				return Err(invalid_field(
+					"FDA.G.k.1.a",
+					format!(
+						"conflicting FDA drug characterizations for {reference}"
+					),
 				));
 			}
 		}
@@ -545,9 +588,8 @@ fn read_g_k_2_1_2b(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
 	Ok(value)
 }
 
-/// e2b:FDA.G.k.1.a
 /// e2b:G.k.2.5
-fn read_fda_g_k_1_a(xpath: &mut Context, node: &Node) -> Result<Option<bool>> {
+fn read_g_k_2_5(xpath: &mut Context, node: &Node) -> Result<Option<bool>> {
 	let raw = first_attr(xpath, node, GDrugPaths::INVESTIGATIONAL_BLINDED);
 	let value = raw.clone().and_then(parse_bool);
 	import_constraint::boolean(
@@ -737,6 +779,11 @@ fn read_g_k_2_3_r_2b(xpath: &mut Context, node: &Node) -> Result<Option<String>>
 		"activeSubstances[].substanceTermId",
 		input_contracts::generated::g::g_k_2_3_r_2b,
 	)
+}
+
+/// XML code system metadata for G.k.2.3.r.2.
+fn read_g_k_2_3_r_2_code_system(xpath: &mut Context, node: &Node) -> Option<String> {
+	first_attr(xpath, node, GDrugPaths::SUBSTANCE_TERMID_CODE_SYSTEM)
 }
 
 /// e2b:G.k.2.3.r.1.KR.1a
@@ -1565,6 +1612,11 @@ mod tests {
 			.codes
 			.iter()
 			.any(|code| code.element == "device_problem")));
+		let drug_b = drugs
+			.iter()
+			.find(|drug| drug.medicinal_product == "Drug B")
+			.expect("Drug B");
+		assert_eq!(drug_b.fda_other_characterization.as_deref(), Some("1"));
 	}
 
 	#[test]
@@ -1592,6 +1644,25 @@ mod tests {
 	}
 
 	#[test]
+	fn preserves_source_dependent_substance_code_system() {
+		let xml = format!(
+			r#"<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3"><subjectOf2><organizer><code code="4" codeSystem="2.16.840.1.113883.3.989.2.1.1.20"/><component><substanceAdministration><id root="{TEST_DRUG_ID}"/><consumable><instanceOfKind><kindOfProduct><name>Drug A</name><ingredient><ingredientSubstance><code code="0Q5GP4Y4FL" codeSystem="2.16.840.1.113883.4.9" codeSystemVersion="12JUL2013"/></ingredientSubstance></ingredient></kindOfProduct></instanceOfKind></consumable></substanceAdministration></component></organizer></subjectOf2><component><causalityAssessment><code code="20" codeSystem="2.16.840.1.113883.3.989.2.1.1.19"/><value code="1" codeSystem="2.16.840.1.113883.3.989.2.1.1.13"/><subject2><productUseReference><id root="{TEST_DRUG_ID}"/></productUseReference></subject2></causalityAssessment></component></MCCI_IN200100UV01>"#
+		);
+
+		let drugs = parse_g_drugs(xml.as_bytes()).expect("parse");
+		let substance = &drugs[0].substances[0];
+		assert_eq!(substance.substance_termid.as_deref(), Some("0Q5GP4Y4FL"));
+		assert_eq!(
+			substance.substance_termid_code_system.as_deref(),
+			Some("2.16.840.1.113883.4.9")
+		);
+		assert_eq!(
+			substance.substance_termid_version.as_deref(),
+			Some("12JUL2013")
+		);
+	}
+
+	#[test]
 	fn preserves_mfds_product_and_substance_identifiers() {
 		let xml = format!(
 			r#"<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3"><subjectOf2><organizer><code code="4" codeSystem="2.16.840.1.113883.3.989.2.1.1.20"/><component><substanceAdministration><id root="{TEST_DRUG_ID}"/><consumable><instanceOfKind><kindOfProduct><code code="200200143" codeSystem="2.16.840.1.113883.3.989.5.1.10.2.1" codeSystemVersion="20240101"/><name>Drug A</name><ingredient><ingredientSubstance><code code="M084105" codeSystem="2.16.840.1.113883.3.989.5.1.10.2.2" codeSystemVersion="20240102"/><name>Substance A</name></ingredientSubstance></ingredient></kindOfProduct></instanceOfKind></consumable></substanceAdministration></component></organizer></subjectOf2><component><causalityAssessment><code code="20" codeSystem="2.16.840.1.113883.3.989.2.1.1.19"/><value code="1" codeSystem="2.16.840.1.113883.3.989.2.1.1.13"/><subject2><productUseReference><id root="{TEST_DRUG_ID}"/></productUseReference></subject2></causalityAssessment></component></MCCI_IN200100UV01>"#
@@ -1602,6 +1673,7 @@ mod tests {
 		assert_eq!(drugs[0].mfds_mpid.as_deref(), Some("200200143"));
 		assert_eq!(drugs[0].mfds_mpid_version.as_deref(), Some("20240101"));
 		assert_eq!(drugs[0].substances[0].substance_termid, None);
+		assert_eq!(drugs[0].substances[0].substance_termid_code_system, None);
 		assert_eq!(drugs[0].substances[0].mfds_id.as_deref(), Some("M084105"));
 		assert_eq!(
 			drugs[0].substances[0].mfds_version.as_deref(),

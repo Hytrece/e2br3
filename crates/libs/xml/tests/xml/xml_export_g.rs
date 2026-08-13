@@ -58,6 +58,7 @@ fn export_g_drug_basic() {
 		substance_name: Some("Substance".to_string()),
 		substance_termid: Some("S1".to_string()),
 		substance_termid_version: Some("1".to_string()),
+		substance_termid_code_system: Some("TBD-Substance".to_string()),
 		strength_value: Some(1.into()),
 		strength_unit: Some("mg".to_string()),
 		created_at: OffsetDateTime::now_utc(),

@@ -197,6 +197,11 @@ fn write_g_k_2_3_r_2b(value: &DrugActiveSubstance) -> Option<&str> {
 	value.substance_termid.as_deref()
 }
 
+/// XML code system metadata for G.k.2.3.r.2.
+fn write_g_k_2_3_r_2_code_system(value: &DrugActiveSubstance) -> Option<&str> {
+	value.substance_termid_code_system.as_deref()
+}
+
 /// e2b:G.k.2.3.r.3a
 fn write_g_k_2_3_r_3a(
 	value: &DrugActiveSubstance,
@@ -834,11 +839,17 @@ pub(crate) fn write_g_k_drug(
 				out.push_str("/>");
 			} else if write_g_k_2_3_r_2b(sub).is_some()
 				|| write_g_k_2_3_r_2a(sub).is_some()
+				|| write_g_k_2_3_r_2_code_system(sub).is_some()
 			{
 				out.push_str("<code");
 				if let Some(code) = write_g_k_2_3_r_2b(sub) {
 					out.push_str(" code=\"");
 					out.push_str(&xml_escape(code));
+					out.push_str("\"");
+				}
+				if let Some(code_system) = write_g_k_2_3_r_2_code_system(sub) {
+					out.push_str(" codeSystem=\"");
+					out.push_str(&xml_escape(code_system));
 					out.push_str("\"");
 				}
 				if let Some(ver) = write_g_k_2_3_r_2a(sub) {
@@ -1773,6 +1784,7 @@ mod tests {
 			substance_name: Some("Substance".to_string()),
 			substance_termid: Some("BASE-SUB".to_string()),
 			substance_termid_version: Some("BASE-SV1".to_string()),
+			substance_termid_code_system: Some("TBD-Substance".to_string()),
 			mfds_version: Some("KR-SV1".to_string()),
 			mfds_id: Some("KR-SUB".to_string()),
 			strength_value: None,
@@ -2169,6 +2181,13 @@ mod tests {
 			)
 			.unwrap();
 		assert_eq!(substance_version, "BASE-SV1");
+		let substance_code_system = xpath
+			.findvalue(
+				"//hl7:ingredient/hl7:ingredientSubstance/hl7:code/@codeSystem",
+				None,
+			)
+			.unwrap();
+		assert_eq!(substance_code_system, "TBD-Substance");
 
 		assert!(
 			!xml.contains("KR-MPID") && !xml.contains("KR-V1"),

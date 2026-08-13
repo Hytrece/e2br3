@@ -2969,6 +2969,7 @@ mod golden_g_required_tests {
 			substance_name: None,
 			substance_termid: None,
 			substance_termid_version: None,
+			substance_termid_code_system: None,
 			mfds_version: None,
 			mfds_id: None,
 			strength_value: None,

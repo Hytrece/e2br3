@@ -276,6 +276,7 @@ pub struct DrugActiveSubstance {
 	// G.k.2.3.r.2 - Substance TermID
 	pub substance_termid: Option<String>,
 	pub substance_termid_version: Option<String>,
+	pub substance_termid_code_system: Option<String>,
 
 	// G.k.2.3.r.1.KR.1a/b - MFDS substance fields
 	pub mfds_version: Option<String>,
@@ -298,6 +299,7 @@ pub struct DrugActiveSubstanceForCreate {
 	pub substance_name: Option<String>,
 	pub substance_termid: Option<String>,
 	pub substance_termid_version: Option<String>,
+	pub substance_termid_code_system: Option<String>,
 	pub mfds_version: Option<String>,
 	pub mfds_id: Option<String>,
 	pub strength_value: Option<Decimal>,
@@ -309,6 +311,7 @@ pub struct DrugActiveSubstanceForUpdate {
 	pub substance_name: Option<String>,
 	pub substance_termid: Option<String>,
 	pub substance_termid_version: Option<String>,
+	pub substance_termid_code_system: Option<String>,
 	pub mfds_version: Option<String>,
 	pub mfds_id: Option<String>,
 	pub strength_value: Option<Decimal>,

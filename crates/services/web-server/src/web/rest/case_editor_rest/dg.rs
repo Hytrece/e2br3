@@ -74,6 +74,10 @@ const ACTIVE_SUBSTANCE_ALIASES: &[(&str, &[&str])] = &[
 	("substance_name", &["substanceName"]),
 	("substance_termid_version", &["substanceTermIdVersion"]),
 	("substance_termid", &["substanceTermId"]),
+	(
+		"substance_termid_code_system",
+		&["substanceTermIdCodeSystem"],
+	),
 	("mfds_version", &["mfdsVersion"]),
 	("mfds_id", &["mfdsId"]),
 	("strength_value", &["substanceStrengthValue"]),
