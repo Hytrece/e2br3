@@ -13,8 +13,10 @@ import json
 import os
 import random
 import re
+import subprocess
 import sys
 import time
+import urllib.parse
 import uuid
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -134,11 +136,37 @@ DISPOSITION_GROUPS = {
     ),
 }
 
+TEST_BACKED_RULES = {
+    "ICH.C.1.1.REQUIRED": "case::sections::c::golden_c1_value_tests::all_missing_flags_every_value_rule",
+    "ICH.C.1.2.REQUIRED": "case::sections::c::golden_c1_value_tests::all_missing_flags_every_value_rule",
+    "ICH.D.10.5.INTEGER": "case::sections::d::golden_companion_tests::heights_must_be_whole_numbers",
+    "ICH.D.4.INTEGER": "case::sections::d::golden_companion_tests::heights_must_be_whole_numbers",
+    "ICH.D.6.NULLFLAVOR.ALLOWED": "case::sections::d::golden_companion_tests::d_6_null_flavor_is_a_case_validation_rule",
+    "ICH.E.i.3.2.NI.ONLY": "case::sections::e::tests::true_marker_rules_accept_absent_values_and_honor_null_flavor",
+    "ICH.F.r.2.1.REQUIRED": "case::sections::f::golden_f_required_tests::test_date_without_name_or_meddra_code_flags_name_variants",
+    "ICH.F.r.2.2b.REQUIRED": "case::sections::f::golden_f_required_tests::test_date_without_name_or_meddra_code_flags_name_variants",
+    "ICH.F.r.2.REQUIRED": "case::sections::f::golden_f_required_tests::test_payload_without_name_flags_test_name",
+    "ICH.G.k.1.REQUIRED": "case::sections::g::golden_g_required_tests::empty_drug_collection_flags_placeholder_drug_rules",
+    "ICH.G.k.2.2.REQUIRED": "case::sections::g::golden_g_required_tests::empty_drug_collection_flags_placeholder_drug_rules",
+    "MFDS.F.r.1.NULLFLAVOR.VOCABULARY": "case::sections::f::golden_f_required_tests::mfds_only_allows_msk_test_date_null_flavor",
+}
+
 
 def rule_dispositions(root: Path = ROOT) -> dict[str, dict[str, str]]:
     dispositions: dict[str, dict[str, str]] = {}
+    integrated = {
+        scenario.expected_code
+        for scenario in (
+            reference_vocabulary_scenarios(0) + reference_required_scenarios(0)
+            + device_integration_scenarios(0) + mirror_warning_scenarios(0)
+            + topology_integration_scenarios(0)
+            + singleton_integration_scenarios(0)
+        )
+    }
     for category, (reason, codes) in DISPOSITION_GROUPS.items():
         for code in codes:
+            if code in integrated or code in TEST_BACKED_RULES:
+                continue
             section = code.split(".", 2)[1].lower()
             if section not in "cdefghn":
                 section = "g" if code.startswith("FDA.G") else "d"
@@ -174,6 +202,8 @@ class Scenario:
     study_values: tuple[tuple[str, Any], ...] = ()
     readback_values: tuple[Any, Any] | None = None
     reaction_values: tuple[tuple[str, Any], ...] = ()
+    reference_fixture: bool = False
+    surface: str = "editor"
 
 
 @dataclass
@@ -210,7 +240,7 @@ def scenario_catalog(seed: int) -> list[Scenario]:
     rng = random.Random(seed)
     year = rng.randint(2020, 2024)
     suffix = f"{rng.getrandbits(32):08x}"
-    return [
+    scenarios = [
         Scenario(
             0,
             "c1-received-date-order",
@@ -818,6 +848,192 @@ def scenario_catalog(seed: int) -> list[Scenario]:
         Scenario(250, "fda-premarket-death-date-required", "fda", "DM", "deathInfo", "dateOfDeath", "date_of_death", "FDA.D.9.1.REQUIRED", None, f"{year}0303", ci_values=(("reportType", "2"),), header_values=(("batch_receiver_identifier", "ZZFDA_PREMKT"), ("message_receiver_identifier", "CDER_IND")), reaction_values=(("seriousness.criteriaResultsInDeath", True),)),
         Scenario(251, "fda-preanda-additional-info-recommended", "fda", "DG", "drug", "fdaAdditionalInfoCoded", "fda_additional_info_coded", "FDA.W0006", None, "1", ci_values=(("reportType", "2"),), header_values=(("batch_receiver_identifier", "ZZFDA_PREMKT"), ("message_receiver_identifier", "CDER_IND_EXEMPT_BA_BE")), study_values=(("fdaPreAndaNumberOccurred", "123456"), ("studyTypeReaction", "1"))),
     ]
+    scenarios.extend(reference_vocabulary_scenarios(len(scenarios)))
+    scenarios.extend(reference_required_scenarios(len(scenarios)))
+    scenarios.extend(device_integration_scenarios(len(scenarios)))
+    scenarios.extend(mirror_warning_scenarios(len(scenarios)))
+    scenarios.extend(topology_integration_scenarios(len(scenarios)))
+    scenarios.extend(singleton_integration_scenarios(len(scenarios)))
+    return scenarios
+
+
+def reference_vocabulary_scenarios(start: int) -> list[Scenario]:
+    scenarios: list[Scenario] = []
+
+    def add(
+        scenario_id: str,
+        authority: str,
+        page: str,
+        owner: str,
+        field: str,
+        projection_field: str,
+        code: str,
+        invalid_value: Any,
+        valid_value: Any,
+        fixture_values: tuple[tuple[str, Any], ...] = (),
+        header_values: tuple[tuple[str, Any], ...] = (),
+    ) -> None:
+        scenarios.append(Scenario(
+            start + len(scenarios), scenario_id, authority, page, owner, field,
+            projection_field, code, invalid_value, valid_value, fixture_values,
+            header_values=header_values, reference_fixture=True,
+        ))
+
+    meddra_pairs = [
+        ("d-history", "DM", "medicalHistoryEpisodes", "meddraVersion", "meddraCode", "meddra_version", "meddra_code", "ICH.D.7.1.r.1a.VOCABULARY", "ICH.D.7.1.r.1b.VOCABULARY"),
+        ("d-parent-history", "DM", "parentMedicalHistory", "meddraVersion", "meddraCode", "meddra_version", "meddra_code", "ICH.D.10.7.1.r.1a.VOCABULARY", "ICH.D.10.7.1.r.1b.VOCABULARY"),
+        ("d-past-indication", "DH", "pastDrugHistory", "indicationMeddraVersion", "indicationMeddraCode", "indication_meddra_version", "indication_meddra_code", "ICH.D.8.r.6a.VOCABULARY", "ICH.D.8.r.6b.VOCABULARY"),
+        ("d-past-reaction", "DH", "pastDrugHistory", "reactionMeddraVersion", "reactionMeddraCode", "reaction_meddra_version", "reaction_meddra_code", "ICH.D.8.r.7a.VOCABULARY", "ICH.D.8.r.7b.VOCABULARY"),
+        ("d-parent-past-indication", "DM", "parentPastDrugs", "indicationMeddraVersion", "indicationMeddraCode", "indication_meddra_version", "indication_meddra_code", "ICH.D.10.8.r.6a.VOCABULARY", "ICH.D.10.8.r.6b.VOCABULARY"),
+        ("d-parent-past-reaction", "DM", "parentPastDrugs", "reactionMeddraVersion", "reactionMeddraCode", "reaction_meddra_version", "reaction_meddra_code", "ICH.D.10.8.r.7a.VOCABULARY", "ICH.D.10.8.r.7b.VOCABULARY"),
+        ("d-reported-cause", "DM", "reportedCauses", "meddraVersion", "meddraCode", "meddra_version", "meddra_code", "ICH.D.9.2.r.1a.VOCABULARY", "ICH.D.9.2.r.1b.VOCABULARY"),
+        ("d-autopsy-cause", "DM", "autopsyCauses", "meddraVersion", "meddraCode", "meddra_version", "meddra_code", "ICH.D.9.4.r.1a.VOCABULARY", "ICH.D.9.4.r.1b.VOCABULARY"),
+        ("e-reaction", "AE", "reaction", "reactionMeddraVersionLLT", "reactionMeddraCodeLLT", "reaction_meddra_version", "reaction_meddra_code", "ICH.E.i.2.1a.VOCABULARY", "ICH.E.i.2.1b.VOCABULARY"),
+        ("f-test", "LB", "testResult", "testMeddraVersion", "testMeddraCode", "test_meddra_version", "test_meddra_code", "ICH.F.r.2.2a.VOCABULARY", "ICH.F.r.2.2b.VOCABULARY"),
+        ("g-indication", "DG", "drug", "indications[].indicationMeddraVersion", "indications[].indicationMeddraCode", "indications[].indication_meddra_version", "indications[].indication_meddra_code", "ICH.G.k.7.r.2a.VOCABULARY", "ICH.G.k.7.r.2b.VOCABULARY"),
+        ("h-diagnosis", "NR", "senderDiagnoses", "diagnosisMeddraVersion", "diagnosisMeddraCode", "diagnosis_meddra_version", "diagnosis_meddra_code", "ICH.H.3.r.1a.VOCABULARY", "ICH.H.3.r.1b.VOCABULARY"),
+    ]
+    for prefix, page, owner, version_field, code_field, version_projection, code_projection, version_rule, code_rule in meddra_pairs:
+        add(f"{prefix}-version-vocabulary", "ich", page, owner, version_field, version_projection, version_rule, "99.9", "26.0", ((code_field, "10000001"),))
+        add(f"{prefix}-code-vocabulary", "ich", page, owner, code_field, code_projection, code_rule, "99999999", "10000001", ((version_field, "26.0"),))
+
+    add("g-substance-strength-unit-vocabulary", "ich", "DG", "drug", "activeSubstances[].substanceStrengthUnit", "activeSubstances[].strength_unit", "ICH.G.k.2.3.r.3b.VOCABULARY", "not-a-unit", "mg", (("activeSubstances[].substanceName", "Fuzz substance"), ("activeSubstances[].substanceStrengthValue", 10)))
+    add("g-dosage-frequency-unit-vocabulary", "ich", "DG", "drug", "dosageInformation[].frequencyUnit", "dosageInformation[].frequency_unit", "ICH.G.k.4.r.3.VOCABULARY", "not-a-frequency", "d", (("dosageInformation[].numberOfUnits", 1),))
+
+    kr_header = (("batch_receiver_identifier", "MFDS-O-KR"), ("message_receiver_identifier", "MFDS-O-KR"))
+    add("mfds-d-past-product-vocabulary", "mfds", "DH", "pastDrugHistory", "mfdsMedicinalProductId", "mfds_medicinal_product_id", "MFDS.D.8.r.1.KR.1b.VOCABULARY", "9999999999", "1234567890", header_values=kr_header)
+    add("mfds-d-parent-past-product-vocabulary", "mfds", "DM", "parentPastDrugs", "mfdsMedicinalProductId", "mfds_medicinal_product_id", "MFDS.D.10.8.r.1.KR.1b.VOCABULARY", "9999999999", "1234567890", header_values=kr_header)
+    add("mfds-g-product-vocabulary", "mfds", "DG", "drug", "mfdsMpid", "mfds_mpid", "MFDS.G.k.2.1.KR.1b.VOCABULARY", "9999999999", "1234567890", (("obtainDrugCountry", "KR"),), kr_header)
+    add("mfds-g-substance-vocabulary", "mfds", "DG", "drug", "activeSubstances[].mfdsId", "activeSubstances[].mfds_id", "MFDS.G.k.2.3.r.1.KR.1b.VOCABULARY", "ZZZZZZZZZZ", "MFDS-SUB-1", (("activeSubstances[].substanceName", "Fuzz substance"),), kr_header)
+    return scenarios
+
+
+def reference_required_scenarios(start: int) -> list[Scenario]:
+    kr_header = (("batch_receiver_identifier", "MFDS-O-KR"), ("message_receiver_identifier", "MFDS-O-KR"))
+    fr_header = (("batch_receiver_identifier", "MFDS-O-FR"), ("message_receiver_identifier", "MFDS-O-FR"))
+    definitions = [
+        ("mfds-d-past-product-required", "DH", "pastDrugHistory", "mfdsMedicinalProductId", "mfds_medicinal_product_id", "MFDS.D.8.r.1.KR.1b.REQUIRED", None, "1234567890", (), kr_header),
+        ("mfds-d-past-product-version-required", "DH", "pastDrugHistory", "mfdsMedicinalProductVersion", "mfds_medicinal_product_version", "MFDS.D.8.r.1.KR.1a.REQUIRED", None, "FUZZ1", (("mfdsMedicinalProductId", "WHO0001"),), fr_header),
+        ("mfds-d-parent-past-product-required", "DM", "parentPastDrugs", "mfdsMedicinalProductId", "mfds_medicinal_product_id", "MFDS.D.10.8.r.1.KR.1b.REQUIRED", None, "1234567890", (), kr_header),
+        ("mfds-d-parent-past-product-version-required", "DM", "parentPastDrugs", "mfdsMedicinalProductVersion", "mfds_medicinal_product_version", "MFDS.D.10.8.r.1.KR.1a.REQUIRED", None, "FUZZ1", (("mfdsMedicinalProductId", "WHO0001"),), fr_header),
+        ("mfds-g-product-required", "DG", "drug", "mfdsMpid", "mfds_mpid", "MFDS.G.k.2.1.KR.1b.REQUIRED", None, "1234567890", (("obtainDrugCountry", "KR"),), kr_header),
+        ("mfds-g-product-version-required", "DG", "drug", "mfdsMpidVersion", "mfds_mpid_version", "MFDS.G.k.2.1.KR.1a.REQUIRED", None, "FUZZ1", (("mfdsMpid", "WHO0001"),), fr_header),
+        ("mfds-g-substance-required", "DG", "drug", "activeSubstances[].mfdsId", "activeSubstances[].mfds_id", "MFDS.G.k.2.3.r.1.KR.1b.REQUIRED", None, "MFDS-SUB-1", (("activeSubstances[].substanceName", "Fuzz substance"),), kr_header),
+        ("mfds-g-substance-version-required", "DG", "drug", "activeSubstances[].mfdsVersion", "activeSubstances[].mfds_version", "MFDS.G.k.2.3.r.1.KR.1a.REQUIRED", None, "FUZZ1", (("activeSubstances[].substanceName", "Fuzz substance"), ("activeSubstances[].mfdsId", "CAS123")), fr_header),
+    ]
+    return [
+        Scenario(
+            start + index, scenario_id, "mfds", page, owner, field,
+            projection, code, invalid, valid, fixtures,
+            header_values=headers, reference_fixture=True,
+        )
+        for index, (
+            scenario_id, page, owner, field, projection, code, invalid, valid,
+            fixtures, headers,
+        ) in enumerate(definitions)
+    ]
+
+
+def device_integration_scenarios(start: int) -> list[Scenario]:
+    definitions = [
+        ("fda-device-patient-na-required", "patientInitialsNullFlavor", "patientInitialsNullFlavor", "FDA.D.1.R0027", None, "NA"),
+        ("fda-device-malfunction-required", "malfunction", "fdaDevices[].malfunction", "FDA.G.K.12.REQUIRED", False, True),
+        ("fda-device-identity-required", "deviceBrandName", "fdaDevices[].device_brand_name", "FDA.G.k.12.r.4-6.AT_LEAST_ONE", None, "Business Device"),
+        ("fda-device-problem-required", "deviceProblemCodes", "fdaDevices[].deviceProblemCodes", "FDA.G.K.12.R.3.REQUIRED", None, "1234567"),
+        ("fda-device-other-characterization-required", "fdaOtherCharacterization", "fda_other_characterization", "FDA.R0072", None, "1"),
+        ("fda-device-remedial-action-recommended", "remedialActions", "fdaDevices[].remedialActions", "FDA.W0007", None, "1"),
+    ]
+    return [
+        Scenario(
+            start + index, scenario_id, "fda", "DV", "fdaDevices", field,
+            projection, code, invalid, valid, surface="device",
+        )
+        for index, (scenario_id, field, projection, code, invalid, valid)
+        in enumerate(definitions)
+    ]
+
+
+def mirror_warning_scenarios(start: int) -> list[Scenario]:
+    return [Scenario(
+        start,
+        "fda-cder-drug-role-warning",
+        "fda",
+        "DG",
+        "drug",
+        "drugCharacterization",
+        "drugCharacterization",
+        "FDA.W0005",
+        "2",
+        "1",
+        header_values=(("batch_receiver_identifier", "ZZFDA"), ("message_receiver_identifier", "CDER")),
+    )]
+
+
+def topology_integration_scenarios(start: int) -> list[Scenario]:
+    definitions = [
+        ("fda-aggregate-linked-report-topology", "fda", "linkedReports", "FDA.W0001", False, True),
+        ("fda-aggregate-study-type-topology", "fda", "studyTypeReaction", "FDA.W0002", "2", "1"),
+        ("fda-ind-aggregate-patient-topology", "fda", "patientInitials", "FDA.W0010", "PERSON", "AGGREGATE"),
+        ("ich-study-patient-identifier-topology", "ich", "patientIdentifiers", "ICH.D.1.1.4.REQUIRED", False, True),
+        ("mfds-study-patient-identifier-topology", "mfds", "patientIdentifiers", "MFDS.D.1.1.4.REQUIRED", False, True),
+        ("mfds-study-registration-topology", "mfds", "studyRegistrationNumbers", "MFDS.C.5.1.r.1.RECEIVER.REQUIRED", False, True),
+        ("mfds-study-registration-nullflavor-topology", "mfds", "registrationNumberNullFlavor", "MFDS.C.5.1.r.1.NULLFLAVOR.FORBIDDEN", "ASKU", None),
+    ]
+    return [
+        Scenario(
+            start + index, scenario_id, authority, "TP", "topology", field,
+            field, code, invalid, valid, surface="topology",
+        )
+        for index, (scenario_id, authority, field, code, invalid, valid)
+        in enumerate(definitions)
+    ]
+
+
+def singleton_integration_scenarios(start: int) -> list[Scenario]:
+    return [
+        Scenario(start, "singleton-patient-required", "ich", "SN", "patientInformation", "patientInitials", "patientInitials", "ICH.D.1.REQUIRED", None, "BUSINESS-FUZZ", surface="singleton"),
+        Scenario(start + 1, "singleton-narrative-required", "ich", "SN", "narrative", "caseNarrative", "caseNarrative", "ICH.H.1.REQUIRED", None, "Business fuzz narrative", surface="singleton"),
+    ]
+
+
+def seed_reference_fixtures(database_url: str) -> None:
+    parsed = urllib.parse.urlparse(database_url)
+    database = parsed.path.lstrip("/")
+    if parsed.scheme not in {"postgres", "postgresql"} or parsed.hostname not in {None, "", "127.0.0.1", "localhost", "::1"}:
+        raise SystemExit("reference fixture database must be local PostgreSQL")
+    if not database.startswith("e2br3_ui_") or database == "app_db":
+        raise SystemExit("reference fixtures require a dedicated e2br3_ui_* database")
+    sql = """
+BEGIN;
+SELECT set_current_user_context('00000000-0000-0000-0000-000000000001');
+INSERT INTO meddra_terms (code, term, level, version, language, active)
+VALUES ('10000001', 'Business fuzz term', 'LLT', '26.0', 'en', true)
+ON CONFLICT (code, version, language) DO UPDATE SET active = true;
+INSERT INTO controlled_terminology_terms
+    (dictionary, version, language, scope, code, display_name, active)
+VALUES ('ich_constrained_ucum', 'BUSINESS-FUZZ', 'en', 'frequency', 'd', 'day', true)
+ON CONFLICT (dictionary, version, language, scope, code) DO UPDATE SET active = true;
+INSERT INTO whodrug_products (code, drug_name, version, language, active)
+VALUES ('WHO0001', 'Business fuzz WHO product', 'FUZZ1', 'en', true)
+ON CONFLICT (code, version, language) DO UPDATE SET active = true;
+INSERT INTO controlled_terminology_terms
+    (dictionary, version, language, scope, code, display_name, active)
+VALUES ('whodrug', 'FUZZ1', 'en', 'cas', 'CAS123', 'Business fuzz CAS', true)
+ON CONFLICT (dictionary, version, language, scope, code) DO UPDATE SET active = true;
+INSERT INTO mfds_products (item_seq, product_name_kr, version, active)
+VALUES ('1234567890', '비즈니스 퍼즈 제품', 'BUSINESS-FUZZ', true)
+ON CONFLICT (item_seq, version) DO UPDATE SET active = true;
+INSERT INTO mfds_product_substances
+    (item_seq, substance_code, substance_name_kr, version, active)
+VALUES ('1234567890', 'MFDS-SUB-1', '비즈니스 퍼즈 성분', 'BUSINESS-FUZZ', true)
+ON CONFLICT (item_seq, substance_code, material_sequence, total_amount_sequence, version)
+DO UPDATE SET active = true;
+COMMIT;
+"""
+    subprocess.run(
+        ["psql", database_url, "-v", "ON_ERROR_STOP=1", "-c", sql],
+        check=True, stdout=subprocess.DEVNULL,
+    )
 
 
 def issue_codes(value: Any) -> set[str]:
@@ -855,6 +1071,11 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--timeout", type=float, default=20)
     result.add_argument("--max-actions", type=int, default=500)
     result.add_argument("--deadline-seconds", type=float, default=300)
+    result.add_argument(
+        "--fixture-database-url",
+        default=os.getenv("E2BR3_FUZZ_DATABASE_URL"),
+        help="dedicated local e2br3_ui_* database used for reference fixtures",
+    )
     result.add_argument("--scenario", action="append", help="run only this scenario id (repeatable)")
     result.add_argument("--allow-remote", action="store_true")
     result.add_argument("--dry-run", action="store_true")
@@ -879,7 +1100,11 @@ def main(args: argparse.Namespace) -> int:
         for code, detail in rule_dispositions().items()
         if code in raw_uncovered
     }
-    unexplained = raw_uncovered - dispositions.keys()
+    test_backed = {
+        code: TEST_BACKED_RULES[code]
+        for code in sorted(raw_uncovered & TEST_BACKED_RULES.keys())
+    }
+    unexplained = raw_uncovered - dispositions.keys() - test_backed.keys()
     if args.dry_run:
         print(json.dumps({
             "seed": args.seed,
@@ -888,11 +1113,16 @@ def main(args: argparse.Namespace) -> int:
             "inventory_rules": len(inventory),
             "raw_uncovered_rules": sorted(raw_uncovered),
             "dispositioned_rules": dispositions,
+            "test_backed_rules": test_backed,
             "uncovered_rules": sorted(unexplained),
         }, sort_keys=True))
         return 0
     if not args.password:
         raise SystemExit("set E2BR3_ADMIN_PASSWORD")
+    if any(scenario.reference_fixture for scenario in scenarios):
+        if not args.fixture_database_url:
+            raise SystemExit("reference scenarios require --fixture-database-url")
+        seed_reference_fixtures(args.fixture_database_url)
 
     client = ApiClient(args.base_url, args.timeout)
     events: list[Event] = []
@@ -1332,6 +1562,408 @@ def main(args: argparse.Namespace) -> int:
                 add(edge, scenario, "FAIL", status, {**reaction_summary, "reason": "reaction_fixture_failed"})
                 return
 
+        if scenario.surface == "singleton":
+            _, before_value, _ = request("GET", f"/api/audit-logs/by-record/cases/{case_id}")
+            before_items = before_value if isinstance(before_value, list) else []
+            if scenario.expected_code == "ICH.D.1.REQUIRED" and value is not None:
+                status, _, save_summary = request(
+                    "PATCH",
+                    f"/api/cases/{case_id}/editor/pages/DM",
+                    {"authorities": ["ich"], "rows": {"patientInformation": {"patientInitials": value}}},
+                )
+                read_status, current = page_current(case_id, "DM", "patientInformation")
+                actual = get_path(current, "patientInitials")
+            elif scenario.expected_code == "ICH.H.1.REQUIRED" and value is not None:
+                status, _, save_summary = request(
+                    "PATCH",
+                    f"/api/cases/{case_id}/editor/pages/NR",
+                    {"authorities": ["ich"], "rows": {"narrative": {"caseNarrative": value}}},
+                )
+                read_status, current = page_current(case_id, "NR", "narrative")
+                actual = get_path(current, "caseNarrative")
+            else:
+                status, save_summary = 200, {"status": 200, "absence_fixture": True}
+                read_status, actual = 200, None
+            _, after_value, _ = request("GET", f"/api/audit-logs/by-record/cases/{case_id}")
+            after_items = after_value if isinstance(after_value, list) else []
+            validation_status, report, validation_summary = validation(case_id, scenario.authority)
+            present = scenario.expected_code in issue_codes(report)
+            expected_present = edge == "invalid_edge"
+            complete_logs = [
+                log for log in after_items
+                if isinstance(log, dict) and audit_log_complete(log)
+            ]
+            passed = (
+                status == 200
+                and read_status == 200
+                and values_equal(value, actual)
+                and validation_status == 200
+                and present == expected_present
+                and (not expected_present or issue_complete(report, scenario.expected_code))
+                and (
+                    len(after_items) == len(before_items)
+                    if expected_present else len(after_items) > len(before_items)
+                )
+                and bool(complete_logs)
+            )
+            add(edge, scenario, "PASS" if passed else "FAIL", status, {
+                **save_summary,
+                "validation": validation_summary,
+                "expected_code": scenario.expected_code,
+                "expected_code_present": expected_present,
+                "actual_code_present": present,
+                "readback": redacted(actual),
+                "audit_rows_before": len(before_items),
+                "audit_rows_after": len(after_items),
+                "audit_complete": bool(complete_logs),
+                "surface": "server-singleton",
+            })
+            return
+
+        if scenario.surface == "device":
+            device_ci = ci_payload(fixture_scenario=scenario)
+            device_ci["id"] = ci_id
+            device_ci["combinationProductReportIndicator"] = "1"
+            if scenario.expected_code == "FDA.G.K.12.REQUIRED":
+                device_ci["localCriteriaReportType"] = "5"
+            elif scenario.expected_code == "FDA.W0007":
+                device_ci["localCriteriaReportType"] = "4"
+            status, _, save_summary = request(
+                "PATCH",
+                f"/api/cases/{case_id}/editor/pages/CI",
+                {"authorities": ["fda"], "rows": {"safetyReportIdentification": device_ci}},
+            )
+            if status != 200:
+                add(edge, scenario, "FAIL", status, {**save_summary, "reason": "device_ci_fixture_failed"})
+                return
+            status, _, save_summary = request(
+                "POST",
+                f"/api/cases/{case_id}/message-header",
+                {"data": {
+                    "case_id": case_id,
+                    "batch_sender_identifier": "SENDER",
+                    "batch_receiver_identifier": "ZZFDA",
+                    "batch_transmission_date": [year, 65, 0, 0, 0, 0, 0, 0, 0],
+                    "message_number": f"BUSINESS-DEVICE-{case_id}",
+                    "message_sender_identifier": "SENDER",
+                    "message_receiver_identifier": "CDER",
+                    "message_date": f"{year}0305000000",
+                }},
+            )
+            if status != 201:
+                add(edge, scenario, "FAIL", status, {**save_summary, "reason": "device_header_fixture_failed"})
+                return
+
+            if scenario.expected_code == "FDA.D.1.R0027":
+                status, _, save_summary = request(
+                    "PATCH",
+                    f"/api/cases/{case_id}/editor/pages/DM",
+                    {"authorities": ["fda"], "rows": {"patientInformation": {
+                        "patientInitialsNullFlavor": value,
+                    }}},
+                )
+                if status != 200:
+                    add(edge, scenario, "FAIL", status, {**save_summary, "reason": "device_patient_fixture_failed"})
+                    return
+                reaction = reaction_payload()
+                reaction["reactionMeddraCodeLLT"] = "10067482"
+                status, _, save_summary = request(
+                    "POST",
+                    f"/api/cases/{case_id}/editor/pages/AE/rows",
+                    {"authorities": ["fda"], "rows": {"reaction": reaction}},
+                )
+                if status != 201:
+                    add(edge, scenario, "FAIL", status, {**save_summary, "reason": "device_reaction_fixture_failed"})
+                    return
+
+            drug = drug_payload(scenario, None)
+            drug["drugCharacterization"] = (
+                "4" if scenario.expected_code == "FDA.R0072" else "1"
+            )
+            if scenario.expected_code == "FDA.R0072":
+                drug["fdaOtherCharacterization"] = value
+            status, created, save_summary = request(
+                "POST",
+                f"/api/cases/{case_id}/editor/pages/DG/rows",
+                {"authorities": ["fda"], "rows": {"drug": drug}},
+            )
+            drug_id = created_row_id(created)
+            if status != 201 or not drug_id:
+                add(edge, scenario, "FAIL", status, {**save_summary, "reason": "device_drug_fixture_failed"})
+                return
+
+            malfunction = (
+                value if scenario.expected_code == "FDA.G.K.12.REQUIRED" else True
+            )
+            brand_name = (
+                value
+                if scenario.expected_code == "FDA.G.k.12.r.4-6.AT_LEAST_ONE"
+                else "Business Device"
+            )
+            status, created, save_summary = request(
+                "POST",
+                f"/api/cases/{case_id}/drugs/{drug_id}/devices",
+                {"data": {
+                    "drug_id": drug_id,
+                    "sequence_number": 1,
+                    "malfunction": malfunction,
+                    "device_brand_name": brand_name,
+                }},
+            )
+            device_id = object_id(created)
+            if status != 201 or not device_id:
+                add(edge, scenario, "FAIL", status, {**save_summary, "reason": "device_fixture_failed"})
+                return
+
+            problem_value = (
+                value if scenario.expected_code == "FDA.G.K.12.R.3.REQUIRED" else "1234567"
+            )
+            if malfunction and problem_value is not None:
+                status, _, save_summary = request(
+                    "POST",
+                    f"/api/cases/{case_id}/drugs/{drug_id}/devices/{device_id}/codes",
+                    {"data": {"device_id": device_id, "element": "device_problem", "sequence_number": 1, "value_code": problem_value}},
+                )
+                if status != 201:
+                    add(edge, scenario, "FAIL", status, {**save_summary, "reason": "device_problem_fixture_failed"})
+                    return
+            if scenario.expected_code == "FDA.W0007" and value is not None:
+                status, _, save_summary = request(
+                    "POST",
+                    f"/api/cases/{case_id}/drugs/{drug_id}/devices/{device_id}/codes",
+                    {"data": {"device_id": device_id, "element": "remedial_action", "sequence_number": 2, "value_code": value}},
+                )
+                if status != 201:
+                    add(edge, scenario, "FAIL", status, {**save_summary, "reason": "device_remedial_fixture_failed"})
+                    return
+
+            read_status, current = page_current(case_id, "DG", "drug", drug_id)
+            devices = current.get("fdaDevices", []) if isinstance(current, dict) else []
+            device = devices[0] if devices and isinstance(devices[0], dict) else {}
+            if scenario.expected_code == "FDA.D.1.R0027":
+                read_status, patient = page_current(case_id, "DM", "patientInformation")
+                actual = get_path(patient, "patientInitialsNullFlavor")
+            elif scenario.expected_code == "FDA.G.K.12.REQUIRED":
+                actual = device.get("malfunction")
+            elif scenario.expected_code == "FDA.G.k.12.r.4-6.AT_LEAST_ONE":
+                actual = device.get("device_brand_name")
+            elif scenario.expected_code == "FDA.G.K.12.R.3.REQUIRED":
+                codes = device.get("deviceProblemCodes", [])
+                actual = codes[0].get("value_code") if codes else None
+            elif scenario.expected_code == "FDA.R0072":
+                actual = current.get("fda_other_characterization") if isinstance(current, dict) else None
+            else:
+                codes = device.get("remedialActions", [])
+                actual = codes[0].get("value_code") if codes else None
+
+            audit_status, audit_value, _ = request("GET", f"/api/audit-logs/by-record/cases/{case_id}")
+            audit_items = (
+                audit_value if isinstance(audit_value, list)
+                else audit_value.get("items", audit_value.get("data", []))
+                if isinstance(audit_value, dict) else []
+            )
+            complete_logs = [
+                log for log in audit_items
+                if isinstance(log, dict) and audit_log_complete(log)
+            ]
+            validation_status, report, validation_summary = validation(case_id, scenario.authority)
+            present = scenario.expected_code in issue_codes(report)
+            expected_present = edge == "invalid_edge"
+            passed = (
+                read_status == 200
+                and values_equal(value, actual)
+                and audit_status == 200
+                and bool(complete_logs)
+                and validation_status == 200
+                and present == expected_present
+                and (not expected_present or issue_complete(report, scenario.expected_code))
+            )
+            add(edge, scenario, "PASS" if passed else "FAIL", status, {
+                **save_summary,
+                "validation": validation_summary,
+                "expected_code": scenario.expected_code,
+                "expected_code_present": expected_present,
+                "actual_code_present": present,
+                "readback": redacted(actual),
+                "audit_logs": len(audit_items),
+                "audit_complete": bool(complete_logs),
+                "surface": "device-subresource",
+            })
+            return
+
+        if scenario.surface == "topology":
+            topology_ci = ci_payload(fixture_scenario=scenario)
+            topology_ci["id"] = ci_id
+            if scenario.expected_code in {
+                "ICH.D.1.1.4.REQUIRED",
+                "MFDS.D.1.1.4.REQUIRED",
+                "MFDS.C.5.1.r.1.RECEIVER.REQUIRED",
+                "MFDS.C.5.1.r.1.NULLFLAVOR.FORBIDDEN",
+                "FDA.W0010",
+            }:
+                topology_ci["reportType"] = "2"
+            linked_reports: list[dict[str, Any]] = []
+            if (
+                scenario.expected_code == "FDA.W0001" and value
+            ) or scenario.expected_code == "FDA.W0010":
+                linked_reports = [{
+                    "sequenceNumber": 1,
+                    "linkedReportNumber": f"LINKED-{args.seed}",
+                }]
+            status, _, save_summary = request(
+                "PATCH",
+                f"/api/cases/{case_id}/editor/pages/CI",
+                {"authorities": [scenario.authority], "rows": {
+                    "safetyReportIdentification": topology_ci,
+                    "linkedReports": linked_reports,
+                }},
+            )
+            if status != 200:
+                add(edge, scenario, "FAIL", status, {**save_summary, "reason": "topology_ci_fixture_failed"})
+                return
+
+            if scenario.authority in {"mfds", "fda"}:
+                if scenario.authority == "mfds":
+                    batch_receiver = message_receiver = "MFDS-O-CT"
+                elif scenario.expected_code == "FDA.W0010":
+                    batch_receiver, message_receiver = "ZZFDA_PREMKT", "CDER_IND"
+                else:
+                    batch_receiver, message_receiver = "ZZFDA", "CDER"
+                status, _, save_summary = request(
+                    "POST",
+                    f"/api/cases/{case_id}/message-header",
+                    {"data": {
+                        "case_id": case_id,
+                        "batch_sender_identifier": "SENDER",
+                        "batch_receiver_identifier": batch_receiver,
+                        "batch_transmission_date": [year, 65, 0, 0, 0, 0, 0, 0, 0],
+                        "message_number": f"BUSINESS-TOPOLOGY-{case_id}",
+                        "message_sender_identifier": "SENDER",
+                        "message_receiver_identifier": message_receiver,
+                        "message_date": f"{year}0305000000",
+                    }},
+                )
+                if status != 201:
+                    add(edge, scenario, "FAIL", status, {**save_summary, "reason": "topology_header_fixture_failed"})
+                    return
+
+            patient = {"patientInitials": "BUSINESS-FUZZ"}
+            identifiers: list[dict[str, Any]] = []
+            if scenario.expected_code in {"FDA.W0001", "FDA.W0002"}:
+                patient["patientInitials"] = "AGGREGATE"
+            elif scenario.expected_code == "FDA.W0010":
+                patient["patientInitials"] = value
+            elif scenario.expected_code in {
+                "ICH.D.1.1.4.REQUIRED", "MFDS.D.1.1.4.REQUIRED",
+            } and value:
+                identifiers = [{
+                    "sequenceNumber": 1,
+                    "identifierTypeCode": "4",
+                    "identifierValue": f"STUDY-{args.seed}",
+                }]
+            status, _, save_summary = request(
+                "PATCH",
+                f"/api/cases/{case_id}/editor/pages/DM",
+                {"authorities": [scenario.authority], "rows": {
+                    "patientInformation": patient,
+                    "patientIdentifiers": identifiers,
+                }},
+            )
+            if status != 200:
+                add(edge, scenario, "FAIL", status, {**save_summary, "reason": "topology_patient_fixture_failed"})
+                return
+
+            study = {
+                "studyName": "Business topology study",
+                "sponsorStudyNumber": f"STUDY-{args.seed}",
+                "studyTypeReaction": "1",
+            }
+            registrations: list[dict[str, Any]] = []
+            if scenario.expected_code == "FDA.W0002":
+                study["studyTypeReaction"] = value
+            elif scenario.expected_code == "FDA.W0010":
+                study["fdaIndNumberOccurred"] = "123456"
+            elif scenario.expected_code == "MFDS.C.5.1.r.1.RECEIVER.REQUIRED" and value:
+                registrations = [{
+                    "sequenceNumber": 1,
+                    "registrationNumber": f"REG-{args.seed}",
+                    "countryCode": "KR",
+                }]
+            elif scenario.expected_code == "MFDS.C.5.1.r.1.NULLFLAVOR.FORBIDDEN":
+                registrations = [{
+                    "sequenceNumber": 1,
+                    "registrationNumber": None if value else f"REG-{args.seed}",
+                    "registrationNumberNullFlavor": value,
+                    "countryCode": "KR",
+                }]
+            status, _, save_summary = request(
+                "PATCH",
+                f"/api/cases/{case_id}/editor/pages/SI",
+                {"authorities": [scenario.authority], "rows": {
+                    "studyInformation": study,
+                    "studyRegistrationNumbers": registrations,
+                }},
+            )
+            if status != 200:
+                add(edge, scenario, "FAIL", status, {**save_summary, "reason": "topology_study_fixture_failed"})
+                return
+
+            if scenario.expected_code == "FDA.W0001":
+                read_status, current = page_current(case_id, "CI", "linkedReports")
+                actual = bool(current)
+            elif scenario.expected_code == "FDA.W0002":
+                read_status, current = page_current(case_id, "SI", "studyInformation")
+                actual = get_path(current, "studyTypeReaction")
+            elif scenario.expected_code == "FDA.W0010":
+                read_status, current = page_current(case_id, "DM", "patientInformation")
+                actual = get_path(current, "patientInitials")
+            elif scenario.expected_code in {
+                "ICH.D.1.1.4.REQUIRED", "MFDS.D.1.1.4.REQUIRED",
+            }:
+                read_status, current = page_current(case_id, "DM", "patientIdentifiers")
+                actual = bool(current)
+            elif scenario.expected_code == "MFDS.C.5.1.r.1.RECEIVER.REQUIRED":
+                read_status, current = page_current(case_id, "SI", "studyRegistrationNumbers")
+                actual = bool(current)
+            else:
+                read_status, current = page_current(case_id, "SI", "studyRegistrationNumbers")
+                actual = get_path(current, "registration_number_null_flavor")
+
+            audit_status, audit_value, _ = request("GET", f"/api/audit-logs/by-record/cases/{case_id}")
+            audit_items = (
+                audit_value if isinstance(audit_value, list)
+                else audit_value.get("items", audit_value.get("data", []))
+                if isinstance(audit_value, dict) else []
+            )
+            complete_logs = [
+                log for log in audit_items
+                if isinstance(log, dict) and audit_log_complete(log)
+            ]
+            validation_status, report, validation_summary = validation(case_id, scenario.authority)
+            present = scenario.expected_code in issue_codes(report)
+            expected_present = edge == "invalid_edge"
+            passed = (
+                read_status == 200
+                and values_equal(value, actual)
+                and audit_status == 200
+                and bool(complete_logs)
+                and validation_status == 200
+                and present == expected_present
+                and (not expected_present or issue_complete(report, scenario.expected_code))
+            )
+            add(edge, scenario, "PASS" if passed else "FAIL", status, {
+                **save_summary,
+                "validation": validation_summary,
+                "expected_code": scenario.expected_code,
+                "expected_code_present": expected_present,
+                "actual_code_present": present,
+                "readback": redacted(actual),
+                "audit_logs": len(audit_items),
+                "audit_complete": bool(complete_logs),
+                "surface": "collection-topology",
+            })
+            return
+
         if scenario.scenario_id == "reaction-hcp-medical-confirmation-omit":
             status, _, save_summary = request("PATCH", f"/api/cases/{case_id}/editor/pages/RP", {
                 "authorities": [scenario.authority],
@@ -1619,6 +2251,7 @@ def main(args: argparse.Namespace) -> int:
             "inventory_rule_count": len(inventory),
             "raw_uncovered_rules": sorted(raw_uncovered),
             "dispositioned_rules": dispositions,
+            "test_backed_rules": test_backed,
             "uncovered_rules": sorted(unexplained),
             "artifact": str(artifact),
             "surface": "case-validation-api",

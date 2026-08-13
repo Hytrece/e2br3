@@ -51,8 +51,13 @@ class CaseBusinessValidatorFuzzerTests(unittest.TestCase):
         inventory = fuzzer.discover_business_rule_codes()
         covered = {item.expected_code for item in fuzzer.scenario_catalog(1)}
         dispositions = fuzzer.rule_dispositions()
-        self.assertEqual(inventory - covered - dispositions.keys(), set())
+        test_backed = fuzzer.TEST_BACKED_RULES.keys()
+        self.assertEqual(
+            inventory - covered - dispositions.keys() - test_backed,
+            set(),
+        )
         self.assertEqual(dispositions.keys() & covered, set())
+        self.assertEqual(test_backed & covered, set())
 
     def test_primary_source_audit_alias_matches_storage_field(self) -> None:
         self.assertTrue(fuzzer.audit_key_matches(
