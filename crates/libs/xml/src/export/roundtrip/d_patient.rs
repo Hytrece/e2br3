@@ -87,7 +87,7 @@ pub fn patch_d_patient(raw_xml: &[u8], patch: &DPatientPatch) -> Result<String> 
 			&parser,
 			&mut xpath,
 			"//hl7:primaryRole",
-			&reported_cause_fragment(cause),
+			&write_d_9_2_r_reported_cause(cause),
 		)?;
 	}
 
@@ -191,7 +191,7 @@ fn write_d_9_2_r_2<'a>(value: &DPatientDeathCausePatch<'a>) -> Option<&'a str> {
 	value.comments
 }
 
-fn reported_cause_fragment(cause: &DPatientDeathCausePatch<'_>) -> String {
+fn write_d_9_2_r_reported_cause(cause: &DPatientDeathCausePatch<'_>) -> String {
 	let mut out = String::from(
 		"<subjectOf2 typeCode=\"SBJ\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code code=\"32\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.19\" displayName=\"reportedCauseOfDeath\"/><value xsi:type=\"CE\"",
 	);

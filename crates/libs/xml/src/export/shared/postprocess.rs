@@ -1,12 +1,12 @@
 use super::*;
 use crate::export::policy::{normalize_gestation_unit, normalize_time_unit};
 use crate::export::roundtrip::reorder_investigation_event_children;
-use crate::export::sections::c::apply_literature_section;
-use crate::export::sections::c::apply_primary_source_section;
-use crate::export::sections::c::apply_report_relationships_section;
-use crate::export::sections::c::apply_study_section;
+use crate::export::sections::c::{
+	apply_c_1_report_relationships, apply_c_2_primary_sources, apply_c_4_literature,
+	apply_c_5_study,
+};
 use crate::export::sections::h::{
-	apply_case_summary_section, apply_sender_diagnosis_section,
+	apply_h_3_sender_diagnoses, apply_h_5_case_summaries,
 };
 use crate::export::sections::n::apply_section_n;
 use crate::export::shared::patch_doc::postprocess_export_doc;
@@ -28,7 +28,7 @@ fn normalize_namespace_artifacts(mut xml: String) -> String {
 	xml
 }
 
-pub(crate) async fn apply_section_postprocess(
+pub(crate) async fn apply_c_d_h_sections(
 	ctx: &Ctx,
 	mm: &ModelManager,
 	case_id: sqlx::types::Uuid,
@@ -50,25 +50,21 @@ pub(crate) async fn apply_section_postprocess(
 	let _ =
 		xpath.register_namespace("xsi", "http://www.w3.org/2001/XMLSchema-instance");
 	apply_section_n(ctx, &mut doc, &parser, mm, case_id, &mut xpath).await?;
-	apply_patient_section(
-		ctx, &mut doc, &parser, mm, case_id, &mut xpath, authority,
-	)
-	.await?;
-	apply_primary_source_section(
-		&mut doc, &parser, mm, case_id, &mut xpath, authority,
-	)
-	.await?;
-	apply_report_relationships_section(
+	apply_section_d(ctx, &mut doc, &parser, mm, case_id, &mut xpath, authority)
+		.await?;
+	apply_c_2_primary_sources(&mut doc, &parser, mm, case_id, &mut xpath, authority)
+		.await?;
+	apply_c_1_report_relationships(
 		&mut doc, &parser, ctx, mm, case_id, &mut xpath, authority,
 	)
 	.await?;
-	apply_literature_section(&mut doc, &parser, mm, case_id, &mut xpath, authority)
+	apply_c_4_literature(&mut doc, &parser, mm, case_id, &mut xpath, authority)
 		.await?;
-	apply_study_section(&mut doc, &parser, ctx, mm, case_id, &mut xpath, authority)
+	apply_c_5_study(&mut doc, &parser, ctx, mm, case_id, &mut xpath, authority)
 		.await?;
-	apply_sender_diagnosis_section(ctx, &mut doc, &parser, mm, case_id, &mut xpath)
+	apply_h_3_sender_diagnoses(ctx, &mut doc, &parser, mm, case_id, &mut xpath)
 		.await?;
-	apply_case_summary_section(ctx, &mut doc, &parser, mm, case_id, &mut xpath)
+	apply_h_5_case_summaries(ctx, &mut doc, &parser, mm, case_id, &mut xpath)
 		.await?;
 	postprocess_export_doc(&mut doc, &mut xpath)?;
 	reorder_investigation_event_children(&mut xpath);
@@ -76,7 +72,7 @@ pub(crate) async fn apply_section_postprocess(
 	Ok(normalize_namespace_artifacts(doc.to_string()))
 }
 
-async fn apply_patient_section(
+async fn apply_section_d(
 	ctx: &Ctx,
 	doc: &mut Document,
 	parser: &Parser,
@@ -191,14 +187,14 @@ async fn apply_patient_section(
 			"//hl7:primaryRole/hl7:player1/hl7:administrativeGenderCode",
 		);
 	}
-	apply_fda_patient_races(
+	apply_fda_d_11_r_1_races(
 		doc,
 		parser,
 		xpath,
 		&patient.race_codes,
 		patient.race_code_null_flavor.as_deref(),
 	)?;
-	apply_fda_patient_ethnicity(
+	apply_fda_d_12_ethnicity(
 		doc,
 		parser,
 		xpath,
@@ -253,7 +249,7 @@ async fn apply_patient_section(
 			null_flavor,
 		);
 	}
-	apply_medical_history_section(doc, parser, xpath, &medical_history)?;
+	apply_d_7_medical_history(doc, parser, xpath, &medical_history)?;
 	if patient.gestation_period.is_some() || patient.gestation_period_unit.is_some()
 	{
 		ensure_patient_observation(xpath, doc, parser, "16", "PQ")?;
@@ -484,14 +480,14 @@ async fn apply_patient_section(
 			}
 			remove_attr_first(xpath, age_value_xpath, "nullFlavor");
 		}
-		apply_parent_past_drug_history_section(
+		apply_d_10_8_parent_past_drugs(
 			doc,
 			parser,
 			xpath,
 			&parent_past_drugs,
 			matches!(authority, lib_core::regulatory::RegulatoryAuthority::Mfds),
 		)?;
-		apply_parent_medical_history_section(
+		apply_d_10_7_parent_medical_history(
 			doc,
 			parser,
 			xpath,
@@ -499,7 +495,7 @@ async fn apply_patient_section(
 		)?;
 	}
 
-	apply_past_drug_history_section(
+	apply_d_8_past_drugs(
 		doc,
 		parser,
 		xpath,
@@ -512,13 +508,13 @@ async fn apply_patient_section(
 			"//hl7:primaryRole/hl7:subjectOf2[hl7:observation/hl7:code[@code='C17049' or @code='C16564']]",
 		);
 	}
-	apply_patient_death_null_flavor(doc, parser, xpath, &death_info)?;
+	apply_d_9_1_date_of_death_null_flavor(doc, parser, xpath, &death_info)?;
 
 	Ok(())
 }
 
 /// e2b:FDA.D.11.r.1
-fn apply_fda_patient_races(
+fn apply_fda_d_11_r_1_races(
 	doc: &mut Document,
 	parser: &Parser,
 	xpath: &mut Context,
@@ -573,7 +569,7 @@ fn write_fda_d_12(value: &str) -> &str {
 }
 
 /// e2b:FDA.D.12
-fn apply_fda_patient_ethnicity(
+fn apply_fda_d_12_ethnicity(
 	doc: &mut Document,
 	parser: &Parser,
 	xpath: &mut Context,
@@ -724,7 +720,7 @@ fn write_d_7_3(xpath: &mut Context, path: &str, value: bool) {
 	set_attr_first(xpath, path, "value", if value { "true" } else { "false" });
 }
 
-fn apply_parent_medical_history_section(
+fn apply_d_10_7_parent_medical_history(
 	doc: &mut Document,
 	parser: &Parser,
 	xpath: &mut Context,
@@ -797,7 +793,7 @@ fn write_d_10_7_1_r_5(value: &ParentMedicalHistory) -> String {
 	value.comments.as_deref().map(|v| format!("<outboundRelationship2 typeCode=\"COMP\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code code=\"10\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.19\"/><value xsi:type=\"ED\">{}</value></observation></outboundRelationship2>", xml_escape(v))).unwrap_or_default()
 }
 
-fn apply_parent_past_drug_history_section(
+fn apply_d_10_8_parent_past_drugs(
 	doc: &mut Document,
 	parser: &Parser,
 	xpath: &mut Context,
@@ -824,7 +820,7 @@ fn apply_parent_past_drug_history_section(
 			parser,
 			xpath,
 			parent_role_xpath,
-			&parent_past_drug_history_fragment(&drug, include_mfds),
+			&write_d_10_8_r_parent_past_drug(&drug, include_mfds),
 		)?;
 	}
 
@@ -900,7 +896,7 @@ fn write_d_10_8_r_7b(value: &ParentPastDrugHistory) -> Option<&str> {
 	value.reaction_meddra_code.as_deref()
 }
 
-fn parent_past_drug_history_fragment(
+fn write_d_10_8_r_parent_past_drug(
 	drug: &ParentPastDrugHistory,
 	include_mfds: bool,
 ) -> String {
@@ -1053,7 +1049,7 @@ fn write_d_7_1_r_6(value: &MedicalHistoryEpisode) -> String {
 	value.family_history.map(|v| format!("<outboundRelationship2 typeCode=\"PERT\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code code=\"38\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.19\"/><value xsi:type=\"BL\" value=\"{}\"/></observation></outboundRelationship2>", if v { "true" } else { "false" })).unwrap_or_default()
 }
 
-fn apply_medical_history_section(
+fn apply_d_7_medical_history(
 	doc: &mut Document,
 	parser: &Parser,
 	xpath: &mut Context,
@@ -1174,7 +1170,7 @@ fn write_d_8_r_7b(value: &PastDrugHistory) -> Option<&str> {
 	value.reaction_meddra_code.as_deref()
 }
 
-fn apply_past_drug_history_section(
+fn apply_d_8_past_drugs(
 	doc: &mut Document,
 	parser: &Parser,
 	xpath: &mut Context,
@@ -1340,7 +1336,7 @@ fn history_effective_time(
 	format!("<effectiveTime xsi:type=\"IVL_TS\">{low}{high}</effectiveTime>")
 }
 
-fn apply_patient_death_null_flavor(
+fn apply_d_9_1_date_of_death_null_flavor(
 	doc: &mut Document,
 	parser: &Parser,
 	xpath: &mut Context,
@@ -1460,7 +1456,7 @@ mod tests {
 		let mut xpath = Context::new(&doc).expect("xpath");
 		let _ = xpath.register_namespace("hl7", "urn:hl7-org:v3");
 
-		apply_medical_history_section(
+		apply_d_7_medical_history(
 			&mut doc,
 			&parser,
 			&mut xpath,
@@ -1517,7 +1513,7 @@ mod tests {
 	}
 
 	#[test]
-	fn past_drug_fragment_exports_mfds_code_separate_from_identifiers() {
+	fn d_8_exports_mfds_code_separate_from_identifiers() {
 		let drug = PastDrugHistory {
 			id: Uuid::nil(),
 			patient_id: Uuid::nil(),
@@ -1553,14 +1549,8 @@ mod tests {
 			.expect("doc");
 		let mut xpath = Context::new(&doc).expect("xpath");
 		let _ = xpath.register_namespace("hl7", "urn:hl7-org:v3");
-		apply_past_drug_history_section(
-			&mut doc,
-			&parser,
-			&mut xpath,
-			&[drug],
-			true,
-		)
-		.expect("apply");
+		apply_d_8_past_drugs(&mut doc, &parser, &mut xpath, &[drug], true)
+			.expect("apply");
 		let fragment = doc.to_string();
 
 		let name = "<name>Past &amp; &lt;drug&gt; \"A\"</name>";
@@ -1584,7 +1574,7 @@ mod tests {
 	}
 
 	#[test]
-	fn past_drug_fragment_omits_blank_mfds_code() {
+	fn d_8_omits_blank_mfds_code() {
 		let drug = PastDrugHistory {
 			id: Uuid::nil(),
 			patient_id: Uuid::nil(),
@@ -1620,14 +1610,8 @@ mod tests {
 			.expect("doc");
 		let mut xpath = Context::new(&doc).expect("xpath");
 		let _ = xpath.register_namespace("hl7", "urn:hl7-org:v3");
-		apply_past_drug_history_section(
-			&mut doc,
-			&parser,
-			&mut xpath,
-			&[drug],
-			true,
-		)
-		.expect("apply");
+		apply_d_8_past_drugs(&mut doc, &parser, &mut xpath, &[drug], true)
+			.expect("apply");
 		let fragment = doc.to_string();
 
 		assert!(!fragment.contains("<code code=\"\""));
@@ -1636,7 +1620,7 @@ mod tests {
 	}
 
 	#[test]
-	fn parent_past_drug_fragment_exports_mfds_code_separate_from_identifiers() {
+	fn d_10_8_exports_mfds_code_separate_from_identifiers() {
 		let drug = ParentPastDrugHistory {
 			id: Uuid::nil(),
 			parent_id: Uuid::nil(),
@@ -1663,8 +1647,8 @@ mod tests {
 			updated_by: None,
 		};
 
-		let fragment = parent_past_drug_history_fragment(&drug, true);
-		let non_mfds_fragment = parent_past_drug_history_fragment(&drug, false);
+		let fragment = write_d_10_8_r_parent_past_drug(&drug, true);
+		let non_mfds_fragment = write_d_10_8_r_parent_past_drug(&drug, false);
 
 		let mfds_code = "<code codeSystem=\"2.16.840.1.113883.3.989.5.1.10.2.1\" code=\"MF&amp;&lt;&gt;&quot;&apos;\" codeSystemVersion=\"MFV&amp;&lt;&gt;&quot;&apos;\"/>";
 		let name =
@@ -1693,7 +1677,7 @@ mod tests {
 			.expect("doc");
 		let mut xpath = Context::new(&doc).expect("xpath");
 		let _ = xpath.register_namespace("hl7", "urn:hl7-org:v3");
-		apply_fda_patient_races(
+		apply_fda_d_11_r_1_races(
 			&mut doc,
 			&parser,
 			&mut xpath,
@@ -1709,7 +1693,7 @@ mod tests {
 			2
 		);
 
-		apply_fda_patient_races(&mut doc, &parser, &mut xpath, &[], Some("UNK"))
+		apply_fda_d_11_r_1_races(&mut doc, &parser, &mut xpath, &[], Some("UNK"))
 			.expect("race null flavor");
 		assert_eq!(
 			xpath
@@ -1735,7 +1719,7 @@ mod tests {
 		let _ = xpath
 			.register_namespace("xsi", "http://www.w3.org/2001/XMLSchema-instance");
 
-		apply_fda_patient_ethnicity(
+		apply_fda_d_12_ethnicity(
 			&mut doc,
 			&parser,
 			&mut xpath,

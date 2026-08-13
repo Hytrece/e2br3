@@ -67,7 +67,7 @@ fn write_h_2(
 		parser,
 		xpath,
 		"//hl7:adverseEventAssessment",
-		&comment_fragment(reporter_comments, "3"),
+		&write_h_2_or_h_4(reporter_comments, "3"),
 	)
 }
 
@@ -83,6 +83,6 @@ fn write_h_4(
 		parser,
 		xpath,
 		"//hl7:adverseEventAssessment",
-		&comment_fragment(sender_comments, "1"),
+		&write_h_2_or_h_4(sender_comments, "1"),
 	)
 }

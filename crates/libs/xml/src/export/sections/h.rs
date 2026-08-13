@@ -21,7 +21,7 @@ pub(crate) async fn export_patch(
 	patch_h_narrative(raw_xml, &narrative)
 }
 
-pub(crate) async fn apply_case_summary_section(
+pub(crate) async fn apply_h_5_case_summaries(
 	ctx: &Ctx,
 	doc: &mut Document,
 	parser: &Parser,
@@ -69,7 +69,7 @@ pub(crate) async fn apply_case_summary_section(
 	Ok(())
 }
 
-pub(crate) async fn apply_sender_diagnosis_section(
+pub(crate) async fn apply_h_3_sender_diagnoses(
 	ctx: &Ctx,
 	doc: &mut Document,
 	parser: &Parser,
@@ -181,10 +181,10 @@ fn reorder_investigation_event_children(xpath: &mut Context) {
 pub fn export_h_narrative_xml(narrative: &NarrativeInformation) -> Result<String> {
 	let mut components = String::new();
 	if let Some(comments) = narrative.reporter_comments.as_deref() {
-		components.push_str(&comment_fragment(comments, "3"));
+		components.push_str(&write_h_2_or_h_4(comments, "3"));
 	}
 	if let Some(comments) = narrative.sender_comments.as_deref() {
-		components.push_str(&comment_fragment(comments, "1"));
+		components.push_str(&write_h_2_or_h_4(comments, "1"));
 	}
 	let xml = base_h_narrative_skeleton()
 		.replace("{CASE_NARRATIVE}", &xml_escape(&narrative.case_narrative))
@@ -192,7 +192,7 @@ pub fn export_h_narrative_xml(narrative: &NarrativeInformation) -> Result<String
 	Ok(xml)
 }
 
-pub(crate) fn comment_fragment(text: &str, author_code: &str) -> String {
+pub(crate) fn write_h_2_or_h_4(text: &str, author_code: &str) -> String {
 	format!(
 		"<component1 typeCode=\"COMP\"><observationEvent classCode=\"OBS\" moodCode=\"EVN\"><code code=\"10\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.19\"/><value xsi:type=\"ED\">{}</value><author typeCode=\"AUT\"><assignedEntity classCode=\"ASSIGNED\"><code code=\"{}\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.21\"/></assignedEntity></author></observationEvent></component1>",
 		xml_escape(text),

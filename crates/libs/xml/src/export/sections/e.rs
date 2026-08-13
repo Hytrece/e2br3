@@ -16,10 +16,6 @@ pub(crate) async fn export_patch(
 	)
 }
 
-use crate::export::policy::{
-	normalize_outcome_code, outcome_display_name,
-	should_emit_required_intervention_null_flavor_ni,
-};
 use sqlx::types::time::Date;
 
 pub fn export_e_reactions_xml(reactions: &[Reaction]) -> Result<String> {
@@ -38,14 +34,13 @@ pub fn export_e_reactions_xml_for_authority(
 
 	let mut reactions_xml = String::new();
 	for reaction in ordered {
-		reactions_xml
-			.push_str(&reaction_fragment_for_authority(reaction, authority)?);
+		reactions_xml.push_str(&write_e_i_reaction(reaction, authority)?);
 	}
 	let xml = base_e_reaction_skeleton().replace("{REACTIONS}", &reactions_xml);
 	Ok(xml)
 }
 
-pub(crate) fn reaction_fragment_for_authority(
+pub(crate) fn write_e_i_reaction(
 	reaction: &Reaction,
 	authority: lib_core::regulatory::RegulatoryAuthority,
 ) -> Result<String> {
@@ -131,9 +126,7 @@ pub(crate) fn reaction_fragment_for_authority(
 		}
 	}
 	out.push_str(&write_e_i_1_2(reaction));
-	if let Some(term_code) = write_e_i_3_1(reaction) {
-		out.push_str(&observation_rel_code("37", term_code));
-	}
+	out.push_str(&write_e_i_3_1(reaction));
 	out.push_str(&write_e_i_3_2a(
 		"34",
 		reaction.criteria_death,
@@ -179,9 +172,7 @@ pub(crate) fn reaction_fragment_for_authority(
 	);
 	append_extension_code(&mut out, "AE_SEVERITY", reaction.severity.as_deref());
 	out.push_str(&write_e_i_7(reaction.outcome.as_deref()));
-	if let Some(value) = write_e_i_8(reaction) {
-		out.push_str(&observation_rel_bool("24", value));
-	}
+	out.push_str(&write_e_i_8(reaction));
 	out.push_str("</observation></subjectOf2>");
 	Ok(out)
 }
@@ -201,7 +192,24 @@ fn write_e_i_1_1b(value: &Reaction) -> Option<&str> {
 
 /// e2b:E.i.1.2
 fn write_e_i_1_2(value: &Reaction) -> String {
-	observation_rel_translation(value)
+	let Some(text) = value
+		.primary_source_reaction_translation
+		.as_deref()
+		.filter(|text| !text.trim().is_empty())
+	else {
+		return String::new();
+	};
+	let mut out = String::new();
+	out.push_str("<outboundRelationship2 typeCode=\"PERT\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code code=\"30\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.19\"/><value xsi:type=\"ED\"");
+	if let Some(language) = value.reaction_language.as_deref() {
+		out.push_str(" language=\"");
+		out.push_str(&xml_escape(language));
+		out.push('"');
+	}
+	out.push('>');
+	out.push_str(&xml_escape(text));
+	out.push_str("</value></observation></outboundRelationship2>");
+	out
 }
 
 /// e2b:E.i.2.1a
@@ -219,8 +227,14 @@ fn write_e_i_2_1b(value: &Reaction) -> Option<&str> {
 }
 
 /// e2b:E.i.3.1
-fn write_e_i_3_1(value: &Reaction) -> Option<&str> {
-	value.term_highlighted.as_deref()
+fn write_e_i_3_1(value: &Reaction) -> String {
+	let Some(term_code) = value.term_highlighted.as_deref() else {
+		return String::new();
+	};
+	format!(
+		"<outboundRelationship2 typeCode=\"PERT\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code code=\"37\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.19\"/><value xsi:type=\"CE\" code=\"{}\"/></observation></outboundRelationship2>",
+		xml_escape(term_code)
+	)
 }
 
 /// e2b:E.i.3.2a
@@ -229,7 +243,7 @@ fn write_e_i_3_2a(
 	value: Option<bool>,
 	null_flavor: Option<&str>,
 ) -> String {
-	observation_rel_bool_or_null_flavor(code, value, null_flavor)
+	write_e_i_3_2(code, value, null_flavor)
 }
 
 /// e2b:E.i.3.2b
@@ -238,7 +252,7 @@ fn write_e_i_3_2b(
 	value: Option<bool>,
 	null_flavor: Option<&str>,
 ) -> String {
-	observation_rel_bool_or_null_flavor(code, value, null_flavor)
+	write_e_i_3_2(code, value, null_flavor)
 }
 
 /// e2b:E.i.3.2c
@@ -247,7 +261,7 @@ fn write_e_i_3_2c(
 	value: Option<bool>,
 	null_flavor: Option<&str>,
 ) -> String {
-	observation_rel_bool_or_null_flavor(code, value, null_flavor)
+	write_e_i_3_2(code, value, null_flavor)
 }
 
 /// e2b:E.i.3.2d
@@ -256,7 +270,7 @@ fn write_e_i_3_2d(
 	value: Option<bool>,
 	null_flavor: Option<&str>,
 ) -> String {
-	observation_rel_bool_or_null_flavor(code, value, null_flavor)
+	write_e_i_3_2(code, value, null_flavor)
 }
 
 /// e2b:E.i.3.2e
@@ -265,7 +279,7 @@ fn write_e_i_3_2e(
 	value: Option<bool>,
 	null_flavor: Option<&str>,
 ) -> String {
-	observation_rel_bool_or_null_flavor(code, value, null_flavor)
+	write_e_i_3_2(code, value, null_flavor)
 }
 
 /// e2b:E.i.3.2f
@@ -274,12 +288,21 @@ fn write_e_i_3_2f(
 	value: Option<bool>,
 	null_flavor: Option<&str>,
 ) -> String {
-	observation_rel_bool_or_null_flavor(code, value, null_flavor)
+	write_e_i_3_2(code, value, null_flavor)
 }
 
 /// e2b:FDA.E.i.3.2h
 fn write_fda_e_i_3_2h(value: Option<bool>, null_flavor: Option<&str>) -> String {
-	observation_rel_required_intervention(value, null_flavor)
+	if let Some(value) = value {
+		let value = if value { "true" } else { "false" };
+		return format!(
+			"<outboundRelationship2 typeCode=\"PERT\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code code=\"7\" codeSystem=\"2.16.840.1.113883.3.989.5.1.2.2.1.3\"/><value xsi:type=\"BL\" value=\"{value}\"/></observation></outboundRelationship2>"
+		);
+	}
+	format!(
+		"<outboundRelationship2 typeCode=\"PERT\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code code=\"7\" codeSystem=\"2.16.840.1.113883.3.989.5.1.2.2.1.3\"/><value xsi:type=\"BL\" nullFlavor=\"{}\"/></observation></outboundRelationship2>",
+		xml_escape(null_flavor.unwrap_or("NI"))
+	)
 }
 
 /// e2b:E.i.4
@@ -290,7 +313,7 @@ fn write_e_i_4(
 	null_flavor: Option<&str>,
 	has_duration: bool,
 ) {
-	append_time_boundary_fragment(out, tag, date, null_flavor, has_duration);
+	write_e_i_4_or_5(out, tag, date, null_flavor, has_duration);
 }
 
 /// e2b:E.i.5
@@ -301,7 +324,7 @@ fn write_e_i_5(
 	null_flavor: Option<&str>,
 	has_duration: bool,
 ) {
-	append_time_boundary_fragment(out, tag, date, null_flavor, has_duration);
+	write_e_i_4_or_5(out, tag, date, null_flavor, has_duration);
 }
 
 /// e2b:E.i.6a
@@ -317,24 +340,38 @@ fn write_e_i_6b(value: &Reaction) -> Option<&'static str> {
 
 /// e2b:E.i.7
 fn write_e_i_7(value: Option<&str>) -> String {
-	observation_rel_outcome(value)
+	let Some((code, display_name)) =
+		value.map(str::trim).and_then(|code| match code {
+			"0" => Some(("0", "unknown")),
+			"1" => Some(("1", "recovered/resolved")),
+			"2" => Some(("2", "recovering/resolving")),
+			"3" => Some(("3", "not recovered/not resolved/ongoing")),
+			"4" => Some(("4", "recovered/resolved with sequelae")),
+			"5" => Some(("5", "fatal")),
+			_ => None,
+		})
+	else {
+		return "<outboundRelationship2 typeCode=\"PERT\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code code=\"27\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.19\"/><value xsi:type=\"CE\" nullFlavor=\"NI\"/></observation></outboundRelationship2>".to_string();
+	};
+	format!(
+		"<outboundRelationship2 typeCode=\"PERT\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code code=\"27\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.19\"/><value xsi:type=\"CE\" code=\"{code}\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.11\" displayName=\"{display_name}\"/></observation></outboundRelationship2>"
+	)
 }
 
 /// e2b:E.i.8
-fn write_e_i_8(value: &Reaction) -> Option<bool> {
-	value.medical_confirmation
+fn write_e_i_8(value: &Reaction) -> String {
+	let Some(value) = value.medical_confirmation else {
+		return String::new();
+	};
+	let value = if value { "true" } else { "false" };
+	format!(
+		"<outboundRelationship2 typeCode=\"PERT\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code code=\"24\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.19\"/><value xsi:type=\"BL\" value=\"{value}\"/></observation></outboundRelationship2>"
+	)
 }
 
 /// e2b:E.i.9
 fn write_e_i_9(value: &Reaction) -> Option<&str> {
 	value.country_code.as_deref()
-}
-
-fn observation_rel_bool(code: &str, value: bool) -> String {
-	let v = if value { "true" } else { "false" };
-	format!(
-		"<outboundRelationship2 typeCode=\"PERT\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code code=\"{code}\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.19\"/><value xsi:type=\"BL\" value=\"{v}\"/></observation></outboundRelationship2>"
-	)
 }
 
 fn append_extension_code(out: &mut String, code: &str, value: Option<&str>) {
@@ -348,21 +385,16 @@ fn append_extension_code(out: &mut String, code: &str, value: Option<&str>) {
 	out.push_str("\"/></observation></outboundRelationship2>");
 }
 
-fn observation_rel_code(code: &str, value: &str) -> String {
-	format!(
-		"<outboundRelationship2 typeCode=\"PERT\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code code=\"{code}\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.19\"/><value xsi:type=\"CE\" code=\"{}\"/></observation></outboundRelationship2>",
-		xml_escape(value)
-	)
-}
-
-fn observation_rel_bool_or_null_flavor(
+fn write_e_i_3_2(
 	code: &str,
 	value: Option<bool>,
 	null_flavor: Option<&str>,
 ) -> String {
 	let value = value.filter(|value| *value);
 	match (value, null_flavor) {
-		(Some(value), None) => observation_rel_bool(code, value),
+		(Some(value), None) => format!(
+			"<outboundRelationship2 typeCode=\"PERT\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code code=\"{code}\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.19\"/><value xsi:type=\"BL\" value=\"{value}\"/></observation></outboundRelationship2>"
+		),
 		(None, null_flavor) => format!(
 			"<outboundRelationship2 typeCode=\"PERT\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code code=\"{code}\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.19\"/><value xsi:type=\"BL\" nullFlavor=\"{}\"/></observation></outboundRelationship2>",
 			xml_escape(null_flavor.unwrap_or("NI"))
@@ -373,7 +405,7 @@ fn observation_rel_bool_or_null_flavor(
 	}
 }
 
-fn append_time_boundary_fragment(
+fn write_e_i_4_or_5(
 	out: &mut String,
 	tag: &str,
 	date: Option<Date>,
@@ -415,72 +447,32 @@ fn append_time_boundary_fragment(
 	}
 }
 
-fn observation_rel_outcome(value: Option<&str>) -> String {
-	let Some(code) = normalize_outcome_code(value) else {
-		return "<outboundRelationship2 typeCode=\"PERT\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code code=\"27\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.19\"/><value xsi:type=\"CE\" nullFlavor=\"NI\"/></observation></outboundRelationship2>".to_string();
-	};
-	let display_name = outcome_display_name(code);
-	format!(
-		"<outboundRelationship2 typeCode=\"PERT\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code code=\"27\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.19\"/><value xsi:type=\"CE\" code=\"{}\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.11\" displayName=\"{}\"/></observation></outboundRelationship2>",
-		xml_escape(code),
-		xml_escape(display_name)
-	)
-}
-
-fn observation_rel_required_intervention(
-	value: Option<bool>,
-	null_flavor: Option<&str>,
-) -> String {
-	if let Some(value) = value {
-		let v = if value { "true" } else { "false" };
-		return format!(
-			"<outboundRelationship2 typeCode=\"PERT\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code code=\"7\" codeSystem=\"2.16.840.1.113883.3.989.5.1.2.2.1.3\"/><value xsi:type=\"BL\" value=\"{v}\"/></observation></outboundRelationship2>"
-		);
-	}
-	if let Some(null_flavor) = null_flavor {
-		return format!(
-			"<outboundRelationship2 typeCode=\"PERT\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code code=\"7\" codeSystem=\"2.16.840.1.113883.3.989.5.1.2.2.1.3\"/><value xsi:type=\"BL\" nullFlavor=\"{}\"/></observation></outboundRelationship2>",
-			xml_escape(null_flavor)
-		);
-	}
-	if should_emit_required_intervention_null_flavor_ni() {
-		"<outboundRelationship2 typeCode=\"PERT\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code code=\"7\" codeSystem=\"2.16.840.1.113883.3.989.5.1.2.2.1.3\"/><value xsi:type=\"BL\" nullFlavor=\"NI\"/></observation></outboundRelationship2>".to_string()
-	} else {
-		"<outboundRelationship2 typeCode=\"PERT\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code code=\"7\" codeSystem=\"2.16.840.1.113883.3.989.5.1.2.2.1.3\"/><value xsi:type=\"BL\" value=\"true\"/></observation></outboundRelationship2>".to_string()
-	}
-}
-
 #[cfg(test)]
 mod split_null_flavor_tests {
-	use super::observation_rel_required_intervention;
+	use super::{write_e_i_7, write_fda_e_i_3_2h};
+
+	#[test]
+	fn exports_unknown_reaction_outcome_as_code_zero() {
+		let xml = write_e_i_7(Some("0"));
+		assert!(xml.contains("code=\"0\""));
+		assert!(xml.contains("displayName=\"unknown\""));
+		assert!(!xml.contains("nullFlavor=\"NI\""));
+	}
+
+	#[test]
+	fn exports_invalid_reaction_outcome_as_null_flavor() {
+		for value in [None, Some(""), Some("99")] {
+			let xml = write_e_i_7(value);
+			assert!(xml.contains("nullFlavor=\"NI\""));
+		}
+	}
 
 	#[test]
 	fn exports_required_intervention_companion_as_boolean_null_flavor() {
-		let xml = observation_rel_required_intervention(None, Some("NI"));
+		let xml = write_fda_e_i_3_2h(None, Some("NI"));
 		assert!(xml.contains("xsi:type=\"BL\" nullFlavor=\"NI\""));
 		assert!(!xml.contains(" value=\""));
 	}
-}
-
-fn observation_rel_translation(reaction: &Reaction) -> String {
-	let Some(text) = reaction
-		.primary_source_reaction_translation
-		.as_deref()
-		.filter(|v| !v.trim().is_empty())
-	else {
-		return String::new();
-	};
-	let mut out = String::new();
-	out.push_str("<outboundRelationship2 typeCode=\"PERT\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code code=\"30\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.19\"/><value xsi:type=\"ED\"");
-	if let Some(lang) = reaction.reaction_language.as_deref() {
-		out.push_str(" language=\"");
-		out.push_str(&xml_escape(lang));
-		out.push_str("\"");
-	}
-	out.push_str(">");
-	out.push_str(&xml_escape(text));
-	out.push_str("</value></observation></outboundRelationship2>");
-	out
 }
 
 fn fmt_date(date: Date) -> String {

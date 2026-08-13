@@ -64,7 +64,7 @@ pub(crate) async fn apply_section_n(
 			xpath,
 			&header.message_receiver_identifier,
 		)?;
-		apply_receiver_organization(
+		apply_n_receiver_organization(
 			doc,
 			parser,
 			xpath,
@@ -72,7 +72,7 @@ pub(crate) async fn apply_section_n(
 			&receiver,
 			report.receiver_organization.as_deref(),
 		);
-		apply_receiver_organization(
+		apply_n_receiver_organization(
 			doc,
 			parser,
 			xpath,
@@ -345,7 +345,7 @@ fn ensure_top_level_receiver_agent_nodes(
 	)
 }
 
-fn apply_receiver_organization(
+fn apply_n_receiver_organization(
 	doc: &mut Document,
 	parser: &Parser,
 	xpath: &mut Context,
@@ -365,7 +365,7 @@ fn apply_receiver_organization(
 		set_text_first(xpath, &format!("{org_base}/hl7:name"), value);
 	}
 	if let Some(value) = receiver.telephone.as_deref() {
-		append_fragment_child_text_telecom(
+		append_n_receiver_telecom(
 			doc,
 			parser,
 			xpath,
@@ -374,7 +374,7 @@ fn apply_receiver_organization(
 		);
 	}
 	if let Some(value) = receiver.fax.as_deref() {
-		append_fragment_child_text_telecom(
+		append_n_receiver_telecom(
 			doc,
 			parser,
 			xpath,
@@ -383,7 +383,7 @@ fn apply_receiver_organization(
 		);
 	}
 	if let Some(value) = receiver.email.as_deref() {
-		append_fragment_child_text_telecom(
+		append_n_receiver_telecom(
 			doc,
 			parser,
 			xpath,
@@ -393,7 +393,7 @@ fn apply_receiver_organization(
 	}
 }
 
-fn append_fragment_child_text_telecom(
+fn append_n_receiver_telecom(
 	doc: &mut Document,
 	parser: &Parser,
 	xpath: &mut Context,

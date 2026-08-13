@@ -101,7 +101,7 @@ fn set_telecom_or_null_flavor(
 	}
 }
 
-pub(crate) async fn apply_primary_source_section(
+pub(crate) async fn apply_c_2_primary_sources(
 	doc: &mut Document,
 	parser: &Parser,
 	mm: &ModelManager,
@@ -112,10 +112,10 @@ pub(crate) async fn apply_primary_source_section(
 	let Some(primary) = fetch_primary_source(mm, case_id).await? else {
 		return Ok(());
 	};
-	apply_primary_source_values(doc, parser, xpath, &primary, authority)
+	apply_c_2_primary_source_values(doc, parser, xpath, &primary, authority)
 }
 
-fn apply_primary_source_values(
+fn apply_c_2_primary_source_values(
 	doc: &mut Document,
 	parser: &Parser,
 	xpath: &mut Context,
@@ -587,7 +587,7 @@ fn ensure_primary_source_author_nodes(
 	)
 }
 
-pub(crate) async fn apply_report_relationships_section(
+pub(crate) async fn apply_c_1_report_relationships(
 	doc: &mut Document,
 	parser: &Parser,
 	ctx: &Ctx,
@@ -653,9 +653,7 @@ pub(crate) async fn apply_report_relationships_section(
 	if fragment.is_empty() {
 		return Ok(());
 	}
-	let Some(xml) =
-		inject_fragment_in_investigation_event(&doc.to_string(), &fragment)
-	else {
+	let Some(xml) = insert_c_1_or_c_4(&doc.to_string(), &fragment) else {
 		return Ok(());
 	};
 	*doc = parser.parse_string(&xml).map_err(|err| Error::InvalidXml {
@@ -919,7 +917,7 @@ mod primary_source_null_flavor_tests {
 		primary.qualification = Some("1".to_string());
 		primary.primary_source_regulatory = Some("1".to_string());
 
-		apply_primary_source_values(
+		apply_c_2_primary_source_values(
 			&mut doc,
 			&parser,
 			&mut xpath,
@@ -989,7 +987,7 @@ mod primary_source_null_flavor_tests {
 		primary.qualification = Some("1".to_string());
 		primary.primary_source_regulatory = Some("1".to_string());
 
-		apply_primary_source_values(
+		apply_c_2_primary_source_values(
 			&mut doc,
 			&parser,
 			&mut xpath,
@@ -1032,7 +1030,7 @@ mod primary_source_null_flavor_tests {
 		let mut xpath = Context::new(&doc).expect("xpath");
 		xpath.register_namespace("hl7", "urn:hl7-org:v3").unwrap();
 
-		apply_primary_source_values(
+		apply_c_2_primary_source_values(
 			&mut doc,
 			&parser,
 			&mut xpath,
@@ -1089,7 +1087,7 @@ mod primary_source_null_flavor_tests {
 		let mut primary = source();
 		primary.qualification_null_flavor = Some("UNK".to_string());
 
-		apply_primary_source_values(
+		apply_c_2_primary_source_values(
 			&mut doc,
 			&parser,
 			&mut xpath,
@@ -1108,7 +1106,7 @@ mod primary_source_null_flavor_tests {
 
 		primary.qualification = Some("3".to_string());
 		primary.qualification_null_flavor = None;
-		apply_primary_source_values(
+		apply_c_2_primary_source_values(
 			&mut doc,
 			&parser,
 			&mut xpath,
@@ -1138,7 +1136,7 @@ mod primary_source_null_flavor_tests {
 		let mut primary = source();
 		primary.email = Some("new@example.com".to_string());
 
-		apply_primary_source_values(
+		apply_c_2_primary_source_values(
 			&mut doc,
 			&parser,
 			&mut xpath,
@@ -1163,7 +1161,7 @@ mod primary_source_null_flavor_tests {
 		primary.email = None;
 		primary.email_null_flavor = Some("ASKU".to_string());
 
-		apply_primary_source_values(
+		apply_c_2_primary_source_values(
 			&mut doc,
 			&parser,
 			&mut xpath,
@@ -1237,7 +1235,7 @@ mod primary_source_null_flavor_tests {
 	}
 }
 
-pub(crate) async fn apply_literature_section(
+pub(crate) async fn apply_c_4_literature(
 	doc: &mut Document,
 	parser: &Parser,
 	mm: &ModelManager,
@@ -1267,7 +1265,7 @@ pub(crate) async fn apply_literature_section(
 	}
 
 	let xml = doc.to_string();
-	if let Some(injected) = inject_fragment_in_investigation_event(&xml, &fragment) {
+	if let Some(injected) = insert_c_1_or_c_4(&xml, &fragment) {
 		let new_doc =
 			parser
 				.parse_string(&injected)
@@ -1328,7 +1326,7 @@ fn write_c_4_r_2(
 	)
 }
 
-pub(crate) async fn apply_study_section(
+pub(crate) async fn apply_c_5_study(
 	doc: &mut Document,
 	parser: &Parser,
 	ctx: &Ctx,
@@ -1397,7 +1395,7 @@ pub(crate) async fn apply_study_section(
 		regional_study_type
 	);
 	let xml = doc.to_string();
-	if let Some(injected) = inject_study_fragment_in_primary_role(&xml, &fragment) {
+	if let Some(injected) = insert_c_5_study(&xml, &fragment) {
 		let new_doc =
 			parser
 				.parse_string(&injected)
@@ -1679,10 +1677,7 @@ mod study_writer_strictness_tests {
 	}
 }
 
-fn inject_study_fragment_in_primary_role(
-	xml: &str,
-	fragment: &str,
-) -> Option<String> {
+fn insert_c_5_study(xml: &str, fragment: &str) -> Option<String> {
 	let primary_start = xml.find("<primaryRole")?;
 	let primary_end = xml[primary_start..].find("</primaryRole>")? + primary_start;
 	let body_start = xml[primary_start..].find('>')? + primary_start + 1;
@@ -1698,10 +1693,7 @@ fn inject_study_fragment_in_primary_role(
 	Some(out)
 }
 
-fn inject_fragment_in_investigation_event(
-	xml: &str,
-	fragment: &str,
-) -> Option<String> {
+fn insert_c_1_or_c_4(xml: &str, fragment: &str) -> Option<String> {
 	let start = xml.find("<investigationEvent")?;
 	let end = xml[start..].find("</investigationEvent>")? + start;
 	let body_start = xml[start..].find('>')? + start + 1;
@@ -1737,7 +1729,7 @@ mod relationship_order_tests {
 			created_by: sqlx::types::Uuid::nil(),
 			updated_by: None,
 		};
-		let xml = inject_fragment_in_investigation_event(
+		let xml = insert_c_1_or_c_4(
 			crate::export::base_export_skeleton(),
 			&write_c_1_9_1(&identifier),
 		)

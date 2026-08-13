@@ -4,7 +4,7 @@ use lib_core::model::case::Case;
 use lib_core::model::ModelManager;
 use lib_core::regulatory::RegulatoryAuthority;
 
-pub(crate) use super::shared::postprocess::apply_section_postprocess;
+pub(crate) use super::shared::postprocess::apply_c_d_h_sections;
 use super::{base_export_skeleton, sections};
 
 pub(crate) async fn build_fresh_export_from_db(

@@ -89,7 +89,7 @@ pub fn export_d_patient_patch(
 	reported_causes: &[ReportedCauseOfDeath],
 	autopsy_causes: &[AutopsyCauseOfDeath],
 ) -> Result<String> {
-	let patient_name = build_patient_name(patient);
+	let patient_name = write_d_1(patient);
 	let age_value = patient.age_at_time_of_onset.as_ref().map(|v| v.to_string());
 	let weight_kg = patient.weight_kg.as_ref().map(|v| v.to_string());
 	let height_cm = patient.height_cm.as_ref().map(|v| v.to_string());
@@ -130,6 +130,6 @@ pub fn export_d_patient_patch(
 	patch_d_patient(raw_xml, &patch)
 }
 
-fn build_patient_name(patient: &PatientInformation) -> Option<String> {
+fn write_d_1(patient: &PatientInformation) -> Option<String> {
 	patient.patient_initials.clone()
 }

@@ -2,7 +2,6 @@ pub const EXPORT_RULE_MEDDRA_CODE_FORMAT_REQUIRED: &str =
 	"ICH.XML.MEDDRA.CODE.FORMAT.REQUIRED";
 pub const EXPORT_RULE_COUNTRY_CODE_FORMAT_REQUIRED: &str =
 	"ICH.XML.COUNTRY.CODE.FORMAT.REQUIRED";
-pub const EXPORT_RULE_XSI_TYPE_NORMALIZE: &str = "ICH.XML.XSI_TYPE.NORMALIZE";
 pub const EXPORT_RULE_OPTIONAL_PATH_EMPTY_PRUNE: &str =
 	"ICH.XML.OPTIONAL.PATH.EMPTY.PRUNE";
 pub const EXPORT_RULE_STRUCTURAL_EMPTY_PRUNE: &str =
@@ -32,7 +31,6 @@ pub enum ExportPolicyDirective {
 	RequiredInterventionNullFlavorNi,
 	ClearNullFlavorWhenValuePresent,
 	NormalizeInvalidCodeToNullFlavorNi,
-	NormalizeTypeAttributeToXsiType,
 	RemoveDocumentTextCompression,
 	RemoveSummaryLanguageJa,
 	RemovePlaceholderValueNodes,
@@ -55,9 +53,6 @@ impl ExportPolicyDirective {
 			}
 			Self::NormalizeInvalidCodeToNullFlavorNi => {
 				"normalize_invalid_code_to_null_flavor_ni"
-			}
-			Self::NormalizeTypeAttributeToXsiType => {
-				"normalize_type_attribute_to_xsi_type"
 			}
 			Self::RemoveDocumentTextCompression => {
 				"remove_document_text_compression"
@@ -110,9 +105,6 @@ pub fn export_policy_directive_for_rule(
 		| EXPORT_RULE_COUNTRY_CODE_FORMAT_REQUIRED => {
 			Some(ExportPolicyDirective::NormalizeInvalidCodeToNullFlavorNi)
 		}
-		EXPORT_RULE_XSI_TYPE_NORMALIZE => {
-			Some(ExportPolicyDirective::NormalizeTypeAttributeToXsiType)
-		}
 		EXPORT_RULE_DOCUMENT_TEXT_COMPRESSION_FORBIDDEN => {
 			Some(ExportPolicyDirective::RemoveDocumentTextCompression)
 		}
@@ -156,19 +148,6 @@ pub fn should_clear_null_flavor_on_value(code: &str) -> bool {
 	)
 }
 
-pub const DEFAULT_OUTCOME_DISPLAY: &str = "not recovered/not resolved/ongoing";
-
-pub fn normalize_outcome_code(value: Option<&str>) -> Option<&'static str> {
-	match value.map(str::trim).filter(|v| !v.is_empty()) {
-		Some("1") => Some("1"),
-		Some("2") => Some("2"),
-		Some("3") => Some("3"),
-		Some("4") => Some("4"),
-		Some("5") => Some("5"),
-		_ => None,
-	}
-}
-
 pub fn normalize_time_unit(value: &str) -> Option<&'static str> {
 	match value.trim() {
 		"800" | "10.a" | "decade" => Some("10.a"),
@@ -190,56 +169,6 @@ pub fn normalize_gestation_unit(value: &str) -> Option<&'static str> {
 			Some(unit @ ("mo" | "wk" | "d")) => Some(unit),
 			_ => None,
 		},
-	}
-}
-
-pub fn outcome_display_name(code: &str) -> &'static str {
-	match code {
-		"1" => "recovered/resolved",
-		"2" => "recovering/resolving",
-		"3" => "not recovered/not resolved/ongoing",
-		"4" => "recovered/resolved with sequelae",
-		"5" => "fatal",
-		_ => DEFAULT_OUTCOME_DISPLAY,
-	}
-}
-
-pub fn should_emit_required_intervention_null_flavor_ni() -> bool {
-	has_export_policy_directive(
-		EXPORT_RULE_FDA_REQUIRED_INTERVENTION,
-		ExportPolicyDirective::RequiredInterventionNullFlavorNi,
-	)
-}
-
-pub fn should_case_validation_require_required_intervention() -> bool {
-	true
-}
-
-pub fn has_drug_characterization(value: &str) -> bool {
-	!value.trim().is_empty()
-}
-
-pub fn has_medicinal_product(value: &str) -> bool {
-	!value.trim().is_empty()
-}
-
-pub fn normalize_drug_characterization(value: &str) -> Option<&'static str> {
-	match value.trim() {
-		"1" => Some("1"),
-		"2" => Some("2"),
-		"3" => Some("3"),
-		"4" => Some("4"),
-		_ => None,
-	}
-}
-
-pub fn drug_characterization_display_name(code: &str) -> &'static str {
-	match code {
-		"1" => "Suspect",
-		"2" => "Concomitant",
-		"3" => "Interacting",
-		"4" => "Drug Not Administered",
-		_ => "Concomitant",
 	}
 }
 
@@ -346,17 +275,6 @@ mod tests {
 	}
 
 	#[test]
-	fn reaction_outcome_policy_rejects_missing_or_invalid() {
-		assert_eq!(normalize_outcome_code(None), None);
-		assert_eq!(normalize_outcome_code(Some("")), None);
-		assert_eq!(normalize_outcome_code(Some("99")), None);
-		assert_eq!(normalize_outcome_code(Some("5")), Some("5"));
-		assert_eq!(outcome_display_name("3"), DEFAULT_OUTCOME_DISPLAY);
-		assert!(should_emit_required_intervention_null_flavor_ni());
-		assert!(should_case_validation_require_required_intervention());
-	}
-
-	#[test]
 	fn time_units_are_exported_as_constrained_ucum() {
 		assert_eq!(normalize_time_unit("801"), Some("a"));
 		assert_eq!(normalize_time_unit("day"), Some("d"));
@@ -364,13 +282,5 @@ mod tests {
 		assert_eq!(normalize_gestation_unit("{Trimester}"), Some("{Trimester}"));
 		assert_eq!(normalize_gestation_unit("801"), None);
 		assert_eq!(normalize_time_unit("fortnight"), None);
-	}
-
-	#[test]
-	fn drug_characterization_policy_rejects_missing_or_invalid() {
-		assert_eq!(normalize_drug_characterization(""), None);
-		assert_eq!(normalize_drug_characterization("99"), None);
-		assert_eq!(normalize_drug_characterization("1"), Some("1"));
-		assert_eq!(drug_characterization_display_name("2"), "Concomitant");
 	}
 }

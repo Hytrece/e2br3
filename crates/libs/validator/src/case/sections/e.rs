@@ -4,9 +4,8 @@ use super::helpers::{
 	valid_meddra_version, DateValues,
 };
 use crate::{
-	has_text, push_business_issue,
-	should_case_validation_require_required_intervention, FdaValidationContext,
-	RegulatoryAuthority, ValidationContext, ValidationIssue,
+	has_text, push_business_issue, FdaValidationContext, RegulatoryAuthority,
+	ValidationContext, ValidationIssue,
 };
 use lib_core::model::reaction::Reaction;
 use lib_core::regulatory::{
@@ -647,10 +646,8 @@ pub(crate) fn collect_fda_issues(
 		.and_then(|header| header.batch_receiver_identifier.as_deref())
 		.map(str::trim)
 		== Some(crate::FDA_BATCH_RECEIVER_PREMARKET);
-	if should_case_validation_require_required_intervention() {
-		for (idx, reaction) in validation_ctx.reactions.iter().enumerate() {
-			fda_e_i_3_2h(idx, reaction, premarket, issues);
-		}
+	for (idx, reaction) in validation_ctx.reactions.iter().enumerate() {
+		fda_e_i_3_2h(idx, reaction, premarket, issues);
 	}
 	if is_fda_vaers(validation_ctx) {
 		for (idx, reaction) in validation_ctx.reactions.iter().enumerate() {

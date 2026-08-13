@@ -134,7 +134,7 @@ pub(crate) fn patch_g_drugs_for_authority(
 			.iter()
 			.filter(|code| drug_device_ids.contains(&code.device_id))
 			.collect();
-		let fragment = drug_fragment(
+		let fragment = write_g_k_drug(
 			drug,
 			&subs,
 			&doses,
@@ -152,7 +152,7 @@ pub(crate) fn patch_g_drugs_for_authority(
 			"//hl7:primaryRole",
 			&fragment,
 		)?;
-		let causality_fragment = causality_role_fragment(drug)?;
+		let causality_fragment = write_g_k_1_causality(drug)?;
 		append_fragment_child(
 			&mut doc,
 			&parser,
@@ -161,7 +161,7 @@ pub(crate) fn patch_g_drugs_for_authority(
 			&causality_fragment,
 		)?;
 		if matches!(authority, lib_core::regulatory::RegulatoryAuthority::Fda) {
-			let fragment = fda_other_causality_role_fragment(drug);
+			let fragment = write_fda_g_k_1_a_causality(drug);
 			if !fragment.is_empty() {
 				append_fragment_child(
 					&mut doc,
@@ -180,7 +180,7 @@ pub(crate) fn patch_g_drugs_for_authority(
 			rows.sort_by_key(|row| row.sequence_number);
 			for row in rows {
 				let related_fragment =
-					relatedness_fragment(drug.id, assessment, row, authority);
+					write_g_k_9_causality(drug.id, assessment, row, authority);
 				append_fragment_child(
 					&mut doc,
 					&parser,

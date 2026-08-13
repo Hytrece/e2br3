@@ -23,10 +23,7 @@ pub(crate) async fn export_patch(
 	)
 }
 
-use crate::export::policy::{
-	drug_characterization_display_name, normalize_drug_characterization,
-	normalize_gestation_unit, normalize_time_unit,
-};
+use crate::export::policy::{normalize_gestation_unit, normalize_time_unit};
 use lib_core::model::drug::{
 	DosageInformation, DrugActiveSubstance, DrugDeviceCharacteristic,
 	DrugIndication, DrugInformation, FdaDeviceCode, FdaDeviceInformation,
@@ -116,7 +113,7 @@ pub fn export_g_drugs_xml(
 			.filter(|assessment| assessment.drug_id == drug.id)
 			.collect();
 		drug_assessments.sort_by_key(|assessment| assessment.reaction_id);
-		items_xml.push_str(&drug_fragment(
+		items_xml.push_str(&write_g_k_drug(
 			drug,
 			&subs,
 			&doses,
@@ -127,7 +124,7 @@ pub fn export_g_drugs_xml(
 			&drug_assessments,
 			RegulatoryAuthority::Ich,
 		)?);
-		causality_xml.push_str(&drug_causality_fragments(
+		causality_xml.push_str(&write_g_k_causality_assessments(
 			drug,
 			&drug_assessments,
 			relatedness,
@@ -505,7 +502,7 @@ fn write_g_k_4_r_11_2b(value: &DosageInformation) -> Option<&str> {
 	value.parent_route_termid.as_deref()
 }
 
-fn append_fda_device_characteristic(
+fn write_fda_g_k_12_device_characteristic(
 	out: &mut String,
 	code: &str,
 	code_system: &str,
@@ -526,7 +523,7 @@ fn append_fda_device_characteristic(
 	out.push_str("\"/></characteristic></subjectOf>");
 }
 
-fn fda_device_fragment(
+fn write_fda_g_k_12_device(
 	device: &FdaDeviceInformation,
 	codes: &[&FdaDeviceCode],
 ) -> String {
@@ -616,7 +613,7 @@ fn fda_device_fragment(
 		}
 		for code in codes {
 			if let Some(value) = write_fda_g_k_12_r_3_r(code) {
-				append_fda_device_characteristic(
+				write_fda_g_k_12_device_characteristic(
 					&mut out,
 					"C54451",
 					"2.16.840.1.113883.3.26.1.1",
@@ -625,7 +622,7 @@ fn fda_device_fragment(
 					"2.16.840.1.113883.3.26.1.1",
 				);
 			} else if let Some(value) = write_fda_g_k_12_r_11_r(code) {
-				append_fda_device_characteristic(
+				write_fda_g_k_12_device_characteristic(
 					&mut out,
 					"C54594",
 					"2.16.840.1.113883.3.26.1.1",
@@ -634,7 +631,7 @@ fn fda_device_fragment(
 					"2.16.840.1.113883.3.989.5.1.2.1.1.3",
 				);
 			} else if let Some(value) = write_fda_g_k_12_r_2_r(code) {
-				append_fda_device_characteristic(
+				write_fda_g_k_12_device_characteristic(
 					&mut out,
 					"C54592",
 					"2.16.840.1.113883.3.26.1.1",
@@ -645,7 +642,7 @@ fn fda_device_fragment(
 			}
 		}
 		if let Some(value) = write_fda_g_k_12_r_8(device) {
-			append_fda_device_characteristic(
+			write_fda_g_k_12_device_characteristic(
 				&mut out,
 				"C54595",
 				"2.16.840.1.113883.3.989.2.1.1.19",
@@ -670,7 +667,7 @@ fn fda_device_fragment(
 	out
 }
 
-pub(crate) fn drug_fragment(
+pub(crate) fn write_g_k_drug(
 	drug: &DrugInformation,
 	substances: &[&DrugActiveSubstance],
 	dosages: &[&DosageInformation],
@@ -964,7 +961,7 @@ pub(crate) fn drug_fragment(
 				.copied()
 				.filter(|code| code.device_id == device.id)
 				.collect();
-			out.push_str(&fda_device_fragment(device, &codes));
+			out.push_str(&write_fda_g_k_12_device(device, &codes));
 		}
 	}
 	out.push_str("</kindOfProduct>");
@@ -975,7 +972,7 @@ pub(crate) fn drug_fragment(
 	}
 	out.push_str("</instanceOfKind></consumable>");
 	for assessment in assessments {
-		out.push_str(&drug_recurrence_fragment(assessment));
+		out.push_str(&write_g_k_9_i_recurrence(assessment));
 	}
 	for code in write_g_k_10_r(drug) {
 		out.push_str("<outboundRelationship2 typeCode=\"REFR\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code code=\"9\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.19\"/><value xsi:type=\"CE\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.17\" code=\"");
@@ -1347,7 +1344,7 @@ fn write_g_k_9_i_4(value: &DrugReactionAssessment) -> Option<&str> {
 	value.recurrence_action.as_deref()
 }
 
-fn drug_recurrence_fragment(assessment: &DrugReactionAssessment) -> String {
+fn write_g_k_9_i_recurrence(assessment: &DrugReactionAssessment) -> String {
 	let mut out = String::new();
 	if assessment.administration_start_interval_value.is_some()
 		|| assessment.administration_start_interval_unit.is_some()
@@ -1412,16 +1409,16 @@ fn drug_recurrence_fragment(assessment: &DrugReactionAssessment) -> String {
 }
 
 #[cfg(test)]
-pub(crate) fn drug_causality_fragments(
+pub(crate) fn write_g_k_causality_assessments(
 	drug: &DrugInformation,
 	assessments: &[&DrugReactionAssessment],
 	relatedness: &[RelatednessAssessment],
 	authority: RegulatoryAuthority,
 ) -> Result<String> {
 	let mut out = String::new();
-	out.push_str(&causality_role_fragment(drug)?);
+	out.push_str(&write_g_k_1_causality(drug)?);
 	if matches!(authority, RegulatoryAuthority::Fda) {
-		out.push_str(&fda_other_causality_role_fragment(drug));
+		out.push_str(&write_fda_g_k_1_a_causality(drug));
 	}
 	for assessment in assessments {
 		let mut rows: Vec<&RelatednessAssessment> = relatedness
@@ -1430,7 +1427,9 @@ pub(crate) fn drug_causality_fragments(
 			.collect();
 		rows.sort_by_key(|row| row.sequence_number);
 		for row in rows {
-			out.push_str(&relatedness_fragment(drug.id, assessment, row, authority));
+			out.push_str(&write_g_k_9_causality(
+				drug.id, assessment, row, authority,
+			));
 		}
 	}
 	Ok(out)
@@ -1441,7 +1440,7 @@ fn write_fda_g_k_1_a(value: &DrugInformation) -> Option<&str> {
 	value.fda_other_characterization.as_deref()
 }
 
-pub(crate) fn fda_other_causality_role_fragment(drug: &DrugInformation) -> String {
+pub(crate) fn write_fda_g_k_1_a_causality(drug: &DrugInformation) -> String {
 	let Some(role) = write_fda_g_k_1_a(drug) else {
 		return String::new();
 	};
@@ -1452,7 +1451,7 @@ pub(crate) fn fda_other_causality_role_fragment(drug: &DrugInformation) -> Strin
 	)
 }
 
-pub(crate) fn relatedness_fragment(
+pub(crate) fn write_g_k_9_causality(
 	drug_id: sqlx::types::Uuid,
 	assessment: &DrugReactionAssessment,
 	relatedness: &RelatednessAssessment,
@@ -1549,12 +1548,12 @@ fn write_g_k_9_i_1(value: &DrugReactionAssessment) -> String {
 	value.reaction_id.to_string()
 }
 
-pub(crate) fn causality_role_fragment(drug: &DrugInformation) -> Result<String> {
+pub(crate) fn write_g_k_1_causality(drug: &DrugInformation) -> Result<String> {
 	let (role, display) = write_g_k_1(drug)
-		.map(|code| {
+		.map(|(code, display_name)| {
 			(
 				format!("code=\"{code}\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.13\""),
-				format!(" displayName=\"{}\"", drug_characterization_display_name(code)),
+				format!(" displayName=\"{display_name}\""),
 			)
 		})
 		.unwrap_or_else(|| ("nullFlavor=\"NI\"".to_string(), String::new()));
@@ -1565,8 +1564,14 @@ pub(crate) fn causality_role_fragment(drug: &DrugInformation) -> Result<String> 
 }
 
 /// e2b:G.k.1
-fn write_g_k_1(value: &DrugInformation) -> Option<&str> {
-	normalize_drug_characterization(&value.drug_characterization)
+fn write_g_k_1(value: &DrugInformation) -> Option<(&str, &'static str)> {
+	match value.drug_characterization.trim() {
+		"1" => Some(("1", "Suspect")),
+		"2" => Some(("2", "Concomitant")),
+		"3" => Some(("3", "Interacting")),
+		"4" => Some(("4", "Drug Not Administered")),
+		_ => None,
+	}
 }
 
 fn fmt_date(date: Date) -> String {
@@ -1919,7 +1924,7 @@ mod tests {
 		assert_eq!(imported[0].investigational_product_blinded, Some(true));
 
 		drug.investigational_product_blinded = Some(false);
-		let fragment = drug_fragment(
+		let fragment = write_g_k_drug(
 			&drug,
 			&[],
 			&[],
@@ -1940,7 +1945,7 @@ mod tests {
 		drug.fda_additional_info_coded = Some("1".to_string());
 		drug.drug_additional_info_codes_json =
 			Some(serde_json::json!([{ "value_code": "2" }]));
-		let fragment = drug_fragment(
+		let fragment = write_g_k_drug(
 			&drug,
 			&[],
 			&[],
@@ -2102,7 +2107,7 @@ mod tests {
 		let drug_id = Uuid::new_v4();
 		let drug = test_drug(drug_id, case_id);
 		let substance = test_substance(drug_id);
-		let xml = drug_fragment(
+		let xml = write_g_k_drug(
 			&drug,
 			&[&substance],
 			&[],
@@ -2207,7 +2212,7 @@ mod tests {
 				updated_by: None,
 			},
 		];
-		let xml = drug_fragment(
+		let xml = write_g_k_drug(
 			&drug,
 			&[],
 			&[],
@@ -2237,7 +2242,7 @@ mod tests {
 		assert!(xml.contains("<country>US</country>"));
 		assert!(xml.contains("<lotNumberText>LOT-DEVICE</lotNumberText>"));
 
-		let ich = drug_fragment(
+		let ich = write_g_k_drug(
 			&drug,
 			&[],
 			&[],
@@ -2259,12 +2264,20 @@ mod tests {
 		let mut drug = test_drug(drug_id, case_id);
 		drug.fda_other_characterization = Some("1".to_string());
 
-		let fda =
-			drug_causality_fragments(&drug, &[], &[], RegulatoryAuthority::Fda)
-				.expect("FDA causality");
-		let mfds =
-			drug_causality_fragments(&drug, &[], &[], RegulatoryAuthority::Mfds)
-				.expect("MFDS causality");
+		let fda = write_g_k_causality_assessments(
+			&drug,
+			&[],
+			&[],
+			RegulatoryAuthority::Fda,
+		)
+		.expect("FDA causality");
+		let mfds = write_g_k_causality_assessments(
+			&drug,
+			&[],
+			&[],
+			RegulatoryAuthority::Mfds,
+		)
+		.expect("MFDS causality");
 
 		assert!(fda.contains("2.16.840.1.113883.3.989.5.1.2.1.1.8"));
 		assert!(fda.contains("code=\"1\" displayName=\"Similar Device\""));
@@ -2291,7 +2304,7 @@ mod tests {
 			created_by: Uuid::new_v4(),
 			updated_by: None,
 		};
-		let xml = relatedness_fragment(
+		let xml = write_g_k_9_causality(
 			Uuid::new_v4(),
 			&assessment,
 			&relatedness,
@@ -2307,7 +2320,7 @@ mod tests {
 		let mut null_flavor = relatedness;
 		null_flavor.result_of_assessment_kr1 = None;
 		null_flavor.result_of_assessment_kr1_null_flavor = Some("NA".to_string());
-		let xml = relatedness_fragment(
+		let xml = write_g_k_9_causality(
 			Uuid::new_v4(),
 			&assessment,
 			&null_flavor,
@@ -2338,7 +2351,7 @@ mod tests {
 
 	#[test]
 	fn recurrence_export_emits_only_standard_code31_no_invented_codes() {
-		let xml = drug_recurrence_fragment(&test_assessment());
+		let xml = write_g_k_9_i_recurrence(&test_assessment());
 
 		// The recurrence answer is carried by the standard G.k.9.i.4 observation (code 31).
 		assert!(

@@ -3,10 +3,8 @@ mod c_safety_report_policy;
 pub mod case;
 mod context;
 mod d_patient_policy;
-mod e_reaction_policy;
 mod f_test_result_policy;
 mod fda_context;
-mod g_drug_policy;
 mod h_narrative_policy;
 mod mfds_context;
 pub use c_reporter_policy::has_any_primary_source_content;
@@ -25,19 +23,10 @@ pub use d_patient_policy::{
 	should_require_fda_ethnicity, should_require_fda_race,
 	should_require_patient_initials,
 };
-pub use e_reaction_policy::{
-	normalize_outcome_code, outcome_display_name,
-	should_case_validation_require_required_intervention,
-	should_emit_required_intervention_null_flavor_ni,
-};
 pub use f_test_result_policy::{has_test_name, has_test_payload};
 pub use fda_context::{
 	list_fda_devices, list_study_registrations, load_fda_validation_context,
 	FdaValidationContext,
-};
-pub use g_drug_policy::{
-	drug_characterization_display_name, has_drug_characterization,
-	has_medicinal_product, normalize_drug_characterization,
 };
 pub use h_narrative_policy::{
 	has_case_narrative, has_narrative_payload, should_require_case_narrative,

@@ -43,9 +43,8 @@ pub(crate) fn patch_e_reactions_for_authority(
 	let mut ordered: Vec<&Reaction> = reactions.iter().collect();
 	ordered.sort_by_key(|reaction| reaction.sequence_number);
 	for reaction in ordered {
-		let fragment = crate::export::sections::e::reaction_fragment_for_authority(
-			reaction, authority,
-		)?;
+		let fragment =
+			crate::export::sections::e::write_e_i_reaction(reaction, authority)?;
 		append_fragment_child(
 			&mut doc,
 			&parser,
@@ -89,7 +88,7 @@ pub fn patch_f_test_results(raw_xml: &[u8], tests: &[TestResult]) -> Result<Stri
 	let mut ordered: Vec<&TestResult> = tests.iter().collect();
 	ordered.sort_by_key(|test| test.sequence_number);
 	for test in ordered {
-		let fragment = test_result_fragment(test)?;
+		let fragment = write_f_r_test_result(test)?;
 		append_fragment_child(
 			&mut doc,
 			&parser,

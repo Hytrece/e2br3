@@ -16,7 +16,7 @@ pub(crate) async fn export_patch(
 
 use sqlx::types::time::Date;
 
-fn push_result_bound(
+fn write_f_r_3_bound(
 	out: &mut String,
 	name: &str,
 	value: &str,
@@ -43,7 +43,7 @@ fn push_result_bound(
 	out.push_str("/>");
 }
 
-pub(crate) fn test_result_fragment(result: &TestResult) -> Result<String> {
+pub(crate) fn write_f_r_test_result(result: &TestResult) -> Result<String> {
 	let mut out = String::new();
 	out.push_str("<subjectOf2 typeCode=\"SBJ\"><organizer classCode=\"CATEGORY\" moodCode=\"EVN\">");
 	out.push_str(
@@ -81,21 +81,21 @@ pub(crate) fn test_result_fragment(result: &TestResult) -> Result<String> {
 		match result.test_result_qualifier.as_deref().unwrap_or("EQ") {
 			"LT" => {
 				out.push_str("<low nullFlavor=\"NINF\"/>");
-				push_result_bound(&mut out, "high", val, unit, Some(false));
+				write_f_r_3_bound(&mut out, "high", val, unit, Some(false));
 			}
 			"LE" => {
 				out.push_str("<low nullFlavor=\"NINF\"/>");
-				push_result_bound(&mut out, "high", val, unit, Some(true));
+				write_f_r_3_bound(&mut out, "high", val, unit, Some(true));
 			}
 			"GT" => {
-				push_result_bound(&mut out, "low", val, unit, Some(false));
+				write_f_r_3_bound(&mut out, "low", val, unit, Some(false));
 				out.push_str("<high nullFlavor=\"PINF\"/>");
 			}
 			"GE" => {
-				push_result_bound(&mut out, "low", val, unit, Some(true));
+				write_f_r_3_bound(&mut out, "low", val, unit, Some(true));
 				out.push_str("<high nullFlavor=\"PINF\"/>");
 			}
-			_ => push_result_bound(&mut out, "center", val, unit, None),
+			_ => write_f_r_3_bound(&mut out, "center", val, unit, None),
 		}
 		out.push_str("</value>");
 	} else if let Some(text) = write_f_r_3_4(result) {
@@ -270,7 +270,7 @@ mod registry_coverage_tests {
 
 #[cfg(test)]
 mod tests {
-	use super::{patch_f_test_results, test_result_fragment};
+	use super::{patch_f_test_results, write_f_r_test_result};
 	use crate::default_xsd_path;
 	use crate::validation::validate_e2b_xml_xsd;
 	use lib_core::model::test_result::TestResult;
@@ -304,20 +304,20 @@ mod tests {
 			created_by: Uuid::new_v4(),
 			updated_by: None,
 		};
-		let xml = test_result_fragment(&result).expect("export");
+		let xml = write_f_r_test_result(&result).expect("export");
 		assert!(
 			xml.contains("<low value=\"10\" unit=\"mg/dL\" inclusive=\"true\"/>")
 		);
 		assert!(xml.contains("<high nullFlavor=\"PINF\"/>"));
 
 		result.test_date_null_flavor = Some("ASKU".to_string());
-		let xml = test_result_fragment(&result).expect("export date NullFlavor");
+		let xml = write_f_r_test_result(&result).expect("export date NullFlavor");
 		assert!(xml.contains("<effectiveTime nullFlavor=\"ASKU\"/>"));
 
 		result.test_name.clear();
 		result.test_meddra_code = Some("10006824".to_string());
 		let xml =
-			test_result_fragment(&result).expect("export MedDRA-only test name");
+			write_f_r_test_result(&result).expect("export MedDRA-only test name");
 		assert!(xml.contains("<code code=\"10006824\">"));
 		assert!(!xml.contains("displayName=\"\""));
 		assert!(!xml.contains("<originalText></originalText>"));
@@ -363,7 +363,7 @@ mod tests {
 
 		for value_start in ["<value xsi:type=\"IVL_PQ\">", "<value xsi:type=\"ED\">"]
 		{
-			let xml = test_result_fragment(&result).expect("export");
+			let xml = write_f_r_test_result(&result).expect("export");
 			assert!(
 				xml.find(value_start).expect("typed result value")
 					< xml

@@ -1,5 +1,5 @@
 use crate::error::Error;
-use crate::export::mode::{apply_section_postprocess, build_fresh_export_from_db};
+use crate::export::mode::{apply_c_d_h_sections, build_fresh_export_from_db};
 use crate::Result;
 use lib_core::ctx::Ctx;
 use lib_core::model::case::CaseBmc;
@@ -73,7 +73,7 @@ pub async fn serialize_case_xml_for_authority(
 		let case = CaseBmc::get(ctx, &mm, case_id).await.map_err(Error::from)?;
 		let xml =
 			build_fresh_export_from_db(ctx, &mm, case_id, &case, authority).await?;
-		apply_section_postprocess(ctx, &mm, case_id, xml, authority).await
+		apply_c_d_h_sections(ctx, &mm, case_id, xml, authority).await
 	}
 	.await;
 	match result {

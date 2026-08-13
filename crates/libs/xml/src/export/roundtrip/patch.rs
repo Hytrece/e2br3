@@ -1,11 +1,11 @@
 use crate::error::Error;
 use crate::export::policy::should_clear_null_flavor_on_value;
-use crate::export::sections::f::test_result_fragment;
+use crate::export::sections::f::write_f_r_test_result;
 use crate::export::sections::g::{
-	causality_role_fragment, drug_fragment, fda_other_causality_role_fragment,
-	relatedness_fragment,
+	write_fda_g_k_1_a_causality, write_g_k_1_causality, write_g_k_9_causality,
+	write_g_k_drug,
 };
-use crate::export::sections::h::comment_fragment;
+use crate::export::sections::h::write_h_2_or_h_4;
 use crate::raw::dom_utils::{
 	append_fragment_child, remove_attr_first, remove_nodes, set_attr_first,
 	set_text_first,
