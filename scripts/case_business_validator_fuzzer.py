@@ -611,6 +611,13 @@ def scenario_catalog(seed: int) -> list[Scenario]:
         Scenario(135, "fda-document-file-name-required", "fda", "CI", "documentsHeldBySender", "fileName", "file_name", "FDA.C.1.6.1.r.2.FILE_NAME.REQUIRED", None, "evidence.pdf", (("documentDescription", "Clinical evidence"), ("includedDocument", "SGVsbG8="), ("mediaType", "application/pdf"))),
         Scenario(136, "fda-document-media-type-match", "fda", "CI", "documentsHeldBySender", "mediaType", "media_type", "FDA.C.1.6.1.r.2.MEDIA_TYPE.MATCH", "text/plain", "application/pdf", (("documentDescription", "Clinical evidence"), ("includedDocument", "SGVsbG8="), ("fileName", "evidence.pdf"))),
         Scenario(137, "c2-study-reporter-organization-required", "ich", "RP", "primarySources", "reporterOrganization", "reporterOrganization", "ICH.C.2.r.2.1.REQUIRED", None, "Business Reporter"),
+        Scenario(138, "fda-combination-indicator-required", "fda", "CI", "safetyReportIdentification", "combinationProductReportIndicator", "combinationProductReportIndicator", "FDA.C.1.12.REQUIRED", None, "false"),
+        Scenario(139, "fda-combination-indicator-recommended", "fda", "CI", "safetyReportIdentification", "combinationProductReportIndicator", "combinationProductReportIndicator", "FDA.C.1.12.RECOMMENDED", None, "false"),
+        Scenario(140, "fda-local-criteria-required", "fda", "CI", "safetyReportIdentification", "localCriteriaReportType", "localCriteriaReportType", "FDA.C.1.7.1.REQUIRED", None, "1"),
+        Scenario(141, "fda-documents-flag-row-required", "fda", "CI", "safetyReportIdentification", "additionalDocumentsAvailable", "additionalDocumentsAvailable", "FDA.R0009", True, False),
+        Scenario(142, "fda-identifiers-flag-row-required", "fda", "CI", "safetyReportIdentification", "otherCaseIdentifiersExist", "otherCaseIdentifiersExist", "FDA.R0017", True, False),
+        Scenario(143, "fda-primary-qualification-required", "fda", "RP", "primarySources", "qualification", "qualification", "FDA.R0020", None, "1"),
+        Scenario(144, "fda-sender-contact-required", "fda", "SD", "senderInformation", "email", "email", "FDA.C.3.SENDER.REQUIRED", None, "sender@example.com"),
     ]
 
 
@@ -974,7 +981,22 @@ def main(args: argparse.Namespace) -> int:
         return payload
 
     def sender_payload(scenario: Scenario, value: Any) -> dict[str, Any]:
-        payload: dict[str, Any] = {"senderType": "1", "organizationName": "Business Sender"}
+        payload: dict[str, Any] = {
+            "senderType": "1",
+            "organizationName": "Business Sender",
+            "department": "Safety",
+            "personTitle": "Dr",
+            "personGivenName": "Business",
+            "personFamilyName": "Sender",
+            "streetAddress": "1 Test Street",
+            "city": "Seoul",
+            "state": "Seoul",
+            "postcode": "04524",
+            "countryCode": "KR",
+            "telephone": "+82-2-1234-5678",
+            "fax": "+82-2-1234-5679",
+            "email": "sender@example.com",
+        }
         set_path(payload, scenario.field, value)
         return payload
 
