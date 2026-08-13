@@ -870,7 +870,6 @@ CREATE TABLE if NOT EXISTS xml_import_history (
     case_number VARCHAR(100),
     status VARCHAR(20) NOT NULL,
     error_message TEXT,
-    validation_authority VARCHAR(16),
     uploaded_by UUID NOT NULL REFERENCES users(id),
     uploaded_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -878,9 +877,6 @@ CREATE TABLE if NOT EXISTS xml_import_history (
 
     CONSTRAINT xml_import_history_status_valid CHECK (
         status IN ('success', 'warning', 'skipped', 'error')
-    ),
-    CONSTRAINT xml_import_history_authority_valid CHECK (
-        validation_authority IS NULL OR validation_authority IN ('ich', 'fda', 'mfds')
     )
 );
 

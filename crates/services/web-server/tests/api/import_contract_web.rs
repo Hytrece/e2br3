@@ -128,7 +128,7 @@ async fn import_xml_fixture(
 ) -> Result<(StatusCode, Value)> {
 	let boundary = "X-BOUNDARY-IMPORT-SETTINGS";
 	let mut multipart = format!(
-		"--{boundary}\r\nContent-Disposition: form-data; name=\"format\"\r\n\r\nfda\r\n--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"{filename}\"\r\nContent-Type: application/xml\r\n\r\n"
+		"--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"{filename}\"\r\nContent-Type: application/xml\r\n\r\n"
 	)
 	.into_bytes();
 	multipart.extend_from_slice(xml);
@@ -157,7 +157,7 @@ async fn import_xml_fixture_with_product(
 ) -> Result<(StatusCode, Value)> {
 	let boundary = "X-BOUNDARY-IMPORT-PRODUCT";
 	let mut multipart = format!(
-		"--{boundary}\r\nContent-Disposition: form-data; name=\"format\"\r\n\r\nfda\r\n--{boundary}\r\nContent-Disposition: form-data; name=\"productPresaveId\"\r\n\r\n{product_presave_id}\r\n--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"{filename}\"\r\nContent-Type: application/xml\r\n\r\n"
+		"--{boundary}\r\nContent-Disposition: form-data; name=\"productPresaveId\"\r\n\r\n{product_presave_id}\r\n--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"{filename}\"\r\nContent-Type: application/xml\r\n\r\n"
 	)
 	.into_bytes();
 	multipart.extend_from_slice(xml);
@@ -185,7 +185,7 @@ async fn import_xml_without_filename_with_product(
 ) -> Result<(StatusCode, Value)> {
 	let boundary = "X-BOUNDARY-IMPORT-MISSING-FILENAME";
 	let mut multipart = format!(
-		"--{boundary}\r\nContent-Disposition: form-data; name=\"format\"\r\n\r\nfda\r\n--{boundary}\r\nContent-Disposition: form-data; name=\"productPresaveId\"\r\n\r\n{product_presave_id}\r\n--{boundary}\r\nContent-Disposition: form-data; name=\"file\"\r\nContent-Type: application/xml\r\n\r\n"
+		"--{boundary}\r\nContent-Disposition: form-data; name=\"productPresaveId\"\r\n\r\n{product_presave_id}\r\n--{boundary}\r\nContent-Disposition: form-data; name=\"file\"\r\nContent-Type: application/xml\r\n\r\n"
 	)
 	.into_bytes();
 	multipart.extend_from_slice(xml);
