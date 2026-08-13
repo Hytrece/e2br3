@@ -606,6 +606,11 @@ def scenario_catalog(seed: int) -> list[Scenario]:
         Scenario(130, "mfds-domestic-product-code-required", "mfds", "DG", "drug", "mfdsMpid", "mfds_mpid", "MFDS.KR.DOMESTIC.PRODUCTCODE.REQUIRED", None, "KR12345678", (("obtainDrugCountry", "KR"),)),
         Scenario(131, "mfds-foreign-whompid-required", "mfds", "DG", "drug", "mfdsMpid", "mfds_mpid", "MFDS.KR.FOREIGN.WHOMPID.REQUIRED", None, "WH12345678", (("obtainDrugCountry", "US"),)),
         Scenario(132, "mfds-domestic-ingredient-code-required", "mfds", "DG", "drug", "activeSubstances[].mfdsId", "activeSubstances[].mfds_id", "MFDS.KR.DOMESTIC.INGREDIENTCODE.REQUIRED", None, "KS12345678", (("obtainDrugCountry", "KR"), ("activeSubstances[].substanceName", "Business ingredient"))),
+        Scenario(133, "c1-document-description-required", "ich", "CI", "documentsHeldBySender", "documentDescription", "documentDescription", "ICH.C.1.6.1.r.1.REQUIRED", None, "Clinical evidence", (("includedDocument", "SGVsbG8="),)),
+        Scenario(134, "c1-document-base64-required", "ich", "CI", "documentsHeldBySender", "includedDocument", "includedDocument", "ICH.C.1.6.1.r.2.ALLOWED.VALUE", "not-base64", "SGVsbG8=", (("documentDescription", "Clinical evidence"),)),
+        Scenario(135, "fda-document-file-name-required", "fda", "CI", "documentsHeldBySender", "fileName", "file_name", "FDA.C.1.6.1.r.2.FILE_NAME.REQUIRED", None, "evidence.pdf", (("documentDescription", "Clinical evidence"), ("includedDocument", "SGVsbG8="), ("mediaType", "application/pdf"))),
+        Scenario(136, "fda-document-media-type-match", "fda", "CI", "documentsHeldBySender", "mediaType", "media_type", "FDA.C.1.6.1.r.2.MEDIA_TYPE.MATCH", "text/plain", "application/pdf", (("documentDescription", "Clinical evidence"), ("includedDocument", "SGVsbG8="), ("fileName", "evidence.pdf"))),
+        Scenario(137, "c2-study-reporter-organization-required", "ich", "RP", "primarySources", "reporterOrganization", "reporterOrganization", "ICH.C.2.r.2.1.REQUIRED", None, "Business Reporter"),
     ]
 
 
@@ -961,6 +966,13 @@ def main(args: argparse.Namespace) -> int:
         set_path(payload, scenario.field, value)
         return payload
 
+    def document_payload(scenario: Scenario, value: Any) -> dict[str, Any]:
+        payload: dict[str, Any] = {}
+        for path, fixture_value in scenario.fixture_values:
+            set_path(payload, path, fixture_value)
+        set_path(payload, scenario.field, value)
+        return payload
+
     def sender_payload(scenario: Scenario, value: Any) -> dict[str, Any]:
         payload: dict[str, Any] = {"senderType": "1", "organizationName": "Business Sender"}
         set_path(payload, scenario.field, value)
@@ -985,8 +997,8 @@ def main(args: argparse.Namespace) -> int:
 
         status, current = page_current(case_id, "CI", "safetyReportIdentification")
         ci_id = object_id(current)
-        ci = ci_payload(scenario.field, value, scenario) if scenario.page == "CI" else ci_payload()
-        if scenario.page == "SI":
+        ci = ci_payload(scenario.field, value, scenario) if scenario.owner == "safetyReportIdentification" else ci_payload()
+        if scenario.page == "SI" or scenario.scenario_id == "c2-study-reporter-organization-required":
             ci["reportType"] = "2"
         ci["id"] = ci_id
         status, _, save_summary = request("PATCH", f"/api/cases/{case_id}/editor/pages/CI", {
@@ -1012,8 +1024,19 @@ def main(args: argparse.Namespace) -> int:
                 return
 
         if scenario.page == "CI":
-            owner_id = ci_id
-            read_status, current = page_current(case_id, "CI", scenario.owner)
+            if scenario.owner == "safetyReportIdentification":
+                owner_id = ci_id
+                read_status, current = page_current(case_id, "CI", scenario.owner)
+            else:
+                status, _, save_summary = request("PATCH", f"/api/cases/{case_id}/editor/pages/CI", {
+                    "authorities": [scenario.authority],
+                    "rows": {scenario.owner: [document_payload(scenario, value)]},
+                })
+                read_status, current = page_current(case_id, "CI", scenario.owner)
+                owner_id = object_id(current)
+                if status != 200 or not owner_id:
+                    add(edge, scenario, "FAIL", status, {**save_summary, "reason": "ci_document_fixture_failed"})
+                    return
         elif scenario.page == "RP":
             sources = [primary_source_payload(scenario, value)]
             if scenario.scenario_id == "c2-primary-source-exactly-once":
