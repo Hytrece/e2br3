@@ -594,6 +594,15 @@ def scenario_catalog(seed: int) -> list[Scenario]:
         Scenario(118, "g-assessment-administration-unit-required", "ich", "DG", "drug", "drugReactionAssessments[].administrationStartIntervalUnit", "drugReactionAssessments[].administrationStartIntervalUnit", "ICH.G.k.9.i.3.1b.REQUIRED", None, "d", (("drugReactionAssessments[].administrationStartIntervalValue", 1.5),)),
         Scenario(119, "g-assessment-last-dose-value-required", "ich", "DG", "drug", "drugReactionAssessments[].lastDoseIntervalValue", "drugReactionAssessments[].lastDoseIntervalValue", "ICH.G.k.9.i.3.2a.REQUIRED", None, 2.5, (("drugReactionAssessments[].lastDoseIntervalUnit", "d"),)),
         Scenario(120, "g-assessment-last-dose-unit-required", "ich", "DG", "drug", "drugReactionAssessments[].lastDoseIntervalUnit", "drugReactionAssessments[].lastDoseIntervalUnit", "ICH.G.k.9.i.3.2b.REQUIRED", None, "d", (("drugReactionAssessments[].lastDoseIntervalValue", 2.5),)),
+        Scenario(121, "mfds-reaction-eu-country-forbidden", "mfds", "AE", "reaction", "reactionCountry", "country_code", "MFDS.E.i.9.EU.FORBIDDEN", "EU", "KR"),
+        Scenario(122, "fda-required-intervention-required", "fda", "AE", "reaction", "requiredIntervention", "required_intervention", "FDA.E.i.3.2h.REQUIRED", None, True),
+        Scenario(123, "reaction-hcp-medical-confirmation-omit", "ich", "AE", "reaction", "medicalConfirmation", "medical_confirmation", "ICH.E.i.8.HCP.OMIT", True, None),
+        Scenario(124, "mfds-more-test-info-documents-required", "mfds", "LB", "testResult", "moreInformationAvailable", "more_info_available", "MFDS.F.r.7.C.1.6.1.REQUIRED", True, False),
+        Scenario(125, "mfds-drug-mpid-version-required", "mfds", "DG", "drug", "mpidVersion", "mpid_version", "MFDS.G.k.2.1.1a.REQUIRED", None, "1"),
+        Scenario(126, "mfds-drug-mpid-required", "mfds", "DG", "drug", "mpid", "mpid", "MFDS.G.k.2.1.1b.REQUIRED", None, f"MPID-{suffix}", (("mpidVersion", "1"),)),
+        Scenario(127, "mfds-drug-phpid-version-required", "mfds", "DG", "drug", "phpidVersion", "phpid_version", "MFDS.G.k.2.1.2a.REQUIRED", None, "1", (("phpid", f"PHPID-{suffix}"),)),
+        Scenario(128, "mfds-drug-phpid-required", "mfds", "DG", "drug", "phpid", "phpid", "MFDS.G.k.2.1.2b.REQUIRED", None, f"PHPID-{suffix}", (("phpidVersion", "1"),)),
+        Scenario(129, "mfds-substance-term-id-required", "mfds", "DG", "drug", "activeSubstances[].substanceTermId", "activeSubstances[].substance_termid", "MFDS.G.k.2.3.r.2b.REQUIRED", None, f"SUB-{suffix}", (("activeSubstances[].substanceTermIdVersion", "1"),)),
     ]
 
 
@@ -984,6 +993,20 @@ def main(args: argparse.Namespace) -> int:
         if status != 200 or not ci_id:
             add(edge, scenario, "FAIL", status, {**save_summary, "reason": "ci_fixture_failed"})
             return
+
+        if scenario.scenario_id == "reaction-hcp-medical-confirmation-omit":
+            status, _, save_summary = request("PATCH", f"/api/cases/{case_id}/editor/pages/RP", {
+                "authorities": [scenario.authority],
+                "rows": {"primarySources": [{
+                    "reporterOrganization": "Business HCP",
+                    "reporterCountry": "KR",
+                    "qualification": "1",
+                    "primarySourceForRegulatoryPurposes": "1",
+                }]},
+            })
+            if status != 200:
+                add(edge, scenario, "FAIL", status, {**save_summary, "reason": "hcp_fixture_failed"})
+                return
 
         if scenario.page == "CI":
             owner_id = ci_id
