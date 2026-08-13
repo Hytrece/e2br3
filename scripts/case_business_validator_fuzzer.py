@@ -628,6 +628,10 @@ def scenario_catalog(seed: int) -> list[Scenario]:
         Scenario(152, "c4-literature-base64-format", "ich", "LR", "literatureReference", "documentBase64", "document_base64", "ICH.C.4.r.2.ALLOWED.VALUE", "not-base64", "SGVsbG8="),
         Scenario(153, "fda-literature-file-name-required", "fda", "LR", "literatureReference", "fileName", "file_name", "FDA.C.4.r.2.FILE_NAME.REQUIRED", None, "article.pdf", (("documentBase64", "SGVsbG8="), ("mediaType", "application/pdf"))),
         Scenario(154, "fda-literature-media-type-match", "fda", "LR", "literatureReference", "mediaType", "media_type", "FDA.C.4.r.2.MEDIA_TYPE.MATCH", "text/plain", "application/pdf", (("documentBase64", "SGVsbG8="), ("fileName", "article.pdf"))),
+        Scenario(155, "fda-race-required", "fda", "DM", "patientInformation", "raceCodeNullFlavor", "raceCodeNullFlavor", "FDA.D.11.r.1.REQUIRED", None, "NA"),
+        Scenario(156, "fda-ethnicity-required", "fda", "DM", "patientInformation", "ethnicityCodeNullFlavor", "ethnicityCodeNullFlavor", "FDA.D.12.REQUIRED", None, "NA"),
+        Scenario(157, "fda-aggregate-race-na-recommended", "fda", "DM", "patientInformation", "raceCodeNullFlavor", "raceCodeNullFlavor", "FDA.W0003", None, "NA", (("patientInitials", "AGGREGATE"),)),
+        Scenario(158, "fda-aggregate-ethnicity-na-recommended", "fda", "DM", "patientInformation", "ethnicityCodeNullFlavor", "ethnicityCodeNullFlavor", "FDA.W0004", None, "NA", (("patientInitials", "AGGREGATE"),)),
     ]
 
 
