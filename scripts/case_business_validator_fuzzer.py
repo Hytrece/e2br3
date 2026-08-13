@@ -583,6 +583,14 @@ def scenario_catalog(seed: int) -> list[Scenario]:
         Scenario(107, "c2-primary-source-exactly-once", "ich", "RP", "primarySources", "primarySourceForRegulatoryPurposes", "primarySourceForRegulatoryPurposes", "ICH.C.2.r.5.EXACTLY_ONCE", "1", None),
         Scenario(108, "c3-sender-type-required", "ich", "SD", "senderInformation", "senderType", "senderType", "ICH.C.3.1.REQUIRED", None, "1"),
         Scenario(109, "c3-sender-organization-required", "ich", "SD", "senderInformation", "organizationName", "organizationName", "ICH.C.3.2.REQUIRED", None, "Business Sender"),
+        Scenario(110, "c5-sponsor-study-number-required", "ich", "SI", "studyInformation", "sponsorStudyNumber", "sponsor_study_number", "ICH.C.5.3.REQUIRED", None, f"STUDY-{suffix}"),
+        Scenario(111, "c5-study-type-reaction-required", "ich", "SI", "studyInformation", "studyTypeReaction", "study_type_reaction", "ICH.C.5.4.REQUIRED", None, "1"),
+        Scenario(112, "mfds-d-past-drug-mpid-version-required", "mfds", "DH", "pastDrugHistory", "mpidVersion", "mpid_version", "MFDS.D.8.r.2a.REQUIRED", None, "1"),
+        Scenario(113, "mfds-d-past-drug-mpid-required", "mfds", "DH", "pastDrugHistory", "mpid", "mpid", "MFDS.D.8.r.2b.REQUIRED", None, f"MPID-{suffix}", (("mpidVersion", "1"),)),
+        Scenario(114, "mfds-d-past-drug-phpid-version-required", "mfds", "DH", "pastDrugHistory", "phpidVersion", "phpid_version", "MFDS.D.8.r.3a.REQUIRED", None, "1", (("mpid", None), ("phpid", f"PHPID-{suffix}"))),
+        Scenario(115, "mfds-d-past-drug-phpid-required", "mfds", "DH", "pastDrugHistory", "phpid", "phpid", "MFDS.D.8.r.3b.REQUIRED", None, f"PHPID-{suffix}", (("mpid", None), ("mpidVersion", None), ("phpidVersion", "1"))),
+        Scenario(116, "mfds-d-parent-past-drug-mpid-required", "mfds", "DM", "parentPastDrugs", "mpid", "mpid", "MFDS.D.10.8.r.2b.REQUIRED", None, f"MPID-{suffix}", (("mpidVersion", "1"),)),
+        Scenario(117, "mfds-d-parent-past-drug-phpid-required", "mfds", "DM", "parentPastDrugs", "phpid", "phpid", "MFDS.D.10.8.r.3b.REQUIRED", None, f"PHPID-{suffix}", (("mpid", None), ("mpidVersion", None), ("phpidVersion", "1"))),
     ]
 
 
@@ -942,6 +950,15 @@ def main(args: argparse.Namespace) -> int:
         set_path(payload, scenario.field, value)
         return payload
 
+    def study_payload(scenario: Scenario, value: Any) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "studyName": "Business Study",
+            "sponsorStudyNumber": f"STUDY-{args.seed}",
+            "studyTypeReaction": "1",
+        }
+        set_path(payload, scenario.field, value)
+        return payload
+
     def run_edge(scenario: Scenario, edge: str, value: Any) -> None:
         nonlocal interrupted
         status, case_id, summary = create_case()
@@ -953,6 +970,8 @@ def main(args: argparse.Namespace) -> int:
         status, current = page_current(case_id, "CI", "safetyReportIdentification")
         ci_id = object_id(current)
         ci = ci_payload(scenario.field, value, scenario) if scenario.page == "CI" else ci_payload()
+        if scenario.page == "SI":
+            ci["reportType"] = "2"
         ci["id"] = ci_id
         status, _, save_summary = request("PATCH", f"/api/cases/{case_id}/editor/pages/CI", {
             "authorities": ["ich"],
@@ -993,6 +1012,16 @@ def main(args: argparse.Namespace) -> int:
             owner_id = object_id(current)
             if status != 200 or not owner_id:
                 add(edge, scenario, "FAIL", status, {**save_summary, "reason": "sd_fixture_failed"})
+                return
+        elif scenario.page == "SI":
+            status, _, save_summary = request("PATCH", f"/api/cases/{case_id}/editor/pages/SI", {
+                "authorities": [scenario.authority],
+                "rows": {"studyInformation": study_payload(scenario, value)},
+            })
+            read_status, current = page_current(case_id, "SI", scenario.owner)
+            owner_id = object_id(current)
+            if status != 200 or not owner_id:
+                add(edge, scenario, "FAIL", status, {**save_summary, "reason": "si_fixture_failed"})
                 return
         elif scenario.page == "DM":
             rows: dict[str, Any] = {"patientInformation": {"patientInitials": "BUSINESS-FUZZ"}}
