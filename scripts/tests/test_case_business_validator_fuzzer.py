@@ -45,6 +45,12 @@ class CaseBusinessValidatorFuzzerTests(unittest.TestCase):
         scenarios = fuzzer.scenario_catalog(1)
         self.assertEqual(len({item.scenario_id for item in scenarios}), len(scenarios))
 
+    def test_primary_source_audit_alias_matches_storage_field(self) -> None:
+        self.assertTrue(fuzzer.audit_key_matches(
+            {"primary_source_regulatory": {"old": None, "new": "1"}},
+            "primarySourceForRegulatoryPurposes",
+        ))
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -547,6 +547,7 @@ AUDIT_FIELD_ALIASES = {
     "reporterPostcodeNullFlavor": "postcode_null_flavor",
     "reporterTelephoneNullFlavor": "telephone_null_flavor",
     "reporterEmailNullFlavor": "email_null_flavor",
+    "primarySourceForRegulatoryPurposes": "primary_source_regulatory",
     "nullificationAmendmentCode": "nullification_code",
     "worldwideUniqueId": "worldwide_unique_id",
     "additionalDocumentsAvailable": "additional_documents_available",

@@ -569,6 +569,20 @@ def scenario_catalog(seed: int) -> list[Scenario]:
         Scenario(93, "d-parent-past-drug-indication-code-required", "ich", "DM", "parentPastDrugs", "indicationMeddraCode", "indication_meddra_code", "ICH.D.10.8.r.6b.REQUIRED", None, "10000001"),
         Scenario(94, "d-parent-past-drug-reaction-version-required", "ich", "DM", "parentPastDrugs", "reactionMeddraVersion", "reaction_meddra_version", "ICH.D.10.8.r.7a.REQUIRED", None, "26.0"),
         Scenario(95, "d-parent-past-drug-reaction-code-required", "ich", "DM", "parentPastDrugs", "reactionMeddraCode", "reaction_meddra_code", "ICH.D.10.8.r.7b.REQUIRED", None, "10000001"),
+        Scenario(96, "d-history-parent-duplicate", "ich", "DM", "medicalHistoryEpisodes", "familyHistory", "family_history", "ICH.D.7.1.r.6.PARENT_DUPLICATE", True, False),
+        Scenario(97, "c1-expedited-criteria-required", "ich", "CI", "safetyReportIdentification", "fulfilExpeditedCriteria", "fulfilExpeditedCriteria", "ICH.C.1.7.REQUIRED", None, True),
+        Scenario(98, "c1-other-identifiers-flag-required", "ich", "CI", "safetyReportIdentification", "otherCaseIdentifiersExist", "otherCaseIdentifiersExist", "ICH.C.1.9.1.REQUIRED", None, True),
+        Scenario(99, "c1-nullification-reason-required", "ich", "CI", "safetyReportIdentification", "nullificationReason", "nullificationReason", "ICH.C.1.11.2.REQUIRED", None, "Amendment reason", (("nullificationAmendmentCode", "2"),)),
+        Scenario(100, "c1-report-id-profile", "ich", "CI", "safetyReportIdentification", "safetyReportId", "safetyReportId", "ICH.C.1.1.PROFILE", "bad-id", f"KR-BUSINESS-{suffix}"),
+        Scenario(101, "mfds-c1-additional-documents-required", "mfds", "CI", "safetyReportIdentification", "additionalDocumentsAvailable", "additionalDocumentsAvailable", "ICH.C.1.6.1.REQUIRED", None, False),
+        Scenario(102, "mfds-c1-worldwide-id-required", "mfds", "CI", "safetyReportIdentification", "worldwideUniqueId", "worldwideUniqueId", "ICH.C.1.8.1.REQUIRED", None, f"KR-BUSINESS-{suffix}"),
+        Scenario(103, "mfds-c1-first-sender-required", "mfds", "CI", "safetyReportIdentification", "firstSenderType", "firstSenderType", "ICH.C.1.8.2.REQUIRED", None, "1"),
+        Scenario(104, "c2-reporter-country-required", "ich", "RP", "primarySources", "reporterCountry", "reporterCountry", "ICH.C.2.r.3.REQUIRED", None, "KR"),
+        Scenario(105, "c2-reporter-qualification-required", "ich", "RP", "primarySources", "qualification", "qualification", "ICH.C.2.r.4.REQUIRED", None, "1"),
+        Scenario(106, "c2-primary-source-required", "ich", "RP", "primarySources", "primarySourceForRegulatoryPurposes", "primarySourceForRegulatoryPurposes", "ICH.C.2.r.5.REQUIRED", None, "1"),
+        Scenario(107, "c2-primary-source-exactly-once", "ich", "RP", "primarySources", "primarySourceForRegulatoryPurposes", "primarySourceForRegulatoryPurposes", "ICH.C.2.r.5.EXACTLY_ONCE", "1", None),
+        Scenario(108, "c3-sender-type-required", "ich", "SD", "senderInformation", "senderType", "senderType", "ICH.C.3.1.REQUIRED", None, "1"),
+        Scenario(109, "c3-sender-organization-required", "ich", "SD", "senderInformation", "organizationName", "organizationName", "ICH.C.3.2.REQUIRED", None, "Business Sender"),
     ]
 
 
@@ -725,13 +739,20 @@ def main(args: argparse.Namespace) -> int:
         })
         return status, object_id(value), summary
 
-    def ci_payload(field: str | None = None, value: Any = None) -> dict[str, Any]:
+    def ci_payload(
+        field: str | None = None,
+        value: Any = None,
+        fixture_scenario: Scenario | None = None,
+    ) -> dict[str, Any]:
         payload = {
             "transmissionDate": f"{year}0305120000+0900",
             "reportType": "1",
             "dateFirstReceivedFromSource": f"{year}0303",
             "dateOfMostRecentInformation": f"{year}0304",
         }
+        if fixture_scenario:
+            for path, fixture_value in fixture_scenario.fixture_values:
+                set_path(payload, path, fixture_value)
         if field:
             if value is None:
                 payload.pop(field, None)
@@ -906,6 +927,21 @@ def main(args: argparse.Namespace) -> int:
         set_path(payload, scenario.field, value)
         return payload
 
+    def primary_source_payload(scenario: Scenario, value: Any) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "reporterOrganization": "Business Reporter",
+            "reporterCountry": "KR",
+            "qualification": "1",
+            "primarySourceForRegulatoryPurposes": "1",
+        }
+        set_path(payload, scenario.field, value)
+        return payload
+
+    def sender_payload(scenario: Scenario, value: Any) -> dict[str, Any]:
+        payload: dict[str, Any] = {"senderType": "1", "organizationName": "Business Sender"}
+        set_path(payload, scenario.field, value)
+        return payload
+
     def run_edge(scenario: Scenario, edge: str, value: Any) -> None:
         nonlocal interrupted
         status, case_id, summary = create_case()
@@ -916,7 +952,7 @@ def main(args: argparse.Namespace) -> int:
 
         status, current = page_current(case_id, "CI", "safetyReportIdentification")
         ci_id = object_id(current)
-        ci = ci_payload(scenario.field, value) if scenario.page == "CI" else ci_payload()
+        ci = ci_payload(scenario.field, value, scenario) if scenario.page == "CI" else ci_payload()
         ci["id"] = ci_id
         status, _, save_summary = request("PATCH", f"/api/cases/{case_id}/editor/pages/CI", {
             "authorities": ["ich"],
@@ -929,12 +965,44 @@ def main(args: argparse.Namespace) -> int:
         if scenario.page == "CI":
             owner_id = ci_id
             read_status, current = page_current(case_id, "CI", scenario.owner)
+        elif scenario.page == "RP":
+            sources = [primary_source_payload(scenario, value)]
+            if scenario.scenario_id == "c2-primary-source-exactly-once":
+                sources.append({
+                    "sequenceNumber": 2,
+                    "reporterOrganization": "Second Reporter",
+                    "reporterCountry": "KR",
+                    "qualification": "1",
+                    "primarySourceForRegulatoryPurposes": "1",
+                })
+            status, _, save_summary = request("PATCH", f"/api/cases/{case_id}/editor/pages/RP", {
+                "authorities": [scenario.authority],
+                "rows": {"primarySources": sources},
+            })
+            read_status, current = page_current(case_id, "RP", scenario.owner)
+            owner_id = object_id(current)
+            if status != 200 or not owner_id:
+                add(edge, scenario, "FAIL", status, {**save_summary, "reason": "rp_fixture_failed"})
+                return
+        elif scenario.page == "SD":
+            status, _, save_summary = request("PATCH", f"/api/cases/{case_id}/editor/pages/SD", {
+                "authorities": [scenario.authority],
+                "rows": {"senderInformation": sender_payload(scenario, value)},
+            })
+            read_status, current = page_current(case_id, "SD", scenario.owner)
+            owner_id = object_id(current)
+            if status != 200 or not owner_id:
+                add(edge, scenario, "FAIL", status, {**save_summary, "reason": "sd_fixture_failed"})
+                return
         elif scenario.page == "DM":
             rows: dict[str, Any] = {"patientInformation": {"patientInitials": "BUSINESS-FUZZ"}}
             if scenario.owner == "patientInformation":
                 rows[scenario.owner] = patient_payload(scenario, value)
             elif scenario.owner == "medicalHistoryEpisodes":
                 rows[scenario.owner] = [medical_history_payload(scenario, value)]
+                if scenario.scenario_id == "d-history-parent-duplicate":
+                    rows["parentInfo"] = {"parentSex": "2"}
+                    rows["parentMedicalHistory"] = [{"meddraVersion": "26.0", "meddraCode": "10000001"}]
             elif scenario.owner == "deathInfo":
                 rows[scenario.owner] = death_info_payload(scenario, value)
             elif scenario.owner in {"reportedCauses", "autopsyCauses"}:
