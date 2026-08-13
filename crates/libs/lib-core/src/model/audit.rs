@@ -67,21 +67,6 @@ pub struct AuditLog {
 	pub created_at: OffsetDateTime,
 }
 
-#[derive(Deserialize)]
-pub struct AuditLogForCreate {
-	pub table_name: String,
-	pub record_id: Uuid,
-	pub action: String,
-	pub reason_for_change: Option<String>,
-	pub change_category: Option<String>,
-	pub e_signature_id: Option<Uuid>,
-	pub changed_fields: Option<JsonValue>,
-	pub old_values: Option<JsonValue>,
-	pub new_values: Option<JsonValue>,
-	pub ip_address: Option<String>, // Stored as TEXT in DB
-	pub user_agent: Option<String>,
-}
-
 #[derive(FilterNodes, Deserialize, Default)]
 pub struct AuditLogFilter {
 	pub table_name: Option<OpValsString>,
@@ -242,45 +227,6 @@ impl AuditLogBmc {
 		new_obj.remove("updated_by");
 
 		old_values == new_values
-	}
-
-	pub async fn create(
-		ctx: &Ctx,
-		mm: &ModelManager,
-		audit_c: AuditLogForCreate,
-	) -> Result<i64> {
-		set_full_context_dbx(
-			mm.dbx(),
-			ctx.user_id(),
-			ctx.organization_id(),
-			ctx.role(),
-		)
-		.await?;
-		let user_id = ctx.user_id();
-		let organization_id = ctx.organization_id();
-		let sql = "INSERT INTO audit_logs (table_name, record_id, organization_id, action, user_id, reason_for_change, change_category, e_signature_id, changed_fields, old_values, new_values, ip_address, user_agent) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING id";
-
-		let (id,) = mm
-			.dbx()
-			.fetch_one(
-				sqlx::query_as::<_, (i64,)>(sql)
-					.bind(audit_c.table_name)
-					.bind(audit_c.record_id)
-					.bind(organization_id)
-					.bind(audit_c.action)
-					.bind(user_id)
-					.bind(audit_c.reason_for_change)
-					.bind(audit_c.change_category)
-					.bind(audit_c.e_signature_id)
-					.bind(audit_c.changed_fields)
-					.bind(audit_c.old_values)
-					.bind(audit_c.new_values)
-					.bind(audit_c.ip_address)
-					.bind(audit_c.user_agent),
-			)
-			.await?;
-
-		Ok(id)
 	}
 
 	pub async fn list(

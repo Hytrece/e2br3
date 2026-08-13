@@ -87,8 +87,9 @@ fn notice_json(
 	})
 }
 
-async fn insert_notice_audit(
+async fn insert_manual_audit(
 	dbx: &Dbx,
+	table_name: &str,
 	record_id: Uuid,
 	organization_id: Uuid,
 	action: &str,
@@ -106,13 +107,23 @@ async fn insert_notice_audit(
 				organization_id,
 				action,
 				user_id,
+				reason_for_change,
+				change_category,
+				e_signature_id,
 				changed_fields,
 				old_values,
 				new_values
 			)
-			VALUES ('dashboard_notices', $1, $2, $3, $4, $5, $6, $7)
+			VALUES (
+				$1, $2, $3, $4, $5,
+				get_current_change_reason(),
+				get_current_change_category(),
+				get_current_esignature_id(),
+				$6, $7, $8
+			)
 			"#,
 		)
+		.bind(table_name)
 		.bind(record_id)
 		.bind(organization_id)
 		.bind(action)
@@ -146,17 +157,16 @@ impl AdminSettingsBmc {
 			.await?;
 
 		if let Some((_, value)) = inserted {
-			dbx.execute(
-				sqlx::query(
-					"INSERT INTO audit_logs (
-						table_name, record_id, organization_id, action, user_id,
-						changed_fields, old_values, new_values
-					) VALUES ('app_settings', $1, $1, 'CREATE', $2, $3, NULL, $4)",
-				)
-				.bind(organization_id)
-				.bind(updated_by)
-				.bind(changed_settings_fields(None, &value))
-				.bind(&value),
+			insert_manual_audit(
+				dbx,
+				"app_settings",
+				organization_id,
+				organization_id,
+				"CREATE",
+				updated_by,
+				changed_settings_fields(None, &value),
+				None,
+				Some(value),
 			)
 			.await?;
 		}
@@ -325,31 +335,18 @@ impl AdminSettingsBmc {
 			} else {
 				"CREATE"
 			};
-			if let Err(err) = dbx
-				.execute(
-					sqlx::query(
-						r#"
-						INSERT INTO audit_logs (
-							table_name,
-							record_id,
-							organization_id,
-							action,
-							user_id,
-							changed_fields,
-							old_values,
-							new_values
-						)
-						VALUES ('app_settings', $1, $1, $2, $3, $4, $5, $6)
-						"#,
-					)
-					.bind(organization_id)
-					.bind(action)
-					.bind(updated_by.unwrap_or_else(|| ctx.user_id()))
-					.bind(changed_fields)
-					.bind(old_value)
-					.bind(value),
-				)
-				.await
+			if let Err(err) = insert_manual_audit(
+				dbx,
+				"app_settings",
+				organization_id,
+				organization_id,
+				action,
+				updated_by.unwrap_or_else(|| ctx.user_id()),
+				Some(changed_fields),
+				old_value,
+				Some(value.clone()),
+			)
+			.await
 			{
 				dbx.rollback_txn().await?;
 				return Err(crate::model::Error::Store(err.to_string()));
@@ -554,8 +551,9 @@ impl AdminSettingsBmc {
 				} else {
 					"CREATE"
 				};
-				if let Err(err) = insert_notice_audit(
+				if let Err(err) = insert_manual_audit(
 					dbx,
+					"dashboard_notices",
 					record_id,
 					organization_id,
 					action,
@@ -589,8 +587,9 @@ impl AdminSettingsBmc {
 				dbx.rollback_txn().await?;
 				return Err(crate::model::Error::Store(err.to_string()));
 			}
-			if let Err(err) = insert_notice_audit(
+			if let Err(err) = insert_manual_audit(
 				dbx,
+				"dashboard_notices",
 				record_id,
 				organization_id,
 				"DELETE",
