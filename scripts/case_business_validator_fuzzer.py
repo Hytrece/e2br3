@@ -603,6 +603,9 @@ def scenario_catalog(seed: int) -> list[Scenario]:
         Scenario(127, "mfds-drug-phpid-version-required", "mfds", "DG", "drug", "phpidVersion", "phpid_version", "MFDS.G.k.2.1.2a.REQUIRED", None, "1", (("phpid", f"PHPID-{suffix}"),)),
         Scenario(128, "mfds-drug-phpid-required", "mfds", "DG", "drug", "phpid", "phpid", "MFDS.G.k.2.1.2b.REQUIRED", None, f"PHPID-{suffix}", (("phpidVersion", "1"),)),
         Scenario(129, "mfds-substance-term-id-required", "mfds", "DG", "drug", "activeSubstances[].substanceTermId", "activeSubstances[].substance_termid", "MFDS.G.k.2.3.r.2b.REQUIRED", None, f"SUB-{suffix}", (("activeSubstances[].substanceTermIdVersion", "1"),)),
+        Scenario(130, "mfds-domestic-product-code-required", "mfds", "DG", "drug", "mfdsMpid", "mfds_mpid", "MFDS.KR.DOMESTIC.PRODUCTCODE.REQUIRED", None, "KR12345678", (("obtainDrugCountry", "KR"),)),
+        Scenario(131, "mfds-foreign-whompid-required", "mfds", "DG", "drug", "mfdsMpid", "mfds_mpid", "MFDS.KR.FOREIGN.WHOMPID.REQUIRED", None, "WH12345678", (("obtainDrugCountry", "US"),)),
+        Scenario(132, "mfds-domestic-ingredient-code-required", "mfds", "DG", "drug", "activeSubstances[].mfdsId", "activeSubstances[].mfds_id", "MFDS.KR.DOMESTIC.INGREDIENTCODE.REQUIRED", None, "KS12345678", (("obtainDrugCountry", "KR"), ("activeSubstances[].substanceName", "Business ingredient"))),
     ]
 
 
