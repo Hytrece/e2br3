@@ -22,6 +22,7 @@ from typing import Any
 
 from case_editor_input_fuzzer import (
     AUDIT_TABLES,
+    NESTED_AUDIT_TABLES,
     audit_key_matches,
     audit_log_complete,
     commit_sha,
@@ -30,6 +31,7 @@ from case_editor_input_fuzzer import (
     object_id,
     redacted,
     response_summary,
+    set_path,
     unwrap,
     values_equal,
 )
@@ -50,6 +52,22 @@ RETAINED_ALLOWED_VALUE_RULES = {
     "ICH.G.k.7.r.2a.ALLOWED.VALUE",
     "ICH.H.3.r.1a.ALLOWED.VALUE",
 }
+GENERATED_BUSINESS_RULE_CODES = {
+    *(f"ICH.E.i.3.2{suffix}.REQUIRED" for suffix in "abcdef"),
+    *(
+        f"ICH.{section}.r.{suffix}{part}.{kind}"
+        for section in ("D.8", "D.10.8")
+        for suffix in ("6", "7")
+        for part in ("a", "b")
+        for kind in ("REQUIRED", "VOCABULARY")
+    ),
+    *(
+        f"ICH.D.9.{group}.r.{field}.{kind}"
+        for group in ("2", "4")
+        for field, kinds in (("1a", ("REQUIRED", "VOCABULARY")), ("1b", ("REQUIRED", "VOCABULARY")), ("2", ("REQUIRED",)))
+        for kind in kinds
+    ),
+}
 
 
 @dataclass(frozen=True)
@@ -64,6 +82,7 @@ class Scenario:
     expected_code: str
     invalid_value: Any
     valid_value: Any
+    fixture_values: tuple[tuple[str, Any], ...] = ()
 
 
 @dataclass
@@ -82,11 +101,16 @@ def discover_business_rule_codes(root: Path = ROOT) -> set[str]:
     for name in "cdefghn":
         path = section_root / f"{name}.rs"
         codes.update(RULE_RE.findall(path.read_text()))
+    codes.update(GENERATED_BUSINESS_RULE_CODES)
     return {
         code
         for code in codes
-        if code in RETAINED_ALLOWED_VALUE_RULES
-        or not code.endswith(INPUT_ONLY_SUFFIXES)
+        if not code.endswith((".", ".r"))
+        and code != "ICH.E.i.3.2"
+        and (
+            code in RETAINED_ALLOWED_VALUE_RULES
+            or not code.endswith(INPUT_ONLY_SUFFIXES)
+        )
     }
 
 
@@ -167,6 +191,359 @@ def scenario_catalog(seed: int) -> list[Scenario]:
             None,
             "KR",
         ),
+        Scenario(
+            6,
+            "c1-report-type-required",
+            "ich",
+            "CI",
+            "safetyReportIdentification",
+            "reportType",
+            "reportType",
+            "ICH.C.1.3.REQUIRED",
+            None,
+            "1",
+        ),
+        Scenario(
+            7,
+            "c1-first-received-required",
+            "ich",
+            "CI",
+            "safetyReportIdentification",
+            "dateFirstReceivedFromSource",
+            "dateFirstReceivedFromSource",
+            "ICH.C.1.4.REQUIRED",
+            None,
+            f"{year}0303",
+        ),
+        Scenario(
+            8,
+            "c1-most-recent-required",
+            "ich",
+            "CI",
+            "safetyReportIdentification",
+            "dateOfMostRecentInformation",
+            "dateOfMostRecentInformation",
+            "ICH.C.1.5.REQUIRED",
+            None,
+            f"{year}0304",
+        ),
+        Scenario(
+            9,
+            "c1-transmission-date-future",
+            "ich",
+            "CI",
+            "safetyReportIdentification",
+            "transmissionDate",
+            "transmissionDate",
+            "ICH.C.1.2.FUTURE_DATE.FORBIDDEN",
+            "29990305120000+0900",
+            f"{year}0305120000+0900",
+        ),
+        Scenario(
+            10,
+            "c1-first-received-future",
+            "ich",
+            "CI",
+            "safetyReportIdentification",
+            "dateFirstReceivedFromSource",
+            "dateFirstReceivedFromSource",
+            "ICH.C.1.4.FUTURE_DATE.FORBIDDEN",
+            "29990303",
+            f"{year}0303",
+        ),
+        Scenario(
+            11,
+            "c1-most-recent-future",
+            "ich",
+            "CI",
+            "safetyReportIdentification",
+            "dateOfMostRecentInformation",
+            "dateOfMostRecentInformation",
+            "ICH.C.1.5.FUTURE_DATE.FORBIDDEN",
+            "29990304",
+            f"{year}0304",
+        ),
+        Scenario(
+            12,
+            "g-active-ingredient-required",
+            "ich",
+            "DG",
+            "drug",
+            "mpid",
+            "mpid",
+            "ICH.G.k.2.3.r.REQUIRED",
+            None,
+            f"MPID-{suffix}",
+        ),
+        Scenario(
+            13,
+            "g-gestation-value-required",
+            "ich",
+            "DG",
+            "drug",
+            "gestationPeriodExposureUnit",
+            "gestation_period_exposure_unit",
+            "ICH.G.k.6a.REQUIRED",
+            "week",
+            None,
+        ),
+        Scenario(
+            14,
+            "g-gestation-unit-required",
+            "ich",
+            "DG",
+            "drug",
+            "gestationPeriodExposureValue",
+            "gestation_period_exposure_value",
+            "ICH.G.k.6b.REQUIRED",
+            2,
+            None,
+        ),
+        Scenario(
+            15,
+            "g-investigational-product-study-only",
+            "ich",
+            "DG",
+            "drug",
+            "investigationalProductBlinded",
+            "investigational_product_blinded",
+            "ICH.G.k.2.5.STUDY.ONLY",
+            False,
+            None,
+        ),
+        Scenario(
+            16,
+            "g-dosage-dose-unit-required",
+            "ich",
+            "DG",
+            "drug",
+            "dosageInformation[].doseUnit",
+            "dosageInformation.dose_unit",
+            "ICH.G.k.4.r.1b.REQUIRED",
+            None,
+            "mg",
+            (("dosageInformation[].doseValue", 2.5),),
+        ),
+        Scenario(
+            17,
+            "g-dosage-frequency-unit-required",
+            "ich",
+            "DG",
+            "drug",
+            "dosageInformation[].frequencyUnit",
+            "dosageInformation.frequency_unit",
+            "ICH.G.k.4.r.3.REQUIRED",
+            None,
+            "d",
+            (("dosageInformation[].numberOfUnits", 1),),
+        ),
+        Scenario(
+            18,
+            "g-dosage-duration-value-required",
+            "ich",
+            "DG",
+            "drug",
+            "dosageInformation[].durationValue",
+            "dosageInformation.duration_value",
+            "ICH.G.k.4.r.6a.REQUIRED",
+            None,
+            2,
+            (("dosageInformation[].durationUnit", "d"),),
+        ),
+        Scenario(
+            19,
+            "g-dosage-duration-unit-required",
+            "ich",
+            "DG",
+            "drug",
+            "dosageInformation[].durationUnit",
+            "dosageInformation.duration_unit",
+            "ICH.G.k.4.r.6b.REQUIRED",
+            None,
+            "d",
+            (("dosageInformation[].durationValue", 2),),
+        ),
+        Scenario(
+            20,
+            "g-dose-form-term-version-required",
+            "ich",
+            "DG",
+            "drug",
+            "dosageInformation[].doseFormTermIdVersion",
+            "dosageInformation.dose_form_termid_version",
+            "ICH.G.k.4.r.9.2a.REQUIRED",
+            None,
+            "1",
+            (("dosageInformation[].doseFormTermId", "DF-1"),),
+        ),
+        Scenario(
+            21,
+            "g-route-term-version-required",
+            "ich",
+            "DG",
+            "drug",
+            "dosageInformation[].routeTermIdVersion",
+            "dosageInformation.route_termid_version",
+            "ICH.G.k.4.r.10.2a.REQUIRED",
+            None,
+            "1",
+            (("dosageInformation[].routeOfAdministration", "oral"),),
+        ),
+        Scenario(
+            22,
+            "g-parent-route-term-version-required",
+            "ich",
+            "DG",
+            "drug",
+            "dosageInformation[].parentRouteTermIdVersion",
+            "dosageInformation.parent_route_termid_version",
+            "ICH.G.k.4.r.11.2a.REQUIRED",
+            None,
+            "1",
+            (("dosageInformation[].parentRouteTermId", "PROUTE-1"),),
+        ),
+        Scenario(
+            23,
+            "g-active-substance-name-required",
+            "ich",
+            "DG",
+            "drug",
+            "activeSubstances[].substanceName",
+            "activeSubstances.substance_name",
+            "ICH.G.k.2.3.r.1.REQUIRED",
+            None,
+            "Fuzz substance",
+            (
+                ("mpid", None),
+                ("activeSubstances[].substanceStrengthValue", 10),
+                ("activeSubstances[].substanceStrengthUnit", "mg"),
+            ),
+        ),
+        Scenario(
+            24,
+            "g-active-substance-term-version-required",
+            "ich",
+            "DG",
+            "drug",
+            "activeSubstances[].substanceTermIdVersion",
+            "activeSubstances.substance_termid_version",
+            "ICH.G.k.2.3.r.2a.REQUIRED",
+            None,
+            "1",
+            (("activeSubstances[].substanceTermId", "SUBSTANCE-1"),),
+        ),
+        Scenario(
+            25,
+            "g-active-substance-strength-unit-required",
+            "ich",
+            "DG",
+            "drug",
+            "activeSubstances[].substanceStrengthUnit",
+            "activeSubstances.strength_unit",
+            "ICH.G.k.2.3.r.3b.REQUIRED",
+            None,
+            "mg",
+            (("activeSubstances[].substanceStrengthValue", 10),),
+        ),
+        Scenario(
+            26,
+            "g-indication-meddra-version-required",
+            "ich",
+            "DG",
+            "drug",
+            "indications[].indicationMeddraVersion",
+            "indications.indication_meddra_version",
+            "ICH.G.k.7.r.2a.REQUIRED",
+            None,
+            "26.0",
+            (("indications[].indicationMeddraCode", "10000001"),),
+        ),
+        Scenario(
+            27,
+            "g-indication-meddra-code-required",
+            "ich",
+            "DG",
+            "drug",
+            "indications[].indicationMeddraCode",
+            "indications.indication_meddra_code",
+            "ICH.G.k.7.r.2b.REQUIRED",
+            None,
+            "10000001",
+            (("indications[].indicationMeddraVersion", "26.0"),),
+        ),
+        Scenario(
+            28,
+            "g-dosage-future-date-forbidden",
+            "ich",
+            "DG",
+            "drug",
+            "dosageInformation[].firstAdministrationDate",
+            "dosageInformation.first_administration_date",
+            "ICH.G.k.4.r.4-5.FUTURE_DATE.FORBIDDEN",
+            "29990303",
+            f"{year}0303",
+        ),
+        Scenario(29, "e-reaction-language-required", "ich", "AE", "reaction", "reactionLanguage", "reaction_language", "ICH.E.i.1.1b.REQUIRED", None, "eng"),
+        Scenario(30, "e-reaction-meddra-version-required", "ich", "AE", "reaction", "reactionMeddraVersionLLT", "reaction_meddra_version", "ICH.E.i.2.1a.REQUIRED", None, "26.0"),
+        Scenario(31, "e-reaction-meddra-code-required", "ich", "AE", "reaction", "reactionMeddraCodeLLT", "reaction_meddra_code", "ICH.E.i.2.1b.REQUIRED", None, "10000001"),
+        Scenario(32, "e-reaction-future-date-forbidden", "ich", "AE", "reaction", "reactionStartDate", "start_date", "ICH.E.i.4-5.FUTURE_DATE.FORBIDDEN", "29990303", f"{year}0303"),
+        Scenario(33, "e-reaction-duration-value-required", "ich", "AE", "reaction", "reactionDuration.value", "duration_value", "ICH.E.i.6a.REQUIRED", None, 1, (("reactionDuration.unit", "d"),)),
+        Scenario(34, "e-reaction-duration-unit-required", "ich", "AE", "reaction", "reactionDuration.unit", "duration_unit", "ICH.E.i.6b.REQUIRED", None, "d", (("reactionDuration.value", 1),)),
+        Scenario(35, "e-reaction-outcome-required", "ich", "AE", "reaction", "reactionOutcome", "outcome", "ICH.E.i.7.REQUIRED", None, "1"),
+        Scenario(
+            36,
+            "e-seriousness-criteria-required",
+            "ich",
+            "AE",
+            "reaction",
+            "seriousness.serious",
+            "serious",
+            "ICH.E.i.3.2.CRITERIA.REQUIRED",
+            True,
+            False,
+            tuple((f"seriousness.{field}", None) for field in (
+                "criteriaResultsInDeath",
+                "criteriaLifeThreatening",
+                "criteriaHospitalization",
+                "criteriaDisabling",
+                "criteriaCongenitalAnomaly",
+                "criteriaOtherMedicallyImportant",
+            )),
+        ),
+        Scenario(37, "e-criteria-death-required", "ich", "AE", "reaction", "seriousness.criteriaResultsInDeath", "criteria_death", "ICH.E.i.3.2a.REQUIRED", None, True),
+        Scenario(38, "e-criteria-life-threatening-required", "ich", "AE", "reaction", "seriousness.criteriaLifeThreatening", "criteria_life_threatening", "ICH.E.i.3.2b.REQUIRED", None, True),
+        Scenario(39, "e-criteria-hospitalization-required", "ich", "AE", "reaction", "seriousness.criteriaHospitalization", "criteria_hospitalization", "ICH.E.i.3.2c.REQUIRED", None, True),
+        Scenario(40, "e-criteria-disabling-required", "ich", "AE", "reaction", "seriousness.criteriaDisabling", "criteria_disabling", "ICH.E.i.3.2d.REQUIRED", None, True),
+        Scenario(41, "e-criteria-congenital-required", "ich", "AE", "reaction", "seriousness.criteriaCongenitalAnomaly", "criteria_congenital_anomaly", "ICH.E.i.3.2e.REQUIRED", None, True),
+        Scenario(42, "e-criteria-medically-important-required", "ich", "AE", "reaction", "seriousness.criteriaOtherMedicallyImportant", "criteria_other_medically_important", "ICH.E.i.3.2f.REQUIRED", None, True),
+        Scenario(43, "f-test-date-required", "ich", "LB", "testResult", "testDate", "test_date", "ICH.F.r.1.REQUIRED", None, f"{year}0303"),
+        Scenario(44, "f-test-future-date-forbidden", "ich", "LB", "testResult", "testDate", "test_date", "ICH.F.r.1.FUTURE_DATE.FORBIDDEN", "29990303", f"{year}0303"),
+        Scenario(45, "f-test-meddra-version-required", "ich", "LB", "testResult", "testMeddraVersion", "test_meddra_version", "ICH.F.r.2.2a.REQUIRED", None, "26.0"),
+        Scenario(46, "f-test-result-unit-required", "ich", "LB", "testResult", "testUnit", "test_result_unit", "ICH.F.r.3.3.REQUIRED", None, "mg/dL"),
+        Scenario(47, "f-coded-result-required", "ich", "LB", "testResult", "testResultCode", "test_result_code", "ICH.F.r.3.1.REQUIRED", None, "1", (("testResult", None), ("testResultUnstructured", None))),
+        Scenario(48, "f-value-result-required", "ich", "LB", "testResult", "testResult", "test_result_value", "ICH.F.r.3.2.REQUIRED", None, "12.5", (("testResultCode", None), ("testResultUnstructured", None))),
+        Scenario(49, "f-unstructured-result-required", "ich", "LB", "testResult", "testResultUnstructured", "result_unstructured", "ICH.F.r.3.4.REQUIRED", None, "Normal", (("testResultCode", None), ("testResult", None))),
+        Scenario(50, "d-patient-age-exclusive", "ich", "DM", "patientInformation", "patientAgeGroup", "age_group", "ICH.D.2.EXCLUSIVE", "5", None, (("patientBirthDate", f"{year}0303"),)),
+        Scenario(51, "d-patient-birth-date-future", "ich", "DM", "patientInformation", "patientBirthDate", "birth_date", "ICH.D.2.1.FUTURE_DATE.FORBIDDEN", "29990303", f"{year}0303"),
+        Scenario(52, "d-patient-age-value-required", "ich", "DM", "patientInformation", "patientAge.value", "age_at_time_of_onset", "ICH.D.2.2a.REQUIRED", None, 36.5, (("patientAge.unit", "a"),)),
+        Scenario(53, "d-patient-age-unit-required", "ich", "DM", "patientInformation", "patientAge.unit", "age_unit", "ICH.D.2.2b.REQUIRED", None, "a", (("patientAge.value", 36.5),)),
+        Scenario(54, "d-patient-gestation-value-required", "ich", "DM", "patientInformation", "gestationPeriod.value", "gestation_period", "ICH.D.2.2.1a.REQUIRED", None, 22, (("gestationPeriod.unit", "wk"),)),
+        Scenario(55, "d-patient-gestation-unit-required", "ich", "DM", "patientInformation", "gestationPeriod.unit", "gestation_period_unit", "ICH.D.2.2.1b.REQUIRED", None, "wk", (("gestationPeriod.value", 22),)),
+        Scenario(56, "d-patient-lmp-future", "ich", "DM", "patientInformation", "lastMenstrualPeriodDate", "last_menstrual_period_date", "ICH.D.6.FUTURE_DATE.FORBIDDEN", "29990303", f"{year}0303"),
+        Scenario(57, "h-diagnosis-meddra-version-required", "ich", "NR", "senderDiagnoses", "diagnosisMeddraVersion", "diagnosis_meddra_version", "ICH.H.3.r.1a.REQUIRED", None, "26.0"),
+        Scenario(58, "h-diagnosis-meddra-code-required", "ich", "NR", "senderDiagnoses", "diagnosisMeddraCode", "diagnosis_meddra_code", "ICH.H.3.r.1b.REQUIRED", None, "10000001"),
+        Scenario(59, "h-case-summary-language-required", "ich", "NR", "caseSummaryInformation", "languageCode", "language_code", "ICH.H.5.r.1b.REQUIRED", None, "eng"),
+        Scenario(60, "d-medical-history-text-required", "ich", "DM", "patientInformation", "medicalHistoryText", "medical_history_text", "ICH.D.7.2.REQUIRED", None, "No relevant history"),
+        Scenario(61, "d-history-meddra-version-required", "ich", "DM", "medicalHistoryEpisodes", "meddraVersion", "meddra_version", "ICH.D.7.1.r.1a.REQUIRED", None, "26.0"),
+        Scenario(62, "d-history-meddra-code-required", "ich", "DM", "medicalHistoryEpisodes", "meddraCode", "meddra_code", "ICH.D.7.1.r.1b.REQUIRED", None, "10000001"),
+        Scenario(63, "d-history-future-date-forbidden", "ich", "DM", "medicalHistoryEpisodes", "startDate", "start_date", "ICH.D.7.1.r.FUTURE_DATE.FORBIDDEN", "29990303", f"{year}0303"),
+        Scenario(64, "d-past-drug-name-required", "ich", "DH", "pastDrugHistory", "drugName", "drug_name", "ICH.D.8.r.1.REQUIRED", None, "Prior drug"),
+        Scenario(65, "d-past-drug-identifier-exclusive", "ich", "DH", "pastDrugHistory", "phpid", "phpid", "ICH.D.8.MPID_PHPID.EXCLUSIVE", f"PHPID-{suffix}", None),
+        Scenario(66, "d-past-drug-future-date-forbidden", "ich", "DH", "pastDrugHistory", "startDate", "start_date", "ICH.D.8.r.FUTURE_DATE.FORBIDDEN", "29990303", f"{year}0303"),
+        Scenario(67, "d-past-drug-indication-version-required", "ich", "DH", "pastDrugHistory", "indicationMeddraVersion", "indication_meddra_version", "ICH.D.8.r.6a.REQUIRED", None, "26.0"),
+        Scenario(68, "d-past-drug-indication-code-required", "ich", "DH", "pastDrugHistory", "indicationMeddraCode", "indication_meddra_code", "ICH.D.8.r.6b.REQUIRED", None, "10000001"),
+        Scenario(69, "d-past-drug-reaction-version-required", "ich", "DH", "pastDrugHistory", "reactionMeddraVersion", "reaction_meddra_version", "ICH.D.8.r.7a.REQUIRED", None, "26.0"),
+        Scenario(70, "d-past-drug-reaction-code-required", "ich", "DH", "pastDrugHistory", "reactionMeddraCode", "reaction_meddra_code", "ICH.D.8.r.7b.REQUIRED", None, "10000001"),
     ]
 
 
@@ -205,6 +582,7 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--timeout", type=float, default=20)
     result.add_argument("--max-actions", type=int, default=500)
     result.add_argument("--deadline-seconds", type=float, default=300)
+    result.add_argument("--scenario", action="append", help="run only this scenario id (repeatable)")
     result.add_argument("--allow-remote", action="store_true")
     result.add_argument("--dry-run", action="store_true")
     return result
@@ -213,6 +591,12 @@ def parser() -> argparse.ArgumentParser:
 def main(args: argparse.Namespace) -> int:
     guard_target(args.base_url, args.allow_remote)
     scenarios = scenario_catalog(args.seed)
+    if args.scenario:
+        requested = set(args.scenario)
+        unknown = requested - {scenario.scenario_id for scenario in scenarios}
+        if unknown:
+            raise SystemExit(f"unknown scenario ids: {', '.join(sorted(unknown))}")
+        scenarios = [scenario for scenario in scenarios if scenario.scenario_id in requested]
     inventory = discover_business_rule_codes()
     covered = {scenario.expected_code for scenario in scenarios}
     if args.dry_run:
@@ -276,7 +660,17 @@ def main(args: argparse.Namespace) -> int:
             current = current[0] if current else None
         return status, current
 
-    def audit_logs(case_id: str, owner: str, row_id: str) -> list[dict[str, Any]]:
+    def audit_logs(case_id: str, owner: str, row_id: str, field: str) -> list[dict[str, Any]]:
+        nested_table = next(
+            (table for prefix, table in NESTED_AUDIT_TABLES.items() if field.startswith(prefix)),
+            None,
+        )
+        if nested_table:
+            status, value, _ = request("GET", f"/api/audit-logs/by-record/cases/{case_id}")
+            return [
+                item for item in value
+                if isinstance(item, dict) and item.get("table_name") == nested_table
+            ] if status == 200 and isinstance(value, list) else []
         table = AUDIT_TABLES.get(owner)
         target = f"{table}/{row_id}" if table else f"cases/{case_id}"
         status, value, _ = request("GET", f"/api/audit-logs/by-record/{target}")
@@ -330,10 +724,110 @@ def main(args: argparse.Namespace) -> int:
             "drugAuthorizationNumber": f"AUTH-{args.seed}",
             "drugAuthorizationCountry": "KR",
         }
-        if value is None:
+        for path, fixture_value in scenario.fixture_values:
+            if fixture_value is None and "." not in path:
+                payload.pop(path, None)
+            else:
+                set_path(payload, path, fixture_value)
+        if value is None and "." not in scenario.field:
             payload.pop(scenario.field, None)
+        elif value is not None:
+            set_path(payload, scenario.field, value)
+        return payload
+
+    def reaction_payload(scenario: Scenario, value: Any) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "sequenceNumber": 1,
+            "primarySourceReaction": "Business fuzz reaction",
+            "reactionLanguage": "eng",
+            "reactionMeddraVersionLLT": "26.0",
+            "reactionMeddraCodeLLT": "10000001",
+            "reactionStartDate": f"{year}0303",
+            "reactionEndDate": f"{year}0304",
+            "reactionDuration": {"value": 1, "unit": "d"},
+            "reactionOutcome": "1",
+            "seriousness": {
+                "serious": True,
+                "criteriaResultsInDeath": True,
+                "criteriaLifeThreatening": True,
+                "criteriaHospitalization": True,
+                "criteriaDisabling": True,
+                "criteriaCongenitalAnomaly": True,
+                "criteriaOtherMedicallyImportant": True,
+            },
+        }
+        for path, fixture_value in scenario.fixture_values:
+            set_path(payload, path, fixture_value)
+        set_path(payload, scenario.field, value)
+        return payload
+
+    def test_result_payload(scenario: Scenario, value: Any) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "sequenceNumber": 1,
+            "testDate": f"{year}0303",
+            "testName": "ALT",
+            "testMeddraVersion": "26.0",
+            "testMeddraCode": "10000001",
+            "testResultCode": "1",
+            "testResult": "12.5",
+            "testUnit": "mg/dL",
+            "testResultUnstructured": "Normal",
+        }
+        for path, fixture_value in scenario.fixture_values:
+            set_path(payload, path, fixture_value)
+        set_path(payload, scenario.field, value)
+        return payload
+
+    def patient_payload(scenario: Scenario, value: Any) -> dict[str, Any]:
+        payload: dict[str, Any] = {"patientInitials": "BUSINESS-FUZZ"}
+        for path, fixture_value in scenario.fixture_values:
+            set_path(payload, path, fixture_value)
+        set_path(payload, scenario.field, value)
+        return payload
+
+    def medical_history_payload(scenario: Scenario, value: Any) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "sequenceNumber": 1,
+            "meddraVersion": "26.0",
+            "meddraCode": "10000001",
+            "startDate": f"{year}0303",
+            "endDate": f"{year}0304",
+            "continuing": True,
+        }
+        for path, fixture_value in scenario.fixture_values:
+            set_path(payload, path, fixture_value)
+        set_path(payload, scenario.field, value)
+        return payload
+
+    def past_drug_payload(scenario: Scenario, value: Any) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "sequenceNumber": 1,
+            "drugName": "Prior drug",
+            "mpid": f"MPID-{args.seed}",
+            "startDate": f"{year}0303",
+            "endDate": f"{year}0304",
+            "indicationMeddraVersion": "26.0",
+            "indicationMeddraCode": "10000001",
+            "reactionMeddraVersion": "26.0",
+            "reactionMeddraCode": "10000001",
+        }
+        for path, fixture_value in scenario.fixture_values:
+            set_path(payload, path, fixture_value)
+        set_path(payload, scenario.field, value)
+        return payload
+
+    def narrative_payload(scenario: Scenario, value: Any) -> dict[str, Any]:
+        if scenario.owner == "senderDiagnoses":
+            payload: dict[str, Any] = {
+                "sequenceNumber": 1,
+                "diagnosisMeddraVersion": "26.0",
+                "diagnosisMeddraCode": "10000001",
+            }
         else:
-            payload[scenario.field] = value
+            payload = {"sequenceNumber": 1, "summaryText": "Business fuzz summary", "languageCode": "eng"}
+        for path, fixture_value in scenario.fixture_values:
+            set_path(payload, path, fixture_value)
+        set_path(payload, scenario.field, value)
         return payload
 
     def run_edge(scenario: Scenario, edge: str, value: Any) -> None:
@@ -359,7 +853,55 @@ def main(args: argparse.Namespace) -> int:
         if scenario.page == "CI":
             owner_id = ci_id
             read_status, current = page_current(case_id, "CI", scenario.owner)
-        else:
+        elif scenario.page == "DM":
+            rows = (
+                {"patientInformation": patient_payload(scenario, value)}
+                if scenario.owner == "patientInformation"
+                else {
+                    "patientInformation": {"patientInitials": "BUSINESS-FUZZ"},
+                    scenario.owner: [medical_history_payload(scenario, value)],
+                }
+            )
+            status, _, save_summary = request("PATCH", f"/api/cases/{case_id}/editor/pages/DM", {
+                "authorities": [scenario.authority],
+                "rows": rows,
+            })
+            read_status, current = page_current(case_id, "DM", scenario.owner)
+            owner_id = object_id(current)
+            if status != 200 or not owner_id:
+                add(edge, scenario, "FAIL", status, {**save_summary, "reason": "dm_fixture_failed"})
+                return
+        elif scenario.page == "NR":
+            status, _, save_summary = request("PATCH", f"/api/cases/{case_id}/editor/pages/NR", {
+                "authorities": [scenario.authority],
+                "rows": {
+                    "narrative": {"caseNarrative": "Business fuzz narrative"},
+                    scenario.owner: [narrative_payload(scenario, value)],
+                },
+            })
+            read_status, current = page_current(case_id, "NR", scenario.owner)
+            owner_id = object_id(current)
+            if status != 200 or not owner_id:
+                add(edge, scenario, "FAIL", status, {**save_summary, "reason": "nr_fixture_failed"})
+                return
+        elif scenario.page == "DH":
+            status, _, _ = request("PATCH", f"/api/cases/{case_id}/editor/pages/DM", {
+                "authorities": [scenario.authority],
+                "rows": {"patientInformation": {"patientInitials": "BUSINESS-FUZZ"}},
+            })
+            if status != 200:
+                add(edge, scenario, "FAIL", status, {"reason": "dh_patient_fixture_failed"})
+                return
+            status, created, save_summary = request("POST", f"/api/cases/{case_id}/editor/pages/DH/rows", {
+                "authorities": [scenario.authority],
+                "rows": {"pastDrugHistory": past_drug_payload(scenario, value)},
+            })
+            owner_id = created_row_id(created)
+            if status != 201 or not owner_id:
+                add(edge, scenario, "FAIL", status, {**save_summary, "reason": "dh_fixture_failed"})
+                return
+            read_status, current = page_current(case_id, "DH", scenario.owner, owner_id)
+        elif scenario.page == "DG":
             status, created, save_summary = request("POST", f"/api/cases/{case_id}/editor/pages/DG/rows", {
                 "authorities": [scenario.authority],
                 "rows": {"drug": drug_payload(scenario, value)},
@@ -369,9 +911,29 @@ def main(args: argparse.Namespace) -> int:
                 add(edge, scenario, "FAIL", status, {**save_summary, "reason": "dg_fixture_failed"})
                 return
             read_status, current = page_current(case_id, "DG", scenario.owner, owner_id)
+        elif scenario.page == "AE":
+            status, created, save_summary = request("POST", f"/api/cases/{case_id}/editor/pages/AE/rows", {
+                "authorities": [scenario.authority],
+                "rows": {"reaction": reaction_payload(scenario, value)},
+            })
+            owner_id = created_row_id(created)
+            if status != 201 or not owner_id:
+                add(edge, scenario, "FAIL", status, {**save_summary, "reason": "ae_fixture_failed"})
+                return
+            read_status, current = page_current(case_id, "AE", scenario.owner, owner_id)
+        else:
+            status, created, save_summary = request("POST", f"/api/cases/{case_id}/editor/pages/LB/rows", {
+                "authorities": [scenario.authority],
+                "rows": {"testResult": test_result_payload(scenario, value)},
+            })
+            owner_id = created_row_id(created)
+            if status != 201 or not owner_id:
+                add(edge, scenario, "FAIL", status, {**save_summary, "reason": "lb_fixture_failed"})
+                return
+            read_status, current = page_current(case_id, "LB", scenario.owner, owner_id)
 
         actual = get_path(current, scenario.projection_field)
-        logs = audit_logs(case_id, scenario.owner, owner_id)
+        logs = audit_logs(case_id, scenario.owner, owner_id, scenario.field)
         complete_logs = [log for log in logs if audit_log_complete(log)]
         field_match = any(
             audit_key_matches(log.get("changedFields", log.get("changed_fields", {})), scenario.projection_field)

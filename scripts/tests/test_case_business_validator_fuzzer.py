@@ -41,6 +41,10 @@ class CaseBusinessValidatorFuzzerTests(unittest.TestCase):
         report["issues"][0].pop("path")
         self.assertFalse(fuzzer.issue_complete(report, "RULE"))
 
+    def test_scenario_ids_are_unique(self) -> None:
+        scenarios = fuzzer.scenario_catalog(1)
+        self.assertEqual(len({item.scenario_id for item in scenarios}), len(scenarios))
+
 
 if __name__ == "__main__":
     unittest.main()
