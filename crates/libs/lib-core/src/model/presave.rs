@@ -1154,12 +1154,12 @@ pub struct ProductPresave {
 	pub original_manufacturer: Option<String>,
 	pub product_description: Option<String>,
 	pub mpid: Option<String>,
-	#[serde(rename = "mpidVersion", alias = "mpidVersionDateNumber")]
+	#[serde(rename = "mpidVersion")]
 	pub mpid_version: Option<String>,
 	pub mfds_mpid: Option<String>,
 	pub mfds_mpid_version: Option<String>,
 	pub phpid: Option<String>,
-	#[serde(rename = "phpidVersion", alias = "phpidVersionDateNumber")]
+	#[serde(rename = "phpidVersion")]
 	pub phpid_version: Option<String>,
 	pub investigational_product_blinded: Option<bool>,
 	pub obtain_drug_country: Option<String>,
@@ -1188,12 +1188,12 @@ pub struct ProductPresaveForCreate {
 	pub original_manufacturer: Option<String>,
 	pub product_description: Option<String>,
 	pub mpid: Option<String>,
-	#[serde(rename = "mpidVersion", alias = "mpidVersionDateNumber")]
+	#[serde(rename = "mpidVersion")]
 	pub mpid_version: Option<String>,
 	pub mfds_mpid: Option<String>,
 	pub mfds_mpid_version: Option<String>,
 	pub phpid: Option<String>,
-	#[serde(rename = "phpidVersion", alias = "phpidVersionDateNumber")]
+	#[serde(rename = "phpidVersion")]
 	pub phpid_version: Option<String>,
 	pub investigational_product_blinded: Option<bool>,
 	pub obtain_drug_country: Option<String>,
@@ -1276,12 +1276,12 @@ pub struct ProductPresaveForUpdate {
 	pub original_manufacturer: Option<String>,
 	pub product_description: Option<String>,
 	pub mpid: Option<String>,
-	#[serde(rename = "mpidVersion", alias = "mpidVersionDateNumber")]
+	#[serde(rename = "mpidVersion")]
 	pub mpid_version: Option<String>,
 	pub mfds_mpid: Option<String>,
 	pub mfds_mpid_version: Option<String>,
 	pub phpid: Option<String>,
-	#[serde(rename = "phpidVersion", alias = "phpidVersionDateNumber")]
+	#[serde(rename = "phpidVersion")]
 	pub phpid_version: Option<String>,
 	pub investigational_product_blinded: Option<bool>,
 	pub obtain_drug_country: Option<String>,

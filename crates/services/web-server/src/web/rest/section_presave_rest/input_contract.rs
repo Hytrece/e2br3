@@ -702,6 +702,24 @@ mod tests {
 			.unwrap();
 		assert_eq!(data.mpid_version.as_deref(), Some("20260101"));
 		assert_eq!(data.phpid_version.as_deref(), Some("20260202"));
+		assert!(serde_json::from_value::<ProductPresaveForUpdate>(
+			serde_json::json!({
+				"mpidVersionDateNumber": "20260101"
+			})
+		)
+		.is_err());
+		assert!(serde_json::from_value::<ProductPresaveForUpdate>(
+			serde_json::json!({
+				"phpidVersionDateNumber": "20260202"
+			})
+		)
+		.is_err());
+		assert!(serde_json::from_value::<ProductPresaveForCreate>(
+			serde_json::json!({
+				"mpidVersionDateNumber": "20260101"
+			})
+		)
+		.is_err());
 	}
 
 	#[test]
