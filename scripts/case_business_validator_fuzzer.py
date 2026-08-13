@@ -618,6 +618,13 @@ def scenario_catalog(seed: int) -> list[Scenario]:
         Scenario(142, "fda-identifiers-flag-row-required", "fda", "CI", "safetyReportIdentification", "otherCaseIdentifiersExist", "otherCaseIdentifiersExist", "FDA.R0017", True, False),
         Scenario(143, "fda-primary-qualification-required", "fda", "RP", "primarySources", "qualification", "qualification", "FDA.R0020", None, "1"),
         Scenario(144, "fda-sender-contact-required", "fda", "SD", "senderInformation", "email", "email", "FDA.C.3.SENDER.REQUIRED", None, "sender@example.com"),
+        Scenario(145, "mfds-primary-qualification-required", "mfds", "RP", "primarySources", "qualification", "qualification", "MFDS.C.2.r.4.REQUIRED", None, "1"),
+        Scenario(146, "d-history-meddra-version-format", "ich", "DM", "medicalHistoryEpisodes", "meddraVersion", "meddra_version", "ICH.D.7.1.r.1a.ALLOWED.VALUE", "bad", "26.0"),
+        Scenario(147, "d-parent-history-meddra-version-format", "ich", "DM", "parentMedicalHistory", "meddraVersion", "meddra_version", "ICH.D.10.7.1.r.1a.ALLOWED.VALUE", "bad", "26.0"),
+        Scenario(148, "e-reaction-meddra-version-format", "ich", "AE", "reaction", "reactionMeddraVersionLLT", "reaction_meddra_version", "ICH.E.i.2.1a.ALLOWED.VALUE", "bad", "26.0"),
+        Scenario(149, "f-test-meddra-version-format", "ich", "LB", "testResult", "testMeddraVersion", "test_meddra_version", "ICH.F.r.2.2a.ALLOWED.VALUE", "bad", "26.0"),
+        Scenario(150, "g-indication-meddra-version-format", "ich", "DG", "drug", "indications[].indicationMeddraVersion", "indications[].indication_meddra_version", "ICH.G.k.7.r.2a.ALLOWED.VALUE", "bad", "26.0", (("indications[].indicationMeddraCode", "10000001"),)),
+        Scenario(151, "h-diagnosis-meddra-version-format", "ich", "NR", "senderDiagnoses", "diagnosisMeddraVersion", "diagnosis_meddra_version", "ICH.H.3.r.1a.ALLOWED.VALUE", "bad", "26.0"),
     ]
 
 
