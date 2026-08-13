@@ -632,6 +632,9 @@ def scenario_catalog(seed: int) -> list[Scenario]:
         Scenario(156, "fda-ethnicity-required", "fda", "DM", "patientInformation", "ethnicityCodeNullFlavor", "ethnicityCodeNullFlavor", "FDA.D.12.REQUIRED", None, "NA"),
         Scenario(157, "fda-aggregate-race-na-recommended", "fda", "DM", "patientInformation", "raceCodeNullFlavor", "raceCodeNullFlavor", "FDA.W0003", None, "NA", (("patientInitials", "AGGREGATE"),)),
         Scenario(158, "fda-aggregate-ethnicity-na-recommended", "fda", "DM", "patientInformation", "ethnicityCodeNullFlavor", "ethnicityCodeNullFlavor", "FDA.W0004", None, "NA", (("patientInitials", "AGGREGATE"),)),
+        Scenario(159, "mfds-relatedness-source-required", "mfds", "DG", "drug", "drugReactionAssessments[].sourceOfAssessment", "drugReactionAssessments[].sourceOfAssessment", "MFDS.G.k.9.i.2.r.1.REQUIRED", None, "Sponsor", (("drugReactionAssessments[].methodOfAssessmentKr1", "1"),)),
+        Scenario(160, "mfds-relatedness-method-required", "mfds", "DG", "drug", "drugReactionAssessments[].methodOfAssessmentKr1", "drugReactionAssessments[].methodOfAssessmentKr1", "MFDS.G.k.9.i.2.r.2.KR.1.REQUIRED", None, "1", (("drugReactionAssessments[].sourceOfAssessment", "Sponsor"),)),
+        Scenario(161, "mfds-relatedness-krct-result-required", "mfds", "DG", "drug", "drugReactionAssessments[].resultOfAssessmentKr2", "drugReactionAssessments[].resultOfAssessmentKr2", "MFDS.G.k.9.i.2.r.3.KR.2.REQUIRED", None, "1", (("drugReactionAssessments[].sourceOfAssessment", "Sponsor"), ("drugReactionAssessments[].methodOfAssessmentKr1", "2"))),
     ]
 
 
@@ -1041,7 +1044,10 @@ def main(args: argparse.Namespace) -> int:
         status, current = page_current(case_id, "CI", "safetyReportIdentification")
         ci_id = object_id(current)
         ci = ci_payload(scenario.field, value, scenario) if scenario.owner == "safetyReportIdentification" else ci_payload()
-        if scenario.page == "SI" or scenario.scenario_id == "c2-study-reporter-organization-required":
+        if scenario.page == "SI" or scenario.scenario_id in {
+            "c2-study-reporter-organization-required",
+            "mfds-relatedness-krct-result-required",
+        }:
             ci["reportType"] = "2"
         ci["id"] = ci_id
         status, _, save_summary = request("PATCH", f"/api/cases/{case_id}/editor/pages/CI", {
