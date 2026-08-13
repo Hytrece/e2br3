@@ -92,9 +92,20 @@ pub fn routes_import(mm: ModelManager) -> Router {
 		)
 		.route(
 			"/import/xml/validate",
-			axum::routing::post(import_rest::validate_xml),
+			axum::routing::post(import_rest::validate_xml).layer(
+				axum::extract::DefaultBodyLimit::max(
+					import_rest::MAX_XML_REQUEST_BYTES,
+				),
+			),
 		)
-		.route("/import/xml", axum::routing::post(import_rest::import_xml))
+		.route(
+			"/import/xml",
+			axum::routing::post(import_rest::import_xml).layer(
+				axum::extract::DefaultBodyLimit::max(
+					import_rest::MAX_XML_REQUEST_BYTES,
+				),
+			),
+		)
 		.with_state(mm)
 }
 

@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import base64
 import collections
 import fnmatch
 import hashlib
@@ -111,6 +112,18 @@ def element_with_code(root: ET.Element, code: str) -> ET.Element | None:
 	return None
 
 
+def base64_text(root: ET.Element) -> ET.Element | None:
+	return next((node for node in root.iter() if local_name(node.tag) == "text" and node.get("representation") == "B64"), None)
+
+
+def set_base64_text(node: ET.Element, value: str) -> None:
+	children = list(node)
+	if children:
+		children[-1].tail = value
+	else:
+		node.text = value
+
+
 def mutate(xml: bytes, kind: str) -> bytes | None:
 	if kind == "malformed_xml":
 		return xml[: max(1, len(xml) // 2)]
@@ -143,14 +156,21 @@ def mutate(xml: bytes, kind: str) -> bytes | None:
 		if value is None:
 			return None
 		value.set("value", "not-a-date")
-	elif kind == "invalid_base64":
-		text = next((node for node in root.iter() if local_name(node.tag) == "text" and node.get("representation") == "B64"), None)
+	elif kind.startswith("base64_"):
+		text = base64_text(root)
 		if text is None:
 			return None
-		for child in list(text):
-			child.tail = "%%%not-base64%%%"
-		if not list(text):
-			text.text = "%%%not-base64%%%"
+		payload = "".join("".join(text.itertext()).split())
+		if kind == "base64_invalid_chars":
+			set_base64_text(text, "%%%not-base64%%")
+		elif kind == "base64_bad_padding":
+			set_base64_text(text, "A")
+		elif kind == "base64_whitespace":
+			set_base64_text(text, " \n\t".join(payload))
+		elif kind == "base64_empty":
+			set_base64_text(text, "")
+		else:
+			raise ValueError(f"unknown mutation: {kind}")
 	else:
 		raise ValueError(f"unknown mutation: {kind}")
 	return ET.tostring(root, encoding="utf-8", xml_declaration=True)
@@ -188,6 +208,31 @@ def identity_signature(xml: bytes) -> tuple[str | None, str | None]:
 	)
 
 
+def preservation_signature(xml: bytes) -> dict[str, collections.Counter[Any]]:
+	document = ET.fromstring(xml)
+	root = next((node for node in document.iter() if local_name(node.tag) == "investigationEvent"), document)
+	null_flavors: collections.Counter[Any] = collections.Counter()
+	codes: collections.Counter[Any] = collections.Counter()
+	dates: collections.Counter[Any] = collections.Counter()
+	attachments: collections.Counter[Any] = collections.Counter()
+	for node in root.iter():
+		name = local_name(node.tag)
+		if null_flavor := node.get("nullFlavor"):
+			null_flavors[null_flavor] += 1
+		if code := node.get("code"):
+			codes[(name, code, node.get("codeSystem"), node.get("codeSystemVersion"))] += 1
+		if name in {"birthTime", "availabilityTime", "low", "high", "center", "width"} and (value := node.get("value")):
+			dates[(name, value, node.get("unit"))] += 1
+		if name == "text" and node.get("representation") == "B64":
+			payload = "".join("".join(node.itertext()).split())
+			try:
+				decoded = base64.b64decode(payload, validate=True)
+			except ValueError:
+				continue
+			attachments[(node.get("mediaType"), hashlib.sha256(decoded).hexdigest())] += 1
+	return {"null_flavors": null_flavors, "codes": codes, "dates": dates, "attachments": attachments}
+
+
 def multipart(authority: str, product_id: str, filename: str, payload: bytes) -> tuple[bytes, str]:
 	boundary = f"XML-FUZZ-{uuid.uuid4().hex}"
 	parts = [
@@ -204,6 +249,14 @@ def zip_samples(samples: list[Sample]) -> bytes:
 	with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
 		for sample in samples:
 			archive.writestr(sample.name, sample.xml)
+	return buffer.getvalue()
+
+
+def zip_entries(entries: list[tuple[str, bytes]]) -> bytes:
+	buffer = io.BytesIO()
+	with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+		for name, value in entries:
+			archive.writestr(name, value)
 	return buffer.getvalue()
 
 
@@ -317,6 +370,12 @@ def verify_roundtrip(client: Client, case_id: str, authority: str, source: bytes
 			for key, count in expected.items():
 				if count and actual[key] < count:
 					failures.append(f"roundtrip_{key}:{count}->{actual[key]}")
+			expected_preservation = preservation_signature(source)
+			actual_preservation = preservation_signature(exported)
+			for key, expected_values in expected_preservation.items():
+				missing = expected_values - actual_preservation[key]
+				if missing:
+					failures.append(f"roundtrip_{key}:{list(missing.items())[:5]}")
 		except ET.ParseError as error:
 			failures.append(f"export_xml:{error}")
 	return failures
@@ -353,7 +412,9 @@ def run(args: argparse.Namespace) -> int:
 				if copy < args.mutations_per_seed:
 					for kind, mutation_expected in (
 						("malformed_xml", "error"), ("invalid_utf8", "error"),
-						("invalid_base64", "error"), ("value_and_nullflavor", "error"),
+						("base64_invalid_chars", "error"), ("base64_bad_padding", "error"),
+						("base64_whitespace", "success"), ("base64_empty", "success"),
+						("value_and_nullflavor", "error"),
 						("invalid_date", "error"), ("wrapper_mismatch", "success"),
 						("c17_ni", "success"),
 					):
@@ -384,6 +445,27 @@ def run(args: argparse.Namespace) -> int:
 				case_id = row.get("caseId") or row.get("case_id")
 				roundtrip = verify_roundtrip(clients[primary.label], case_id, authority, sample.xml) if row_status in {"success", "warning"} and case_id else []
 				results.append({"actor": primary.label, "authority": authority, "file": name, "kind": sample.kind, "expected": sample.expected, "status": row_status, "case_id": case_id, "category": classify_error(message, status), "message": message, "roundtrip_failures": roundtrip})
+
+	if not args.skip_archive_probes:
+		probe_authority = next((key for key, value in all_samples.items() if value), None)
+		if probe_authority:
+			probe_xml = unique_xml(next(sample.xml for sample in all_samples[probe_authority] if sample.kind == "healthy"), hashlib.sha256(f"{args.seed}:archive".encode()).hexdigest()[:20].upper())
+			nested = zip_entries([("inner.xml", probe_xml)])
+			archive_probes = (
+				("zip_empty", zip_entries([]), "empty.zip", "error"),
+				("zip_nested", zip_entries([("nested.zip", nested)]), "nested.zip", "error"),
+				("zip_path_name", zip_entries([("../probe.xml", probe_xml)]), "path.zip", "error"),
+				("zip_duplicate_name", zip_entries([("one/same.xml", probe_xml), ("two/same.xml", probe_xml)]), "duplicate.zip", "error"),
+				("zip_entry_oversize", zip_entries([("large.xml", b" " * (25 * 1024 * 1024 + 1))]), "large.zip", "error"),
+				("upload_oversize", b" " * (50 * 1024 * 1024 + 1), "large.xml", "error"),
+			)
+			for kind, archive, filename, expected in archive_probes:
+				payload, content_type = multipart(probe_authority, primary.product_presave_id, filename, archive)
+				status, body, transport = clients[primary.label].request("POST", "/api/import/xml", payload, content_type)
+				rows = imported_rows(body)
+				row_statuses = [row.get("status") for row in rows]
+				result_status = "error" if (status is not None and status >= 400) or (expected == "error" and transport) else "success" if rows else "request_error"
+				results.append({"actor": primary.label, "authority": probe_authority, "file": filename, "kind": kind, "expected": expected, "status": result_status, "http": status, "category": classify_error(transport or body.decode(errors="replace")[:500], status), "message": transport or body.decode(errors="replace")[:500], "row_statuses": row_statuses})
 
 	# Same C.1.1/version must be accepted independently by every configured organization.
 	if len(actors) > 1:
@@ -424,6 +506,7 @@ def main() -> int:
 	parser.add_argument("--batch-size", type=int, default=10)
 	parser.add_argument("--seed", type=int, default=20260812)
 	parser.add_argument("--timeout", type=float, default=300)
+	parser.add_argument("--skip-archive-probes", action="store_true")
 	parser.add_argument("--output", type=Path, default=Path("tmp/xml-import-fuzz/results.jsonl"))
 	args = parser.parse_args()
 	if args.copies < 1 or args.batch_size < 1 or args.mutations_per_seed < 0:

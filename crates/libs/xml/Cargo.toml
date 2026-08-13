@@ -25,6 +25,7 @@ derive_more = { workspace = true }
 quick-xml = "0.31"
 libxml = "0.3"
 tracing = "0.1"
+base64 = "0.22"
 
 [dev-dependencies]
 serial_test = "3"

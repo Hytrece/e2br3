@@ -914,7 +914,8 @@ fn parent_past_drug_history_fragment(
 		&& (write_d_10_8_r_1_kr_1b(drug).is_some()
 			|| write_d_10_8_r_1_kr_1a(drug).is_some())
 	{
-		let mut attrs = String::new();
+		let mut attrs =
+			String::from(" codeSystem=\"2.16.840.1.113883.3.989.5.1.10.2.1\"");
 		if let Some(id) = write_d_10_8_r_1_kr_1b(drug) {
 			attrs.push_str(&format!(" code=\"{}\"", xml_escape(id)));
 		}
@@ -1207,7 +1208,8 @@ fn apply_past_drug_history_section(
 		let mfds_code = if include_mfds
 			&& (mfds_product_id.is_some() || mfds_product_version.is_some())
 		{
-			let mut attrs = String::new();
+			let mut attrs =
+				String::from(" codeSystem=\"2.16.840.1.113883.3.989.5.1.10.2.1\"");
 			if let Some(id) = mfds_product_id {
 				attrs.push_str(&format!(" code=\"{}\"", xml_escape(id)));
 			}
@@ -1568,6 +1570,9 @@ mod tests {
 		let mfds_index = fragment
 			.find("code=\"MF&amp;&lt;&gt;&quot;\"")
 			.expect("MFDS product code");
+		assert!(
+			fragment.contains("codeSystem=\"2.16.840.1.113883.3.989.5.1.10.2.1\"")
+		);
 		assert!(fragment.contains("codeSystemVersion=\"MFV&amp;&lt;&gt;&quot;\""));
 		let name_index = fragment.find(name).expect("drug name");
 		let mpid_index = fragment.find(mpid).expect("MPID identifier");
@@ -1661,7 +1666,7 @@ mod tests {
 		let fragment = parent_past_drug_history_fragment(&drug, true);
 		let non_mfds_fragment = parent_past_drug_history_fragment(&drug, false);
 
-		let mfds_code = "<code code=\"MF&amp;&lt;&gt;&quot;&apos;\" codeSystemVersion=\"MFV&amp;&lt;&gt;&quot;&apos;\"/>";
+		let mfds_code = "<code codeSystem=\"2.16.840.1.113883.3.989.5.1.10.2.1\" code=\"MF&amp;&lt;&gt;&quot;&apos;\" codeSystemVersion=\"MFV&amp;&lt;&gt;&quot;&apos;\"/>";
 		let name =
 			"<name>Parent &amp; &lt;drug&gt; &quot;A&quot; &apos;B&apos;</name>";
 		let mpid = "<asIdentifiedEntity classCode=\"IDENT\"><id extension=\"MP&amp;&lt;&gt;&quot;&apos;\"/><code code=\"MPID\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.4\" codeSystemVersion=\"MPV&amp;&lt;&gt;&quot;&apos;\"/></asIdentifiedEntity>";

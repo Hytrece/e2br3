@@ -4726,6 +4726,7 @@ dependencies = [
 name = "xml"
 version = "0.1.0"
 dependencies = [
+ "base64",
  "derive_more",
  "input-contracts",
  "lib-core",

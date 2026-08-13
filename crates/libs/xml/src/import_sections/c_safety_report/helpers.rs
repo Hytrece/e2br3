@@ -1003,6 +1003,54 @@ mod tests {
 	}
 
 	#[test]
+	fn attachment_import_validates_normalized_base64_per_field() {
+		for (code, value, valid, field) in [
+			(
+				"1",
+				"QUJD",
+				true,
+				"documentsHeldBySender[].includedDocument",
+			),
+			(
+				"1",
+				"Q U\nJ\tD",
+				true,
+				"documentsHeldBySender[].includedDocument",
+			),
+			(
+				"1",
+				"%%%",
+				false,
+				"documentsHeldBySender[].includedDocument",
+			),
+			("1", "A", false, "documentsHeldBySender[].includedDocument"),
+			("2", "REVG", true, "literatureReferences[].documentBase64"),
+			(
+				"2",
+				"R E\nV\tG",
+				true,
+				"literatureReferences[].documentBase64",
+			),
+			("2", "%%%", false, "literatureReferences[].documentBase64"),
+			("2", "A", false, "literatureReferences[].documentBase64"),
+		] {
+			let xml = format!(
+				r#"<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3"><reference><document><code code="{code}" codeSystem="2.16.840.1.113883.3.989.2.1.1.27"/><text representation="B64">{value}</text></document></reference></MCCI_IN200100UV01>"#
+			);
+			let result = if code == "1" {
+				parse_documents_held_by_sender(xml.as_bytes()).map(|_| ())
+			} else {
+				parse_literature_references(xml.as_bytes()).map(|_| ())
+			};
+			if valid {
+				result.expect("valid Base64");
+			} else {
+				assert!(result.unwrap_err().to_string().contains(field));
+			}
+		}
+	}
+
+	#[test]
 	fn primary_source_import_keeps_direct_department_without_promoting_it() {
 		let xml = primary_source_xml(
 			r#"<representedOrganization>
@@ -1391,6 +1439,30 @@ fn read_c_1_6_1_r_2(
 	Option<String>,
 	Option<String>,
 )> {
+	let values = read_document_content(xpath, node)?;
+	import_constraint::string(
+		"documentsHeldBySender[].includedDocument",
+		values.0.as_deref(),
+		None,
+		input_contracts::generated::c::c_1_6_1_r_2,
+	)?;
+	import_constraint::base64(
+		"documentsHeldBySender[].includedDocument",
+		values.0.as_deref(),
+	)?;
+	Ok(values)
+}
+
+fn read_document_content(
+	xpath: &mut Context,
+	node: &libxml::tree::Node,
+) -> Result<(
+	Option<String>,
+	Option<String>,
+	Option<String>,
+	Option<String>,
+	Option<String>,
+)> {
 	let representation = first_attr(xpath, node, "hl7:text", "representation");
 	let document = xpath
 		.findnodes("hl7:text", Some(node))
@@ -1416,12 +1488,6 @@ fn read_c_1_6_1_r_2(
 				value
 			}
 		});
-	import_constraint::string(
-		"documentsHeldBySender[].includedDocument",
-		document.as_deref(),
-		None,
-		input_contracts::generated::c::c_1_6_1_r_2,
-	)?;
 	Ok((
 		document,
 		first_attr(xpath, node, "hl7:text/hl7:reference", "value"),
@@ -1529,12 +1595,16 @@ fn read_c_4_r_2(
 	Option<String>,
 	Option<String>,
 )> {
-	let values = read_c_1_6_1_r_2(xpath, node)?;
+	let values = read_document_content(xpath, node)?;
 	import_constraint::string(
-		"documentBase64",
+		"literatureReferences[].documentBase64",
 		values.0.as_deref(),
 		None,
 		input_contracts::generated::c::c_4_r_2,
+	)?;
+	import_constraint::base64(
+		"literatureReferences[].documentBase64",
+		values.0.as_deref(),
 	)?;
 	Ok(values)
 }

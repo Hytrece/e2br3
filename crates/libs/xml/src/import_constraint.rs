@@ -1,4 +1,5 @@
 use crate::{Error, Result};
+use base64::engine::{general_purpose, Engine};
 use input_contracts::{FieldInput, InputIssue, InputValue};
 
 pub(crate) fn string<F>(
@@ -18,6 +19,17 @@ where
 			null_flavor,
 		)),
 	)
+}
+
+pub(crate) fn base64(field: &str, value: Option<&str>) -> Result<()> {
+	if value.is_some_and(|value| general_purpose::STANDARD.decode(value).is_err()) {
+		return Err(Error::InvalidXml {
+			message: format!("{field}: invalid Base64 value"),
+			line: None,
+			column: None,
+		});
+	}
+	Ok(())
 }
 
 pub(crate) fn boolean<F>(
@@ -108,7 +120,13 @@ pub(crate) fn normalize_decimal_lexeme(value: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-	use super::{normalize_decimal_lexeme, string};
+	use super::{base64, normalize_decimal_lexeme, string};
+
+	#[test]
+	fn rejects_invalid_base64_storage_input() {
+		assert!(base64("includedDocument", Some("A")).is_err());
+		base64("includedDocument", Some("QUJD")).expect("valid Base64");
+	}
 
 	#[test]
 	fn business_rules_do_not_block_import_parsing() {

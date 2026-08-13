@@ -26,6 +26,7 @@ use lib_web::middleware::mw_auth::CtxW;
 use lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW;
 use serde::Serialize;
 use sqlx::FromRow;
+use std::collections::HashSet;
 use std::io::{Cursor, Read};
 use time::format_description::well_known::Rfc3339;
 use uuid::Uuid;
@@ -33,9 +34,7 @@ use xml::import_sections::{
 	c_safety_report::parse_c_safety_report, d_patient::parse_d_patient,
 	e_reaction::parse_e_reactions, g_drug::parse_g_drugs,
 };
-use xml::validation::{
-	normalize_e2b_xml_for_import, validate_e2b_xml_for_import,
-};
+use xml::validation::{normalize_e2b_xml_for_import, validate_e2b_xml_for_import};
 use xml::{
 	extract_safety_report_id_from_xml, import_e2b_xml, CImportSettings,
 	XmlImportRequest, XmlValidationReport,
@@ -44,6 +43,7 @@ use zip::ZipArchive;
 
 const MAX_XML_UPLOAD_BYTES: usize = 50 * 1024 * 1024;
 const MAX_XML_ZIP_ENTRY_BYTES: usize = 25 * 1024 * 1024;
+pub const MAX_XML_REQUEST_BYTES: usize = MAX_XML_UPLOAD_BYTES + 64 * 1024;
 
 struct UploadedImportPayload {
 	bytes: Vec<u8>,
@@ -172,15 +172,22 @@ async fn read_field_limited(
 	label: &str,
 ) -> Result<Vec<u8>> {
 	let mut bytes = Vec::new();
+	let mut exceeded = false;
 	while let Some(chunk) = field.chunk().await.map_err(|err| Error::BadRequest {
 		message: format!("multipart read error: {err}"),
 	})? {
 		if bytes.len().saturating_add(chunk.len()) > max_bytes {
-			return Err(Error::BadRequest {
-				message: format!("{label} exceeds {max_bytes} bytes"),
-			});
+			exceeded = true;
+			continue;
 		}
-		bytes.extend_from_slice(&chunk);
+		if !exceeded {
+			bytes.extend_from_slice(&chunk);
+		}
+	}
+	if exceeded {
+		return Err(Error::BadRequest {
+			message: format!("{label} exceeds {max_bytes} bytes"),
+		});
 	}
 	Ok(bytes)
 }
@@ -209,16 +216,31 @@ fn extract_xml_entries_from_zip(
 	mut zip: ZipArchive<Cursor<&[u8]>>,
 ) -> Result<Vec<(String, Vec<u8>)>> {
 	let mut entries = Vec::new();
+	let mut names = HashSet::new();
 	for idx in 0..zip.len() {
 		let mut entry = zip.by_index(idx).map_err(|err| Error::BadRequest {
 			message: format!("zip read error: {err}"),
 		})?;
+		let entry_path = entry.enclosed_name().ok_or_else(|| Error::BadRequest {
+			message: format!("unsafe zip entry path: {}", entry.name()),
+		})?;
 		if entry.name().ends_with('/') {
 			continue;
 		}
-		let entry_name = entry.name().to_string();
+		let entry_name = entry_path
+			.file_name()
+			.and_then(|name| name.to_str())
+			.ok_or_else(|| Error::BadRequest {
+				message: format!("invalid zip entry name: {}", entry.name()),
+			})?
+			.to_string();
 		if !entry_name.to_ascii_lowercase().ends_with(".xml") {
 			continue;
+		}
+		if !names.insert(entry_name.to_ascii_lowercase()) {
+			return Err(Error::BadRequest {
+				message: format!("duplicate xml file name in zip: {entry_name}"),
+			});
 		}
 
 		let entry_bytes = read_zip_entry_limited(
@@ -1005,12 +1027,44 @@ async fn import_xml_authorized(
 #[cfg(test)]
 mod tests {
 	use super::{
-		parse_g_drugs, summary_for_skipped_decision, XmlImportHistoryStatus,
+		extract_xml_entries, parse_g_drugs, summary_for_skipped_decision,
+		XmlImportHistoryStatus,
 	};
 	use lib_core::model::xml_import_decision::{
 		XmlImportDecision, XmlImportDecisionAction,
 	};
 	use uuid::Uuid;
+	use zip::write::SimpleFileOptions;
+	use zip::ZipWriter;
+
+	fn zip_with(entries: &[(&str, &[u8])]) -> Vec<u8> {
+		use std::io::{Cursor, Write};
+
+		let mut writer = ZipWriter::new(Cursor::new(Vec::new()));
+		for (name, value) in entries {
+			writer
+				.start_file(*name, SimpleFileOptions::default())
+				.expect("start zip entry");
+			writer.write_all(value).expect("write zip entry");
+		}
+		writer.finish().expect("finish zip").into_inner()
+	}
+
+	#[test]
+	fn zip_import_rejects_unsafe_and_duplicate_xml_names() {
+		let unsafe_zip = zip_with(&[("../case.xml", b"<xml/>")]);
+		assert!(extract_xml_entries(&unsafe_zip, "cases.zip")
+			.unwrap_err()
+			.to_string()
+			.contains("unsafe zip entry path"));
+
+		let duplicate_zip =
+			zip_with(&[("one/case.xml", b"<one/>"), ("two/CASE.XML", b"<two/>")]);
+		assert!(extract_xml_entries(&duplicate_zip, "cases.zip")
+			.unwrap_err()
+			.to_string()
+			.contains("duplicate xml file name"));
+	}
 
 	#[test]
 	fn skipped_decision_summary_exposes_skip_without_case_id() {
