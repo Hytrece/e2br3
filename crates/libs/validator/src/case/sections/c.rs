@@ -175,34 +175,6 @@ fn c_1_1(report: &SafetyReportIdentification, issues: &mut Vec<ValidationIssue>)
 	);
 }
 
-/// ICH.C.1.1.PROFILE
-fn c_1_1_profile(
-	report: &SafetyReportIdentification,
-	vocabulary: &crate::context::VocabularyContext,
-	issues: &mut Vec<ValidationIssue>,
-) {
-	let Some(value) = trimmed(report.safety_report_id.as_deref()) else {
-		return;
-	};
-	let mut parts = value.splitn(3, '-');
-	let country = parts.next().unwrap_or_default();
-	let sender = parts.next().unwrap_or_default();
-	let report_number = parts.next().unwrap_or_default();
-	let valid = vocabulary.contains_snapshot_code(
-		"ISO3166",
-		crate::VocabularyScope::All,
-		country,
-	) && !sender.is_empty()
-		&& !report_number.is_empty();
-	push_business_violation(
-		issues,
-		!valid,
-		"ICH.C.1.1.PROFILE",
-		"safetyReportIdentification.safetyReportId",
-		"C.1.1 must use the country-sender-report-number profile with a two-letter country code.",
-	);
-}
-
 /// ICH.C.1.2.REQUIRED
 /// ICH.C.1.2.FUTURE_DATE.FORBIDDEN
 /// ICH.C.1.2.ALLOWED.VALUE
@@ -1282,7 +1254,6 @@ pub(crate) fn collect_ich_issues(
 ) {
 	if let Some(report) = validation_ctx.safety_report.as_ref() {
 		c_1_1(report, issues);
-		c_1_1_profile(report, &validation_ctx.vocabulary, issues);
 		c_1_2(report, issues);
 		c_1_3(report, issues);
 		c_1_4(report, issues);
@@ -2856,36 +2827,26 @@ mod golden_c1_value_tests {
 	}
 
 	#[test]
-	fn c_profile_and_primary_marker_are_semantically_checked() {
+	fn c_1_1_accepts_free_text_within_length() {
 		let mut report = base_report();
-		report.safety_report_id = Some("bad-id".to_string());
+		report.safety_report_id = Some("ICH-RICH-20260813-001".to_string());
+		let mut issues = Vec::new();
+		c_1_1(&report, &mut issues);
+		assert!(issues.is_empty());
+	}
+
+	#[test]
+	fn primary_marker_is_semantically_checked() {
 		let mut first = primary_source();
 		first.primary_source_regulatory = Some("1".to_string());
 		let mut second = primary_source();
 		second.primary_source_regulatory = Some("1".to_string());
 		let mut issues = Vec::new();
-		c_1_1_profile(&report, &Default::default(), &mut issues);
 		c_2_r_5(&[first, second], &mut issues);
 
-		assert!(issues.iter().any(|issue| issue.code == "ICH.C.1.1.PROFILE"));
 		assert!(issues
 			.iter()
 			.any(|issue| issue.code == "ICH.C.2.r.5.EXACTLY_ONCE"));
-	}
-
-	#[test]
-	fn c_profile_accepts_active_iso_and_ich_extension_country_codes() {
-		let vocabulary = crate::context::VocabularyContext::for_active_codes(&[
-			("ISO3166", crate::VocabularyScope::All, "US"),
-			("ISO3166", crate::VocabularyScope::All, "EU"),
-		]);
-		for identifier in ["US-SENDER-1", "EU-SENDER-1"] {
-			let mut report = base_report();
-			report.safety_report_id = Some(identifier.to_string());
-			let mut issues = Vec::new();
-			c_1_1_profile(&report, &vocabulary, &mut issues);
-			assert!(issues.is_empty(), "{identifier}: {issues:?}");
-		}
 	}
 
 	#[test]
