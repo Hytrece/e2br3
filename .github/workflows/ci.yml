@@ -222,6 +222,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Check database migration changes
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          git fetch --no-tags origin "${BEFORE_SHA}"
+          scripts/db/check_migration_changes.sh "${BEFORE_SHA}" "${GITHUB_SHA}"
+
       - name: Checkout frontend dev
         uses: actions/checkout@v4
         with:
