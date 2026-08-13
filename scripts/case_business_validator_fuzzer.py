@@ -69,6 +69,92 @@ GENERATED_BUSINESS_RULE_CODES = {
     ),
 }
 
+DISPOSITION_GROUPS = {
+    "EXTERNAL_VOCABULARY_FIXTURE": (
+        "The rule is conditional on an active MedDRA, WHO Drug, EDQM, or MFDS reference-data release; a clean isolated database intentionally has no authoritative release to invent.",
+        {
+            "ICH.D.10.7.1.r.1a.VOCABULARY", "ICH.D.10.7.1.r.1b.VOCABULARY",
+            "ICH.D.10.8.r.6a.VOCABULARY", "ICH.D.10.8.r.6b.VOCABULARY",
+            "ICH.D.10.8.r.7a.VOCABULARY", "ICH.D.10.8.r.7b.VOCABULARY",
+            "ICH.D.7.1.r.1a.VOCABULARY", "ICH.D.7.1.r.1b.VOCABULARY",
+            "ICH.D.8.r.6a.VOCABULARY", "ICH.D.8.r.6b.VOCABULARY",
+            "ICH.D.8.r.7a.VOCABULARY", "ICH.D.8.r.7b.VOCABULARY",
+            "ICH.D.9.2.r.1a.VOCABULARY", "ICH.D.9.2.r.1b.VOCABULARY",
+            "ICH.D.9.4.r.1a.VOCABULARY", "ICH.D.9.4.r.1b.VOCABULARY",
+            "ICH.E.i.2.1a.VOCABULARY", "ICH.E.i.2.1b.VOCABULARY",
+            "ICH.F.r.2.2a.VOCABULARY", "ICH.F.r.2.2b.VOCABULARY",
+            "ICH.G.k.2.3.r.3b.VOCABULARY", "ICH.G.k.4.r.3.VOCABULARY",
+            "ICH.G.k.7.r.2a.VOCABULARY", "ICH.G.k.7.r.2b.VOCABULARY",
+            "ICH.H.3.r.1a.VOCABULARY", "ICH.H.3.r.1b.VOCABULARY",
+            "MFDS.D.10.8.r.1.KR.1b.VOCABULARY", "MFDS.D.8.r.1.KR.1b.VOCABULARY",
+            "MFDS.G.k.2.1.KR.1b.VOCABULARY", "MFDS.G.k.2.3.r.1.KR.1b.VOCABULARY",
+        },
+    ),
+    "REFERENCE_DATA_DEPENDENT_EDGE": (
+        "The valid edge requires an active receiver-specific MFDS product or substance record, so it must run with a separately versioned regulatory dictionary fixture.",
+        {
+            "MFDS.D.10.8.r.1.KR.1a.REQUIRED", "MFDS.D.10.8.r.1.KR.1b.REQUIRED",
+            "MFDS.D.8.r.1.KR.1a.REQUIRED", "MFDS.D.8.r.1.KR.1b.REQUIRED",
+            "MFDS.G.k.2.1.KR.1a.REQUIRED", "MFDS.G.k.2.1.KR.1b.REQUIRED",
+            "MFDS.G.k.2.3.r.1.KR.1a.REQUIRED", "MFDS.G.k.2.3.r.1.KR.1b.REQUIRED",
+        },
+    ),
+    "INPUT_CONTRACT_OR_PERSISTENCE_GUARD": (
+        "The invalid state is rejected or normalized before persistence, so it cannot be a persisted business-validator edge with readback and audit evidence.",
+        {
+            "ICH.D.10.5.INTEGER", "ICH.D.4.INTEGER", "ICH.D.6.NULLFLAVOR.ALLOWED",
+            "ICH.E.i.3.2.NI.ONLY", "ICH.F.r.2.1.REQUIRED",
+            "ICH.F.r.2.2b.REQUIRED", "ICH.F.r.2.REQUIRED",
+            "ICH.G.k.1.REQUIRED", "ICH.G.k.2.2.REQUIRED",
+            "MFDS.F.r.1.NULLFLAVOR.VOCABULARY",
+        },
+    ),
+    "SERVER_MANAGED_OR_DEFERRED_SINGLETON": (
+        "The API creates, defaults, or deliberately defers this singleton field, so the missing state cannot be retained by a one-field editor save.",
+        {"ICH.C.1.1.REQUIRED", "ICH.C.1.2.REQUIRED", "ICH.D.1.REQUIRED", "ICH.H.1.REQUIRED"},
+    ),
+    "COLLECTION_TOPOLOGY_NOT_FIELD_MUTATION": (
+        "The violation is absence or presence of an entire repeating row/section rather than a mutation of one existing field, which is outside this fuzzer's one-field contract.",
+        {
+            "FDA.W0001", "FDA.W0002", "FDA.W0010",
+            "ICH.D.1.1.4.REQUIRED", "MFDS.C.5.1.r.1.NULLFLAVOR.FORBIDDEN",
+            "MFDS.C.5.1.r.1.RECEIVER.REQUIRED", "MFDS.D.1.1.4.REQUIRED",
+        },
+    ),
+    "SPECIALIZED_DEVICE_SUBRESOURCE": (
+        "The predicate depends on FDA device rows/codes loaded through the dedicated device child model, not a Case editor field owned by this fuzzer.",
+        {
+            "FDA.D.1.R0027", "FDA.G.K.12.R.3.REQUIRED", "FDA.G.K.12.REQUIRED",
+            "FDA.G.k.12.r.4-6.AT_LEAST_ONE", "FDA.R0072", "FDA.W0007",
+        },
+    ),
+    "COEMITTED_MIRROR_WARNING": (
+        "This warning is emitted by the same predicate as the covered blocking route rule FDA.R0069; a second identical mutation would add no independent edge.",
+        {"FDA.W0005"},
+    ),
+}
+
+
+def rule_dispositions(root: Path = ROOT) -> dict[str, dict[str, str]]:
+    dispositions: dict[str, dict[str, str]] = {}
+    for category, (reason, codes) in DISPOSITION_GROUPS.items():
+        for code in codes:
+            section = code.split(".", 2)[1].lower()
+            if section not in "cdefghn":
+                section = "g" if code.startswith("FDA.G") else "d"
+            evidence = root / f"crates/libs/validator/src/case/sections/{section}.rs"
+            for name in "cdefghn":
+                candidate = root / f"crates/libs/validator/src/case/sections/{name}.rs"
+                if code in candidate.read_text().split("\n#[cfg(test)]", 1)[0]:
+                    evidence = candidate
+                    break
+            dispositions[code] = {
+                "category": category,
+                "reason": reason,
+                "evidence": str(evidence),
+            }
+    return dispositions
+
 
 @dataclass(frozen=True)
 class Scenario:
@@ -83,6 +169,11 @@ class Scenario:
     invalid_value: Any
     valid_value: Any
     fixture_values: tuple[tuple[str, Any], ...] = ()
+    ci_values: tuple[tuple[str, Any], ...] = ()
+    header_values: tuple[tuple[str, Any], ...] = ()
+    study_values: tuple[tuple[str, Any], ...] = ()
+    readback_values: tuple[Any, Any] | None = None
+    reaction_values: tuple[tuple[str, Any], ...] = ()
 
 
 @dataclass
@@ -100,7 +191,8 @@ def discover_business_rule_codes(root: Path = ROOT) -> set[str]:
     section_root = root / "crates/libs/validator/src/case/sections"
     for name in "cdefghn":
         path = section_root / f"{name}.rs"
-        codes.update(RULE_RE.findall(path.read_text()))
+        production_source = path.read_text().split("\n#[cfg(test)]", 1)[0]
+        codes.update(RULE_RE.findall(production_source))
     codes.update(GENERATED_BUSINESS_RULE_CODES)
     return {
         code
@@ -635,6 +727,96 @@ def scenario_catalog(seed: int) -> list[Scenario]:
         Scenario(159, "mfds-relatedness-source-required", "mfds", "DG", "drug", "drugReactionAssessments[].sourceOfAssessment", "drugReactionAssessments[].sourceOfAssessment", "MFDS.G.k.9.i.2.r.1.REQUIRED", None, "Sponsor", (("drugReactionAssessments[].methodOfAssessmentKr1", "1"),)),
         Scenario(160, "mfds-relatedness-method-required", "mfds", "DG", "drug", "drugReactionAssessments[].methodOfAssessmentKr1", "drugReactionAssessments[].methodOfAssessmentKr1", "MFDS.G.k.9.i.2.r.2.KR.1.REQUIRED", None, "1", (("drugReactionAssessments[].sourceOfAssessment", "Sponsor"),)),
         Scenario(161, "mfds-relatedness-krct-result-required", "mfds", "DG", "drug", "drugReactionAssessments[].resultOfAssessmentKr2", "drugReactionAssessments[].resultOfAssessmentKr2", "MFDS.G.k.9.i.2.r.3.KR.2.REQUIRED", None, "1", (("drugReactionAssessments[].sourceOfAssessment", "Sponsor"), ("drugReactionAssessments[].methodOfAssessmentKr1", "2"))),
+        Scenario(162, "n-batch-number-required", "ich", "N", "messageHeaders", "batchNumber", "batch_number", "ICH.N.1.2.REQUIRED", "", "BATCH-VALID"),
+        Scenario(163, "n-batch-sender-required", "ich", "N", "messageHeaders", "batchSenderIdentifier", "batch_sender_identifier", "ICH.N.1.3.REQUIRED", None, "SENDER"),
+        Scenario(164, "n-batch-receiver-required", "ich", "N", "messageHeaders", "batchReceiverIdentifier", "batch_receiver_identifier", "ICH.N.1.4.REQUIRED", None, "RECEIVER"),
+        Scenario(165, "n-batch-transmission-required", "ich", "N", "messageHeaders", "batchTransmissionDate", "batch_transmission_date", "ICH.N.1.5.REQUIRED", None, [year, 65, 0, 0, 0, 0, 0, 0, 0]),
+        Scenario(166, "n-batch-transmission-future", "ich", "N", "messageHeaders", "batchTransmissionDate", "batch_transmission_date", "ICH.N.1.5.FUTURE_DATE.FORBIDDEN", [2999, 1, 0, 0, 0, 0, 0, 0, 0], [year, 65, 0, 0, 0, 0, 0, 0, 0]),
+        Scenario(167, "n-message-sender-required", "ich", "N", "messageHeaders", "messageSenderIdentifier", "message_sender_identifier", "ICH.N.2.r.2.REQUIRED", "", "SENDER"),
+        Scenario(168, "n-message-receiver-required", "ich", "N", "messageHeaders", "messageReceiverIdentifier", "message_receiver_identifier", "ICH.N.2.r.3.REQUIRED", "", "RECEIVER"),
+        Scenario(169, "fda-postmarket-batch-route", "fda", "N", "messageHeaders", "batchReceiverIdentifier", "batch_receiver_identifier", "FDA.R0004", "WRONG", "ZZFDA", (("message_receiver_identifier", "CDER"),)),
+        Scenario(170, "fda-premarket-batch-route", "fda", "N", "messageHeaders", "batchReceiverIdentifier", "batch_receiver_identifier", "FDA.R0005", "WRONG", "ZZFDA_PREMKT", (("message_receiver_identifier", "CDER_IND"),)),
+        Scenario(171, "fda-postmarket-message-route", "fda", "N", "messageHeaders", "messageReceiverIdentifier", "message_receiver_identifier", "FDA.R0006", "CBER", "CDER", (("batch_receiver_identifier", "ZZFDA"),)),
+        Scenario(172, "fda-premarket-message-route", "fda", "N", "messageHeaders", "messageReceiverIdentifier", "message_receiver_identifier", "FDA.R0007", "CDER", "CDER_IND", (("batch_receiver_identifier", "ZZFDA_PREMKT"),)),
+        Scenario(173, "fda-sender-route-pair", "fda", "N", "messageHeaders", "messageSenderIdentifier", "message_sender_identifier", "FDA.R0100", "OTHER", "SENDER", (("batch_sender_identifier", "SENDER"),)),
+        Scenario(174, "fda-vaers-route-pair", "fda", "N", "messageHeaders", "batchReceiverIdentifier", "batch_receiver_identifier", "FDA.VAERS.N.ROUTE.PAIR", "CBER VAERS", "CBER_VAERS", (("message_receiver_identifier", "CBER_VAERS"),)),
+        Scenario(175, "mfds-batch-receiver-route", "mfds", "N", "messageHeaders", "batchReceiverIdentifier", "batch_receiver_identifier", "MFDS.N.1.4.ROUTE", "WRONG", "MFDS-O-KR", (("message_receiver_identifier", "MFDS-O-KR"),)),
+        Scenario(176, "mfds-message-receiver-route", "mfds", "N", "messageHeaders", "messageReceiverIdentifier", "message_receiver_identifier", "MFDS.N.2.r.3.ROUTE", "WRONG", "MFDS-O-KR", (("batch_receiver_identifier", "MFDS-O-KR"),)),
+        Scenario(177, "mfds-receiver-route-pair", "mfds", "N", "messageHeaders", "messageReceiverIdentifier", "message_receiver_identifier", "MFDS.N.ROUTE.PAIR", "MFDS-O-FR", "MFDS-O-KR", (("batch_receiver_identifier", "MFDS-O-KR"),)),
+        Scenario(178, "c2-reporter-country-vocabulary", "ich", "RP", "primarySources", "reporterCountry", "reporterCountry", "ICH.C.2.r.3.VOCABULARY", "ZZ", "KR"),
+        Scenario(179, "c3-sender-country-vocabulary", "ich", "SD", "senderInformation", "countryCode", "countryCode", "ICH.C.3.4.5.VOCABULARY", "ZZ", "KR"),
+        Scenario(180, "e-reaction-language-vocabulary", "ich", "AE", "reaction", "reactionLanguage", "reaction_language", "ICH.E.i.1.1b.VOCABULARY", "zzz", "eng"),
+        Scenario(181, "h-summary-language-vocabulary", "ich", "NR", "caseSummaryInformation", "languageCode", "language_code", "ICH.H.5.r.1b.VOCABULARY", "zzz", "eng"),
+        Scenario(182, "fda-initial-expedited-ni-forbidden", "fda", "CI", "safetyReportIdentification", "fulfilExpeditedCriteriaNullFlavor", "fulfilExpeditedCriteriaNullFlavor", "FDA.R0011", "NI", None, header_values=(("batch_receiver_identifier", "ZZFDA"), ("message_receiver_identifier", "CDER"))),
+        Scenario(183, "fda-initial-nullification-forbidden", "fda", "CI", "safetyReportIdentification", "nullificationAmendmentCode", "nullificationAmendmentCode", "FDA.R0101", "2", None, (("nullificationReason", "Business fuzz amendment"),), header_values=(("batch_receiver_identifier", "ZZFDA"), ("message_receiver_identifier", "CDER"))),
+        Scenario(184, "fda-postmarket-combination-expedited-route", "fda", "CI", "safetyReportIdentification", "localCriteriaReportType", "localCriteriaReportType", "FDA.R0012", "2", "1", (("combinationProductReportIndicator", "true"), ("fulfilExpeditedCriteria", True)), header_values=(("batch_receiver_identifier", "ZZFDA"), ("message_receiver_identifier", "CDER"))),
+        Scenario(185, "fda-postmarket-combination-nonexpedited-route", "fda", "CI", "safetyReportIdentification", "localCriteriaReportType", "localCriteriaReportType", "FDA.R0013", "1", "2", (("combinationProductReportIndicator", "true"), ("fulfilExpeditedCriteria", False)), header_values=(("batch_receiver_identifier", "ZZFDA"), ("message_receiver_identifier", "CDER"))),
+        Scenario(186, "fda-postmarket-expedited-route", "fda", "CI", "safetyReportIdentification", "localCriteriaReportType", "localCriteriaReportType", "FDA.R0014", "2", "1", (("combinationProductReportIndicator", "false"), ("fulfilExpeditedCriteria", True)), header_values=(("batch_receiver_identifier", "ZZFDA"), ("message_receiver_identifier", "CDER"))),
+        Scenario(187, "fda-postmarket-nonexpedited-route", "fda", "CI", "safetyReportIdentification", "localCriteriaReportType", "localCriteriaReportType", "FDA.R0015", "1", "2", (("combinationProductReportIndicator", "false"), ("fulfilExpeditedCriteria", False)), header_values=(("batch_receiver_identifier", "ZZFDA"), ("message_receiver_identifier", "CDER"))),
+        Scenario(188, "fda-premarket-expedited-route", "fda", "CI", "safetyReportIdentification", "localCriteriaReportType", "localCriteriaReportType", "FDA.R0016", "2", "1", (("reportType", "1"), ("combinationProductReportIndicator", "false"), ("fulfilExpeditedCriteria", True)), header_values=(("batch_receiver_identifier", "ZZFDA_PREMKT"), ("message_receiver_identifier", "CDER_IND"))),
+        Scenario(189, "fda-premarket-study-type-required", "fda", "SI", "studyInformation", "studyTypeReaction", "studyTypeReaction", "FDA.R0102", None, "1", ci_values=(("reportType", "2"),), header_values=(("batch_receiver_identifier", "ZZFDA_PREMKT"), ("message_receiver_identifier", "CDER_IND"))),
+        Scenario(190, "fda-postmarket-study-type-required", "fda", "SI", "studyInformation", "studyTypeReaction", "studyTypeReaction", "FDA.R0104", None, "1", ci_values=(("reportType", "2"),), header_values=(("batch_receiver_identifier", "ZZFDA"), ("message_receiver_identifier", "CDER"))),
+        Scenario(191, "fda-postmarket-spontaneous-study-type-forbidden", "fda", "SI", "studyInformation", "studyTypeReaction", "studyTypeReaction", "FDA.R0103", "1", None, ci_values=(("reportType", "1"),), header_values=(("batch_receiver_identifier", "ZZFDA"), ("message_receiver_identifier", "CDER"))),
+        Scenario(192, "fda-premarket-spontaneous-study-type-forbidden", "fda", "SI", "studyInformation", "studyTypeReaction", "studyTypeReaction", "FDA.R0113", "1", None, ci_values=(("reportType", "1"),), header_values=(("batch_receiver_identifier", "ZZFDA_PREMKT"), ("message_receiver_identifier", "CDER_IND"))),
+        Scenario(193, "fda-ind-number-required", "fda", "SI", "studyInformation", "fdaIndNumberOccurred", "fdaIndNumberOccurred", "FDA.R0024", None, "123456", ci_values=(("reportType", "1"),), header_values=(("batch_receiver_identifier", "ZZFDA_PREMKT"), ("message_receiver_identifier", "CDER_IND"))),
+        Scenario(194, "fda-ind-number-format", "fda", "SI", "studyInformation", "fdaIndNumberOccurred", "fdaIndNumberOccurred", "FDA.R0024.FORMAT", "ABC", "123456", ci_values=(("reportType", "1"),), header_values=(("batch_receiver_identifier", "ZZFDA_PREMKT"), ("message_receiver_identifier", "CDER_IND"))),
+        Scenario(195, "fda-postmarket-ind-number-forbidden", "fda", "SI", "studyInformation", "fdaIndNumberOccurred", "fdaIndNumberOccurred", "FDA.R0107", "123456", None, ci_values=(("reportType", "1"),), header_values=(("batch_receiver_identifier", "ZZFDA"), ("message_receiver_identifier", "CDER"))),
+        Scenario(196, "fda-preanda-number-required", "fda", "SI", "studyInformation", "fdaPreAndaNumberOccurred", "fdaPreAndaNumberOccurred", "FDA.R0025", None, "123456", (("studyTypeReaction", "1"),), (("reportType", "2"),), (("batch_receiver_identifier", "ZZFDA_PREMKT"), ("message_receiver_identifier", "CDER_IND_EXEMPT_BA_BE"))),
+        Scenario(197, "fda-preanda-number-format", "fda", "SI", "studyInformation", "fdaPreAndaNumberOccurred", "fdaPreAndaNumberOccurred", "FDA.R0025.FORMAT", "ABC", "123456", (("studyTypeReaction", "1"),), (("reportType", "2"),), (("batch_receiver_identifier", "ZZFDA_PREMKT"), ("message_receiver_identifier", "CDER_IND_EXEMPT_BA_BE"))),
+        Scenario(198, "fda-postmarket-preanda-number-forbidden", "fda", "SI", "studyInformation", "fdaPreAndaNumberOccurred", "fdaPreAndaNumberOccurred", "FDA.R0108", "123456", None, ci_values=(("reportType", "1"),), header_values=(("batch_receiver_identifier", "ZZFDA"), ("message_receiver_identifier", "CDER"))),
+        Scenario(199, "fda-cross-reported-ind-required", "fda", "SI", "studyInformation", "fdaCrossReportedIndNumbers[].indNumber", "fdaCrossReportedIndNumbers[].indNumber", "FDA.R0026", "", "123456", (("fdaIndNumberOccurred", "123456"),), (("reportType", "1"),), (("batch_receiver_identifier", "ZZFDA_PREMKT"), ("message_receiver_identifier", "CDER_IND")), readback_values=(None, "123456")),
+        Scenario(200, "fda-ind-report-type-route", "fda", "CI", "safetyReportIdentification", "reportType", "reportType", "FDA.R0110", "2", "1", header_values=(("batch_receiver_identifier", "ZZFDA_PREMKT"), ("message_receiver_identifier", "CDER_IND")), study_values=(("fdaIndNumberOccurred", "123456"),)),
+        Scenario(201, "fda-ind-study-report-type-route", "fda", "CI", "safetyReportIdentification", "reportType", "reportType", "FDA.R0008", "1", "2", header_values=(("batch_receiver_identifier", "ZZFDA_PREMKT"), ("message_receiver_identifier", "CDER_IND")), study_values=(("fdaIndNumberOccurred", "123456"), ("studyTypeReaction", "1"))),
+        Scenario(202, "fda-preanda-report-type-route", "fda", "CI", "safetyReportIdentification", "reportType", "reportType", "FDA.R0111", "1", "2", header_values=(("batch_receiver_identifier", "ZZFDA_PREMKT"), ("message_receiver_identifier", "CDER_IND_EXEMPT_BA_BE")), study_values=(("fdaPreAndaNumberOccurred", "123456"), ("studyTypeReaction", "1"))),
+        Scenario(203, "fda-ind-report-type-forbidden", "fda", "CI", "safetyReportIdentification", "reportType", "reportType", "FDA.R0112", "3", "1", header_values=(("batch_receiver_identifier", "ZZFDA_PREMKT"), ("message_receiver_identifier", "CDER_IND"))),
+        Scenario(204, "fda-postmarket-cross-report-forbidden", "fda", "N", "messageHeaders", "batchReceiverIdentifier", "batch_receiver_identifier", "FDA.R0109", "ZZFDA", "ZZFDA_PREMKT", (("message_receiver_identifier", "CDER"),), study_values=(("fdaCrossReportedIndNumbers[].indNumber", "123456"),)),
+        Scenario(205, "fda-cder-drug-role-route", "fda", "DG", "drug", "drugCharacterization", "drugCharacterization", "FDA.R0069", "2", "1", header_values=(("batch_receiver_identifier", "ZZFDA"), ("message_receiver_identifier", "CDER"))),
+        Scenario(206, "fda-ind-drug-role-route", "fda", "DG", "drug", "drugCharacterization", "drugCharacterization", "FDA.R0070", "4", "1", ci_values=(("reportType", "2"),), header_values=(("batch_receiver_identifier", "ZZFDA_PREMKT"), ("message_receiver_identifier", "CDER_IND"))),
+        Scenario(207, "fda-preanda-drug-role-route", "fda", "DG", "drug", "drugCharacterization", "drugCharacterization", "FDA.R0071", "2", "1", ci_values=(("reportType", "2"),), header_values=(("batch_receiver_identifier", "ZZFDA_PREMKT"), ("message_receiver_identifier", "CDER_IND_EXEMPT_BA_BE"))),
+        Scenario(208, "fda-postmarket-drug-role-route", "fda", "DG", "drug", "drugCharacterization", "drugCharacterization", "FDA.G.k.1.ROUTE", "4", "1", header_values=(("batch_receiver_identifier", "ZZFDA"), ("message_receiver_identifier", "CBER"))),
+        Scenario(209, "mfds-ct-report-type-route", "mfds", "CI", "safetyReportIdentification", "reportType", "reportType", "MFDS.C.1.3.RECEIVER", "1", "2", header_values=(("batch_receiver_identifier", "MFDS-O-CT"), ("message_receiver_identifier", "MFDS-O-CT"))),
+        Scenario(210, "mfds-ct-expedited-route", "mfds", "CI", "safetyReportIdentification", "fulfilExpeditedCriteria", "fulfilExpeditedCriteria", "MFDS.C.1.7.RECEIVER", False, True, header_values=(("batch_receiver_identifier", "MFDS-O-CT"), ("message_receiver_identifier", "MFDS-O-CT"))),
+        Scenario(211, "mfds-r2-retransmission-provenance", "mfds", "CI", "safetyReportIdentification", "fulfilExpeditedCriteriaNullFlavor", "fulfilExpeditedCriteriaNullFlavor", "MFDS.C.1.7.NULLFLAVOR.R2.RETRANSMISSION.REQUIRED", "NI", None, header_values=(("batch_receiver_identifier", "MFDS-O-KR"), ("message_receiver_identifier", "MFDS-O-KR"))),
+        Scenario(212, "mfds-ct-primary-identity-required", "mfds", "RP", "primarySources", "reporterGivenName", "reporterGivenName", "MFDS.C.2.RECEIVER.REQUIRED", None, "Business", header_values=(("batch_receiver_identifier", "MFDS-O-CT"), ("message_receiver_identifier", "MFDS-O-CT"))),
+        Scenario(213, "mfds-ct-primary-address-required", "mfds", "RP", "primarySources", "reporterStreet", "reporterStreet", "MFDS.C.2.r.2.3-5.RECEIVER.REQUIRED", None, "1 Test Street", header_values=(("batch_receiver_identifier", "MFDS-O-CT"), ("message_receiver_identifier", "MFDS-O-CT"))),
+        Scenario(214, "mfds-ct-sender-name-required", "mfds", "SD", "senderInformation", "personGivenName", "personGivenName", "MFDS.C.3.3.3.RECEIVER.REQUIRED", None, "Business", header_values=(("batch_receiver_identifier", "MFDS-O-CT"), ("message_receiver_identifier", "MFDS-O-CT"))),
+        Scenario(215, "mfds-ct-study-name-required", "mfds", "SI", "studyInformation", "studyName", "study_name", "MFDS.C.5.RECEIVER.REQUIRED", None, "Business Study", ci_values=(("reportType", "2"),), header_values=(("batch_receiver_identifier", "MFDS-O-CT"), ("message_receiver_identifier", "MFDS-O-CT"))),
+        Scenario(216, "mfds-ct-study-type-route", "mfds", "SI", "studyInformation", "studyTypeReaction", "study_type_reaction", "MFDS.C.5.4.RECEIVER", "2", "1", ci_values=(("reportType", "2"),), header_values=(("batch_receiver_identifier", "MFDS-O-CT"), ("message_receiver_identifier", "MFDS-O-CT"))),
+        Scenario(217, "mfds-reporter-qualification-kind-required", "mfds", "RP", "primarySources", "qualificationKr1", "qualificationKr1", "MFDS.C.2.r.4.KR.1.REQUIRED", None, "1", (("qualification", "3"),), header_values=(("batch_receiver_identifier", "MFDS-O-KR"), ("message_receiver_identifier", "MFDS-O-KR"))),
+        Scenario(218, "mfds-sender-health-professional-kind-required", "mfds", "SD", "senderInformation", "healthProfessionalTypeKr1", "healthProfessionalTypeKr1", "MFDS.C.3.1.KR.1.REQUIRED", None, "1", (("senderType", "3"),), header_values=(("batch_receiver_identifier", "MFDS-O-KR"), ("message_receiver_identifier", "MFDS-O-KR"))),
+        Scenario(219, "mfds-study-type-kind-required", "mfds", "SI", "studyInformation", "studyTypeReactionKr1", "study_type_reaction_kr1", "MFDS.C.5.4.KR.1.REQUIRED", None, "1", (("studyTypeReaction", "3"),), header_values=(("batch_receiver_identifier", "MFDS-O-KR"), ("message_receiver_identifier", "MFDS-O-KR"))),
+        Scenario(220, "mfds-ct-patient-age-required", "mfds", "DM", "patientInformation", "patientAge.value", "age_at_time_of_onset", "MFDS.D.2.2a.REQUIRED", None, 36.5, header_values=(("batch_receiver_identifier", "MFDS-O-CT"), ("message_receiver_identifier", "MFDS-O-CT"))),
+        Scenario(221, "mfds-ct-patient-age-unit-required", "mfds", "DM", "patientInformation", "patientAge.unit", "age_unit", "MFDS.D.2.2b.REQUIRED", None, "a", header_values=(("batch_receiver_identifier", "MFDS-O-CT"), ("message_receiver_identifier", "MFDS-O-CT"))),
+        Scenario(222, "mfds-ct-patient-sex-required", "mfds", "DM", "patientInformation", "patientSex", "sex", "MFDS.D.5.REQUIRED", None, "2", header_values=(("batch_receiver_identifier", "MFDS-O-CT"), ("message_receiver_identifier", "MFDS-O-CT"))),
+        Scenario(223, "mfds-ct-reaction-start-required", "mfds", "AE", "reaction", "reactionStartDate", "start_date", "MFDS.E.i.4.REQUIRED", None, f"{year}0303", header_values=(("batch_receiver_identifier", "MFDS-O-CT"), ("message_receiver_identifier", "MFDS-O-CT"))),
+        Scenario(224, "mfds-ct-reaction-end-required", "mfds", "AE", "reaction", "reactionEndDate", "end_date", "MFDS.E.i.5.REQUIRED", None, f"{year}0304", header_values=(("batch_receiver_identifier", "MFDS-O-CT"), ("message_receiver_identifier", "MFDS-O-CT"))),
+        Scenario(225, "mfds-korean-sender-comments", "mfds", "NR", "narrative", "senderComments", "sender_comments", "MFDS.H.4.KOREAN.REQUIRED", "English only", "한국어 의견", header_values=(("batch_receiver_identifier", "MFDS-O-KR"), ("message_receiver_identifier", "MFDS-O-KR"))),
+        Scenario(226, "e-reaction-country-vocabulary", "ich", "AE", "reaction", "reactionCountry", "country_code", "ICH.E.i.9.VOCABULARY", "ZZ", "KR"),
+        Scenario(227, "g-obtain-country-vocabulary", "ich", "DG", "drug", "obtainDrugCountry", "obtain_drug_country", "ICH.G.k.2.4.VOCABULARY", "ZZ", "KR"),
+        Scenario(228, "g-authorization-country-vocabulary", "ich", "DG", "drug", "drugAuthorizationCountry", "manufacturer_country", "ICH.G.k.3.2.VOCABULARY", "ZZ", "KR"),
+        Scenario(229, "f-test-unit-vocabulary", "ich", "LB", "testResult", "testUnit", "test_result_unit", "ICH.F.r.3.3.VOCABULARY", "not-a-unit", "mg/dL"),
+        Scenario(230, "c5-registration-country-vocabulary", "ich", "SI", "studyRegistrationNumbers", "countryCode", "country_code", "ICH.C.5.1.r.2.VOCABULARY", "ZZ", "KR"),
+        Scenario(231, "c1-other-identifier-source-required", "ich", "CI", "otherCaseIdentifiers", "source", "source", "ICH.C.1.9.1.r.1.REQUIRED", "", "CI source", (("caseIdentifier", "KR-ORG-001"),)),
+        Scenario(232, "c1-other-identifier-required", "ich", "CI", "otherCaseIdentifiers", "caseIdentifier", "caseIdentifier", "ICH.C.1.9.1.r.2.REQUIRED", "", "KR-ORG-001", (("source", "CI source"),)),
+        Scenario(233, "c1-other-identifier-profile", "ich", "CI", "otherCaseIdentifiers", "caseIdentifier", "caseIdentifier", "ICH.C.1.9.1.r.2.PROFILE", "bad", "KR-ORG-001", (("source", "CI source"),)),
+        Scenario(234, "fda-vaers-primary-contact-required", "fda", "RP", "primarySources", "reporterGivenName", "reporterGivenName", "FDA.C.2.PRIMARY.REQUIRED", None, "Business", (("reporterFamilyName", "Reporter"), ("reporterStreet", "1 Test Street"), ("reporterCity", "Seoul"), ("reporterState", "Seoul"), ("reporterPostcode", "04524"), ("reporterTelephone", "+82-2-1234-5678")), header_values=(("batch_receiver_identifier", "CBER_VAERS"), ("message_receiver_identifier", "CBER_VAERS"))),
+        Scenario(235, "fda-vaers-primary-msk-forbidden", "fda", "RP", "primarySources", "reporterGivenNameNullFlavor", "reporterGivenNameNullFlavor", "FDA.C.2.PRIMARY.MSK.FORBIDDEN", "MSK", None, (("reporterCountry", "US"),), header_values=(("batch_receiver_identifier", "CBER_VAERS"), ("message_receiver_identifier", "CBER_VAERS"))),
+        Scenario(236, "fda-vaers-primary-email-required", "fda", "RP", "primarySources", "reporterEmail", "reporterEmail", "FDA.C.2.r.2.8.REQUIRED", None, "reporter@example.com", header_values=(("batch_receiver_identifier", "CBER_VAERS"), ("message_receiver_identifier", "CBER_VAERS"))),
+        Scenario(237, "fda-vaers-primary-email-msk-forbidden", "fda", "RP", "primarySources", "reporterEmailNullFlavor", "reporterEmailNullFlavor", "FDA.C.2.r.2.8.MSK.FORBIDDEN", "MSK", None, (("reporterCountry", "US"),), header_values=(("batch_receiver_identifier", "CBER_VAERS"), ("message_receiver_identifier", "CBER_VAERS"))),
+        Scenario(238, "fda-vaers-race-required", "fda", "DM", "patientInformation", "raceCodeNullFlavor", "raceCodeNullFlavor", "FDA.D.11.REQUIRED", None, "UNK", header_values=(("batch_receiver_identifier", "CBER_VAERS"), ("message_receiver_identifier", "CBER_VAERS"))),
+        Scenario(239, "fda-vaers-race-nullflavor-route", "fda", "DM", "patientInformation", "raceCodeNullFlavor", "raceCodeNullFlavor", "FDA.D.11.NULLFLAVOR.ROUTE", "NA", "UNK", header_values=(("batch_receiver_identifier", "CBER_VAERS"), ("message_receiver_identifier", "CBER_VAERS"))),
+        Scenario(240, "fda-vaers-ethnicity-nullflavor-route", "fda", "DM", "patientInformation", "ethnicityCodeNullFlavor", "ethnicityCodeNullFlavor", "FDA.D.12.NULLFLAVOR.ROUTE", "NA", "UNK", header_values=(("batch_receiver_identifier", "CBER_VAERS"), ("message_receiver_identifier", "CBER_VAERS"))),
+        Scenario(241, "fda-vaers-patient-age-required", "fda", "DM", "patientInformation", "patientAge.value", "age_at_time_of_onset", "FDA.D.2.REQUIRED", None, 36.5, header_values=(("batch_receiver_identifier", "CBER_VAERS"), ("message_receiver_identifier", "CBER_VAERS"))),
+        Scenario(242, "fda-premarket-required-intervention-ni", "fda", "AE", "reaction", "requiredInterventionNullFlavor", "required_intervention_null_flavor", "FDA.E.i.3.2h.PREMARKET.NI.REQUIRED", None, "NI", header_values=(("batch_receiver_identifier", "ZZFDA_PREMKT"), ("message_receiver_identifier", "CDER_IND"))),
+        Scenario(243, "fda-vaers-reaction-timing-required", "fda", "AE", "reaction", "reactionStartDate", "start_date", "FDA.E.i.4-6.REQUIRED", None, f"{year}0303", (("reactionEndDate", None), ("reactionDuration.value", None)), header_values=(("batch_receiver_identifier", "CBER_VAERS"), ("message_receiver_identifier", "CBER_VAERS"))),
+        Scenario(244, "fda-ind-relatedness-source-required", "fda", "DG", "drug", "drugReactionAssessments[].sourceOfAssessment", "drugReactionAssessments[].sourceOfAssessment", "FDA.G.k.9.i.2.r.1.REQUIRED", None, "Sponsor", (("drugReactionAssessments[].methodOfAssessment", "FDA"), ("drugReactionAssessments[].resultOfAssessment", "Suspected")), (("reportType", "2"),), (("batch_receiver_identifier", "ZZFDA_PREMKT"), ("message_receiver_identifier", "CDER_IND")), (("fdaIndNumberOccurred", "123456"),)),
+        Scenario(245, "fda-ind-relatedness-method-required", "fda", "DG", "drug", "drugReactionAssessments[].methodOfAssessment", "drugReactionAssessments[].methodOfAssessment", "FDA.G.k.9.i.2.r.2.REQUIRED", None, "FDA", (("drugReactionAssessments[].sourceOfAssessment", "Sponsor"), ("drugReactionAssessments[].resultOfAssessment", "Suspected")), (("reportType", "2"),), (("batch_receiver_identifier", "ZZFDA_PREMKT"), ("message_receiver_identifier", "CDER_IND")), (("fdaIndNumberOccurred", "123456"),)),
+        Scenario(246, "fda-ind-relatedness-result-required", "fda", "DG", "drug", "drugReactionAssessments[].resultOfAssessment", "drugReactionAssessments[].resultOfAssessment", "FDA.G.k.9.i.2.r.3.REQUIRED", None, "Suspected", (("drugReactionAssessments[].sourceOfAssessment", "Sponsor"), ("drugReactionAssessments[].methodOfAssessment", "FDA")), (("reportType", "2"),), (("batch_receiver_identifier", "ZZFDA_PREMKT"), ("message_receiver_identifier", "CDER_IND")), (("fdaIndNumberOccurred", "123456"),)),
+        Scenario(247, "mfds-ct-qualification-nullflavor-forbidden", "mfds", "RP", "primarySources", "qualificationNullFlavor", "qualificationNullFlavor", "MFDS.C.2.r.4.NULLFLAVOR.FORBIDDEN.CT_CU", "UNK", None, (("qualification", None),), header_values=(("batch_receiver_identifier", "MFDS-O-CT"), ("message_receiver_identifier", "MFDS-O-CT"))),
+        Scenario(248, "mfds-ct-action-taken-required", "mfds", "DG", "drug", "drugActionTaken", "action_taken", "MFDS.G.k.8.REQUIRED", None, "1", header_values=(("batch_receiver_identifier", "MFDS-O-CT"), ("message_receiver_identifier", "MFDS-O-CT"))),
+        Scenario(249, "mfds-who-umc-result-required", "mfds", "DG", "drug", "drugReactionAssessments[].resultOfAssessmentKr1", "drugReactionAssessments[].resultOfAssessmentKr1", "MFDS.G.k.9.i.2.r.3.KR.1.REQUIRED", None, "1", (("drugReactionAssessments[].sourceOfAssessment", "Sponsor"), ("drugReactionAssessments[].methodOfAssessmentKr1", "1")), header_values=(("batch_receiver_identifier", "MFDS-O-KR"), ("message_receiver_identifier", "MFDS-O-KR"))),
+        Scenario(250, "fda-premarket-death-date-required", "fda", "DM", "deathInfo", "dateOfDeath", "date_of_death", "FDA.D.9.1.REQUIRED", None, f"{year}0303", ci_values=(("reportType", "2"),), header_values=(("batch_receiver_identifier", "ZZFDA_PREMKT"), ("message_receiver_identifier", "CDER_IND")), reaction_values=(("seriousness.criteriaResultsInDeath", True),)),
+        Scenario(251, "fda-preanda-additional-info-recommended", "fda", "DG", "drug", "fdaAdditionalInfoCoded", "fda_additional_info_coded", "FDA.W0006", None, "1", ci_values=(("reportType", "2"),), header_values=(("batch_receiver_identifier", "ZZFDA_PREMKT"), ("message_receiver_identifier", "CDER_IND_EXEMPT_BA_BE")), study_values=(("fdaPreAndaNumberOccurred", "123456"), ("studyTypeReaction", "1"))),
     ]
 
 
@@ -682,6 +864,7 @@ def parser() -> argparse.ArgumentParser:
 def main(args: argparse.Namespace) -> int:
     guard_target(args.base_url, args.allow_remote)
     scenarios = scenario_catalog(args.seed)
+    catalog_covered = {scenario.expected_code for scenario in scenarios}
     if args.scenario:
         requested = set(args.scenario)
         unknown = requested - {scenario.scenario_id for scenario in scenarios}
@@ -690,13 +873,22 @@ def main(args: argparse.Namespace) -> int:
         scenarios = [scenario for scenario in scenarios if scenario.scenario_id in requested]
     inventory = discover_business_rule_codes()
     covered = {scenario.expected_code for scenario in scenarios}
+    raw_uncovered = inventory - catalog_covered
+    dispositions = {
+        code: detail
+        for code, detail in rule_dispositions().items()
+        if code in raw_uncovered
+    }
+    unexplained = raw_uncovered - dispositions.keys()
     if args.dry_run:
         print(json.dumps({
             "seed": args.seed,
             "scenarios": len(scenarios),
             "covered_rules": len(covered),
             "inventory_rules": len(inventory),
-            "uncovered_rules": sorted(inventory - covered),
+            "raw_uncovered_rules": sorted(raw_uncovered),
+            "dispositioned_rules": dispositions,
+            "uncovered_rules": sorted(unexplained),
         }, sort_keys=True))
         return 0
     if not args.password:
@@ -780,7 +972,7 @@ def main(args: argparse.Namespace) -> int:
     if status != 200:
         interrupted = interrupted or "login_failed"
 
-    year = scenario_catalog(args.seed)[0].invalid_value[:4]
+    year = int(scenario_catalog(args.seed)[0].invalid_value[:4])
 
     def create_case() -> tuple[int | None, str | None, dict[str, Any]]:
         status, value, summary = request("POST", "/api/cases", {
@@ -803,6 +995,9 @@ def main(args: argparse.Namespace) -> int:
             "dateOfMostRecentInformation": f"{year}0304",
         }
         if fixture_scenario:
+            for path, fixture_value in fixture_scenario.ci_values:
+                set_path(payload, path, fixture_value)
+        if fixture_scenario and fixture_scenario.owner == "safetyReportIdentification":
             for path, fixture_value in fixture_scenario.fixture_values:
                 set_path(payload, path, fixture_value)
         if field:
@@ -994,6 +1189,8 @@ def main(args: argparse.Namespace) -> int:
             "qualification": "1",
             "primarySourceForRegulatoryPurposes": "1",
         }
+        for path, fixture_value in scenario.fixture_values:
+            set_path(payload, path, fixture_value)
         set_path(payload, scenario.field, value)
         return payload
 
@@ -1021,6 +1218,8 @@ def main(args: argparse.Namespace) -> int:
             "fax": "+82-2-1234-5679",
             "email": "sender@example.com",
         }
+        for path, fixture_value in scenario.fixture_values:
+            set_path(payload, path, fixture_value)
         set_path(payload, scenario.field, value)
         return payload
 
@@ -1030,7 +1229,39 @@ def main(args: argparse.Namespace) -> int:
             "sponsorStudyNumber": f"STUDY-{args.seed}",
             "studyTypeReaction": "1",
         }
+        for path, fixture_value in scenario.fixture_values:
+            set_path(payload, path, fixture_value)
         set_path(payload, scenario.field, value)
+        return payload
+
+    def message_header_payload(case_id: str, scenario: Scenario, value: Any) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "case_id": case_id,
+            "batch_sender_identifier": "SENDER",
+            "batch_receiver_identifier": "RECEIVER",
+            "batch_transmission_date": [year, 65, 0, 0, 0, 0, 0, 0, 0],
+            "message_number": f"BUSINESS-FUZZ-{case_id}",
+            "message_sender_identifier": "SENDER",
+            "message_receiver_identifier": "RECEIVER",
+            "message_date": f"{year}0305000000",
+        }
+        if scenario.page == "N":
+            for path, fixture_value in scenario.fixture_values:
+                payload[path] = fixture_value
+        for path, fixture_value in scenario.header_values:
+            payload[path] = fixture_value
+        target = {
+            "batchSenderIdentifier": "batch_sender_identifier",
+            "batchReceiverIdentifier": "batch_receiver_identifier",
+            "batchTransmissionDate": "batch_transmission_date",
+            "messageSenderIdentifier": "message_sender_identifier",
+            "messageReceiverIdentifier": "message_receiver_identifier",
+        }.get(scenario.field)
+        if target:
+            if value is None:
+                payload.pop(target, None)
+            else:
+                payload[target] = value
         return payload
 
     def run_edge(scenario: Scenario, edge: str, value: Any) -> None:
@@ -1043,8 +1274,12 @@ def main(args: argparse.Namespace) -> int:
 
         status, current = page_current(case_id, "CI", "safetyReportIdentification")
         ci_id = object_id(current)
-        ci = ci_payload(scenario.field, value, scenario) if scenario.owner == "safetyReportIdentification" else ci_payload()
-        if scenario.page == "SI" or scenario.scenario_id in {
+        ci = ci_payload(
+            scenario.field if scenario.owner == "safetyReportIdentification" else None,
+            value,
+            scenario,
+        )
+        if (scenario.page == "SI" and not any(path == "reportType" for path, _ in scenario.ci_values)) or scenario.scenario_id in {
             "c2-study-reporter-organization-required",
             "mfds-relatedness-krct-result-required",
         }:
@@ -1057,6 +1292,45 @@ def main(args: argparse.Namespace) -> int:
         if status != 200 or not ci_id:
             add(edge, scenario, "FAIL", status, {**save_summary, "reason": "ci_fixture_failed"})
             return
+
+        if scenario.page != "N" and scenario.header_values:
+            status, _, header_summary = request(
+                "POST",
+                f"/api/cases/{case_id}/message-header",
+                {"data": message_header_payload(case_id, scenario, None)},
+            )
+            if status != 201:
+                add(edge, scenario, "FAIL", status, {**header_summary, "reason": "header_fixture_failed"})
+                return
+
+        if scenario.page != "SI" and scenario.study_values:
+            study = {
+                "studyName": "Business Study",
+                "sponsorStudyNumber": f"STUDY-{args.seed}",
+            }
+            for path, fixture_value in scenario.study_values:
+                set_path(study, path, fixture_value)
+            status, _, study_summary = request(
+                "PATCH",
+                f"/api/cases/{case_id}/editor/pages/SI",
+                {"authorities": [scenario.authority], "rows": {"studyInformation": study}},
+            )
+            if status != 200:
+                add(edge, scenario, "FAIL", status, {**study_summary, "reason": "study_fixture_failed"})
+                return
+
+        if scenario.page != "AE" and scenario.reaction_values:
+            reaction = reaction_payload()
+            for path, fixture_value in scenario.reaction_values:
+                set_path(reaction, path, fixture_value)
+            status, _, reaction_summary = request(
+                "POST",
+                f"/api/cases/{case_id}/editor/pages/AE/rows",
+                {"authorities": [scenario.authority], "rows": {"reaction": reaction}},
+            )
+            if status != 201:
+                add(edge, scenario, "FAIL", status, {**reaction_summary, "reason": "reaction_fixture_failed"})
+                return
 
         if scenario.scenario_id == "reaction-hcp-medical-confirmation-omit":
             status, _, save_summary = request("PATCH", f"/api/cases/{case_id}/editor/pages/RP", {
@@ -1072,7 +1346,27 @@ def main(args: argparse.Namespace) -> int:
                 add(edge, scenario, "FAIL", status, {**save_summary, "reason": "hcp_fixture_failed"})
                 return
 
-        if scenario.page == "CI":
+        if scenario.page == "N":
+            status, created, save_summary = request(
+                "POST",
+                f"/api/cases/{case_id}/message-header",
+                {"data": message_header_payload(case_id, scenario, value)},
+            )
+            owner_id = object_id(created)
+            if status != 201 or not owner_id:
+                add(edge, scenario, "FAIL", status, {**save_summary, "reason": "n_fixture_failed"})
+                return
+            if scenario.field == "batchNumber":
+                status, _, save_summary = request(
+                    "PUT",
+                    f"/api/cases/{case_id}/message-header",
+                    {"data": {"batch_number": value}},
+                )
+                if status != 200:
+                    add(edge, scenario, "FAIL", status, {**save_summary, "reason": "n_update_failed"})
+                    return
+            read_status, current, _ = request("GET", f"/api/cases/{case_id}/message-header")
+        elif scenario.page == "CI":
             if scenario.owner == "safetyReportIdentification":
                 owner_id = ci_id
                 read_status, current = page_current(case_id, "CI", scenario.owner)
@@ -1116,9 +1410,23 @@ def main(args: argparse.Namespace) -> int:
                 add(edge, scenario, "FAIL", status, {**save_summary, "reason": "sd_fixture_failed"})
                 return
         elif scenario.page == "SI":
+            rows = {"studyInformation": study_payload(scenario, value)}
+            if scenario.owner == "studyRegistrationNumbers":
+                rows = {
+                    "studyInformation": {
+                        "studyName": "Business Study",
+                        "sponsorStudyNumber": f"STUDY-{args.seed}",
+                        "studyTypeReaction": "1",
+                    },
+                    "studyRegistrationNumbers": [{
+                        "sequenceNumber": 1,
+                        "registrationNumber": f"REG-{args.seed}",
+                        scenario.field: value,
+                    }],
+                }
             status, _, save_summary = request("PATCH", f"/api/cases/{case_id}/editor/pages/SI", {
                 "authorities": [scenario.authority],
-                "rows": {"studyInformation": study_payload(scenario, value)},
+                "rows": rows,
             })
             read_status, current = page_current(case_id, "SI", scenario.owner)
             owner_id = object_id(current)
@@ -1157,12 +1465,14 @@ def main(args: argparse.Namespace) -> int:
                 add(edge, scenario, "FAIL", status, {**save_summary, "reason": "dm_fixture_failed"})
                 return
         elif scenario.page == "NR":
+            rows = {"narrative": {"caseNarrative": "Business fuzz narrative"}}
+            if scenario.owner == "narrative":
+                rows["narrative"][scenario.field] = value
+            else:
+                rows[scenario.owner] = [narrative_payload(scenario, value)]
             status, _, save_summary = request("PATCH", f"/api/cases/{case_id}/editor/pages/NR", {
                 "authorities": [scenario.authority],
-                "rows": {
-                    "narrative": {"caseNarrative": "Business fuzz narrative"},
-                    scenario.owner: [narrative_payload(scenario, value)],
-                },
+                "rows": rows,
             })
             read_status, current = page_current(case_id, "NR", scenario.owner)
             owner_id = object_id(current)
@@ -1239,6 +1549,11 @@ def main(args: argparse.Namespace) -> int:
             read_status, current = page_current(case_id, "LB", scenario.owner, owner_id)
 
         actual = get_path(current, scenario.projection_field)
+        expected_readback = (
+            scenario.readback_values[0 if edge == "invalid_edge" else 1]
+            if scenario.readback_values is not None
+            else value
+        )
         logs = audit_logs(case_id, scenario.owner, owner_id, scenario.field)
         complete_logs = [log for log in logs if audit_log_complete(log)]
         field_match = any(
@@ -1250,7 +1565,7 @@ def main(args: argparse.Namespace) -> int:
         expected_present = edge == "invalid_edge"
         passed = (
             read_status == 200
-            and values_equal(value, actual)
+            and values_equal(expected_readback, actual)
             and bool(complete_logs)
             and (value is None or field_match)
             and validation_status == 200
@@ -1264,6 +1579,7 @@ def main(args: argparse.Namespace) -> int:
             "expected_code_present": expected_present,
             "actual_code_present": present,
             "readback": redacted(actual),
+            "expected_normalization": scenario.readback_values is not None,
             "audit_logs": len(logs),
             "audit_complete": bool(complete_logs),
             "audit_field_match": field_match,
@@ -1301,7 +1617,9 @@ def main(args: argparse.Namespace) -> int:
             "scenario_count": len(scenarios),
             "covered_rules": sorted(covered),
             "inventory_rule_count": len(inventory),
-            "uncovered_rules": sorted(inventory - covered),
+            "raw_uncovered_rules": sorted(raw_uncovered),
+            "dispositioned_rules": dispositions,
+            "uncovered_rules": sorted(unexplained),
             "artifact": str(artifact),
             "surface": "case-validation-api",
         }, sort_keys=True) + "\n")

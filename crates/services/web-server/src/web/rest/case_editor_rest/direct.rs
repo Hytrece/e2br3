@@ -484,7 +484,10 @@ async fn apply_ci_rows_patch(
 					row,
 					"fulfilExpeditedCriteria",
 				)?,
-				fulfil_expedited_criteria_null_flavor: None,
+				fulfil_expedited_criteria_null_flavor: string_field(
+					row,
+					&["fulfilExpeditedCriteriaNullFlavor"],
+				),
 				local_criteria_report_type: patch_string(
 					row,
 					"localCriteriaReportType",

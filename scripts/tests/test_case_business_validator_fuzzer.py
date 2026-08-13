@@ -26,6 +26,8 @@ class CaseBusinessValidatorFuzzerTests(unittest.TestCase):
         self.assertNotIn("ICH.G.k.2.2.LENGTH.MAX", codes)
         self.assertNotIn("ICH.G.k.1.ALLOWED.VALUE", codes)
         self.assertIn("ICH.G.k.7.r.2a.ALLOWED.VALUE", codes)
+        self.assertNotIn("ICH.N.REQUIRED", codes)
+        self.assertNotIn("ICH.N.2.r.1.MATCH.C.1.1", codes)
 
     def test_issue_oracle_requires_complete_evidence(self) -> None:
         report = {"issues": [{
@@ -44,6 +46,13 @@ class CaseBusinessValidatorFuzzerTests(unittest.TestCase):
     def test_scenario_ids_are_unique(self) -> None:
         scenarios = fuzzer.scenario_catalog(1)
         self.assertEqual(len({item.scenario_id for item in scenarios}), len(scenarios))
+
+    def test_every_inventory_rule_is_covered_or_dispositioned(self) -> None:
+        inventory = fuzzer.discover_business_rule_codes()
+        covered = {item.expected_code for item in fuzzer.scenario_catalog(1)}
+        dispositions = fuzzer.rule_dispositions()
+        self.assertEqual(inventory - covered - dispositions.keys(), set())
+        self.assertEqual(dispositions.keys() & covered, set())
 
     def test_primary_source_audit_alias_matches_storage_field(self) -> None:
         self.assertTrue(fuzzer.audit_key_matches(
