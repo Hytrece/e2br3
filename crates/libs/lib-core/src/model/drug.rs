@@ -361,6 +361,7 @@ pub struct DosageInformation {
 
 	// G.k.4.r.7 - Batch/Lot Number
 	pub batch_lot_number: Option<String>,
+	pub batch_lot_number_null_flavor: Option<String>,
 
 	// G.k.4.r.8 - Dosage Text
 	pub dosage_text: Option<String>,
@@ -427,6 +428,9 @@ pub struct DosageInformationForCreate {
 	pub duration_unit: Option<String>,
 	pub continuing: Option<bool>,
 	pub batch_lot_number: Option<String>,
+	/// Source XML preservation only; G.k.4.r.7 input contracts do not allow NullFlavor.
+	#[serde(skip_deserializing)]
+	pub batch_lot_number_null_flavor: Option<String>,
 	pub dosage_text: Option<String>,
 	pub dose_form: Option<String>,
 	pub dose_form_null_flavor: Option<String>,
@@ -476,6 +480,9 @@ pub struct DosageInformationForUpdate {
 	pub duration_unit: Option<String>,
 	pub continuing: Option<bool>,
 	pub batch_lot_number: Option<String>,
+	/// Source XML preservation only; G.k.4.r.7 input contracts do not allow NullFlavor.
+	#[serde(skip_deserializing)]
+	pub batch_lot_number_null_flavor: Option<String>,
 	pub dosage_text: Option<String>,
 	pub dose_form: Option<String>,
 	pub dose_form_null_flavor: Option<String>,
@@ -861,6 +868,18 @@ impl DrugInformationBmc {
 		id: Uuid,
 		drug_u: DrugInformationForUpdate,
 	) -> Result<()> {
+		Self::update_patch(ctx, mm, id, drug_u, &[]).await
+	}
+
+	pub async fn update_patch(
+		ctx: &Ctx,
+		mm: &ModelManager,
+		id: Uuid,
+		drug_u: DrugInformationForUpdate,
+		clear_fields: &[&str],
+	) -> Result<()> {
+		let clears: Vec<String> =
+			clear_fields.iter().map(|field| (*field).into()).collect();
 		mm.dbx().begin_txn().await?;
 		set_full_context_dbx_or_rollback(
 			mm.dbx(),
@@ -872,32 +891,32 @@ impl DrugInformationBmc {
 
 		let sql = format!(
 			"UPDATE {}
-			 SET medicinal_product = COALESCE($2, medicinal_product),
-			     drug_characterization = COALESCE($3, drug_characterization),
-			     drug_authorization_number = COALESCE($6, drug_authorization_number),
-			     manufacturer_name = COALESCE($7, manufacturer_name),
-			     manufacturer_country = COALESCE($8, manufacturer_country),
-			     batch_lot_number = COALESCE($9, batch_lot_number),
-			     cumulative_dose_first_reaction_value = COALESCE($10, cumulative_dose_first_reaction_value),
-			     cumulative_dose_first_reaction_unit = COALESCE($11, cumulative_dose_first_reaction_unit),
-			     gestation_period_exposure_value = COALESCE($12, gestation_period_exposure_value),
-			     gestation_period_exposure_unit = COALESCE($13, gestation_period_exposure_unit),
-			     action_taken = COALESCE($15, action_taken),
-			     investigational_product_blinded = COALESCE($17, investigational_product_blinded),
-			     mpid = COALESCE($18, mpid),
-			     mpid_version = COALESCE($19, mpid_version),
-			     mfds_mpid_version = COALESCE($20, mfds_mpid_version),
-			     mfds_mpid = COALESCE($21, mfds_mpid),
-			     phpid = COALESCE($22, phpid),
-			     phpid_version = COALESCE($23, phpid_version),
-			     obtain_drug_country = COALESCE($24, obtain_drug_country),
-			     fda_additional_info_coded = CASE WHEN $27 IS NOT NULL THEN NULL ELSE COALESCE($26, fda_additional_info_coded) END,
-			     fda_additional_info_coded_null_flavor = CASE WHEN $26 IS NOT NULL THEN NULL ELSE COALESCE($27, fda_additional_info_coded_null_flavor) END,
-			     drug_additional_info_codes_json = COALESCE($28, drug_additional_info_codes_json),
-			     drug_additional_information = COALESCE($29, drug_additional_information),
-			     fda_specialized_product_category = COALESCE($30, fda_specialized_product_category),
-				     source_product_presave_id = COALESCE($31, source_product_presave_id),
-				     fda_other_characterization = COALESCE($32, fda_other_characterization),
+			 SET medicinal_product = CASE WHEN 'medicinal_product' = ANY($34) THEN NULL ELSE COALESCE($2, medicinal_product) END,
+			     drug_characterization = CASE WHEN 'drug_characterization' = ANY($34) THEN NULL ELSE COALESCE($3, drug_characterization) END,
+			     drug_authorization_number = CASE WHEN 'drug_authorization_number' = ANY($34) THEN NULL ELSE COALESCE($6, drug_authorization_number) END,
+			     manufacturer_name = CASE WHEN 'manufacturer_name' = ANY($34) THEN NULL ELSE COALESCE($7, manufacturer_name) END,
+			     manufacturer_country = CASE WHEN 'manufacturer_country' = ANY($34) THEN NULL ELSE COALESCE($8, manufacturer_country) END,
+			     batch_lot_number = CASE WHEN 'batch_lot_number' = ANY($34) THEN NULL ELSE COALESCE($9, batch_lot_number) END,
+			     cumulative_dose_first_reaction_value = CASE WHEN 'cumulative_dose_first_reaction_value' = ANY($34) THEN NULL ELSE COALESCE($10, cumulative_dose_first_reaction_value) END,
+			     cumulative_dose_first_reaction_unit = CASE WHEN 'cumulative_dose_first_reaction_unit' = ANY($34) THEN NULL ELSE COALESCE($11, cumulative_dose_first_reaction_unit) END,
+			     gestation_period_exposure_value = CASE WHEN 'gestation_period_exposure_value' = ANY($34) THEN NULL ELSE COALESCE($12, gestation_period_exposure_value) END,
+			     gestation_period_exposure_unit = CASE WHEN 'gestation_period_exposure_unit' = ANY($34) THEN NULL ELSE COALESCE($13, gestation_period_exposure_unit) END,
+			     action_taken = CASE WHEN 'action_taken' = ANY($34) THEN NULL ELSE COALESCE($15, action_taken) END,
+			     investigational_product_blinded = CASE WHEN 'investigational_product_blinded' = ANY($34) THEN NULL ELSE COALESCE($17, investigational_product_blinded) END,
+			     mpid = CASE WHEN 'mpid' = ANY($34) THEN NULL ELSE COALESCE($18, mpid) END,
+			     mpid_version = CASE WHEN 'mpid_version' = ANY($34) THEN NULL ELSE COALESCE($19, mpid_version) END,
+			     mfds_mpid_version = CASE WHEN 'mfds_mpid_version' = ANY($34) THEN NULL ELSE COALESCE($20, mfds_mpid_version) END,
+			     mfds_mpid = CASE WHEN 'mfds_mpid' = ANY($34) THEN NULL ELSE COALESCE($21, mfds_mpid) END,
+			     phpid = CASE WHEN 'phpid' = ANY($34) THEN NULL ELSE COALESCE($22, phpid) END,
+			     phpid_version = CASE WHEN 'phpid_version' = ANY($34) THEN NULL ELSE COALESCE($23, phpid_version) END,
+			     obtain_drug_country = CASE WHEN 'obtain_drug_country' = ANY($34) THEN NULL ELSE COALESCE($24, obtain_drug_country) END,
+			     fda_additional_info_coded = CASE WHEN 'fda_additional_info_coded' = ANY($34) OR $27 IS NOT NULL THEN NULL ELSE COALESCE($26, fda_additional_info_coded) END,
+			     fda_additional_info_coded_null_flavor = CASE WHEN 'fda_additional_info_coded_null_flavor' = ANY($34) OR $26 IS NOT NULL THEN NULL ELSE COALESCE($27, fda_additional_info_coded_null_flavor) END,
+			     drug_additional_info_codes_json = CASE WHEN 'drug_additional_info_codes_json' = ANY($34) THEN NULL ELSE COALESCE($28, drug_additional_info_codes_json) END,
+			     drug_additional_information = CASE WHEN 'drug_additional_information' = ANY($34) THEN NULL ELSE COALESCE($29, drug_additional_information) END,
+			     fda_specialized_product_category = CASE WHEN 'fda_specialized_product_category' = ANY($34) THEN NULL ELSE COALESCE($30, fda_specialized_product_category) END,
+			     source_product_presave_id = CASE WHEN 'source_product_presave_id' = ANY($34) THEN NULL ELSE COALESCE($31, source_product_presave_id) END,
+			     fda_other_characterization = CASE WHEN 'fda_other_characterization' = ANY($34) THEN NULL ELSE COALESCE($32, fda_other_characterization) END,
 				     updated_at = now(),
 				     updated_by = $33
 				 WHERE id = $1",
@@ -939,7 +958,8 @@ impl DrugInformationBmc {
 					.bind(drug_u.fda_specialized_product_category)
 					.bind(drug_u.source_product_presave_id)
 					.bind(drug_u.fda_other_characterization)
-					.bind(ctx.user_id()),
+					.bind(ctx.user_id())
+					.bind(clears),
 			)
 			.await?;
 		if result == 0 {
@@ -1069,6 +1089,19 @@ impl DrugInformationBmc {
 		id: Uuid,
 		drug_u: DrugInformationForUpdate,
 	) -> Result<()> {
+		Self::update_in_case_patch(ctx, mm, case_id, id, drug_u, &[]).await
+	}
+
+	pub async fn update_in_case_patch(
+		ctx: &Ctx,
+		mm: &ModelManager,
+		case_id: Uuid,
+		id: Uuid,
+		drug_u: DrugInformationForUpdate,
+		clear_fields: &[&str],
+	) -> Result<()> {
+		let clears: Vec<String> =
+			clear_fields.iter().map(|field| (*field).into()).collect();
 		mm.dbx().begin_txn().await?;
 		set_full_context_dbx_or_rollback(
 			mm.dbx(),
@@ -1080,31 +1113,32 @@ impl DrugInformationBmc {
 
 		let sql = format!(
 			"UPDATE {}
-			 SET medicinal_product = COALESCE($3, medicinal_product),
-			     drug_characterization = COALESCE($4, drug_characterization),
-			     drug_authorization_number = COALESCE($7, drug_authorization_number),
-			     manufacturer_name = COALESCE($8, manufacturer_name),
-			     manufacturer_country = COALESCE($9, manufacturer_country),
-			     batch_lot_number = COALESCE($10, batch_lot_number),
-			     cumulative_dose_first_reaction_value = COALESCE($11, cumulative_dose_first_reaction_value),
-			     cumulative_dose_first_reaction_unit = COALESCE($12, cumulative_dose_first_reaction_unit),
-			     gestation_period_exposure_value = COALESCE($13, gestation_period_exposure_value),
-			     gestation_period_exposure_unit = COALESCE($14, gestation_period_exposure_unit),
-			     action_taken = COALESCE($16, action_taken),
-			     investigational_product_blinded = COALESCE($18, investigational_product_blinded),
-			     mpid = COALESCE($19, mpid),
-			     mpid_version = COALESCE($20, mpid_version),
-			     mfds_mpid_version = COALESCE($21, mfds_mpid_version),
-			     mfds_mpid = COALESCE($22, mfds_mpid),
-			     phpid = COALESCE($23, phpid),
-			     phpid_version = COALESCE($24, phpid_version),
-			     obtain_drug_country = COALESCE($25, obtain_drug_country),
-			     fda_additional_info_coded = CASE WHEN $28 IS NOT NULL THEN NULL ELSE COALESCE($27, fda_additional_info_coded) END,
-			     fda_additional_info_coded_null_flavor = CASE WHEN $27 IS NOT NULL THEN NULL ELSE COALESCE($28, fda_additional_info_coded_null_flavor) END,
-			     drug_additional_info_codes_json = COALESCE($29, drug_additional_info_codes_json),
-			     drug_additional_information = COALESCE($30, drug_additional_information),
-			     fda_specialized_product_category = COALESCE($31, fda_specialized_product_category),
-			     fda_other_characterization = COALESCE($32, fda_other_characterization),
+			 SET medicinal_product = CASE WHEN 'medicinal_product' = ANY($34) THEN NULL ELSE COALESCE($3, medicinal_product) END,
+			     drug_characterization = CASE WHEN 'drug_characterization' = ANY($34) THEN NULL ELSE COALESCE($4, drug_characterization) END,
+			     drug_authorization_number = CASE WHEN 'drug_authorization_number' = ANY($34) THEN NULL ELSE COALESCE($7, drug_authorization_number) END,
+			     manufacturer_name = CASE WHEN 'manufacturer_name' = ANY($34) THEN NULL ELSE COALESCE($8, manufacturer_name) END,
+			     manufacturer_country = CASE WHEN 'manufacturer_country' = ANY($34) THEN NULL ELSE COALESCE($9, manufacturer_country) END,
+			     batch_lot_number = CASE WHEN 'batch_lot_number' = ANY($34) THEN NULL ELSE COALESCE($10, batch_lot_number) END,
+			     cumulative_dose_first_reaction_value = CASE WHEN 'cumulative_dose_first_reaction_value' = ANY($34) THEN NULL ELSE COALESCE($11, cumulative_dose_first_reaction_value) END,
+			     cumulative_dose_first_reaction_unit = CASE WHEN 'cumulative_dose_first_reaction_unit' = ANY($34) THEN NULL ELSE COALESCE($12, cumulative_dose_first_reaction_unit) END,
+			     gestation_period_exposure_value = CASE WHEN 'gestation_period_exposure_value' = ANY($34) THEN NULL ELSE COALESCE($13, gestation_period_exposure_value) END,
+			     gestation_period_exposure_unit = CASE WHEN 'gestation_period_exposure_unit' = ANY($34) THEN NULL ELSE COALESCE($14, gestation_period_exposure_unit) END,
+			     action_taken = CASE WHEN 'action_taken' = ANY($34) THEN NULL ELSE COALESCE($16, action_taken) END,
+			     investigational_product_blinded = CASE WHEN 'investigational_product_blinded' = ANY($34) THEN NULL ELSE COALESCE($18, investigational_product_blinded) END,
+			     mpid = CASE WHEN 'mpid' = ANY($34) THEN NULL ELSE COALESCE($19, mpid) END,
+			     mpid_version = CASE WHEN 'mpid_version' = ANY($34) THEN NULL ELSE COALESCE($20, mpid_version) END,
+			     mfds_mpid_version = CASE WHEN 'mfds_mpid_version' = ANY($34) THEN NULL ELSE COALESCE($21, mfds_mpid_version) END,
+			     mfds_mpid = CASE WHEN 'mfds_mpid' = ANY($34) THEN NULL ELSE COALESCE($22, mfds_mpid) END,
+			     phpid = CASE WHEN 'phpid' = ANY($34) THEN NULL ELSE COALESCE($23, phpid) END,
+			     phpid_version = CASE WHEN 'phpid_version' = ANY($34) THEN NULL ELSE COALESCE($24, phpid_version) END,
+			     obtain_drug_country = CASE WHEN 'obtain_drug_country' = ANY($34) THEN NULL ELSE COALESCE($25, obtain_drug_country) END,
+			     fda_additional_info_coded = CASE WHEN 'fda_additional_info_coded' = ANY($34) OR $28 IS NOT NULL THEN NULL ELSE COALESCE($27, fda_additional_info_coded) END,
+			     fda_additional_info_coded_null_flavor = CASE WHEN 'fda_additional_info_coded_null_flavor' = ANY($34) OR $27 IS NOT NULL THEN NULL ELSE COALESCE($28, fda_additional_info_coded_null_flavor) END,
+			     drug_additional_info_codes_json = CASE WHEN 'drug_additional_info_codes_json' = ANY($34) THEN NULL ELSE COALESCE($29, drug_additional_info_codes_json) END,
+			     drug_additional_information = CASE WHEN 'drug_additional_information' = ANY($34) THEN NULL ELSE COALESCE($30, drug_additional_information) END,
+			     fda_specialized_product_category = CASE WHEN 'fda_specialized_product_category' = ANY($34) THEN NULL ELSE COALESCE($31, fda_specialized_product_category) END,
+			     fda_other_characterization = CASE WHEN 'fda_other_characterization' = ANY($34) THEN NULL ELSE COALESCE($32, fda_other_characterization) END,
+			     source_product_presave_id = CASE WHEN 'source_product_presave_id' = ANY($34) THEN NULL ELSE COALESCE($35, source_product_presave_id) END,
 			     updated_at = now(),
 			     updated_by = $33
 			 WHERE id = $1 AND case_id = $2",
@@ -1146,7 +1180,9 @@ impl DrugInformationBmc {
 					.bind(drug_u.drug_additional_information)
 					.bind(drug_u.fda_specialized_product_category)
 					.bind(drug_u.fda_other_characterization)
-					.bind(ctx.user_id()),
+					.bind(ctx.user_id())
+					.bind(clears)
+					.bind(drug_u.source_product_presave_id),
 			)
 			.await?;
 		if result == 0 {

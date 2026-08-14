@@ -258,11 +258,11 @@ pub struct MedicalHistoryEpisode {
 	pub meddra_code: Option<String>,
 
 	// D.7.1.r.2-4
-	pub start_date: Option<Date>,
+	pub start_date: Option<String>,
 	pub start_date_null_flavor: Option<String>,
 	pub continuing: Option<bool>,
 	pub continuing_null_flavor: Option<String>,
-	pub end_date: Option<Date>,
+	pub end_date: Option<String>,
 	pub end_date_null_flavor: Option<String>,
 	pub comments: Option<String>,
 	pub family_history: Option<bool>,
@@ -288,19 +288,11 @@ pub struct MedicalHistoryEpisodeForCreate {
 pub struct MedicalHistoryEpisodeForUpdate {
 	pub meddra_version: Option<String>,
 	pub meddra_code: Option<String>,
-	#[serde(
-		default,
-		deserialize_with = "crate::serde::flex_date::deserialize_option_date"
-	)]
-	pub start_date: Option<Date>,
+	pub start_date: Option<String>,
 	pub start_date_null_flavor: Option<String>,
 	pub continuing: Option<bool>,
 	pub continuing_null_flavor: Option<String>,
-	#[serde(
-		default,
-		deserialize_with = "crate::serde::flex_date::deserialize_option_date"
-	)]
-	pub end_date: Option<Date>,
+	pub end_date: Option<String>,
 	pub end_date_null_flavor: Option<String>,
 	pub comments: Option<String>,
 	pub family_history: Option<bool>,
@@ -790,14 +782,27 @@ impl PatientInformationBmc {
 		id: Uuid,
 		data: PatientInformationForUpdate,
 	) -> Result<()> {
+		Self::update_patch(ctx, mm, id, data, &[]).await
+	}
+
+	pub async fn update_patch(
+		ctx: &Ctx,
+		mm: &ModelManager,
+		id: Uuid,
+		data: PatientInformationForUpdate,
+		clear_fields: &[&str],
+	) -> Result<()> {
 		mm.dbx().begin_txn().await?;
 		if let Err(err) = set_full_context_from_ctx_dbx(mm.dbx(), ctx).await {
 			mm.dbx().rollback_txn().await?;
 			return Err(err);
 		}
-		let age_clear = matches!(data.age_at_time_of_onset, Some(None));
-		let weight_clear = matches!(data.weight_kg, Some(None));
-		let height_clear = matches!(data.height_cm, Some(None));
+		let age_clear = matches!(data.age_at_time_of_onset, Some(None))
+			|| clear_fields.contains(&"age_at_time_of_onset");
+		let weight_clear = matches!(data.weight_kg, Some(None))
+			|| clear_fields.contains(&"weight_kg");
+		let height_clear = matches!(data.height_cm, Some(None))
+			|| clear_fields.contains(&"height_cm");
 		let age_at_time_of_onset = data.age_at_time_of_onset.flatten();
 		let weight_kg = data.weight_kg.flatten();
 		let height_cm = data.height_cm.flatten();
@@ -816,31 +821,33 @@ impl PatientInformationBmc {
 				.bind(height_clear),
 			)
 			.await?;
+		let clears: Vec<String> =
+			clear_fields.iter().map(|field| (*field).into()).collect();
 
 		let sql = format!(
 			"UPDATE {}
-			 SET patient_initials = CASE WHEN $3 IS NOT NULL THEN NULL ELSE COALESCE($2, patient_initials) END,
-			     patient_initials_null_flavor = CASE WHEN $2 IS NOT NULL THEN NULL ELSE COALESCE($3, patient_initials_null_flavor) END,
-			     birth_date = CASE WHEN $5 IS NOT NULL THEN NULL ELSE COALESCE($4, birth_date) END,
-			     birth_date_null_flavor = CASE WHEN $4 IS NOT NULL THEN NULL ELSE COALESCE($5, birth_date_null_flavor) END,
-			     age_at_time_of_onset = COALESCE($6, age_at_time_of_onset),
-			     age_unit = COALESCE($7, age_unit),
-			     gestation_period = COALESCE($8, gestation_period),
-			     gestation_period_unit = COALESCE($9, gestation_period_unit),
-			     age_group = COALESCE($10, age_group),
-			     weight_kg = COALESCE($11, weight_kg),
-			     height_cm = COALESCE($12, height_cm),
-			     sex = CASE WHEN $14 IS NOT NULL THEN NULL ELSE COALESCE($13, sex) END,
-			     sex_null_flavor = CASE WHEN $13 IS NOT NULL THEN NULL ELSE COALESCE($14, sex_null_flavor) END,
-			     race_codes = CASE WHEN $16 IS NOT NULL THEN '{{}}'::VARCHAR(10)[] ELSE COALESCE($15, race_codes) END,
-			     race_code_null_flavor = CASE WHEN COALESCE(cardinality($15), 0) > 0 THEN NULL ELSE COALESCE($16, race_code_null_flavor) END,
-			     ethnicity_code = CASE WHEN $18 IS NOT NULL THEN NULL ELSE COALESCE($17, ethnicity_code) END,
-			     ethnicity_code_null_flavor = CASE WHEN $17 IS NOT NULL THEN NULL ELSE COALESCE($18, ethnicity_code_null_flavor) END,
-			     last_menstrual_period_date = CASE WHEN $20 IS NOT NULL THEN NULL ELSE COALESCE($19, last_menstrual_period_date) END,
-			     last_menstrual_period_date_null_flavor = CASE WHEN $19 IS NOT NULL THEN NULL ELSE COALESCE($20, last_menstrual_period_date_null_flavor) END,
-			     medical_history_text = CASE WHEN $22 IS NOT NULL THEN NULL ELSE COALESCE($21, medical_history_text) END,
-			     medical_history_text_null_flavor = CASE WHEN $21 IS NOT NULL THEN NULL ELSE COALESCE($22, medical_history_text_null_flavor) END,
-			     concomitant_therapy = COALESCE($23, concomitant_therapy),
+			 SET patient_initials = CASE WHEN 'patient_initials' = ANY($25) THEN NULL ELSE CASE WHEN $3 IS NOT NULL THEN NULL ELSE COALESCE($2, patient_initials) END END,
+			     patient_initials_null_flavor = CASE WHEN 'patient_initials_null_flavor' = ANY($25) THEN NULL ELSE CASE WHEN $2 IS NOT NULL THEN NULL ELSE COALESCE($3, patient_initials_null_flavor) END END,
+			     birth_date = CASE WHEN 'birth_date' = ANY($25) THEN NULL ELSE CASE WHEN $5 IS NOT NULL THEN NULL ELSE COALESCE($4, birth_date) END END,
+			     birth_date_null_flavor = CASE WHEN 'birth_date_null_flavor' = ANY($25) THEN NULL ELSE CASE WHEN $4 IS NOT NULL THEN NULL ELSE COALESCE($5, birth_date_null_flavor) END END,
+			     age_at_time_of_onset = CASE WHEN 'age_at_time_of_onset' = ANY($25) THEN NULL ELSE COALESCE($6, age_at_time_of_onset) END,
+			     age_unit = CASE WHEN 'age_unit' = ANY($25) THEN NULL ELSE COALESCE($7, age_unit) END,
+			     gestation_period = CASE WHEN 'gestation_period' = ANY($25) THEN NULL ELSE COALESCE($8, gestation_period) END,
+			     gestation_period_unit = CASE WHEN 'gestation_period_unit' = ANY($25) THEN NULL ELSE COALESCE($9, gestation_period_unit) END,
+			     age_group = CASE WHEN 'age_group' = ANY($25) THEN NULL ELSE COALESCE($10, age_group) END,
+			     weight_kg = CASE WHEN 'weight_kg' = ANY($25) THEN NULL ELSE COALESCE($11, weight_kg) END,
+			     height_cm = CASE WHEN 'height_cm' = ANY($25) THEN NULL ELSE COALESCE($12, height_cm) END,
+			     sex = CASE WHEN 'sex' = ANY($25) THEN NULL ELSE CASE WHEN $14 IS NOT NULL THEN NULL ELSE COALESCE($13, sex) END END,
+			     sex_null_flavor = CASE WHEN 'sex_null_flavor' = ANY($25) THEN NULL ELSE CASE WHEN $13 IS NOT NULL THEN NULL ELSE COALESCE($14, sex_null_flavor) END END,
+			     race_codes = CASE WHEN 'race_codes' = ANY($25) THEN NULL ELSE CASE WHEN $16 IS NOT NULL THEN '{{}}'::VARCHAR(10)[] ELSE COALESCE($15, race_codes) END END,
+			     race_code_null_flavor = CASE WHEN 'race_code_null_flavor' = ANY($25) THEN NULL ELSE CASE WHEN COALESCE(cardinality($15), 0) > 0 THEN NULL ELSE COALESCE($16, race_code_null_flavor) END END,
+			     ethnicity_code = CASE WHEN 'ethnicity_code' = ANY($25) THEN NULL ELSE CASE WHEN $18 IS NOT NULL THEN NULL ELSE COALESCE($17, ethnicity_code) END END,
+			     ethnicity_code_null_flavor = CASE WHEN 'ethnicity_code_null_flavor' = ANY($25) THEN NULL ELSE CASE WHEN $17 IS NOT NULL THEN NULL ELSE COALESCE($18, ethnicity_code_null_flavor) END END,
+			     last_menstrual_period_date = CASE WHEN 'last_menstrual_period_date' = ANY($25) THEN NULL ELSE CASE WHEN $20 IS NOT NULL THEN NULL ELSE COALESCE($19, last_menstrual_period_date) END END,
+			     last_menstrual_period_date_null_flavor = CASE WHEN 'last_menstrual_period_date_null_flavor' = ANY($25) THEN NULL ELSE CASE WHEN $19 IS NOT NULL THEN NULL ELSE COALESCE($20, last_menstrual_period_date_null_flavor) END END,
+			     medical_history_text = CASE WHEN 'medical_history_text' = ANY($25) THEN NULL ELSE CASE WHEN $22 IS NOT NULL THEN NULL ELSE COALESCE($21, medical_history_text) END END,
+			     medical_history_text_null_flavor = CASE WHEN 'medical_history_text_null_flavor' = ANY($25) THEN NULL ELSE CASE WHEN $21 IS NOT NULL THEN NULL ELSE COALESCE($22, medical_history_text_null_flavor) END END,
+			     concomitant_therapy = CASE WHEN 'concomitant_therapy' = ANY($25) THEN NULL ELSE COALESCE($23, concomitant_therapy) END,
 			     updated_at = now(),
 			     updated_by = $24
 			 WHERE id = $1",
@@ -873,7 +880,8 @@ impl PatientInformationBmc {
 					.bind(data.medical_history_text)
 					.bind(data.medical_history_text_null_flavor)
 					.bind(data.concomitant_therapy)
-					.bind(ctx.user_id()),
+					.bind(ctx.user_id())
+					.bind(clears),
 			)
 			.await?;
 
@@ -957,14 +965,27 @@ impl PatientInformationBmc {
 		case_id: Uuid,
 		data: PatientInformationForUpdate,
 	) -> Result<()> {
+		Self::update_by_case_patch(ctx, mm, case_id, data, &[]).await
+	}
+
+	pub async fn update_by_case_patch(
+		ctx: &Ctx,
+		mm: &ModelManager,
+		case_id: Uuid,
+		data: PatientInformationForUpdate,
+		clear_fields: &[&str],
+	) -> Result<()> {
 		mm.dbx().begin_txn().await?;
 		if let Err(err) = set_full_context_from_ctx_dbx(mm.dbx(), ctx).await {
 			mm.dbx().rollback_txn().await?;
 			return Err(err);
 		}
-		let age_clear = matches!(data.age_at_time_of_onset, Some(None));
-		let weight_clear = matches!(data.weight_kg, Some(None));
-		let height_clear = matches!(data.height_cm, Some(None));
+		let age_clear = matches!(data.age_at_time_of_onset, Some(None))
+			|| clear_fields.contains(&"age_at_time_of_onset");
+		let weight_clear = matches!(data.weight_kg, Some(None))
+			|| clear_fields.contains(&"weight_kg");
+		let height_clear = matches!(data.height_cm, Some(None))
+			|| clear_fields.contains(&"height_cm");
 		let age_at_time_of_onset = data.age_at_time_of_onset.flatten();
 		let weight_kg = data.weight_kg.flatten();
 		let height_cm = data.height_cm.flatten();
@@ -983,31 +1004,33 @@ impl PatientInformationBmc {
 				.bind(height_clear),
 			)
 			.await?;
+		let clears: Vec<String> =
+			clear_fields.iter().map(|field| (*field).into()).collect();
 
 		let sql = format!(
 			"UPDATE {}
-			 SET patient_initials = CASE WHEN $3 IS NOT NULL THEN NULL ELSE COALESCE($2, patient_initials) END,
-			     patient_initials_null_flavor = CASE WHEN $2 IS NOT NULL THEN NULL ELSE COALESCE($3, patient_initials_null_flavor) END,
-			     birth_date = CASE WHEN $5 IS NOT NULL THEN NULL ELSE COALESCE($4, birth_date) END,
-			     birth_date_null_flavor = CASE WHEN $4 IS NOT NULL THEN NULL ELSE COALESCE($5, birth_date_null_flavor) END,
-			     age_at_time_of_onset = COALESCE($6, age_at_time_of_onset),
-			     age_unit = COALESCE($7, age_unit),
-			     gestation_period = COALESCE($8, gestation_period),
-			     gestation_period_unit = COALESCE($9, gestation_period_unit),
-			     age_group = COALESCE($10, age_group),
-			     weight_kg = COALESCE($11, weight_kg),
-			     height_cm = COALESCE($12, height_cm),
-			     sex = CASE WHEN $14 IS NOT NULL THEN NULL ELSE COALESCE($13, sex) END,
-			     sex_null_flavor = CASE WHEN $13 IS NOT NULL THEN NULL ELSE COALESCE($14, sex_null_flavor) END,
-			     race_codes = CASE WHEN $16 IS NOT NULL THEN '{{}}'::VARCHAR(10)[] ELSE COALESCE($15, race_codes) END,
-			     race_code_null_flavor = CASE WHEN COALESCE(cardinality($15), 0) > 0 THEN NULL ELSE COALESCE($16, race_code_null_flavor) END,
-			     ethnicity_code = CASE WHEN $18 IS NOT NULL THEN NULL ELSE COALESCE($17, ethnicity_code) END,
-			     ethnicity_code_null_flavor = CASE WHEN $17 IS NOT NULL THEN NULL ELSE COALESCE($18, ethnicity_code_null_flavor) END,
-			     last_menstrual_period_date = CASE WHEN $20 IS NOT NULL THEN NULL ELSE COALESCE($19, last_menstrual_period_date) END,
-			     last_menstrual_period_date_null_flavor = CASE WHEN $19 IS NOT NULL THEN NULL ELSE COALESCE($20, last_menstrual_period_date_null_flavor) END,
-			     medical_history_text = CASE WHEN $22 IS NOT NULL THEN NULL ELSE COALESCE($21, medical_history_text) END,
-			     medical_history_text_null_flavor = CASE WHEN $21 IS NOT NULL THEN NULL ELSE COALESCE($22, medical_history_text_null_flavor) END,
-			     concomitant_therapy = COALESCE($23, concomitant_therapy),
+			 SET patient_initials = CASE WHEN 'patient_initials' = ANY($25) THEN NULL ELSE CASE WHEN $3 IS NOT NULL THEN NULL ELSE COALESCE($2, patient_initials) END END,
+			     patient_initials_null_flavor = CASE WHEN 'patient_initials_null_flavor' = ANY($25) THEN NULL ELSE CASE WHEN $2 IS NOT NULL THEN NULL ELSE COALESCE($3, patient_initials_null_flavor) END END,
+			     birth_date = CASE WHEN 'birth_date' = ANY($25) THEN NULL ELSE CASE WHEN $5 IS NOT NULL THEN NULL ELSE COALESCE($4, birth_date) END END,
+			     birth_date_null_flavor = CASE WHEN 'birth_date_null_flavor' = ANY($25) THEN NULL ELSE CASE WHEN $4 IS NOT NULL THEN NULL ELSE COALESCE($5, birth_date_null_flavor) END END,
+			     age_at_time_of_onset = CASE WHEN 'age_at_time_of_onset' = ANY($25) THEN NULL ELSE COALESCE($6, age_at_time_of_onset) END,
+			     age_unit = CASE WHEN 'age_unit' = ANY($25) THEN NULL ELSE COALESCE($7, age_unit) END,
+			     gestation_period = CASE WHEN 'gestation_period' = ANY($25) THEN NULL ELSE COALESCE($8, gestation_period) END,
+			     gestation_period_unit = CASE WHEN 'gestation_period_unit' = ANY($25) THEN NULL ELSE COALESCE($9, gestation_period_unit) END,
+			     age_group = CASE WHEN 'age_group' = ANY($25) THEN NULL ELSE COALESCE($10, age_group) END,
+			     weight_kg = CASE WHEN 'weight_kg' = ANY($25) THEN NULL ELSE COALESCE($11, weight_kg) END,
+			     height_cm = CASE WHEN 'height_cm' = ANY($25) THEN NULL ELSE COALESCE($12, height_cm) END,
+			     sex = CASE WHEN 'sex' = ANY($25) THEN NULL ELSE CASE WHEN $14 IS NOT NULL THEN NULL ELSE COALESCE($13, sex) END END,
+			     sex_null_flavor = CASE WHEN 'sex_null_flavor' = ANY($25) THEN NULL ELSE CASE WHEN $13 IS NOT NULL THEN NULL ELSE COALESCE($14, sex_null_flavor) END END,
+			     race_codes = CASE WHEN 'race_codes' = ANY($25) THEN NULL ELSE CASE WHEN $16 IS NOT NULL THEN '{{}}'::VARCHAR(10)[] ELSE COALESCE($15, race_codes) END END,
+			     race_code_null_flavor = CASE WHEN 'race_code_null_flavor' = ANY($25) THEN NULL ELSE CASE WHEN COALESCE(cardinality($15), 0) > 0 THEN NULL ELSE COALESCE($16, race_code_null_flavor) END END,
+			     ethnicity_code = CASE WHEN 'ethnicity_code' = ANY($25) THEN NULL ELSE CASE WHEN $18 IS NOT NULL THEN NULL ELSE COALESCE($17, ethnicity_code) END END,
+			     ethnicity_code_null_flavor = CASE WHEN 'ethnicity_code_null_flavor' = ANY($25) THEN NULL ELSE CASE WHEN $17 IS NOT NULL THEN NULL ELSE COALESCE($18, ethnicity_code_null_flavor) END END,
+			     last_menstrual_period_date = CASE WHEN 'last_menstrual_period_date' = ANY($25) THEN NULL ELSE CASE WHEN $20 IS NOT NULL THEN NULL ELSE COALESCE($19, last_menstrual_period_date) END END,
+			     last_menstrual_period_date_null_flavor = CASE WHEN 'last_menstrual_period_date_null_flavor' = ANY($25) THEN NULL ELSE CASE WHEN $19 IS NOT NULL THEN NULL ELSE COALESCE($20, last_menstrual_period_date_null_flavor) END END,
+			     medical_history_text = CASE WHEN 'medical_history_text' = ANY($25) THEN NULL ELSE CASE WHEN $22 IS NOT NULL THEN NULL ELSE COALESCE($21, medical_history_text) END END,
+			     medical_history_text_null_flavor = CASE WHEN 'medical_history_text_null_flavor' = ANY($25) THEN NULL ELSE CASE WHEN $21 IS NOT NULL THEN NULL ELSE COALESCE($22, medical_history_text_null_flavor) END END,
+			     concomitant_therapy = CASE WHEN 'concomitant_therapy' = ANY($25) THEN NULL ELSE COALESCE($23, concomitant_therapy) END,
 			     updated_at = now(),
 			     updated_by = $24
 			 WHERE case_id = $1",
@@ -1040,7 +1063,8 @@ impl PatientInformationBmc {
 					.bind(data.medical_history_text)
 					.bind(data.medical_history_text_null_flavor)
 					.bind(data.concomitant_therapy)
-					.bind(ctx.user_id()),
+					.bind(ctx.user_id())
+					.bind(clears),
 			)
 			.await?;
 		if result == 0 {
@@ -1126,6 +1150,16 @@ impl PatientIdentifierBmc {
 		id: Uuid,
 		data: PatientIdentifierForUpdate,
 	) -> Result<()> {
+		Self::update_patch(ctx, mm, id, data, &[]).await
+	}
+
+	pub async fn update_patch(
+		ctx: &Ctx,
+		mm: &ModelManager,
+		id: Uuid,
+		data: PatientIdentifierForUpdate,
+		clear_fields: &[&str],
+	) -> Result<()> {
 		mm.dbx().begin_txn().await?;
 		set_full_context_dbx_or_rollback(
 			mm.dbx(),
@@ -1139,17 +1173,19 @@ impl PatientIdentifierBmc {
 			"UPDATE {} SET
 			 identifier_type_code = COALESCE($1, identifier_type_code),
 			 identifier_value = CASE
+			  WHEN 'identifier_value' = ANY($4::text[]) THEN NULL
 			  WHEN $3::varchar IS NOT NULL THEN NULL
 			  ELSE COALESCE($2, identifier_value)
 			 END,
 			 identifier_value_null_flavor = CASE
+			  WHEN 'identifier_value_null_flavor' = ANY($4::text[]) THEN NULL
 			  WHEN $3::varchar IS NOT NULL THEN $3
 			  WHEN $2::varchar IS NOT NULL THEN NULL
 			  ELSE identifier_value_null_flavor
 			 END,
 			 updated_at = now(),
-			 updated_by = $4
-			 WHERE id = $5",
+			 updated_by = $5
+			 WHERE id = $6",
 			Self::TABLE
 		);
 		let result = mm
@@ -1159,6 +1195,7 @@ impl PatientIdentifierBmc {
 					.bind(data.identifier_type_code)
 					.bind(data.identifier_value)
 					.bind(data.identifier_value_null_flavor)
+					.bind(clear_fields)
 					.bind(ctx.user_id())
 					.bind(id),
 			)
@@ -1283,6 +1320,16 @@ impl PastDrugHistoryBmc {
 		id: Uuid,
 		data: PastDrugHistoryForUpdate,
 	) -> Result<()> {
+		Self::update_patch(ctx, mm, id, data, &[]).await
+	}
+
+	pub async fn update_patch(
+		ctx: &Ctx,
+		mm: &ModelManager,
+		id: Uuid,
+		data: PastDrugHistoryForUpdate,
+		clear_fields: &[&str],
+	) -> Result<()> {
 		mm.dbx().begin_txn().await?;
 		set_full_context_dbx_or_rollback(
 			mm.dbx(),
@@ -1291,25 +1338,27 @@ impl PastDrugHistoryBmc {
 			ctx.role(),
 		)
 		.await?;
+		let clears: Vec<String> =
+			clear_fields.iter().map(|field| (*field).into()).collect();
 
 		let sql = format!(
 			"UPDATE {} SET
-			 drug_name = CASE WHEN $1::varchar IS NOT NULL THEN NULL ELSE COALESCE($2, drug_name) END,
-			 drug_name_null_flavor = CASE WHEN $2::varchar IS NOT NULL THEN NULL ELSE COALESCE($1, drug_name_null_flavor) END,
-			 mfds_medicinal_product_version = COALESCE($3, mfds_medicinal_product_version),
-			 mfds_medicinal_product_id = COALESCE($4, mfds_medicinal_product_id),
-			 mpid = COALESCE($5, mpid),
-			 mpid_version = COALESCE($6, mpid_version),
-			 phpid = COALESCE($7, phpid),
-			 phpid_version = COALESCE($8, phpid_version),
-			 start_date = CASE WHEN $10::varchar IS NOT NULL THEN NULL ELSE COALESCE($9, start_date) END,
-			 start_date_null_flavor = CASE WHEN $9::date IS NOT NULL THEN NULL ELSE COALESCE($10, start_date_null_flavor) END,
-			 end_date = CASE WHEN $12::varchar IS NOT NULL THEN NULL ELSE COALESCE($11, end_date) END,
-			 end_date_null_flavor = CASE WHEN $11::date IS NOT NULL THEN NULL ELSE COALESCE($12, end_date_null_flavor) END,
-			 indication_meddra_version = COALESCE($13, indication_meddra_version),
-			 indication_meddra_code = COALESCE($14, indication_meddra_code),
-			 reaction_meddra_version = COALESCE($15, reaction_meddra_version),
-			 reaction_meddra_code = COALESCE($16, reaction_meddra_code),
+			 drug_name = CASE WHEN 'drug_name' = ANY($19) THEN NULL ELSE CASE WHEN $1::varchar IS NOT NULL THEN NULL ELSE COALESCE($2, drug_name) END END,
+			 drug_name_null_flavor = CASE WHEN 'drug_name_null_flavor' = ANY($19) THEN NULL ELSE CASE WHEN $2::varchar IS NOT NULL THEN NULL ELSE COALESCE($1, drug_name_null_flavor) END END,
+			 mfds_medicinal_product_version = CASE WHEN 'mfds_medicinal_product_version' = ANY($19) THEN NULL ELSE COALESCE($3, mfds_medicinal_product_version) END,
+			 mfds_medicinal_product_id = CASE WHEN 'mfds_medicinal_product_id' = ANY($19) THEN NULL ELSE COALESCE($4, mfds_medicinal_product_id) END,
+			 mpid = CASE WHEN 'mpid' = ANY($19) THEN NULL ELSE COALESCE($5, mpid) END,
+			 mpid_version = CASE WHEN 'mpid_version' = ANY($19) THEN NULL ELSE COALESCE($6, mpid_version) END,
+			 phpid = CASE WHEN 'phpid' = ANY($19) THEN NULL ELSE COALESCE($7, phpid) END,
+			 phpid_version = CASE WHEN 'phpid_version' = ANY($19) THEN NULL ELSE COALESCE($8, phpid_version) END,
+			 start_date = CASE WHEN 'start_date' = ANY($19) THEN NULL ELSE CASE WHEN $10::varchar IS NOT NULL THEN NULL ELSE COALESCE($9, start_date) END END,
+			 start_date_null_flavor = CASE WHEN 'start_date_null_flavor' = ANY($19) THEN NULL ELSE CASE WHEN $9::date IS NOT NULL THEN NULL ELSE COALESCE($10, start_date_null_flavor) END END,
+			 end_date = CASE WHEN 'end_date' = ANY($19) THEN NULL ELSE CASE WHEN $12::varchar IS NOT NULL THEN NULL ELSE COALESCE($11, end_date) END END,
+			 end_date_null_flavor = CASE WHEN 'end_date_null_flavor' = ANY($19) THEN NULL ELSE CASE WHEN $11::date IS NOT NULL THEN NULL ELSE COALESCE($12, end_date_null_flavor) END END,
+			 indication_meddra_version = CASE WHEN 'indication_meddra_version' = ANY($19) THEN NULL ELSE COALESCE($13, indication_meddra_version) END,
+			 indication_meddra_code = CASE WHEN 'indication_meddra_code' = ANY($19) THEN NULL ELSE COALESCE($14, indication_meddra_code) END,
+			 reaction_meddra_version = CASE WHEN 'reaction_meddra_version' = ANY($19) THEN NULL ELSE COALESCE($15, reaction_meddra_version) END,
+			 reaction_meddra_code = CASE WHEN 'reaction_meddra_code' = ANY($19) THEN NULL ELSE COALESCE($16, reaction_meddra_code) END,
 			 updated_at = now(),
 			 updated_by = $17
 			 WHERE id = $18",
@@ -1337,7 +1386,8 @@ impl PastDrugHistoryBmc {
 					.bind(data.reaction_meddra_version)
 					.bind(data.reaction_meddra_code)
 					.bind(ctx.user_id())
-					.bind(id),
+					.bind(id)
+					.bind(clears),
 			)
 			.await?;
 		if result == 0 {
@@ -1397,6 +1447,16 @@ impl PatientDeathInformationBmc {
 		id: Uuid,
 		data: PatientDeathInformationForUpdate,
 	) -> Result<()> {
+		Self::update_patch(ctx, mm, id, data, &[]).await
+	}
+
+	pub async fn update_patch(
+		ctx: &Ctx,
+		mm: &ModelManager,
+		id: Uuid,
+		data: PatientDeathInformationForUpdate,
+		clear_fields: &[&str],
+	) -> Result<()> {
 		mm.dbx().begin_txn().await?;
 		set_full_context_dbx_or_rollback(
 			mm.dbx(),
@@ -1405,27 +1465,29 @@ impl PatientDeathInformationBmc {
 			ctx.role(),
 		)
 		.await?;
+		let clears: Vec<String> =
+			clear_fields.iter().map(|field| (*field).into()).collect();
 
 		let sql = format!(
 			"UPDATE {} SET
-			 date_of_death = CASE
+			 date_of_death = CASE WHEN 'date_of_death' = ANY($7) THEN NULL ELSE CASE
 			 	WHEN $1::varchar IS NOT NULL THEN NULL
 			 	ELSE COALESCE($2, date_of_death)
-			 END,
-			 date_of_death_null_flavor = CASE
+			 END END,
+			 date_of_death_null_flavor = CASE WHEN 'date_of_death_null_flavor' = ANY($7) THEN NULL ELSE CASE
 			 	WHEN $1::varchar IS NOT NULL THEN $1
 			 	WHEN $2::date IS NOT NULL THEN NULL
 			 	ELSE date_of_death_null_flavor
-			 END,
-			 autopsy_performed = CASE
+			 END END,
+			 autopsy_performed = CASE WHEN 'autopsy_performed' = ANY($7) THEN NULL ELSE CASE
 			  WHEN $3::varchar IS NOT NULL THEN NULL
 			  ELSE COALESCE($4, autopsy_performed)
-			 END,
-			 autopsy_performed_null_flavor = CASE
+			 END END,
+			 autopsy_performed_null_flavor = CASE WHEN 'autopsy_performed_null_flavor' = ANY($7) THEN NULL ELSE CASE
 			  WHEN $3::varchar IS NOT NULL THEN $3
 			  WHEN $4::boolean IS NOT NULL THEN NULL
 			  ELSE autopsy_performed_null_flavor
-			 END,
+			 END END,
 			 updated_at = now(),
 			 updated_by = $5
 			 WHERE id = $6",
@@ -1441,7 +1503,8 @@ impl PatientDeathInformationBmc {
 					.bind(data.autopsy_performed_null_flavor)
 					.bind(data.autopsy_performed)
 					.bind(ctx.user_id())
-					.bind(id),
+					.bind(id)
+					.bind(clears),
 			)
 			.await?;
 		if result == 0 {
@@ -1616,6 +1679,16 @@ impl ParentInformationBmc {
 		id: Uuid,
 		data: ParentInformationForUpdate,
 	) -> Result<()> {
+		Self::update_patch(ctx, mm, id, data, &[]).await
+	}
+
+	pub async fn update_patch(
+		ctx: &Ctx,
+		mm: &ModelManager,
+		id: Uuid,
+		data: ParentInformationForUpdate,
+		clear_fields: &[&str],
+	) -> Result<()> {
 		mm.dbx().begin_txn().await?;
 		set_full_context_dbx_or_rollback(
 			mm.dbx(),
@@ -1624,7 +1697,10 @@ impl ParentInformationBmc {
 			ctx.role(),
 		)
 		.await?;
-		let parent_age_clear = matches!(data.parent_age, Some(None));
+		let clears: Vec<String> =
+			clear_fields.iter().map(|field| (*field).into()).collect();
+		let parent_age_clear = matches!(data.parent_age, Some(None))
+			|| clear_fields.contains(&"parent_age");
 		let parent_age = data.parent_age.flatten();
 		mm.dbx()
 			.execute(
@@ -1638,47 +1714,47 @@ impl ParentInformationBmc {
 
 		let sql = format!(
 			"UPDATE {} SET
-			 parent_identification = CASE
+			 parent_identification = CASE WHEN 'parent_identification' = ANY($16) THEN NULL ELSE CASE
 			   WHEN $1::varchar IS NOT NULL THEN NULL
 			   ELSE COALESCE($2, parent_identification)
-			 END,
-			 parent_identification_null_flavor = CASE
+			 END END,
+			 parent_identification_null_flavor = CASE WHEN 'parent_identification_null_flavor' = ANY($16) THEN NULL ELSE CASE
 			   WHEN $1::varchar IS NOT NULL THEN $1
 			   WHEN $2::varchar IS NOT NULL THEN NULL
 			   ELSE parent_identification_null_flavor
-			 END,
-			 parent_birth_date = CASE
+			 END END,
+			 parent_birth_date = CASE WHEN 'parent_birth_date' = ANY($16) THEN NULL ELSE CASE
 			   WHEN $3::varchar IS NOT NULL THEN NULL
 			   ELSE COALESCE($4, parent_birth_date)
-			 END,
-			 parent_birth_date_null_flavor = CASE
+			 END END,
+			 parent_birth_date_null_flavor = CASE WHEN 'parent_birth_date_null_flavor' = ANY($16) THEN NULL ELSE CASE
 			   WHEN $3::varchar IS NOT NULL THEN $3
 			   WHEN $4::date IS NOT NULL THEN NULL
 			   ELSE parent_birth_date_null_flavor
-			 END,
-			 parent_age = COALESCE($5, parent_age),
-			 parent_age_unit = COALESCE($6, parent_age_unit),
-			 last_menstrual_period_date = CASE
+			 END END,
+			 parent_age = CASE WHEN 'parent_age' = ANY($16) THEN NULL ELSE COALESCE($5, parent_age) END,
+			 parent_age_unit = CASE WHEN 'parent_age_unit' = ANY($16) THEN NULL ELSE COALESCE($6, parent_age_unit) END,
+			 last_menstrual_period_date = CASE WHEN 'last_menstrual_period_date' = ANY($16) THEN NULL ELSE CASE
 			   WHEN $7::varchar IS NOT NULL THEN NULL
 			   ELSE COALESCE($8, last_menstrual_period_date)
-			 END,
-			 last_menstrual_period_date_null_flavor = CASE
+			 END END,
+			 last_menstrual_period_date_null_flavor = CASE WHEN 'last_menstrual_period_date_null_flavor' = ANY($16) THEN NULL ELSE CASE
 			   WHEN $7::varchar IS NOT NULL THEN $7
 			   WHEN $8::date IS NOT NULL THEN NULL
 			   ELSE last_menstrual_period_date_null_flavor
-			 END,
-			 weight_kg = COALESCE($9, weight_kg),
-			 height_cm = COALESCE($10, height_cm),
-			 sex = CASE
+			 END END,
+			 weight_kg = CASE WHEN 'weight_kg' = ANY($16) THEN NULL ELSE COALESCE($9, weight_kg) END,
+			 height_cm = CASE WHEN 'height_cm' = ANY($16) THEN NULL ELSE COALESCE($10, height_cm) END,
+			 sex = CASE WHEN 'sex' = ANY($16) THEN NULL ELSE CASE
 			   WHEN $11::varchar IS NOT NULL THEN NULL
 			   ELSE COALESCE($12, sex)
-			 END,
-			 sex_null_flavor = CASE
+			 END END,
+			 sex_null_flavor = CASE WHEN 'sex_null_flavor' = ANY($16) THEN NULL ELSE CASE
 			   WHEN $11::varchar IS NOT NULL THEN $11
 			   WHEN $12::varchar IS NOT NULL THEN NULL
 			   ELSE sex_null_flavor
-			 END,
-			 medical_history_text = COALESCE($13, medical_history_text),
+			 END END,
+			 medical_history_text = CASE WHEN 'medical_history_text' = ANY($16) THEN NULL ELSE COALESCE($13, medical_history_text) END,
 			 updated_at = now(),
 			 updated_by = $14
 			 WHERE id = $15",
@@ -1703,7 +1779,8 @@ impl ParentInformationBmc {
 					.bind(data.sex)
 					.bind(data.medical_history_text)
 					.bind(ctx.user_id())
-					.bind(id),
+					.bind(id)
+					.bind(clears),
 			)
 			.await?;
 		if result == 0 {

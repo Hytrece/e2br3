@@ -1147,8 +1147,7 @@ struct CaseForUpdateDoc {
 #[derive(serde::Serialize, serde::Deserialize, ToSchema)]
 struct CaseIntakeCheckInputDoc {
 	safety_report_id: String,
-	#[schema(value_type = Vec<i32>)]
-	date_of_most_recent_information: Option<Vec<i32>>,
+	date_of_most_recent_information: Option<String>,
 	report_type: Option<String>,
 	reporter_organization: Option<String>,
 	reporter_organization_null_flavor: Option<String>,
@@ -1164,8 +1163,7 @@ struct CaseIntakeCheckInputDoc {
 	dg_prd_key: Option<String>,
 	reaction_meddra_version: Option<String>,
 	reaction_meddra_code: Option<String>,
-	#[schema(value_type = Vec<i32>)]
-	ae_start_date: Option<Vec<i32>>,
+	ae_start_date: Option<String>,
 	ae_start_date_null_flavor: Option<String>,
 }
 
@@ -1177,8 +1175,7 @@ struct CaseIntakeDuplicateMatchDoc {
 	status: String,
 	created_at: String,
 	report_type: Option<String>,
-	#[schema(value_type = Vec<i32>)]
-	date_of_most_recent_information: Option<Vec<i32>>,
+	date_of_most_recent_information: Option<String>,
 	reporter_organization: Option<String>,
 	sponsor_study_number: Option<String>,
 	patient_initials: Option<String>,
@@ -1188,8 +1185,7 @@ struct CaseIntakeDuplicateMatchDoc {
 	dg_prd_key: Option<String>,
 	reaction_meddra_version: Option<String>,
 	reaction_meddra_code: Option<String>,
-	#[schema(value_type = Vec<i32>)]
-	ae_start_date: Option<Vec<i32>>,
+	ae_start_date: Option<String>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, ToSchema)]
@@ -1210,10 +1206,8 @@ struct CaseFromIntakeInputDoc {
 	safety_report_id: String,
 	#[schema(value_type = Vec<i32>)]
 	transmission_date: Option<Vec<i32>>,
-	#[schema(value_type = Vec<i32>)]
-	date_first_received_from_source: Option<Vec<i32>>,
-	#[schema(value_type = Vec<i32>)]
-	date_of_most_recent_information: Vec<i32>,
+	date_first_received_from_source: Option<String>,
+	date_of_most_recent_information: String,
 	report_type: String,
 	status: Option<String>,
 	/// Honored only when duplicate matches are empty and the duplicate basis
@@ -1236,8 +1230,7 @@ struct CaseFromIntakeInputDoc {
 	dg_prd_key: Option<String>,
 	reaction_meddra_version: Option<String>,
 	reaction_meddra_code: Option<String>,
-	#[schema(value_type = Vec<i32>)]
-	ae_start_date: Option<Vec<i32>>,
+	ae_start_date: Option<String>,
 	ae_start_date_null_flavor: Option<String>,
 }
 

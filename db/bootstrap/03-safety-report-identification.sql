@@ -18,10 +18,10 @@ CREATE TABLE safety_report_identification (
     -- 1=Spontaneous report, 2=Report from study, 3=Other, 4=Not available
 
     -- C.1.4 - Date Report Was First Received from Source (MANDATORY)
-    date_first_received_from_source DATE,
+    date_first_received_from_source TEXT,
 
     -- C.1.5 - Date of Most Recent Information (MANDATORY)
-    date_of_most_recent_information DATE,
+    date_of_most_recent_information TEXT,
 
     -- C.1.7 - Fulfils Expedited Criteria (MANDATORY)
     fulfil_expedited_criteria BOOLEAN,

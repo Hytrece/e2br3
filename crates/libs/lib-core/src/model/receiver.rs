@@ -287,6 +287,67 @@ impl ReceiverInformationBmc {
 		Ok(())
 	}
 
+	pub async fn update_by_case_patch(
+		ctx: &Ctx,
+		mm: &ModelManager,
+		case_id: Uuid,
+		data: ReceiverInformationForUpdate,
+		clear_fields: &[&str],
+	) -> Result<()> {
+		mm.dbx().begin_txn().await?;
+		set_full_context_dbx_or_rollback(
+			mm.dbx(),
+			ctx.user_id(),
+			ctx.organization_id(),
+			ctx.role(),
+		)
+		.await?;
+		let clears: Vec<String> =
+			clear_fields.iter().map(|field| (*field).into()).collect();
+		let sql = format!("UPDATE {} SET
+			receiver_type = CASE WHEN 'receiver_type' = ANY($14) THEN NULL ELSE COALESCE($2, receiver_type) END,
+			organization_name = CASE WHEN 'organization_name' = ANY($14) THEN NULL ELSE COALESCE($3, organization_name) END,
+			department = CASE WHEN 'department' = ANY($14) THEN NULL ELSE COALESCE($4, department) END,
+			street_address = CASE WHEN 'street_address' = ANY($14) THEN NULL ELSE COALESCE($5, street_address) END,
+			city = CASE WHEN 'city' = ANY($14) THEN NULL ELSE COALESCE($6, city) END,
+			state_province = CASE WHEN 'state_province' = ANY($14) THEN NULL ELSE COALESCE($7, state_province) END,
+			postcode = CASE WHEN 'postcode' = ANY($14) THEN NULL ELSE COALESCE($8, postcode) END,
+			country_code = CASE WHEN 'country_code' = ANY($14) THEN NULL ELSE COALESCE($9, country_code) END,
+			telephone = CASE WHEN 'telephone' = ANY($14) THEN NULL ELSE COALESCE($10, telephone) END,
+			fax = CASE WHEN 'fax' = ANY($14) THEN NULL ELSE COALESCE($11, fax) END,
+			email = CASE WHEN 'email' = ANY($14) THEN NULL ELSE COALESCE($12, email) END,
+			updated_at = now(), updated_by = $13 WHERE case_id = $1", Self::TABLE);
+		let result = mm
+			.dbx()
+			.execute(
+				sqlx::query(&sql)
+					.bind(case_id)
+					.bind(data.receiver_type)
+					.bind(data.organization_name)
+					.bind(data.department)
+					.bind(data.street_address)
+					.bind(data.city)
+					.bind(data.state_province)
+					.bind(data.postcode)
+					.bind(data.country_code)
+					.bind(data.telephone)
+					.bind(data.fax)
+					.bind(data.email)
+					.bind(ctx.user_id())
+					.bind(clears),
+			)
+			.await?;
+		if result == 0 {
+			mm.dbx().rollback_txn().await?;
+			return Err(crate::model::Error::EntityUuidNotFound {
+				entity: Self::TABLE,
+				id: case_id,
+			});
+		}
+		mm.dbx().commit_txn().await?;
+		Ok(())
+	}
+
 	pub async fn delete_by_case(
 		ctx: &Ctx,
 		mm: &ModelManager,

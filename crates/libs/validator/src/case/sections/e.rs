@@ -1,7 +1,7 @@
 use super::helpers::{
-	max_length, reject_future_date, reject_when, require, valid_code, valid_decimal,
-	valid_dotted_version, valid_iso3166, valid_iso639, valid_meddra_term,
-	valid_meddra_version, DateValues,
+	e2b_ts_date, max_length, reject_future_date, reject_when, require, valid_code,
+	valid_decimal, valid_dotted_version, valid_iso3166, valid_iso639,
+	valid_meddra_term, valid_meddra_version, DateValues,
 };
 use crate::{
 	has_text, push_business_issue, FdaValidationContext, RegulatoryAuthority,
@@ -11,16 +11,11 @@ use lib_core::model::reaction::Reaction;
 use lib_core::regulatory::{
 	is_mfds_clinical_trial_receiver, is_mfds_compassionate_use_receiver,
 };
-use sqlx::types::Decimal;
 
 const SECTION: &str = "reactions";
 const MAX_LENGTH_MESSAGE: &str = "Dictionary max length exceeded.";
 const ALLOWED_VALUE_MESSAGE: &str = "Dictionary allowed values constraint.";
 const VOCABULARY_MESSAGE: &str = "Dictionary vocabulary constraint.";
-
-fn decimal_text(value: Option<Decimal>) -> Option<String> {
-	value.map(|value| value.to_string())
-}
 
 /// ICH.E.i.1.1a.LENGTH.MAX
 fn e_i_1_1a(
@@ -350,7 +345,10 @@ fn e_i_4_5(idx: usize, reaction: &Reaction, issues: &mut Vec<ValidationIssue>) {
 		&format!("reactions.{idx}.reactionDateRange"),
 		SECTION,
 		"[E.i.4/E.i.5] Reaction dates must not be later than today.",
-		DateValues::Two(reaction.start_date, reaction.end_date),
+		DateValues::Two(
+			e2b_ts_date(reaction.start_date.as_deref()),
+			e2b_ts_date(reaction.end_date.as_deref()),
+		),
 	);
 }
 
@@ -367,14 +365,13 @@ fn e_i_6a(idx: usize, reaction: &Reaction, issues: &mut Vec<ValidationIssue>) {
 		has_text(reaction.duration_unit.as_deref())
 			&& reaction.duration_value.is_none(),
 	);
-	let value = decimal_text(reaction.duration_value);
 	max_length(
 		issues,
 		"ICH.E.i.6a.LENGTH.MAX",
 		&path,
 		SECTION,
 		MAX_LENGTH_MESSAGE,
-		value.as_deref(),
+		reaction.duration_value.as_deref(),
 		5,
 	);
 }
@@ -689,7 +686,7 @@ mod tests {
 	use lib_core::model::case::Case;
 	use lib_core::model::reaction::Reaction;
 	use sqlx::types::time::OffsetDateTime;
-	use sqlx::types::{Decimal, Uuid};
+	use sqlx::types::Uuid;
 
 	fn dummy_case() -> Case {
 		Case {
@@ -956,7 +953,7 @@ mod tests {
 		reaction.primary_source_reaction_translation = Some("T".repeat(251));
 		reaction.reaction_meddra_version = Some("V".repeat(5));
 		reaction.reaction_meddra_code = Some("M".repeat(9));
-		reaction.duration_value = Some(Decimal::new(123456, 0));
+		reaction.duration_value = Some("123456".to_string());
 		reaction.duration_unit = Some("U".repeat(51));
 		reaction.outcome = Some("OC".to_string());
 		reaction.country_code = Some("USA".to_string());

@@ -78,6 +78,71 @@ impl DbBmc for MessageHeaderBmc {
 }
 
 impl MessageHeaderBmc {
+	pub async fn upsert_outbound(
+		ctx: &crate::ctx::Ctx,
+		mm: &ModelManager,
+		data: MessageHeaderForCreate,
+	) -> Result<MessageHeader> {
+		mm.dbx().begin_txn().await?;
+		set_full_context_dbx_or_rollback(
+			mm.dbx(),
+			ctx.user_id(),
+			ctx.organization_id(),
+			ctx.role(),
+		)
+		.await?;
+		let sql = format!(
+			"INSERT INTO {} (
+				case_id, batch_number, batch_sender_identifier,
+				batch_receiver_identifier, batch_transmission_date,
+				message_type, message_format_version, message_format_release,
+				message_date_format, message_number, message_sender_identifier,
+				message_receiver_identifier, message_date, created_at, updated_at, created_by
+			 ) VALUES (
+				$1, $2, $3, $4, $5, 'ichicsr', '2.1', '2.0', '204',
+				$6, $7, $8, $9, now(), now(), $10
+			 ) ON CONFLICT (case_id) DO UPDATE SET
+				batch_number = EXCLUDED.batch_number,
+				batch_sender_identifier = EXCLUDED.batch_sender_identifier,
+				batch_receiver_identifier = EXCLUDED.batch_receiver_identifier,
+				batch_transmission_date = EXCLUDED.batch_transmission_date,
+				message_number = EXCLUDED.message_number,
+				message_sender_identifier = EXCLUDED.message_sender_identifier,
+				message_receiver_identifier = EXCLUDED.message_receiver_identifier,
+				message_date = EXCLUDED.message_date,
+				updated_at = now(),
+				updated_by = $10
+			 RETURNING *",
+			Self::TABLE
+		);
+		let result = mm
+			.dbx()
+			.fetch_one(
+				sqlx::query_as::<_, MessageHeader>(&sql)
+					.bind(data.case_id)
+					.bind(format!("BATCH-{}", data.case_id))
+					.bind(data.batch_sender_identifier)
+					.bind(data.batch_receiver_identifier)
+					.bind(data.batch_transmission_date)
+					.bind(data.message_number)
+					.bind(data.message_sender_identifier)
+					.bind(data.message_receiver_identifier)
+					.bind(data.message_date)
+					.bind(ctx.user_id()),
+			)
+			.await;
+		match result {
+			Ok(header) => {
+				mm.dbx().commit_txn().await?;
+				Ok(header)
+			}
+			Err(err) => {
+				mm.dbx().rollback_txn().await?;
+				Err(err.into())
+			}
+		}
+	}
+
 	pub async fn create(
 		ctx: &crate::ctx::Ctx,
 		mm: &ModelManager,

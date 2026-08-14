@@ -6,6 +6,7 @@ use lib_core::ctx::ROLE_SPONSOR_ADMIN_CRO;
 use lib_core::model::store::set_full_context_dbx;
 use serde_json::{json, Value};
 use serial_test::serial;
+use time::Date;
 use tower::ServiceExt;
 use uuid::Uuid;
 
@@ -122,9 +123,17 @@ fn intake_basis(
 	day_of_year: u32,
 	report_type: &str,
 ) -> Value {
+	let date = Date::from_ordinal_date(2024, day_of_year as u16)
+		.expect("valid test ordinal date");
+	let date = format!(
+		"{:04}{:02}{:02}",
+		date.year(),
+		u8::from(date.month()),
+		date.day()
+	);
 	json!({
 		"safety_report_id": safety_report_id,
-		"date_of_most_recent_information": [2024, day_of_year],
+		"date_of_most_recent_information": date,
 		"report_type": report_type,
 		"patient_initials": intake_patient_initials(safety_report_id),
 		"age_d2_2a": "41",
@@ -132,7 +141,7 @@ fn intake_basis(
 		"dg_prd_key": format!("DG-{}", intake_patient_initials(safety_report_id)),
 		"reaction_meddra_version": "27.0",
 		"reaction_meddra_code": "10019211",
-		"ae_start_date": [2024, day_of_year]
+		"ae_start_date": date.clone()
 	})
 }
 
@@ -288,8 +297,8 @@ async fn test_follow_up_creation_preserves_scope_and_allocates_versions(
 	let rows = mm
 		.dbx()
 		.fetch_all(
-				sqlx::query_as::<_, (Uuid, Option<String>, i32)>(
-					"SELECT c.id, c.dg_prd_key, s.version
+			sqlx::query_as::<_, (Uuid, Option<String>, i32)>(
+				"SELECT c.id, c.dg_prd_key, s.version
 				   FROM cases c
 				   JOIN safety_report_identification s ON s.case_id = c.id
 				  WHERE s.safety_report_id = $1
@@ -516,8 +525,8 @@ async fn test_case_from_intake_persists_distinct_c_1_dates() -> Result<()> {
 	let intake_body = json!({
 		"data": intake_data(&safety_report_id, 123, "1", json!({
 			"transmission_date": [2024, 121],
-			"date_first_received_from_source": [2024, 122],
-			"date_of_most_recent_information": [2024, 123]
+			"date_first_received_from_source": "20240501",
+			"date_of_most_recent_information": "20240502"
 		}))
 	});
 	let (status, body) =
@@ -535,11 +544,11 @@ async fn test_case_from_intake_persists_distinct_c_1_dates() -> Result<()> {
 	assert_eq!(value["data"]["transmission_date"], "20240430000000");
 	assert_eq!(
 		value["data"]["date_first_received_from_source"],
-		json!([2024, 122])
+		"20240501"
 	);
 	assert_eq!(
 		value["data"]["date_of_most_recent_information"],
-		json!([2024, 123])
+		"20240502"
 	);
 
 	Ok(())
@@ -1022,7 +1031,7 @@ async fn test_case_intake_duplicate_check_requires_all_active_fields() -> Result
 
 	let e_i_4_match = json!({
 		"data": intake_data(&safety_report_id, 123, "1", json!({
-			"ae_start_date": [2024, 123]
+			"ae_start_date": "20240502"
 		}))
 	});
 	let (status, body) =
@@ -1032,7 +1041,7 @@ async fn test_case_intake_duplicate_check_requires_all_active_fields() -> Result
 
 	let e_i_4_mismatch = json!({
 		"data": intake_data(&safety_report_id, 123, "1", json!({
-			"ae_start_date": [2024, 124]
+			"ae_start_date": "20240503"
 		}))
 	});
 	let (status, body) =

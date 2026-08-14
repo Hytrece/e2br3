@@ -38,11 +38,7 @@ use crate::web::rest::case_rest::validate_case_create_payload;
 #[derive(Debug, Deserialize)]
 pub struct CaseIntakeCheckInput {
 	pub safety_report_id: Option<String>,
-	#[serde(
-		default,
-		deserialize_with = "lib_core::serde::flex_date::deserialize_option_date"
-	)]
-	pub date_of_most_recent_information: Option<Date>,
+	pub date_of_most_recent_information: Option<String>,
 	pub report_type: Option<String>,
 	pub reporter_organization: Option<String>,
 	pub reporter_organization_null_flavor: Option<String>,
@@ -58,11 +54,7 @@ pub struct CaseIntakeCheckInput {
 	pub dg_prd_key: Option<String>,
 	pub reaction_meddra_version: Option<String>,
 	pub reaction_meddra_code: Option<String>,
-	#[serde(
-		default,
-		deserialize_with = "lib_core::serde::flex_date::deserialize_option_date"
-	)]
-	pub ae_start_date: Option<Date>,
+	pub ae_start_date: Option<String>,
 	pub ae_start_date_null_flavor: Option<String>,
 }
 
@@ -83,13 +75,8 @@ pub struct CaseFromIntakeInput {
 		deserialize_with = "lib_core::serde::flex_date::deserialize_option_date"
 	)]
 	pub transmission_date: Option<Date>,
-	#[serde(
-		default,
-		deserialize_with = "lib_core::serde::flex_date::deserialize_option_date"
-	)]
-	pub date_first_received_from_source: Option<Date>,
-	#[serde(deserialize_with = "lib_core::serde::flex_date::deserialize_date")]
-	pub date_of_most_recent_information: Date,
+	pub date_first_received_from_source: Option<String>,
+	pub date_of_most_recent_information: String,
 	pub report_type: String,
 	pub status: Option<String>,
 	pub allow_duplicate_override: Option<bool>,
@@ -110,11 +97,7 @@ pub struct CaseFromIntakeInput {
 	pub dg_prd_key: Option<String>,
 	pub reaction_meddra_version: Option<String>,
 	pub reaction_meddra_code: Option<String>,
-	#[serde(
-		default,
-		deserialize_with = "lib_core::serde::flex_date::deserialize_option_date"
-	)]
-	pub ae_start_date: Option<Date>,
+	pub ae_start_date: Option<String>,
 	pub ae_start_date_null_flavor: Option<String>,
 }
 
@@ -160,7 +143,7 @@ fn to_duplicate_key(input: &CaseIntakeCheckInput) -> CaseDuplicateKey {
 		dg_prd_key: input.dg_prd_key.clone(),
 		reaction_meddra_version: input.reaction_meddra_version.clone(),
 		reaction_meddra_code: input.reaction_meddra_code.clone(),
-		ae_start_date: input.ae_start_date,
+		ae_start_date: input.ae_start_date.clone(),
 		ae_start_date_null_flavor: input.ae_start_date_null_flavor.clone(),
 	}
 }
@@ -170,7 +153,9 @@ fn normalize_intake_check_input(data: CaseIntakeCheckInput) -> CaseIntakeCheckIn
 		safety_report_id: data
 			.safety_report_id
 			.map(|value| value.trim().to_string()),
-		date_of_most_recent_information: data.date_of_most_recent_information,
+		date_of_most_recent_information: normalize_optional_text(
+			data.date_of_most_recent_information,
+		),
 		report_type: normalize_optional_text(data.report_type),
 		reporter_organization: normalize_optional_text(data.reporter_organization),
 		reporter_organization_null_flavor: normalize_optional_text(
@@ -196,7 +181,7 @@ fn normalize_intake_check_input(data: CaseIntakeCheckInput) -> CaseIntakeCheckIn
 			data.reaction_meddra_version,
 		),
 		reaction_meddra_code: normalize_optional_text(data.reaction_meddra_code),
-		ae_start_date: data.ae_start_date,
+		ae_start_date: normalize_optional_text(data.ae_start_date),
 		ae_start_date_null_flavor: normalize_optional_text(
 			data.ae_start_date_null_flavor,
 		),
@@ -206,7 +191,9 @@ fn normalize_intake_check_input(data: CaseIntakeCheckInput) -> CaseIntakeCheckIn
 fn normalized_from_intake(data: &CaseFromIntakeInput) -> CaseIntakeCheckInput {
 	normalize_intake_check_input(CaseIntakeCheckInput {
 		safety_report_id: data.safety_report_id.clone(),
-		date_of_most_recent_information: Some(data.date_of_most_recent_information),
+		date_of_most_recent_information: Some(
+			data.date_of_most_recent_information.clone(),
+		),
 		report_type: Some(data.report_type.clone()),
 		reporter_organization: data.reporter_organization.clone(),
 		reporter_organization_null_flavor: data
@@ -228,7 +215,7 @@ fn normalized_from_intake(data: &CaseFromIntakeInput) -> CaseIntakeCheckInput {
 		dg_prd_key: data.dg_prd_key.clone(),
 		reaction_meddra_version: data.reaction_meddra_version.clone(),
 		reaction_meddra_code: data.reaction_meddra_code.clone(),
-		ae_start_date: data.ae_start_date,
+		ae_start_date: data.ae_start_date.clone(),
 		ae_start_date_null_flavor: data.ae_start_date_null_flavor.clone(),
 	})
 }
@@ -294,7 +281,38 @@ fn validate_intake_pair(
 	Ok(())
 }
 
+fn validate_intake_value(
+	value: Option<&str>,
+	path: &str,
+	check: impl for<'a> Fn(
+		input_contracts::FieldInput<'a>,
+	) -> Vec<input_contracts::InputIssue>,
+) -> Result<()> {
+	let Some(value) = value.map(str::trim).filter(|value| !value.is_empty()) else {
+		return Ok(());
+	};
+	if let Some(issue) = check(input_contracts::FieldInput::new(
+		input_contracts::InputValue::String(value),
+		None,
+	))
+	.into_iter()
+	.next()
+	{
+		return Err(Error::ConstraintViolation(ConstraintViolation {
+			rule_code: issue.code.to_string(),
+			path: path.to_string(),
+			message: issue.message,
+		}));
+	}
+	Ok(())
+}
+
 fn validate_intake_pairs(data: &CaseIntakeCheckInput) -> Result<()> {
+	validate_intake_value(
+		data.date_of_most_recent_information.as_deref(),
+		"safetyReportIdentification.dateOfMostRecentInformation",
+		input_contracts::generated::c::c_1_5,
+	)?;
 	validate_intake_pair(
 		data.reporter_organization.is_some(),
 		data.reporter_organization.as_deref(),
@@ -337,7 +355,7 @@ fn validate_intake_pairs(data: &CaseIntakeCheckInput) -> Result<()> {
 	)?;
 	validate_intake_pair(
 		data.ae_start_date.is_some(),
-		None,
+		data.ae_start_date.as_deref(),
 		data.ae_start_date_null_flavor.as_deref(),
 		"reactions[].reactionStartDateNullFlavor",
 		"ICH.E.i.4.NULLFLAVOR.ALLOWED",
@@ -492,6 +510,11 @@ async fn create_case_from_intake_in_txn(
 	use sqlx::types::time::OffsetDateTime;
 
 	let mut safety_report_id = data.safety_report_id.clone().unwrap_or_default();
+	validate_intake_value(
+		data.date_first_received_from_source.as_deref(),
+		"safetyReportIdentification.dateFirstReceivedFromSource",
+		input_contracts::generated::c::c_1_4,
+	)?;
 	validate_intake_pairs(&normalized_from_intake(&data))?;
 	if data.report_type.trim().is_empty() {
 		return Err(Error::BadRequest {
@@ -555,12 +578,23 @@ async fn create_case_from_intake_in_txn(
 	};
 	validate_case_create_payload(&case_create)?;
 	let case_id = CaseBmc::create(ctx, mm, case_create).await?;
-	let transmission_date = data
-		.transmission_date
-		.unwrap_or(data.date_of_most_recent_information);
+	let date_of_most_recent_information =
+		non_empty(Some(&data.date_of_most_recent_information)).ok_or_else(|| {
+			Error::BadRequest {
+				message: "date_of_most_recent_information is required".to_string(),
+			}
+		})?;
+	let transmission_date = data.transmission_date.unwrap_or_else(|| {
+		lib_core::serde::flex_date::e2b_datetime_date(
+			&date_of_most_recent_information,
+		)
+		.unwrap_or_else(|| OffsetDateTime::now_utc().date())
+	});
 	let date_first_received_from_source = data
 		.date_first_received_from_source
-		.unwrap_or(data.date_of_most_recent_information);
+		.as_deref()
+		.and_then(|value| non_empty(Some(value)))
+		.unwrap_or_else(|| date_of_most_recent_information.clone());
 
 	let now = OffsetDateTime::now_utc();
 	MessageHeaderBmc::create(
@@ -593,7 +627,7 @@ async fn create_case_from_intake_in_txn(
 			report_type: Some(data.report_type),
 			date_first_received_from_source: Some(date_first_received_from_source),
 			date_of_most_recent_information: Some(
-				data.date_of_most_recent_information,
+				date_of_most_recent_information,
 			),
 			fulfil_expedited_criteria: Some(false),
 			fulfil_expedited_criteria_null_flavor: None,
@@ -760,7 +794,7 @@ async fn create_case_from_intake_in_txn(
 				mfds_device_action_notification: None,
 				mfds_device_action_label_change: None,
 				mfds_device_action_other: None,
-				start_date: data.ae_start_date,
+				start_date: data.ae_start_date.and_then(|value| non_empty(Some(&value))),
 				start_date_null_flavor: non_empty(
 					data.ae_start_date_null_flavor.as_deref(),
 				),
@@ -800,7 +834,7 @@ fn format_e2b_datetime(date: Date) -> String {
 
 #[cfg(test)]
 mod tests {
-	use super::validate_intake_pair;
+	use super::{validate_intake_pair, validate_intake_value};
 
 	#[test]
 	fn intake_null_flavor_uses_explicit_catalog_companion() {
@@ -819,5 +853,27 @@ mod tests {
 		assert!(validate(false, None, Some("UNK")).is_err());
 		assert!(validate(true, None, Some("ASKU")).is_err());
 		assert!(validate(true, Some("ASKU"), None).is_err());
+	}
+
+	#[test]
+	fn intake_date_contract_keeps_field_specific_precision() {
+		assert!(validate_intake_value(
+			Some("202206"),
+			"reactionStartDate",
+			input_contracts::generated::e::e_i_4,
+		)
+		.is_ok());
+		assert!(validate_intake_value(
+			Some("202206"),
+			"dateOfMostRecentInformation",
+			input_contracts::generated::c::c_1_5,
+		)
+		.is_err());
+		assert!(validate_intake_value(
+			Some("200509211242-08"),
+			"reactionStartDate",
+			input_contracts::generated::e::e_i_4,
+		)
+		.is_ok());
 	}
 }

@@ -87,9 +87,9 @@ impl EReactionPaths {
 	pub const END_DATE_NULL_FLAVOR: &'static str =
 		"hl7:effectiveTime/hl7:high/@nullFlavor | hl7:effectiveTime/hl7:comp[@xsi:type='IVL_TS']/hl7:high/@nullFlavor";
 	pub const DURATION_VALUE: &'static str =
-		"hl7:effectiveTime/hl7:comp[@operator='A']/hl7:width/@value";
+		"hl7:effectiveTime/hl7:width/@value | hl7:effectiveTime/hl7:comp[@xsi:type='IVL_TS']/hl7:width/@value";
 	pub const DURATION_UNIT: &'static str =
-		"hl7:effectiveTime/hl7:comp[@operator='A']/hl7:width/@unit";
+		"hl7:effectiveTime/hl7:width/@unit | hl7:effectiveTime/hl7:comp[@xsi:type='IVL_TS']/hl7:width/@unit";
 
 	// Outcome / confirmation / country
 	pub const OUTCOME_CODE: &'static str =

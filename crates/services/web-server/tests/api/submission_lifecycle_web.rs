@@ -960,8 +960,7 @@ async fn test_submission_receiver_selection_updates_message_header_n_identifiers
 	for lifecycle in ["draft", "reviewed", "validated", "locked"] {
 		let case_id = create_case(&app, &cookie, seed.org_id).await?;
 		create_message_header(&app, &cookie, case_id).await?;
-		let outbound_batch_number = format!("OUTBOUND-BATCH-{case_id}");
-		let outbound_message_number = format!("OUTBOUND-MESSAGE-{case_id}");
+		let safety_report_id = format!("SYSTEM-HEADER-{case_id}");
 
 		mm.dbx().begin_txn().await?;
 		set_full_context_dbx(
@@ -1009,9 +1008,22 @@ async fn test_submission_receiver_selection_updates_message_header_n_identifiers
 			.await?;
 		mm.dbx()
 			.execute(
-				sqlx::query("UPDATE cases SET status = $1 WHERE id = $2")
-					.bind(lifecycle)
-					.bind(case_id),
+				sqlx::query(
+					"UPDATE cases SET status = $1, mfds_report_type = '3' WHERE id = $2",
+				)
+				.bind(lifecycle)
+				.bind(case_id),
+			)
+			.await?;
+		mm.dbx()
+			.execute(
+				sqlx::query(
+					"UPDATE safety_report_identification
+					 SET safety_report_id = $1, transmission_date = '20260806010203'
+					 WHERE case_id = $2",
+				)
+				.bind(&safety_report_id)
+				.bind(case_id),
 			)
 			.await?;
 		mm.dbx().commit_txn().await?;
@@ -1023,28 +1035,11 @@ async fn test_submission_receiver_selection_updates_message_header_n_identifiers
 			json!({
 				"data": {
 					"authority": "mfds",
-					"receiver_label": "MFDS(KR)",
-					"batch_receiver_identifier": "MFDS-O-KR",
-					"message_receiver_identifier": "MFDS-O-KR",
-					"outbound_message_header": {
-						"batch_number": outbound_batch_number,
-						"batch_sender_identifier": "OUTBOUND-SENDER",
-						"batch_receiver_identifier": "MFDS-O-KR",
-						"batch_transmission_date": "20260806010203",
-						"message_number": outbound_message_number,
-						"message_sender_identifier": "OUTBOUND-SENDER",
-						"message_receiver_identifier": "MFDS-O-KR",
-						"message_date": "20260806010203"
-					}
+					"receiver_label": "MFDS(KR)"
 				}
 			}),
 		)
 		.await?;
-
-		if lifecycle == "draft" {
-			assert_eq!(response_status, StatusCode::FORBIDDEN, "{body:?}");
-			continue;
-		}
 
 		assert_eq!(response_status, StatusCode::OK, "{body:?}");
 		assert_eq!(
@@ -1067,7 +1062,7 @@ async fn test_submission_receiver_selection_updates_message_header_n_identifiers
 		assert_eq!(header_status, StatusCode::OK, "{header:?}");
 		assert_eq!(
 			header["data"]["message_number"].as_str(),
-			Some(outbound_message_number.as_str())
+			Some(safety_report_id.as_str())
 		);
 		assert_eq!(
 			header["data"]["message_sender_identifier"].as_str(),
@@ -1075,7 +1070,7 @@ async fn test_submission_receiver_selection_updates_message_header_n_identifiers
 		);
 		assert_eq!(
 			header["data"]["batch_number"].as_str(),
-			Some(outbound_batch_number.as_str())
+			Some(format!("BATCH-{case_id}").as_str())
 		);
 		assert_eq!(
 			header["data"]["batch_sender_identifier"].as_str(),
@@ -1087,6 +1082,128 @@ async fn test_submission_receiver_selection_updates_message_header_n_identifiers
 		);
 		assert_eq!(header["data"]["batch_transmission_date"][0], 2026);
 	}
+
+	Ok(())
+}
+
+#[serial]
+#[tokio::test]
+async fn concurrent_authority_header_preparation_returns_request_scoped_values(
+) -> Result<()> {
+	clear_esg_env();
+	let mm = init_test_mm().await?;
+	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
+	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
+	let cookie = cookie_header(&token.to_string());
+	let app = web_server::app(mm.clone());
+	let case_id = create_case(&app, &cookie, seed.org_id).await?;
+
+	mm.dbx().begin_txn().await?;
+	set_full_context_dbx(
+		mm.dbx(),
+		seed.admin.id,
+		seed.org_id,
+		ROLE_SPONSOR_ADMIN_CRO,
+	)
+	.await?;
+	let sender_presave_id = Uuid::new_v4();
+	mm.dbx()
+		.execute(
+			sqlx::query(
+				"INSERT INTO sender_presaves (id, organization_id, organization_name, created_by)
+				 VALUES ($1, $2, 'Concurrent Sender', $3)",
+			)
+			.bind(sender_presave_id)
+			.bind(seed.org_id)
+			.bind(seed.admin.id),
+		)
+		.await?;
+	mm.dbx()
+		.execute(
+			sqlx::query(
+				"INSERT INTO sender_presave_gateways (
+					sender_presave_id, sequence_number, gateway_authority,
+					sender_identifier, is_default_for_authority, created_by
+				 ) VALUES
+					($1, 1, 'fda', 'FDA-SENDER', true, $2),
+					($1, 2, 'mfds', 'MFDS-SENDER', true, $2)",
+			)
+			.bind(sender_presave_id)
+			.bind(seed.admin.id),
+		)
+		.await?;
+	mm.dbx()
+		.execute(
+			sqlx::query(
+				"INSERT INTO sender_information (case_id, source_sender_presave_id, created_by)
+				 VALUES ($1, $2, $3)",
+			)
+			.bind(case_id)
+			.bind(sender_presave_id)
+			.bind(seed.admin.id),
+		)
+		.await?;
+	mm.dbx()
+		.execute(
+			sqlx::query(
+				"UPDATE cases SET fda_report_type = '4', mfds_report_type = '3'
+				 WHERE id = $1",
+			)
+			.bind(case_id),
+		)
+		.await?;
+	mm.dbx()
+		.execute(
+			sqlx::query(
+				"UPDATE safety_report_identification
+				 SET safety_report_id = $1, transmission_date = '20260814000000'
+				 WHERE case_id = $2",
+			)
+			.bind(format!("CONCURRENT-{case_id}"))
+			.bind(case_id),
+		)
+		.await?;
+	mm.dbx().commit_txn().await?;
+
+	let uri = format!("/api/cases/{case_id}/submission-receiver");
+	let (fda, mfds) = tokio::join!(
+		put_json(
+			&app,
+			&cookie,
+			&uri,
+			json!({ "data": { "authority": "fda" } }),
+		),
+		put_json(
+			&app,
+			&cookie,
+			&uri,
+			json!({ "data": { "authority": "mfds" } }),
+		)
+	);
+	let (fda_status, fda) = fda?;
+	let (mfds_status, mfds) = mfds?;
+	assert_eq!(fda_status, StatusCode::OK, "{fda:?}");
+	assert_eq!(mfds_status, StatusCode::OK, "{mfds:?}");
+	assert_eq!(
+		fda["data"]["message_receiver_identifier"].as_str(),
+		Some("CDER"),
+		"{fda:?}"
+	);
+	assert_eq!(
+		mfds["data"]["message_receiver_identifier"].as_str(),
+		Some("MFDS-O-KR"),
+		"{mfds:?}"
+	);
+	assert_eq!(
+		fda["data"]["message_sender_identifier"].as_str(),
+		Some("FDA-SENDER"),
+		"{fda:?}"
+	);
+	assert_eq!(
+		mfds["data"]["message_sender_identifier"].as_str(),
+		Some("MFDS-SENDER"),
+		"{mfds:?}"
+	);
 
 	Ok(())
 }

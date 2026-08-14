@@ -10,7 +10,6 @@ use crate::model::ModelManager;
 use crate::model::Result;
 use serde::Serialize;
 use sqlx::FromRow;
-use time::Date;
 use uuid::Uuid;
 
 // -- Types
@@ -34,7 +33,7 @@ pub struct CaseDuplicateKey {
 	pub dg_prd_key: Option<String>,
 	pub reaction_meddra_version: Option<String>,
 	pub reaction_meddra_code: Option<String>,
-	pub ae_start_date: Option<Date>,
+	pub ae_start_date: Option<String>,
 	pub ae_start_date_null_flavor: Option<String>,
 }
 
@@ -54,7 +53,7 @@ pub struct CaseIntakeDuplicateMatch {
 	pub status: String,
 	pub created_at: String,
 	pub report_type: Option<String>,
-	pub date_of_most_recent_information: Option<Date>,
+	pub date_of_most_recent_information: Option<String>,
 	pub reporter_organization: Option<String>,
 	pub sponsor_study_number: Option<String>,
 	pub patient_initials: Option<String>,
@@ -64,7 +63,7 @@ pub struct CaseIntakeDuplicateMatch {
 	pub dg_prd_key: Option<String>,
 	pub reaction_meddra_version: Option<String>,
 	pub reaction_meddra_code: Option<String>,
-	pub ae_start_date: Option<Date>,
+	pub ae_start_date: Option<String>,
 }
 
 /// Flat row returned by the duplicate scan LATERAL JOIN query.
@@ -77,7 +76,7 @@ struct DuplicateScanRow {
 	created_at: sqlx::types::time::OffsetDateTime,
 	dg_prd_key: Option<String>,
 	report_type: Option<String>,
-	date_of_most_recent_information: Option<Date>,
+	date_of_most_recent_information: Option<String>,
 	reporter_organization: Option<String>,
 	reporter_organization_null_flavor: Option<String>,
 	sponsor_study_number: Option<String>,
@@ -91,7 +90,7 @@ struct DuplicateScanRow {
 	investigation_number_null_flavor: Option<String>,
 	reaction_meddra_code: Option<String>,
 	reaction_meddra_version: Option<String>,
-	ae_start_date: Option<Date>,
+	ae_start_date: Option<String>,
 	ae_start_date_null_flavor: Option<String>,
 }
 
@@ -133,14 +132,23 @@ fn matches_required_decimal(expected: Option<&str>, actual: Option<&str>) -> boo
 }
 
 fn match_date_or_null_flavor(
-	expected: Option<Date>,
+	expected: Option<&str>,
 	expected_null_flavor: Option<&str>,
-	actual: Option<Date>,
+	actual: Option<&str>,
 	actual_null_flavor: Option<&str>,
 ) -> bool {
 	match (expected, has_meaningful_text(expected_null_flavor)) {
 		(Some(expected), false) => {
-			actual == Some(expected) && !has_meaningful_text(actual_null_flavor)
+			actual.is_some_and(|actual| {
+				match (
+					crate::serde::flex_date::e2b_datetime_date(expected),
+					crate::serde::flex_date::e2b_datetime_date(actual),
+				) {
+					(Some(expected), Some(actual)) => expected == actual,
+					_ => expected.trim().eq_ignore_ascii_case(actual.trim()),
+				}
+			})
+				&& !has_meaningful_text(actual_null_flavor)
 		}
 		(None, true) => {
 			actual.is_none()
@@ -188,7 +196,7 @@ pub fn product_signature_present(
 	product_id: Option<&str>,
 	reaction_version: Option<&str>,
 	reaction_code: Option<&str>,
-	ae_start_date: Option<Date>,
+	ae_start_date: Option<&str>,
 ) -> bool {
 	has_meaningful_text(product_id)
 		&& has_meaningful_text(reaction_version)
@@ -502,9 +510,9 @@ impl CaseDuplicateBmc {
 				key.reaction_meddra_code.as_deref(),
 				row.reaction_meddra_code.as_deref(),
 			) && match_date_or_null_flavor(
-				key.ae_start_date,
+				key.ae_start_date.as_deref(),
 				key.ae_start_date_null_flavor.as_deref(),
-				row.ae_start_date,
+				row.ae_start_date.as_deref(),
 				row.ae_start_date_null_flavor.as_deref(),
 			);
 

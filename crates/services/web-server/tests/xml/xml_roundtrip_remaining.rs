@@ -13,6 +13,26 @@ use serial_test::serial;
 use tower::ServiceExt;
 use uuid::Uuid;
 
+fn outbound_header(
+	authority: lib_core::regulatory::RegulatoryAuthority,
+) -> xml::OutboundMessageHeader {
+	let (batch_receiver_identifier, message_receiver_identifier) = match authority {
+		lib_core::regulatory::RegulatoryAuthority::Ich => ("TEST-ICH", "TEST-ICH"),
+		lib_core::regulatory::RegulatoryAuthority::Fda => ("ZZFDA", "CDER"),
+		lib_core::regulatory::RegulatoryAuthority::Mfds => {
+			("MFDS-O-KR", "MFDS-O-KR")
+		}
+	};
+	xml::OutboundMessageHeader {
+		batch_number: "TEST-BATCH".to_string(),
+		batch_sender_identifier: "TEST-SENDER".to_string(),
+		batch_receiver_identifier: batch_receiver_identifier.to_string(),
+		batch_transmission_date: time::OffsetDateTime::now_utc(),
+		message_sender_identifier: "TEST-SENDER".to_string(),
+		message_receiver_identifier: message_receiver_identifier.to_string(),
+	}
+}
+
 fn workspace_root() -> std::path::PathBuf {
 	std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 		.join("../../..")
@@ -479,13 +499,12 @@ async fn fda_export_reads_persisted_sections_through_rls() -> Result<()> {
 	}
 
 	let case_id = Uuid::parse_str(&case_id)?;
+	let authority = lib_core::regulatory::RegulatoryAuthority::Fda;
+	let header = outbound_header(authority);
 	let exported = tokio::task::block_in_place(|| {
 		tokio::runtime::Handle::current().block_on(
 			xml::export::serialize_case_xml_for_authority(
-				&ctx,
-				&mm,
-				case_id,
-				lib_core::regulatory::RegulatoryAuthority::Fda,
+				&ctx, &mm, case_id, authority, &header,
 			),
 		)
 	})?;
@@ -586,10 +605,11 @@ async fn fresh_full_build_validates_for_all_authorities() -> Result<()> {
 		lib_core::regulatory::RegulatoryAuthority::Fda,
 		lib_core::regulatory::RegulatoryAuthority::Mfds,
 	] {
+		let header = outbound_header(authority);
 		let exported = tokio::task::block_in_place(|| {
 			tokio::runtime::Handle::current().block_on(
 				xml::export::serialize_case_xml_for_authority(
-					&ctx, &mm, case_id, authority,
+					&ctx, &mm, case_id, authority, &header,
 				),
 			)
 		})?;
@@ -903,12 +923,18 @@ async fn parent_null_flavor_xml_roundtrip() -> Result<()> {
 	assert_eq!(status, StatusCode::OK, "{}", String::from_utf8_lossy(&body));
 
 	let parsed_case_id = Uuid::parse_str(&case_id)?;
+	let authority = lib_core::regulatory::RegulatoryAuthority::Ich;
+	let header = outbound_header(authority);
 	let xml = tokio::task::block_in_place(|| {
-		tokio::runtime::Handle::current().block_on(xml::serialize_case_xml(
-			&ctx,
-			&mm,
-			parsed_case_id,
-		))
+		tokio::runtime::Handle::current().block_on(
+			xml::serialize_case_xml_for_authority(
+				&ctx,
+				&mm,
+				parsed_case_id,
+				authority,
+				&header,
+			),
+		)
 	})?;
 	assert!(xml.contains("nullFlavor=\"UNK\""), "{xml}");
 	assert!(xml.contains("nullFlavor=\"NASK\""), "{xml}");

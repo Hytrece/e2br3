@@ -346,6 +346,60 @@ impl DrugReactionAssessmentBmc {
 		Ok(())
 	}
 
+	pub async fn update_patch(
+		ctx: &Ctx,
+		mm: &ModelManager,
+		id: Uuid,
+		data: DrugReactionAssessmentForUpdate,
+		clear_fields: &[&str],
+	) -> Result<()> {
+		mm.dbx().begin_txn().await?;
+		set_full_context_dbx_or_rollback(
+			mm.dbx(),
+			ctx.user_id(),
+			ctx.organization_id(),
+			ctx.role(),
+		)
+		.await?;
+		let clears: Vec<String> =
+			clear_fields.iter().map(|field| (*field).into()).collect();
+		let sql = format!("UPDATE {} SET
+			administration_start_interval_value = CASE WHEN 'administration_start_interval_value' = ANY($11) THEN NULL ELSE COALESCE($2, administration_start_interval_value) END,
+			administration_start_interval_unit = CASE WHEN 'administration_start_interval_unit' = ANY($11) THEN NULL ELSE COALESCE($3, administration_start_interval_unit) END,
+			last_dose_interval_value = CASE WHEN 'last_dose_interval_value' = ANY($11) THEN NULL ELSE COALESCE($4, last_dose_interval_value) END,
+			last_dose_interval_unit = CASE WHEN 'last_dose_interval_unit' = ANY($11) THEN NULL ELSE COALESCE($5, last_dose_interval_unit) END,
+			recurrence_action = CASE WHEN 'recurrence_action' = ANY($11) THEN NULL ELSE COALESCE($6, recurrence_action) END,
+			dechallenge_result = CASE WHEN 'dechallenge_result' = ANY($11) THEN NULL ELSE COALESCE($7, dechallenge_result) END,
+			reaction_recurred = CASE WHEN 'reaction_recurred' = ANY($11) THEN NULL ELSE COALESCE($9, reaction_recurred) END,
+			updated_at = now(), updated_by = $10 WHERE id = $1", Self::TABLE);
+		let result = mm
+			.dbx()
+			.execute(
+				sqlx::query(&sql)
+					.bind(id)
+					.bind(data.administration_start_interval_value)
+					.bind(data.administration_start_interval_unit)
+					.bind(data.last_dose_interval_value)
+					.bind(data.last_dose_interval_unit)
+					.bind(data.recurrence_action)
+					.bind(data.dechallenge_result)
+					.bind(Option::<String>::None)
+					.bind(data.reaction_recurred)
+					.bind(ctx.user_id())
+					.bind(clears),
+			)
+			.await?;
+		if result == 0 {
+			mm.dbx().rollback_txn().await?;
+			return Err(crate::model::Error::EntityUuidNotFound {
+				entity: Self::TABLE,
+				id,
+			});
+		}
+		mm.dbx().commit_txn().await?;
+		Ok(())
+	}
+
 	pub async fn delete(ctx: &Ctx, mm: &ModelManager, id: Uuid) -> Result<()> {
 		mm.dbx().begin_txn().await?;
 		set_full_context_dbx_or_rollback(

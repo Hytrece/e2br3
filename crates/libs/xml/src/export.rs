@@ -7,19 +7,21 @@ use lib_core::model::store::set_full_context_from_ctx_dbx;
 use lib_core::model::{self, ModelManager};
 use lib_core::regulatory::RegulatoryAuthority;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
+pub struct OutboundMessageHeader {
+	pub batch_number: String,
+	pub batch_sender_identifier: String,
+	pub batch_receiver_identifier: String,
+	pub batch_transmission_date: sqlx::types::time::OffsetDateTime,
+	pub message_sender_identifier: String,
+	pub message_receiver_identifier: String,
+}
+
+#[derive(Debug, Clone)]
 pub struct ExportXmlOptions {
 	pub apply_comments: bool,
 	pub authority: RegulatoryAuthority,
-}
-
-impl Default for ExportXmlOptions {
-	fn default() -> Self {
-		Self {
-			apply_comments: true,
-			authority: RegulatoryAuthority::Ich,
-		}
-	}
+	pub outbound_message_header: OutboundMessageHeader,
 }
 
 pub(crate) mod mode;
@@ -28,33 +30,21 @@ pub mod roundtrip;
 pub mod sections;
 pub(crate) mod shared;
 
-pub async fn export_case_xml(
-	ctx: &Ctx,
-	mm: &ModelManager,
-	case_id: sqlx::types::Uuid,
-) -> Result<String> {
-	export_case_xml_with_options(ctx, mm, case_id, ExportXmlOptions::default()).await
-}
-
 pub async fn export_case_xml_with_options(
 	ctx: &Ctx,
 	mm: &ModelManager,
 	case_id: sqlx::types::Uuid,
 	options: ExportXmlOptions,
 ) -> Result<String> {
-	serialize_case_xml_for_authority(ctx, mm, case_id, options.authority)
-		.await
-		.map(|xml| apply_export_xml_options(xml, options))
-}
-
-/// Serializes the current case data as an ICH payload.
-pub async fn serialize_case_xml(
-	ctx: &Ctx,
-	mm: &ModelManager,
-	case_id: sqlx::types::Uuid,
-) -> Result<String> {
-	serialize_case_xml_for_authority(ctx, mm, case_id, RegulatoryAuthority::Ich)
-		.await
+	serialize_case_xml_for_authority(
+		ctx,
+		mm,
+		case_id,
+		options.authority,
+		&options.outbound_message_header,
+	)
+	.await
+	.map(|xml| apply_export_xml_options(xml, options.apply_comments))
 }
 
 pub async fn serialize_case_xml_for_authority(
@@ -62,6 +52,7 @@ pub async fn serialize_case_xml_for_authority(
 	mm: &ModelManager,
 	case_id: sqlx::types::Uuid,
 	authority: RegulatoryAuthority,
+	outbound_message_header: &OutboundMessageHeader,
 ) -> Result<String> {
 	let mm = mm.new_with_txn()?;
 	mm.dbx().begin_txn().await.map_err(model::Error::from)?;
@@ -73,7 +64,15 @@ pub async fn serialize_case_xml_for_authority(
 		let case = CaseBmc::get(ctx, &mm, case_id).await.map_err(Error::from)?;
 		let xml =
 			build_fresh_export_from_db(ctx, &mm, case_id, &case, authority).await?;
-		apply_c_d_h_sections(ctx, &mm, case_id, xml, authority).await
+		apply_c_d_h_sections(
+			ctx,
+			&mm,
+			case_id,
+			xml,
+			authority,
+			outbound_message_header,
+		)
+		.await
 	}
 	.await;
 	match result {
@@ -92,8 +91,8 @@ pub(crate) fn base_export_skeleton() -> &'static str {
 	include_str!("fixtures/base_export_skeleton.xml")
 }
 
-fn apply_export_xml_options(xml: String, options: ExportXmlOptions) -> String {
-	if options.apply_comments {
+fn apply_export_xml_options(xml: String, apply_comments: bool) -> String {
+	if apply_comments {
 		xml
 	} else {
 		strip_xml_comments(&xml)

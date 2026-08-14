@@ -594,13 +594,13 @@ fn write_c_1_4(
 	doc: &mut Document,
 	parser: &Parser,
 	xpath: &mut Context,
-	date_first_received: Option<Date>,
+	date_first_received: Option<&str>,
 ) -> Result<()> {
 	ensure_investigation_effective_time(doc, parser, xpath)?;
 	let path = "//hl7:investigationEvent/hl7:effectiveTime/hl7:low";
 	if let Some(value) = date_first_received {
 		remove_attr_first(xpath, path, "nullFlavor");
-		set_attr_first(xpath, path, "value", &fmt_date(value));
+		set_attr_first(xpath, path, "value", value);
 	}
 	Ok(())
 }
@@ -610,13 +610,13 @@ fn write_c_1_5(
 	doc: &mut Document,
 	parser: &Parser,
 	xpath: &mut Context,
-	date_most_recent: Option<Date>,
+	date_most_recent: Option<&str>,
 ) -> Result<()> {
 	ensure_investigation_availability_time(doc, parser, xpath)?;
 	let path = "//hl7:investigationEvent/hl7:availabilityTime";
 	if let Some(value) = date_most_recent {
 		remove_attr_first(xpath, path, "nullFlavor");
-		set_attr_first(xpath, path, "value", &fmt_date(value));
+		set_attr_first(xpath, path, "value", value);
 	}
 	Ok(())
 }

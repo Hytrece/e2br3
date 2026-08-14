@@ -826,9 +826,11 @@ def expand_null_flavor_contracts(
 
 def baseline_for(fields: list[dict[str, Any]], minimal: bool = False) -> dict[str, Any]:
     result: dict[str, Any] = {}
+    concrete = [field for field in fields if not is_nullflavor_field(field)]
     if minimal:
-        concrete = [field for field in fields if not is_nullflavor_field(field)]
         fields = (concrete or fields)[:2]
+    elif concrete:
+        fields = concrete
     for field in fields:
         for path, value in field.get("_fixedPayload", {}).items():
             set_path(result, path, copy.deepcopy(value))
@@ -1111,7 +1113,7 @@ def main(args: argparse.Namespace) -> int:
                 add(Event("baseline", None, page, owner, None, "PASS" if owner_ready[owner] else "BASELINE_REJECTED", status, {**summary, "reason": "reuse case-created safety report row"}))
                 continue
             baseline_fields = [field for field in setup_groups.get(owner, owner_fields) if field.get("code") != "C.1.1"]
-            baseline = baseline_for(baseline_fields, minimal=True)
+            baseline = baseline_for(baseline_fields, minimal=not args.complete_baseline)
             if page == "AE" and owner == "reaction":
                 # AE create contract requires an explicit positive sequence.
                 baseline.setdefault("sequenceNumber", 1)
@@ -1155,7 +1157,7 @@ def main(args: argparse.Namespace) -> int:
                     for candidate in setup_groups.get(owner, fields)
                     if nested_root(candidate["payloadPath"]) == root
                 ]
-                nested_baseline = baseline_for(root_fields, minimal=True)
+                nested_baseline = baseline_for(root_fields, minimal=not args.complete_baseline)
                 if page == "DG" and root.startswith("drugReactionAssessments[]") and reaction_id:
                     set_path(nested_baseline, "drugReactionAssessments[].reactionId", reaction_id)
                 if row_ids.get(owner):
@@ -1373,7 +1375,7 @@ def main(args: argparse.Namespace) -> int:
     with artifact.open("w", encoding="utf-8") as handle:
         for event in events:
             handle.write(json.dumps({"seed": args.seed, "commit": commit_sha(), **asdict(event)}, sort_keys=True) + "\n")
-        handle.write(json.dumps({"kind": "run", "seed": args.seed, "cases": len(events), "requests": request_count, "elapsed_seconds": round(time.monotonic() - started, 3), "interrupted": interrupted, "artifact": str(artifact), "contract": str(contract_path), "candidate_schema_version": 6, "samples_per_category": args.samples_per_category, "field_filter": sorted(requested_fields), "derived_null_flavors": derived_null_flavors, "max_length_fields": max_length_fields, "identifier_fields": identifier_fields, "boolean_fields": boolean_fields, "null_flavor_only": args.null_flavor_only, "surface": "api", "validator_excluded": not args.run_gates, "frontend_gate": "run" if args.run_gates else "not_run"}, sort_keys=True) + "\n")
+        handle.write(json.dumps({"kind": "run", "seed": args.seed, "case_id": case_id, "cases": len(events), "requests": request_count, "elapsed_seconds": round(time.monotonic() - started, 3), "interrupted": interrupted, "artifact": str(artifact), "contract": str(contract_path), "candidate_schema_version": 6, "samples_per_category": args.samples_per_category, "field_filter": sorted(requested_fields), "derived_null_flavors": derived_null_flavors, "max_length_fields": max_length_fields, "identifier_fields": identifier_fields, "boolean_fields": boolean_fields, "null_flavor_only": args.null_flavor_only, "surface": "api", "validator_excluded": not args.run_gates, "frontend_gate": "run" if args.run_gates else "not_run"}, sort_keys=True) + "\n")
     counts: dict[str, int] = {}
     for event in events:
         counts[event.classification] = counts.get(event.classification, 0) + 1
@@ -1409,6 +1411,7 @@ def parser() -> argparse.ArgumentParser:
     parser.add_argument("--contract", default=str(DEFAULT_CONTRACT))
     parser.add_argument("--null-flavor-pairs", default=str(DEFAULT_NULL_FLAVOR_PAIRS))
     parser.add_argument("--null-flavor-only", action="store_true")
+    parser.add_argument("--complete-baseline", action="store_true", help="populate every concrete contract field during owner setup")
     parser.add_argument("--artifact-dir", default="tmp/rbac-rls-fuzz/case-editor-contract")
     parser.add_argument("--allow-remote", action="store_true")
     parser.add_argument("--dry-run", action="store_true")

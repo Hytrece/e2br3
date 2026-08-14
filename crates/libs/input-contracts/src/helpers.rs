@@ -139,6 +139,24 @@ pub(crate) fn format(
 	}
 }
 
+pub(crate) fn min_e2b_datetime(
+	issues: &mut Vec<InputIssue>,
+	code: &'static str,
+	value: InputValue<'_>,
+	minimum_digits: usize,
+) {
+	if let InputValue::String(value) = normalized(value) {
+		let end = value.find(['+', '-', '.']).unwrap_or(value.len());
+		if end < minimum_digits {
+			push(
+				issues,
+				code,
+				format!("must contain at least {minimum_digits} date digits"),
+			);
+		}
+	}
+}
+
 pub(crate) fn null_flavor(
 	issues: &mut Vec<InputIssue>,
 	code: &'static str,
@@ -239,12 +257,30 @@ fn valid_e2b_datetime(value: &str) -> bool {
 	};
 	if let Some(offset) = offset {
 		let bytes = offset.as_bytes();
-		if bytes.len() != 5
+		let digits = &bytes[1..];
+		if !(1..=4).contains(&digits.len())
 			|| !matches!(bytes[0], b'+' | b'-')
-			|| !bytes[1..].iter().all(u8::is_ascii_digit)
-			|| !matches!(offset[1..3].parse::<u8>().ok(), Some(0..=14))
-			|| !matches!(offset[3..5].parse::<u8>().ok(), Some(0..=59))
+			|| !digits.iter().all(u8::is_ascii_digit)
 		{
+			return false;
+		}
+		let hours = if digits.len() <= 2 {
+			digits
+				.iter()
+				.fold(0, |value, digit| value * 10 + digit - b'0')
+		} else {
+			digits[..digits.len() - 2]
+				.iter()
+				.fold(0, |value, digit| value * 10 + digit - b'0')
+		};
+		let minutes = if digits.len() >= 3 {
+			digits[digits.len() - 2..]
+				.iter()
+				.fold(0, |value, digit| value * 10 + digit - b'0')
+		} else {
+			0
+		};
+		if hours > 14 || minutes > 59 {
 			return false;
 		}
 	}
@@ -305,6 +341,7 @@ mod tests {
 		assert!(valid_dotted_version("2.1"));
 		assert!(!valid_dotted_version("2"));
 		assert!(valid_e2b_datetime("20240229123059+0900"));
+		assert!(valid_e2b_datetime("200509211242-08"));
 		assert!(!valid_e2b_datetime("20230229"));
 		let mut issues = Vec::new();
 		identifier(

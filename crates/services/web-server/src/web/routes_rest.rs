@@ -25,6 +25,6 @@ pub fn routes(mm: ModelManager) -> Router {
 		.merge(rest::routes_import(mm.clone()))
 		// Audit logs
 		.merge(rest::routes_audit(mm.clone()))
-		// Submission tracking + mock ACK ingestion
+		// Submission tracking and gateway ACK callbacks
 		.merge(rest::routes_submissions(mm))
 }

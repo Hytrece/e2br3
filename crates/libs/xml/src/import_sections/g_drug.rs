@@ -112,6 +112,7 @@ pub struct GDrugDosageImport {
 	pub dose_form_termid: Option<String>,
 	pub dose_form_termid_version: Option<String>,
 	pub batch_lot: Option<String>,
+	pub batch_lot_null_flavor: Option<String>,
 	pub parent_route_termid: Option<String>,
 	pub parent_route_termid_version: Option<String>,
 	pub parent_route_termid_code_system: Option<String>,
@@ -302,7 +303,8 @@ pub fn parse_g_drugs(xml: &[u8]) -> Result<Vec<GDrugImport>> {
 				read_g_k_4_r_9_1(&mut xpath, &dose)?;
 			let dose_form_termid = read_g_k_4_r_9_2b(&mut xpath, &dose)?;
 			let dose_form_termid_version = read_g_k_4_r_9_2a(&mut xpath, &dose)?;
-			let batch_lot = read_g_k_4_r_7(&mut xpath, &dose)?;
+			let (batch_lot, batch_lot_null_flavor) =
+				read_g_k_4_r_7(&mut xpath, &dose)?;
 			let parent_route_termid = read_g_k_4_r_11_2b(&mut xpath, &dose)?;
 			let parent_route_termid_version = read_g_k_4_r_11_2a(&mut xpath, &dose)?;
 			let parent_route_termid_code_system =
@@ -334,6 +336,7 @@ pub fn parse_g_drugs(xml: &[u8]) -> Result<Vec<GDrugImport>> {
 				dose_form_termid,
 				dose_form_termid_version,
 				batch_lot,
+				batch_lot_null_flavor,
 				parent_route_termid,
 				parent_route_termid_version,
 				parent_route_termid_code_system,
@@ -935,12 +938,25 @@ fn read_g_k_4_r_6b(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
 }
 
 /// e2b:G.k.4.r.7
-fn read_g_k_4_r_7(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
-	input_string(
+fn read_g_k_4_r_7(
+	xpath: &mut Context,
+	node: &Node,
+) -> Result<(Option<String>, Option<String>)> {
+	let pair = input_string_pair(
 		first_text(xpath, node, GDrugPaths::DOSAGE_BATCH_LOT),
+		first_attr(xpath, node, GDrugPaths::DOSAGE_BATCH_LOT_NULL_FLAVOR),
 		"dosageInformation[].batchNumber",
+		"dosageInformation[].batchNumberNullFlavor",
 		input_contracts::generated::g::g_k_4_r_7,
-	)
+	)?;
+	if pair.1.as_deref().is_some_and(|value| value != "UNK") {
+		return Err(Error::InvalidXml {
+			message: "ICH.G.k.4.r.7: unsupported source nullFlavor".to_string(),
+			line: None,
+			column: None,
+		});
+	}
+	Ok(pair)
 }
 
 /// e2b:G.k.4.r.8
@@ -1587,11 +1603,29 @@ mod tests {
 	}
 
 	#[test]
-	fn leaves_batch_lot_null_flavor_to_business_validation() {
+	fn imports_batch_lot_null_flavor_and_rejects_a_value_pair() {
 		let xml = br#"<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3"><subjectOf2><organizer><code code="4" codeSystem="2.16.840.1.113883.3.989.2.1.1.20"/><component><substanceAdministration><consumable><instanceOfKind><kindOfProduct><name>Drug A</name></kindOfProduct></instanceOfKind></consumable><outboundRelationship2 typeCode="COMP"><substanceAdministration><consumable><instanceOfKind><productInstanceInstance><lotNumberText nullFlavor="UNK"/></productInstanceInstance></instanceOfKind></consumable></substanceAdministration></outboundRelationship2></substanceAdministration></component></organizer></subjectOf2></MCCI_IN200100UV01>"#;
 
-		parse_g_drugs(with_drug_role(std::str::from_utf8(xml).unwrap()).as_bytes())
-			.expect("business validation runs later");
+		let drugs = parse_g_drugs(
+			with_drug_role(std::str::from_utf8(xml).unwrap()).as_bytes(),
+		)
+		.expect("parse batch lot NullFlavor");
+		assert_eq!(drugs[0].dosages[0].batch_lot, None);
+		assert_eq!(
+			drugs[0].dosages[0].batch_lot_null_flavor.as_deref(),
+			Some("UNK")
+		);
+
+		let invalid = std::str::from_utf8(xml).unwrap().replace(
+			"<lotNumberText nullFlavor=\"UNK\"/>",
+			"<lotNumberText nullFlavor=\"UNK\">LOT-1</lotNumberText>",
+		);
+		assert!(parse_g_drugs(with_drug_role(&invalid).as_bytes()).is_err());
+
+		let unsupported = std::str::from_utf8(xml)
+			.unwrap()
+			.replace("nullFlavor=\"UNK\"", "nullFlavor=\"NI\"");
+		assert!(parse_g_drugs(with_drug_role(&unsupported).as_bytes()).is_err());
 	}
 
 	#[test]

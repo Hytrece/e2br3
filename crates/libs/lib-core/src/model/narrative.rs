@@ -313,6 +313,59 @@ impl NarrativeInformationBmc {
 		Ok(())
 	}
 
+	pub async fn update_by_case_patch(
+		ctx: &crate::ctx::Ctx,
+		mm: &ModelManager,
+		case_id: Uuid,
+		data: NarrativeInformationForUpdate,
+		clear_fields: &[&str],
+	) -> Result<()> {
+		mm.dbx().begin_txn().await?;
+		set_full_context_dbx_or_rollback(
+			mm.dbx(),
+			ctx.user_id(),
+			ctx.organization_id(),
+			ctx.role(),
+		)
+		.await?;
+		let clears: Vec<String> =
+			clear_fields.iter().map(|field| (*field).into()).collect();
+		let sql = format!(
+			"UPDATE {}
+			 SET source_narrative_presave_id = CASE WHEN 'source_narrative_presave_id' = ANY($8) THEN NULL ELSE COALESCE($2, source_narrative_presave_id) END,
+			     case_narrative = CASE WHEN 'case_narrative' = ANY($8) THEN NULL ELSE COALESCE($3, case_narrative) END,
+			     reporter_comments = CASE WHEN 'reporter_comments' = ANY($8) THEN NULL ELSE COALESCE($4, reporter_comments) END,
+			     sender_comments = CASE WHEN 'sender_comments' = ANY($8) THEN NULL ELSE COALESCE($5, sender_comments) END,
+			     additional_information = CASE WHEN 'additional_information' = ANY($8) THEN NULL ELSE COALESCE($6, additional_information) END,
+			     updated_at = now(), updated_by = $7
+			 WHERE case_id = $1",
+			Self::TABLE
+		);
+		let result = mm
+			.dbx()
+			.execute(
+				sqlx::query(&sql)
+					.bind(case_id)
+					.bind(data.source_narrative_presave_id)
+					.bind(data.case_narrative)
+					.bind(data.reporter_comments)
+					.bind(data.sender_comments)
+					.bind(data.additional_information)
+					.bind(ctx.user_id())
+					.bind(clears),
+			)
+			.await?;
+		if result == 0 {
+			mm.dbx().rollback_txn().await?;
+			return Err(crate::model::Error::EntityUuidNotFound {
+				entity: Self::TABLE,
+				id: case_id,
+			});
+		}
+		mm.dbx().commit_txn().await?;
+		Ok(())
+	}
+
 	pub async fn delete_by_case(
 		ctx: &crate::ctx::Ctx,
 		mm: &ModelManager,

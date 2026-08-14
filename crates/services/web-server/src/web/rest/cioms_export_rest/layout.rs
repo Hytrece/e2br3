@@ -450,7 +450,7 @@ pub(super) fn render_landscape_cioms(
 		124,
 		template.manufacturer_information.h,
 		"24c. DATE RECEIVED BY MANUFACTURER",
-		&date_text(report.and_then(|r| r.date_first_received_from_source)),
+		&ts_text(report.and_then(|r| r.date_first_received_from_source.as_deref())),
 		18,
 		1,
 	);
@@ -819,7 +819,7 @@ fn render_portrait_cioms(
 		175,
 		40,
 		"24c. DATE RECEIVED",
-		&date_text(report.and_then(|r| r.date_first_received_from_source)),
+		&ts_text(report.and_then(|r| r.date_first_received_from_source.as_deref())),
 		24,
 		1,
 	);
@@ -956,10 +956,10 @@ pub(super) fn collect_cioms_overflow(
 	);
 	push_overflow(
 		"24c. DATE RECEIVED BY MANUFACTURER",
-		&date_text(
+		&ts_text(
 			data.report
 				.as_ref()
-				.and_then(|r| r.date_first_received_from_source),
+				.and_then(|r| r.date_first_received_from_source.as_deref()),
 		),
 		if portrait { 24 } else { 18 },
 		1,
@@ -1368,12 +1368,12 @@ pub(super) fn render_cioms_continuation_pages(
 					.meddra_code
 					.clone()
 					.map(|value| format!("Code: {value}")),
-				episode.start_date.map(|value| format!("Start: {value}")),
+				episode.start_date.as_deref().map(|value| format!("Start: {value}")),
 				episode
 					.start_date_null_flavor
 					.clone()
 					.map(|value| format!("Start null flavor: {value}")),
-				episode.end_date.map(|value| format!("End: {value}")),
+				episode.end_date.as_deref().map(|value| format!("End: {value}")),
 				episode
 					.end_date_null_flavor
 					.clone()

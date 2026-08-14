@@ -76,6 +76,7 @@ pub fn patch_d_patient(raw_xml: &[u8], patch: &DPatientPatch) -> Result<String> 
 			&write_d_9_1(date_of_death),
 		)?;
 	}
+	reorder_patient_player_children(&mut xpath);
 
 	remove_nodes(
 		&mut xpath,

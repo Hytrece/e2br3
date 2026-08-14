@@ -4,6 +4,327 @@ use rust_decimal::Decimal;
 use serde::Serialize;
 use std::str::FromStr;
 
+const CI_SAFETY_REPORT_PATCH_FIELDS: &[(&str, &[&str])] = &[
+	("safety_report_id", &["safetyReportId"]),
+	("version", &["version"]),
+	("transmission_date", &["transmissionDate"]),
+	("report_type", &["reportType"]),
+	(
+		"date_first_received_from_source",
+		&["dateFirstReceivedFromSource"],
+	),
+	(
+		"date_of_most_recent_information",
+		&["dateOfMostRecentInformation"],
+	),
+	("fulfil_expedited_criteria", &["fulfilExpeditedCriteria"]),
+	(
+		"fulfil_expedited_criteria_null_flavor",
+		&["fulfilExpeditedCriteriaNullFlavor"],
+	),
+	("local_criteria_report_type", &["localCriteriaReportType"]),
+	(
+		"combination_product_report_indicator",
+		&["combinationProductReportIndicator"],
+	),
+	(
+		"combination_product_report_indicator_null_flavor",
+		&["combinationProductReportIndicatorNullFlavor"],
+	),
+	("worldwide_unique_id", &["worldwideUniqueId"]),
+	("first_sender_type", &["firstSenderType"]),
+	(
+		"additional_documents_available",
+		&["additionalDocumentsAvailable"],
+	),
+	(
+		"other_case_identifiers_exist",
+		&["otherCaseIdentifiersExist"],
+	),
+	(
+		"other_case_identifiers_exist_null_flavor",
+		&["otherCaseIdentifiersExistNullFlavor"],
+	),
+	("nullification_code", &["nullificationAmendmentCode"]),
+	("nullification_reason", &["nullificationReason"]),
+	("receiver_organization", &["receiverOrganization"]),
+];
+const CI_CASE_PATCH_FIELDS: &[(&str, &[&str])] = &[
+	("report_year", &["reportYear"]),
+	("fda_report_type", &["fdaReportType"]),
+	("mfds_report_type", &["mfdsReportType"]),
+];
+const CI_DOCUMENT_PATCH_FIELDS: &[(&str, &[&str])] = &[
+	("title", &["documentDescription"]),
+	("document_base64", &["includedDocument"]),
+	("file_name", &["fileName"]),
+	("media_type", &["mediaType"]),
+	("representation", &["representation"]),
+	("compression", &["compression"]),
+];
+const CI_SOURCE_DOCUMENT_PATCH_FIELDS: &[(&str, &[&str])] = &[
+	("source_document_name", &["sourceDocumentName"]),
+	("source_document_base64", &["sourceDocumentBase64"]),
+	("source_document_media_type", &["sourceDocumentMediaType"]),
+];
+const RP_PRIMARY_SOURCE_PATCH_FIELDS: &[(&str, &[&str])] = &[
+	("source_reporter_presave_id", &["sourceReporterPresaveId"]),
+	("reporter_title", &["reporterTitle"]),
+	("reporter_title_null_flavor", &["reporterTitleNullFlavor"]),
+	("reporter_given_name", &["reporterGivenName"]),
+	(
+		"reporter_given_name_null_flavor",
+		&["reporterGivenNameNullFlavor"],
+	),
+	("reporter_middle_name", &["reporterMiddleName"]),
+	(
+		"reporter_middle_name_null_flavor",
+		&["reporterMiddleNameNullFlavor"],
+	),
+	("reporter_family_name", &["reporterFamilyName"]),
+	(
+		"reporter_family_name_null_flavor",
+		&["reporterFamilyNameNullFlavor"],
+	),
+	("organization", &["reporterOrganization"]),
+	(
+		"organization_null_flavor",
+		&["reporterOrganizationNullFlavor"],
+	),
+	("department", &["reporterDepartment"]),
+	("department_null_flavor", &["reporterDepartmentNullFlavor"]),
+	("street", &["reporterStreet"]),
+	("street_null_flavor", &["reporterStreetNullFlavor"]),
+	("city", &["reporterCity"]),
+	("city_null_flavor", &["reporterCityNullFlavor"]),
+	("state", &["reporterState"]),
+	("state_null_flavor", &["reporterStateNullFlavor"]),
+	("postcode", &["reporterPostcode"]),
+	("postcode_null_flavor", &["reporterPostcodeNullFlavor"]),
+	("telephone", &["reporterTelephone"]),
+	("telephone_null_flavor", &["reporterTelephoneNullFlavor"]),
+	("country_code", &["reporterCountry"]),
+	("email", &["reporterEmail"]),
+	("email_null_flavor", &["reporterEmailNullFlavor"]),
+	("qualification", &["qualification"]),
+	("qualification_null_flavor", &["qualificationNullFlavor"]),
+	("qualification_kr1", &["qualificationKr1"]),
+	(
+		"primary_source_regulatory",
+		&["primarySourceForRegulatoryPurposes"],
+	),
+];
+const SD_SENDER_PATCH_FIELDS: &[(&str, &[&str])] = &[
+	("source_sender_presave_id", &["sourceSenderPresaveId"]),
+	("sender_type", &["senderType"]),
+	(
+		"health_professional_type_kr1",
+		&["healthProfessionalTypeKr1"],
+	),
+	("organization_name", &["organizationName"]),
+	("department", &["department"]),
+	("street_address", &["streetAddress"]),
+	("city", &["city"]),
+	("state", &["state"]),
+	("postcode", &["postcode"]),
+	("country_code", &["countryCode"]),
+	("person_title", &["personTitle"]),
+	("person_title_null_flavor", &["personTitleNullFlavor"]),
+	("person_given_name", &["personGivenName"]),
+	(
+		"person_given_name_null_flavor",
+		&["personGivenNameNullFlavor"],
+	),
+	("person_middle_name", &["personMiddleName"]),
+	(
+		"person_middle_name_null_flavor",
+		&["personMiddleNameNullFlavor"],
+	),
+	("person_family_name", &["personFamilyName"]),
+	(
+		"person_family_name_null_flavor",
+		&["personFamilyNameNullFlavor"],
+	),
+	("telephone", &["telephone"]),
+	("fax", &["fax"]),
+	("email", &["email"]),
+];
+const SD_RECEIVER_PATCH_FIELDS: &[(&str, &[&str])] = &[
+	("receiver_type", &["receiverType"]),
+	("organization_name", &["organizationName"]),
+	("department", &["department"]),
+	("street_address", &["streetAddress"]),
+	("city", &["city"]),
+	("state_province", &["stateProvince"]),
+	("postcode", &["postcode"]),
+	("country_code", &["countryCode"]),
+	("telephone", &["telephone"]),
+	("fax", &["fax"]),
+	("email", &["email"]),
+];
+const SI_STUDY_PATCH_FIELDS: &[(&str, &[&str])] = &[
+	("source_study_presave_id", &["sourceStudyPresaveId"]),
+	("study_name", &["studyName"]),
+	("study_name_null_flavor", &["studyNameNullFlavor"]),
+	("sponsor_study_number", &["sponsorStudyNumber"]),
+	(
+		"sponsor_study_number_null_flavor",
+		&["sponsorStudyNumberNullFlavor"],
+	),
+	("study_type_reaction", &["studyTypeReaction"]),
+	("study_type_reaction_kr1", &["studyTypeReactionKr1"]),
+	("fda_ind_number_occurred", &["fdaIndNumberOccurred"]),
+	(
+		"fda_pre_anda_number_occurred",
+		&["fdaPreAndaNumberOccurred"],
+	),
+];
+const SI_REGISTRATION_PATCH_FIELDS: &[(&str, &[&str])] = &[
+	("registration_number", &["registrationNumber"]),
+	(
+		"registration_number_null_flavor",
+		&["registrationNumberNullFlavor"],
+	),
+	("country_code", &["countryCode"]),
+	("country_code_null_flavor", &["countryCodeNullFlavor"]),
+];
+const SI_FDA_IND_PATCH_FIELDS: &[(&str, &[&str])] = &[
+	("ind_number", &["indNumber"]),
+	("ind_number_null_flavor", &["indNumberNullFlavor"]),
+];
+const DM_MEDICAL_HISTORY_PATCH_FIELDS: &[(&str, &[&str])] = &[
+	("meddra_version", &["meddraVersion"]),
+	("meddra_code", &["meddraCode"]),
+	("start_date", &["startDate"]),
+	("start_date_null_flavor", &["startDateNullFlavor"]),
+	("continuing", &["continuing"]),
+	("continuing_null_flavor", &["continuingNullFlavor"]),
+	("end_date", &["endDate"]),
+	("end_date_null_flavor", &["endDateNullFlavor"]),
+	("comments", &["comments"]),
+	("family_history", &["familyHistory"]),
+];
+const DM_CAUSE_PATCH_FIELDS: &[(&str, &[&str])] = &[
+	("meddra_version", &["meddraVersion"]),
+	("meddra_code", &["meddraCode"]),
+	("comments", &["causeText"]),
+];
+const DM_PARENT_MEDICAL_HISTORY_PATCH_FIELDS: &[(&str, &[&str])] = &[
+	("meddra_version", &["meddraVersion"]),
+	("meddra_code", &["meddraCode"]),
+	("start_date", &["startDate"]),
+	("start_date_null_flavor", &["startDateNullFlavor"]),
+	("continuing", &["continuing"]),
+	("continuing_null_flavor", &["continuingNullFlavor"]),
+	("end_date", &["endDate"]),
+	("end_date_null_flavor", &["endDateNullFlavor"]),
+	("comments", &["comments"]),
+];
+const DM_PATIENT_PATCH_FIELDS: &[(&str, &[&str])] = &[
+	("patient_initials", &["patientInitials"]),
+	(
+		"patient_initials_null_flavor",
+		&["patientInitialsNullFlavor"],
+	),
+	("birth_date", &["patientBirthDate"]),
+	("birth_date_null_flavor", &["patientBirthDateNullFlavor"]),
+	("age_at_time_of_onset", &["patientAge.value"]),
+	("age_unit", &["patientAge.unit"]),
+	("gestation_period", &["gestationPeriod.value"]),
+	("gestation_period_unit", &["gestationPeriod.unit"]),
+	("age_group", &["patientAgeGroup"]),
+	("weight_kg", &["patientWeight.value"]),
+	("height_cm", &["patientHeight.value"]),
+	("sex", &["patientSex"]),
+	("sex_null_flavor", &["patientSexNullFlavor"]),
+	("race_codes", &["raceCodes", "raceCode"]),
+	("race_code_null_flavor", &["raceCodeNullFlavor"]),
+	("ethnicity_code", &["ethnicityCode"]),
+	("ethnicity_code_null_flavor", &["ethnicityCodeNullFlavor"]),
+	("last_menstrual_period_date", &["lastMenstrualPeriodDate"]),
+	(
+		"last_menstrual_period_date_null_flavor",
+		&["lastMenstrualPeriodDateNullFlavor"],
+	),
+	("medical_history_text", &["medicalHistoryText"]),
+	(
+		"medical_history_text_null_flavor",
+		&["medicalHistoryTextNullFlavor"],
+	),
+	("concomitant_therapy", &["concomitantTherapies"]),
+];
+const DM_DEATH_PATCH_FIELDS: &[(&str, &[&str])] = &[
+	("date_of_death", &["dateOfDeath"]),
+	("date_of_death_null_flavor", &["dateOfDeathNullFlavor"]),
+	("autopsy_performed", &["autopsyPerformed"]),
+	(
+		"autopsy_performed_null_flavor",
+		&["autopsyPerformedNullFlavor"],
+	),
+];
+const DM_PARENT_PATCH_FIELDS: &[(&str, &[&str])] = &[
+	("parent_identification", &["parentIdentification"]),
+	(
+		"parent_identification_null_flavor",
+		&["parentIdentificationNullFlavor"],
+	),
+	("parent_birth_date", &["parentBirthDate"]),
+	(
+		"parent_birth_date_null_flavor",
+		&["parentBirthDateNullFlavor"],
+	),
+	("parent_age", &["parentAge.value"]),
+	("parent_age_unit", &["parentAge.unit"]),
+	(
+		"last_menstrual_period_date",
+		&["parentLastMenstrualPeriodDate"],
+	),
+	(
+		"last_menstrual_period_date_null_flavor",
+		&["parentLastMenstrualPeriodDateNullFlavor"],
+	),
+	("weight_kg", &["parentWeight.value"]),
+	("height_cm", &["parentHeight.value"]),
+	("sex", &["parentSex"]),
+	("sex_null_flavor", &["parentSexNullFlavor"]),
+	("medical_history_text", &["medicalHistoryText"]),
+];
+const DM_PARENT_PAST_DRUG_PATCH_FIELDS: &[(&str, &[&str])] = &[
+	("drug_name", &["drugName"]),
+	("mpid", &["mpid"]),
+	("mpid_version", &["mpidVersion"]),
+	(
+		"mfds_medicinal_product_version",
+		&["mfdsMedicinalProductVersion"],
+	),
+	("mfds_medicinal_product_id", &["mfdsMedicinalProductId"]),
+	("phpid", &["phpid"]),
+	("phpid_version", &["phpidVersion"]),
+	("start_date", &["startDate"]),
+	("start_date_null_flavor", &["startDateNullFlavor"]),
+	("end_date", &["endDate"]),
+	("end_date_null_flavor", &["endDateNullFlavor"]),
+	("indication_meddra_version", &["indicationMeddraVersion"]),
+	("indication_meddra_code", &["indicationMeddraCode"]),
+	("reaction_meddra_version", &["reactionMeddraVersion"]),
+	("reaction_meddra_code", &["reactionMeddraCode"]),
+];
+const NR_NARRATIVE_PATCH_FIELDS: &[(&str, &[&str])] = &[
+	("source_narrative_presave_id", &["sourceNarrativePresaveId"]),
+	("case_narrative", &["caseNarrative"]),
+	("reporter_comments", &["reporterComments"]),
+	("sender_comments", &["senderComments"]),
+	("additional_information", &["additionalInformation"]),
+];
+const NR_SENDER_DIAGNOSIS_PATCH_FIELDS: &[(&str, &[&str])] = &[
+	("diagnosis_meddra_version", &["diagnosisMeddraVersion"]),
+	("diagnosis_meddra_code", &["diagnosisMeddraCode"]),
+];
+const NR_CASE_SUMMARY_PATCH_FIELDS: &[(&str, &[&str])] = &[
+	("language_code", &["languageCode"]),
+	("summary_text", &["summaryText"]),
+];
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct CaseEditorRpPrimarySourceDto {
@@ -117,12 +438,8 @@ async fn load_editor_ci_data(
 				safety_report_version: entity.version,
 				transmission_date: entity.transmission_date,
 				report_type: entity.report_type,
-				date_first_received_from_source: ci_date(
-					entity.date_first_received_from_source,
-				),
-				date_of_most_recent_information: ci_date(
-					entity.date_of_most_recent_information,
-				),
+				date_first_received_from_source: entity.date_first_received_from_source,
+				date_of_most_recent_information: entity.date_of_most_recent_information,
 				fulfil_expedited_criteria: entity.fulfil_expedited_criteria,
 				fulfil_expedited_criteria_null_flavor: entity
 					.fulfil_expedited_criteria_null_flavor,
@@ -446,16 +763,19 @@ async fn apply_ci_rows_patch(
 				}),
 			}
 		}
-		fn date(
+		fn date_text(
 			row: &Map<String, Value>,
 			key: &str,
-		) -> Result<Option<sqlx::types::time::Date>> {
+		) -> Result<Option<String>> {
 			let value = row.get(key).cloned().unwrap_or(Value::Null);
 			if value.as_str().is_some_and(|value| value.trim().is_empty()) {
 				return Ok(None);
 			}
+			if let Some(value) = value.as_str() {
+				return Ok(Some(value.to_string()));
+			}
 			serde_json::from_value::<CiDatePatchValue>(json!({ "value": value }))
-				.map(|value| value.value)
+				.map(|value| value.value.map(|date| format!("{:04}{:02}{:02}", date.year(), u8::from(date.month()), date.day())))
 				.map_err(|err| Error::BadRequest {
 					message: format!(
 						"CI.safetyReportIdentification.{key} must be an E2B date or null: {err}"
@@ -463,7 +783,9 @@ async fn apply_ci_rows_patch(
 				})
 		}
 
-		SafetyReportIdentificationBmc::update_by_case(
+		let clear_fields =
+			explicit_null_model_fields(row, CI_SAFETY_REPORT_PATCH_FIELDS);
+		SafetyReportIdentificationBmc::update_by_case_patch(
 			ctx,
 			mm,
 			case_id,
@@ -472,11 +794,11 @@ async fn apply_ci_rows_patch(
 				version: i32_field(row, &["version"]),
 				transmission_date: string_field(row, &["transmissionDate"]),
 				report_type: patch_string(row, "reportType")?,
-				date_first_received_from_source: date(
+				date_first_received_from_source: date_text(
 					row,
 					"dateFirstReceivedFromSource",
 				)?,
-				date_of_most_recent_information: date(
+				date_of_most_recent_information: date_text(
 					row,
 					"dateOfMostRecentInformation",
 				)?,
@@ -521,6 +843,7 @@ async fn apply_ci_rows_patch(
 				nullification_reason: string_field(row, &["nullificationReason"]),
 				receiver_organization: string_field(row, &["receiverOrganization"]),
 			},
+			&clear_fields,
 		)
 		.await?;
 	}
@@ -528,7 +851,11 @@ async fn apply_ci_rows_patch(
 	if let Some(value) = rows.get("case") {
 		let patch = serde_json::from_value::<CiCaseRowPatch>(value.clone())
 			.map_err(|err| ci_row_error("case", err))?;
-		CaseBmc::update(
+		let clear_fields = explicit_null_model_fields(
+			value.as_object().expect("validated CI case row"),
+			CI_CASE_PATCH_FIELDS,
+		);
+		lib_core::model::update_uuid_patch::<CaseBmc, _>(
 			ctx,
 			mm,
 			case_id,
@@ -539,6 +866,7 @@ async fn apply_ci_rows_patch(
 				dirty_c: Some(true),
 				..Default::default()
 			},
+			&clear_fields,
 		)
 		.await?;
 	}
@@ -547,7 +875,8 @@ async fn apply_ci_rows_patch(
 		let patches =
 			serde_json::from_value::<Vec<CiDocumentRowPatch>>(value.clone())
 				.map_err(|err| ci_row_error("documentsHeldBySender", err))?;
-		for patch in patches {
+		let raw_patches = value.as_array().expect("validated CI document array");
+		for (patch, raw_patch) in patches.into_iter().zip(raw_patches) {
 			if let Some(id) = patch.id {
 				let current = DocumentsHeldBySenderBmc::get(ctx, mm, id).await?;
 				if current.case_id != case_id {
@@ -562,7 +891,11 @@ async fn apply_ci_rows_patch(
 				if patch.deleted == Some(false) && current.deleted {
 					DocumentsHeldBySenderBmc::restore(ctx, mm, id).await?;
 				}
-				DocumentsHeldBySenderBmc::update(
+				let clear_fields = explicit_null_model_fields(
+					raw_patch.as_object().expect("validated CI document row"),
+					CI_DOCUMENT_PATCH_FIELDS,
+				);
+				lib_core::model::update_uuid_patch::<DocumentsHeldBySenderBmc, _>(
 					ctx,
 					mm,
 					id,
@@ -575,6 +908,7 @@ async fn apply_ci_rows_patch(
 						compression: patch.compression,
 						sequence_number: patch.sequence_number,
 					},
+					&clear_fields,
 				)
 				.await?;
 			} else {
@@ -746,7 +1080,10 @@ async fn apply_ci_rows_patch(
 		let patches =
 			serde_json::from_value::<Vec<CiSourceDocumentRowPatch>>(value.clone())
 				.map_err(|err| ci_row_error("sourceDocuments", err))?;
-		for patch in patches {
+		let raw_patches = value
+			.as_array()
+			.expect("validated CI source document array");
+		for (patch, raw_patch) in patches.into_iter().zip(raw_patches) {
 			if let Some(id) = patch.id {
 				let current = SourceDocumentBmc::get(ctx, mm, id).await?;
 				if current.case_id != case_id {
@@ -756,7 +1093,13 @@ async fn apply_ci_rows_patch(
 						),
 					});
 				}
-				SourceDocumentBmc::update(
+				let clear_fields = explicit_null_model_fields(
+					raw_patch
+						.as_object()
+						.expect("validated CI source document row"),
+					CI_SOURCE_DOCUMENT_PATCH_FIELDS,
+				);
+				lib_core::model::update_uuid_patch::<SourceDocumentBmc, _>(
 					ctx,
 					mm,
 					id,
@@ -766,6 +1109,7 @@ async fn apply_ci_rows_patch(
 						source_document_media_type: patch.source_document_media_type,
 						sequence_number: patch.sequence_number,
 					},
+					&clear_fields,
 				)
 				.await?;
 			} else {
@@ -1214,7 +1558,9 @@ async fn apply_rp_source_patch(
 		),
 	};
 	if let Some(id) = id {
-		PrimarySourceBmc::update(ctx, mm, id, update).await?;
+		let clear_fields =
+			explicit_null_model_fields(source, RP_PRIMARY_SOURCE_PATCH_FIELDS);
+		PrimarySourceBmc::update_patch(ctx, mm, id, update, &clear_fields).await?;
 	} else {
 		PrimarySourceBmc::create(
 			ctx,
@@ -1325,7 +1671,16 @@ async fn apply_sd_page_rows_patch(
 		.first()
 		.map(|row| row.id);
 		if let Some(id) = uuid_field(sender, &["id"]).or(existing_sender_id) {
-			SenderInformationBmc::update(ctx, mm, id, update).await?;
+			let clear_fields =
+				explicit_null_model_fields(sender, SD_SENDER_PATCH_FIELDS);
+			lib_core::model::update_uuid_patch::<SenderInformationBmc, _>(
+				ctx,
+				mm,
+				id,
+				update,
+				&clear_fields,
+			)
+			.await?;
 		} else {
 			SenderInformationBmc::create(
 				ctx,
@@ -1382,7 +1737,16 @@ async fn apply_sd_page_rows_patch(
 			.await?
 			.is_some()
 		{
-			ReceiverInformationBmc::update_by_case(ctx, mm, case_id, update).await?;
+			let clear_fields =
+				explicit_null_model_fields(receiver, SD_RECEIVER_PATCH_FIELDS);
+			ReceiverInformationBmc::update_by_case_patch(
+				ctx,
+				mm,
+				case_id,
+				update,
+				&clear_fields,
+			)
+			.await?;
 		} else {
 			ReceiverInformationBmc::create(
 				ctx,
@@ -1440,7 +1804,16 @@ async fn apply_si_page_rows_patch(
 			),
 		};
 		if let Some(id) = uuid_field(study, &["id"]) {
-			StudyInformationBmc::update(ctx, mm, id, update).await?;
+			let clear_fields =
+				explicit_null_model_fields(study, SI_STUDY_PATCH_FIELDS);
+			lib_core::model::update_uuid_patch::<StudyInformationBmc, _>(
+				ctx,
+				mm,
+				id,
+				update,
+				&clear_fields,
+			)
+			.await?;
 			id
 		} else {
 			let existing = StudyInformationBmc::list(
@@ -1455,7 +1828,16 @@ async fn apply_si_page_rows_patch(
 			.into_iter()
 			.min_by_key(|study| study.created_at);
 			if let Some(existing) = existing {
-				StudyInformationBmc::update(ctx, mm, existing.id, update).await?;
+				let clear_fields =
+					explicit_null_model_fields(study, SI_STUDY_PATCH_FIELDS);
+				lib_core::model::update_uuid_patch::<StudyInformationBmc, _>(
+					ctx,
+					mm,
+					existing.id,
+					update,
+					&clear_fields,
+				)
+				.await?;
 				existing.id
 			} else {
 				StudyInformationBmc::create(
@@ -1555,7 +1937,18 @@ async fn apply_si_page_rows_patch(
 					}
 					.into());
 				}
-				StudyRegistrationNumberBmc::update(ctx, mm, id, update).await?;
+				let clear_fields = explicit_null_model_fields(
+					registration,
+					SI_REGISTRATION_PATCH_FIELDS,
+				);
+				lib_core::model::update_uuid_patch::<StudyRegistrationNumberBmc, _>(
+					ctx,
+					mm,
+					id,
+					update,
+					&clear_fields,
+				)
+				.await?;
 			} else if update.registration_number.is_some()
 				|| update.registration_number_null_flavor.is_some()
 			{
@@ -1638,7 +2031,13 @@ async fn apply_si_page_rows_patch(
 						}
 						.into());
 					}
-					StudyFdaCrossReportedIndBmc::update(ctx, mm, id, update).await?;
+					let clear_fields =
+						explicit_null_model_fields(number, SI_FDA_IND_PATCH_FIELDS);
+					lib_core::model::update_uuid_patch::<
+						StudyFdaCrossReportedIndBmc,
+						_,
+					>(ctx, mm, id, update, &clear_fields)
+					.await?;
 				} else {
 					StudyFdaCrossReportedIndBmc::create(
 						ctx,
@@ -1776,6 +2175,16 @@ async fn apply_dm_page_rows_patch(
 					paths[0]
 				),
 			})
+	}
+	fn ts_field(
+		_page_id: &str,
+		row: &Map<String, Value>,
+		_request_path: &str,
+		paths: &[&str],
+	) -> Result<Option<String>> {
+		Ok(value_at_path(row, paths).and_then(|value| {
+			value.as_str().map(str::trim).filter(|v| !v.is_empty()).map(str::to_owned)
+		}))
 	}
 	fn boolean_field(row: &Map<String, Value>, paths: &[&str]) -> Option<bool> {
 		value_at_path(row, paths).and_then(Value::as_bool)
@@ -1926,8 +2335,16 @@ async fn apply_dm_page_rows_patch(
 		};
 		match PatientInformationBmc::get_by_case(ctx, mm, case_id).await {
 			Ok(entity) => {
-				PatientInformationBmc::update_by_case(ctx, mm, case_id, update)
-					.await?;
+				let clear_fields =
+					explicit_null_model_fields(patient, DM_PATIENT_PATCH_FIELDS);
+				PatientInformationBmc::update_by_case_patch(
+					ctx,
+					mm,
+					case_id,
+					update,
+					&clear_fields,
+				)
+				.await?;
 				entity.id
 			}
 			Err(lib_core::model::Error::EntityUuidNotFound { .. }) => {
@@ -2002,7 +2419,7 @@ async fn apply_dm_page_rows_patch(
 			}
 			let meddra_version = string_field(episode, &["meddraVersion"]);
 			let meddra_code = string_field(episode, &["meddraCode"]);
-			let start_date = date_field(
+			let start_date = ts_field(
 				page_id,
 				episode,
 				"medicalHistoryEpisodes[].startDate",
@@ -2013,7 +2430,7 @@ async fn apply_dm_page_rows_patch(
 			let continuing = bool_field(episode, &["continuing"]);
 			let continuing_null_flavor =
 				null_flavor_field(episode, &["continuingNullFlavor"]);
-			let end_date = date_field(
+			let end_date = ts_field(
 				page_id,
 				episode,
 				"medicalHistoryEpisodes[].endDate",
@@ -2063,11 +2480,27 @@ async fn apply_dm_page_rows_patch(
 				)
 				.await?
 			};
-			MedicalHistoryEpisodeBmc::update(ctx, mm, id, update).await?;
+			let clear_fields =
+				explicit_null_model_fields(episode, DM_MEDICAL_HISTORY_PATCH_FIELDS);
+			lib_core::model::update_uuid_patch::<MedicalHistoryEpisodeBmc, _>(
+				ctx,
+				mm,
+				id,
+				update,
+				&clear_fields,
+			)
+			.await?;
 		}
 	}
 
 	if let Some(value) = rows.get("patientIdentifiers") {
+		const PATIENT_IDENTIFIER_PATCH_FIELDS: &[(&str, &[&str])] = &[
+			("identifier_value", &["identifierValue"]),
+			(
+				"identifier_value_null_flavor",
+				&["identifierValueNullFlavor"],
+			),
+		];
 		let Some(identifier_rows) = value.as_array() else {
 			return Err(Error::BadRequest {
 				message: format!("{page_id}.patientIdentifiers must be an array"),
@@ -2093,7 +2526,18 @@ async fn apply_dm_page_rows_patch(
 				),
 			};
 			if let Some(id) = id {
-				PatientIdentifierBmc::update(ctx, mm, id, update).await?;
+				let clear_fields = explicit_null_model_fields(
+					identifier,
+					PATIENT_IDENTIFIER_PATCH_FIELDS,
+				);
+				PatientIdentifierBmc::update_patch(
+					ctx,
+					mm,
+					id,
+					update,
+					&clear_fields,
+				)
+				.await?;
 			} else {
 				let identifier_type_code =
 					identifier_type_code.ok_or_else(|| Error::BadRequest {
@@ -2162,7 +2606,16 @@ async fn apply_dm_page_rows_patch(
 			),
 		};
 		if let Some(existing) = existing_death_info {
-			PatientDeathInformationBmc::update(ctx, mm, existing.id, update).await?;
+			let clear_fields =
+				explicit_null_model_fields(death_info, DM_DEATH_PATCH_FIELDS);
+			PatientDeathInformationBmc::update_patch(
+				ctx,
+				mm,
+				existing.id,
+				update,
+				&clear_fields,
+			)
+			.await?;
 			Some(existing.id)
 		} else {
 			Some(
@@ -2215,7 +2668,16 @@ async fn apply_dm_page_rows_patch(
 				comments: string_field(cause, &["causeText"]),
 			};
 			if let Some(id) = id {
-				ReportedCauseOfDeathBmc::update(ctx, mm, id, update).await?;
+				let clear_fields =
+					explicit_null_model_fields(cause, DM_CAUSE_PATCH_FIELDS);
+				lib_core::model::update_uuid_patch::<ReportedCauseOfDeathBmc, _>(
+					ctx,
+					mm,
+					id,
+					update,
+					&clear_fields,
+				)
+				.await?;
 			} else {
 				ReportedCauseOfDeathBmc::create(
 					ctx,
@@ -2265,7 +2727,16 @@ async fn apply_dm_page_rows_patch(
 				comments: string_field(cause, &["causeText"]),
 			};
 			if let Some(id) = id {
-				AutopsyCauseOfDeathBmc::update(ctx, mm, id, update).await?;
+				let clear_fields =
+					explicit_null_model_fields(cause, DM_CAUSE_PATCH_FIELDS);
+				lib_core::model::update_uuid_patch::<AutopsyCauseOfDeathBmc, _>(
+					ctx,
+					mm,
+					id,
+					update,
+					&clear_fields,
+				)
+				.await?;
 			} else {
 				AutopsyCauseOfDeathBmc::create(
 					ctx,
@@ -2372,7 +2843,16 @@ async fn apply_dm_page_rows_patch(
 				medical_history_text: string_field(parent, &["medicalHistoryText"]),
 			};
 			if let Some(existing) = existing {
-				ParentInformationBmc::update(ctx, mm, existing.id, update).await?;
+				let clear_fields =
+					explicit_null_model_fields(parent, DM_PARENT_PATCH_FIELDS);
+				ParentInformationBmc::update_patch(
+					ctx,
+					mm,
+					existing.id,
+					update,
+					&clear_fields,
+				)
+				.await?;
 			} else if patch_value_has_content(&Value::Object(parent.clone()))
 				|| rows
 					.get("parentMedicalHistory")
@@ -2499,7 +2979,18 @@ async fn apply_dm_page_rows_patch(
 				)
 				.await?
 			};
-			ParentMedicalHistoryBmc::update(ctx, mm, id, update).await?;
+			let clear_fields = explicit_null_model_fields(
+				history,
+				DM_PARENT_MEDICAL_HISTORY_PATCH_FIELDS,
+			);
+			lib_core::model::update_uuid_patch::<ParentMedicalHistoryBmc, _>(
+				ctx,
+				mm,
+				id,
+				update,
+				&clear_fields,
+			)
+			.await?;
 		}
 	}
 
@@ -2585,7 +3076,18 @@ async fn apply_dm_page_rows_patch(
 				reaction_meddra_code: string_field(drug, &["reactionMeddraCode"]),
 			};
 			if let Some(id) = id {
-				ParentPastDrugHistoryBmc::update(ctx, mm, id, update).await?;
+				let clear_fields = explicit_null_model_fields(
+					drug,
+					DM_PARENT_PAST_DRUG_PATCH_FIELDS,
+				);
+				ParentPastDrugHistoryBmc::update_patch(
+					ctx,
+					mm,
+					id,
+					update,
+					&clear_fields,
+				)
+				.await?;
 			} else {
 				ParentPastDrugHistoryBmc::create(
 					ctx,
@@ -2659,8 +3161,16 @@ async fn apply_nr_page_rows_patch(
 		match NarrativeInformationBmc::get_by_case_optional(ctx, mm, case_id).await?
 		{
 			Some(_) => {
-				NarrativeInformationBmc::update_by_case(ctx, mm, case_id, update)
-					.await?
+				let clear_fields =
+					explicit_null_model_fields(narrative, NR_NARRATIVE_PATCH_FIELDS);
+				NarrativeInformationBmc::update_by_case_patch(
+					ctx,
+					mm,
+					case_id,
+					update,
+					&clear_fields,
+				)
+				.await?
 			}
 			None => {
 				let Some(case_narrative) = case_narrative else {
@@ -2719,7 +3229,11 @@ async fn apply_nr_page_rows_patch(
 				if deleted {
 					SenderDiagnosisBmc::delete(ctx, mm, id).await?;
 				} else {
-					SenderDiagnosisBmc::update(
+					let clear_fields = explicit_null_model_fields(
+						diagnosis,
+						NR_SENDER_DIAGNOSIS_PATCH_FIELDS,
+					);
+					lib_core::model::update_uuid_patch::<SenderDiagnosisBmc, _>(
 						ctx,
 						mm,
 						id,
@@ -2733,6 +3247,7 @@ async fn apply_nr_page_rows_patch(
 								&["diagnosisMeddraCode"],
 							),
 						},
+						&clear_fields,
 					)
 					.await?;
 				}
@@ -2789,7 +3304,11 @@ async fn apply_nr_page_rows_patch(
 				if deleted {
 					CaseSummaryInformationBmc::delete(ctx, mm, id).await?;
 				} else {
-					CaseSummaryInformationBmc::update(
+					let clear_fields = explicit_null_model_fields(
+						summary,
+						NR_CASE_SUMMARY_PATCH_FIELDS,
+					);
+					lib_core::model::update_uuid_patch::<CaseSummaryInformationBmc, _>(
 						ctx,
 						mm,
 						id,
@@ -2797,6 +3316,7 @@ async fn apply_nr_page_rows_patch(
 							language_code: string_field(summary, &["languageCode"]),
 							summary_text: string_field(summary, &["summaryText"]),
 						},
+						&clear_fields,
 					)
 					.await?;
 				}
@@ -3122,9 +3642,9 @@ async fn load_editor_dm_data(
 			if let Value::Object(ref mut map) = value {
 				map.insert(
 					"start_date".to_string(),
-					json!(ci_date(episode.start_date)),
+					json!(episode.start_date),
 				);
-				map.insert("end_date".to_string(), json!(ci_date(episode.end_date)));
+				map.insert("end_date".to_string(), json!(episode.end_date));
 			}
 			value
 		})

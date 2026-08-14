@@ -18,8 +18,8 @@ pub(crate) use runtime::import_section_c;
 pub struct CSafetyReportImport {
 	pub transmission_date: Option<String>,
 	pub report_type: Option<String>,
-	pub date_first_received_from_source: Option<Date>,
-	pub date_of_most_recent_information: Option<Date>,
+	pub date_first_received_from_source: Option<String>,
+	pub date_of_most_recent_information: Option<String>,
 	pub fulfil_expedited_criteria: Option<bool>,
 	pub fulfil_expedited_criteria_null_flavor: Option<String>,
 	pub additional_documents_available: Option<bool>,
@@ -125,7 +125,7 @@ fn read_c_1_3(xpath: &mut Context) -> Result<Option<String>> {
 }
 
 /// e2b:C.1.4
-fn read_c_1_4(xpath: &mut Context) -> Result<Option<Date>> {
+fn read_c_1_4(xpath: &mut Context) -> Result<Option<String>> {
 	let value = first_value_root(xpath, CSafetyReportPaths::DATE_FIRST_RECEIVED);
 	import_constraint::string(
 		"dateFirstReceivedFromSource",
@@ -133,11 +133,11 @@ fn read_c_1_4(xpath: &mut Context) -> Result<Option<Date>> {
 		None,
 		input_contracts::generated::c::c_1_4,
 	)?;
-	Ok(value.and_then(parse_date))
+	Ok(value)
 }
 
 /// e2b:C.1.5
-fn read_c_1_5(xpath: &mut Context) -> Result<Option<Date>> {
+fn read_c_1_5(xpath: &mut Context) -> Result<Option<String>> {
 	let value = first_value_root(xpath, CSafetyReportPaths::DATE_MOST_RECENT);
 	import_constraint::string(
 		"dateOfMostRecentInformation",
@@ -145,7 +145,7 @@ fn read_c_1_5(xpath: &mut Context) -> Result<Option<Date>> {
 		None,
 		input_contracts::generated::c::c_1_5,
 	)?;
-	Ok(value.and_then(parse_date))
+	Ok(value)
 }
 
 /// e2b:C.1.6.1

@@ -1,8 +1,6 @@
 use libxml::parser::Parser;
 use libxml::xpath::Context;
 
-use sqlx::types::time::Date;
-use time::Month;
 use xml::export::roundtrip::{patch_c_safety_report, CSafetyReportPatch};
 
 #[test]
@@ -19,13 +17,9 @@ fn patch_c_section_updates_values() {
 		report_unique_id: "SR-TEST-123",
 		transmission_date: Some("20240115"),
 		report_type: "1",
-		date_first_received: Some(
-			Date::from_calendar_date(2024, Month::January, 10).unwrap(),
-		),
-		date_most_recent: Some(
-			Date::from_calendar_date(2024, Month::January, 15).unwrap(),
-		),
-		fulfil_expedited: true,
+		date_first_received: Some("20240110"),
+		date_most_recent: Some("20240115"),
+		fulfil_expedited: Some(true),
 		additional_documents_available: Some(false),
 		other_case_identifiers_exist: None,
 		other_case_identifiers_exist_null_flavor: None,
@@ -52,6 +46,7 @@ fn patch_c_section_updates_values() {
 		sender_telephone: Some("+82-2-555-0100"),
 		sender_fax: Some("+82-2-555-0101"),
 		sender_email: Some("safety.sender@example.com"),
+		..Default::default()
 	};
 
 	let patched = patch_c_safety_report(&xml, &patch).expect("patch xml");
@@ -102,7 +97,7 @@ fn sender_patch<'a>(
 		report_type: "1",
 		date_first_received: None,
 		date_most_recent: None,
-		fulfil_expedited: false,
+		fulfil_expedited: Some(false),
 		additional_documents_available: None,
 		other_case_identifiers_exist: None,
 		other_case_identifiers_exist_null_flavor: None,
@@ -129,6 +124,7 @@ fn sender_patch<'a>(
 		sender_telephone: telephone,
 		sender_fax: fax,
 		sender_email: email,
+		..Default::default()
 	}
 }
 
@@ -326,7 +322,7 @@ fn patch_c_1_9_1_exports_boolean_value_without_ce_children() {
 		report_type: "1",
 		date_first_received: None,
 		date_most_recent: None,
-		fulfil_expedited: true,
+		fulfil_expedited: Some(true),
 		additional_documents_available: None,
 		other_case_identifiers_exist: Some(true),
 		other_case_identifiers_exist_null_flavor: None,
@@ -353,6 +349,7 @@ fn patch_c_1_9_1_exports_boolean_value_without_ce_children() {
 		sender_telephone: None,
 		sender_fax: None,
 		sender_email: None,
+		..Default::default()
 	};
 
 	let patched = patch_c_safety_report(xml.as_bytes(), &patch).expect("patch xml");
@@ -413,13 +410,9 @@ fn patch_c_uses_persisted_c1_2() {
 		report_unique_id: "SR-TEST-124",
 		transmission_date: Some("20240115"),
 		report_type: "1",
-		date_first_received: Some(
-			Date::from_calendar_date(2024, Month::January, 10).unwrap(),
-		),
-		date_most_recent: Some(
-			Date::from_calendar_date(2024, Month::January, 15).unwrap(),
-		),
-		fulfil_expedited: true,
+		date_first_received: Some("20240110"),
+		date_most_recent: Some("20240115"),
+		fulfil_expedited: Some(true),
 		additional_documents_available: None,
 		other_case_identifiers_exist: None,
 		other_case_identifiers_exist_null_flavor: None,
@@ -446,6 +439,7 @@ fn patch_c_uses_persisted_c1_2() {
 		sender_telephone: None,
 		sender_fax: None,
 		sender_email: None,
+		..Default::default()
 	};
 
 	let patched = patch_c_safety_report(&xml, &patch).expect("patch xml");
@@ -485,13 +479,9 @@ fn patch_c_keeps_investigation_event_order_when_adding_components() {
 		report_unique_id: "CASE-1",
 		transmission_date: Some("20240115"),
 		report_type: "1",
-		date_first_received: Some(
-			Date::from_calendar_date(2024, Month::January, 10).unwrap(),
-		),
-		date_most_recent: Some(
-			Date::from_calendar_date(2024, Month::January, 15).unwrap(),
-		),
-		fulfil_expedited: true,
+		date_first_received: Some("20240110"),
+		date_most_recent: Some("20240115"),
+		fulfil_expedited: Some(true),
 		additional_documents_available: None,
 		other_case_identifiers_exist: None,
 		other_case_identifiers_exist_null_flavor: None,
@@ -518,6 +508,7 @@ fn patch_c_keeps_investigation_event_order_when_adding_components() {
 		sender_telephone: None,
 		sender_fax: None,
 		sender_email: None,
+		..Default::default()
 	};
 
 	let patched = patch_c_safety_report(xml, &patch).expect("patch xml");
@@ -577,13 +568,9 @@ fn patch_c_keeps_order_when_adding_local_criteria_component() {
 		report_unique_id: "CASE-2",
 		transmission_date: Some("20240115"),
 		report_type: "2",
-		date_first_received: Some(
-			Date::from_calendar_date(2024, Month::January, 10).unwrap(),
-		),
-		date_most_recent: Some(
-			Date::from_calendar_date(2024, Month::January, 15).unwrap(),
-		),
-		fulfil_expedited: true,
+		date_first_received: Some("20240110"),
+		date_most_recent: Some("20240115"),
+		fulfil_expedited: Some(true),
 		additional_documents_available: None,
 		other_case_identifiers_exist: None,
 		other_case_identifiers_exist_null_flavor: None,
@@ -610,6 +597,7 @@ fn patch_c_keeps_order_when_adding_local_criteria_component() {
 		sender_telephone: None,
 		sender_fax: None,
 		sender_email: None,
+		..Default::default()
 	};
 
 	let patched = patch_c_safety_report(xml, &patch).expect("patch xml");
@@ -677,13 +665,9 @@ fn patch_c_exports_sender_health_professional_type_kr1() {
 		report_unique_id: "CASE-3",
 		transmission_date: Some("20240115"),
 		report_type: "2",
-		date_first_received: Some(
-			Date::from_calendar_date(2024, Month::January, 10).unwrap(),
-		),
-		date_most_recent: Some(
-			Date::from_calendar_date(2024, Month::January, 15).unwrap(),
-		),
-		fulfil_expedited: true,
+		date_first_received: Some("20240110"),
+		date_most_recent: Some("20240115"),
+		fulfil_expedited: Some(true),
 		additional_documents_available: None,
 		other_case_identifiers_exist: None,
 		other_case_identifiers_exist_null_flavor: None,
@@ -710,6 +694,7 @@ fn patch_c_exports_sender_health_professional_type_kr1() {
 		sender_telephone: None,
 		sender_fax: None,
 		sender_email: None,
+		..Default::default()
 	};
 
 	let patched = patch_c_safety_report(xml, &patch).expect("patch xml");

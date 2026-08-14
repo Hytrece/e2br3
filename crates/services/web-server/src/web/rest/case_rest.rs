@@ -139,7 +139,7 @@ async fn normalize_review_receivers_for_update(
 			.await
 			.map_err(Error::Model)?;
 		let c15 = if requirements.needs_report_due_date {
-			Some(report.date_of_most_recent_information.ok_or_else(|| {
+			Some(report.date_of_most_recent_information.as_deref().and_then(lib_core::serde::flex_date::e2b_datetime_date).ok_or_else(|| {
 				Error::BadRequest {
 					message: "C.1.5 date_of_most_recent_information is required to calculate review receiver reportDueDate".to_string(),
 				}

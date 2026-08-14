@@ -76,6 +76,7 @@ fn decimal_text(value: Option<Decimal>) -> Option<String> {
 	value.map(|value| value.normalize().to_string())
 }
 
+#[cfg(test)]
 fn resolve_drug_child_indices(
 	drug_indices: &HashMap<sqlx::types::Uuid, usize>,
 	drug_id: sqlx::types::Uuid,
@@ -86,13 +87,6 @@ fn resolve_drug_child_indices(
 		.checked_sub(1)
 		.and_then(|value| usize::try_from(value).ok())?;
 	Some((drug_index, child_index))
-}
-
-fn sequence_idx(sequence_number: i32, fallback: usize) -> usize {
-	sequence_number
-		.checked_sub(1)
-		.and_then(|value| usize::try_from(value).ok())
-		.unwrap_or(fallback)
 }
 
 fn additional_info_codes(drug: &DrugInformation) -> Vec<String> {
@@ -535,12 +529,16 @@ fn g_k_11(idx: usize, drug: &DrugInformation, issues: &mut Vec<ValidationIssue>)
 /// ICH.G.k.2.3.r.1.REQUIRED
 /// ICH.G.k.2.3.r.1.LENGTH.MAX
 fn g_k_2_3_r_1(
-	flat_idx: usize,
+	_flat_idx: usize,
 	nested: Option<(usize, usize)>,
 	substance: &DrugActiveSubstance,
 	issues: &mut Vec<ValidationIssue>,
 ) {
-	let required_path = format!("drugs.0.activeSubstances.{flat_idx}.substanceName");
+	let Some((drug_idx, idx)) = nested else {
+		return;
+	};
+	let required_path =
+		format!("drugs.{drug_idx}.activeSubstances.{idx}.substanceName");
 	reject_when(
 		issues,
 		"ICH.G.k.2.3.r.1.REQUIRED",
@@ -565,13 +563,16 @@ fn g_k_2_3_r_1(
 /// ICH.G.k.2.3.r.2a.REQUIRED
 /// ICH.G.k.2.3.r.2a.LENGTH.MAX
 fn g_k_2_3_r_2a(
-	flat_idx: usize,
+	_flat_idx: usize,
 	nested: Option<(usize, usize)>,
 	substance: &DrugActiveSubstance,
 	issues: &mut Vec<ValidationIssue>,
 ) {
+	let Some((drug_idx, idx)) = nested else {
+		return;
+	};
 	let required_path =
-		format!("drugs.0.activeSubstances.{flat_idx}.substanceTermIdVersion");
+		format!("drugs.{drug_idx}.activeSubstances.{idx}.substanceTermIdVersion");
 	reject_when(
 		issues,
 		"ICH.G.k.2.3.r.2a.REQUIRED",
@@ -645,12 +646,16 @@ fn g_k_2_3_r_3a(
 /// ICH.G.k.2.3.r.3b.ALLOWED.VALUE
 /// ICH.G.k.2.3.r.3b.LENGTH.MAX
 fn g_k_2_3_r_3b(
-	flat_idx: usize,
+	_flat_idx: usize,
 	nested: Option<(usize, usize)>,
 	substance: &DrugActiveSubstance,
 	issues: &mut Vec<ValidationIssue>,
 ) {
-	let required_path = format!("drugs.0.activeSubstances.{flat_idx}.strengthUnit");
+	let Some((drug_idx, idx)) = nested else {
+		return;
+	};
+	let required_path =
+		format!("drugs.{drug_idx}.activeSubstances.{idx}.strengthUnit");
 	reject_when(
 		issues,
 		"ICH.G.k.2.3.r.3b.REQUIRED",
@@ -679,7 +684,9 @@ fn g_k_2_3_r_3b(
 }
 
 fn dosage_path(nested: Option<(usize, usize)>, field: &str) -> Option<String> {
-	nested.map(|(drug_idx, idx)| format!("drugs.{drug_idx}.dosages.{idx}.{field}"))
+	nested.map(|(drug_idx, idx)| {
+		format!("drugs.{drug_idx}.dosageInformation.{idx}.{field}")
+	})
 }
 
 /// ICH.G.k.4.r.1a.LENGTH.MAX
@@ -704,12 +711,15 @@ fn g_k_4_r_1a(
 /// ICH.G.k.4.r.1b.REQUIRED
 /// ICH.G.k.4.r.1b.LENGTH.MAX
 fn g_k_4_r_1b(
-	flat_idx: usize,
+	_flat_idx: usize,
 	nested: Option<(usize, usize)>,
 	dosage: &DosageInformation,
 	issues: &mut Vec<ValidationIssue>,
 ) {
-	let required_path = format!("drugs.0.dosages.{flat_idx}.doseUnit");
+	let Some((drug_idx, idx)) = nested else {
+		return;
+	};
+	let required_path = format!("drugs.{drug_idx}.dosageInformation.{idx}.doseUnit");
 	reject_when(
 		issues,
 		"ICH.G.k.4.r.1b.REQUIRED",
@@ -752,13 +762,17 @@ fn g_k_4_r_2(
 /// ICH.G.k.4.r.3.ALLOWED.VALUE
 /// ICH.G.k.4.r.3.LENGTH.MAX
 fn g_k_4_r_3(
-	flat_idx: usize,
+	_flat_idx: usize,
 	nested: Option<(usize, usize)>,
 	dosage: &DosageInformation,
 	vocabulary_ctx: &crate::context::VocabularyContext,
 	issues: &mut Vec<ValidationIssue>,
 ) {
-	let required_path = format!("drugs.0.dosages.{flat_idx}.frequencyUnit");
+	let Some((drug_idx, idx)) = nested else {
+		return;
+	};
+	let required_path =
+		format!("drugs.{drug_idx}.dosageInformation.{idx}.frequencyUnit");
 	reject_when(
 		issues,
 		"ICH.G.k.4.r.3.REQUIRED",
@@ -798,33 +812,48 @@ fn g_k_4_r_3(
 
 /// ICH.G.k.4.r.4-5.FUTURE_DATE.FORBIDDEN
 fn g_k_4_r_4_5(
-	flat_idx: usize,
+	nested: Option<(usize, usize)>,
 	dosage: &DosageInformation,
 	issues: &mut Vec<ValidationIssue>,
 ) {
-	let path = format!("drugs.0.dosageInformation.{flat_idx}.dateRange");
+	let Some((drug_idx, idx)) = nested else {
+		return;
+	};
+	let start_path =
+		format!("drugs.{drug_idx}.dosageInformation.{idx}.firstAdministrationDate");
 	reject_future_date(
 		issues,
 		"ICH.G.k.4.r.4-5.FUTURE_DATE.FORBIDDEN",
-		&path,
+		&start_path,
 		SECTION,
 		"[G.k.4.r.4/G.k.4.r.5] Drug administration dates must not be later than today.",
-		DateValues::Two(
-			dosage.first_administration_date,
-			dosage.last_administration_date,
-		),
+		DateValues::One(dosage.first_administration_date),
+	);
+	let end_path =
+		format!("drugs.{drug_idx}.dosageInformation.{idx}.lastAdministrationDate");
+	reject_future_date(
+		issues,
+		"ICH.G.k.4.r.4-5.FUTURE_DATE.FORBIDDEN",
+		&end_path,
+		SECTION,
+		"[G.k.4.r.4/G.k.4.r.5] Drug administration dates must not be later than today.",
+		DateValues::One(dosage.last_administration_date),
 	);
 }
 
 /// ICH.G.k.4.r.6a.REQUIRED
 /// ICH.G.k.4.r.6a.LENGTH.MAX
 fn g_k_4_r_6a(
-	flat_idx: usize,
+	_flat_idx: usize,
 	nested: Option<(usize, usize)>,
 	dosage: &DosageInformation,
 	issues: &mut Vec<ValidationIssue>,
 ) {
-	let required_path = format!("drugs.0.dosages.{flat_idx}.durationValue");
+	let Some((drug_idx, idx)) = nested else {
+		return;
+	};
+	let required_path =
+		format!("drugs.{drug_idx}.dosageInformation.{idx}.durationValue");
 	reject_when(
 		issues,
 		"ICH.G.k.4.r.6a.REQUIRED",
@@ -848,12 +877,16 @@ fn g_k_4_r_6a(
 /// ICH.G.k.4.r.6b.REQUIRED
 /// ICH.G.k.4.r.6b.LENGTH.MAX
 fn g_k_4_r_6b(
-	flat_idx: usize,
+	_flat_idx: usize,
 	nested: Option<(usize, usize)>,
 	dosage: &DosageInformation,
 	issues: &mut Vec<ValidationIssue>,
 ) {
-	let required_path = format!("drugs.0.dosages.{flat_idx}.durationUnit");
+	let Some((drug_idx, idx)) = nested else {
+		return;
+	};
+	let required_path =
+		format!("drugs.{drug_idx}.dosageInformation.{idx}.durationUnit");
 	reject_when(
 		issues,
 		"ICH.G.k.4.r.6b.REQUIRED",
@@ -926,12 +959,16 @@ fn g_k_4_r_9_1(
 /// ICH.G.k.4.r.9.2a.REQUIRED
 /// ICH.G.k.4.r.9.2a.LENGTH.MAX
 fn g_k_4_r_9_2a(
-	flat_idx: usize,
+	_flat_idx: usize,
 	nested: Option<(usize, usize)>,
 	dosage: &DosageInformation,
 	issues: &mut Vec<ValidationIssue>,
 ) {
-	let required_path = format!("drugs.0.dosages.{flat_idx}.doseFormTermIdVersion");
+	let Some((drug_idx, idx)) = nested else {
+		return;
+	};
+	let required_path =
+		format!("drugs.{drug_idx}.dosageInformation.{idx}.doseFormTermIdVersion");
 	reject_when(
 		issues,
 		"ICH.G.k.4.r.9.2a.REQUIRED",
@@ -987,12 +1024,16 @@ fn g_k_4_r_10_1(
 /// ICH.G.k.4.r.10.2a.REQUIRED
 /// ICH.G.k.4.r.10.2a.LENGTH.MAX
 fn g_k_4_r_10_2a(
-	flat_idx: usize,
+	_flat_idx: usize,
 	nested: Option<(usize, usize)>,
 	dosage: &DosageInformation,
 	issues: &mut Vec<ValidationIssue>,
 ) {
-	let required_path = format!("drugs.0.dosages.{flat_idx}.routeTermIdVersion");
+	let Some((drug_idx, idx)) = nested else {
+		return;
+	};
+	let required_path =
+		format!("drugs.{drug_idx}.dosageInformation.{idx}.routeTermIdVersion");
 	reject_when(
 		issues,
 		"ICH.G.k.4.r.10.2a.REQUIRED",
@@ -1048,13 +1089,16 @@ fn g_k_4_r_11_1(
 /// ICH.G.k.4.r.11.2a.REQUIRED
 /// ICH.G.k.4.r.11.2a.LENGTH.MAX
 fn g_k_4_r_11_2a(
-	flat_idx: usize,
+	_flat_idx: usize,
 	nested: Option<(usize, usize)>,
 	dosage: &DosageInformation,
 	issues: &mut Vec<ValidationIssue>,
 ) {
+	let Some((drug_idx, idx)) = nested else {
+		return;
+	};
 	let required_path =
-		format!("drugs.0.dosages.{flat_idx}.parentRouteTermIdVersion");
+		format!("drugs.{drug_idx}.dosageInformation.{idx}.parentRouteTermIdVersion");
 	reject_when(
 		issues,
 		"ICH.G.k.4.r.11.2a.REQUIRED",
@@ -1113,13 +1157,16 @@ fn g_k_7_r_1(
 /// ICH.G.k.7.r.2a.REQUIRED
 /// ICH.G.k.7.r.2a.LENGTH.MAX
 fn g_k_7_r_2a(
-	flat_idx: usize,
+	_flat_idx: usize,
 	nested: Option<(usize, usize)>,
 	indication: &DrugIndication,
 	issues: &mut Vec<ValidationIssue>,
 ) {
+	let Some((drug_idx, idx)) = nested else {
+		return;
+	};
 	let required_path =
-		format!("drugs.0.indications.{flat_idx}.indicationMeddraVersion");
+		format!("drugs.{drug_idx}.indications.{idx}.indicationMeddraVersion");
 	reject_when(
 		issues,
 		"ICH.G.k.7.r.2a.REQUIRED",
@@ -1145,13 +1192,16 @@ fn g_k_7_r_2a(
 /// ICH.G.k.7.r.2b.REQUIRED
 /// ICH.G.k.7.r.2b.LENGTH.MAX
 fn g_k_7_r_2b(
-	flat_idx: usize,
+	_flat_idx: usize,
 	nested: Option<(usize, usize)>,
 	indication: &DrugIndication,
 	issues: &mut Vec<ValidationIssue>,
 ) {
+	let Some((drug_idx, idx)) = nested else {
+		return;
+	};
 	let required_path =
-		format!("drugs.0.indications.{flat_idx}.indicationMeddraCode");
+		format!("drugs.{drug_idx}.indications.{idx}.indicationMeddraCode");
 	reject_when(
 		issues,
 		"ICH.G.k.7.r.2b.REQUIRED",
@@ -1221,20 +1271,23 @@ fn g_k_7_r_2(
 
 fn assessment_path(nested: Option<(usize, usize)>, field: &str) -> Option<String> {
 	nested.map(|(drug_idx, idx)| {
-		format!("drugs.{drug_idx}.reactionAssessments.{idx}.{field}")
+		format!("drugs.{drug_idx}.drugReactionAssessments.{idx}.{field}")
 	})
 }
 
 /// ICH.G.k.9.i.3.1a.REQUIRED
 /// ICH.G.k.9.i.3.1a.LENGTH.MAX
 fn g_k_9_i_3_1a(
-	flat_idx: usize,
+	_flat_idx: usize,
 	nested: Option<(usize, usize)>,
 	assessment: &DrugReactionAssessment,
 	issues: &mut Vec<ValidationIssue>,
 ) {
+	let Some((drug_idx, idx)) = nested else {
+		return;
+	};
 	let required_path = format!(
-		"drugs.0.reactionAssessments.{flat_idx}.administrationStartIntervalValue"
+		"drugs.{drug_idx}.drugReactionAssessments.{idx}.administrationStartIntervalValue"
 	);
 	reject_when(
 		issues,
@@ -1260,13 +1313,16 @@ fn g_k_9_i_3_1a(
 /// ICH.G.k.9.i.3.1b.REQUIRED
 /// ICH.G.k.9.i.3.1b.LENGTH.MAX
 fn g_k_9_i_3_1b(
-	flat_idx: usize,
+	_flat_idx: usize,
 	nested: Option<(usize, usize)>,
 	assessment: &DrugReactionAssessment,
 	issues: &mut Vec<ValidationIssue>,
 ) {
+	let Some((drug_idx, idx)) = nested else {
+		return;
+	};
 	let required_path = format!(
-		"drugs.0.reactionAssessments.{flat_idx}.administrationStartIntervalUnit"
+		"drugs.{drug_idx}.drugReactionAssessments.{idx}.administrationStartIntervalUnit"
 	);
 	reject_when(
 		issues,
@@ -1291,13 +1347,17 @@ fn g_k_9_i_3_1b(
 /// ICH.G.k.9.i.3.2a.REQUIRED
 /// ICH.G.k.9.i.3.2a.LENGTH.MAX
 fn g_k_9_i_3_2a(
-	flat_idx: usize,
+	_flat_idx: usize,
 	nested: Option<(usize, usize)>,
 	assessment: &DrugReactionAssessment,
 	issues: &mut Vec<ValidationIssue>,
 ) {
-	let required_path =
-		format!("drugs.0.reactionAssessments.{flat_idx}.lastDoseIntervalValue");
+	let Some((drug_idx, idx)) = nested else {
+		return;
+	};
+	let required_path = format!(
+		"drugs.{drug_idx}.drugReactionAssessments.{idx}.lastDoseIntervalValue"
+	);
 	reject_when(
 		issues,
 		"ICH.G.k.9.i.3.2a.REQUIRED",
@@ -1322,13 +1382,17 @@ fn g_k_9_i_3_2a(
 /// ICH.G.k.9.i.3.2b.REQUIRED
 /// ICH.G.k.9.i.3.2b.LENGTH.MAX
 fn g_k_9_i_3_2b(
-	flat_idx: usize,
+	_flat_idx: usize,
 	nested: Option<(usize, usize)>,
 	assessment: &DrugReactionAssessment,
 	issues: &mut Vec<ValidationIssue>,
 ) {
-	let required_path =
-		format!("drugs.0.reactionAssessments.{flat_idx}.lastDoseIntervalUnit");
+	let Some((drug_idx, idx)) = nested else {
+		return;
+	};
+	let required_path = format!(
+		"drugs.{drug_idx}.drugReactionAssessments.{idx}.lastDoseIntervalUnit"
+	);
 	reject_when(
 		issues,
 		"ICH.G.k.9.i.3.2b.REQUIRED",
@@ -1398,7 +1462,9 @@ fn relatedness_path(
 	nested: Option<(usize, usize, usize)>,
 	field: &str,
 ) -> Option<String> {
-	nested.map(|(drug_idx, assessment_idx, idx)| format!("drugs.{drug_idx}.reactionAssessments.{assessment_idx}.relatednessAssessments.{idx}.{field}"))
+	nested.map(|(drug_idx, _assessment_idx, idx)| {
+		format!("drugs.{drug_idx}.drugReactionAssessments.{idx}.{field}")
+	})
 }
 
 /// ICH.G.k.9.i.2.r.1.LENGTH.MAX
@@ -1512,15 +1578,11 @@ pub(crate) fn collect_ich_issues(
 	let mut fallback = HashMap::new();
 	for (flat_idx, substance) in validation_ctx.active_substances.iter().enumerate()
 	{
-		let nested = drug_indices
-			.get(&substance.drug_id)
-			.copied()
-			.map(|drug_idx| {
-				let fallback_idx = fallback.entry(substance.drug_id).or_insert(0);
-				let idx = sequence_idx(substance.sequence_number, *fallback_idx);
-				*fallback_idx += 1;
-				(drug_idx, idx)
-			});
+		let drug_idx = drug_indices.get(&substance.drug_id).copied().unwrap_or(0);
+		let fallback_idx = fallback.entry(substance.drug_id).or_insert(0);
+		let idx = *fallback_idx;
+		*fallback_idx += 1;
+		let nested = Some((drug_idx, idx));
 		g_k_2_3_r_1(flat_idx, nested, substance, issues);
 		g_k_2_3_r_2a(flat_idx, nested, substance, issues);
 		g_k_2_3_r_2b(nested, substance, issues);
@@ -1530,17 +1592,16 @@ pub(crate) fn collect_ich_issues(
 
 	let mut fallback = HashMap::new();
 	for (flat_idx, dosage) in validation_ctx.dosages.iter().enumerate() {
-		let nested = drug_indices.get(&dosage.drug_id).copied().map(|drug_idx| {
-			let fallback_idx = fallback.entry(dosage.drug_id).or_insert(0);
-			let idx = sequence_idx(dosage.sequence_number, *fallback_idx);
-			*fallback_idx += 1;
-			(drug_idx, idx)
-		});
+		let drug_idx = drug_indices.get(&dosage.drug_id).copied().unwrap_or(0);
+		let fallback_idx = fallback.entry(dosage.drug_id).or_insert(0);
+		let idx = *fallback_idx;
+		*fallback_idx += 1;
+		let nested = Some((drug_idx, idx));
 		g_k_4_r_1a(nested, dosage, issues);
 		g_k_4_r_1b(flat_idx, nested, dosage, issues);
 		g_k_4_r_2(nested, dosage, issues);
 		g_k_4_r_3(flat_idx, nested, dosage, &validation_ctx.vocabulary, issues);
-		g_k_4_r_4_5(flat_idx, dosage, issues);
+		g_k_4_r_4_5(nested, dosage, issues);
 		g_k_4_r_6a(flat_idx, nested, dosage, issues);
 		g_k_4_r_6b(flat_idx, nested, dosage, issues);
 		g_k_4_r_7(nested, dosage, issues);
@@ -1558,18 +1619,11 @@ pub(crate) fn collect_ich_issues(
 
 	let mut fallback = HashMap::new();
 	for (flat_idx, indication) in validation_ctx.indications.iter().enumerate() {
-		let nested =
-			drug_indices
-				.get(&indication.drug_id)
-				.copied()
-				.map(|drug_idx| {
-					let fallback_idx =
-						fallback.entry(indication.drug_id).or_insert(0);
-					let idx =
-						sequence_idx(indication.sequence_number, *fallback_idx);
-					*fallback_idx += 1;
-					(drug_idx, idx)
-				});
+		let drug_idx = drug_indices.get(&indication.drug_id).copied().unwrap_or(0);
+		let fallback_idx = fallback.entry(indication.drug_id).or_insert(0);
+		let idx = *fallback_idx;
+		*fallback_idx += 1;
+		let nested = Some((drug_idx, idx));
 		g_k_7_r_1(nested, indication, issues);
 		g_k_7_r_2a(flat_idx, nested, indication, issues);
 		g_k_7_r_2b(flat_idx, nested, indication, issues);
@@ -1581,17 +1635,11 @@ pub(crate) fn collect_ich_issues(
 	for (flat_idx, assessment) in
 		validation_ctx.drug_reaction_assessments.iter().enumerate()
 	{
-		let nested =
-			drug_indices
-				.get(&assessment.drug_id)
-				.copied()
-				.map(|drug_idx| {
-					let idx = *fallback.entry(assessment.drug_id).or_insert(0);
-					*fallback.get_mut(&assessment.drug_id).expect("entry exists") +=
-						1;
-					assessment_indices.insert(assessment.id, (drug_idx, idx));
-					(drug_idx, idx)
-				});
+		let drug_idx = drug_indices.get(&assessment.drug_id).copied().unwrap_or(0);
+		let idx = *fallback.entry(assessment.drug_id).or_insert(0);
+		*fallback.get_mut(&assessment.drug_id).expect("entry exists") += 1;
+		assessment_indices.insert(assessment.id, (drug_idx, idx));
+		let nested = Some((drug_idx, idx));
 		g_k_9_i_3_1a(flat_idx, nested, assessment, issues);
 		g_k_9_i_3_1b(flat_idx, nested, assessment, issues);
 		g_k_9_i_3_2a(flat_idx, nested, assessment, issues);
@@ -1599,15 +1647,32 @@ pub(crate) fn collect_ich_issues(
 		g_k_9_i_4(nested, assessment, issues);
 		cioms_item_20(nested, assessment, issues);
 	}
+	let mut relatedness_bases = HashMap::new();
+	let mut relatedness_next_by_drug = HashMap::new();
+	for assessment in &validation_ctx.drug_reaction_assessments {
+		let next = relatedness_next_by_drug
+			.entry(assessment.drug_id)
+			.or_insert(0);
+		relatedness_bases.insert(assessment.id, *next);
+		let row_count = validation_ctx
+			.relatedness_assessments
+			.iter()
+			.filter(|row| row.drug_reaction_assessment_id == assessment.id)
+			.count()
+			.max(1);
+		*next += row_count;
+	}
 	let mut fallback = HashMap::new();
 	for relatedness in &validation_ctx.relatedness_assessments {
 		let assessment_id = relatedness.drug_reaction_assessment_id;
 		let nested = assessment_indices.get(&assessment_id).copied().map(
 			|(drug_idx, assessment_idx)| {
 				let fallback_idx = fallback.entry(assessment_id).or_insert(0);
-				let idx = sequence_idx(relatedness.sequence_number, *fallback_idx);
+				let child_idx =
+					relatedness_bases.get(&assessment_id).copied().unwrap_or(0)
+						+ *fallback_idx;
 				*fallback_idx += 1;
-				(drug_idx, assessment_idx, idx)
+				(drug_idx, assessment_idx, child_idx)
 			},
 		);
 		g_k_9_i_2_r_1(nested, relatedness, issues);
@@ -1618,6 +1683,7 @@ pub(crate) fn collect_ich_issues(
 
 /// FDA.G.K.12.REQUIRED
 fn fda_g_k_12(
+	drug_idx: usize,
 	local_criteria_is_malfunction_only: bool,
 	has_suspect_malfunction: bool,
 	issues: &mut Vec<ValidationIssue>,
@@ -1625,7 +1691,7 @@ fn fda_g_k_12(
 	reject_when(
 		issues,
 		"FDA.G.K.12.REQUIRED",
-		"drugs.0.fdaDevices.0.malfunction",
+		&format!("drugs.{drug_idx}.fdaDevices.0.malfunction"),
 		SECTION,
 		"FDA postmarket requires at least one suspect product with [G.K.12.r.1]=true when [C.1.7.1]=5.",
 		local_criteria_is_malfunction_only && !has_suspect_malfunction,
@@ -1864,14 +1930,31 @@ fn fda_g_k_9(
 			crate::push_business_issue(
 				issues,
 				code,
-				format!("drugs.{drug_idx}.reactionAssessments.0.relatednessAssessments.0.{field}"),
+				format!("drugs.{drug_idx}.drugReactionAssessments.0.{field}"),
 				message,
 			);
 		}
 		return;
 	}
+	let mut relatedness_bases = HashMap::new();
+	let mut relatedness_next_by_drug = HashMap::new();
+	for assessment in &validation_ctx.drug_reaction_assessments {
+		let next = relatedness_next_by_drug
+			.entry(assessment.drug_id)
+			.or_insert(0);
+		relatedness_bases.insert(assessment.id, *next);
+		let row_count = validation_ctx
+			.relatedness_assessments
+			.iter()
+			.filter(|row| row.drug_reaction_assessment_id == assessment.id)
+			.count()
+			.max(1);
+		*next += row_count;
+	}
 	let mut assessment_indices = HashMap::new();
 	let mut has_suspect_result = false;
+	let mut first_suspect_result_path = None;
+	let mut first_suspect_assessment_path = None;
 	for assessment in &validation_ctx.drug_reaction_assessments {
 		let Some(drug_idx) = drug_indices.get(&assessment.drug_id).copied() else {
 			continue;
@@ -1885,8 +1968,17 @@ fn fda_g_k_9(
 			.iter()
 			.filter(|row| row.drug_reaction_assessment_id == assessment.id)
 			.collect::<Vec<_>>();
+		if is_suspect && first_suspect_assessment_path.is_none() {
+			let first_index =
+				relatedness_bases.get(&assessment.id).copied().unwrap_or(0);
+			first_suspect_assessment_path = Some(format!(
+				"drugs.{drug_idx}.drugReactionAssessments.{first_index}.resultOfAssessment"
+			));
+		}
 		for (fallback_idx, row) in rows.iter().enumerate() {
-			let relatedness_idx = sequence_idx(row.sequence_number, fallback_idx);
+			let relatedness_idx =
+				relatedness_bases.get(&assessment.id).copied().unwrap_or(0)
+					+ fallback_idx;
 			let has_source = row.source_of_assessment.as_deref().map(str::trim)
 				== Some("Sponsor");
 			let has_method =
@@ -1897,6 +1989,11 @@ fn fda_g_k_9(
 			);
 			if is_suspect {
 				has_suspect_result |= has_result;
+				if has_result && first_suspect_result_path.is_none() {
+					first_suspect_result_path = Some(format!(
+						"drugs.{drug_idx}.drugReactionAssessments.{relatedness_idx}.resultOfAssessment"
+					));
+				}
 			}
 			for (code, field, present, message) in [
 				(
@@ -1916,13 +2013,15 @@ fn fda_g_k_9(
 					crate::push_business_issue(
 						issues,
 						code,
-						format!("drugs.{drug_idx}.reactionAssessments.{assessment_idx}.relatednessAssessments.{relatedness_idx}.{field}"),
+						format!("drugs.{drug_idx}.drugReactionAssessments.{relatedness_idx}.{field}"),
 						message,
 					);
 				}
 			}
 		}
 		if rows.is_empty() {
+			let relatedness_idx =
+				relatedness_bases.get(&assessment.id).copied().unwrap_or(0);
 			for (code, field) in [
 				("FDA.G.k.9.i.2.r.1.REQUIRED", "sourceOfAssessment"),
 				("FDA.G.k.9.i.2.r.2.REQUIRED", "methodOfAssessment"),
@@ -1930,7 +2029,7 @@ fn fda_g_k_9(
 				crate::push_business_issue(
 					issues,
 					code,
-					format!("drugs.{drug_idx}.reactionAssessments.{assessment_idx}.relatednessAssessments.0.{field}"),
+					format!("drugs.{drug_idx}.drugReactionAssessments.{relatedness_idx}.{field}"),
 					"A relatedness assessment value is required for an IND safety report.",
 				);
 			}
@@ -1942,7 +2041,11 @@ fn fda_g_k_9(
 		crate::push_business_issue(
 			issues,
 			"FDA.G.k.9.i.2.r.3.REQUIRED",
-			format!("drugs.{drug_idx}.reactionAssessments.0.relatednessAssessments.0.resultOfAssessment"),
+			first_suspect_result_path
+				.or(first_suspect_assessment_path)
+			.unwrap_or_else(|| {
+				format!("drugs.{drug_idx}.drugReactionAssessments.0.resultOfAssessment")
+			}),
 			"At least one suspect product must have a relatedness result for an IND safety report.",
 		);
 	}
@@ -2080,7 +2183,16 @@ pub(crate) async fn collect_fda_issues(
 		fda_g_k_12_r_4_6(0, 0, [None; 3], true, issues);
 	}
 	fda_d_1_malfunction(validation_ctx, combination_true, has_malfunction, issues);
-	fda_g_k_12(local_criteria == Some("5"), has_malfunction_suspect, issues);
+	fda_g_k_12(
+		validation_ctx
+			.drugs
+			.iter()
+			.position(|drug| drug.drug_characterization.trim() == "1")
+			.unwrap_or(0),
+		local_criteria == Some("5"),
+		has_malfunction_suspect,
+		issues,
+	);
 	fda_g_k_1_route(validation_ctx, first_product_malfunction, issues);
 	fda_g_k_9(validation_ctx, ind_number_present, issues);
 	Ok(())
@@ -2468,21 +2580,23 @@ pub(crate) fn collect_mfds_issues(
 		}
 	}
 
+	let mut mfds_substance_indices = HashMap::new();
 	for substance in &mfds_ctx.active_substances {
-		let Some((drug_index, substance_index)) = resolve_drug_child_indices(
-			&drug_index_by_id,
-			substance.drug_id,
-			substance.sequence_number,
-		) else {
+		let Some(drug_index) = drug_index_by_id.get(&substance.drug_id).copied()
+		else {
 			continue;
 		};
+		let substance_index =
+			mfds_substance_indices.entry(substance.drug_id).or_insert(0);
+		let child_index = *substance_index;
+		*substance_index += 1;
 		let drug_has_mfds_mpid = drug_has_mfds_mpid_by_id
 			.get(&substance.drug_id)
 			.copied()
 			.unwrap_or(false);
 		mfds_g_k_2_3_r_1_kr_1b(
 			drug_index,
-			substance_index,
+			child_index,
 			substance.mfds_id.as_deref(),
 			substance.mfds_version.as_deref(),
 			vocabulary_receiver,
@@ -2493,12 +2607,12 @@ pub(crate) fn collect_mfds_issues(
 		);
 		mfds_g_k_2_3_r_1_kr_1a(
 			drug_index,
-			substance_index,
+			child_index,
 			substance.mfds_version.as_deref(),
 			receiver_is_fr && has_text(substance.mfds_id.as_deref()),
 			issues,
 		);
-		mfds_g_k_2_3_r_2b(drug_index, substance_index, substance, issues);
+		mfds_g_k_2_3_r_2b(drug_index, child_index, substance, issues);
 	}
 	if receiver_is_kr || receiver_is_fr {
 		for (drug_idx, drug) in validation_ctx.drugs.iter().enumerate() {
@@ -2517,14 +2631,15 @@ pub(crate) fn collect_mfds_issues(
 		}
 	}
 
+	let mut mfds_relatedness_indices = HashMap::new();
 	for r in &mfds_ctx.relatedness {
-		let Some((drug_index, assessment_index)) = resolve_drug_child_indices(
-			&drug_index_by_id,
-			r.drug_id,
-			r.relatedness_sequence_number,
-		) else {
+		let Some(drug_index) = drug_index_by_id.get(&r.drug_id).copied() else {
 			continue;
 		};
+		let assessment_index =
+			mfds_relatedness_indices.entry(r.drug_id).or_insert(0);
+		let child_index = *assessment_index;
+		*assessment_index += 1;
 		let has_source = has_text(r.source_of_assessment.as_deref());
 		let has_method = has_text(r.method_of_assessment_kr1.as_deref());
 		let has_result_kr1 = has_text(r.result_of_assessment_kr1.as_deref())
@@ -2540,7 +2655,7 @@ pub(crate) fn collect_mfds_issues(
 			&& (report_type_is_study || receiver_is_ct_or_cu);
 		mfds_g_k_9_i_2_r_2_kr_1(
 			drug_index,
-			assessment_index,
+			child_index,
 			r.method_of_assessment_kr1.as_deref(),
 			method_required_context,
 			receiver_is_ct_or_cu,
@@ -2550,7 +2665,7 @@ pub(crate) fn collect_mfds_issues(
 		);
 		mfds_g_k_9_i_2_r_3_kr_1(
 			drug_index,
-			assessment_index,
+			child_index,
 			r.result_of_assessment_kr1.as_deref(),
 			r.result_of_assessment_kr1_null_flavor.as_deref(),
 			r.method_of_assessment_kr1.as_deref(),
@@ -2559,14 +2674,14 @@ pub(crate) fn collect_mfds_issues(
 		);
 		mfds_g_k_9_i_2_r_3_kr_2(
 			drug_index,
-			assessment_index,
+			child_index,
 			r.result_of_assessment_kr2.as_deref(),
 			kr2_required_context,
 			issues,
 		);
 		mfds_g_k_9_i_2_r_1(
 			drug_index,
-			assessment_index,
+			child_index,
 			r.source_of_assessment.as_deref(),
 			has_method || has_any_result,
 			issues,
@@ -2999,6 +3114,7 @@ mod golden_g_required_tests {
 			duration_unit: None,
 			continuing: None,
 			batch_lot_number: None,
+			batch_lot_number_null_flavor: None,
 			dosage_text: None,
 			dose_form: None,
 			dose_form_null_flavor: None,
@@ -3479,7 +3595,7 @@ mod golden_g_required_tests {
 		)));
 		assert!(length_issues(&ctx).contains(&(
 			"ICH.G.k.4.r.1a.LENGTH.MAX".to_string(),
-			"drugs.0.dosages.0.doseValue".to_string()
+			"drugs.0.dosageInformation.0.doseValue".to_string()
 		)));
 		assert!(length_issues(&ctx).contains(&(
 			"ICH.G.k.7.r.2b.LENGTH.MAX".to_string(),
@@ -3487,12 +3603,11 @@ mod golden_g_required_tests {
 		)));
 		assert!(length_issues(&ctx).contains(&(
 			"ICH.G.k.9.i.4.LENGTH.MAX".to_string(),
-			"drugs.0.reactionAssessments.0.reactionRecurred".to_string()
+			"drugs.0.drugReactionAssessments.0.reactionRecurred".to_string()
 		)));
 		assert!(length_issues(&ctx).contains(&(
 			"ICH.G.k.9.i.2.r.1.LENGTH.MAX".to_string(),
-			"drugs.0.reactionAssessments.0.relatednessAssessments.0.sourceOfAssessment"
-				.to_string()
+			"drugs.0.drugReactionAssessments.0.sourceOfAssessment".to_string()
 		)));
 	}
 
@@ -3561,15 +3676,15 @@ mod golden_g_required_tests {
 	#[test]
 	fn fda_malfunction_only_requires_a_suspect_malfunction() {
 		let mut issues = Vec::new();
-		fda_g_k_12(false, false, &mut issues);
-		fda_g_k_12(true, true, &mut issues);
+		fda_g_k_12(0, false, false, &mut issues);
+		fda_g_k_12(0, true, true, &mut issues);
 		assert!(issues.is_empty());
 
-		fda_g_k_12(true, false, &mut issues);
+		fda_g_k_12(2, true, false, &mut issues);
 		assert_eq!(issues.len(), 1);
 		let issue = &issues[0];
 		assert_eq!(issue.code, "FDA.G.K.12.REQUIRED");
-		assert_eq!(issue.path, "drugs.0.fdaDevices.0.malfunction");
+		assert_eq!(issue.path, "drugs.2.fdaDevices.0.malfunction");
 		assert_eq!(issue.section, "drugs");
 		assert!(issue.blocking);
 	}

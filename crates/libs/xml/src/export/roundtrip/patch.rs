@@ -48,7 +48,9 @@ pub use e_f_sections::{patch_e_reactions, patch_f_test_results};
 pub use g_drug::patch_g_drugs;
 pub(crate) use g_drug::patch_g_drugs_for_authority;
 pub use h_narrative::patch_h_narrative;
-pub(crate) use helpers::reorder_investigation_event_children;
+pub(crate) use helpers::{
+	reorder_investigation_event_children, reorder_patient_player_children,
+};
 pub use types::{CSafetyReportPatch, DPatientDeathCausePatch, DPatientPatch};
 
 use helpers::*;

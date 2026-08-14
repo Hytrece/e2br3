@@ -11,10 +11,7 @@ use lib_core::model::ModelManager;
 use libxml::parser::Parser;
 use libxml::tree::Node;
 use libxml::xpath::Context;
-use rust_decimal::Decimal;
-use sqlx::types::time::Date;
 use sqlx::types::Uuid;
-use time::Month;
 
 #[derive(Debug)]
 pub struct EReactionImport {
@@ -59,11 +56,11 @@ pub struct EReactionImport {
 	pub mfds_device_action_notification: Option<bool>,
 	pub mfds_device_action_label_change: Option<bool>,
 	pub mfds_device_action_other: Option<String>,
-	pub start_date: Option<Date>,
+	pub start_date: Option<String>,
 	pub start_date_null_flavor: Option<String>,
-	pub end_date: Option<Date>,
+	pub end_date: Option<String>,
 	pub end_date_null_flavor: Option<String>,
-	pub duration_value: Option<Decimal>,
+	pub duration_value: Option<String>,
 	pub duration_unit: Option<String>,
 	pub outcome: Option<String>,
 	pub medical_confirmation: Option<bool>,
@@ -453,18 +450,18 @@ fn read_date(
 	check: impl for<'a> Fn(
 		input_contracts::FieldInput<'a>,
 	) -> Vec<input_contracts::InputIssue>,
-) -> Result<(Option<Date>, Option<String>)> {
+) -> Result<(Option<String>, Option<String>)> {
 	let raw = first_attr(xpath, node, value_path);
 	let null_flavor = first_attr(xpath, node, null_flavor_path);
 	import_constraint::string(field, raw.as_deref(), null_flavor.as_deref(), check)?;
-	Ok((raw.and_then(parse_date), null_flavor))
+	Ok((raw, null_flavor))
 }
 
 /// e2b:E.i.4
 fn read_e_i_4(
 	xpath: &mut Context,
 	node: &Node,
-) -> Result<(Option<Date>, Option<String>)> {
+) -> Result<(Option<String>, Option<String>)> {
 	read_date(
 		xpath,
 		node,
@@ -480,7 +477,7 @@ fn read_e_i_4(
 fn read_e_i_5(
 	xpath: &mut Context,
 	node: &Node,
-) -> Result<(Option<Date>, Option<String>)> {
+) -> Result<(Option<String>, Option<String>)> {
 	read_date(
 		xpath,
 		node,
@@ -493,14 +490,18 @@ fn read_e_i_5(
 }
 
 /// e2b:E.i.6a
-fn read_e_i_6a(xpath: &mut Context, node: &Node) -> Result<Option<Decimal>> {
+fn read_e_i_6a(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
 	let raw = first_attr(xpath, node, EReactionPaths::DURATION_VALUE);
-	import_constraint::number_string(
+	let raw = raw
+		.map(|value| value.trim().to_string())
+		.filter(|value| !value.is_empty());
+	import_constraint::string(
 		"reactionDuration.value",
 		raw.as_deref(),
+		None,
 		input_contracts::generated::e::e_i_6a,
 	)?;
-	Ok(raw.and_then(|value| value.parse().ok()))
+	Ok(raw)
 }
 
 /// e2b:E.i.6b
@@ -904,6 +905,7 @@ mod split_null_flavor_tests {
 			let reactions = parse_e_reactions(xml.as_bytes())
 				.expect("supported UCUM reaction duration unit");
 			assert_eq!(reactions[0].duration_unit.as_deref(), Some(stored));
+			assert_eq!(reactions[0].duration_value.as_deref(), Some("1"));
 		}
 
 		let xml = reaction_with_duration_unit("min");
@@ -916,21 +918,44 @@ mod split_null_flavor_tests {
 		let xml = br#"<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><subjectOf2><observation><code code="29" codeSystem="2.16.840.1.113883.3.989.2.1.1.19"/><effectiveTime xsi:type="SXPR_TS"><comp xsi:type="IVL_TS"><low value="20081009"/><high value="20081201"/></comp><comp xsi:type="IVL_TS" operator="A"><width value="54" unit="d"/></comp></effectiveTime><value xsi:type="CE"><originalText>Reaction</originalText></value></observation></subjectOf2></MCCI_IN200100UV01>"#;
 		let reaction = parse_e_reactions(xml).expect("parse").remove(0);
 
-		assert_eq!(reaction.start_date.unwrap().to_string(), "2008-10-09");
-		assert_eq!(reaction.end_date.unwrap().to_string(), "2008-12-01");
-		assert_eq!(reaction.duration_value.unwrap().to_string(), "54");
+		assert_eq!(reaction.start_date.as_deref(), Some("20081009"));
+		assert_eq!(reaction.end_date.as_deref(), Some("20081201"));
+		assert_eq!(reaction.duration_value.as_deref(), Some("54"));
 		assert_eq!(reaction.duration_unit.as_deref(), Some("804"));
 	}
-}
 
-fn parse_date(value: String) -> Option<Date> {
-	let digits: String = value.chars().filter(|c| c.is_ascii_digit()).collect();
-	if digits.len() < 8 {
-		return None;
+	#[test]
+	fn imports_duration_from_the_official_first_sxpr_component() {
+		let xml = br#"<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><subjectOf2><observation><code code="29" codeSystem="2.16.840.1.113883.3.989.2.1.1.19"/><effectiveTime xsi:type="SXPR_TS"><comp xsi:type="IVL_TS"><low value="20030511"/><width value="1.00" unit="wk"/></comp><comp xsi:type="IVL_TS" operator="A"><high value="20030518"/></comp></effectiveTime><value xsi:type="CE"><originalText>Reaction</originalText></value></observation></subjectOf2></MCCI_IN200100UV01>"#;
+		let reaction = parse_e_reactions(xml).expect("parse").remove(0);
+
+		assert_eq!(reaction.duration_value.as_deref(), Some("1.00"));
+		assert_eq!(reaction.duration_unit.as_deref(), Some("803"));
 	}
-	let y: i32 = digits[0..4].parse().ok()?;
-	let m: u8 = digits[4..6].parse().ok()?;
-	let d: u8 = digits[6..8].parse().ok()?;
-	let month = Month::try_from(m).ok()?;
-	Date::from_calendar_date(y, month, d).ok()
+
+	#[test]
+	fn imports_duration_from_direct_effective_time_width() {
+		let xml = br#"<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><subjectOf2><observation><code code="29" codeSystem="2.16.840.1.113883.3.989.2.1.1.19"/><effectiveTime xsi:type="IVL_TS"><width value="24" unit="h"/></effectiveTime><value xsi:type="CE"><originalText>Reaction</originalText></value></observation></subjectOf2></MCCI_IN200100UV01>"#;
+		let reaction = parse_e_reactions(xml).expect("parse").remove(0);
+
+		assert_eq!(reaction.duration_value.as_deref(), Some("24"));
+		assert_eq!(reaction.duration_unit.as_deref(), Some("805"));
+	}
+
+	#[test]
+	fn rejects_non_numeric_duration_values_before_db() {
+		let xml = br#"<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><subjectOf2><observation><code code="29" codeSystem="2.16.840.1.113883.3.989.2.1.1.19"/><effectiveTime xsi:type="SXPR_TS"><comp xsi:type="IVL_TS"><width value="54x" unit="d"/></comp></effectiveTime><value xsi:type="CE"><originalText>Reaction</originalText></value></observation></subjectOf2></MCCI_IN200100UV01>"#;
+		let error =
+			parse_e_reactions(xml).expect_err("invalid duration must fail import");
+
+		assert!(error.to_string().contains("reactionDuration.value"));
+	}
+
+	#[test]
+	fn preserves_partial_and_offset_reaction_ts() {
+		let xml = br#"<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><subjectOf2><observation><code code="29" codeSystem="2.16.840.1.113883.3.989.2.1.1.19"/><effectiveTime xsi:type="IVL_TS"><low value="202206"/><high value="200509211242-08"/></effectiveTime><value xsi:type="CE"><originalText>Reaction</originalText></value></observation></subjectOf2></MCCI_IN200100UV01>"#;
+		let reaction = parse_e_reactions(xml).expect("parse").remove(0);
+		assert_eq!(reaction.start_date.as_deref(), Some("202206"));
+		assert_eq!(reaction.end_date.as_deref(), Some("200509211242-08"));
+	}
 }

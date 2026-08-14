@@ -5,11 +5,11 @@ use lib_core::model::drug::{
 use libxml::parser::Parser;
 use libxml::xpath::Context;
 use rust_decimal::Decimal;
-use sqlx::types::time::{Date, Time};
+use sqlx::types::time::Date;
 use sqlx::types::Uuid;
 use time::Month;
 use time::OffsetDateTime;
-use xml::export_sections::g_drug::export_g_drugs_xml;
+use xml::export::sections::g::export_g_drugs_xml;
 
 #[test]
 fn export_g_drug_basic() {
@@ -49,6 +49,7 @@ fn export_g_drug_basic() {
 		updated_at: OffsetDateTime::now_utc(),
 		created_by: Uuid::new_v4(),
 		updated_by: None,
+		deleted: false,
 	};
 
 	let substance = DrugActiveSubstance {
@@ -59,12 +60,15 @@ fn export_g_drug_basic() {
 		substance_termid: Some("S1".to_string()),
 		substance_termid_version: Some("1".to_string()),
 		substance_termid_code_system: Some("TBD-Substance".to_string()),
+		mfds_version: None,
+		mfds_id: None,
 		strength_value: Some(1.into()),
 		strength_unit: Some("mg".to_string()),
 		created_at: OffsetDateTime::now_utc(),
 		updated_at: OffsetDateTime::now_utc(),
 		created_by: Uuid::new_v4(),
 		updated_by: None,
+		deleted: false,
 	};
 
 	let dosage = DosageInformation {
@@ -85,24 +89,33 @@ fn export_g_drug_basic() {
 		last_administration_date_raw: None,
 		duration_value: Some(1.into()),
 		duration_unit: Some("d".to_string()),
+		continuing: None,
 		batch_lot_number: Some("LOT1".to_string()),
+		batch_lot_number_null_flavor: None,
 		dosage_text: Some("Dose text".to_string()),
 		dose_form: Some("Tablet".to_string()),
+		dose_form_null_flavor: None,
 		dose_form_termid: Some("DF1".to_string()),
 		dose_form_termid_version: Some("1".to_string()),
 		route_of_administration: Some("PO".to_string()),
+		route_termid: None,
+		route_of_administration_null_flavor: None,
 		route_termid_version: Some("1".to_string()),
 		route_termid_code_system: Some("0.4.0.127.0.16.1.1.2.6".to_string()),
 		parent_route: Some("oral".to_string()),
+		parent_route_null_flavor: None,
 		parent_route_termid: Some("001".to_string()),
 		parent_route_termid_version: Some("1".to_string()),
 		parent_route_termid_code_system: Some(
 			"2.16.840.1.113883.3.989.2.1.1.14".to_string(),
 		),
+		first_administration_date_null_flavor: None,
+		last_administration_date_null_flavor: None,
 		created_at: OffsetDateTime::now_utc(),
 		updated_at: OffsetDateTime::now_utc(),
 		created_by: Uuid::new_v4(),
 		updated_by: None,
+		deleted: false,
 	};
 
 	let indication = DrugIndication {
@@ -110,12 +123,14 @@ fn export_g_drug_basic() {
 		drug_id,
 		sequence_number: 1,
 		indication_text: Some("Indication".to_string()),
+		indication_text_null_flavor: None,
 		indication_meddra_version: Some("24.1".to_string()),
 		indication_meddra_code: Some("10012345".to_string()),
 		created_at: OffsetDateTime::now_utc(),
 		updated_at: OffsetDateTime::now_utc(),
 		created_by: Uuid::new_v4(),
 		updated_by: None,
+		deleted: false,
 	};
 
 	let characteristic = DrugDeviceCharacteristic {
@@ -130,6 +145,7 @@ fn export_g_drug_basic() {
 		value_code: None,
 		value_code_system: None,
 		value_display_name: None,
+		deleted: false,
 		created_at: OffsetDateTime::now_utc(),
 		updated_at: OffsetDateTime::now_utc(),
 		created_by: Uuid::new_v4(),

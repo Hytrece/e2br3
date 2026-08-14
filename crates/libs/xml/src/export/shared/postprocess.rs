@@ -1,6 +1,8 @@
 use super::*;
 use crate::export::policy::{normalize_gestation_unit, normalize_time_unit};
-use crate::export::roundtrip::reorder_investigation_event_children;
+use crate::export::roundtrip::{
+	reorder_investigation_event_children, reorder_patient_player_children,
+};
 use crate::export::sections::c::{
 	apply_c_1_report_relationships, apply_c_2_primary_sources, apply_c_4_literature,
 	apply_c_5_study,
@@ -34,6 +36,7 @@ pub(crate) async fn apply_c_d_h_sections(
 	case_id: sqlx::types::Uuid,
 	xml: String,
 	authority: lib_core::regulatory::RegulatoryAuthority,
+	_outbound_message_header: &crate::export::OutboundMessageHeader,
 ) -> Result<String> {
 	let parser = Parser::default();
 	let mut doc = parser.parse_string(&xml).map_err(|err| Error::InvalidXml {
@@ -49,7 +52,16 @@ pub(crate) async fn apply_c_d_h_sections(
 	let _ = xpath.register_namespace("hl7", "urn:hl7-org:v3");
 	let _ =
 		xpath.register_namespace("xsi", "http://www.w3.org/2001/XMLSchema-instance");
-	apply_section_n(ctx, &mut doc, &parser, mm, case_id, &mut xpath).await?;
+	apply_section_n(
+		ctx,
+		&mut doc,
+		&parser,
+		mm,
+		case_id,
+		&mut xpath,
+		_outbound_message_header,
+	)
+	.await?;
 	apply_section_d(ctx, &mut doc, &parser, mm, case_id, &mut xpath, authority)
 		.await?;
 	apply_c_2_primary_sources(&mut doc, &parser, mm, case_id, &mut xpath, authority)
@@ -1014,10 +1026,11 @@ fn write_d_7_1_r_1b(value: &MedicalHistoryEpisode) -> Option<&str> {
 }
 
 /// e2b:D.7.1.r.2
-fn write_d_7_1_r_2(
-	value: &MedicalHistoryEpisode,
-) -> (Option<sqlx::types::time::Date>, Option<&str>) {
-	(value.start_date, value.start_date_null_flavor.as_deref())
+fn write_d_7_1_r_2(value: &MedicalHistoryEpisode) -> (Option<&str>, Option<&str>) {
+	(
+		value.start_date.as_deref(),
+		value.start_date_null_flavor.as_deref(),
+	)
 }
 
 /// e2b:D.7.1.r.3
@@ -1029,10 +1042,11 @@ fn write_d_7_1_r_3(value: &MedicalHistoryEpisode) -> String {
 }
 
 /// e2b:D.7.1.r.4
-fn write_d_7_1_r_4(
-	value: &MedicalHistoryEpisode,
-) -> (Option<sqlx::types::time::Date>, Option<&str>) {
-	(value.end_date, value.end_date_null_flavor.as_deref())
+fn write_d_7_1_r_4(value: &MedicalHistoryEpisode) -> (Option<&str>, Option<&str>) {
+	(
+		value.end_date.as_deref(),
+		value.end_date_null_flavor.as_deref(),
+	)
 }
 
 /// e2b:D.7.1.r.5
@@ -1077,7 +1091,7 @@ fn apply_d_7_medical_history(
 		let (start, start_null) = write_d_7_1_r_2(&episode);
 		let (end, end_null) = write_d_7_1_r_4(&episode);
 		let effective_time =
-			history_effective_time(start, start_null, end, end_null);
+			history_effective_time_raw(start, start_null, end, end_null);
 		let continuing = write_d_7_1_r_3(&episode);
 		let comments = write_d_7_1_r_5(&episode);
 		let family_history = write_d_7_1_r_6(&episode);
@@ -1356,6 +1370,36 @@ fn history_effective_time(
 	format!("<effectiveTime xsi:type=\"IVL_TS\">{low}{high}</effectiveTime>")
 }
 
+fn history_effective_time_raw(
+	start: Option<&str>,
+	start_null_flavor: Option<&str>,
+	end: Option<&str>,
+	end_null_flavor: Option<&str>,
+) -> String {
+	if start.is_none()
+		&& start_null_flavor.is_none()
+		&& end.is_none()
+		&& end_null_flavor.is_none()
+	{
+		return String::new();
+	}
+	let low = match (start, start_null_flavor) {
+		(Some(value), _) => format!("<low value=\"{}\"/>", xml_escape(value)),
+		(None, Some(value)) => {
+			format!("<low nullFlavor=\"{}\"/>", xml_escape(value))
+		}
+		(None, None) => "<low/>".to_string(),
+	};
+	let high = match (end, end_null_flavor) {
+		(Some(value), _) => format!("<high value=\"{}\"/>", xml_escape(value)),
+		(None, Some(value)) => {
+			format!("<high nullFlavor=\"{}\"/>", xml_escape(value))
+		}
+		(None, None) => "<high/>".to_string(),
+	};
+	format!("<effectiveTime xsi:type=\"IVL_TS\">{low}{high}</effectiveTime>")
+}
+
 fn apply_d_9_1_date_of_death_null_flavor(
 	doc: &mut Document,
 	parser: &Parser,
@@ -1386,6 +1430,7 @@ fn apply_d_9_1_date_of_death_null_flavor(
 		}
 		remove_attr_first(xpath, deceased_time, "value");
 		set_attr_first(xpath, deceased_time, "nullFlavor", null_flavor);
+		reorder_patient_player_children(xpath);
 	}
 	Ok(())
 }
@@ -1457,6 +1502,90 @@ mod tests {
 				.expect("parent height"),
 			"162"
 		);
+	}
+
+	#[test]
+	fn deceased_time_null_flavor_precedes_identifiers_and_parent_role() {
+		let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+			.parent()
+			.and_then(|path| path.parent())
+			.and_then(|path| path.parent())
+			.expect("workspace root")
+			.to_path_buf();
+		let source = std::fs::read_to_string(
+			root.join("docs/exporter/fda/FAERS2022Scenario1.xml"),
+		)
+		.expect("official FDA example");
+		let parser = Parser::default();
+		let mut doc = parser.parse_string(&source).expect("document");
+		let mut xpath = Context::new(&doc).expect("xpath");
+		let _ = xpath.register_namespace("hl7", "urn:hl7-org:v3");
+		let _ = xpath
+			.register_namespace("xsi", "http://www.w3.org/2001/XMLSchema-instance");
+
+		append_fragment_child(
+			&mut doc,
+			&parser,
+			&mut xpath,
+			"//hl7:primaryRole/hl7:player1",
+			"<addr><country>US</country></addr>",
+		)
+		.expect("patient address");
+		append_fragment_child(
+			&mut doc,
+			&parser,
+			&mut xpath,
+			"//hl7:primaryRole/hl7:player1",
+			"<raceCode code=\"C16352\" codeSystem=\"2.16.840.1.113883.3.26.1.1\"/>",
+		)
+		.expect("patient race");
+		ensure_patient_identifier(&mut xpath, &mut doc, &parser, "1")
+			.expect("patient identifier");
+		ensure_parent_role(&mut xpath, &mut doc, &parser).expect("parent role");
+		apply_d_9_1_date_of_death_null_flavor(
+			&mut doc,
+			&parser,
+			&mut xpath,
+			&Some(PatientDeathInformation {
+				id: Uuid::nil(),
+				patient_id: Uuid::nil(),
+				date_of_death: None,
+				date_of_death_null_flavor: Some("NASK".to_string()),
+				autopsy_performed: None,
+				autopsy_performed_null_flavor: None,
+				created_at: OffsetDateTime::UNIX_EPOCH,
+				updated_at: OffsetDateTime::UNIX_EPOCH,
+				created_by: Uuid::nil(),
+				updated_by: None,
+			}),
+		)
+		.expect("date of death null flavor");
+
+		let exported = doc.to_string();
+		let player = exported
+			.split_once("<player1")
+			.and_then(|(_, xml)| xml.split_once("</player1>"))
+			.map(|(xml, _)| xml)
+			.expect("patient player");
+		let deceased = player.find("<deceasedTime").expect("deceasedTime");
+		let address = player.find("<addr").expect("patient address");
+		let race = player.find("<raceCode").expect("patient race");
+		let identifier = player
+			.find("<asIdentifiedEntity")
+			.expect("patient identifier");
+		let role = player.find("code=\"PRN\"").expect("parent role");
+		assert!(
+			deceased < address
+				&& address < race
+				&& race < identifier
+				&& identifier < role
+		);
+		let errors = crate::validation::validate_e2b_xml_xsd(
+			exported.as_bytes(),
+			&crate::default_xsd_path().expect("official ICH schema"),
+		)
+		.expect("validate XSD");
+		assert!(errors.is_empty(), "{errors:#?}");
 	}
 
 	#[test]

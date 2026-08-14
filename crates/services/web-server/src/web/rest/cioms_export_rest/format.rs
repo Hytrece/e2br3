@@ -31,6 +31,10 @@ pub(super) fn date_text(value: Option<Date>) -> String {
 	value.map(|value| value.to_string()).unwrap_or_default()
 }
 
+pub(super) fn ts_text(value: Option<&str>) -> String {
+	value.unwrap_or_default().to_string()
+}
+
 pub(super) fn e2b_datetime_date_text(value: Option<&str>) -> String {
 	value
 		.and_then(lib_core::serde::flex_date::e2b_datetime_date)
@@ -170,8 +174,8 @@ pub(super) fn reaction_dates(reaction: Option<&Reaction>) -> String {
 	let Some(reaction) = reaction else {
 		return String::new();
 	};
-	let start = date_text(reaction.start_date);
-	let end = date_text(reaction.end_date);
+	let start = ts_text(reaction.start_date.as_deref());
+	let end = ts_text(reaction.end_date.as_deref());
 	match (start.is_empty(), end.is_empty()) {
 		(false, false) => format!("{start} to {end}"),
 		(false, true) => start,

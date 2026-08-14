@@ -46,6 +46,20 @@ pub(crate) struct PatientIdentifierImport {
 pub(crate) struct MedicalHistoryImport {
 	pub(crate) meddra_version: Option<String>,
 	pub(crate) meddra_code: Option<String>,
+	pub(crate) start_date: Option<String>,
+	pub(crate) start_date_null_flavor: Option<String>,
+	pub(crate) continuing: Option<bool>,
+	pub(crate) continuing_null_flavor: Option<String>,
+	pub(crate) end_date: Option<String>,
+	pub(crate) end_date_null_flavor: Option<String>,
+	pub(crate) comments: Option<String>,
+	pub(crate) family_history: Option<bool>,
+}
+
+#[derive(Debug)]
+pub(crate) struct ParentMedicalHistoryImport {
+	pub(crate) meddra_version: Option<String>,
+	pub(crate) meddra_code: Option<String>,
 	pub(crate) start_date: Option<Date>,
 	pub(crate) start_date_null_flavor: Option<String>,
 	pub(crate) continuing: Option<bool>,
@@ -53,7 +67,6 @@ pub(crate) struct MedicalHistoryImport {
 	pub(crate) end_date: Option<Date>,
 	pub(crate) end_date_null_flavor: Option<String>,
 	pub(crate) comments: Option<String>,
-	pub(crate) family_history: Option<bool>,
 }
 
 #[derive(Debug)]
@@ -108,7 +121,7 @@ pub(crate) struct ParentImport {
 	pub(crate) sex: Option<String>,
 	pub(crate) sex_null_flavor: Option<String>,
 	pub(crate) medical_history_text: Option<String>,
-	pub(crate) medical_history: Vec<MedicalHistoryImport>,
+	pub(crate) medical_history: Vec<ParentMedicalHistoryImport>,
 	pub(crate) past_drugs: Vec<PastDrugHistoryImport>,
 }
 
@@ -138,6 +151,23 @@ fn input_date(
 		check,
 	)?;
 	Ok((value.and_then(parse_date), null_flavor))
+}
+
+fn input_ts(
+	value: Option<String>,
+	null_flavor: Option<String>,
+	field: &str,
+	check: impl for<'a> Fn(
+		input_contracts::FieldInput<'a>,
+	) -> Vec<input_contracts::InputIssue>,
+) -> Result<(Option<String>, Option<String>)> {
+	import_constraint::string(
+		field,
+		value.as_deref(),
+		null_flavor.as_deref(),
+		check,
+	)?;
+	Ok((value, null_flavor))
 }
 
 fn input_number(
@@ -357,8 +387,8 @@ fn read_d_7_1_r_1(
 fn read_d_7_1_r_2(
 	xpath: &mut Context,
 	node: &libxml::tree::Node,
-) -> Result<(Option<Date>, Option<String>)> {
-	input_date(
+) -> Result<(Option<String>, Option<String>)> {
+	input_ts(
 		first_attr(xpath, node, "hl7:effectiveTime/hl7:low", "value"),
 		first_attr(xpath, node, "hl7:effectiveTime/hl7:low", "nullFlavor"),
 		"medicalHistoryEpisodes[].startDate",
@@ -394,8 +424,8 @@ fn read_d_7_1_r_3(
 fn read_d_7_1_r_4(
 	xpath: &mut Context,
 	node: &libxml::tree::Node,
-) -> Result<(Option<Date>, Option<String>)> {
-	input_date(
+) -> Result<(Option<String>, Option<String>)> {
+	input_ts(
 		first_attr(xpath, node, "hl7:effectiveTime/hl7:high", "value"),
 		first_attr(xpath, node, "hl7:effectiveTime/hl7:high", "nullFlavor"),
 		"medicalHistoryEpisodes[].endDate",
@@ -1303,8 +1333,7 @@ pub(crate) fn parse_parent_information(xml: &[u8]) -> Result<Option<ParentImport
 			read_d_10_7_1_r_3(&mut xpath, &obs)?;
 		let (end_date, end_date_null_flavor) = read_d_10_7_1_r_4(&mut xpath, &obs)?;
 		let comments = read_d_10_7_1_r_5(&mut xpath, &obs)?;
-		let family_history = None;
-		medical_history.push(MedicalHistoryImport {
+		medical_history.push(ParentMedicalHistoryImport {
 			meddra_version,
 			meddra_code,
 			start_date,
@@ -1314,7 +1343,6 @@ pub(crate) fn parse_parent_information(xml: &[u8]) -> Result<Option<ParentImport
 			end_date,
 			end_date_null_flavor,
 			comments,
-			family_history,
 		});
 	}
 
@@ -1394,6 +1422,14 @@ mod tests {
 </MCCI_IN200100UV01>"#;
 
 		assert!(parse_parent_information(xml).is_ok());
+	}
+
+	#[test]
+	fn preserves_partial_medical_history_ts() {
+		let xml = br#"<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><primaryRole><subjectOf2><organizer><code code="1" codeSystem="2.16.840.1.113883.3.989.2.1.1.20"/><component><observation><code codeSystem="2.16.840.1.113883.6.163" code="100"/><effectiveTime xsi:type="IVL_TS"><low value="2018"/><high value="201904"/></effectiveTime></observation></component></organizer></subjectOf2></primaryRole></MCCI_IN200100UV01>"#;
+		let history = parse_medical_history(xml).expect("parse");
+		assert_eq!(history[0].start_date.as_deref(), Some("2018"));
+		assert_eq!(history[0].end_date.as_deref(), Some("201904"));
 	}
 
 	#[test]

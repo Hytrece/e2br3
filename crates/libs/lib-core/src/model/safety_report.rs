@@ -5,15 +5,18 @@ use crate::e2b::null_flavor::NullFlavor;
 use crate::model::base::base_uuid;
 use crate::model::base::DbBmc;
 use crate::model::modql_utils::uuid_to_sea_value;
+use crate::model::patch::deserialize_patch_value;
 use crate::model::store::set_full_context_from_ctx_dbx;
 use crate::model::ModelManager;
 use crate::model::Result;
 use modql::field::Fields;
 use modql::filter::{FilterNodes, ListOptions, OpValBool, OpValsBool, OpValsValue};
 use serde::{Deserialize, Serialize};
-use sqlx::types::time::{Date, OffsetDateTime};
+use sqlx::types::time::OffsetDateTime;
 use sqlx::types::Uuid;
 use sqlx::FromRow;
+
+pub use crate::model::patch::PatchValue;
 
 fn validation_error(message: &str) -> crate::model::Error {
 	crate::model::Error::Validation {
@@ -59,10 +62,10 @@ pub struct SafetyReportIdentification {
 	pub report_type: Option<String>,
 
 	// C.1.4 - Date Report Was First Received from Source (MANDATORY)
-	pub date_first_received_from_source: Option<Date>,
+	pub date_first_received_from_source: Option<String>,
 
 	// C.1.5 - Date of Most Recent Information (MANDATORY)
-	pub date_of_most_recent_information: Option<Date>,
+	pub date_of_most_recent_information: Option<String>,
 
 	// C.1.7 - Fulfils Expedited Criteria (MANDATORY)
 	pub fulfil_expedited_criteria: Option<bool>,
@@ -116,16 +119,8 @@ pub struct SafetyReportIdentificationForCreate {
 	)]
 	pub transmission_date: Option<String>,
 	pub report_type: Option<String>,
-	#[serde(
-		default,
-		deserialize_with = "crate::serde::flex_date::deserialize_option_date"
-	)]
-	pub date_first_received_from_source: Option<Date>,
-	#[serde(
-		default,
-		deserialize_with = "crate::serde::flex_date::deserialize_option_date"
-	)]
-	pub date_of_most_recent_information: Option<Date>,
+	pub date_first_received_from_source: Option<String>,
+	pub date_of_most_recent_information: Option<String>,
 	pub fulfil_expedited_criteria: Option<bool>,
 	pub fulfil_expedited_criteria_null_flavor: Option<String>,
 	pub local_criteria_report_type: Option<String>,
@@ -141,45 +136,6 @@ pub struct SafetyReportIdentificationForCreate {
 	pub receiver_organization: Option<String>,
 }
 
-#[derive(Debug, Clone, Default)]
-pub enum PatchValue<T> {
-	#[default]
-	Missing,
-	Null,
-	Value(T),
-}
-
-impl<T> PatchValue<T> {
-	fn into_parts(self) -> (Option<T>, bool) {
-		match self {
-			Self::Missing => (None, false),
-			Self::Null => (None, true),
-			Self::Value(value) => (Some(value), false),
-		}
-	}
-}
-
-fn deserialize_patch_value<'de, D, T>(
-	deserializer: D,
-) -> std::result::Result<PatchValue<T>, D::Error>
-where
-	D: serde::Deserializer<'de>,
-	T: Deserialize<'de>,
-{
-	#[derive(Deserialize)]
-	#[serde(untagged)]
-	enum PatchInput<T> {
-		Null(()),
-		Value(T),
-	}
-
-	let value = PatchInput::<T>::deserialize(deserializer)?;
-	Ok(match value {
-		PatchInput::Null(()) => PatchValue::Null,
-		PatchInput::Value(value) => PatchValue::Value(value),
-	})
-}
-
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct SafetyReportIdentificationForUpdate {
@@ -192,16 +148,8 @@ pub struct SafetyReportIdentificationForUpdate {
 	pub transmission_date: Option<String>,
 	#[serde(default, deserialize_with = "deserialize_patch_value")]
 	pub report_type: PatchValue<String>,
-	#[serde(
-		default,
-		deserialize_with = "crate::serde::flex_date::deserialize_option_date"
-	)]
-	pub date_first_received_from_source: Option<Date>,
-	#[serde(
-		default,
-		deserialize_with = "crate::serde::flex_date::deserialize_option_date"
-	)]
-	pub date_of_most_recent_information: Option<Date>,
+	pub date_first_received_from_source: Option<String>,
+	pub date_of_most_recent_information: Option<String>,
 	#[serde(default, deserialize_with = "deserialize_patch_value")]
 	pub fulfil_expedited_criteria: PatchValue<bool>,
 	pub fulfil_expedited_criteria_null_flavor: Option<String>,
@@ -828,15 +776,36 @@ impl SafetyReportIdentificationBmc {
 		case_id: Uuid,
 		data: SafetyReportIdentificationForUpdate,
 	) -> Result<()> {
+		Self::update_by_case_patch(ctx, mm, case_id, data, &[]).await
+	}
+
+	pub async fn update_by_case_patch(
+		ctx: &Ctx,
+		mm: &ModelManager,
+		case_id: Uuid,
+		data: SafetyReportIdentificationForUpdate,
+		clear_fields: &[&str],
+	) -> Result<()> {
+		let clears: Vec<String> =
+			clear_fields.iter().map(|field| (*field).into()).collect();
 		let (report_type, clear_report_type) = data.report_type.into_parts();
+		let clear_report_type =
+			clear_report_type || clear_fields.contains(&"report_type");
 		let (fulfil_expedited_criteria, clear_fulfil_expedited_criteria) =
 			data.fulfil_expedited_criteria.into_parts();
+		let clear_fulfil_expedited_criteria = clear_fulfil_expedited_criteria
+			|| clear_fields.contains(&"fulfil_expedited_criteria");
 		let (local_criteria_report_type, clear_local_criteria_report_type) =
 			data.local_criteria_report_type.into_parts();
+		let clear_local_criteria_report_type = clear_local_criteria_report_type
+			|| clear_fields.contains(&"local_criteria_report_type");
 		let (
 			combination_product_report_indicator,
 			clear_combination_product_report_indicator,
 		) = data.combination_product_report_indicator.into_parts();
+		let clear_combination_product_report_indicator =
+			clear_combination_product_report_indicator
+				|| clear_fields.contains(&"combination_product_report_indicator");
 		let should_mark_nullified = data
 			.nullification_code
 			.as_deref()
@@ -890,25 +859,25 @@ impl SafetyReportIdentificationBmc {
 
 		let sql = format!(
 			"UPDATE {}
-			 SET safety_report_id = COALESCE($2, safety_report_id),
-			     version = COALESCE($3, version),
-			     transmission_date = COALESCE($4, transmission_date),
+			 SET safety_report_id = CASE WHEN 'safety_report_id' = ANY($26) THEN NULL ELSE COALESCE($2, safety_report_id) END,
+			     version = CASE WHEN 'version' = ANY($26) THEN NULL ELSE COALESCE($3, version) END,
+			     transmission_date = CASE WHEN 'transmission_date' = ANY($26) THEN NULL ELSE COALESCE($4, transmission_date) END,
 			     report_type = CASE WHEN $5 THEN NULL ELSE COALESCE($6, report_type) END,
-			     date_first_received_from_source = COALESCE($7, date_first_received_from_source),
-			     date_of_most_recent_information = COALESCE($8, date_of_most_recent_information),
+			     date_first_received_from_source = CASE WHEN 'date_first_received_from_source' = ANY($26) THEN NULL ELSE COALESCE($7, date_first_received_from_source) END,
+			     date_of_most_recent_information = CASE WHEN 'date_of_most_recent_information' = ANY($26) THEN NULL ELSE COALESCE($8, date_of_most_recent_information) END,
 			     fulfil_expedited_criteria = CASE WHEN $9 OR $11 IS NOT NULL THEN NULL ELSE COALESCE($10, fulfil_expedited_criteria) END,
-			     fulfil_expedited_criteria_null_flavor = CASE WHEN $10 IS NOT NULL THEN NULL ELSE COALESCE($11, fulfil_expedited_criteria_null_flavor) END,
+			     fulfil_expedited_criteria_null_flavor = CASE WHEN 'fulfil_expedited_criteria_null_flavor' = ANY($26) OR $10 IS NOT NULL THEN NULL ELSE COALESCE($11, fulfil_expedited_criteria_null_flavor) END,
 			     local_criteria_report_type = CASE WHEN $12 THEN NULL ELSE COALESCE($13, local_criteria_report_type) END,
 			     combination_product_report_indicator = CASE WHEN $14 OR $25 IS NOT NULL THEN NULL ELSE COALESCE($15, combination_product_report_indicator) END,
-			     combination_product_report_indicator_null_flavor = CASE WHEN $15 IS NOT NULL THEN NULL ELSE COALESCE($25, combination_product_report_indicator_null_flavor) END,
-			     worldwide_unique_id = COALESCE($16, worldwide_unique_id),
-			     first_sender_type = COALESCE($17, first_sender_type),
-			     additional_documents_available = COALESCE($18, additional_documents_available),
-			     other_case_identifiers_exist = CASE WHEN $20 IS NOT NULL THEN NULL ELSE COALESCE($19, other_case_identifiers_exist) END,
-			     other_case_identifiers_exist_null_flavor = CASE WHEN $19 IS NOT NULL THEN NULL ELSE COALESCE($20, other_case_identifiers_exist_null_flavor) END,
-			     nullification_code = COALESCE($21, nullification_code),
-			     nullification_reason = COALESCE($22, nullification_reason),
-			     receiver_organization = COALESCE($23, receiver_organization),
+			     combination_product_report_indicator_null_flavor = CASE WHEN 'combination_product_report_indicator_null_flavor' = ANY($26) OR $15 IS NOT NULL THEN NULL ELSE COALESCE($25, combination_product_report_indicator_null_flavor) END,
+			     worldwide_unique_id = CASE WHEN 'worldwide_unique_id' = ANY($26) THEN NULL ELSE COALESCE($16, worldwide_unique_id) END,
+			     first_sender_type = CASE WHEN 'first_sender_type' = ANY($26) THEN NULL ELSE COALESCE($17, first_sender_type) END,
+			     additional_documents_available = CASE WHEN 'additional_documents_available' = ANY($26) THEN NULL ELSE COALESCE($18, additional_documents_available) END,
+			     other_case_identifiers_exist = CASE WHEN 'other_case_identifiers_exist' = ANY($26) OR $20 IS NOT NULL THEN NULL ELSE COALESCE($19, other_case_identifiers_exist) END,
+			     other_case_identifiers_exist_null_flavor = CASE WHEN 'other_case_identifiers_exist_null_flavor' = ANY($26) OR $19 IS NOT NULL THEN NULL ELSE COALESCE($20, other_case_identifiers_exist_null_flavor) END,
+			     nullification_code = CASE WHEN 'nullification_code' = ANY($26) THEN NULL ELSE COALESCE($21, nullification_code) END,
+			     nullification_reason = CASE WHEN 'nullification_reason' = ANY($26) THEN NULL ELSE COALESCE($22, nullification_reason) END,
+			     receiver_organization = CASE WHEN 'receiver_organization' = ANY($26) THEN NULL ELSE COALESCE($23, receiver_organization) END,
 			     updated_at = now(),
 			     updated_by = $24
 			 WHERE case_id = $1",
@@ -942,7 +911,8 @@ impl SafetyReportIdentificationBmc {
 					.bind(data.nullification_reason)
 					.bind(data.receiver_organization)
 					.bind(ctx.user_id())
-					.bind(data.combination_product_report_indicator_null_flavor),
+					.bind(data.combination_product_report_indicator_null_flavor)
+					.bind(clears),
 			)
 			.await?;
 		if result == 0 {
@@ -1119,6 +1089,31 @@ impl PrimarySourceBmc {
 			data.qualification_null_flavor.as_deref(),
 		)?;
 		base_uuid::update::<Self, _>(ctx, mm, id, data).await
+	}
+
+	pub async fn update_patch(
+		ctx: &Ctx,
+		mm: &ModelManager,
+		id: Uuid,
+		data: PrimarySourceForUpdate,
+		clear_fields: &[&'static str],
+	) -> Result<()> {
+		Self::validate_null_flavors(
+			data.reporter_title_null_flavor.as_deref(),
+			data.reporter_given_name_null_flavor.as_deref(),
+			data.reporter_middle_name_null_flavor.as_deref(),
+			data.reporter_family_name_null_flavor.as_deref(),
+			data.organization_null_flavor.as_deref(),
+			data.department_null_flavor.as_deref(),
+			data.street_null_flavor.as_deref(),
+			data.city_null_flavor.as_deref(),
+			data.state_null_flavor.as_deref(),
+			data.postcode_null_flavor.as_deref(),
+			data.telephone_null_flavor.as_deref(),
+			data.email_null_flavor.as_deref(),
+			data.qualification_null_flavor.as_deref(),
+		)?;
+		base_uuid::update_patch::<Self, _>(ctx, mm, id, data, clear_fields).await
 	}
 
 	pub async fn delete(ctx: &Ctx, mm: &ModelManager, id: Uuid) -> Result<()> {

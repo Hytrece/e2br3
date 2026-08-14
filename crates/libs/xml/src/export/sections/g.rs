@@ -33,14 +33,12 @@ use lib_core::model::drug_reaction_assessment::{
 };
 use lib_core::regulatory::RegulatoryAuthority;
 use sqlx::types::time::{Date, Time};
-#[cfg(test)]
 use std::collections::HashMap;
 
 fn decimal_text(value: &rust_decimal::Decimal) -> String {
 	value.normalize().to_string()
 }
 
-#[cfg(test)]
 pub fn export_g_drugs_xml(
 	drugs: &[DrugInformation],
 	substances: &[DrugActiveSubstance],
@@ -1008,6 +1006,9 @@ pub(crate) fn write_g_k_drug(
 	}
 	out.push_str("</instanceOfKind></consumable>");
 	for assessment in assessments {
+		out.push_str(&write_g_k_9_i_time_intervals(assessment));
+	}
+	for assessment in assessments {
 		out.push_str(&write_g_k_9_i_recurrence(assessment));
 	}
 	for code in write_g_k_10_r(drug) {
@@ -1225,6 +1226,7 @@ pub(crate) fn write_g_k_drug(
 			out.push_str("/>");
 		}
 		if dose.batch_lot_number.is_some()
+			|| dose.batch_lot_number_null_flavor.is_some()
 			|| dose.dose_form.is_some()
 			|| dose.dose_form_termid.is_some()
 			|| dose.dose_form_null_flavor.is_some()
@@ -1234,6 +1236,12 @@ pub(crate) fn write_g_k_drug(
 				out.push_str("<productInstanceInstance><lotNumberText>");
 				out.push_str(&xml_escape(batch));
 				out.push_str("</lotNumberText></productInstanceInstance>");
+			} else if let Some(null_flavor) =
+				dose.batch_lot_number_null_flavor.as_deref()
+			{
+				out.push_str("<productInstanceInstance><id nullFlavor=\"NI\"/><lotNumberText nullFlavor=\"");
+				out.push_str(&xml_escape(null_flavor));
+				out.push_str("\"/></productInstanceInstance>");
 			}
 			if dose.dose_form.is_some()
 				|| dose.dose_form_termid.is_some()
@@ -1392,7 +1400,7 @@ fn write_g_k_9_i_4(value: &DrugReactionAssessment) -> Option<&str> {
 	value.recurrence_action.as_deref()
 }
 
-fn write_g_k_9_i_recurrence(assessment: &DrugReactionAssessment) -> String {
+fn write_g_k_9_i_time_intervals(assessment: &DrugReactionAssessment) -> String {
 	let mut out = String::new();
 	if assessment.administration_start_interval_value.is_some()
 		|| assessment.administration_start_interval_unit.is_some()
@@ -1434,6 +1442,11 @@ fn write_g_k_9_i_recurrence(assessment: &DrugReactionAssessment) -> String {
 		out.push_str(&xml_escape(&assessment.reaction_id.to_string()));
 		out.push_str("\"/></actReference></outboundRelationship1>");
 	}
+	out
+}
+
+fn write_g_k_9_i_recurrence(assessment: &DrugReactionAssessment) -> String {
+	let mut out = String::new();
 	// G.k.9.i.4 - Did Reaction Recur on Re-administration? (standard single observation,
 	// HL7 observation code 31). The recurrence answer uses the official 1-4 enum, which the
 	// backend stores in recurrence_action (matching the FDA reference instance value codes).
@@ -1456,7 +1469,6 @@ fn write_g_k_9_i_recurrence(assessment: &DrugReactionAssessment) -> String {
 	out
 }
 
-#[cfg(test)]
 pub(crate) fn write_g_k_causality_assessments(
 	drug: &DrugInformation,
 	assessments: &[&DrugReactionAssessment],
@@ -1597,17 +1609,20 @@ fn write_g_k_9_i_1(value: &DrugReactionAssessment) -> String {
 }
 
 pub(crate) fn write_g_k_1_causality(drug: &DrugInformation) -> Result<String> {
-	let (role, display) = write_g_k_1(drug)
-		.map(|(code, display_name)| {
-			(
-				format!("code=\"{code}\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.13\""),
-				format!(" displayName=\"{display_name}\""),
-			)
-		})
-		.unwrap_or_else(|| ("nullFlavor=\"NI\"".to_string(), String::new()));
+	let (code, display_name) =
+		write_g_k_1(drug).ok_or_else(|| Error::InvalidXml {
+			message: if drug.drug_characterization.trim().is_empty() {
+				"ICH.G.k.1.REQUIRED"
+			} else {
+				"ICH.G.k.1.INVALID"
+			}
+			.to_string(),
+			line: None,
+			column: None,
+		})?;
 	Ok(format!(
-		"<component typeCode=\"COMP\"><causalityAssessment classCode=\"OBS\" moodCode=\"EVN\"><code code=\"20\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.19\" displayName=\"interventionCharacterization\"/><value xsi:type=\"CE\" {role}{display}/><subject2 typeCode=\"SUBJ\"><productUseReference classCode=\"SBADM\" moodCode=\"EVN\"><id root=\"{drug_id}\"/></productUseReference></subject2></causalityAssessment></component>",
-		drug_id = drug.id
+		"<component typeCode=\"COMP\"><causalityAssessment classCode=\"OBS\" moodCode=\"EVN\"><code code=\"20\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.19\" displayName=\"interventionCharacterization\"/><value xsi:type=\"CE\" code=\"{code}\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.13\" displayName=\"{display_name}\"/><subject2 typeCode=\"SUBJ\"><productUseReference classCode=\"SBADM\" moodCode=\"EVN\"><id root=\"{drug_id}\"/></productUseReference></subject2></causalityAssessment></component>",
+		drug_id = drug.id,
 	))
 }
 
@@ -1674,7 +1689,6 @@ fn export_characteristic_code(code: &str) -> &str {
 	}
 }
 
-#[cfg(test)]
 fn base_g_drug_skeleton() -> &'static str {
 	"<?xml version=\"1.0\" encoding=\"utf-8\"?>\
 <MCCI_IN200100UV01 xmlns=\"urn:hl7-org:v3\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" ITSVersion=\"XML_1.0\">\
@@ -1813,6 +1827,7 @@ mod tests {
 			duration_unit: None,
 			continuing: None,
 			batch_lot_number: None,
+			batch_lot_number_null_flavor: None,
 			dosage_text: Some("row dosage text".to_string()),
 			dose_form: None,
 			dose_form_null_flavor: None,
@@ -2208,12 +2223,16 @@ mod tests {
 		dosage.route_of_administration_null_flavor = Some("ASKU".to_string());
 		dosage.dose_form_null_flavor = Some("UNK".to_string());
 		dosage.parent_route_null_flavor = Some("NASK".to_string());
+		dosage.batch_lot_number_null_flavor = Some("UNK".to_string());
 
 		let xml = export_g_drugs_xml(&[drug], &[], &[dosage], &[], &[], &[], &[])
 			.expect("export xml");
 		assert!(xml.contains("<routeCode nullFlavor=\"ASKU\"/>"));
 		assert!(xml.contains("<formCode nullFlavor=\"UNK\">"));
 		assert!(xml.contains("<value xsi:type=\"CE\" nullFlavor=\"NASK\">"));
+		assert!(xml.contains(
+			"<productInstanceInstance><id nullFlavor=\"NI\"/><lotNumberText nullFlavor=\"UNK\"/></productInstanceInstance>"
+		));
 	}
 
 	#[test]
@@ -2420,6 +2439,14 @@ mod tests {
 	}
 
 	#[test]
+	fn rejects_invalid_g_k_1_without_a_synthetic_null_flavor() {
+		let mut drug = test_drug(Uuid::new_v4(), Uuid::new_v4());
+		drug.drug_characterization.clear();
+
+		assert!(write_g_k_1_causality(&drug).is_err());
+	}
+
+	#[test]
 	fn mfds_relatedness_uses_kr1_code_systems() {
 		let assessment = test_assessment();
 		let relatedness = RelatednessAssessment {
@@ -2498,5 +2525,79 @@ mod tests {
 			!xml.contains("G.k.8.r"),
 			"non-standard recurrence codes G.k.8.r.* must not be exported: {xml}"
 		);
+	}
+
+	#[test]
+	fn export_g_groups_time_intervals_before_recurrence_observations() {
+		let case_id = Uuid::new_v4();
+		let drug_id = Uuid::new_v4();
+		let drug = test_drug(drug_id, case_id);
+		let mut first = test_assessment();
+		first.drug_id = drug_id;
+		first.administration_start_interval_value = Some(Decimal::new(3, 0));
+		first.administration_start_interval_unit = Some("d".to_string());
+		let mut second = test_assessment();
+		second.drug_id = drug_id;
+		second.administration_start_interval_value = Some(Decimal::new(44, 0));
+		second.administration_start_interval_unit = Some("d".to_string());
+		second.last_dose_interval_value = Some(Decimal::new(28, 0));
+		second.last_dose_interval_unit = Some("d".to_string());
+
+		let source = include_bytes!(
+			"../../../../../../docs/exporter/mfds/1-1_ExampleCase_literature_KR_initial_v1_0_샘플.xml"
+		);
+		let xml = crate::export::roundtrip::patch_g_drugs_for_authority(
+			source,
+			&[drug],
+			&[],
+			&[],
+			&[],
+			&[],
+			&[],
+			&[],
+			&[first, second],
+			&[],
+			RegulatoryAuthority::Mfds,
+		)
+		.expect("patch MFDS drug");
+
+		let parser = libxml::parser::Parser::default();
+		let doc = parser.parse_string(&xml).expect("parse export");
+		let mut xpath = libxml::xpath::Context::new(&doc).expect("create XPath");
+		xpath
+			.register_namespace("hl7", "urn:hl7-org:v3")
+			.expect("register namespace");
+		let node = xpath
+			.findnodes(
+				&format!("//hl7:substanceAdministration[hl7:id[@root='{drug_id}']]"),
+				None,
+			)
+			.expect("find drug")
+			.into_iter()
+			.next()
+			.expect("drug node");
+		let mut seen_relationship2 = false;
+		let mut relationship1_count = 0;
+		for child in node.get_child_nodes() {
+			match child.get_name().as_str() {
+				"outboundRelationship2" => seen_relationship2 = true,
+				"outboundRelationship1" => {
+					assert!(
+						!seen_relationship2,
+						"outboundRelationship1 emitted after outboundRelationship2"
+					);
+					relationship1_count += 1;
+				}
+				_ => {}
+			}
+		}
+		assert_eq!(relationship1_count, 3);
+
+		let errors = crate::validation::validate_e2b_xml_xsd(
+			xml.as_bytes(),
+			&crate::default_xsd_path().expect("official ICH schema"),
+		)
+		.expect("validate XSD");
+		assert!(errors.is_empty(), "{errors:#?}");
 	}
 }

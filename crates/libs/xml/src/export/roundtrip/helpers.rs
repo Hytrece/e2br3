@@ -281,6 +281,28 @@ pub(crate) fn reorder_investigation_event_children(xpath: &mut Context) {
 	}
 }
 
+pub(crate) fn reorder_patient_player_children(xpath: &mut Context) {
+	// Patient schema tail: D.9.1, address, race, identifiers, parent role.
+	for name in [
+		"deceasedTime",
+		"addr",
+		"raceCode",
+		"asIdentifiedEntity",
+		"role",
+	] {
+		if let Ok(nodes) = xpath
+			.findnodes(&format!("//hl7:primaryRole/hl7:player1/hl7:{name}"), None)
+		{
+			for mut node in nodes {
+				if let Some(mut parent) = node.get_parent() {
+					node.unlink_node();
+					let _ = parent.add_child(&mut node);
+				}
+			}
+		}
+	}
+}
+
 pub(super) fn clear_null_flavor_if_export_policy(
 	xpath: &mut Context,
 	rule_code: &str,

@@ -1,7 +1,7 @@
 use super::helpers::{
-	max_length, reject_future_date, reject_when, require, valid_code, valid_decimal,
-	valid_dotted_version, valid_identifier, valid_meddra_term, valid_meddra_version,
-	valid_mfds_product, warn_when, DateValues,
+	e2b_ts_date, max_length, reject_future_date, reject_when, require, valid_code,
+	valid_decimal, valid_dotted_version, valid_identifier, valid_meddra_term,
+	valid_meddra_version, valid_mfds_product, warn_when, DateValues,
 };
 use crate::context::VocabularyContext;
 use crate::{
@@ -593,7 +593,10 @@ fn d_7_1_r(
 		&format!("patientInformation.medicalHistoryEpisodes.{idx}.dateRange"),
 		SECTION,
 		"[D.7.1.r] Medical history dates must not be later than today.",
-		DateValues::Two(episode.start_date, episode.end_date),
+		DateValues::Two(
+			e2b_ts_date(episode.start_date.as_deref()),
+			e2b_ts_date(episode.end_date.as_deref()),
+		),
 	);
 }
 

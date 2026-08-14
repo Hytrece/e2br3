@@ -166,8 +166,10 @@ CREATE TABLE dosage_information (
     duration_unit VARCHAR(50),  -- E2B contract max; commonly 800-805 codes
     continuing BOOLEAN,
 
-    -- G.k.4.r.7 - Batch/Lot Number
+    -- G.k.4.r.7 - Batch/Lot Number; NullFlavor is retained only for source XML round trips.
     batch_lot_number VARCHAR(200),
+    batch_lot_number_null_flavor VARCHAR(4)
+        CHECK (batch_lot_number_null_flavor IN ('UNK')),
 
     -- G.k.4.r.8 - Dosage Text
     dosage_text TEXT,
@@ -201,6 +203,8 @@ CREATE TABLE dosage_information (
 		CHECK (route_of_administration IS NULL OR route_of_administration_null_flavor IS NULL),
 	CONSTRAINT ck_nfv_dosage_information_f27137b32806
 		CHECK (parent_route IS NULL OR parent_route_null_flavor IS NULL),
+	CONSTRAINT ck_nfv_dosage_information_batch_lot
+		CHECK (batch_lot_number IS NULL OR batch_lot_number_null_flavor IS NULL),
     deleted BOOLEAN NOT NULL DEFAULT false,
 
     -- Audit fields (standardized UUID-based)

@@ -113,7 +113,7 @@ fn patch_e_reaction_uses_comp_nodes_for_sxpr_effective_time() {
 		start_date_null_flavor: None,
 		end_date: Some(end_date),
 		end_date_null_flavor: None,
-		duration_value: Some(3.into()),
+		duration_value: Some("3".to_string()),
 		duration_unit: Some("d".to_string()),
 		outcome: Some("3".to_string()),
 		medical_confirmation: None,

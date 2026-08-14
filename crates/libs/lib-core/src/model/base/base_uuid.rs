@@ -11,7 +11,8 @@ use crate::model::base::{
 use crate::model::store::set_full_context_from_ctx_dbx;
 use crate::model::ModelManager;
 use crate::model::Result;
-use modql::field::HasSeaFields;
+use modql::field::{HasSeaFields, SeaField};
+use modql::SIden;
 use sea_query::{Expr, PostgresQueryBuilder, Query};
 use sea_query_binder::SqlxBinder;
 use sqlx::postgres::PgRow;
@@ -192,6 +193,33 @@ where
 	Ok(())
 }
 
+pub async fn update_patch<MC, E>(
+	ctx: &Ctx,
+	mm: &ModelManager,
+	id: Uuid,
+	data: E,
+	clear_fields: &[&'static str],
+) -> Result<()>
+where
+	MC: DbBmc,
+	E: HasSeaFields,
+{
+	let dbx = mm.dbx();
+	dbx.begin_txn().await?;
+	if let Err(err) = set_full_context_from_ctx_dbx(dbx, ctx).await {
+		dbx.rollback_txn().await?;
+		return Err(err);
+	}
+	if let Err(err) =
+		update_patch_in_transaction::<MC, E>(ctx, mm, id, data, clear_fields).await
+	{
+		dbx.rollback_txn().await?;
+		return Err(err);
+	}
+	dbx.commit_txn().await?;
+	Ok(())
+}
+
 /// Updates one entity using the caller's open transaction. The caller owns
 /// transaction context, rollback, and commit.
 pub async fn update_in_transaction<MC, E>(
@@ -204,12 +232,34 @@ where
 	MC: DbBmc,
 	E: HasSeaFields,
 {
+	update_patch_in_transaction::<MC, E>(ctx, mm, id, data, &[]).await
+}
+
+async fn update_patch_in_transaction<MC, E>(
+	ctx: &Ctx,
+	mm: &ModelManager,
+	id: Uuid,
+	data: E,
+	clear_fields: &[&'static str],
+) -> Result<()>
+where
+	MC: DbBmc,
+	E: HasSeaFields,
+{
 	let dbx = mm.dbx();
 
 	let user_id = ctx.user_id();
 
 	// -- Extract fields and prep for update (adds updated_by, updated_at)
 	let mut fields = data.not_none_sea_fields();
+	for &field in clear_fields {
+		if !E::field_names().contains(&field) {
+			return Err(crate::model::Error::Validation {
+				message: format!("invalid clear field '{field}' for {}", MC::TABLE),
+			});
+		}
+		fields.push(SeaField::new(SIden(field), Expr::cust("NULL")));
+	}
 	prep_fields_for_update::<MC>(&mut fields, user_id);
 
 	// -- Build the SQL query

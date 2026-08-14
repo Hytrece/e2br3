@@ -102,5 +102,26 @@ mod tests {
 			None,
 		))
 		.is_empty());
+		assert!(generated::e::e_i_4(FieldInput::new(
+			InputValue::String("200509211242-08"),
+			None,
+		))
+		.is_empty());
+		assert!(!generated::c::c_1_4(FieldInput::new(
+			InputValue::String("202206"),
+			None,
+		))
+		.is_empty());
+	}
+
+	#[test]
+	fn storage_required_fields_reject_explicit_null_only() {
+		assert!(
+			!generated::c::c_1_1(FieldInput::new(InputValue::Null, None)).is_empty()
+		);
+		assert!(
+			generated::c::c_1_1(FieldInput::new(InputValue::Missing, None))
+				.is_empty()
+		);
 	}
 }

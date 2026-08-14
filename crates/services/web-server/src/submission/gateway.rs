@@ -333,14 +333,12 @@ mod tests {
 	}
 
 	#[test]
-	fn mock_flag_does_not_select_a_gateway() {
+	fn unconfigured_transport_does_not_select_a_gateway() {
 		std::env::remove_var("AS2_SUBMITTER_URL");
 		std::env::remove_var("FDA_ESG_ENABLED");
 		std::env::remove_var("FDA_ESG_BASE_URL");
-		std::env::set_var("E2BR3_ALLOW_MOCK_SUBMISSION", "1");
 		let result = select_gateway_name(SubmissionAuthority::Fda);
-		std::env::remove_var("E2BR3_ALLOW_MOCK_SUBMISSION");
-		let error = result.expect_err("mock flag must not configure a gateway");
+		let error = result.expect_err("unconfigured transport must fail");
 		assert!(error
 			.to_string()
 			.contains("no submission transport configured"));

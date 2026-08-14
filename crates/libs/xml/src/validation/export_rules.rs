@@ -35,21 +35,7 @@ pub fn validate_export_rules(
 		xpath.register_namespace("xsi", "http://www.w3.org/2001/XMLSchema-instance");
 
 	let mut errors = Vec::new();
-	reject(
-		&mut xpath,
-		&mut errors,
-		"N.2.r.1",
-		"/hl7:MCCI_IN200100UV01/hl7:PORR_IN049016UV[hl7:id[@root='2.16.840.1.113883.3.989.2.1.3.1']/@extension != hl7:controlActProcess/hl7:subject/hl7:investigationEvent/hl7:id[@root='2.16.840.1.113883.3.989.2.1.3.1']/@extension]",
-		"N.2.r.1 must be identical to C.1.1.",
-	);
-	reject(
-		&mut xpath,
-		&mut errors,
-		"N.2.r.4",
-		"/hl7:MCCI_IN200100UV01/hl7:PORR_IN049016UV[hl7:creationTime/@value != hl7:controlActProcess/hl7:effectiveTime/@value]",
-		"N.2.r.4 must be identical to C.1.2.",
-	);
-	ich::run(&mut xpath, &mut errors);
+	ich::run(&mut xpath, authority, &mut errors);
 	authority::run(&mut xpath, authority, &mut errors);
 	Ok(errors)
 }
@@ -110,9 +96,10 @@ mod tests {
 	#[test]
 	fn regional_fields_are_a_final_authority_invariant() {
 		let xml = br#"<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3"><raceCode/></MCCI_IN200100UV01>"#;
-		assert!(validate_export_rules(xml, RegulatoryAuthority::Fda)
+		assert!(!validate_export_rules(xml, RegulatoryAuthority::Fda)
 			.unwrap()
-			.is_empty());
+			.iter()
+			.any(|error| error.message.contains("regional fields")));
 		let errors = validate_export_rules(xml, RegulatoryAuthority::Ich).unwrap();
 		assert!(errors.iter().any(
 			|error| error.message == "XML for ICH contains FDA regional fields."
@@ -123,9 +110,15 @@ mod tests {
 	fn rejects_icsr_without_required_reaction_product_and_narrative() {
 		let xml = br#"<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3"><PORR_IN049016UV><controlActProcess><subject><investigationEvent/></subject></controlActProcess></PORR_IN049016UV></MCCI_IN200100UV01>"#;
 		let errors = validate_export_rules(xml, RegulatoryAuthority::Fda).unwrap();
+		assert!(errors
+			.iter()
+			.any(|error| error.code.as_deref() == Some("ICH.N.1.5.REQUIRED")));
 		let codes = errors
 			.iter()
 			.filter_map(|error| error.code.as_deref())
+			.filter(|code| {
+				matches!(*code, "E.i.2.1a" | "E.i.2.1b" | "G.k.1" | "H.1")
+			})
 			.collect::<Vec<_>>();
 		assert_eq!(codes, ["E.i.2.1a", "E.i.2.1b", "G.k.1", "H.1"]);
 	}
@@ -133,8 +126,97 @@ mod tests {
 	#[test]
 	fn accepts_required_ich_case_content() {
 		let xml = br#"<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3"><PORR_IN049016UV><controlActProcess><subject><investigationEvent><text>Case narrative</text><observation><code code="29" codeSystem="2.16.840.1.113883.3.989.2.1.1.19"/><value code="10019211" codeSystem="2.16.840.1.113883.6.163" codeSystemVersion="28.1"/></observation><causalityAssessment><code code="20" codeSystem="2.16.840.1.113883.3.989.2.1.1.19"/><value code="1" codeSystem="2.16.840.1.113883.3.989.2.1.1.13"/></causalityAssessment></investigationEvent></subject></controlActProcess></PORR_IN049016UV></MCCI_IN200100UV01>"#;
-		assert!(validate_export_rules(xml, RegulatoryAuthority::Fda)
+		let errors = validate_export_rules(xml, RegulatoryAuthority::Fda).unwrap();
+		assert!(!errors.iter().any(|error| {
+			matches!(
+				error.code.as_deref(),
+				Some("E.i.2.1a" | "E.i.2.1b" | "G.k.1" | "H.1")
+			)
+		}));
+	}
+
+	#[test]
+	fn validates_generated_message_header_only_at_xml_boundary() {
+		let xml = br#"<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3"><id extension="batch"/><creationTime value="20260814000000"/><receiver><device><id extension="ZZFDA"/></device></receiver><sender><device><id extension="SENDER"/></device></sender><PORR_IN049016UV><id root="2.16.840.1.113883.3.989.2.1.3.1" extension="case"/><creationTime value="20260814000000"/><receiver><device><id extension="CDER"/></device></receiver><sender><device><id extension="SENDER"/></device></sender><controlActProcess><effectiveTime value="20260814000000"/><subject><investigationEvent><id root="2.16.840.1.113883.3.989.2.1.3.1" extension="case"/><text>Case narrative</text><observation><code code="29" codeSystem="2.16.840.1.113883.3.989.2.1.1.19"/><value code="10019211" codeSystem="2.16.840.1.113883.6.163" codeSystemVersion="28.1"/></observation><causalityAssessment><code code="20" codeSystem="2.16.840.1.113883.3.989.2.1.1.19"/><value code="1" codeSystem="2.16.840.1.113883.3.989.2.1.1.13"/></causalityAssessment></investigationEvent></subject></controlActProcess></PORR_IN049016UV></MCCI_IN200100UV01>"#;
+		for (authority, batch_receiver, message_receiver) in [
+			(RegulatoryAuthority::Ich, "ICHTEST", "ICHTEST"),
+			(RegulatoryAuthority::Fda, "ZZFDA_PREMKT", "CDER_IND"),
+			(
+				RegulatoryAuthority::Fda,
+				"ZZFDA_PREMKT",
+				"CDER_IND_EXEMPT_BA_BE",
+			),
+			(RegulatoryAuthority::Fda, "ZZFDA_PREMKT", "CBER_IND"),
+			(RegulatoryAuthority::Fda, "ZZFDA", "CDER"),
+			(RegulatoryAuthority::Mfds, "MFDS-O-CT", "MFDS-O-CT"),
+			(RegulatoryAuthority::Mfds, "MFDS-O-CU", "MFDS-O-CU"),
+			(RegulatoryAuthority::Mfds, "MFDS-O-KR", "MFDS-O-KR"),
+			(RegulatoryAuthority::Mfds, "MFDS-O-FR", "MFDS-O-FR"),
+			(RegulatoryAuthority::Mfds, "MFDS-O-CF", "MFDS-O-CF"),
+		] {
+			let candidate = String::from_utf8(xml.to_vec())
+				.unwrap()
+				.replace(
+					"extension=\"ZZFDA\"",
+					&format!("extension=\"{batch_receiver}\""),
+				)
+				.replace(
+					"extension=\"CDER\"",
+					&format!("extension=\"{message_receiver}\""),
+				);
+			let errors =
+				validate_export_rules(candidate.as_bytes(), authority).unwrap();
+			assert!(
+				!errors.iter().any(|error| {
+					error.code.as_deref().is_some_and(|code| {
+						code.contains(".N.")
+							|| code.starts_with("N.")
+							|| code.starts_with("FDA.R")
+							|| code.starts_with("MFDS.N")
+					})
+				}),
+				"{authority:?} {batch_receiver}/{message_receiver}: {errors:?}"
+			);
+		}
+
+		let invalid_fda = String::from_utf8(xml.to_vec())
 			.unwrap()
-			.is_empty());
+			.replace("extension=\"ZZFDA\"", "extension=\"ZZFDA_PREMKT\"");
+		assert!(validate_export_rules(
+			invalid_fda.as_bytes(),
+			RegulatoryAuthority::Fda
+		)
+		.unwrap()
+		.iter()
+		.any(|error| error.code.as_deref() == Some("FDA.R0007")));
+		let future = String::from_utf8(xml.to_vec()).unwrap().replacen(
+			"20260814000000",
+			"20990101000000",
+			1,
+		);
+		assert!(
+			validate_export_rules(future.as_bytes(), RegulatoryAuthority::Fda)
+				.unwrap()
+				.iter()
+				.any(|error| {
+					error.code.as_deref() == Some("ICH.N.1.5.FUTURE_DATE.FORBIDDEN")
+				})
+		);
+
+		let invalid_mfds = String::from_utf8(xml.to_vec())
+			.unwrap()
+			.replace("extension=\"ZZFDA\"", "extension=\"MFDS-O-CT\"")
+			.replace("extension=\"CDER\"", "extension=\"CT\"");
+		let errors = validate_export_rules(
+			invalid_mfds.as_bytes(),
+			RegulatoryAuthority::Mfds,
+		)
+		.unwrap();
+		assert!(errors
+			.iter()
+			.any(|error| error.code.as_deref() == Some("MFDS.N.2.r.3.ROUTE")));
+		assert!(errors
+			.iter()
+			.any(|error| error.code.as_deref() == Some("MFDS.N.ROUTE.PAIR")));
 	}
 }

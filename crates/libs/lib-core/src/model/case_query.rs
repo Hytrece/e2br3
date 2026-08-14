@@ -234,6 +234,7 @@ fn build_predicate(
 	binds: &mut Vec<String>,
 ) -> String {
 	let column = cond.source.column;
+	let raw_ts = is_raw_ts(&cond.source);
 	let (col_expr, val_cast): (String, &str) = match cond.data_type {
 		DataType::Text | DataType::Code | DataType::Bool => {
 			(format!("{prefix}.{column}::text"), "")
@@ -241,11 +242,17 @@ fn build_predicate(
 		DataType::Integer | DataType::Decimal => {
 			(format!("{prefix}.{column}"), "::numeric")
 		}
+		DataType::Date if raw_ts => (format!("left({prefix}.{column}, 8)"), ""),
 		DataType::Date => (format!("{prefix}.{column}"), "::date"),
 	};
 
 	let next_placeholder = |binds: &mut Vec<String>, value: &str| -> String {
-		binds.push(value.to_string());
+		let value = if raw_ts {
+			value.chars().filter(|c| c.is_ascii_digit()).take(8).collect()
+		} else {
+			value.to_string()
+		};
+		binds.push(value);
 		format!("${}{}", binds.len(), val_cast)
 	};
 
@@ -286,6 +293,22 @@ fn build_predicate(
 		}
 		Operator::Null => format!("{col_expr} IS NULL"),
 		Operator::NotNull => format!("{col_expr} IS NOT NULL"),
+	}
+}
+
+fn is_raw_ts(source: &FieldSource) -> bool {
+	match source.join {
+		JoinKind::OneToOne("safety_report_identification") => matches!(
+			source.column,
+			"date_first_received_from_source" | "date_of_most_recent_information"
+		),
+		JoinKind::OneToMany("reactions") => {
+			matches!(source.column, "start_date" | "end_date")
+		}
+		JoinKind::OneToMany("medical_history_episodes") => {
+			matches!(source.column, "start_date" | "end_date")
+		}
+		_ => false,
 	}
 }
 
@@ -372,7 +395,20 @@ mod tests {
 		)])
 		.unwrap();
 		let (sql, _) = build_where(&conditions);
-		assert!(sql.contains("t.date_first_received_from_source = $1::date"));
+		assert!(sql.contains("left(t.date_first_received_from_source, 8) = $1"));
+	}
+
+	#[test]
+	fn ordinary_sql_dates_keep_date_casts() {
+		let conditions = validate_conditions(&[raw(
+			"DM",
+			"birth_date",
+			Operator::Equal,
+			&["2026-01-01"],
+		)])
+		.unwrap();
+		let (sql, _) = build_where(&conditions);
+		assert!(sql.contains("t.birth_date = $1::date"));
 	}
 
 	#[test]

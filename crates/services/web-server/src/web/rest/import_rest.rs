@@ -595,7 +595,8 @@ fn duplicate_key_from_xml(
 				.and_then(|reaction| reaction.reaction_meddra_version.clone()),
 			reaction_meddra_code: first_reaction
 				.and_then(|reaction| reaction.reaction_meddra_code.clone()),
-			ae_start_date: first_reaction.and_then(|reaction| reaction.start_date),
+			ae_start_date: first_reaction
+				.and_then(|reaction| reaction.start_date.clone()),
 			ae_start_date_null_flavor: None,
 		},
 	))

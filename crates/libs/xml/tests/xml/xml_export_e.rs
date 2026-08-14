@@ -2,9 +2,7 @@ use lib_core::model::reaction::Reaction;
 use lib_core::regulatory::RegulatoryAuthority;
 use libxml::parser::Parser;
 use libxml::xpath::Context;
-use sqlx::types::time::Date;
 use sqlx::types::Uuid;
-use time::Month;
 use time::OffsetDateTime;
 use xml::export::sections::e::{
 	export_e_reactions_xml, export_e_reactions_xml_for_authority,
@@ -12,7 +10,7 @@ use xml::export::sections::e::{
 
 #[test]
 fn export_e_reaction_basic() {
-	let reaction = Reaction {
+	let mut reaction = Reaction {
 		id: Uuid::new_v4(),
 		case_id: Uuid::new_v4(),
 		sequence_number: 1,
@@ -57,7 +55,7 @@ fn export_e_reaction_basic() {
 		mfds_device_action_notification: None,
 		mfds_device_action_label_change: None,
 		mfds_device_action_other: None,
-		start_date: Some(Date::from_calendar_date(2024, Month::January, 2).unwrap()),
+		start_date: Some("20240102".to_string()),
 		start_date_null_flavor: None,
 		end_date: None,
 		end_date_null_flavor: None,
@@ -73,7 +71,7 @@ fn export_e_reaction_basic() {
 	};
 
 	let xml =
-		export_e_reactions_xml_for_authority(&[reaction], RegulatoryAuthority::Fda)
+		export_e_reactions_xml_for_authority(&[reaction.clone()], RegulatoryAuthority::Fda)
 			.expect("export xml");
 	let parser = Parser::default();
 	let doc = parser.parse_string(&xml).expect("parse");
@@ -107,6 +105,12 @@ fn export_e_reaction_basic() {
 		)
 		.unwrap();
 	assert_eq!(required_intervention_null_flavor, "NI");
+
+	reaction.start_date = Some("202206".to_string());
+	reaction.end_date = Some("200509211242-08".to_string());
+	let ts_xml = export_e_reactions_xml(&[reaction]).expect("export XML");
+	assert!(ts_xml.contains("<low value=\"202206\"/>"));
+	assert!(ts_xml.contains("<high value=\"200509211242-08\"/>"));
 }
 
 #[test]

@@ -230,6 +230,8 @@ async fn persist_active_substances(
 			if deleted {
 				DrugActiveSubstanceBmc::delete(ctx, mm, id).await?;
 			} else {
+				let clear_fields =
+					explicit_null_model_fields(row, ACTIVE_SUBSTANCE_ALIASES);
 				let model = row_model_value(
 					"DG",
 					"activeSubstances[].",
@@ -242,7 +244,11 @@ async fn persist_active_substances(
 					"activeSubstances",
 					model,
 				)?;
-				DrugActiveSubstanceBmc::update(ctx, mm, id, update).await?;
+				lib_core::model::update_uuid_patch::<
+					DrugActiveSubstanceBmc,
+					DrugActiveSubstanceForUpdate,
+				>(ctx, mm, id, update, &clear_fields)
+				.await?;
 			}
 		} else if !deleted && child_row_has_content(row) {
 			let model = row_model_value(
@@ -332,6 +338,8 @@ macro_rules! persist_drug_children {
 					if deleted {
 						$bmc::delete(ctx, mm, id).await?;
 					} else {
+						let clear_fields =
+							explicit_null_model_fields(row, $aliases);
 						let model = row_model_value(
 							"DG",
 							concat!($key, "[]."),
@@ -341,7 +349,14 @@ macro_rules! persist_drug_children {
 						);
 						let update =
 							parse_row_model::<$update>("DG", $key, model)?;
-						$bmc::update(ctx, mm, id, update).await?;
+						lib_core::model::update_uuid_patch::<$bmc, $update>(
+							ctx,
+							mm,
+							id,
+							update,
+							&clear_fields,
+						)
+						.await?;
 					}
 				} else if !deleted && child_row_has_content(row) {
 					let model = row_model_value(
@@ -485,6 +500,7 @@ async fn persist_drug_reaction_assessments(
 		}
 
 		let assessment_id = if let Some(assessment) = persisted_assessment {
+			let clear_fields = explicit_null_model_fields(row, ASSESSMENT_ALIASES);
 			let model = row_model_value(
 				"DG",
 				"drugReactionAssessments[].",
@@ -497,8 +513,14 @@ async fn persist_drug_reaction_assessments(
 				"drugReactionAssessments",
 				model,
 			)?;
-			DrugReactionAssessmentBmc::update(ctx, mm, assessment.id, update)
-				.await?;
+			DrugReactionAssessmentBmc::update_patch(
+				ctx,
+				mm,
+				assessment.id,
+				update,
+				&clear_fields,
+			)
+			.await?;
 			assessment.id
 		} else if let Some(assessment) =
 			DrugReactionAssessmentBmc::get_by_drug_and_reaction(
@@ -509,6 +531,7 @@ async fn persist_drug_reaction_assessments(
 			)
 			.await?
 		{
+			let clear_fields = explicit_null_model_fields(row, ASSESSMENT_ALIASES);
 			let model = row_model_value(
 				"DG",
 				"drugReactionAssessments[].",
@@ -521,8 +544,14 @@ async fn persist_drug_reaction_assessments(
 				"drugReactionAssessments",
 				model,
 			)?;
-			DrugReactionAssessmentBmc::update(ctx, mm, assessment.id, update)
-				.await?;
+			DrugReactionAssessmentBmc::update_patch(
+				ctx,
+				mm,
+				assessment.id,
+				update,
+				&clear_fields,
+			)
+			.await?;
 			assessment.id
 		} else {
 			let model = row_model_value(
@@ -566,6 +595,8 @@ async fn persist_drug_reaction_assessments(
 			if deleted {
 				RelatednessAssessmentBmc::delete(ctx, mm, relatedness_id).await?;
 			} else {
+				let clear_fields =
+					explicit_null_model_fields(row, RELATEDNESS_ALIASES);
 				let model = row_model_value(
 					"DG",
 					"drugReactionAssessments[].",
@@ -578,8 +609,11 @@ async fn persist_drug_reaction_assessments(
 					"drugReactionAssessments",
 					model,
 				)?;
-				RelatednessAssessmentBmc::update(ctx, mm, relatedness_id, update)
-					.await?;
+				lib_core::model::update_uuid_patch::<
+					RelatednessAssessmentBmc,
+					RelatednessAssessmentForUpdate,
+				>(ctx, mm, relatedness_id, update, &clear_fields)
+				.await?;
 			}
 		} else if !deleted
 			&& RELATEDNESS_ALIASES.iter().any(|(_, aliases)| {
@@ -1123,7 +1157,16 @@ pub async fn patch_editor_dg_page_row(
 				let update = parse_row_model::<DrugInformationForUpdate>(
 					"DG", "drug", model,
 				)?;
-				DrugInformationBmc::update(ctx, mm, row_id, update).await?;
+				let clear_fields = explicit_null_model_fields(row, DRUG_ROW_ALIASES);
+				DrugInformationBmc::update_in_case_patch(
+					ctx,
+					mm,
+					case_id,
+					row_id,
+					update,
+					&clear_fields,
+				)
+				.await?;
 				persist_active_substances(ctx, mm, row_id, row).await?;
 				persist_dosage_information(ctx, mm, row_id, row).await?;
 				persist_indications(ctx, mm, row_id, row).await?;

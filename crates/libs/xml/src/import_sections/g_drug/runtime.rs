@@ -190,6 +190,7 @@ async fn import_drugs(
 					duration_unit: dose.duration_unit,
 					continuing: None,
 					batch_lot_number: dose.batch_lot,
+					batch_lot_number_null_flavor: dose.batch_lot_null_flavor,
 					dosage_text: dose.dosage_text,
 					dose_form: dose.dose_form,
 					dose_form_null_flavor: dose.dose_form_null_flavor,

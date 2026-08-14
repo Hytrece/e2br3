@@ -1,5 +1,4 @@
 use super::*;
-use lib_core::model::message_header::MessageHeaderBmc;
 
 pub(crate) async fn apply_section_n(
 	ctx: &Ctx,
@@ -8,47 +7,47 @@ pub(crate) async fn apply_section_n(
 	mm: &ModelManager,
 	case_id: sqlx::types::Uuid,
 	xpath: &mut Context,
+	header: &crate::export::OutboundMessageHeader,
 ) -> Result<()> {
-	let header = fetch_message_header(ctx, mm, case_id).await?;
-	let Some(header) = header else {
-		return Ok(());
-	};
 	let report = SafetyReportIdentificationBmc::get_by_case(ctx, mm, case_id)
 		.await
 		.map_err(Error::from)?;
-	let export_time = sqlx::types::time::OffsetDateTime::now_utc();
-	let message_date = report
-		.transmission_date
-		.as_deref()
-		.filter(|value| !value.trim().is_empty())
-		.map(str::to_string)
-		.unwrap_or_else(|| fmt_datetime(export_time));
-	let report_id = report
-		.safety_report_id
-		.as_deref()
-		.map(str::trim)
-		.filter(|value| !value.is_empty())
-		.map(str::to_string)
-		.unwrap_or_else(|| case_id.to_string());
+	let report_id = required_outbound_value(
+		"C.1.1 Safety Report ID",
+		report.safety_report_id.as_deref(),
+	)?;
+	let message_date = required_outbound_value(
+		"C.1.2 Date of Creation",
+		report.transmission_date.as_deref(),
+	)?;
+	let batch_number =
+		required_outbound_value("N.1.2 Batch Number", Some(&header.batch_number))?;
+	let batch_sender = required_outbound_value(
+		"N.1.3 Batch Sender Identifier",
+		Some(&header.batch_sender_identifier),
+	)?;
+	let batch_receiver = required_outbound_value(
+		"N.1.4 Batch Receiver Identifier",
+		Some(&header.batch_receiver_identifier),
+	)?;
+	let batch_transmission_date = header.batch_transmission_date;
+	let message_sender = required_outbound_value(
+		"N.2.r.2 Message Sender Identifier",
+		Some(&header.message_sender_identifier),
+	)?;
+	let message_receiver = required_outbound_value(
+		"N.2.r.3 Message Receiver Identifier",
+		Some(&header.message_receiver_identifier),
+	)?;
 
-	write_n_1_1(xpath, &header.message_type);
-	write_n_1_2(xpath, header.batch_number.as_deref());
-	let batch_sender = header
-		.batch_sender_identifier
-		.as_deref()
-		.filter(|val| !val.trim().is_empty())
-		.unwrap_or(&header.message_sender_identifier);
-	write_n_1_3(xpath, batch_sender);
-	let batch_receiver = header
-		.batch_receiver_identifier
-		.as_deref()
-		.filter(|val| !val.trim().is_empty())
-		.unwrap_or(&header.message_receiver_identifier);
-	write_n_1_4(doc, parser, xpath, batch_receiver)?;
-	write_n_1_5(xpath, Some(export_time));
+	write_n_1_1(xpath, "ichicsr");
+	write_n_1_2(xpath, Some(&batch_number));
+	write_n_1_3(xpath, &batch_sender);
+	write_n_1_4(doc, parser, xpath, &batch_receiver)?;
+	write_n_1_5(xpath, Some(batch_transmission_date));
 	write_n_2_r_1(xpath, &report_id);
-	write_n_2_r_2(xpath, &header.message_sender_identifier);
-	write_n_2_r_3(xpath, &header.message_receiver_identifier);
+	write_n_2_r_2(xpath, &message_sender);
+	write_n_2_r_3(xpath, &message_receiver);
 	write_n_2_r_4(xpath, &message_date);
 
 	if let Some(receiver) = fetch_receiver_information(mm, case_id).await? {
@@ -56,14 +55,9 @@ pub(crate) async fn apply_section_n(
 			doc,
 			parser,
 			xpath,
-			&header.message_receiver_identifier,
+			&message_receiver,
 		)?;
-		ensure_receiver_agent_nodes(
-			doc,
-			parser,
-			xpath,
-			&header.message_receiver_identifier,
-		)?;
+		ensure_receiver_agent_nodes(doc, parser, xpath, &message_receiver)?;
 		apply_n_receiver_organization(
 			doc,
 			parser,
@@ -82,6 +76,18 @@ pub(crate) async fn apply_section_n(
 		);
 	}
 	Ok(())
+}
+
+fn required_outbound_value(field: &str, value: Option<&str>) -> Result<String> {
+	value
+		.map(str::trim)
+		.filter(|value| !value.is_empty())
+		.map(str::to_string)
+		.ok_or_else(|| Error::InvalidXml {
+			message: format!("outbound message header {field} is missing"),
+			line: None,
+			column: None,
+		})
 }
 
 /// e2b:N.1.1
@@ -200,18 +206,6 @@ fn write_n_2_r_4(xpath: &mut Context, message_date: &str) {
 	);
 }
 
-pub(crate) async fn fetch_message_header(
-	ctx: &Ctx,
-	mm: &ModelManager,
-	case_id: sqlx::types::Uuid,
-) -> Result<Option<MessageHeader>> {
-	match MessageHeaderBmc::get_by_case(ctx, mm, case_id).await {
-		Ok(header) => Ok(Some(header)),
-		Err(lib_core::model::Error::EntityUuidNotFound { .. }) => Ok(None),
-		Err(err) => Err(Error::Model(err)),
-	}
-}
-
 pub(crate) async fn fetch_primary_sources(
 	mm: &ModelManager,
 	case_id: sqlx::types::Uuid,
@@ -277,6 +271,16 @@ mod date_tests {
 				.findvalue("/hl7:MCCI_IN200100UV01/hl7:creationTime/@value", None)
 				.unwrap(),
 			""
+		);
+	}
+
+	#[test]
+	fn outbound_header_values_are_required_without_fallbacks() {
+		assert!(required_outbound_value("N.1.2", None).is_err());
+		assert!(required_outbound_value("N.1.3", Some("   ")).is_err());
+		assert_eq!(
+			required_outbound_value("N.2.r.1", Some(" CASE-1 ")).unwrap(),
+			"CASE-1"
 		);
 	}
 }

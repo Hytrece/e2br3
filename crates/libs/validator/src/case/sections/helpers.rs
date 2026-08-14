@@ -96,6 +96,34 @@ pub(crate) fn e2b_datetime_date(value: Option<&str>) -> Option<Date> {
 	value.and_then(lib_core::serde::flex_date::e2b_datetime_date)
 }
 
+pub(crate) fn e2b_ts_date(value: Option<&str>) -> Option<Date> {
+	let value = value?.trim();
+	let local = value
+		.char_indices()
+		.skip(4)
+		.find(|(_, char)| matches!(char, '+' | '-'))
+		.map(|(index, _)| &value[..index])
+		.unwrap_or(value);
+	let local = local.split('.').next()?;
+	let digits: String = local.chars().filter(|c| c.is_ascii_digit()).collect();
+	let year = digits.get(0..4)?.parse().ok()?;
+	match digits.len() {
+		4 => Date::from_calendar_date(year, time::Month::January, 1).ok(),
+		6 => {
+			let month: u8 = digits.get(4..6)?.parse().ok()?;
+			Date::from_calendar_date(year, time::Month::try_from(month).ok()?, 1)
+				.ok()
+		}
+		_ if digits.len() >= 8 => {
+			let month: u8 = digits.get(4..6)?.parse().ok()?;
+			let day: u8 = digits.get(6..8)?.parse().ok()?;
+			Date::from_calendar_date(year, time::Month::try_from(month).ok()?, day)
+				.ok()
+		}
+		_ => None,
+	}
+}
+
 pub(crate) fn valid_decimal(value: Option<&str>) -> bool {
 	value
 		.map(str::trim)
@@ -405,5 +433,17 @@ mod tests {
 			Some("2026.03"),
 			Some("0000050000")
 		));
+	}
+
+	#[test]
+	fn e2b_ts_date_ignores_time_offset_and_fraction() {
+		assert_eq!(
+			e2b_ts_date(Some("200509211242-08")),
+			Date::from_calendar_date(2005, time::Month::September, 21).ok()
+		);
+		assert_eq!(
+			e2b_ts_date(Some("20240101120000.1234+0900")),
+			Date::from_calendar_date(2024, time::Month::January, 1).ok()
+		);
 	}
 }

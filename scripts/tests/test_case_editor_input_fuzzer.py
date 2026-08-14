@@ -10,6 +10,7 @@ from unittest import mock
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import case_editor_input_fuzzer as fuzzer
+import case_editor_ui_fuzzer as ui_fuzzer
 import rbac_rls_blackbox
 
 
@@ -195,6 +196,38 @@ class CaseEditorInputFuzzerTests(unittest.TestCase):
         self.assertTrue(fuzzer.add_nullflavor_partner(field, mutation, 13))
         self.assertEqual(mutation["patientBirthDate"], "20000101")
         self.assertEqual(fuzzer.candidate_kind(field, 13), "nullflavor_with_value")
+
+    def test_complete_baseline_prefers_values_over_null_flavors(self) -> None:
+        value = {
+            "code": "D.2.1", "payloadPath": "patientBirthDate", "roundTripValue": "20000101",
+            "constraint": {"status": "verified"},
+        }
+        null_flavor = {
+            "code": "D.2.1.nullFlavor", "payloadPath": "patientBirthDateNullFlavor", "roundTripValue": "UNK",
+            "constraint": {"status": "verified"}, "_allowedNullFlavors": ["UNK"],
+        }
+        self.assertEqual(fuzzer.baseline_for([value, null_flavor]), {"patientBirthDate": "20000101"})
+        self.assertTrue(fuzzer.parser().parse_args(["--complete-baseline"]).complete_baseline)
+
+    def test_ui_plan_covers_all_fields_and_seeded_candidates(self) -> None:
+        args = ui_fuzzer.parser().parse_args(["--seed", "2026081401", "--dry-run"])
+        plan = ui_fuzzer.build_plan(args)
+        self.assertEqual(plan["fieldCount"], 297)
+        self.assertEqual(plan["mutationCount"], 10241)
+        self.assertEqual(len({field["code"] for field in plan["fields"]}), 297)
+        null_flavor = next(field for field in plan["fields"] if field["nullFlavor"])
+        invalid = next(mutation for mutation in null_flavor["mutations"] if mutation["kind"] == "nullflavor_unknown")
+        conflict = next(mutation for mutation in null_flavor["mutations"] if mutation["kind"] == "nullflavor_with_value")
+        self.assertEqual(invalid["expectation"], "reject")
+        self.assertEqual(conflict["expectation"], "reject")
+        shards = [
+            ui_fuzzer.build_plan(ui_fuzzer.parser().parse_args([
+                "--seed", "2026081401", "--shard-count", "3", "--shard-index", str(index), "--dry-run",
+            ]))
+            for index in range(3)
+        ]
+        self.assertEqual(sum(shard["fieldCount"] for shard in shards), 297)
+        self.assertEqual(sum(shard["mutationCount"] for shard in shards), 10241)
 
 
 if __name__ == "__main__":

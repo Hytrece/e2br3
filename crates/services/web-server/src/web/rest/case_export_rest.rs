@@ -1,4 +1,5 @@
 use crate::runtime_settings;
+use crate::submission::{export_message_header, prepare_outbound_message_header};
 use axum::extract::{Path, Query, State};
 use axum::http::header;
 use axum::response::Response;
@@ -122,6 +123,7 @@ async fn export_xml_options(
 	mm: &lib_core::model::ModelManager,
 	include_notation: Option<bool>,
 	authority: RegulatoryAuthority,
+	outbound_message_header: xml::OutboundMessageHeader,
 ) -> Result<ExportXmlOptions> {
 	let apply_comments = runtime_settings::load(ctx, mm)
 		.await?
@@ -129,6 +131,7 @@ async fn export_xml_options(
 	Ok(ExportXmlOptions {
 		apply_comments,
 		authority,
+		outbound_message_header,
 	})
 }
 
@@ -186,9 +189,18 @@ async fn generate_validated_case_xml_for_authority_with_notation(
 	authority: RegulatoryAuthority,
 	include_notation: Option<bool>,
 ) -> Result<(lib_core::model::case::Case, String)> {
+	let header =
+		prepare_outbound_message_header(ctx, mm, id, authority, None).await?;
 	let ctx_clone = ctx.clone();
 	let mm_clone = mm.clone();
-	let options = export_xml_options(ctx, mm, include_notation, authority).await?;
+	let options = export_xml_options(
+		ctx,
+		mm,
+		include_notation,
+		authority,
+		export_message_header(&header)?,
+	)
+	.await?;
 	let xml = task::spawn_blocking(move || {
 		Handle::current().block_on(export_case_xml_with_options(
 			&ctx_clone, &mm_clone, id, options,

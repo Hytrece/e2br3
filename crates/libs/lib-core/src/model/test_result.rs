@@ -190,7 +190,17 @@ impl TestResultBmc {
 		ctx: &Ctx,
 		mm: &ModelManager,
 		id: Uuid,
-		test_u: TestResultForUpdate,
+		data: TestResultForUpdate,
+	) -> Result<()> {
+		Self::update_patch(ctx, mm, id, data, &[]).await
+	}
+
+	pub async fn update_patch(
+		ctx: &Ctx,
+		mm: &ModelManager,
+		id: Uuid,
+		data: TestResultForUpdate,
+		clear_fields: &[&str],
 	) -> Result<()> {
 		mm.dbx().begin_txn().await?;
 		set_full_context_dbx_or_rollback(
@@ -200,23 +210,25 @@ impl TestResultBmc {
 			ctx.role(),
 		)
 		.await?;
+		let clears: Vec<String> =
+			clear_fields.iter().map(|field| (*field).into()).collect();
 
 		let sql = format!(
 			"UPDATE {}
-			 SET test_name = COALESCE($2, test_name),
-				     test_date = CASE WHEN $3 IS NOT NULL THEN $3 ELSE CASE WHEN $4 IS NOT NULL THEN NULL ELSE test_date END END,
-				     test_date_null_flavor = CASE WHEN $3 IS NOT NULL THEN NULL ELSE COALESCE($4, test_date_null_flavor) END,
-				     test_meddra_version = COALESCE($5, test_meddra_version),
-			     test_meddra_code = COALESCE($6, test_meddra_code),
-			     test_result_code = COALESCE($7, test_result_code),
-			     test_result_value = COALESCE($8, test_result_value),
-			     test_result_qualifier = CASE WHEN $8 IS NOT NULL THEN $9 ELSE test_result_qualifier END,
-			     test_result_unit = COALESCE($10, test_result_unit),
-			     result_unstructured = COALESCE($11, result_unstructured),
-			     normal_low_value = COALESCE($12, normal_low_value),
-			     normal_high_value = COALESCE($13, normal_high_value),
-			     comments = COALESCE($14, comments),
-			     more_info_available = COALESCE($15, more_info_available),
+			 SET test_name = CASE WHEN 'test_name' = ANY($17) THEN NULL ELSE COALESCE($2, test_name) END,
+				     test_date = CASE WHEN 'test_date' = ANY($17) THEN NULL ELSE CASE WHEN $3 IS NOT NULL THEN $3 ELSE CASE WHEN $4 IS NOT NULL THEN NULL ELSE test_date END END END,
+				     test_date_null_flavor = CASE WHEN 'test_date_null_flavor' = ANY($17) THEN NULL ELSE CASE WHEN $3 IS NOT NULL THEN NULL ELSE COALESCE($4, test_date_null_flavor) END END,
+				     test_meddra_version = CASE WHEN 'test_meddra_version' = ANY($17) THEN NULL ELSE COALESCE($5, test_meddra_version) END,
+			     test_meddra_code = CASE WHEN 'test_meddra_code' = ANY($17) THEN NULL ELSE COALESCE($6, test_meddra_code) END,
+			     test_result_code = CASE WHEN 'test_result_code' = ANY($17) THEN NULL ELSE COALESCE($7, test_result_code) END,
+			     test_result_value = CASE WHEN 'test_result_value' = ANY($17) THEN NULL ELSE COALESCE($8, test_result_value) END,
+			     test_result_qualifier = CASE WHEN 'test_result_qualifier' = ANY($17) THEN NULL ELSE CASE WHEN $8 IS NOT NULL THEN $9 ELSE test_result_qualifier END END,
+			     test_result_unit = CASE WHEN 'test_result_unit' = ANY($17) THEN NULL ELSE COALESCE($10, test_result_unit) END,
+			     result_unstructured = CASE WHEN 'result_unstructured' = ANY($17) THEN NULL ELSE COALESCE($11, result_unstructured) END,
+			     normal_low_value = CASE WHEN 'normal_low_value' = ANY($17) THEN NULL ELSE COALESCE($12, normal_low_value) END,
+			     normal_high_value = CASE WHEN 'normal_high_value' = ANY($17) THEN NULL ELSE COALESCE($13, normal_high_value) END,
+			     comments = CASE WHEN 'comments' = ANY($17) THEN NULL ELSE COALESCE($14, comments) END,
+			     more_info_available = CASE WHEN 'more_info_available' = ANY($17) THEN NULL ELSE COALESCE($15, more_info_available) END,
 			     updated_at = now(),
 			     updated_by = $16
 			 WHERE id = $1",
@@ -227,21 +239,22 @@ impl TestResultBmc {
 			.execute(
 				sqlx::query(&sql)
 					.bind(id)
-					.bind(test_u.test_name)
-					.bind(test_u.test_date)
-					.bind(test_u.test_date_null_flavor)
-					.bind(test_u.test_meddra_version)
-					.bind(test_u.test_meddra_code)
-					.bind(test_u.test_result_code)
-					.bind(test_u.test_result_value)
-					.bind(test_u.test_result_qualifier)
-					.bind(test_u.test_result_unit)
-					.bind(test_u.result_unstructured)
-					.bind(test_u.normal_low_value)
-					.bind(test_u.normal_high_value)
-					.bind(test_u.comments)
-					.bind(test_u.more_info_available)
-					.bind(ctx.user_id()),
+					.bind(data.test_name)
+					.bind(data.test_date)
+					.bind(data.test_date_null_flavor)
+					.bind(data.test_meddra_version)
+					.bind(data.test_meddra_code)
+					.bind(data.test_result_code)
+					.bind(data.test_result_value)
+					.bind(data.test_result_qualifier)
+					.bind(data.test_result_unit)
+					.bind(data.result_unstructured)
+					.bind(data.normal_low_value)
+					.bind(data.normal_high_value)
+					.bind(data.comments)
+					.bind(data.more_info_available)
+					.bind(ctx.user_id())
+					.bind(clears),
 			)
 			.await?;
 		if result == 0 {
@@ -367,7 +380,18 @@ impl TestResultBmc {
 		mm: &ModelManager,
 		case_id: Uuid,
 		id: Uuid,
-		test_u: TestResultForUpdate,
+		data: TestResultForUpdate,
+	) -> Result<()> {
+		Self::update_in_case_patch(ctx, mm, case_id, id, data, &[]).await
+	}
+
+	pub async fn update_in_case_patch(
+		ctx: &Ctx,
+		mm: &ModelManager,
+		case_id: Uuid,
+		id: Uuid,
+		data: TestResultForUpdate,
+		clear_fields: &[&str],
 	) -> Result<()> {
 		mm.dbx().begin_txn().await?;
 		set_full_context_dbx_or_rollback(
@@ -377,23 +401,25 @@ impl TestResultBmc {
 			ctx.role(),
 		)
 		.await?;
+		let clears: Vec<String> =
+			clear_fields.iter().map(|field| (*field).into()).collect();
 
 		let sql = format!(
 			"UPDATE {}
-			 SET test_name = COALESCE($3, test_name),
-				     test_date = CASE WHEN $4 IS NOT NULL THEN $4 ELSE CASE WHEN $5 IS NOT NULL THEN NULL ELSE test_date END END,
-				     test_date_null_flavor = CASE WHEN $4 IS NOT NULL THEN NULL ELSE COALESCE($5, test_date_null_flavor) END,
-				     test_meddra_version = COALESCE($6, test_meddra_version),
-			     test_meddra_code = COALESCE($7, test_meddra_code),
-			     test_result_code = COALESCE($8, test_result_code),
-			     test_result_value = COALESCE($9, test_result_value),
-			     test_result_qualifier = CASE WHEN $9 IS NOT NULL THEN $10 ELSE test_result_qualifier END,
-			     test_result_unit = COALESCE($11, test_result_unit),
-			     result_unstructured = COALESCE($12, result_unstructured),
-			     normal_low_value = COALESCE($13, normal_low_value),
-			     normal_high_value = COALESCE($14, normal_high_value),
-			     comments = COALESCE($15, comments),
-			     more_info_available = COALESCE($16, more_info_available),
+			 SET test_name = CASE WHEN 'test_name' = ANY($18) THEN NULL ELSE COALESCE($3, test_name) END,
+				     test_date = CASE WHEN 'test_date' = ANY($18) THEN NULL ELSE CASE WHEN $4 IS NOT NULL THEN $4 ELSE CASE WHEN $5 IS NOT NULL THEN NULL ELSE test_date END END END,
+				     test_date_null_flavor = CASE WHEN 'test_date_null_flavor' = ANY($18) THEN NULL ELSE CASE WHEN $4 IS NOT NULL THEN NULL ELSE COALESCE($5, test_date_null_flavor) END END,
+				     test_meddra_version = CASE WHEN 'test_meddra_version' = ANY($18) THEN NULL ELSE COALESCE($6, test_meddra_version) END,
+			     test_meddra_code = CASE WHEN 'test_meddra_code' = ANY($18) THEN NULL ELSE COALESCE($7, test_meddra_code) END,
+			     test_result_code = CASE WHEN 'test_result_code' = ANY($18) THEN NULL ELSE COALESCE($8, test_result_code) END,
+			     test_result_value = CASE WHEN 'test_result_value' = ANY($18) THEN NULL ELSE COALESCE($9, test_result_value) END,
+			     test_result_qualifier = CASE WHEN 'test_result_qualifier' = ANY($18) THEN NULL ELSE CASE WHEN $9 IS NOT NULL THEN $10 ELSE test_result_qualifier END END,
+			     test_result_unit = CASE WHEN 'test_result_unit' = ANY($18) THEN NULL ELSE COALESCE($11, test_result_unit) END,
+			     result_unstructured = CASE WHEN 'result_unstructured' = ANY($18) THEN NULL ELSE COALESCE($12, result_unstructured) END,
+			     normal_low_value = CASE WHEN 'normal_low_value' = ANY($18) THEN NULL ELSE COALESCE($13, normal_low_value) END,
+			     normal_high_value = CASE WHEN 'normal_high_value' = ANY($18) THEN NULL ELSE COALESCE($14, normal_high_value) END,
+			     comments = CASE WHEN 'comments' = ANY($18) THEN NULL ELSE COALESCE($15, comments) END,
+			     more_info_available = CASE WHEN 'more_info_available' = ANY($18) THEN NULL ELSE COALESCE($16, more_info_available) END,
 			     updated_at = now(),
 			     updated_by = $17
 			 WHERE id = $1 AND case_id = $2",
@@ -405,21 +431,22 @@ impl TestResultBmc {
 				sqlx::query(&sql)
 					.bind(id)
 					.bind(case_id)
-					.bind(test_u.test_name)
-					.bind(test_u.test_date)
-					.bind(test_u.test_date_null_flavor)
-					.bind(test_u.test_meddra_version)
-					.bind(test_u.test_meddra_code)
-					.bind(test_u.test_result_code)
-					.bind(test_u.test_result_value)
-					.bind(test_u.test_result_qualifier)
-					.bind(test_u.test_result_unit)
-					.bind(test_u.result_unstructured)
-					.bind(test_u.normal_low_value)
-					.bind(test_u.normal_high_value)
-					.bind(test_u.comments)
-					.bind(test_u.more_info_available)
-					.bind(ctx.user_id()),
+					.bind(data.test_name)
+					.bind(data.test_date)
+					.bind(data.test_date_null_flavor)
+					.bind(data.test_meddra_version)
+					.bind(data.test_meddra_code)
+					.bind(data.test_result_code)
+					.bind(data.test_result_value)
+					.bind(data.test_result_qualifier)
+					.bind(data.test_result_unit)
+					.bind(data.result_unstructured)
+					.bind(data.normal_low_value)
+					.bind(data.normal_high_value)
+					.bind(data.comments)
+					.bind(data.more_info_available)
+					.bind(ctx.user_id())
+					.bind(clears),
 			)
 			.await?;
 		if result == 0 {

@@ -240,7 +240,16 @@ where
 }
 
 pub fn e2b_datetime_date(value: &str) -> Option<Date> {
-	let digits: String = value.chars().filter(|c| c.is_ascii_digit()).collect();
+	let value = value.trim();
+	let local = value
+		.char_indices()
+		.find(|(index, char)| *index >= 8 && matches!(char, '+' | '-'))
+		.map(|(index, _)| &value[..index])
+		.unwrap_or(value)
+		.split('.')
+		.next()
+		.unwrap_or(value);
+	let digits: String = local.chars().filter(|c| c.is_ascii_digit()).collect();
 	parse_yyyymmdd_digits(&digits)
 }
 
@@ -251,6 +260,8 @@ mod tests {
 		deserialize_optional_partial_ts_raw,
 	};
 	use serde::Deserialize;
+	use sqlx::types::time::Date;
+	use time::Month;
 
 	#[derive(Deserialize)]
 	struct Input {
@@ -298,5 +309,13 @@ mod tests {
 		}))
 		.expect("full date");
 		assert!(parsed.value.is_some());
+	}
+
+	#[test]
+	fn e2b_datetime_date_ignores_time_offset_and_fraction() {
+		assert_eq!(
+			super::e2b_datetime_date("20240101120000.1234+0900"),
+			Date::from_calendar_date(2024, Month::January, 1).ok()
+		);
 	}
 }

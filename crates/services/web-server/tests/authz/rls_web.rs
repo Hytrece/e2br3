@@ -349,12 +349,21 @@ async fn device_rows_are_tenant_scoped_and_targeted_export_ignores_org_volume(
 	.is_empty());
 
 	let exported = tokio::task::block_in_place(|| {
+		let header = xml::OutboundMessageHeader {
+			batch_number: "TEST-BATCH".to_string(),
+			batch_sender_identifier: "TEST-SENDER".to_string(),
+			batch_receiver_identifier: "ZZFDA".to_string(),
+			batch_transmission_date: time::OffsetDateTime::now_utc(),
+			message_sender_identifier: "TEST-SENDER".to_string(),
+			message_receiver_identifier: "CDER".to_string(),
+		};
 		tokio::runtime::Handle::current().block_on(
 			xml::export::serialize_case_xml_for_authority(
 				&ctx,
 				&mm,
 				seed.case_org1,
 				lib_core::regulatory::RegulatoryAuthority::Fda,
+				&header,
 			),
 		)
 	})?;

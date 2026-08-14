@@ -1,5 +1,31 @@
 use super::common::*;
 
+const PAST_DRUG_ROW_ALIASES: &[(&str, &[&str])] = &[
+	("drug_name", &["drugName"]),
+	("drug_name_null_flavor", &["drugNameNullFlavor"]),
+	(
+		"mfds_medicinal_product_version",
+		&["mfdsMedicinalProductVersion"],
+	),
+	("mfds_medicinal_product_id", &["mfdsMedicinalProductId"]),
+	("mpid", &["mpid"]),
+	("mpid_version", &["mpidVersion"]),
+	("phpid", &["phpid"]),
+	("phpid_version", &["phpidVersion"]),
+	("start_date", &["startDate"]),
+	("start_date_null_flavor", &["startDateNullFlavor"]),
+	("end_date", &["endDate"]),
+	("end_date_null_flavor", &["endDateNullFlavor"]),
+	("indication_meddra_version", &["indicationMeddraVersion"]),
+	(
+		"indication_meddra_code",
+		&["indicationMeddraCode", "indication"],
+	),
+	("reaction_meddra_version", &["reactionMeddraVersion"]),
+	("reaction_meddra_code", &["reactionMeddraCode"]),
+	("sequence_number", &["sequenceNumber"]),
+];
+
 async fn load_editor_dh_list_rows(
 	ctx: &lib_core::ctx::Ctx,
 	mm: &ModelManager,
@@ -226,23 +252,7 @@ repeatable_page_row_create_handler!(
 	row_key: "pastDrugHistory",
 	bmc: PastDrugHistoryBmc,
 	model: PastDrugHistoryForCreate,
-	aliases: &[
-		("drug_name", &["drugName"][..]),
-		("drug_name_null_flavor", &["drugNameNullFlavor"][..]),
-		("mfds_medicinal_product_version", &["mfdsMedicinalProductVersion"][..]),
-		("mfds_medicinal_product_id", &["mfdsMedicinalProductId"][..]),
-		("mpid_version", &["mpidVersion"][..]),
-		("phpid_version", &["phpidVersion"][..]),
-		("start_date", &["startDate"][..]),
-		("start_date_null_flavor", &["startDateNullFlavor"][..]),
-		("end_date", &["endDate"][..]),
-		("end_date_null_flavor", &["endDateNullFlavor"][..]),
-		("indication_meddra_version", &["indicationMeddraVersion"][..]),
-		("indication_meddra_code", &["indicationMeddraCode", "indication"][..]),
-		("reaction_meddra_version", &["reactionMeddraVersion"][..]),
-		("reaction_meddra_code", &["reactionMeddraCode"][..]),
-		("sequence_number", &["sequenceNumber"][..]),
-	],
+	aliases: PAST_DRUG_ROW_ALIASES,
 	extras_fn: editor_dh_create_extras,
 	build_response: build_editor_dh_page_row_response,
 );
@@ -254,22 +264,7 @@ repeatable_page_row_patch_handler!(
 	bmc: PastDrugHistoryBmc,
 	model: PastDrugHistoryForUpdate,
 	verify: verify_editor_dh_page_row,
-	aliases: &[
-		("drug_name", &["drugName"][..]),
-		("drug_name_null_flavor", &["drugNameNullFlavor"][..]),
-		("mfds_medicinal_product_version", &["mfdsMedicinalProductVersion"][..]),
-		("mfds_medicinal_product_id", &["mfdsMedicinalProductId"][..]),
-		("mpid_version", &["mpidVersion"][..]),
-		("phpid_version", &["phpidVersion"][..]),
-		("start_date", &["startDate"][..]),
-		("start_date_null_flavor", &["startDateNullFlavor"][..]),
-		("end_date", &["endDate"][..]),
-		("end_date_null_flavor", &["endDateNullFlavor"][..]),
-		("indication_meddra_version", &["indicationMeddraVersion"][..]),
-		("indication_meddra_code", &["indicationMeddraCode", "indication"][..]),
-		("reaction_meddra_version", &["reactionMeddraVersion"][..]),
-		("reaction_meddra_code", &["reactionMeddraCode"][..]),
-	],
+	aliases: PAST_DRUG_ROW_ALIASES,
 	build_response: build_editor_dh_page_row_response,
 );
 

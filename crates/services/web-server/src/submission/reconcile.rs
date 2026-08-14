@@ -1,4 +1,5 @@
 use super::*;
+use lib_core::model::Error as ModelError;
 
 pub async fn reconcile_due_submissions(
 	mm: &ModelManager,
@@ -140,6 +141,15 @@ pub(super) async fn reconcile_one_submission(
 				SubmissionAuthority::Fda => RegulatoryAuthority::Fda,
 				SubmissionAuthority::Mfds => RegulatoryAuthority::Mfds,
 			};
+			let header = prepare_outbound_message_header(
+				&system_ctx,
+				mm,
+				row.case_id,
+				export_authority,
+				None,
+			)
+			.await?;
+			let outbound_message_header = export_message_header(&header)?;
 
 			let ctx_clone = system_ctx.with_compliance(
 				Some(SYSTEM_REASON_RECONCILE_EXPORT.to_string()),
@@ -153,8 +163,9 @@ pub(super) async fn reconcile_one_submission(
 					&mm_clone,
 					case_id,
 					ExportXmlOptions {
+						apply_comments: true,
 						authority: export_authority,
-						..ExportXmlOptions::default()
+						outbound_message_header,
 					},
 				))
 			})

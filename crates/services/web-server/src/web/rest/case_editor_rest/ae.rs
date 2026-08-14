@@ -246,8 +246,8 @@ async fn build_editor_ae_page_row_response(
 	authorities: Option<String>,
 ) -> Result<Value> {
 	let persisted = ReactionBmc::get_in_case(&ctx, &mm, case_id, row_id).await?;
-	let start_date = ci_date(persisted.start_date);
-	let end_date = ci_date(persisted.end_date);
+	let start_date = ci_ts(persisted.start_date.as_deref());
+	let end_date = ci_ts(persisted.end_date.as_deref());
 	let mut reaction = json!(persisted);
 	if let Value::Object(ref mut map) = reaction {
 		map.insert("start_date".to_string(), json!(start_date));

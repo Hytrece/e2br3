@@ -802,8 +802,8 @@ pub fn export_c_safety_report_patch(
 		report_unique_id: report.safety_report_id.as_deref().unwrap_or(""),
 		transmission_date: report.transmission_date.as_deref(),
 		report_type: report.report_type.as_deref().unwrap_or(""),
-		date_first_received: report.date_first_received_from_source,
-		date_most_recent: report.date_of_most_recent_information,
+		date_first_received: report.date_first_received_from_source.as_deref(),
+		date_most_recent: report.date_of_most_recent_information.as_deref(),
 		fulfil_expedited: report.fulfil_expedited_criteria,
 		fulfil_expedited_null_flavor: report
 			.fulfil_expedited_criteria_null_flavor

@@ -184,6 +184,12 @@ pub fn c_1_4(input: crate::FieldInput<'_>) -> Vec<crate::InputIssue> {
 		input.value,
 		crate::FormatName::E2bDatetime,
 	);
+	crate::helpers::min_e2b_datetime(
+		&mut issues,
+		"ICH.C.1.4.ALLOWED.VALUE",
+		input.value,
+		8,
+	);
 	issues
 }
 
@@ -195,6 +201,12 @@ pub fn c_1_5(input: crate::FieldInput<'_>) -> Vec<crate::InputIssue> {
 		"ICH.C.1.5.ALLOWED.VALUE",
 		input.value,
 		crate::FormatName::E2bDatetime,
+	);
+	crate::helpers::min_e2b_datetime(
+		&mut issues,
+		"ICH.C.1.5.ALLOWED.VALUE",
+		input.value,
+		8,
 	);
 	issues
 }

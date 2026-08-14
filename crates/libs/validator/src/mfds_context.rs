@@ -8,6 +8,7 @@ use sqlx::types::Uuid;
 #[derive(Debug, Clone, sqlx::FromRow)]
 pub struct RelatednessWithDrug {
 	pub drug_id: Uuid,
+	pub drug_reaction_assessment_id: Uuid,
 	pub relatedness_sequence_number: i32,
 	pub source_of_assessment: Option<String>,
 	pub method_of_assessment: Option<String>,
@@ -97,6 +98,7 @@ async fn list_relatedness_by_case(
 ) -> Result<Vec<RelatednessWithDrug>> {
 	let sql = r#"
 SELECT di.id as drug_id
+     , dra.id as drug_reaction_assessment_id
      , ra.sequence_number as relatedness_sequence_number
      , ra.source_of_assessment
      , ra.method_of_assessment
@@ -111,7 +113,7 @@ JOIN drug_information di ON di.id = dra.drug_id
 WHERE di.case_id = $1
   AND di.deleted = false
   AND ra.deleted = false
-ORDER BY di.sequence_number, ra.sequence_number
+ORDER BY di.sequence_number, dra.sequence_number, ra.sequence_number
 "#;
 	mm.dbx().begin_txn().await?;
 	set_full_context_from_ctx_dbx(mm.dbx(), ctx).await?;

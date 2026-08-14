@@ -1,17 +1,16 @@
-use sqlx::types::time::Date;
-
 pub struct DPatientDeathCausePatch<'a> {
 	pub meddra_version: Option<&'a str>,
 	pub meddra_code: Option<&'a str>,
 	pub comments: Option<&'a str>,
 }
 
+#[derive(Default)]
 pub struct CSafetyReportPatch<'a> {
 	pub report_unique_id: &'a str,
 	pub transmission_date: Option<&'a str>,
 	pub report_type: &'a str,
-	pub date_first_received: Option<Date>,
-	pub date_most_recent: Option<Date>,
+	pub date_first_received: Option<&'a str>,
+	pub date_most_recent: Option<&'a str>,
 	pub fulfil_expedited: Option<bool>,
 	pub fulfil_expedited_null_flavor: Option<&'a str>,
 	pub additional_documents_available: Option<bool>,
@@ -61,3 +60,4 @@ pub struct DPatientPatch<'a> {
 	pub reported_causes: &'a [DPatientDeathCausePatch<'a>],
 	pub autopsy_causes: &'a [DPatientDeathCausePatch<'a>],
 }
+use sqlx::types::time::Date;

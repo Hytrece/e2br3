@@ -113,7 +113,7 @@ CREATE TABLE medical_history_episodes (
     meddra_code VARCHAR(20),
 
     -- D.7.1.r.2 - Start Date
-    start_date DATE,
+    start_date TEXT,
     start_date_null_flavor VARCHAR(4) CHECK (start_date_null_flavor IN ('MSK', 'ASKU', 'NASK')),
 
     -- D.7.1.r.3 - Continuing
@@ -121,7 +121,7 @@ CREATE TABLE medical_history_episodes (
     continuing_null_flavor VARCHAR(4) CHECK (continuing_null_flavor IN ('MSK', 'UNK', 'ASKU', 'NASK')),
 
     -- D.7.1.r.4 - End Date
-    end_date DATE,
+    end_date TEXT,
     end_date_null_flavor VARCHAR(4) CHECK (end_date_null_flavor IN ('MSK', 'ASKU', 'NASK')),
 
     -- D.7.1.r.5 - Comments

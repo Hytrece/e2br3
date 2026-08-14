@@ -14,14 +14,19 @@ pub async fn create_submission(
 		SubmissionAuthority::Fda => RegulatoryAuthority::Fda,
 		SubmissionAuthority::Mfds => RegulatoryAuthority::Mfds,
 	};
+	let header =
+		prepare_outbound_message_header(ctx, mm, case_id, export_authority, None)
+			.await?;
+	let outbound_message_header = export_message_header(&header)?;
 	let xml = task::spawn_blocking(move || {
 		Handle::current().block_on(export_case_xml_with_options(
 			&ctx_clone,
 			&mm_clone,
 			case_id,
 			ExportXmlOptions {
+				apply_comments: true,
 				authority: export_authority,
-				..ExportXmlOptions::default()
+				outbound_message_header,
 			},
 		))
 	})

@@ -151,6 +151,7 @@ repeatable_page_row_patch_handler!(
 	model: LiteratureReferenceForUpdate,
 	verify: verify_editor_lr_page_row,
 	aliases: LITERATURE_REFERENCE_ROW_ALIASES,
+	base_patch: true,
 	build_response: build_editor_lr_page_row_response,
 );
 

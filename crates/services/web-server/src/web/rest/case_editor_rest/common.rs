@@ -391,6 +391,34 @@ pub(super) fn insert_alias(
 	}
 }
 
+pub(super) fn explicit_null_model_fields(
+	row: &serde_json::Map<String, Value>,
+	aliases: &'static [(&'static str, &'static [&'static str])],
+) -> Vec<&'static str> {
+	fn value_at_path<'a>(
+		row: &'a serde_json::Map<String, Value>,
+		path: &str,
+	) -> Option<&'a Value> {
+		let mut segments = path.split('.');
+		let mut value = row.get(segments.next()?)?;
+		for segment in segments {
+			value = value.as_object()?.get(segment)?;
+		}
+		Some(value)
+	}
+
+	aliases
+		.iter()
+		.filter_map(|(field, candidates)| {
+			std::iter::once(*field)
+				.chain(candidates.iter().copied())
+				.find_map(|path| value_at_path(row, path))
+				.is_some_and(Value::is_null)
+				.then_some(*field)
+		})
+		.collect()
+}
+
 pub(super) fn row_model_value(
 	_section: &str,
 	_request_prefix: &str,
@@ -455,6 +483,10 @@ pub(super) fn ci_date(value: Option<sqlx::types::time::Date>) -> Option<String> 
 			date.day()
 		)
 	})
+}
+
+pub(super) fn ci_ts(value: Option<&str>) -> Option<String> {
+	value.map(str::to_owned)
 }
 
 pub(super) fn rows_from_direct_section(data: Value) -> BTreeMap<String, Value> {
@@ -732,6 +764,7 @@ macro_rules! repeatable_page_row_patch_handler {
 		model: $model:ty,
 		verify: $verify_fn:ident,
 		aliases: $aliases:expr,
+		base_patch: true,
 		build_response: $build_response:ident $(,)?
 	) => {
 		pub async fn $fn_name(
@@ -754,9 +787,65 @@ macro_rules! repeatable_page_row_patch_handler {
 					$verify_fn(ctx, mm, case_id, row_id).await?;
 					let row = required_row_object($section, &request.rows, $row_key)?;
 					validate_row_payload($section, $row_key, row, None)?;
+					let clear_fields = explicit_null_model_fields(row, $aliases);
 					let value = row_model_value($section, "", row, $aliases, &[]);
 					let update = parse_row_model::<$model>($section, $row_key, value)?;
-					$bmc::update(ctx, mm, row_id, update).await?;
+					lib_core::model::update_uuid_patch::<$bmc, $model>(
+						ctx,
+						mm,
+						row_id,
+						update,
+						&clear_fields,
+					)
+					.await?;
+					mark_editor_validation_summary_stale(
+						ctx, mm, case_id, requested_authorities.clone(),
+					)
+					.await?;
+					let response =
+						$build_response(ctx, mm, case_id, row_id, requested_authorities)
+							.await?;
+					Ok((axum::http::StatusCode::OK, Json(response)))
+				}),
+			)
+			.await
+		}
+	};
+	(
+		$fn_name:ident,
+		section: $section:expr,
+		row_key: $row_key:expr,
+		bmc: $bmc:ident,
+		model: $model:ty,
+		verify: $verify_fn:ident,
+		aliases: $aliases:expr,
+		build_response: $build_response:ident $(,)?
+	) => {
+		pub async fn $fn_name(
+			State(mm): State<ModelManager>,
+			ctx_w: CtxW,
+			snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
+			Path((case_id, row_id)): Path<(Uuid, Uuid)>,
+			Json(request): Json<CaseEditorPagePatchRequest>,
+		) -> Result<(axum::http::StatusCode, Json<Value>)> {
+			let ctx = ctx_w.0;
+			lib_rest_core::with_authorized_case_child_mutation(
+				&ctx,
+				&snapshot,
+				&mm,
+				case_id,
+				format!("editor/{}/{}/{}", $section, $row_key, row_id),
+				move |ctx, mm| Box::pin(async move {
+					let requested_authorities =
+						validate_request_projection_context(request.authorities.as_deref())?;
+					$verify_fn(ctx, mm, case_id, row_id).await?;
+					let row = required_row_object($section, &request.rows, $row_key)?;
+					validate_row_payload($section, $row_key, row, None)?;
+					let clear_fields = explicit_null_model_fields(row, $aliases);
+					let value = row_model_value($section, "", row, $aliases, &[]);
+					let update = parse_row_model::<$model>($section, $row_key, value)?;
+					$bmc::update_patch(ctx, mm, row_id, update, &clear_fields)
+					.await?;
 					mark_editor_validation_summary_stale(
 						ctx, mm, case_id, requested_authorities.clone(),
 					)
@@ -799,9 +888,11 @@ macro_rules! repeatable_page_row_patch_handler {
 					$bmc::get_in_case(ctx, mm, case_id, row_id).await?;
 					let row = required_row_object($section, &request.rows, $row_key)?;
 					validate_row_payload($section, $row_key, row, None)?;
+					let clear_fields = explicit_null_model_fields(row, $aliases);
 					let value = row_model_value($section, "", row, $aliases, &[]);
 					let update = parse_row_model::<$model>($section, $row_key, value)?;
-					$bmc::update(ctx, mm, row_id, update).await?;
+					$bmc::update_patch(ctx, mm, row_id, update, &clear_fields)
+					.await?;
 					mark_editor_validation_summary_stale(
 						ctx, mm, case_id, requested_authorities.clone(),
 					)

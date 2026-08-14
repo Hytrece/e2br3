@@ -16,8 +16,6 @@ pub(crate) async fn export_patch(
 	)
 }
 
-use sqlx::types::time::Date;
-
 pub fn export_e_reactions_xml(reactions: &[Reaction]) -> Result<String> {
 	export_e_reactions_xml_for_authority(
 		reactions,
@@ -59,35 +57,41 @@ pub(crate) fn write_e_i_reaction(
 		|| reaction.duration_value.is_some()
 	{
 		let has_duration = reaction.duration_value.is_some();
-		if has_duration {
+		let has_low = reaction.start_date.is_some()
+			|| reaction.start_date_null_flavor.is_some();
+		let has_high =
+			reaction.end_date.is_some() || reaction.end_date_null_flavor.is_some();
+		let use_sxpr = has_duration && has_low && has_high;
+		if use_sxpr {
 			out.push_str("<effectiveTime xsi:type=\"SXPR_TS\">");
+			out.push_str("<comp xsi:type=\"IVL_TS\">");
 		} else {
 			out.push_str("<effectiveTime xsi:type=\"IVL_TS\">");
+		}
+		if has_duration && !has_low && has_high {
+			write_e_i_6_width(&mut out, reaction);
 		}
 		write_e_i_4(
 			&mut out,
 			"low",
-			reaction.start_date,
+			reaction.start_date.as_deref(),
 			reaction.start_date_null_flavor.as_deref(),
-			has_duration,
 		);
+		if !use_sxpr && has_duration && has_low {
+			write_e_i_6_width(&mut out, reaction);
+		}
 		write_e_i_5(
 			&mut out,
 			"high",
-			reaction.end_date,
+			reaction.end_date.as_deref(),
 			reaction.end_date_null_flavor.as_deref(),
-			has_duration,
 		);
-		if let Some(width) = write_e_i_6a(reaction) {
-			out.push_str("<comp xsi:type=\"IVL_TS\" operator=\"A\"><width value=\"");
-			out.push_str(&xml_escape(&width.to_string()));
-			out.push_str("\"");
-			if let Some(unit) = write_e_i_6b(reaction) {
-				out.push_str(" unit=\"");
-				out.push_str(&xml_escape(unit));
-				out.push_str("\"");
-			}
-			out.push_str("/></comp>");
+		if use_sxpr {
+			out.push_str("</comp><comp xsi:type=\"IVL_TS\" operator=\"A\">");
+			write_e_i_6_width(&mut out, reaction);
+			out.push_str("</comp>");
+		} else if has_duration && !has_low && !has_high {
+			write_e_i_6_width(&mut out, reaction);
 		}
 		out.push_str("</effectiveTime>");
 	}
@@ -171,7 +175,7 @@ pub(crate) fn write_e_i_reaction(
 		reaction.expectedness.as_deref(),
 	);
 	append_extension_code(&mut out, "AE_SEVERITY", reaction.severity.as_deref());
-	out.push_str(&write_e_i_7(reaction.outcome.as_deref()));
+	out.push_str(&write_e_i_7(reaction.outcome.as_deref())?);
 	out.push_str(&write_e_i_8(reaction));
 	out.push_str("</observation></subjectOf2>");
 	Ok(out)
@@ -309,27 +313,25 @@ fn write_fda_e_i_3_2h(value: Option<bool>, null_flavor: Option<&str>) -> String 
 fn write_e_i_4(
 	out: &mut String,
 	tag: &str,
-	date: Option<Date>,
+	date: Option<&str>,
 	null_flavor: Option<&str>,
-	has_duration: bool,
 ) {
-	write_e_i_4_or_5(out, tag, date, null_flavor, has_duration);
+	write_e_i_4_or_5(out, tag, date, null_flavor);
 }
 
 /// e2b:E.i.5
 fn write_e_i_5(
 	out: &mut String,
 	tag: &str,
-	date: Option<Date>,
+	date: Option<&str>,
 	null_flavor: Option<&str>,
-	has_duration: bool,
 ) {
-	write_e_i_4_or_5(out, tag, date, null_flavor, has_duration);
+	write_e_i_4_or_5(out, tag, date, null_flavor);
 }
 
 /// e2b:E.i.6a
-fn write_e_i_6a(value: &Reaction) -> Option<&rust_decimal::Decimal> {
-	value.duration_value.as_ref()
+fn write_e_i_6a(value: &Reaction) -> Option<&str> {
+	value.duration_value.as_deref()
 }
 
 /// e2b:E.i.6b
@@ -338,8 +340,23 @@ fn write_e_i_6b(value: &Reaction) -> Option<&'static str> {
 	crate::mapping::fda::e_reaction::reaction_duration_unit_to_ucum(unit)
 }
 
+fn write_e_i_6_width(out: &mut String, reaction: &Reaction) {
+	let Some(width) = write_e_i_6a(reaction) else {
+		return;
+	};
+	out.push_str("<width value=\"");
+	out.push_str(&xml_escape(width));
+	out.push_str("\"");
+	if let Some(unit) = write_e_i_6b(reaction) {
+		out.push_str(" unit=\"");
+		out.push_str(&xml_escape(unit));
+		out.push_str("\"");
+	}
+	out.push_str("/>");
+}
+
 /// e2b:E.i.7
-fn write_e_i_7(value: Option<&str>) -> String {
+fn write_e_i_7(value: Option<&str>) -> Result<String> {
 	let Some((code, display_name)) =
 		value.map(str::trim).and_then(|code| match code {
 			"0" => Some(("0", "unknown")),
@@ -351,11 +368,22 @@ fn write_e_i_7(value: Option<&str>) -> String {
 			_ => None,
 		})
 	else {
-		return "<outboundRelationship2 typeCode=\"PERT\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code code=\"27\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.19\"/><value xsi:type=\"CE\" nullFlavor=\"NI\"/></observation></outboundRelationship2>".to_string();
+		return Err(Error::InvalidXml {
+			message: if value.map(str::trim).is_some_and(str::is_empty)
+				|| value.is_none()
+			{
+				"ICH.E.i.7.REQUIRED"
+			} else {
+				"ICH.E.i.7.INVALID"
+			}
+			.to_string(),
+			line: None,
+			column: None,
+		});
 	};
-	format!(
+	Ok(format!(
 		"<outboundRelationship2 typeCode=\"PERT\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code code=\"27\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.19\"/><value xsi:type=\"CE\" code=\"{code}\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.11\" codeSystemVersion=\"1.0\" displayName=\"{display_name}\"/></observation></outboundRelationship2>"
-	)
+	))
 }
 
 /// e2b:E.i.8
@@ -408,40 +436,23 @@ fn write_e_i_3_2(
 fn write_e_i_4_or_5(
 	out: &mut String,
 	tag: &str,
-	date: Option<Date>,
+	date: Option<&str>,
 	null_flavor: Option<&str>,
-	has_duration: bool,
 ) {
 	match (date, null_flavor) {
 		(Some(value), _) => {
-			if has_duration {
-				out.push_str("<comp xsi:type=\"IVL_TS\" operator=\"A\"><");
-				out.push_str(tag);
-				out.push_str(" value=\"");
-				out.push_str(&fmt_date(value));
-				out.push_str("\"/></comp>");
-			} else {
-				out.push('<');
-				out.push_str(tag);
-				out.push_str(" value=\"");
-				out.push_str(&fmt_date(value));
-				out.push_str("\"/>");
-			}
+			out.push('<');
+			out.push_str(tag);
+			out.push_str(" value=\"");
+			out.push_str(&xml_escape(value));
+			out.push_str("\"/>");
 		}
 		(None, Some(null_flavor)) => {
-			if has_duration {
-				out.push_str("<comp xsi:type=\"IVL_TS\" operator=\"A\"><");
-				out.push_str(tag);
-				out.push_str(" nullFlavor=\"");
-				out.push_str(&xml_escape(null_flavor));
-				out.push_str("\"/></comp>");
-			} else {
-				out.push('<');
-				out.push_str(tag);
-				out.push_str(" nullFlavor=\"");
-				out.push_str(&xml_escape(null_flavor));
-				out.push_str("\"/>");
-			}
+			out.push('<');
+			out.push_str(tag);
+			out.push_str(" nullFlavor=\"");
+			out.push_str(&xml_escape(null_flavor));
+			out.push_str("\"/>");
 		}
 		(None, None) => {}
 	}
@@ -453,17 +464,16 @@ mod split_null_flavor_tests {
 
 	#[test]
 	fn exports_unknown_reaction_outcome_as_code_zero() {
-		let xml = write_e_i_7(Some("0"));
+		let xml = write_e_i_7(Some("0")).expect("valid outcome");
 		assert!(xml.contains("code=\"0\""));
 		assert!(xml.contains("displayName=\"unknown\""));
 		assert!(!xml.contains("nullFlavor=\"NI\""));
 	}
 
 	#[test]
-	fn exports_invalid_reaction_outcome_as_null_flavor() {
+	fn rejects_invalid_reaction_outcome() {
 		for value in [None, Some(""), Some("99")] {
-			let xml = write_e_i_7(value);
-			assert!(xml.contains("nullFlavor=\"NI\""));
+			assert!(write_e_i_7(value).is_err());
 		}
 	}
 
@@ -473,15 +483,6 @@ mod split_null_flavor_tests {
 		assert!(xml.contains("xsi:type=\"BL\" nullFlavor=\"NI\""));
 		assert!(!xml.contains(" value=\""));
 	}
-}
-
-fn fmt_date(date: Date) -> String {
-	format!(
-		"{:04}{:02}{:02}",
-		date.year(),
-		u8::from(date.month()),
-		date.day()
-	)
 }
 
 fn xml_escape(value: &str) -> String {
@@ -684,7 +685,7 @@ mod meddra_requirement_tests {
 	#[test]
 	fn exports_internal_duration_codes_as_ucum_and_omits_unknown_units() {
 		let mut reaction = reaction();
-		reaction.duration_value = Some(1.into());
+		reaction.duration_value = Some("1".to_string());
 		for (stored, ucum) in [
 			("800", "10.a"),
 			("801", "a"),
@@ -704,5 +705,93 @@ mod meddra_requirement_tests {
 			.expect("semantic unit issue must not block export");
 		assert!(xml.contains("<width value=\"1\"/>"));
 		assert!(!xml.contains("unit=\"d\""));
+	}
+
+	#[test]
+	fn exports_original_duration_value_lexeme_when_present() {
+		let mut reaction = reaction();
+		reaction.duration_value = Some("54.00".to_string());
+		reaction.duration_unit = Some("804".to_string());
+
+		let xml = export_e_reactions_xml(std::slice::from_ref(&reaction))
+			.expect("duration export");
+		assert!(xml.contains("<width value=\"54.00\" unit=\"d\"/>"));
+	}
+
+	#[test]
+	fn exports_e_i_6_in_the_official_effective_time_shapes() {
+		let mut reaction = reaction();
+		reaction.duration_value = Some("24".to_string());
+		reaction.duration_unit = Some("805".to_string());
+		let xml = export_e_reactions_xml(std::slice::from_ref(&reaction))
+			.expect("width-only export");
+		assert!(xml.contains(
+			"<effectiveTime xsi:type=\"IVL_TS\"><width value=\"24\" unit=\"h\"/></effectiveTime>"
+		));
+
+		reaction.start_date = Some("20030511".to_string());
+		reaction.duration_value = Some("1.00".to_string());
+		reaction.duration_unit = Some("803".to_string());
+		let xml = export_e_reactions_xml(std::slice::from_ref(&reaction))
+			.expect("low-and-width export");
+		assert!(xml.contains(
+			"<effectiveTime xsi:type=\"IVL_TS\"><low value=\"20030511\"/><width value=\"1.00\" unit=\"wk\"/></effectiveTime>"
+		));
+
+		reaction.start_date = None;
+		reaction.end_date = Some("20030518".to_string());
+		let xml = export_e_reactions_xml(std::slice::from_ref(&reaction))
+			.expect("width-and-high export");
+		assert!(xml.contains(
+			"<effectiveTime xsi:type=\"IVL_TS\"><width value=\"1.00\" unit=\"wk\"/><high value=\"20030518\"/></effectiveTime>"
+		));
+
+		reaction.start_date = Some("20030511".to_string());
+		reaction.end_date = Some("20030518".to_string());
+		reaction.duration_value = Some("54".to_string());
+		reaction.duration_unit = Some("804".to_string());
+		let xml = export_e_reactions_xml(std::slice::from_ref(&reaction))
+			.expect("SXPR export");
+		assert!(xml.contains(
+			"<effectiveTime xsi:type=\"SXPR_TS\"><comp xsi:type=\"IVL_TS\"><low value=\"20030511\"/><high value=\"20030518\"/></comp><comp xsi:type=\"IVL_TS\" operator=\"A\"><width value=\"54\" unit=\"d\"/></comp></effectiveTime>"
+		));
+	}
+
+	#[test]
+	fn exported_e_i_6_shapes_pass_the_official_ich_xsd() {
+		let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+			.parent()
+			.and_then(|path| path.parent())
+			.and_then(|path| path.parent())
+			.expect("workspace root")
+			.to_path_buf();
+		let source =
+			std::fs::read(root.join("docs/exporter/fda/FAERS2022Scenario1.xml"))
+				.expect("official FDA example");
+		let schema = crate::default_xsd_path().expect("official ICH schema");
+
+		for (start, end, duration, unit) in [
+			(None, None, "24", "805"),
+			(Some("20030511"), None, "1.00", "803"),
+			(None, Some("20030518"), "1.00", "803"),
+			(Some("20030511"), Some("20030518"), "54", "804"),
+		] {
+			let mut reaction = reaction();
+			reaction.start_date = start.map(str::to_string);
+			reaction.end_date = end.map(str::to_string);
+			reaction.duration_value = Some(duration.to_string());
+			reaction.duration_unit = Some(unit.to_string());
+			let exported = crate::export::roundtrip::patch_e_reactions(
+				&source,
+				std::slice::from_ref(&reaction),
+			)
+			.expect("patch official FDA example");
+			let errors = crate::validation::validate_e2b_xml_xsd(
+				exported.as_bytes(),
+				&schema,
+			)
+			.expect("validate XSD");
+			assert!(errors.is_empty(), "{errors:#?}");
+		}
 	}
 }

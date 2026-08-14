@@ -36,10 +36,10 @@ pub fn apply_c_safety_report_import_settings(
 		report.transmission_date = Some(format_e2b_datetime(import_date));
 	}
 	if settings.update_most_recent_info_date {
-		report.date_of_most_recent_information = Some(import_date);
+		report.date_of_most_recent_information = Some(format_e2b_date(import_date));
 	}
 	if settings.update_report_first_received_date {
-		report.date_first_received_from_source = Some(import_date);
+		report.date_first_received_from_source = Some(format_e2b_date(import_date));
 	}
 	Ok(())
 }
@@ -47,6 +47,15 @@ pub fn apply_c_safety_report_import_settings(
 fn format_e2b_datetime(date: Date) -> String {
 	format!(
 		"{:04}{:02}{:02}000000",
+		date.year(),
+		u8::from(date.month()),
+		date.day()
+	)
+}
+
+fn format_e2b_date(date: Date) -> String {
+	format!(
+		"{:04}{:02}{:02}",
 		date.year(),
 		u8::from(date.month()),
 		date.day()
@@ -924,8 +933,8 @@ mod tests {
 		CSafetyReportImport {
 			transmission_date: Some("20240110000000".to_string()),
 			report_type: Some("1".to_string()),
-			date_first_received_from_source: Some(date(2024, Month::January, 5)),
-			date_of_most_recent_information: Some(date(2024, Month::January, 8)),
+			date_first_received_from_source: Some("20240105".to_string()),
+			date_of_most_recent_information: Some("20240108".to_string()),
 			fulfil_expedited_criteria: Some(false),
 			fulfil_expedited_criteria_null_flavor: None,
 			additional_documents_available: None,
@@ -982,8 +991,8 @@ mod tests {
 
 		assert!(result.is_ok());
 		assert_eq!(
-			report.date_of_most_recent_information,
-			Some(date(2024, Month::February, 1))
+			report.date_of_most_recent_information.as_deref(),
+			Some("20240201")
 		);
 		assert_eq!(report.transmission_date.as_deref(), Some("20240110000000"));
 	}

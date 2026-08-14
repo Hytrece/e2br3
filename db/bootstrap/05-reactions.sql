@@ -69,13 +69,13 @@ CREATE TABLE reactions (
     mfds_device_action_other VARCHAR(20000),
 
     -- E.i.4 - Date of Start of Reaction/Event
-    start_date DATE,
+    start_date TEXT,
 
     -- E.i.5 - Date of End of Reaction/Event
-    end_date DATE,
+    end_date TEXT,
 
     -- E.i.6 - Duration of Reaction/Event
-    duration_value DECIMAL(10,2),
+    duration_value TEXT,
     duration_unit VARCHAR(50),  -- E2B contract max; commonly 800-805 codes
 
     -- E.i.7 - Outcome of Reaction/Event at Time of Last Observation

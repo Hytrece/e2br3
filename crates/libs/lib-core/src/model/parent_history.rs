@@ -308,6 +308,16 @@ impl ParentPastDrugHistoryBmc {
 		id: Uuid,
 		data: ParentPastDrugHistoryForUpdate,
 	) -> Result<()> {
+		Self::update_patch(ctx, mm, id, data, &[]).await
+	}
+
+	pub async fn update_patch(
+		ctx: &Ctx,
+		mm: &ModelManager,
+		id: Uuid,
+		data: ParentPastDrugHistoryForUpdate,
+		clear_fields: &[&str],
+	) -> Result<()> {
 		mm.dbx().begin_txn().await?;
 		set_full_context_dbx_or_rollback(
 			mm.dbx(),
@@ -316,24 +326,26 @@ impl ParentPastDrugHistoryBmc {
 			ctx.role(),
 		)
 		.await?;
+		let clears: Vec<String> =
+			clear_fields.iter().map(|field| (*field).into()).collect();
 
 		let sql = format!(
 			"UPDATE {} SET
-			 drug_name = COALESCE($1, drug_name),
-			 mpid = COALESCE($2, mpid),
-			 mpid_version = COALESCE($3, mpid_version),
-			 mfds_medicinal_product_version = COALESCE($4, mfds_medicinal_product_version),
-			 mfds_medicinal_product_id = COALESCE($5, mfds_medicinal_product_id),
-			 phpid = COALESCE($6, phpid),
-			 phpid_version = COALESCE($7, phpid_version),
-			 start_date = CASE WHEN $9::varchar IS NOT NULL THEN NULL ELSE COALESCE($8, start_date) END,
-			 start_date_null_flavor = CASE WHEN $8::date IS NOT NULL THEN NULL ELSE COALESCE($9, start_date_null_flavor) END,
-			 end_date = CASE WHEN $11::varchar IS NOT NULL THEN NULL ELSE COALESCE($10, end_date) END,
-			 end_date_null_flavor = CASE WHEN $10::date IS NOT NULL THEN NULL ELSE COALESCE($11, end_date_null_flavor) END,
-			 indication_meddra_version = COALESCE($12, indication_meddra_version),
-			 indication_meddra_code = COALESCE($13, indication_meddra_code),
-			 reaction_meddra_version = COALESCE($14, reaction_meddra_version),
-			 reaction_meddra_code = COALESCE($15, reaction_meddra_code),
+			 drug_name = CASE WHEN 'drug_name' = ANY($18) THEN NULL ELSE COALESCE($1, drug_name) END,
+			 mpid = CASE WHEN 'mpid' = ANY($18) THEN NULL ELSE COALESCE($2, mpid) END,
+			 mpid_version = CASE WHEN 'mpid_version' = ANY($18) THEN NULL ELSE COALESCE($3, mpid_version) END,
+			 mfds_medicinal_product_version = CASE WHEN 'mfds_medicinal_product_version' = ANY($18) THEN NULL ELSE COALESCE($4, mfds_medicinal_product_version) END,
+			 mfds_medicinal_product_id = CASE WHEN 'mfds_medicinal_product_id' = ANY($18) THEN NULL ELSE COALESCE($5, mfds_medicinal_product_id) END,
+			 phpid = CASE WHEN 'phpid' = ANY($18) THEN NULL ELSE COALESCE($6, phpid) END,
+			 phpid_version = CASE WHEN 'phpid_version' = ANY($18) THEN NULL ELSE COALESCE($7, phpid_version) END,
+			 start_date = CASE WHEN 'start_date' = ANY($18) THEN NULL ELSE CASE WHEN $9::varchar IS NOT NULL THEN NULL ELSE COALESCE($8, start_date) END END,
+			 start_date_null_flavor = CASE WHEN 'start_date_null_flavor' = ANY($18) THEN NULL ELSE CASE WHEN $8::date IS NOT NULL THEN NULL ELSE COALESCE($9, start_date_null_flavor) END END,
+			 end_date = CASE WHEN 'end_date' = ANY($18) THEN NULL ELSE CASE WHEN $11::varchar IS NOT NULL THEN NULL ELSE COALESCE($10, end_date) END END,
+			 end_date_null_flavor = CASE WHEN 'end_date_null_flavor' = ANY($18) THEN NULL ELSE CASE WHEN $10::date IS NOT NULL THEN NULL ELSE COALESCE($11, end_date_null_flavor) END END,
+			 indication_meddra_version = CASE WHEN 'indication_meddra_version' = ANY($18) THEN NULL ELSE COALESCE($12, indication_meddra_version) END,
+			 indication_meddra_code = CASE WHEN 'indication_meddra_code' = ANY($18) THEN NULL ELSE COALESCE($13, indication_meddra_code) END,
+			 reaction_meddra_version = CASE WHEN 'reaction_meddra_version' = ANY($18) THEN NULL ELSE COALESCE($14, reaction_meddra_version) END,
+			 reaction_meddra_code = CASE WHEN 'reaction_meddra_code' = ANY($18) THEN NULL ELSE COALESCE($15, reaction_meddra_code) END,
 			 updated_at = now(),
 			 updated_by = $16
 			 WHERE id = $17",
@@ -360,7 +372,8 @@ impl ParentPastDrugHistoryBmc {
 					.bind(data.reaction_meddra_version)
 					.bind(data.reaction_meddra_code)
 					.bind(ctx.user_id())
-					.bind(id),
+					.bind(id)
+					.bind(clears),
 			)
 			.await?;
 		if result == 0 {

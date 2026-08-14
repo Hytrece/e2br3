@@ -1,6 +1,6 @@
 use super::helpers::{
-	e2b_datetime_date, max_length, reject_future_date, reject_when, require,
-	valid_base64, valid_code, valid_e2b_datetime, valid_ich_identifier,
+	e2b_datetime_date, e2b_ts_date, max_length, reject_future_date, reject_when,
+	require, valid_base64, valid_code, valid_e2b_datetime, valid_ich_identifier,
 	valid_iso3166, DateValues,
 };
 use crate::{
@@ -256,7 +256,9 @@ fn c_1_4(report: &SafetyReportIdentification, issues: &mut Vec<ValidationIssue>)
 		PATH,
 		"case-identification",
 		"[C.1.4] must not be later than today.",
-		DateValues::One(report.date_first_received_from_source),
+		DateValues::One(e2b_ts_date(
+			report.date_first_received_from_source.as_deref(),
+		)),
 	);
 	reject_when(
 		issues,
@@ -265,8 +267,8 @@ fn c_1_4(report: &SafetyReportIdentification, issues: &mut Vec<ValidationIssue>)
 		"case-identification",
 		"[C.1.4] cannot be later than [C.1.5].",
 		is_later_than(
-			report.date_first_received_from_source,
-			report.date_of_most_recent_information,
+			e2b_ts_date(report.date_first_received_from_source.as_deref()),
+			e2b_ts_date(report.date_of_most_recent_information.as_deref()),
 		),
 	);
 }
@@ -289,7 +291,9 @@ fn c_1_5(report: &SafetyReportIdentification, issues: &mut Vec<ValidationIssue>)
 		PATH,
 		"case-identification",
 		"[C.1.5] must not be later than today.",
-		DateValues::One(report.date_of_most_recent_information),
+		DateValues::One(e2b_ts_date(
+			report.date_of_most_recent_information.as_deref(),
+		)),
 	);
 }
 
@@ -2338,9 +2342,8 @@ mod golden_c1_value_tests {
 		SafetyReportIdentification, SenderInformation, StudyFdaCrossReportedInd,
 		StudyInformation, StudyRegistrationNumber,
 	};
-	use sqlx::types::time::{Date, OffsetDateTime};
+	use sqlx::types::time::OffsetDateTime;
 	use sqlx::types::Uuid;
-	use time::Month;
 
 	const TARGET_CODES: &[&str] = &[
 		"ICH.C.1.2.REQUIRED",
@@ -3189,10 +3192,8 @@ mod golden_c1_value_tests {
 		report.safety_report_id = Some("US-ABC-1".to_string());
 		report.transmission_date = Some("20200101120000".to_string());
 		report.report_type = Some("1".to_string());
-		report.date_first_received_from_source =
-			Some(Date::from_calendar_date(2020, Month::January, 1).unwrap());
-		report.date_of_most_recent_information =
-			Some(Date::from_calendar_date(2020, Month::January, 1).unwrap());
+		report.date_first_received_from_source = Some("20200101".to_string());
+		report.date_of_most_recent_information = Some("20200101".to_string());
 		report.fulfil_expedited_criteria = Some(true);
 		assert_eq!(snapshot(report), Vec::new());
 	}
@@ -3201,10 +3202,8 @@ mod golden_c1_value_tests {
 	fn c1_information_dates_may_follow_creation_date() {
 		let mut report = base_report();
 		report.transmission_date = Some("20140714151617-0500".to_string());
-		report.date_first_received_from_source =
-			Some(Date::from_calendar_date(2022, Month::June, 14).unwrap());
-		report.date_of_most_recent_information =
-			Some(Date::from_calendar_date(2022, Month::June, 14).unwrap());
+		report.date_first_received_from_source = Some("20220614".to_string());
+		report.date_of_most_recent_information = Some("20220614".to_string());
 		let mut issues = Vec::new();
 
 		c_1_4(&report, &mut issues);

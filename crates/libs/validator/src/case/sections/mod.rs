@@ -5,7 +5,6 @@ pub(crate) mod f;
 pub(crate) mod g;
 pub(crate) mod h;
 pub(crate) mod helpers;
-pub(crate) mod n;
 
 use crate::{
 	FdaValidationContext, MfdsValidationContext, RegulatoryAuthority,
@@ -48,7 +47,6 @@ pub(crate) async fn collect_section_issues(
 	)
 	.await?;
 	h::collect(&mut issues, authority, validation_ctx);
-	n::collect(&mut issues, authority, validation_ctx);
 	collect_meddra_version_issues(validation_ctx, &mut issues);
 	retain_case_business_rules(&mut issues);
 	Ok(issues)

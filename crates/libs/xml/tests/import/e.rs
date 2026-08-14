@@ -1,5 +1,4 @@
-use crate::common::{date, fixture};
-use rust_decimal::Decimal;
+use crate::common::fixture;
 use xml::import_sections::e_reaction::parse_e_reactions;
 
 #[test]
@@ -46,11 +45,11 @@ fn import_e_section_all_fields_from_scenario6() {
 	assert_eq!(first.criteria_other_medically_important, Some(true));
 	assert_eq!(first.criteria_other_medically_important_null_flavor, None);
 	assert_eq!(first.required_intervention, None);
-	assert_eq!(first.start_date, Some(date(2009, 1, 1)));
+	assert_eq!(first.start_date.as_deref(), Some("20090101"));
 	assert_eq!(first.start_date_null_flavor, None);
-	assert_eq!(first.end_date, Some(date(2009, 1, 2)));
+	assert_eq!(first.end_date.as_deref(), Some("20090102"));
 	assert_eq!(first.end_date_null_flavor, None);
-	assert_eq!(first.duration_value, None::<Decimal>);
+	assert_eq!(first.duration_value, None::<String>);
 	assert_eq!(first.duration_unit, None);
 	assert_eq!(first.outcome.as_deref(), Some("3"));
 	assert_eq!(first.medical_confirmation, Some(true));
@@ -97,7 +96,7 @@ fn import_e_section_all_fields_from_scenario6() {
 	assert_eq!(second.start_date_null_flavor.as_deref(), Some("NASK"));
 	assert_eq!(second.end_date, None);
 	assert_eq!(second.end_date_null_flavor, None);
-	assert_eq!(second.duration_value, None::<Decimal>);
+	assert_eq!(second.duration_value, None::<String>);
 	assert_eq!(second.duration_unit, None);
 	assert_eq!(second.outcome.as_deref(), Some("3"));
 	assert_eq!(second.medical_confirmation, None);
