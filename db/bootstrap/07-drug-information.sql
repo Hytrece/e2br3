@@ -91,7 +91,6 @@ CREATE TABLE drug_information (
 
 CREATE INDEX idx_drug_info_case ON drug_information(case_id);
 CREATE INDEX idx_drug_info_source_presave ON drug_information(source_product_presave_id);
-CREATE INDEX idx_drug_info_mpid ON drug_information(mpid);
 CREATE INDEX idx_drug_info_mfds_mpid ON drug_information(mfds_mpid);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_drug_information_active_sequence_unique
     ON drug_information(case_id, sequence_number)
