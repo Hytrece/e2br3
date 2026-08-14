@@ -8,8 +8,6 @@ pub const EXPORT_RULE_STRUCTURAL_EMPTY_PRUNE: &str =
 	"ICH.XML.STRUCTURAL.EMPTY.PRUNE";
 pub const EXPORT_RULE_PLACEHOLDER_VALUE_PRUNE: &str =
 	"ICH.XML.PLACEHOLDER.VALUE.PRUNE";
-pub const EXPORT_RULE_PLACEHOLDER_CODESYSTEMVERSION_PRUNE: &str =
-	"ICH.XML.PLACEHOLDER.CODESYSTEMVERSION.PRUNE";
 pub const EXPORT_RULE_RACE_NI_PRUNE: &str = "ICH.XML.RACE.NI.PRUNE";
 pub const EXPORT_RULE_RACE_EMPTY_PRUNE: &str = "ICH.XML.RACE.EMPTY.PRUNE";
 pub const EXPORT_RULE_GK11_EMPTY_PRUNE: &str = "ICH.XML.GK11.EMPTY.PRUNE";
@@ -34,7 +32,6 @@ pub enum ExportPolicyDirective {
 	RemoveDocumentTextCompression,
 	RemoveSummaryLanguageJa,
 	RemovePlaceholderValueNodes,
-	RemovePlaceholderCodeSystemVersion,
 	RemoveRaceNiNodes,
 	RemoveRaceEmptyNodes,
 	RemoveEmptyGk11Relationships,
@@ -59,9 +56,6 @@ impl ExportPolicyDirective {
 			}
 			Self::RemoveSummaryLanguageJa => "remove_summary_language_ja",
 			Self::RemovePlaceholderValueNodes => "remove_placeholder_value_nodes",
-			Self::RemovePlaceholderCodeSystemVersion => {
-				"remove_placeholder_code_system_version"
-			}
 			Self::RemoveRaceNiNodes => "remove_race_ni_nodes",
 			Self::RemoveRaceEmptyNodes => "remove_race_empty_nodes",
 			Self::RemoveEmptyGk11Relationships => "remove_empty_gk11_relationships",
@@ -113,9 +107,6 @@ pub fn export_policy_directive_for_rule(
 		}
 		EXPORT_RULE_PLACEHOLDER_VALUE_PRUNE => {
 			Some(ExportPolicyDirective::RemovePlaceholderValueNodes)
-		}
-		EXPORT_RULE_PLACEHOLDER_CODESYSTEMVERSION_PRUNE => {
-			Some(ExportPolicyDirective::RemovePlaceholderCodeSystemVersion)
 		}
 		EXPORT_RULE_RACE_NI_PRUNE => Some(ExportPolicyDirective::RemoveRaceNiNodes),
 		EXPORT_RULE_RACE_EMPTY_PRUNE => {
@@ -232,12 +223,6 @@ pub fn export_attribute_strip_spec_for_rule(
 	code: &str,
 ) -> Option<ExportAttributeStripSpec> {
 	match code {
-		EXPORT_RULE_PLACEHOLDER_CODESYSTEMVERSION_PRUNE => {
-			Some(ExportAttributeStripSpec {
-				xpath: "//hl7:observation/hl7:value[@codeSystemVersion='D.8.r.6a' or @codeSystemVersion='D.8.r.7a' or @codeSystemVersion='D.9.2.r.1a' or @codeSystemVersion='D.9.4.r.1a']",
-				attribute: "codeSystemVersion",
-			})
-		}
 		EXPORT_RULE_DOCUMENT_TEXT_COMPRESSION_FORBIDDEN => {
 			Some(ExportAttributeStripSpec {
 				xpath: "//hl7:document/hl7:text[@compression]",

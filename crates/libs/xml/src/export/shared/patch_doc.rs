@@ -5,7 +5,6 @@ use crate::export::policy::{
 	EXPORT_RULE_DOCUMENT_TEXT_COMPRESSION_FORBIDDEN,
 	EXPORT_RULE_FDA_REQUIRED_INTERVENTION, EXPORT_RULE_GK11_EMPTY_PRUNE,
 	EXPORT_RULE_OPTIONAL_PATH_EMPTY_PRUNE,
-	EXPORT_RULE_PLACEHOLDER_CODESYSTEMVERSION_PRUNE,
 	EXPORT_RULE_PLACEHOLDER_VALUE_PRUNE, EXPORT_RULE_RACE_EMPTY_PRUNE,
 	EXPORT_RULE_RACE_NI_PRUNE, EXPORT_RULE_STRUCTURAL_EMPTY_PRUNE,
 	EXPORT_RULE_SUMMARY_LANGUAGE_JA_FORBIDDEN,
@@ -133,17 +132,6 @@ fn prune_placeholder_nodes(xpath: &mut Context) {
 	) {
 		for path in export_xpaths_for_rule(EXPORT_RULE_PLACEHOLDER_VALUE_PRUNE) {
 			unlink_nodes(xpath, path, true);
-		}
-	}
-
-	if has_export_policy_directive(
-		EXPORT_RULE_PLACEHOLDER_CODESYSTEMVERSION_PRUNE,
-		ExportPolicyDirective::RemovePlaceholderCodeSystemVersion,
-	) {
-		if let Some(spec) = export_attribute_strip_spec_for_rule(
-			EXPORT_RULE_PLACEHOLDER_CODESYSTEMVERSION_PRUNE,
-		) {
-			remove_attribute_on_nodes(xpath, spec.xpath, spec.attribute);
 		}
 	}
 
