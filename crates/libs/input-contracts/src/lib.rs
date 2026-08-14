@@ -5,6 +5,7 @@ pub mod generated;
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum InputValue<'a> {
 	Missing,
+	Null,
 	String(&'a str),
 	Boolean(bool),
 	Number(&'a serde_json::Number),
@@ -51,14 +52,24 @@ mod tests {
 			None,
 		))
 		.is_empty());
-		assert!(generated::c::c_4_r_2(FieldInput::new(
+		assert!(!generated::c::c_4_r_2(FieldInput::new(
 			InputValue::String("not-base64"),
 			None,
 		))
 		.is_empty());
-		assert!(generated::d::d_6(FieldInput::new(
+		assert!(generated::c::c_4_r_2(FieldInput::new(
+			InputValue::String("UEZERg=="),
+			None,
+		))
+		.is_empty());
+		assert!(!generated::d::d_6(FieldInput::new(
 			InputValue::Missing,
 			Some("NASK"),
+		))
+		.is_empty());
+		assert!(generated::d::d_6(FieldInput::new(
+			InputValue::Missing,
+			Some("MSK"),
 		))
 		.is_empty());
 		assert!(generated::e::e_i_2_1a(FieldInput::new(

@@ -21,6 +21,16 @@ pub(crate) fn max_length(
 	}
 }
 
+pub(crate) fn reject_null(
+	issues: &mut Vec<InputIssue>,
+	code: &'static str,
+	value: InputValue<'_>,
+) {
+	if value == InputValue::Null {
+		push(issues, code, "cannot be null".to_string());
+	}
+}
+
 pub(crate) fn allowed_values(
 	issues: &mut Vec<InputIssue>,
 	code: &'static str,
@@ -57,6 +67,21 @@ pub(crate) fn identifier(
 			code,
 			"must not contain control characters".to_string(),
 		);
+	}
+}
+
+pub(crate) fn base64(
+	issues: &mut Vec<InputIssue>,
+	code: &'static str,
+	value: InputValue<'_>,
+) {
+	let valid = match normalized(value) {
+		InputValue::Missing => true,
+		InputValue::String(value) => valid_base64(value),
+		_ => false,
+	};
+	if !valid {
+		push(issues, code, "must be valid Base64".to_string());
 	}
 }
 
@@ -139,6 +164,7 @@ fn present(value: Option<&str>) -> Option<&str> {
 
 fn normalized(value: InputValue<'_>) -> InputValue<'_> {
 	match value {
+		InputValue::Null => InputValue::Missing,
 		InputValue::String(value) => present(Some(value))
 			.map(InputValue::String)
 			.unwrap_or(InputValue::Missing),
@@ -160,6 +186,36 @@ fn valid_decimal(value: &str) -> bool {
 		&& fraction.is_none_or(|part| {
 			!part.is_empty() && part.bytes().all(|byte| byte.is_ascii_digit())
 		}) && (!whole.is_empty() || fraction.is_some())
+}
+
+fn valid_base64(value: &str) -> bool {
+	let bytes = value.as_bytes();
+	if bytes.is_empty() || !bytes.len().is_multiple_of(4) {
+		return false;
+	}
+	let padding = bytes.iter().rev().take_while(|&&byte| byte == b'=').count();
+	if padding > 2
+		|| !bytes[..bytes.len() - padding]
+			.iter()
+			.all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'+' | b'/'))
+	{
+		return false;
+	}
+	let last = bytes[bytes.len() - padding - 1];
+	let sextet = match last {
+		b'A'..=b'Z' => last - b'A',
+		b'a'..=b'z' => last - b'a' + 26,
+		b'0'..=b'9' => last - b'0' + 52,
+		b'+' => 62,
+		b'/' => 63,
+		_ => return false,
+	};
+	match padding {
+		0 => true,
+		1 => sextet & 0b11 == 0,
+		2 => sextet & 0b1111 == 0,
+		_ => false,
+	}
 }
 
 fn valid_dotted_version(value: &str) -> bool {

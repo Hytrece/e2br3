@@ -96,6 +96,7 @@ pub fn fda_c_5_6_r(input: crate::FieldInput<'_>) -> Vec<crate::InputIssue> {
 /// ICH.C.1.1.LENGTH.MAX
 pub fn c_1_1(input: crate::FieldInput<'_>) -> Vec<crate::InputIssue> {
 	let mut issues = Vec::new();
+	crate::helpers::reject_null(&mut issues, "ICH.C.1.1.REQUIRED", input.value);
 	crate::helpers::max_length(
 		&mut issues,
 		"ICH.C.1.1.LENGTH.MAX",
@@ -766,8 +767,10 @@ pub fn c_4_r_1(input: crate::FieldInput<'_>) -> Vec<crate::InputIssue> {
 }
 
 /// ICH.C.4.r.2.ALLOWED.VALUE
-pub fn c_4_r_2(_input: crate::FieldInput<'_>) -> Vec<crate::InputIssue> {
-	Vec::new()
+pub fn c_4_r_2(input: crate::FieldInput<'_>) -> Vec<crate::InputIssue> {
+	let mut issues = Vec::new();
+	crate::helpers::base64(&mut issues, "ICH.C.4.r.2.ALLOWED.VALUE", input.value);
+	issues
 }
 
 /// ICH.C.5.1.r.1.LENGTH.MAX

@@ -94,7 +94,7 @@ fn value_at_request_path<'a>(
 
 fn input_value<'a>(value: &'a Value, value_type: InputType) -> InputValue<'a> {
 	if value.is_null() {
-		return InputValue::Missing;
+		return InputValue::Null;
 	}
 	match (value_type, value) {
 		(InputType::String, Value::String(value)) => InputValue::String(value),
@@ -166,9 +166,9 @@ fn normalized_direct_object(
 
 	let mut normalized = Map::new();
 	for (target, candidates) in aliases {
-		if let Some(value) = candidates.iter().find_map(|key| {
-			source_value(source, key).filter(|value| !value.is_null())
-		}) {
+		if let Some(value) =
+			candidates.iter().find_map(|key| source_value(source, key))
+		{
 			insert_path(&mut normalized, target, value.clone());
 		}
 	}
@@ -1307,7 +1307,9 @@ where
 			})
 			.map(str::trim)
 			.filter(|value| !value.is_empty());
-		if value != InputValue::Missing && null_flavor_value.is_some() {
+		if !matches!(value, InputValue::Missing | InputValue::Null)
+			&& null_flavor_value.is_some()
+		{
 			let (_, null_flavor_path, code) =
 				companion.expect("companion is present");
 			let path = concrete_frontend_path(null_flavor_path, &concrete_indexes);
@@ -1559,6 +1561,15 @@ mod input_contract_save_tests {
 			json!({ "case_narrative": "X".repeat(100_001) }),
 		)]);
 		validate_direct_rows("NR", &snake_case_rows, false).unwrap_err();
+		let null_rows = BTreeMap::from([(
+			"narrative".to_string(),
+			json!({ "caseNarrative": null }),
+		)]);
+		let detail = constraint_violation(
+			validate_direct_rows("NR", &null_rows, false).unwrap_err(),
+		);
+		assert_eq!(detail.rule_code, "ICH.H.1.REQUIRED");
+		assert_eq!(detail.path, "narrative.caseNarrative");
 
 		let sender_rows = BTreeMap::from([(
 			"senderInformation".to_string(),

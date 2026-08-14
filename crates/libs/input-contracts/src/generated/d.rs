@@ -725,6 +725,12 @@ pub fn d_6(input: crate::FieldInput<'_>) -> Vec<crate::InputIssue> {
 		input.value,
 		crate::FormatName::E2bDatetime,
 	);
+	crate::helpers::null_flavor(
+		&mut issues,
+		"ICH.D.6.NULLFLAVOR.ALLOWED",
+		input.null_flavor,
+		&["MSK"],
+	);
 	issues
 }
 
