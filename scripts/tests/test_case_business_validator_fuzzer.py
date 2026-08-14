@@ -65,6 +65,51 @@ class CaseBusinessValidatorFuzzerTests(unittest.TestCase):
             "primarySourceForRegulatoryPurposes",
         ))
 
+    def test_every_scenario_has_seeded_fallback_free_generation(self) -> None:
+        generated = [
+            fuzzer.generated_scenario(template, 2026081455, sample)
+            for template in fuzzer.scenario_catalog(2026081455)
+            for sample in range(3)
+        ]
+        self.assertEqual(len(generated), 306 * 3)
+        self.assertTrue(all(item.generator_family in fuzzer.GENERATOR_FAMILIES for item in generated))
+        self.assertEqual(len({item.generation_fingerprint for item in generated}), len(generated))
+
+    def test_generation_is_reproducible_and_sampled(self) -> None:
+        template = next(
+            item for item in fuzzer.scenario_catalog(1)
+            if item.scenario_id == "c1-transmission-date-future"
+        )
+        first = fuzzer.generated_scenario(template, 99, 0)
+        self.assertEqual(first, fuzzer.generated_scenario(template, 99, 0))
+        samples = [fuzzer.generated_scenario(template, 99, sample) for sample in range(3)]
+        self.assertEqual(len({item.invalid_value for item in samples}), 3)
+        self.assertTrue(all(int(item.invalid_value[:4]) >= 2030 for item in samples))
+        self.assertTrue(all(int(item.valid_value[:4]) <= 2024 for item in samples))
+
+    def test_unknown_generator_family_fails_instead_of_falling_back(self) -> None:
+        template = fuzzer.Scenario(
+            0, "unknown", "ich", "CI", "owner", "field", "field", "UNKNOWN", {}, {},
+        )
+        with self.assertRaises(ValueError):
+            fuzzer.generated_scenario(template, 1, 0)
+        unsupported_string = fuzzer.Scenario(
+            0, "unknown-string", "ich", "CI", "owner", "opaque", "opaque",
+            "UNKNOWN.REQUIRED", None, "value",
+        )
+        with self.assertRaises(ValueError):
+            fuzzer.generated_scenario(unsupported_string, 1, 0)
+
+    def test_lexical_candidates_are_real_seeded_values(self) -> None:
+        template = next(
+            item for item in fuzzer.scenario_catalog(1)
+            if item.scenario_id == "c1-document-base64-required"
+        )
+        samples = [fuzzer.generated_scenario(template, 77, sample) for sample in range(3)]
+        self.assertEqual(len({item.invalid_value for item in samples}), 3)
+        self.assertEqual(len({item.valid_value for item in samples}), 3)
+        self.assertTrue(all(item.invalid_value.startswith("%%%") for item in samples))
+
 
 if __name__ == "__main__":
     unittest.main()
