@@ -5,10 +5,12 @@ import sys
 import unicodedata
 import unittest
 from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import case_editor_input_fuzzer as fuzzer
+import rbac_rls_blackbox
 
 
 class CaseEditorInputFuzzerTests(unittest.TestCase):
@@ -25,6 +27,7 @@ class CaseEditorInputFuzzerTests(unittest.TestCase):
         self.assertIsNone(fuzzer.nested_root("[].registrationNumber"))
         self.assertTrue(fuzzer.values_equal(["\t\n"], ["\t\n"]))
         self.assertTrue(fuzzer.values_equal(64.5, ["64.50"]))
+        self.assertFalse(fuzzer.values_equal(64.5, ["64.50", "99"]))
         self.assertFalse(fuzzer.values_equal(["x"], ["y"]))
 
     def test_unicode_and_exact_length_candidates(self) -> None:
@@ -110,6 +113,14 @@ class CaseEditorInputFuzzerTests(unittest.TestCase):
         self.assertEqual(fuzzer.normalized_classification("new", "old", False), "AUDIT_MISMATCH")
         self.assertEqual(fuzzer.audit_field_key("safetyReportId"), "safety_report_id")
         self.assertEqual(fuzzer.audit_field_key("reporterCountry"), "country_code")
+        self.assertTrue(fuzzer.audit_key_matches(
+            {"drug_additional_info_codes_json.unexpected": {"old": None, "new": 1}},
+            "drug_additional_info_codes_json",
+        ))
+        self.assertFalse(fuzzer.audit_key_matches(
+            {"reporter_email_backup": {"old": None, "new": "x"}},
+            "reporterEmail",
+        ))
         self.assertIn("drug_additional_info_codes_json", fuzzer.UNFILTERED_AUDIT_FIELDS)
         self.assertTrue(fuzzer.audit_log_complete({
             "user_id": "u", "organization_id": "o", "created_at": "t", "action": "UPDATE",
@@ -117,6 +128,18 @@ class CaseEditorInputFuzzerTests(unittest.TestCase):
             "old_values": {"json_field": {"child": 1}}, "new_values": {"json_field": {"child": 2}},
             "prev_hash": "p", "entry_hash": "e",
         }))
+
+    def test_commit_sha_is_cached(self) -> None:
+        rbac_rls_blackbox.commit_sha.cache_clear()
+        with mock.patch.object(
+            rbac_rls_blackbox.subprocess,
+            "check_output",
+            return_value="abc123\n",
+        ) as check_output:
+            self.assertEqual(rbac_rls_blackbox.commit_sha(), "abc123")
+            self.assertEqual(rbac_rls_blackbox.commit_sha(), "abc123")
+        check_output.assert_called_once()
+        rbac_rls_blackbox.commit_sha.cache_clear()
 
     def test_seeded_samples_are_reproducible_and_vary(self) -> None:
         field = {"authority": "ICH", "code": "H.1", "payloadPath": "caseNarrative", "roundTripValue": "base"}

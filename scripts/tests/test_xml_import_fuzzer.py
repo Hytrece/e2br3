@@ -5,6 +5,7 @@ import tempfile
 import unittest
 import zipfile
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts"))
@@ -49,6 +50,57 @@ class XmlImportFuzzerTests(unittest.TestCase):
         self.assertEqual(fuzzer.imported_rows(body)[0]["sourceFileName"], "one.xml")
         self.assertEqual(fuzzer.classify_error("PgDatabaseError SQLx(", 200), "server_or_raw_db")
         self.assertEqual(fuzzer.classify_error("includedDocument bad", 200), "base64")
+
+    def test_batch_reconciliation_reports_missing_and_unexpected_rows(self) -> None:
+        one = fuzzer.Sample("one.xml", "ich", b"<x/>", "healthy", "success")
+        two = fuzzer.Sample("two.xml", "ich", b"<x/>", "healthy", "success")
+        matched, missing, unexpected = fuzzer.reconcile_batch(
+            [one, two],
+            [
+                {"sourceFileName": "one.xml", "status": "success"},
+                {"sourceFileName": "other.xml", "status": "success"},
+            ],
+        )
+        self.assertEqual([sample.name for sample, _ in matched], ["one.xml"])
+        self.assertEqual([sample.name for sample in missing], ["two.xml"])
+        self.assertEqual(unexpected[0]["sourceFileName"], "other.xml")
+
+    def test_transport_failure_is_not_an_archive_rejection(self) -> None:
+        self.assertEqual(fuzzer.archive_probe_status(None, "TimeoutError", []), "request_error")
+        self.assertEqual(fuzzer.archive_probe_status(413, None, []), "error")
+        self.assertEqual(
+            fuzzer.archive_probe_status(200, None, [{"status": "error"}]),
+            "error",
+        )
+
+    def test_environment_guard_requires_isolated_non_8080_target(self) -> None:
+        fuzzer.guard_environment(
+            "http://127.0.0.1:8098",
+            "postgres://user:secret@localhost/e2br3_ui_xml_fuzz",
+        )
+        with self.assertRaises(SystemExit):
+            fuzzer.guard_environment(
+                "http://127.0.0.1:8080",
+                "postgres://user:secret@localhost/e2br3_ui_xml_fuzz",
+            )
+        with self.assertRaises(SystemExit):
+            fuzzer.guard_environment(
+                "http://127.0.0.1:8098",
+                "postgres://user:secret@localhost/app_db",
+            )
+
+    def test_modes_choose_fast_and_full_defaults(self) -> None:
+        with mock.patch.object(sys, "argv", ["xml_import_fuzzer.py", "--config", "x.json"]), mock.patch.object(fuzzer, "run", return_value=0) as run:
+            self.assertEqual(fuzzer.main(), 0)
+            smoke = run.call_args.args[0]
+        self.assertEqual(smoke.copies, 1)
+        self.assertFalse(smoke.archive_probes)
+
+        with mock.patch.object(sys, "argv", ["xml_import_fuzzer.py", "--config", "x.json", "--mode", "full"]), mock.patch.object(fuzzer, "run", return_value=0) as run:
+            self.assertEqual(fuzzer.main(), 0)
+            full = run.call_args.args[0]
+        self.assertEqual(full.copies, 10)
+        self.assertTrue(full.archive_probes)
 
     def test_corpus_documents_reads_selected_archive_members(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

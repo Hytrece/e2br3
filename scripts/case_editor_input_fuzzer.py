@@ -562,8 +562,8 @@ def audit_key_matches(changed: dict[str, Any], payload_path: str) -> bool:
     raw_leaf = leaf_path(payload_path).split(".")[-1]
     candidates = {snake(raw_leaf), snake(AUDIT_FIELD_ALIASES.get(raw_leaf, raw_leaf))}
     for key in changed:
-        candidate = snake(str(key))
-        if any(candidate == leaf or candidate in leaf or leaf in candidate for leaf in candidates if leaf):
+        key_parts = {snake(part) for part in str(key).split(".") if part}
+        if candidates & key_parts:
             return True
     return False
 
@@ -597,7 +597,7 @@ def values_equal(candidate: Any, actual: Any) -> bool:
     if candidate == actual:
         return True
     if isinstance(actual, list):
-        return any(values_equal(candidate, item) for item in actual)
+        return len(actual) == 1 and values_equal(candidate, actual[0])
     if isinstance(candidate, (int, float)) and not isinstance(candidate, bool) and isinstance(actual, str):
         try:
             return Decimal(str(candidate)) == Decimal(actual)

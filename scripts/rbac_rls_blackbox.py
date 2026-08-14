@@ -8,6 +8,7 @@ belong in a later phase after the target and credentials are explicitly set.
 from __future__ import annotations
 
 import argparse
+import functools
 import hashlib
 import http.cookiejar
 import json
@@ -130,6 +131,7 @@ def classify(status: int | None, expected: set[int]) -> str:
 	return "FAIL"
 
 
+@functools.cache
 def commit_sha() -> str:
 	try:
 		return subprocess.check_output(

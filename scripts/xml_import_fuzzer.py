@@ -13,6 +13,7 @@ import io
 import json
 import os
 import sys
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -22,6 +23,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 from xml.etree import ElementTree as ET
+
+from rbac_rls_blackbox import SAFE_LOCAL_HOSTS, commit_sha, guard_target
 
 
 PAGES = ("CI", "RP", "SD", "LR", "SI", "DM", "NR", "DH", "AE", "LB", "DG")
@@ -55,6 +58,8 @@ class Client:
 		self.opener = urllib.request.build_opener(
 			urllib.request.HTTPCookieProcessor(self.jar)
 		)
+		self.requests = 0
+		self.request_seconds = 0.0
 
 	def request(
 		self,
@@ -63,6 +68,7 @@ class Client:
 		body: bytes | dict[str, Any] | None = None,
 		content_type: str | None = None,
 	) -> tuple[int | None, bytes, str | None]:
+		started = time.monotonic()
 		data = body if isinstance(body, bytes) else json.dumps(body).encode() if body is not None else None
 		headers = {"Accept": "application/json"}
 		if data is not None:
@@ -75,6 +81,27 @@ class Client:
 			return error.code, error.read(), None
 		except (OSError, urllib.error.URLError) as error:
 			return None, b"", type(error).__name__
+		finally:
+			self.requests += 1
+			self.request_seconds += time.monotonic() - started
+
+
+def guard_environment(base_url: str, database_url: str | None) -> None:
+	guard_target(base_url, False)
+	base = urllib.parse.urlparse(base_url)
+	if base.port in {None, 8080}:
+		raise SystemExit("XML fuzzing requires an explicit non-8080 backend port")
+	if not database_url:
+		raise SystemExit("set --database-url to the isolated UI database")
+	database = urllib.parse.urlparse(database_url)
+	database_name = database.path.lstrip("/").split("/", 1)[0]
+	if (
+		database.scheme not in {"postgres", "postgresql"}
+		or database.hostname not in SAFE_LOCAL_HOSTS
+		or not database_name.startswith("e2br3_ui_")
+		or database_name == "app_db"
+	):
+		raise SystemExit("refusing non-local or non-isolated database; expected e2br3_ui_<name>")
 
 
 def local_name(tag: str) -> str:
@@ -274,6 +301,39 @@ def imported_rows(body: bytes) -> list[dict[str, Any]]:
 	return [row for row in rows if isinstance(row, dict)]
 
 
+def reconcile_batch(
+	samples: list[Sample],
+	rows: list[dict[str, Any]],
+) -> tuple[list[tuple[Sample, dict[str, Any]]], list[Sample], list[dict[str, Any]]]:
+	pending = {sample.name: sample for sample in samples}
+	if len(pending) != len(samples):
+		raise ValueError("duplicate source file name in import batch")
+	matched: list[tuple[Sample, dict[str, Any]]] = []
+	unexpected: list[dict[str, Any]] = []
+	for row in rows:
+		name = row.get("sourceFileName") or row.get("source_file_name")
+		sample = pending.pop(name, None)
+		if sample is None:
+			unexpected.append(row)
+		else:
+			matched.append((sample, row))
+	return matched, list(pending.values()), unexpected
+
+
+def archive_probe_status(
+	status: int | None,
+	transport: str | None,
+	rows: list[dict[str, Any]],
+) -> str:
+	if transport:
+		return "request_error"
+	if status is not None and status >= 400:
+		return "error"
+	if rows and all(row.get("status") == "error" for row in rows):
+		return "error"
+	return "success" if rows else "request_error"
+
+
 def classify_error(message: str | None, http_status: int | None) -> str:
 	text = (message or "").lower()
 	if http_status is None:
@@ -386,11 +446,15 @@ def batches(items: list[Sample], size: int) -> list[list[Sample]]:
 
 
 def run(args: argparse.Namespace) -> int:
+	started = time.monotonic()
 	base_url, actors, corpora = load_config(args.config)
+	guard_environment(base_url, args.database_url)
 	if not actors:
 		raise ValueError("at least one actor is required")
 	clients = {actor.label: Client(base_url, args.timeout) for actor in actors}
 	results: list[dict[str, Any]] = []
+	created_cases: dict[str, set[str]] = collections.defaultdict(set)
+	cleanup_report_ids: dict[str, set[str]] = collections.defaultdict(set)
 	for actor in actors:
 		status, error = login(clients[actor.label], actor)
 		if status != 200:
@@ -426,27 +490,46 @@ def run(args: argparse.Namespace) -> int:
 							all_samples[authority].append(Sample(f"mut-{kind}-{source_name}-{copy}.xml", authority, changed, kind, mutation_expected))
 
 	for authority, samples in all_samples.items():
-		by_name = {sample.name: sample for sample in samples}
 		for batch in batches(samples, args.batch_size):
 			payload, content_type = multipart(authority, primary.product_presave_id, f"xml-fuzz-{authority}.zip", zip_samples(batch))
 			status, body, transport = clients[primary.label].request("POST", "/api/import/xml", payload, content_type)
 			rows = imported_rows(body)
 			if not rows:
 				for sample in batch:
+					try:
+						if report_id := identity_signature(sample.xml)[0]:
+							cleanup_report_ids[primary.label].add(report_id)
+					except ET.ParseError:
+						pass
 					results.append({"actor": primary.label, "authority": authority, "file": sample.name, "kind": sample.kind, "expected": sample.expected, "status": "request_error", "http": status, "category": classify_error(transport or body.decode(errors="replace")[:500], status)})
 				continue
-			for row in rows:
-				name = row.get("sourceFileName") or row.get("source_file_name")
-				sample = by_name.get(name)
-				if sample is None:
-					continue
+			matched, missing, unexpected = reconcile_batch(batch, rows)
+			for row in unexpected:
+				results.append({"actor": primary.label, "authority": authority, "file": row.get("sourceFileName") or row.get("source_file_name"), "kind": "unexpected_response_row", "expected": "protocol", "status": "error", "category": "protocol", "message": "response row did not match an uploaded file"})
+			for sample in missing:
+				try:
+					if report_id := identity_signature(sample.xml)[0]:
+						cleanup_report_ids[primary.label].add(report_id)
+				except ET.ParseError:
+					pass
+				results.append({"actor": primary.label, "authority": authority, "file": sample.name, "kind": "missing_response_row", "expected": sample.expected, "status": "missing", "category": "protocol", "message": "uploaded file missing from import response"})
+			for sample, row in matched:
+				name = sample.name
 				row_status = row.get("status")
 				message = row.get("message")
 				case_id = row.get("caseId") or row.get("case_id")
-				roundtrip = verify_roundtrip(clients[primary.label], case_id, authority, sample.xml) if row_status in {"success", "warning"} and case_id else []
+				if case_id:
+					created_cases[primary.label].add(case_id)
+				else:
+					try:
+						if report_id := identity_signature(sample.xml)[0]:
+							cleanup_report_ids[primary.label].add(report_id)
+					except ET.ParseError:
+						pass
+				roundtrip = verify_roundtrip(clients[primary.label], case_id, authority, sample.xml) if row_status in {"success", "warning"} and case_id and (args.mode == "full" or sample.kind == "healthy") else []
 				results.append({"actor": primary.label, "authority": authority, "file": name, "kind": sample.kind, "expected": sample.expected, "status": row_status, "case_id": case_id, "category": classify_error(message, status), "message": message, "roundtrip_failures": roundtrip})
 
-	if not args.skip_archive_probes:
+	if args.archive_probes:
 		probe_authority = next((key for key, value in all_samples.items() if value), None)
 		if probe_authority:
 			probe_xml = unique_xml(next(sample.xml for sample in all_samples[probe_authority] if sample.kind == "healthy"), hashlib.sha256(f"{args.seed}:archive".encode()).hexdigest()[:20].upper())
@@ -463,8 +546,11 @@ def run(args: argparse.Namespace) -> int:
 				payload, content_type = multipart(probe_authority, primary.product_presave_id, filename, archive)
 				status, body, transport = clients[primary.label].request("POST", "/api/import/xml", payload, content_type)
 				rows = imported_rows(body)
+				for row in rows:
+					if case_id := row.get("caseId") or row.get("case_id"):
+						created_cases[primary.label].add(case_id)
 				row_statuses = [row.get("status") for row in rows]
-				result_status = "error" if (status is not None and status >= 400) or (expected == "error" and transport) else "success" if rows else "request_error"
+				result_status = archive_probe_status(status, transport, rows)
 				results.append({"actor": primary.label, "authority": probe_authority, "file": filename, "kind": kind, "expected": expected, "status": result_status, "http": status, "category": classify_error(transport or body.decode(errors="replace")[:500], status), "message": transport or body.decode(errors="replace")[:500], "row_statuses": row_statuses})
 
 	# Same C.1.1/version must be accepted independently by every configured organization.
@@ -485,30 +571,93 @@ def run(args: argparse.Namespace) -> int:
 				row = (imported_rows(body) or [{}])[0]
 				row_status = row.get("status", "request_error")
 				case_id = row.get("caseId") or row.get("case_id")
+				if case_id:
+					created_cases[actor.label].add(case_id)
+				else:
+					cleanup_report_ids[actor.label].add(identity_signature(probe.xml)[0] or "")
 				roundtrip = verify_roundtrip(clients[actor.label], case_id, probe_authority, probe.xml) if row_status in {"success", "warning"} and case_id else []
 				results.append({"actor": actor.label, "authority": probe_authority, "file": probe.name, "kind": "multi_org_same_identifier", "expected": "success", "status": row_status, "case_id": case_id, "http": status, "message": row.get("message") or transport, "roundtrip_failures": roundtrip})
 
+	if not args.keep_cases:
+		for actor in actors:
+			for report_id in sorted(cleanup_report_ids[actor.label] - {""}):
+				query = urllib.parse.urlencode({"filters[safety_report_id][$eq]": report_id})
+				status, body, transport = clients[actor.label].request("GET", f"/api/cases?{query}")
+				value = json_value(body)
+				rows = value.get("data", []) if isinstance(value, dict) else []
+				if status == 200 and isinstance(rows, list):
+					created_cases[actor.label].update(
+						row["id"] for row in rows
+						if isinstance(row, dict) and isinstance(row.get("id"), str)
+					)
+				else:
+					results.append({"actor": actor.label, "authority": None, "file": None, "kind": "cleanup_lookup", "expected": "success", "status": "error", "http": status, "category": classify_error(transport, status), "message": transport or "case lookup failed"})
+			for case_id in sorted(created_cases[actor.label]):
+				status, body, transport = clients[actor.label].request(
+					"DELETE",
+					f"/api/cases/{case_id}",
+					{"reason_for_change": "XML import fuzzer cleanup"},
+				)
+				results.append({
+					"actor": actor.label,
+					"authority": None,
+					"file": None,
+					"kind": "cleanup",
+					"expected": "success",
+					"status": "success" if status == 200 else "error",
+					"case_id": case_id,
+					"http": status,
+					"category": classify_error(transport or body.decode(errors="replace")[:500], status),
+					"message": transport or (None if status == 200 else body.decode(errors="replace")[:500]),
+				})
+
 	args.output.parent.mkdir(parents=True, exist_ok=True)
+	sha = commit_sha()
+	request_count = sum(client.requests for client in clients.values())
+	request_seconds = sum(client.request_seconds for client in clients.values())
+	run_summary = {
+		"kind": "run",
+		"seed": args.seed,
+		"commit": sha,
+		"mode": args.mode,
+		"copies": args.copies,
+		"mutations_per_seed": args.mutations_per_seed,
+		"batch_size": args.batch_size,
+		"archive_probes": args.archive_probes,
+		"keep_cases": args.keep_cases,
+		"results": len(results),
+		"requests": request_count,
+		"request_seconds": round(request_seconds, 3),
+		"elapsed_seconds": round(time.monotonic() - started, 3),
+	}
 	with args.output.open("w") as handle:
 		for result in results:
-			handle.write(json.dumps(result, ensure_ascii=False) + "\n")
+			handle.write(json.dumps({"seed": args.seed, "commit": sha, **result}, ensure_ascii=False) + "\n")
+		handle.write(json.dumps(run_summary, ensure_ascii=False) + "\n")
 	summary = collections.Counter((item.get("kind"), item.get("status")) for item in results)
-	errors = [item for item in results if item.get("category") == "server_or_raw_db" or item.get("roundtrip_failures") or (item.get("expected") == "success" and item.get("status") not in {"success", "warning"}) or (item.get("expected") == "error" and item.get("status") != "error")]
-	print(json.dumps({"total": len(results), "failures": len(errors), "by_kind_status": {f"{kind}:{status}": count for (kind, status), count in sorted(summary.items())}, "output": str(args.output)}, ensure_ascii=False, indent=2))
+	errors = [item for item in results if item.get("category") == "server_or_raw_db" or item.get("roundtrip_failures") or item.get("kind") in {"missing_response_row", "unexpected_response_row"} or (item.get("expected") == "success" and item.get("status") not in {"success", "warning"}) or (item.get("expected") == "error" and item.get("status") != "error")]
+	print(json.dumps({"total": len(results), "failures": len(errors), "requests": request_count, "elapsed_seconds": run_summary["elapsed_seconds"], "by_kind_status": {f"{kind}:{status}": count for (kind, status), count in sorted(summary.items())}, "output": str(args.output)}, ensure_ascii=False, indent=2))
 	return 1 if errors else 0
 
 
 def main() -> int:
 	parser = argparse.ArgumentParser()
 	parser.add_argument("--config", type=Path, required=True)
-	parser.add_argument("--copies", type=int, default=10)
+	parser.add_argument("--mode", choices=("smoke", "full"), default="smoke")
+	parser.add_argument("--copies", type=int)
 	parser.add_argument("--mutations-per-seed", type=int, default=1)
 	parser.add_argument("--batch-size", type=int, default=10)
 	parser.add_argument("--seed", type=int, default=20260812)
 	parser.add_argument("--timeout", type=float, default=300)
-	parser.add_argument("--skip-archive-probes", action="store_true")
+	parser.add_argument("--archive-probes", action=argparse.BooleanOptionalAction)
+	parser.add_argument("--database-url", default=os.getenv("SERVICE_DB_URL"))
+	parser.add_argument("--keep-cases", action="store_true")
 	parser.add_argument("--output", type=Path, default=Path("tmp/xml-import-fuzz/results.jsonl"))
 	args = parser.parse_args()
+	if args.copies is None:
+		args.copies = 1 if args.mode == "smoke" else 10
+	if args.archive_probes is None:
+		args.archive_probes = args.mode == "full"
 	if args.copies < 1 or args.batch_size < 1 or args.mutations_per_seed < 0:
 		parser.error("copies/batch-size must be positive and mutations-per-seed non-negative")
 	return run(args)
