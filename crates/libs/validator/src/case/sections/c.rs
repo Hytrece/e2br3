@@ -3131,6 +3131,25 @@ mod golden_c1_value_tests {
 	}
 
 	#[test]
+	fn c_1_1_required_has_both_edges() {
+		let mut report = base_report();
+		let mut issues = Vec::new();
+		c_1_1(&report, &mut issues);
+		assert!(issues.iter().any(|issue| {
+			issue.code == "ICH.C.1.1.REQUIRED"
+				&& issue.path == "safetyReportIdentification.safetyReportId"
+				&& issue.blocking
+		}));
+
+		issues.clear();
+		report.safety_report_id = Some("CASE-1".to_string());
+		c_1_1(&report, &mut issues);
+		assert!(!issues
+			.iter()
+			.any(|issue| issue.code == "ICH.C.1.1.REQUIRED"));
+	}
+
+	#[test]
 	fn all_missing_flags_every_value_rule() {
 		assert_eq!(
 			snapshot(base_report()),

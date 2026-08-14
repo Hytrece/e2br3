@@ -904,6 +904,26 @@ mod tests {
 	}
 
 	#[test]
+	fn seriousness_null_flavor_ni_only_has_both_edges() {
+		let mut reaction = reaction();
+		reaction.criteria_death_null_flavor = Some("UNK".to_string());
+		let mut issues = Vec::new();
+		e_i_3_2(3, &reaction, &mut issues);
+		assert!(issues.iter().any(|issue| {
+			issue.code == "ICH.E.i.3.2.NI.ONLY"
+				&& issue.path == "reactions.3.seriousnessCriteria"
+				&& issue.blocking
+		}));
+
+		issues.clear();
+		reaction.criteria_death_null_flavor = Some("NI".to_string());
+		e_i_3_2(3, &reaction, &mut issues);
+		assert!(issues
+			.iter()
+			.all(|issue| issue.code != "ICH.E.i.3.2.NI.ONLY"));
+	}
+
+	#[test]
 	fn true_marker_rules_accept_absent_values_and_honor_null_flavor() {
 		let mut reaction = reaction();
 		reaction.criteria_death_null_flavor = Some("NI".to_string());

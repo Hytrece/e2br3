@@ -3355,6 +3355,26 @@ mod golden_companion_tests {
 	}
 
 	#[test]
+	fn parent_height_integer_has_both_edges() {
+		let mut parent = parent(Uuid::nil());
+		parent.height_cm = Some(Decimal::new(1755, 1));
+		let mut issues = Vec::new();
+		d_10_5_integer(2, &parent, &mut issues);
+		assert!(issues.iter().any(|issue| {
+			issue.code == "ICH.D.10.5.INTEGER"
+				&& issue.path == "patientInformation.parents.2.heightCm"
+				&& issue.blocking
+		}));
+
+		issues.clear();
+		parent.height_cm = Some(Decimal::new(175, 0));
+		d_10_5_integer(2, &parent, &mut issues);
+		assert!(issues
+			.iter()
+			.all(|issue| issue.code != "ICH.D.10.5.INTEGER"));
+	}
+
+	#[test]
 	fn parent_birth_date_and_age_are_exclusive() {
 		let mut parent = parent(Uuid::nil());
 		parent.parent_birth_date_null_flavor = Some("UNK".to_string());

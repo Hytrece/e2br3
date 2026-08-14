@@ -137,12 +137,12 @@ DISPOSITION_GROUPS = {
 }
 
 TEST_BACKED_RULES = {
-    "ICH.C.1.1.REQUIRED": "case::sections::c::golden_c1_value_tests::all_missing_flags_every_value_rule",
+    "ICH.C.1.1.REQUIRED": "case::sections::c::golden_c1_value_tests::c_1_1_required_has_both_edges",
     "ICH.C.1.2.REQUIRED": "case::sections::c::golden_c1_value_tests::all_missing_flags_every_value_rule",
-    "ICH.D.10.5.INTEGER": "case::sections::d::golden_companion_tests::heights_must_be_whole_numbers",
+    "ICH.D.10.5.INTEGER": "case::sections::d::golden_companion_tests::parent_height_integer_has_both_edges",
     "ICH.D.4.INTEGER": "case::sections::d::golden_companion_tests::heights_must_be_whole_numbers",
     "ICH.D.6.NULLFLAVOR.ALLOWED": "case::sections::d::golden_companion_tests::d_6_null_flavor_is_a_case_validation_rule",
-    "ICH.E.i.3.2.NI.ONLY": "case::sections::e::tests::true_marker_rules_accept_absent_values_and_honor_null_flavor",
+    "ICH.E.i.3.2.NI.ONLY": "case::sections::e::tests::seriousness_null_flavor_ni_only_has_both_edges",
     "ICH.F.r.2.1.REQUIRED": "case::sections::f::golden_f_required_tests::test_date_without_name_or_meddra_code_flags_name_variants",
     "ICH.F.r.2.2b.REQUIRED": "case::sections::f::golden_f_required_tests::test_date_without_name_or_meddra_code_flags_name_variants",
     "ICH.F.r.2.REQUIRED": "case::sections::f::golden_f_required_tests::test_payload_without_name_flags_test_name",
