@@ -38,7 +38,8 @@ class CaseEditorInputFuzzerTests(unittest.TestCase):
         self.assertTrue(any(char in values[1] for char in "\u202b\u202e\u2067"))
         self.assertTrue(any(char in values[2] for char in "\u200b\u200c\u200d\ufeff\u2060"))
         self.assertGreater(len(values[3]), 64)
-        self.assertEqual(ord(values[4]), 0xD800)
+        self.assertGreaterEqual(ord(values[4]), 0xD800)
+        self.assertLessEqual(ord(values[4]), 0xDFFF)
         self.assertTrue(any(char in values[5] for char in "\ufffd\ufffe\uffff\U0010ffff"))
         self.assertEqual(len(values[6]), 4)
         self.assertEqual(len(values[7]), 5)
@@ -146,12 +147,35 @@ class CaseEditorInputFuzzerTests(unittest.TestCase):
         first = fuzzer.field_value(field, fuzzer.candidate_rng(11, field, 5, 0), 5)
         repeated = fuzzer.field_value(field, fuzzer.candidate_rng(11, field, 5, 0), 5)
         another_seed = fuzzer.field_value(field, fuzzer.candidate_rng(12, field, 5, 0), 5)
-        another_sample = fuzzer.field_value(field, fuzzer.candidate_rng(11, field, 5, 1), 5)
+        another_sample = fuzzer.field_value(field, fuzzer.candidate_rng(11, field, 5, 1), 5, 1)
         self.assertEqual(first, repeated)
         self.assertNotEqual(first, another_seed)
         self.assertNotEqual(first, another_sample)
         self.assertEqual(fuzzer.candidate_sample_count(field, 0, 3), 1)
         self.assertEqual(fuzzer.candidate_sample_count(field, 5, 3), 3)
+
+    def test_generated_candidates_have_no_generic_fallback(self) -> None:
+        field = {
+            "authority": "ICH",
+            "code": "H.1",
+            "frontendPath": "narrative.caseNarrative",
+            "payloadPath": "caseNarrative",
+            "roundTripValue": "base",
+            "constraint": {"invalidValue": "bad"},
+        }
+        candidates = [
+            fuzzer.field_value(field, fuzzer.candidate_rng(11, field, 8, sample), 8, sample)
+            for sample in range(3)
+        ]
+        self.assertEqual(len(set(candidates)), 3)
+        self.assertEqual(len({
+            fuzzer.candidate_fingerprint(field, 8, sample, candidate)
+            for sample, candidate in enumerate(candidates)
+        }), 3)
+        with self.assertRaises(ValueError):
+            fuzzer.field_value(field, random.Random(1), 18)
+        self.assertEqual(fuzzer.parser().parse_args([]).samples_per_category, 3)
+        self.assertEqual(fuzzer.parser().parse_args(["--field", "H.1"]).field, ["H.1"])
 
     def test_nullflavor_error_candidates_and_value_conflict(self) -> None:
         field = {

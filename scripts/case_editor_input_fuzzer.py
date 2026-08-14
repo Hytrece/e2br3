@@ -233,6 +233,17 @@ def candidate_rng(seed: int, field: dict[str, Any], ordinal: int, sample: int) -
     return random.Random(int.from_bytes(digest[:8]))
 
 
+def candidate_fingerprint(
+    field: dict[str, Any],
+    ordinal: int,
+    sample: int,
+    candidate: Any,
+) -> str:
+    identity = [field.get(key) for key in ("authority", "code", "frontendPath", "payloadPath")]
+    raw = json.dumps([identity, ordinal, sample, candidate], sort_keys=True, ensure_ascii=True)
+    return hashlib.sha256(raw.encode()).hexdigest()[:16]
+
+
 def candidate_sample_count(field: dict[str, Any], ordinal: int, requested: int) -> int:
     if requested <= 1:
         return 1
@@ -240,10 +251,12 @@ def candidate_sample_count(field: dict[str, Any], ordinal: int, requested: int) 
         return requested if ordinal in {5, 7, 8, 10} else 1
     if field.get("_booleanRule"):
         return requested if ordinal in {2, 7} else 1
+    if isinstance(field.get("roundTripValue"), bool):
+        return requested if ordinal in {2, 7} else 1
     return 1 if ordinal in {0, 1, 4, 12} else requested
 
 
-def field_value(field: dict[str, Any], rng: random.Random, ordinal: int) -> Any:
+def field_value(field: dict[str, Any], rng: random.Random, ordinal: int, sample: int = 0) -> Any:
     """Grammar-guided candidates, not arbitrary bytes."""
     baseline = field.get("roundTripValue")
     constraint = field.get("constraint", {})
@@ -253,16 +266,19 @@ def field_value(field: dict[str, Any], rng: random.Random, ordinal: int) -> Any:
     if is_nullflavor_field(field):
         allowed = tuple(field.get("_allowedNullFlavors", ()))
         if ordinal == 0:
-            return invalid if invalid is not None else "ZZZ"
+            return invalid if invalid is not None else f"NF-{rng.randrange(1_000_000):06d}"
         if ordinal == 1:
             return None
         if ordinal == 2:
             return baseline
         if ordinal == 3:
-            return next(
-                (token for token in allowed if token != baseline),
-                next(token for token in NULL_FLAVOR_TOKENS if token not in allowed),
-            )
+            alternatives = [token for token in allowed if token != baseline]
+            candidates = alternatives or [
+                token for token in NULL_FLAVOR_TOKENS if token not in allowed
+            ]
+            if not candidates:
+                raise ValueError(f"no alternate NullFlavor candidate for {field.get('code')}")
+            return rng.choice(candidates)
         if ordinal == 4:
             return ""
         if ordinal == 5:
@@ -273,23 +289,44 @@ def field_value(field: dict[str, Any], rng: random.Random, ordinal: int) -> Any:
             return {f"unexpected{rng.randrange(1_000)}": "nullFlavor"}
         if ordinal == 8:
             disallowed = [token for token in NULL_FLAVOR_TOKENS if token not in allowed]
-            return rng.choice(disallowed or ["ZZZ"])
+            return (
+                disallowed[sample % len(disallowed)]
+                if disallowed
+                else f"NF-{rng.randrange(1_000_000):06d}"
+            )
         if ordinal == 9:
             return str(baseline).lower()
         if ordinal == 10:
-            return "NULLFLAVOR-" + rng.choice("XYZ") * rng.randrange(64, 257)
+            return "NULLFLAVOR-" + "".join(
+                rng.choice("XYZ") for _ in range(rng.randrange(64, 257))
+            )
         if ordinal == 11:
             return [baseline]
         if ordinal == 12:
             return True
-        return baseline
+        if ordinal == 13:
+            return baseline
+        raise ValueError(f"unsupported NullFlavor candidate ordinal: {ordinal}")
     if field.get("_booleanRule"):
         if ordinal == 2:
             return f"not-a-boolean-{rng.randrange(1_000_000)}"
         if ordinal == 7:
             return {f"unexpected{rng.randrange(1_000)}": "object"}
-        return (invalid if invalid is not None else "not-a-boolean", None, None, False, "", True, False)[ordinal]
-    if ordinal == 0 and invalid is not None:
+        values = (
+            invalid if invalid is not None else f"not-a-boolean-{rng.randrange(1_000_000)}",
+            None,
+            None,
+            False,
+            "",
+            True,
+            False,
+        )
+        if 0 <= ordinal < len(values):
+            return values[ordinal]
+        raise ValueError(f"unsupported boolean candidate ordinal: {ordinal}")
+    if ordinal == 0:
+        if "invalidValue" not in constraint:
+            raise ValueError(f"verified field has no invalidValue: {field.get('code')}")
         return invalid
     if ordinal == 1:
         return None
@@ -297,17 +334,17 @@ def field_value(field: dict[str, Any], rng: random.Random, ordinal: int) -> Any:
         if isinstance(baseline, bool):
             return "not-a-boolean"
         if isinstance(baseline, (int, float)) and not isinstance(baseline, bool):
-            return "not-a-number"
-        return rng.choice([" ", "  ", "   ", "\t"])
+            return f"not-a-number-{rng.randrange(1_000_000)}"
+        return rng.choice((" ", "\t")) * (sample + 1 + 3 * rng.randrange(4))
     if ordinal == 3:
         if isinstance(baseline, bool):
             return rng.choice([True, False])
         if "date" in code.lower() or "date" in path.lower():
-            return rng.choice(["00000000", "99999999", "not-a-date"])
+            return ("00000000", "99999999", f"not-a-date-{rng.randrange(1_000_000)}")[sample % 3]
         if isinstance(baseline, list):
             return [f"fuzz-{rng.randrange(1_000_000)}"]
         if isinstance(baseline, (int, float)) and not isinstance(baseline, bool):
-            return rng.choice([-1, 0, 2**31 - 1, 2**31])
+            return (-1, 0, 2**31 - 1, 2**31)[sample % 4]
         return f"<p>fuzz-{rng.randrange(1_000_000)} <strong>rich</strong></p>"
     if ordinal == 4:
         return ""
@@ -319,7 +356,9 @@ def field_value(field: dict[str, Any], rng: random.Random, ordinal: int) -> Any:
             return 1
         return f"한글🙂-{suffix}"
     if ordinal == 6:
-        value = "A" + "".join(rng.sample(["\x00", "\t", "\n", "\r", "\x1f", "\x7f"], 3)) + "B"
+        value = f"A{sample}" + "".join(
+            rng.sample(["\x00", "\t", "\n", "\r", "\x1f", "\x7f"], 3)
+        ) + "B"
         if isinstance(baseline, list):
             return [value]
         if isinstance(baseline, bool):
@@ -333,31 +372,52 @@ def field_value(field: dict[str, Any], rng: random.Random, ordinal: int) -> Any:
         if isinstance(baseline, (int, float)) and not isinstance(baseline, bool):
             return {f"unexpected{rng.randrange(1_000)}": rng.randrange(1_000)}
         return ["unexpected", rng.randrange(1_000_000)]
-    unicode_values = (
-        unicodedata.normalize("NFD", rng.choice(["한글", "가나다", "각힣"])),
-        rng.choice(["\u202bעברית العربية\u202c", "\u202eabc123\u202c", "\u2067فارسی\u2069"]),
-        f"A{''.join(rng.sample([chr(0x200B), chr(0x200C), chr(0x200D), chr(0xFEFF), chr(0x2060)], 3))}B",
-        rng.choice(["👨‍👩‍👧‍👦", "🏳️‍🌈", "👩🏽‍💻", "🧑‍🚀"]) * rng.randrange(32, 97),
-        "\ud800",
-        rng.choice(["\x7f\u0080\ufffd\U0010ffff", "\u0085\u009f\ufffd", "\ufffe\uffff\U0010ffff"]),
-    )
-    if 8 <= ordinal < 14:
-        value = unicode_values[ordinal - 8]
+    if ordinal == 8:
+        value = unicodedata.normalize(
+            "NFD", "".join(chr(rng.randint(0xAC00, 0xD7A3)) for _ in range(3))
+        )
+        return [value] if isinstance(baseline, list) else value
+    if ordinal == 9:
+        value = rng.choice([
+            "\u202bעברית العربية\u202c",
+            "\u202eabc123\u202c",
+            "\u2067فارسی\u2069",
+        ]) + str(rng.randrange(1_000_000))
+        return [value] if isinstance(baseline, list) else value
+    if ordinal == 10:
+        value = (
+            "A"
+            + "".join(rng.sample([
+                chr(0x200B), chr(0x200C), chr(0x200D), chr(0xFEFF), chr(0x2060),
+            ], 3))
+            + f"{rng.randrange(1_000_000)}B"
+        )
+        return [value] if isinstance(baseline, list) else value
+    if ordinal == 11:
+        value = "".join(
+            rng.choice(["👨‍👩‍👧‍👦", "🏳️‍🌈", "👩🏽‍💻", "🧑‍🚀"])
+            for _ in range(rng.randrange(32, 97))
+        )
+        return [value] if isinstance(baseline, list) else value
+    if ordinal == 12:
+        value = chr(rng.randint(0xD800, 0xDFFF))
+        return [value] if isinstance(baseline, list) else value
+    if ordinal == 13:
+        value = str(sample) + "".join(
+            rng.choice([
+                "\x7f", "\u0080", "\u0085", "\u009f",
+                "\ufffd", "\ufffe", "\uffff", "\U0010ffff",
+            ])
+            for _ in range(4)
+        )
         return [value] if isinstance(baseline, list) else value
     if 14 <= ordinal < 17 and isinstance(baseline, str) and isinstance(field.get("_maxLength"), int):
         limit = field["_maxLength"]
         length = (limit, limit + 1, limit + min(max(limit, 64), 4096))[ordinal - 14]
-        return rng.choice("XYZ가🙂") * length
+        return "".join(chr(rng.randint(0xAC00, 0xD7A3)) for _ in range(length))
     if ordinal == 17 and field.get("_identifierRule"):
-        return f"A{rng.choice([chr(9), chr(10), chr(13)])}B{rng.choice([chr(9), chr(10)])}C"
-    if isinstance(baseline, bool):
-        return rng.choice([True, False])
-    if isinstance(baseline, list):
-        return [f"fuzz-{rng.randrange(1_000_000)}"]
-    if isinstance(baseline, (int, float)) and not isinstance(baseline, bool):
-        return rng.randrange(-1000, 1001)
-    length = rng.choice([0, 1, 8, 64, 255, 1024])
-    return "" if length == 0 else "fuzz-" + "".join(rng.choice("abcdef0123456789") for _ in range(max(1, length - 5)))
+        return f"A{sample}{rng.choice([chr(9), chr(10), chr(13)])}B{rng.choice([chr(9), chr(10)])}C"
+    raise ValueError(f"unsupported candidate ordinal {ordinal} for {field.get('code')}")
 
 
 def candidate_count(field: dict[str, Any], requested: int) -> int:
@@ -860,6 +920,13 @@ def main(args: argparse.Namespace) -> int:
         load_dictionary_null_flavors(Path(__file__).resolve().parents[1]),
     )
     pages = [page.strip().upper() for page in args.pages.split(",") if page.strip()]
+    requested_fields = set(args.field or ())
+    available_fields = {
+        field.get("code") for page in pages for field in contract_rows(contract, page)
+    }
+    unknown_fields = requested_fields - available_fields
+    if unknown_fields:
+        raise SystemExit(f"unknown field codes: {', '.join(sorted(unknown_fields))}")
     started = time.monotonic()
     events: list[Event] = []
     interrupted: str | None = None
@@ -870,6 +937,8 @@ def main(args: argparse.Namespace) -> int:
 
     def page_fields(page: str) -> list[dict[str, Any]]:
         fields = contract_rows(contract, page)
+        if requested_fields:
+            fields = [field for field in fields if field.get("code") in requested_fields]
         return [field for field in fields if is_nullflavor_field(field)] if args.null_flavor_only else fields
 
     def add(event: Event) -> None:
@@ -1029,7 +1098,7 @@ def main(args: argparse.Namespace) -> int:
         row_route = page in ROW_PAGES
         row_ids: dict[str, str | None] = {}
         owner_ready: dict[str, bool] = {}
-        owner_items = list(groups.items())
+        owner_items = list(setup_groups.items())
         if page == "SI":
             owner_items.sort(key=lambda item: 0 if item[0] == "studyInformation" else 1)
         if page == "DM":
@@ -1081,7 +1150,11 @@ def main(args: argparse.Namespace) -> int:
                 continue
             root = nested_root(payload_path)
             if root and (owner, root) not in nested_row_ids:
-                root_fields = [candidate for candidate in fields if candidate["patch"]["owner"] == owner and nested_root(candidate["payloadPath"]) == root]
+                root_fields = [
+                    candidate
+                    for candidate in setup_groups.get(owner, fields)
+                    if nested_root(candidate["payloadPath"]) == root
+                ]
                 nested_baseline = baseline_for(root_fields, minimal=True)
                 if page == "DG" and root.startswith("drugReactionAssessments[]") and reaction_id:
                     set_path(nested_baseline, "drugReactionAssessments[].reactionId", reaction_id)
@@ -1112,7 +1185,12 @@ def main(args: argparse.Namespace) -> int:
             for ordinal, sample in candidates:
                 if interrupted:
                     break
-                candidate = field_value(field, candidate_rng(args.seed, field, ordinal, sample), ordinal)
+                candidate = field_value(
+                    field,
+                    candidate_rng(args.seed, field, ordinal, sample),
+                    ordinal,
+                    sample,
+                )
                 mutation = copy.deepcopy(baseline_for([field]))
                 set_path(mutation, leaf_path(payload_path), candidate)
                 nullflavor_with_value = add_nullflavor_partner(field, mutation, ordinal)
@@ -1152,6 +1230,7 @@ def main(args: argparse.Namespace) -> int:
                     "candidate_kind": candidate_kind(field, ordinal),
                     "candidate_ordinal": ordinal,
                     "sample_ordinal": sample,
+                    "generation_fingerprint": candidate_fingerprint(field, ordinal, sample, candidate),
                     "rule_code": field.get("constraint", {}).get("ruleCode"),
                 }
                 if expectation:
@@ -1294,7 +1373,7 @@ def main(args: argparse.Namespace) -> int:
     with artifact.open("w", encoding="utf-8") as handle:
         for event in events:
             handle.write(json.dumps({"seed": args.seed, "commit": commit_sha(), **asdict(event)}, sort_keys=True) + "\n")
-        handle.write(json.dumps({"kind": "run", "seed": args.seed, "cases": len(events), "requests": request_count, "elapsed_seconds": round(time.monotonic() - started, 3), "interrupted": interrupted, "artifact": str(artifact), "contract": str(contract_path), "candidate_schema_version": 5, "samples_per_category": args.samples_per_category, "derived_null_flavors": derived_null_flavors, "max_length_fields": max_length_fields, "identifier_fields": identifier_fields, "boolean_fields": boolean_fields, "null_flavor_only": args.null_flavor_only, "surface": "api", "validator_excluded": not args.run_gates, "frontend_gate": "run" if args.run_gates else "not_run"}, sort_keys=True) + "\n")
+        handle.write(json.dumps({"kind": "run", "seed": args.seed, "cases": len(events), "requests": request_count, "elapsed_seconds": round(time.monotonic() - started, 3), "interrupted": interrupted, "artifact": str(artifact), "contract": str(contract_path), "candidate_schema_version": 6, "samples_per_category": args.samples_per_category, "field_filter": sorted(requested_fields), "derived_null_flavors": derived_null_flavors, "max_length_fields": max_length_fields, "identifier_fields": identifier_fields, "boolean_fields": boolean_fields, "null_flavor_only": args.null_flavor_only, "surface": "api", "validator_excluded": not args.run_gates, "frontend_gate": "run" if args.run_gates else "not_run"}, sort_keys=True) + "\n")
     counts: dict[str, int] = {}
     for event in events:
         counts[event.classification] = counts.get(event.classification, 0) + 1
@@ -1316,11 +1395,12 @@ def parser() -> argparse.ArgumentParser:
     # DH needs the DM patient row; create it immediately after DM before later
     # page mutations can make the case setup harder to authorize.
     parser.add_argument("--pages", default="CI,RP,SD,LR,SI,DM,DH,NR,AE,LB,DG")
+    parser.add_argument("--field", action="append", help="run only this field code (repeatable)")
     parser.add_argument("--values-per-field", type=int, default=IDENTIFIER_CANDIDATES, help="upper bound; only candidates applicable to each field are used")
     parser.add_argument(
         "--samples-per-category",
         type=int,
-        default=2,
+        default=3,
         help="seeded variants for randomized grammar categories",
     )
     parser.add_argument("--max-actions", type=int, default=30000)
