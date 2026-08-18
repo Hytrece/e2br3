@@ -20,8 +20,6 @@ use sqlx::types::time::OffsetDateTime;
 use std::collections::HashSet;
 use std::io::{Cursor, Write};
 use time::Month;
-use tokio::runtime::Handle;
-use tokio::task;
 use uuid::Uuid;
 use xml::validation::{validate_e2b_xml, XmlValidatorConfig};
 use xml::{export_case_xml_with_options, ExportXmlOptions};
@@ -194,8 +192,6 @@ async fn generate_validated_case_xml_for_authority_with_notation(
 ) -> Result<(lib_core::model::case::Case, String)> {
 	let header =
 		prepare_outbound_message_header(ctx, mm, id, authority, None).await?;
-	let ctx_clone = ctx.clone();
-	let mm_clone = mm.clone();
 	let options = export_xml_options(
 		ctx,
 		mm,
@@ -204,15 +200,11 @@ async fn generate_validated_case_xml_for_authority_with_notation(
 		export_message_header(&header)?,
 	)
 	.await?;
-	let xml = task::spawn_blocking(move || {
-		Handle::current().block_on(export_case_xml_with_options(
-			&ctx_clone, &mm_clone, id, options,
-		))
-	})
-	.await
-	.map_err(|err| Error::BadRequest {
-		message: format!("export task failed: {err}"),
-	})??;
+	let xml = export_case_xml_with_options(ctx, mm, id, options)
+		.await
+		.map_err(|err| Error::BadRequest {
+			message: format!("export task failed: {err}"),
+		})?;
 
 	{
 		let schema_report = validate_e2b_xml(
@@ -226,9 +218,6 @@ async fn generate_validated_case_xml_for_authority_with_notation(
 			message: format!("export XML validation failed: {err}"),
 		})?;
 		if !schema_report.ok {
-			let debug_path =
-				std::env::temp_dir().join(format!("e2br3-export-debug-{id}.xml"));
-			let _ = std::fs::write(&debug_path, &xml);
 			let details = schema_report
 				.errors
 				.iter()
@@ -246,10 +235,9 @@ async fn generate_validated_case_xml_for_authority_with_notation(
 				.join(" | ");
 			return Err(Error::BadRequest {
 				message: format!(
-					"exported XML failed schema/basic validation ({} issue(s)); details: {}; debug_xml: {}",
+					"exported XML failed schema/basic validation ({} issue(s)); details: {}",
 					schema_report.errors.len(),
-					details,
-					debug_path.display()
+					details
 				),
 			});
 		}

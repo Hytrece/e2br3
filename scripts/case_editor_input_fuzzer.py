@@ -26,6 +26,12 @@ from pathlib import Path
 from typing import Any
 
 from rbac_rls_blackbox import ApiClient, commit_sha, guard_target, response_summary
+from audit_trail_consistency_fuzzer import (
+    AUDIT_FIELD_ALIASES,
+    audit_field_key,
+    audit_key_matches,
+    audit_log_complete,
+)
 
 
 DEFAULT_CONTRACT = Path(__file__).resolve().parents[1] / "../frontend/E2BR3-frontend/lib/case-editor/generated/editorContracts.json"
@@ -585,66 +591,7 @@ def snake(value: str) -> str:
     return re.sub(r"[^a-zA-Z0-9]+", "_", value).strip("_").lower()
 
 
-AUDIT_FIELD_ALIASES = {
-    "documentDescription": "title",
-    "includedDocument": "document_base64",
-    "source": "source_of_identifier",
-    "caseIdentifier": "case_identifier",
-    "reporterCountry": "country_code",
-    "reporterOrganization": "organization",
-    "reporterDepartment": "department",
-    "reporterStreet": "street",
-    "reporterCity": "city",
-    "reporterState": "state",
-    "reporterPostcode": "postcode",
-    "reporterTelephone": "telephone",
-    "reporterEmail": "email",
-    "reporterOrganizationNullFlavor": "organization_null_flavor",
-    "reporterDepartmentNullFlavor": "department_null_flavor",
-    "reporterStreetNullFlavor": "street_null_flavor",
-    "reporterCityNullFlavor": "city_null_flavor",
-    "reporterStateNullFlavor": "state_null_flavor",
-    "reporterPostcodeNullFlavor": "postcode_null_flavor",
-    "reporterTelephoneNullFlavor": "telephone_null_flavor",
-    "reporterEmailNullFlavor": "email_null_flavor",
-    "primarySourceForRegulatoryPurposes": "primary_source_regulatory",
-    "nullificationAmendmentCode": "nullification_code",
-    "worldwideUniqueId": "worldwide_unique_id",
-    "additionalDocumentsAvailable": "additional_documents_available",
-    "otherCaseIdentifiersExist": "other_case_identifiers_exist",
-    "combinationProductReportIndicator": "combination_product_report_indicator",
-    "localCriteriaReportType": "local_criteria_report_type",
-}
 UNFILTERED_AUDIT_FIELDS = {"drug_additional_info_codes_json"}
-
-
-def audit_key_matches(changed: dict[str, Any], payload_path: str) -> bool:
-    raw_leaf = leaf_path(payload_path).split(".")[-1]
-    candidates = {snake(raw_leaf), snake(AUDIT_FIELD_ALIASES.get(raw_leaf, raw_leaf))}
-    for key in changed:
-        key_parts = {snake(part) for part in str(key).split(".") if part}
-        if candidates & key_parts:
-            return True
-    return False
-
-
-def audit_field_key(payload_path: str) -> str:
-    raw_leaf = leaf_path(payload_path).split(".")[-1]
-    return snake(AUDIT_FIELD_ALIASES.get(raw_leaf, raw_leaf))
-
-
-def audit_log_complete(log: dict[str, Any]) -> bool:
-    """Minimum append-only record shape for Part 11-oriented evidence."""
-    required = ("user_id", "organization_id", "created_at", "action", "changed_fields", "prev_hash", "entry_hash")
-    if not all(log.get(key) is not None for key in required):
-        return False
-    changed = log["changed_fields"] if isinstance(log["changed_fields"], dict) else {}
-    return all(
-        isinstance(delta, dict)
-        and "old" in delta
-        and "new" in delta
-        for delta in changed.values()
-    )
 
 
 def redacted(value: Any) -> dict[str, Any]:

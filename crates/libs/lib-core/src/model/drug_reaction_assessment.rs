@@ -41,6 +41,9 @@ pub struct DrugReactionAssessment {
 	// CIOMS Item 20 - Did reaction abate after stopping drug?
 	pub dechallenge_result: Option<String>, // 1=Yes, 2=No, 3=Not applicable
 
+	// Local assessment expectedness - 1=Expected, 2=Unexpected
+	pub expectedness: Option<String>,
+
 	// Timestamps
 	pub created_at: OffsetDateTime,
 	pub updated_at: OffsetDateTime,
@@ -59,6 +62,7 @@ pub struct DrugReactionAssessmentForCreate {
 	pub recurrence_action: Option<String>,
 	pub reaction_recurred: Option<String>,
 	pub dechallenge_result: Option<String>,
+	pub expectedness: Option<String>,
 }
 
 #[derive(Fields, Deserialize)]
@@ -70,6 +74,7 @@ pub struct DrugReactionAssessmentForUpdate {
 	pub recurrence_action: Option<String>,
 	pub reaction_recurred: Option<String>,
 	pub dechallenge_result: Option<String>,
+	pub expectedness: Option<String>,
 }
 
 #[derive(FilterNodes, Deserialize, Default)]
@@ -173,9 +178,9 @@ impl DrugReactionAssessmentBmc {
 			 drug_id, reaction_id, administration_start_interval_value,
 			 administration_start_interval_unit, last_dose_interval_value,
 			 last_dose_interval_unit, recurrence_action,
-			 dechallenge_result, reaction_recurred, created_at, updated_at, created_by
+			 dechallenge_result, expectedness, reaction_recurred, created_at, updated_at, created_by
 			)
-			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $10, now(), now(), $11)
+			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, now(), now(), $11)
 			 ON CONFLICT (drug_id, reaction_id)
 			 DO UPDATE SET
 			  administration_start_interval_value = COALESCE(EXCLUDED.administration_start_interval_value, drug_reaction_assessments.administration_start_interval_value),
@@ -184,6 +189,7 @@ impl DrugReactionAssessmentBmc {
 			  last_dose_interval_unit = COALESCE(EXCLUDED.last_dose_interval_unit, drug_reaction_assessments.last_dose_interval_unit),
 			  recurrence_action = COALESCE(EXCLUDED.recurrence_action, drug_reaction_assessments.recurrence_action),
 			  dechallenge_result = COALESCE(EXCLUDED.dechallenge_result, drug_reaction_assessments.dechallenge_result),
+			  expectedness = COALESCE(EXCLUDED.expectedness, drug_reaction_assessments.expectedness),
 			  reaction_recurred = COALESCE(EXCLUDED.reaction_recurred, drug_reaction_assessments.reaction_recurred),
 			  updated_at = now(),
 			  updated_by = EXCLUDED.created_by
@@ -202,7 +208,7 @@ impl DrugReactionAssessmentBmc {
 					.bind(data.last_dose_interval_unit)
 					.bind(data.recurrence_action)
 					.bind(data.dechallenge_result)
-					.bind(Option::<String>::None)
+					.bind(data.expectedness)
 					.bind(data.reaction_recurred)
 					.bind(ctx.user_id()),
 			)
@@ -312,6 +318,7 @@ impl DrugReactionAssessmentBmc {
 				     last_dose_interval_unit = COALESCE($5, last_dose_interval_unit),
 				     recurrence_action = COALESCE($6, recurrence_action),
 				     dechallenge_result = COALESCE($7, dechallenge_result),
+				     expectedness = COALESCE($8, expectedness),
 				     reaction_recurred = COALESCE($9, reaction_recurred),
 			     updated_at = now(),
 			     updated_by = $10
@@ -329,7 +336,7 @@ impl DrugReactionAssessmentBmc {
 					.bind(data.last_dose_interval_unit)
 					.bind(data.recurrence_action)
 					.bind(data.dechallenge_result)
-					.bind(Option::<String>::None)
+					.bind(data.expectedness)
 					.bind(data.reaction_recurred)
 					.bind(ctx.user_id()),
 			)
@@ -370,6 +377,7 @@ impl DrugReactionAssessmentBmc {
 			last_dose_interval_unit = CASE WHEN 'last_dose_interval_unit' = ANY($11) THEN NULL ELSE COALESCE($5, last_dose_interval_unit) END,
 			recurrence_action = CASE WHEN 'recurrence_action' = ANY($11) THEN NULL ELSE COALESCE($6, recurrence_action) END,
 			dechallenge_result = CASE WHEN 'dechallenge_result' = ANY($11) THEN NULL ELSE COALESCE($7, dechallenge_result) END,
+			expectedness = CASE WHEN 'expectedness' = ANY($11) THEN NULL ELSE COALESCE($8, expectedness) END,
 			reaction_recurred = CASE WHEN 'reaction_recurred' = ANY($11) THEN NULL ELSE COALESCE($9, reaction_recurred) END,
 			updated_at = now(), updated_by = $10 WHERE id = $1", Self::TABLE);
 		let result = mm
@@ -383,7 +391,7 @@ impl DrugReactionAssessmentBmc {
 					.bind(data.last_dose_interval_unit)
 					.bind(data.recurrence_action)
 					.bind(data.dechallenge_result)
-					.bind(Option::<String>::None)
+					.bind(data.expectedness)
 					.bind(data.reaction_recurred)
 					.bind(ctx.user_id())
 					.bind(clears),

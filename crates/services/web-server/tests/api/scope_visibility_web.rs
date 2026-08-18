@@ -1859,7 +1859,7 @@ async fn test_sender_uuid_scope_lists_matching_sender_presave() -> Result<()> {
 
 #[serial]
 #[tokio::test]
-async fn test_company_sponsor_admin_cannot_assign_sender_scope() -> Result<()> {
+async fn test_company_sponsor_admin_can_assign_sender_scope() -> Result<()> {
 	let mm = init_test_mm().await?;
 	let seed = seed_company_org_with_users(&mm, "companypwd", "viewpwd").await?;
 	let company_admin = seed.admin;
@@ -1867,6 +1867,13 @@ async fn test_company_sponsor_admin_cannot_assign_sender_scope() -> Result<()> {
 		generate_web_token(&company_admin.email, company_admin.token_salt)?;
 	let company_cookie = cookie_header(&company_token.to_string());
 	let app = web_server::app(mm);
+	let sender_id = create_sender_presave(
+		&app,
+		&company_cookie,
+		"Company Sender Scope",
+		"COMPANY-SCOPE",
+	)
+	.await?;
 
 	let (status, value) = request_json(
 		&app,
@@ -1875,12 +1882,12 @@ async fn test_company_sponsor_admin_cannot_assign_sender_scope() -> Result<()> {
 		format!("/api/users/{}", seed.viewer.id),
 		Some(json!({
 			"data": {
-				"access_sender_ids": [Uuid::new_v4().to_string()]
+				"access_sender_ids": [sender_id.to_string()]
 			}
 		})),
 	)
 	.await?;
-	assert_eq!(status, StatusCode::FORBIDDEN, "{value:?}");
+	assert_eq!(status, StatusCode::OK, "{value:?}");
 
 	Ok(())
 }

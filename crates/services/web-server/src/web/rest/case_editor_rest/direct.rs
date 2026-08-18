@@ -1673,7 +1673,7 @@ async fn apply_sd_page_rows_patch(
 			Some(vec![SenderInformationFilter {
 				case_id: Some(uuid_eq(case_id)),
 			}]),
-			Some(ListOptions::default()),
+			Some(ListOptions::from_limit(1)),
 		)
 		.await?
 		.first()
@@ -2594,7 +2594,7 @@ async fn apply_dm_page_rows_patch(
 		Some(vec![PatientDeathInformationFilter {
 			patient_id: Some(uuid_eq(patient_id)),
 		}]),
-		Some(ListOptions::default()),
+		Some(ListOptions::from_limit(1)),
 	)
 	.await?
 	.into_iter()
@@ -2785,7 +2785,7 @@ async fn apply_dm_page_rows_patch(
 				patient_id: Some(uuid_eq(patient_id)),
 				..Default::default()
 			}]),
-			Some(ListOptions::default()),
+			Some(ListOptions::from_limit(1)),
 		)
 		.await?
 		.into_iter()
@@ -2915,7 +2915,7 @@ async fn apply_dm_page_rows_patch(
 				patient_id: Some(uuid_eq(patient_id)),
 				..Default::default()
 			}]),
-			Some(ListOptions::default()),
+			Some(ListOptions::from_limit(1)),
 		)
 		.await?
 		.into_iter()
@@ -3019,7 +3019,7 @@ async fn apply_dm_page_rows_patch(
 				patient_id: Some(uuid_eq(patient_id)),
 				..Default::default()
 			}]),
-			Some(ListOptions::default()),
+			Some(ListOptions::from_limit(1)),
 		)
 		.await?
 		.into_iter()
@@ -3428,7 +3428,7 @@ async fn load_editor_sd_data(
 		Some(vec![SenderInformationFilter {
 			case_id: Some(uuid_eq(case_id)),
 		}]),
-		Some(ListOptions::default()),
+		Some(ListOptions::from_limit(1)),
 	)
 	.await?;
 	let sender = sender_information.first().cloned();
@@ -3512,17 +3512,19 @@ async fn load_editor_si_data(
 	mm: &ModelManager,
 	case_id: Uuid,
 ) -> Result<Value> {
-	let mut studies = StudyInformationBmc::list(
+	let mut study_options = ListOptions::from_order_bys(vec!["created_at", "id"]);
+	study_options.limit = Some(1);
+	let study_information = StudyInformationBmc::list(
 		ctx,
 		mm,
 		Some(vec![StudyInformationFilter {
 			case_id: Some(uuid_eq(case_id)),
 		}]),
-		Some(ListOptions::default()),
+		Some(study_options),
 	)
-	.await?;
-	studies.sort_by_key(|study| study.created_at);
-	let study_information = studies.into_iter().next();
+	.await?
+	.into_iter()
+	.next();
 	let (study_registration_numbers, fda_cross_reported_ind_numbers) =
 		if let Some(ref study) = study_information {
 			let registrations = StudyRegistrationNumberBmc::list(
@@ -3668,20 +3670,71 @@ async fn load_editor_dm_data(
 		Some(ListOptions::from_order_bys(vec!["created_at", "id"])),
 	)
 	.await?;
+	let parent_ids = parent_information_rows
+		.iter()
+		.map(|parent| parent.id)
+		.collect::<Vec<_>>();
+	let parent_medical_history_rows = if parent_ids.is_empty() {
+		Vec::new()
+	} else {
+		ParentMedicalHistoryBmc::list(
+			ctx,
+			mm,
+			Some(
+				parent_ids
+					.iter()
+					.copied()
+					.map(|parent_id| ParentMedicalHistoryFilter {
+						parent_id: Some(uuid_eq(parent_id)),
+						..Default::default()
+					})
+					.collect(),
+			),
+			Some(ListOptions::from_order_bys(vec!["sequence_number", "id"])),
+		)
+		.await?
+	};
+	let parent_past_drug_rows = if parent_ids.is_empty() {
+		Vec::new()
+	} else {
+		ParentPastDrugHistoryBmc::list(
+			ctx,
+			mm,
+			Some(
+				parent_ids
+					.iter()
+					.copied()
+					.map(|parent_id| ParentPastDrugHistoryFilter {
+						parent_id: Some(uuid_eq(parent_id)),
+						..Default::default()
+					})
+					.collect(),
+			),
+			Some(ListOptions::from_order_bys(vec!["sequence_number", "id"])),
+		)
+		.await?
+	};
+	let mut medical_history_by_parent = BTreeMap::new();
+	for history in parent_medical_history_rows {
+		medical_history_by_parent
+			.entry(history.parent_id)
+			.or_insert_with(Vec::new)
+			.push(history);
+	}
+	let mut past_drugs_by_parent = BTreeMap::new();
+	for drug in parent_past_drug_rows {
+		past_drugs_by_parent
+			.entry(drug.parent_id)
+			.or_insert_with(Vec::new)
+			.push(drug);
+	}
 	let mut parents = Vec::new();
 	let mut parent_medical_history = Vec::new();
 	let mut parent_past_drugs = Vec::new();
 	for parent in &parent_information_rows {
-		let medical_history = ParentMedicalHistoryBmc::list(
-			ctx,
-			mm,
-			Some(vec![ParentMedicalHistoryFilter {
-				parent_id: Some(uuid_eq(parent.id)),
-				..Default::default()
-			}]),
-			Some(ListOptions::from_order_bys(vec!["sequence_number", "id"])),
-		)
-		.await?;
+		let medical_history = medical_history_by_parent
+			.remove(&parent.id)
+			.unwrap_or_default();
 		let medical_history = medical_history
 			.into_iter()
 			.map(|history| {
@@ -3699,16 +3752,8 @@ async fn load_editor_dm_data(
 				value
 			})
 			.collect::<Vec<_>>();
-		let past_drug_history = ParentPastDrugHistoryBmc::list(
-			ctx,
-			mm,
-			Some(vec![ParentPastDrugHistoryFilter {
-				parent_id: Some(uuid_eq(parent.id)),
-				..Default::default()
-			}]),
-			Some(ListOptions::from_order_bys(vec!["sequence_number", "id"])),
-		)
-		.await?;
+		let past_drug_history =
+			past_drugs_by_parent.remove(&parent.id).unwrap_or_default();
 		let past_drug_history = past_drug_history
 			.into_iter()
 			.map(|drug| {
@@ -3745,32 +3790,76 @@ async fn load_editor_dm_data(
 		Some(ListOptions::from_order_bys(vec!["created_at", "id"])),
 	)
 	.await?;
+	let death_info_ids = death_information
+		.iter()
+		.map(|death_info| death_info.id)
+		.collect::<Vec<_>>();
+	let reported_cause_rows = if death_info_ids.is_empty() {
+		Vec::new()
+	} else {
+		ReportedCauseOfDeathBmc::list(
+			ctx,
+			mm,
+			Some(
+				death_info_ids
+					.iter()
+					.copied()
+					.map(|death_info_id| ReportedCauseOfDeathFilter {
+						death_info_id: Some(uuid_eq(death_info_id)),
+						..Default::default()
+					})
+					.collect(),
+			),
+			Some(ListOptions::from_order_bys(vec!["sequence_number", "id"])),
+		)
+		.await?
+	};
+	let autopsy_cause_rows = if death_info_ids.is_empty() {
+		Vec::new()
+	} else {
+		AutopsyCauseOfDeathBmc::list(
+			ctx,
+			mm,
+			Some(
+				death_info_ids
+					.iter()
+					.copied()
+					.map(|death_info_id| AutopsyCauseOfDeathFilter {
+						death_info_id: Some(uuid_eq(death_info_id)),
+						..Default::default()
+					})
+					.collect(),
+			),
+			Some(ListOptions::from_order_bys(vec!["sequence_number", "id"])),
+		)
+		.await?
+	};
+	let mut reported_causes_by_death = BTreeMap::new();
+	for cause in reported_cause_rows {
+		reported_causes_by_death
+			.entry(cause.death_info_id)
+			.or_insert_with(Vec::new)
+			.push(cause);
+	}
+	let mut autopsy_causes_by_death = BTreeMap::new();
+	for cause in autopsy_cause_rows {
+		autopsy_causes_by_death
+			.entry(cause.death_info_id)
+			.or_insert_with(Vec::new)
+			.push(cause);
+	}
 	let mut reported_causes = Vec::new();
 	let mut autopsy_causes = Vec::new();
 	for death_info in &death_information {
 		reported_causes.extend(
-			ReportedCauseOfDeathBmc::list(
-				ctx,
-				mm,
-				Some(vec![ReportedCauseOfDeathFilter {
-					death_info_id: Some(uuid_eq(death_info.id)),
-					..Default::default()
-				}]),
-				Some(ListOptions::from_order_bys(vec!["sequence_number", "id"])),
-			)
-			.await?,
+			reported_causes_by_death
+				.remove(&death_info.id)
+				.unwrap_or_default(),
 		);
 		autopsy_causes.extend(
-			AutopsyCauseOfDeathBmc::list(
-				ctx,
-				mm,
-				Some(vec![AutopsyCauseOfDeathFilter {
-					death_info_id: Some(uuid_eq(death_info.id)),
-					..Default::default()
-				}]),
-				Some(ListOptions::from_order_bys(vec!["sequence_number", "id"])),
-			)
-			.await?,
+			autopsy_causes_by_death
+				.remove(&death_info.id)
+				.unwrap_or_default(),
 		);
 	}
 	let death_info = death_information.into_iter().next().map(|death_info| {

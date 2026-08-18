@@ -54,6 +54,17 @@ fn generated_pdf_rows_preserve_reviewed_order_and_availability() {
 		.find(|row| row.grant_id == "email.report_due.send")
 		.unwrap();
 	assert_eq!(email_send.menu_key, "email_report_due");
+	assert_eq!(email_send.menu, "Sender");
+	assert_eq!(email_send.type_name, "Report due mail");
+	assert_eq!(
+		contract
+			.pdf_rows
+			.iter()
+			.find(|row| row.grant_id == "home.workflow.read")
+			.unwrap()
+			.type_name,
+		"My To Do"
+	);
 	assert_eq!(email_send.field, "canEdit");
 }
 

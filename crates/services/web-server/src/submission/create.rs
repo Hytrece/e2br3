@@ -8,8 +8,6 @@ pub async fn create_submission(
 ) -> Result<SubmissionRecord> {
 	assert_case_not_submitted(ctx, mm, case_id).await?;
 
-	let ctx_clone = ctx.clone();
-	let mm_clone = mm.clone();
 	let export_authority = match authority {
 		SubmissionAuthority::Fda => RegulatoryAuthority::Fda,
 		SubmissionAuthority::Mfds => RegulatoryAuthority::Mfds,
@@ -18,22 +16,17 @@ pub async fn create_submission(
 		prepare_outbound_message_header(ctx, mm, case_id, export_authority, None)
 			.await?;
 	let outbound_message_header = export_message_header(&header)?;
-	let xml = task::spawn_blocking(move || {
-		Handle::current().block_on(export_case_xml_with_options(
-			&ctx_clone,
-			&mm_clone,
-			case_id,
-			ExportXmlOptions {
-				apply_comments: true,
-				authority: export_authority,
-				outbound_message_header,
-			},
-		))
-	})
+	let xml = export_case_xml_with_options(
+		ctx,
+		mm,
+		case_id,
+		ExportXmlOptions {
+			apply_comments: true,
+			authority: export_authority,
+			outbound_message_header,
+		},
+	)
 	.await
-	.map_err(|err| Error::BadRequest {
-		message: format!("submission export task failed: {err}"),
-	})?
 	.map_err(Error::from)?;
 	let schema_report = validate_e2b_xml(
 		xml.as_bytes(),

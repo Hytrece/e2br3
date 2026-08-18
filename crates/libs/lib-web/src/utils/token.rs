@@ -1,7 +1,7 @@
 pub use crate::error::ClientError;
 pub use crate::error::{Error, Result};
 use lib_auth::token::generate_web_token;
-use tower_cookies::{Cookie, Cookies};
+use tower_cookies::{cookie::SameSite, Cookie, Cookies};
 use uuid::Uuid;
 
 // endregion: --- Modules
@@ -21,10 +21,25 @@ pub fn set_token_cookie(
 	let mut cookie = Cookie::new(AUTH_TOKEN, token.to_string());
 	cookie.set_http_only(true);
 	cookie.set_path("/");
+	cookie.set_same_site(SameSite::Lax);
+	cookie.set_secure(secure_auth_cookie());
 
 	cookies.add(cookie);
 
 	Ok(())
+}
+
+fn secure_auth_cookie() -> bool {
+	let environment = std::env::var("E2BR3_ENV")
+		.or_else(|_| std::env::var("SERVICE_ENV"))
+		.unwrap_or_default();
+	matches!(
+		environment.trim().to_ascii_lowercase().as_str(),
+		"prod" | "production"
+	) || matches!(
+		std::env::var("E2BR3_COOKIE_SECURE"),
+		Ok(value) if matches!(value.trim().to_ascii_lowercase().as_str(), "1" | "true" | "yes" | "on")
+	)
 }
 
 pub(crate) fn remove_token_cookie(cookies: &Cookies) -> Result<()> {

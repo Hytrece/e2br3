@@ -547,21 +547,22 @@ fn header_to_str(value: &HeaderValue) -> Option<String> {
 }
 
 fn validate_internal_token(headers: &HeaderMap) -> Result<()> {
-	let expected =
-		std::env::var("AS2_CALLBACK_TOKEN").map_err(|_| Error::BadRequest {
+	let expected = std::env::var("SUBMISSION_RECONCILE_TOKEN").map_err(|_| {
+		Error::BadRequest {
 			message:
-				"AS2_CALLBACK_TOKEN is required for internal submission endpoints"
+				"SUBMISSION_RECONCILE_TOKEN is required for reconcile endpoints"
 					.to_string(),
-		})?;
+		}
+	})?;
 	let incoming = headers
-		.get("x-callback-token")
+		.get("x-reconcile-token")
 		.and_then(header_to_str)
 		.ok_or(Error::BadRequest {
-			message: "missing x-callback-token".to_string(),
+			message: "missing x-reconcile-token".to_string(),
 		})?;
 	if !tokens_equal(&expected, &incoming) {
 		return Err(Error::BadRequest {
-			message: "invalid x-callback-token".to_string(),
+			message: "invalid x-reconcile-token".to_string(),
 		});
 	}
 	Ok(())

@@ -345,6 +345,7 @@ async fn import_drug_reaction_assessments(
 					recurrence_action: obs.rechallenge_action.clone(),
 					reaction_recurred: obs.reaction_recurred.clone(),
 					dechallenge_result: None,
+					expectedness: None,
 				},
 			)
 			.await?;
@@ -406,6 +407,7 @@ async fn import_drug_reaction_assessments(
 					recurrence_action: None,
 					reaction_recurred: None,
 					dechallenge_result: None,
+					expectedness: None,
 				},
 			)
 			.await?;

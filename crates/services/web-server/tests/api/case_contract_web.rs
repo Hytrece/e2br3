@@ -2121,6 +2121,63 @@ async fn test_delete_case_soft_deletes_and_keeps_case_visible() -> Result<()> {
 		Some("client requested soft delete")
 	);
 
+	let (missing_reason_status, missing_reason_body) = post_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/restore"),
+		json!({}),
+	)
+	.await?;
+	assert_eq!(
+		missing_reason_status,
+		StatusCode::BAD_REQUEST,
+		"{missing_reason_body:?}"
+	);
+	assert!(
+		missing_reason_body
+			.to_string()
+			.contains("reason_for_change is required for restore"),
+		"{missing_reason_body:?}"
+	);
+
+	let (restore_status, restore_body) = post_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}/restore"),
+		json!({ "reason_for_change": "deletion was entered in error" }),
+	)
+	.await?;
+	assert_eq!(restore_status, StatusCode::OK, "{restore_body:?}");
+	assert_eq!(restore_body["data"]["status"].as_str(), Some("draft"));
+
+	let dbx = mm.dbx();
+	dbx.begin_txn().await?;
+	dbx.execute(sqlx::query("SET ROLE e2br3_auditor_role"))
+		.await?;
+	let restore_reason = dbx
+		.fetch_optional(
+			sqlx::query_as::<_, (Option<String>,)>(
+				r#"
+				SELECT reason_for_change
+				FROM audit_logs
+				WHERE table_name = 'cases'
+				  AND record_id = $1
+				  AND action = 'UPDATE'
+				  AND changed_fields->'status'->>'old' = 'deleted'
+				  AND changed_fields->'status'->>'new' = 'draft'
+				ORDER BY id DESC
+				LIMIT 1
+				"#,
+			)
+			.bind(Uuid::parse_str(&case_id)?),
+		)
+		.await?;
+	dbx.rollback_txn().await?;
+	assert_eq!(
+		restore_reason.and_then(|(v,)| v).as_deref(),
+		Some("deletion was entered in error")
+	);
+
 	Ok(())
 }
 

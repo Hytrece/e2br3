@@ -1,17 +1,15 @@
 use super::*;
+use lib_core::model::receiver::ReceiverInformation;
+use lib_core::model::safety_report::SafetyReportIdentification;
 
-pub(crate) async fn apply_section_n(
-	ctx: &Ctx,
+pub(crate) fn apply_section_n(
 	doc: &mut Document,
 	parser: &Parser,
-	mm: &ModelManager,
-	case_id: sqlx::types::Uuid,
 	xpath: &mut Context,
+	report: &SafetyReportIdentification,
+	receiver: Option<&ReceiverInformation>,
 	header: &crate::export::OutboundMessageHeader,
 ) -> Result<()> {
-	let report = SafetyReportIdentificationBmc::get_by_case(ctx, mm, case_id)
-		.await
-		.map_err(Error::from)?;
 	let report_id = required_outbound_value(
 		"C.1.1 Safety Report ID",
 		report.safety_report_id.as_deref(),
@@ -50,7 +48,7 @@ pub(crate) async fn apply_section_n(
 	write_n_2_r_3(xpath, &message_receiver);
 	write_n_2_r_4(xpath, &message_date);
 
-	if let Some(receiver) = fetch_receiver_information(mm, case_id).await? {
+	if let Some(receiver) = receiver {
 		ensure_top_level_receiver_agent_nodes(
 			doc,
 			parser,
@@ -446,7 +444,7 @@ fn ensure_batch_receiver_nodes(
 	append_fragment_child(doc, parser, xpath, "/hl7:MCCI_IN200100UV01", &fragment)
 }
 
-pub(super) async fn fetch_receiver_information(
+pub(crate) async fn fetch_receiver_information(
 	mm: &ModelManager,
 	case_id: sqlx::types::Uuid,
 ) -> Result<Option<ReceiverInformation>> {

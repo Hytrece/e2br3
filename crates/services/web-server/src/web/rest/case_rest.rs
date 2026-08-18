@@ -1546,6 +1546,59 @@ pub async fn delete_case(
 	.await
 }
 
+/// POST /api/cases/{id}/restore
+pub async fn restore_case(
+	State(mm): State<ModelManager>,
+	ctx_w: CtxW,
+	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
+	Path(id): Path<Uuid>,
+	Json(payload): Json<PublicCaseDeleteRequest>,
+) -> Result<(axum::http::StatusCode, Json<DataRestResult<CaseReadResult>>)> {
+	let ctx = ctx_w.0;
+	lib_rest_core::with_authorized_case_mutation(
+		&ctx,
+		&snapshot,
+		&mm,
+		id,
+		"case.delete",
+		CaseMutationKind::Restore,
+		move |ctx, mm| {
+			Box::pin(async move {
+				let current = CaseBmc::get(ctx, mm, id).await?;
+				if !is_allowed_case_status_transition(&current.status, "draft") {
+					return Err(Error::BadRequest {
+						message: format!(
+							"illegal case status transition: '{}' -> 'draft'",
+							current.status
+						),
+					});
+				}
+				let reason = required_reason_for_change(
+					payload.reason_for_change,
+					ctx.change_reason(),
+					"restore",
+				)?;
+				let ctx_for_update = ctx.with_compliance(Some(reason), None);
+				CaseBmc::update(
+					&ctx_for_update,
+					mm,
+					id,
+					case_status_update("draft".to_string()),
+				)
+				.await?;
+				CaseValidationSummaryBmc::mark_stale_for_case(ctx, mm, id).await?;
+				let entity = CaseBmc::get(ctx, mm, id).await?;
+				let entity = case_to_read_result(ctx, mm, entity).await?;
+				Ok((
+					axum::http::StatusCode::OK,
+					Json(DataRestResult { data: entity }),
+				))
+			})
+		},
+	)
+	.await
+}
+
 /// POST /api/cases/{id}/validator/mark-validated
 pub async fn mark_case_validated_by_validator(
 	State(mm): State<ModelManager>,

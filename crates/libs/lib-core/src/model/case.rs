@@ -346,7 +346,8 @@ pub fn is_allowed_case_status_transition(from: &str, to: &str) -> bool {
 			"validated" | "submitted" | "deleted" | "archived" | "nullified"
 		),
 		"submitted" => matches!(to.as_str(), "deleted" | "archived" | "nullified"),
-		"deleted" | "archived" => false,
+		"deleted" => to == "draft",
+		"archived" => false,
 		"nullified" => to == "archived",
 		_ => false,
 	}

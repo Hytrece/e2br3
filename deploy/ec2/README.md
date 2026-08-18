@@ -52,6 +52,8 @@
    RUST_LOG=info
    E2BR3_ENV=prod
    E2BR3_STRICT_SUBMISSION_CONFIG=true
+   E2BR3_PUBLIC_ORIGIN=https://safety.example.com
+   SUBMISSION_RECONCILE_TOKEN=<separate-internal-secret>
    ```
 7. Ensure `/opt/e2br3/.env.prod` has `E2BR3_SCHEMAS_DIR=/opt/e2br3/schemas`
    so the container bind-mount includes `/app/schemas/...`.
@@ -60,6 +62,8 @@
 8. Keep `SERVICE_PWD_KEY` stable across deployments and bootstrap runs.
    Seeded user password hashes are derived from `SERVICE_PWD_KEY`, so changing the key later will make
    existing passwords fail with `403 LOGIN_FAIL`.
+   The first HMAC token rollout invalidates pre-rollout `auth-token` cookies;
+   users must sign in again once after deployment.
    Keep `SERVICE_MIGRATION_DB_URL` separate from `SERVICE_DB_URL`: the migration user owns the
    versioned authorization migration objects, while request connections retain the lower-privilege
    application role. Deployment preflight rejects URLs that resolve to the same database username.
@@ -348,8 +352,10 @@ boundary plus `AS2_INBOUND_TOKEN`.
    AS2_RECEIVER_PORT=4080
    ```
 
-   `AS2_SUBMITTER_URL`, `AS2_ACK_CALLBACK_URL` and the app-side
-   `AS2_CALLBACK_TOKEN` are set by the overlay; do not duplicate them.
+   `AS2_SUBMITTER_URL`, `AS2_ACK_CALLBACK_URL`, the app-side
+   `AS2_CALLBACK_TOKEN`, and `SUBMISSION_RECONCILE_TOKEN` are consumed by the
+   app overlay. Keep the reconcile secret separate from the gateway callback
+   secret.
 
    Note `E2BR3_STRICT_SUBMISSION_CONFIG=true` makes the web server refuse to
    start without a configured transport, so these must land before the rollout.

@@ -160,6 +160,7 @@ const ASSESSMENT_ALIASES: &[(&str, &[&str])] = &[
 	("recurrence_action", &["recurrenceAction"]),
 	("reaction_recurred", &["reactionRecurred"]),
 	("dechallenge_result", &["dechallengeResult"]),
+	("expectedness", &["expectedness"]),
 ];
 
 fn reject_unscoped_blind_write(
@@ -919,6 +920,7 @@ async fn load_editor_dg_row_detail(
 			"recurrenceAction": assessment.recurrence_action,
 			"reactionRecurred": assessment.reaction_recurred,
 			"dechallengeResult": assessment.dechallenge_result,
+			"expectedness": assessment.expectedness,
 		});
 		if relatedness.is_empty() {
 			drug_reaction_assessments.push(base);

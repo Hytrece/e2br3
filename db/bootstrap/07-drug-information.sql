@@ -378,6 +378,9 @@ CREATE TABLE drug_reaction_assessments (
     dechallenge_result VARCHAR(1) CHECK (dechallenge_result IN ('1', '2', '3')),
     -- 1=Yes, 2=No, 3=Not applicable
 
+    -- Local assessment expectedness: 1=Expected, 2=Unexpected
+    expectedness VARCHAR(1) CHECK (expectedness IN ('1', '2')),
+
     -- Audit fields (standardized UUID-based)
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),

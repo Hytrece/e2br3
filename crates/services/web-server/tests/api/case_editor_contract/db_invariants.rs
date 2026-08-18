@@ -198,7 +198,8 @@ async fn newly_added_pairs_persist_either_member_and_reject_both() -> Result<()>
 				"drug": {
 					"drugReactionAssessments": [{
 						"reactionId": reaction_id,
-						"dechallengeResult": "1"
+						"dechallengeResult": "1",
+						"expectedness": "2"
 					}]
 				}
 			}
@@ -206,6 +207,10 @@ async fn newly_added_pairs_persist_either_member_and_reject_both() -> Result<()>
 	)
 	.await?;
 	assert_eq!(status, StatusCode::OK, "{body}");
+	assert_eq!(
+		body["data"]["drug"]["drugReactionAssessments"][0]["expectedness"],
+		json!("2")
+	);
 	let (status, body) = patch_json(
 		&app,
 		&cookie,
@@ -283,11 +288,14 @@ async fn newly_added_pairs_persist_either_member_and_reject_both() -> Result<()>
 		ROLE_SPONSOR_ADMIN_CRO,
 	)
 	.await?;
-	let (stored_dechallenge,): (Option<String>,) = mm
-		.dbx()
+	let (assessment_id, stored_dechallenge, stored_expectedness): (
+		Uuid,
+		Option<String>,
+		Option<String>,
+	) = mm.dbx()
 		.fetch_one(
 			sqlx::query_as(
-				"SELECT dechallenge_result
+				"SELECT id, dechallenge_result, expectedness
 				 FROM drug_reaction_assessments
 				 WHERE drug_id = $1 AND reaction_id = $2",
 			)
@@ -296,6 +304,27 @@ async fn newly_added_pairs_persist_either_member_and_reject_both() -> Result<()>
 		)
 		.await?;
 	assert_eq!(stored_dechallenge.as_deref(), Some("1"));
+	assert_eq!(stored_expectedness.as_deref(), Some("2"));
 	mm.dbx().commit_txn().await?;
+
+	mm.dbx().begin_txn().await?;
+	mm.dbx()
+		.execute(sqlx::query("SET ROLE e2br3_auditor_role"))
+		.await?;
+	let (audit_count,): (i64,) = mm
+		.dbx()
+		.fetch_one(
+			sqlx::query_as(
+				"SELECT count(*)
+				 FROM audit_logs
+				 WHERE table_name = 'drug_reaction_assessments'
+				   AND record_id = $1
+				   AND changed_fields ? 'expectedness'",
+			)
+			.bind(assessment_id),
+		)
+		.await?;
+	assert_eq!(audit_count, 1);
+	mm.dbx().rollback_txn().await?;
 	Ok(())
 }

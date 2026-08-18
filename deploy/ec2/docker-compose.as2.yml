@@ -10,7 +10,8 @@
 # repository publishes no image.
 #
 # Required in .env.prod (see deploy/ec2/README.md, "AS2 submitter"):
-#   AS2_SUBMITTER_SRC, AS2_FROM_ID, AS2_CALLBACK_TOKEN, AS2_CERTS_DIR
+#   AS2_SUBMITTER_SRC, AS2_FROM_ID, AS2_CALLBACK_TOKEN,
+#   SUBMISSION_RECONCILE_TOKEN, AS2_CERTS_DIR
 services:
   as2-submitter:
     build:
@@ -60,6 +61,7 @@ services:
       AS2_SUBMITTER_URL: "http://as2-submitter:9090"
       AS2_ACK_CALLBACK_URL: "http://app:8080/internal/submissions/callbacks/ack"
       AS2_CALLBACK_TOKEN: "${AS2_CALLBACK_TOKEN}"
+      SUBMISSION_RECONCILE_TOKEN: "${SUBMISSION_RECONCILE_TOKEN}"
     depends_on:
       - as2-submitter
 

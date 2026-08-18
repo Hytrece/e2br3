@@ -5,8 +5,10 @@ mod error;
 pub use self::error::{Error, Result};
 
 use crate::config::auth_config;
-use lib_utils::b64::{b64u_decode_to_string, b64u_encode};
+use hmac::{Hmac, Mac};
+use lib_utils::b64::{b64u_decode, b64u_decode_to_string, b64u_encode};
 use lib_utils::time::{now_utc, now_utc_plus_sec_str, parse_utc};
+use sha2::Sha256;
 use std::fmt::Display;
 use std::str::FromStr;
 use uuid::Uuid;
@@ -104,10 +106,12 @@ fn validate_token_sign_and_exp(
 	key: &[u8],
 ) -> Result<()> {
 	// -- Validate signature.
-	let new_sign_b64u =
-		token_sign_into_b64u(&origin_token.ident, &origin_token.exp, salt, key)?;
-
-	if new_sign_b64u != origin_token.sign_b64u {
+	let provided = b64u_decode(&origin_token.sign_b64u)
+		.map_err(|_| Error::SignatureNotMatching)?;
+	if token_mac(&origin_token.ident, &origin_token.exp, salt, key)?
+		.verify_slice(&provided)
+		.is_err()
+	{
 		return Err(Error::SignatureNotMatching);
 	}
 
@@ -130,22 +134,20 @@ fn token_sign_into_b64u(
 	salt: Uuid,
 	key: &[u8],
 ) -> Result<String> {
+	Ok(b64u_encode(
+		token_mac(ident, exp, salt, key)?.finalize().into_bytes(),
+	))
+}
+
+type TokenMac = Hmac<Sha256>;
+
+fn token_mac(ident: &str, exp: &str, salt: Uuid, key: &[u8]) -> Result<TokenMac> {
 	let content = format!("{}.{}", b64u_encode(ident), b64u_encode(exp));
-
-	// -- Create a Black3 Hasher (not from key because blake3 key is fixed length).
-	let mut hasher = blake3::Hasher::new();
-
-	// -- Add content.
-	hasher.update(content.as_bytes());
-	hasher.update(salt.as_bytes());
-	hasher.update(key);
-
-	// -- Finalize and b64u encode.
-	let hmac_result = hasher.finalize();
-	let result_bytes = hmac_result.as_bytes();
-	let result = b64u_encode(result_bytes);
-
-	Ok(result)
+	let mut mac = Hmac::<Sha256>::new_from_slice(key)
+		.map_err(|_| Error::HmacFailNewFromSlice)?;
+	mac.update(content.as_bytes());
+	mac.update(salt.as_bytes());
+	Ok(mac)
 }
 
 // endregion: --- (private) Token Gen and Validation
@@ -238,6 +240,21 @@ mod tests {
 			"Should have matched `Err(Error::Expired)` but was `{res:?}`"
 		);
 
+		Ok(())
+	}
+
+	#[test]
+	fn test_token_validate_web_token_rejects_tampering() -> Result<()> {
+		let fx_salt =
+			Uuid::parse_str("f05e8961-d6ad-4086-9e78-a6de065e5453").unwrap();
+		let token_key = &auth_config().TOKEN_KEY;
+		let mut fx_token = generate_token("user_one", 60.0, fx_salt, token_key)?;
+		fx_token.ident.push('x');
+
+		assert!(matches!(
+			validate_web_token(&fx_token, fx_salt),
+			Err(token::Error::SignatureNotMatching)
+		));
 		Ok(())
 	}
 }

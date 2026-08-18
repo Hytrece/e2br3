@@ -232,6 +232,10 @@ pub fn routes_cases(mm: ModelManager) -> Router {
 		"/cases/{id}/lock/toggle",
 		axum::routing::post(case_rest::toggle_case_lock),
 	)
+	.route(
+		"/cases/{id}/restore",
+		axum::routing::post(case_rest::restore_case),
+	)
 	// Patient (singleton per case)
 	.route(
 		"/cases/{case_id}/patient",

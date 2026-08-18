@@ -37,6 +37,7 @@ fn clear_esg_env() {
 	std::env::remove_var("AS2_SUBMITTER_TIMEOUT_SECS");
 	std::env::remove_var("AS2_ACK_CALLBACK_URL");
 	std::env::remove_var("AS2_CALLBACK_TOKEN");
+	std::env::remove_var("SUBMISSION_RECONCILE_TOKEN");
 }
 
 fn valid_compliance_payload() -> Value {
@@ -1796,7 +1797,7 @@ async fn test_submission_idempotency_key_parallel_requests_single_submission(
 #[tokio::test]
 async fn test_internal_reconcile_endpoint_auth_and_empty_result() -> Result<()> {
 	clear_esg_env();
-	std::env::set_var("AS2_CALLBACK_TOKEN", "callback-secret");
+	std::env::set_var("SUBMISSION_RECONCILE_TOKEN", "reconcile-secret");
 	let mm = init_test_mm().await?;
 	let app = web_server::app(mm);
 
@@ -1804,7 +1805,7 @@ async fn test_internal_reconcile_endpoint_auth_and_empty_result() -> Result<()> 
 		.method("POST")
 		.uri("/internal/submissions/reconcile")
 		.header("content-type", "application/json")
-		.header("x-callback-token", "callback-secret")
+		.header("x-reconcile-token", "reconcile-secret")
 		.body(Body::from(json!({ "limit": 5 }).to_string()))?;
 	let res = app.clone().oneshot(req).await?;
 	let status = res.status();
@@ -1817,7 +1818,7 @@ async fn test_internal_reconcile_endpoint_auth_and_empty_result() -> Result<()> 
 	let req = Request::builder()
 		.method("GET")
 		.uri("/internal/submissions/reconcile/status")
-		.header("x-callback-token", "callback-secret")
+		.header("x-reconcile-token", "reconcile-secret")
 		.body(Body::empty())?;
 	let res = app.clone().oneshot(req).await?;
 	let status = res.status();
@@ -1840,7 +1841,7 @@ async fn test_internal_reconcile_endpoint_auth_and_empty_result() -> Result<()> 
 async fn test_internal_reconcile_status_accumulates_runtime_counters() -> Result<()>
 {
 	clear_esg_env();
-	std::env::set_var("AS2_CALLBACK_TOKEN", "callback-secret");
+	std::env::set_var("SUBMISSION_RECONCILE_TOKEN", "reconcile-secret");
 	let mm = init_test_mm().await?;
 	let app = web_server::app(mm);
 
@@ -1849,7 +1850,7 @@ async fn test_internal_reconcile_status_accumulates_runtime_counters() -> Result
 			.method("POST")
 			.uri("/internal/submissions/reconcile")
 			.header("content-type", "application/json")
-			.header("x-callback-token", "callback-secret")
+			.header("x-reconcile-token", "reconcile-secret")
 			.body(Body::from(json!({ "limit": 25 }).to_string()))?;
 		let res = app.clone().oneshot(req).await?;
 		let status = res.status();
@@ -1864,7 +1865,7 @@ async fn test_internal_reconcile_status_accumulates_runtime_counters() -> Result
 	let req = Request::builder()
 		.method("GET")
 		.uri("/internal/submissions/reconcile/status")
-		.header("x-callback-token", "callback-secret")
+		.header("x-reconcile-token", "reconcile-secret")
 		.body(Body::empty())?;
 	let res = app.clone().oneshot(req).await?;
 	let status = res.status();
@@ -1892,6 +1893,7 @@ async fn test_internal_reconcile_retries_failed_submission_to_success() -> Resul
 	clear_esg_env();
 	configure_mock_esg_transport().await?;
 	std::env::set_var("AS2_CALLBACK_TOKEN", "callback-secret");
+	std::env::set_var("SUBMISSION_RECONCILE_TOKEN", "reconcile-secret");
 	std::env::set_var("E2BR3_VALIDATOR_TOKEN", "validator-secret");
 	let mm = init_test_mm().await?;
 	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
@@ -1961,7 +1963,7 @@ async fn test_internal_reconcile_retries_failed_submission_to_success() -> Resul
 		.method("POST")
 		.uri("/internal/submissions/reconcile")
 		.header("content-type", "application/json")
-		.header("x-callback-token", "callback-secret")
+		.header("x-reconcile-token", "reconcile-secret")
 		.body(Body::from(json!({ "limit": 25 }).to_string()))?;
 	let res = app.clone().oneshot(req).await?;
 	let status = res.status();
@@ -2019,6 +2021,7 @@ async fn test_internal_reconcile_retries_failed_submission_and_keeps_rejected_on
 	clear_esg_env();
 	configure_mock_esg_transport().await?;
 	std::env::set_var("AS2_CALLBACK_TOKEN", "callback-secret");
+	std::env::set_var("SUBMISSION_RECONCILE_TOKEN", "reconcile-secret");
 	std::env::set_var("E2BR3_VALIDATOR_TOKEN", "validator-secret");
 	let mm = init_test_mm().await?;
 	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
@@ -2089,7 +2092,7 @@ async fn test_internal_reconcile_retries_failed_submission_and_keeps_rejected_on
 		.method("POST")
 		.uri("/internal/submissions/reconcile")
 		.header("content-type", "application/json")
-		.header("x-callback-token", "callback-secret")
+		.header("x-reconcile-token", "reconcile-secret")
 		.body(Body::from(json!({ "limit": 25 }).to_string()))?;
 	let res = app.clone().oneshot(req).await?;
 	let status = res.status();
@@ -2140,6 +2143,7 @@ async fn test_internal_submission_endpoints_require_valid_callback_token(
 ) -> Result<()> {
 	clear_esg_env();
 	std::env::set_var("AS2_CALLBACK_TOKEN", "callback-secret");
+	std::env::set_var("SUBMISSION_RECONCILE_TOKEN", "reconcile-secret");
 	let mm = init_test_mm().await?;
 	let app = web_server::app(mm);
 
@@ -2199,14 +2203,14 @@ async fn test_internal_submission_endpoints_require_valid_callback_token(
 	let value: Value = serde_json::from_slice(&body)?;
 	assert_eq!(status, StatusCode::BAD_REQUEST, "{value:?}");
 	assert!(
-		value.to_string().contains("missing x-callback-token"),
+		value.to_string().contains("missing x-reconcile-token"),
 		"{value:?}"
 	);
 
 	let req = Request::builder()
 		.method("GET")
 		.uri("/internal/submissions/reconcile/status")
-		.header("x-callback-token", "wrong-token")
+		.header("x-reconcile-token", "wrong-token")
 		.body(Body::empty())?;
 	let res = app.clone().oneshot(req).await?;
 	let status = res.status();
@@ -2214,7 +2218,7 @@ async fn test_internal_submission_endpoints_require_valid_callback_token(
 	let value: Value = serde_json::from_slice(&body)?;
 	assert_eq!(status, StatusCode::BAD_REQUEST, "{value:?}");
 	assert!(
-		value.to_string().contains("invalid x-callback-token"),
+		value.to_string().contains("invalid x-reconcile-token"),
 		"{value:?}"
 	);
 

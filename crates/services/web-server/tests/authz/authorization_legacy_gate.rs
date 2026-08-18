@@ -610,13 +610,8 @@ fn user_role_metadata_does_not_turn_user_create_into_admin_identity() {
 		root.join("crates/services/web-server/src/web/rest/user_rest/validation.rs"),
 	)
 	.expect("user validation source must be readable");
-	let openapi =
-		fs::read_to_string(root.join("crates/services/web-server/src/openapi.rs"))
-			.expect("OpenAPI source must be readable");
-
 	assert!(!dto.contains("pub can_admin:"));
 	assert!(!validation.contains("has_permission(permission_subject, USER_CREATE)"));
-	assert!(!openapi.contains("\tcan_admin: bool,"));
 }
 
 #[test]

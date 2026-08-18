@@ -1,5 +1,7 @@
 use super::*;
-use lib_core::model::narrative::NarrativeInformation;
+use lib_core::model::narrative::{
+	CaseSummaryInformation, NarrativeInformation, SenderDiagnosis,
+};
 
 pub(crate) async fn export_patch(
 	ctx: &Ctx,
@@ -21,20 +23,12 @@ pub(crate) async fn export_patch(
 	patch_h_narrative(raw_xml, &narrative)
 }
 
-pub(crate) async fn apply_h_5_case_summaries(
-	ctx: &Ctx,
+pub(crate) fn apply_h_5_case_summaries(
 	doc: &mut Document,
 	parser: &Parser,
-	mm: &ModelManager,
-	case_id: sqlx::types::Uuid,
 	xpath: &mut Context,
+	summaries: &[CaseSummaryInformation],
 ) -> Result<()> {
-	let Some(narrative) =
-		NarrativeInformationBmc::get_by_case_optional(ctx, mm, case_id).await?
-	else {
-		return Ok(());
-	};
-	let summaries = fetch_case_summaries(ctx, mm, narrative.id).await?;
 	let Some(summary) = summaries.iter().find(|s| {
 		s.summary_text
 			.as_deref()
@@ -69,21 +63,12 @@ pub(crate) async fn apply_h_5_case_summaries(
 	Ok(())
 }
 
-pub(crate) async fn apply_h_3_sender_diagnoses(
-	ctx: &Ctx,
+pub(crate) fn apply_h_3_sender_diagnoses(
 	doc: &mut Document,
 	parser: &Parser,
-	mm: &ModelManager,
-	case_id: sqlx::types::Uuid,
 	xpath: &mut Context,
+	diagnoses: &[SenderDiagnosis],
 ) -> Result<()> {
-	let Some(narrative) =
-		NarrativeInformationBmc::get_by_case_optional(ctx, mm, case_id).await?
-	else {
-		return Ok(());
-	};
-	let diagnoses = fetch_sender_diagnoses(ctx, mm, narrative.id).await?;
-
 	remove_nodes(
 		xpath,
 		"//hl7:investigationEvent/hl7:component/hl7:adverseEventAssessment/hl7:component1/hl7:observationEvent[hl7:code[@code='15'] and hl7:author/hl7:assignedEntity/hl7:code[@code='1']]",

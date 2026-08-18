@@ -97,6 +97,7 @@ class ApiClient:
 		path: str,
 		payload: dict[str, Any] | bytes | None = None,
 		content_type: str | None = None,
+		extra_headers: dict[str, str] | None = None,
 	) -> tuple[int | None, bytes, str | None]:
 		body = (
 			payload
@@ -104,6 +105,8 @@ class ApiClient:
 			else json.dumps(payload).encode() if payload is not None else None
 		)
 		headers = {"Accept": "application/json"}
+		if extra_headers:
+			headers.update(extra_headers)
 		if payload is not None:
 			headers["Content-Type"] = content_type or "application/json"
 		request = urllib.request.Request(

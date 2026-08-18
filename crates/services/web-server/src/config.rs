@@ -55,6 +55,12 @@ pub fn validate_submission_runtime_config() -> core::result::Result<(), String> 
 				"missing submission transport: set AS2_SUBMITTER_URL or FDA_ESG_ENABLED=1".to_string(),
 			);
 		}
+		if !env_non_empty("SUBMISSION_RECONCILE_TOKEN") {
+			return Err(
+				"production requires SUBMISSION_RECONCILE_TOKEN for reconcile endpoints"
+					.to_string(),
+			);
+		}
 	}
 
 	if as2_enabled && esg_enabled {

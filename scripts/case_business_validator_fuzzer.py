@@ -27,8 +27,6 @@ from typing import Any
 from case_editor_input_fuzzer import (
     AUDIT_TABLES,
     NESTED_AUDIT_TABLES,
-    audit_key_matches,
-    audit_log_complete,
     commit_sha,
     created_row_id,
     get_path,
@@ -40,6 +38,7 @@ from case_editor_input_fuzzer import (
     unwrap,
     values_equal,
 )
+from audit_trail_consistency_fuzzer import audit_key_matches, audit_log_complete
 from rbac_rls_blackbox import ApiClient, guard_target
 
 

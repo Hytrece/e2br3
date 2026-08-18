@@ -190,6 +190,7 @@ CREATE OR REPLACE FUNCTION audit_logs_hash_chain_before_insert()
 RETURNS TRIGGER
 LANGUAGE plpgsql
 SECURITY DEFINER
+SET search_path = public
 AS $$
 DECLARE
     v_prev_hash TEXT;
@@ -365,6 +366,7 @@ CREATE OR REPLACE FUNCTION audit_log_organization_id(
 RETURNS UUID
 LANGUAGE plpgsql
 SECURITY DEFINER
+SET search_path = public
 AS $$
 DECLARE
     v_values JSONB;
@@ -528,6 +530,7 @@ CREATE OR REPLACE FUNCTION audit_trigger_function()
 RETURNS TRIGGER
 LANGUAGE plpgsql
 SECURITY DEFINER
+SET search_path = public
 AS $$
 DECLARE
     v_old_business JSONB;
@@ -597,6 +600,7 @@ CREATE OR REPLACE FUNCTION audit_trigger_function_with_audit_id()
 RETURNS TRIGGER
 LANGUAGE plpgsql
 SECURITY DEFINER
+SET search_path = public
 AS $$
 DECLARE
     v_old_business JSONB;
@@ -665,6 +669,7 @@ CREATE OR REPLACE FUNCTION audit_trigger_function_with_submission_id()
 RETURNS TRIGGER
 LANGUAGE plpgsql
 SECURITY DEFINER
+SET search_path = public
 AS $$
 DECLARE
     v_old_business JSONB;

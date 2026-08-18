@@ -266,7 +266,6 @@ async fn import_e2b_xml_in_txn(
 
 	let snapshot = json!({
 		"parsed": parsed.json,
-		"raw_xml": String::from_utf8_lossy(&req.xml),
 	});
 
 	let reaction_map = import_section_e(ctx, &mm, &req.xml, case_id).await?;

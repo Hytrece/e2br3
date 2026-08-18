@@ -13,8 +13,204 @@ use crate::export::sections::h::{
 use crate::export::sections::n::apply_section_n;
 use crate::export::shared::patch_doc::postprocess_export_doc;
 use crate::export_utils::set_xsi_type_first;
+use lib_core::model::case_identifiers::{
+	LinkedReportNumber, LinkedReportNumberBmc, LinkedReportNumberFilter,
+	OtherCaseIdentifier, OtherCaseIdentifierBmc, OtherCaseIdentifierFilter,
+};
+use lib_core::model::narrative::NarrativeInformationBmc;
+use lib_core::model::receiver::ReceiverInformation;
+use lib_core::model::safety_report::{
+	DocumentsHeldBySender, DocumentsHeldBySenderBmc, DocumentsHeldBySenderFilter,
+	LiteratureReference, PrimarySource, SafetyReportIdentification,
+	SafetyReportIdentificationBmc, StudyFdaCrossReportedInd, StudyInformation,
+	StudyRegistrationNumber,
+};
+use modql::filter::{ListOptions, OpValValue, OpValsValue};
+use serde_json::json;
 
 const FDA_MPID_CODE_SYSTEM: &str = "2.16.840.1.113883.6.69";
+
+struct PostprocessSnapshot {
+	report: SafetyReportIdentification,
+	receiver: Option<ReceiverInformation>,
+	patient: Option<PatientInformation>,
+	identifiers: Vec<PatientIdentifier>,
+	parent: Option<ParentInformation>,
+	parent_past_drugs: Vec<ParentPastDrugHistory>,
+	parent_medical_history: Vec<ParentMedicalHistory>,
+	medical_history: Vec<MedicalHistoryEpisode>,
+	past_drugs: Vec<PastDrugHistory>,
+	death_info: Option<PatientDeathInformation>,
+	primary_sources: Vec<PrimarySource>,
+	documents: Vec<DocumentsHeldBySender>,
+	other_identifiers: Vec<OtherCaseIdentifier>,
+	linked_reports: Vec<LinkedReportNumber>,
+	literature_references: Vec<LiteratureReference>,
+	study: Option<StudyInformation>,
+	study_registrations: Vec<StudyRegistrationNumber>,
+	study_cross_reported_inds: Vec<StudyFdaCrossReportedInd>,
+	case_summaries: Vec<CaseSummaryInformation>,
+	sender_diagnoses: Vec<SenderDiagnosis>,
+}
+
+async fn load_postprocess_snapshot(
+	ctx: &Ctx,
+	mm: &ModelManager,
+	case_id: sqlx::types::Uuid,
+	authority: lib_core::regulatory::RegulatoryAuthority,
+) -> Result<PostprocessSnapshot> {
+	let report = SafetyReportIdentificationBmc::get_by_case(ctx, mm, case_id)
+		.await
+		.map_err(Error::from)?;
+	let receiver =
+		crate::export::sections::n::fetch_receiver_information(mm, case_id).await?;
+	let patient = fetch_patient_information(ctx, mm, case_id).await?;
+	let (
+		identifiers,
+		parent,
+		parent_past_drugs,
+		parent_medical_history,
+		medical_history,
+		past_drugs,
+		death_info,
+	) = if let Some(patient) = patient.as_ref() {
+		let identifiers = fetch_patient_identifiers(ctx, mm, patient.id).await?;
+		let parent = fetch_parent_information(ctx, mm, patient.id).await?;
+		let parent_past_drugs = if let Some(parent) = parent.as_ref() {
+			fetch_parent_past_drug_history(ctx, mm, parent.id).await?
+		} else {
+			Vec::new()
+		};
+		let parent_medical_history = if let Some(parent) = parent.as_ref() {
+			fetch_parent_medical_history(ctx, mm, parent.id).await?
+		} else {
+			Vec::new()
+		};
+		let medical_history =
+			fetch_medical_history_episodes(ctx, mm, patient.id).await?;
+		let past_drugs = fetch_past_drug_history(ctx, mm, patient.id).await?;
+		let death_info = fetch_patient_death_information(mm, patient.id).await?;
+		(
+			identifiers,
+			parent,
+			parent_past_drugs,
+			parent_medical_history,
+			medical_history,
+			past_drugs,
+			death_info,
+		)
+	} else {
+		(
+			Vec::new(),
+			None,
+			Vec::new(),
+			Vec::new(),
+			Vec::new(),
+			Vec::new(),
+			None,
+		)
+	};
+
+	let primary_sources =
+		crate::export::sections::n::fetch_primary_sources(mm, case_id).await?;
+	let mut documents = DocumentsHeldBySenderBmc::list(
+		ctx,
+		mm,
+		Some(vec![DocumentsHeldBySenderFilter {
+			case_id: Some(uuid_eq(case_id)),
+			..Default::default()
+		}]),
+		Some(ListOptions::default()),
+	)
+	.await
+	.map_err(Error::from)?;
+	let mut other_identifiers = OtherCaseIdentifierBmc::list(
+		ctx,
+		mm,
+		Some(vec![OtherCaseIdentifierFilter {
+			case_id: Some(uuid_eq(case_id)),
+			..Default::default()
+		}]),
+		Some(ListOptions::default()),
+	)
+	.await
+	.map_err(Error::from)?;
+	let mut linked_reports = LinkedReportNumberBmc::list(
+		ctx,
+		mm,
+		Some(vec![LinkedReportNumberFilter {
+			case_id: Some(uuid_eq(case_id)),
+			..Default::default()
+		}]),
+		Some(ListOptions::default()),
+	)
+	.await
+	.map_err(Error::from)?;
+	documents.sort_by_key(|value| value.sequence_number);
+	other_identifiers.sort_by_key(|value| value.sequence_number);
+	linked_reports.sort_by_key(|value| value.sequence_number);
+
+	let literature_references =
+		crate::export::sections::c::fetch_literature_references(mm, case_id).await?;
+	let study =
+		crate::export::sections::c::fetch_study_information(ctx, mm, case_id)
+			.await?;
+	let (study_registrations, study_cross_reported_inds) = if let Some(study) =
+		study.as_ref()
+	{
+		let registrations =
+			crate::export::sections::c::fetch_study_registrations(ctx, mm, study.id)
+				.await?;
+		let cross_reported_inds =
+			if matches!(authority, lib_core::regulatory::RegulatoryAuthority::Fda) {
+				crate::export::sections::c::fetch_study_fda_cross_reported_inds(
+					ctx, mm, study.id,
+				)
+				.await?
+			} else {
+				Vec::new()
+			};
+		(registrations, cross_reported_inds)
+	} else {
+		(Vec::new(), Vec::new())
+	};
+	let (case_summaries, sender_diagnoses) = if let Some(narrative) =
+		NarrativeInformationBmc::get_by_case_optional(ctx, mm, case_id).await?
+	{
+		(
+			fetch_case_summaries(ctx, mm, narrative.id).await?,
+			fetch_sender_diagnoses(ctx, mm, narrative.id).await?,
+		)
+	} else {
+		(Vec::new(), Vec::new())
+	};
+	Ok(PostprocessSnapshot {
+		report,
+		receiver,
+		patient,
+		identifiers,
+		parent,
+		parent_past_drugs,
+		parent_medical_history,
+		medical_history,
+		past_drugs,
+		death_info,
+		primary_sources,
+		documents,
+		other_identifiers,
+		linked_reports,
+		literature_references,
+		study,
+		study_registrations,
+		study_cross_reported_inds,
+		case_summaries,
+		sender_diagnoses,
+	})
+}
+
+fn uuid_eq(id: sqlx::types::Uuid) -> OpValsValue {
+	OpValValue::Eq(json!(id)).into()
+}
 
 fn normalize_namespace_artifacts(mut xml: String) -> String {
 	xml = xml.replace("xmlns:default=\"urn:hl7-org:v3\"", "");
@@ -40,6 +236,7 @@ pub(crate) async fn apply_c_d_h_sections(
 	authority: lib_core::regulatory::RegulatoryAuthority,
 	_outbound_message_header: &crate::export::OutboundMessageHeader,
 ) -> Result<String> {
+	let snapshot = load_postprocess_snapshot(ctx, mm, case_id, authority).await?;
 	let parser = Parser::default();
 	let mut doc = parser.parse_string(&xml).map_err(|err| Error::InvalidXml {
 		message: format!("XML parse error (patched): {err}"),
@@ -55,65 +252,94 @@ pub(crate) async fn apply_c_d_h_sections(
 	let _ =
 		xpath.register_namespace("xsi", "http://www.w3.org/2001/XMLSchema-instance");
 	apply_section_n(
-		ctx,
 		&mut doc,
 		&parser,
-		mm,
-		case_id,
 		&mut xpath,
+		&snapshot.report,
+		snapshot.receiver.as_ref(),
 		_outbound_message_header,
-	)
-	.await?;
-	apply_section_d(ctx, &mut doc, &parser, mm, case_id, &mut xpath, authority)
-		.await?;
-	apply_c_2_primary_sources(&mut doc, &parser, mm, case_id, &mut xpath, authority)
-		.await?;
+	)?;
+	apply_section_d(
+		&mut doc,
+		&parser,
+		&mut xpath,
+		snapshot.patient.as_ref(),
+		&snapshot.identifiers,
+		snapshot.parent.as_ref(),
+		&snapshot.parent_past_drugs,
+		&snapshot.parent_medical_history,
+		&snapshot.medical_history,
+		&snapshot.past_drugs,
+		&snapshot.death_info,
+		authority,
+	)?;
+	apply_c_2_primary_sources(
+		&mut doc,
+		&parser,
+		&mut xpath,
+		&snapshot.primary_sources,
+		authority,
+	)?;
 	apply_c_1_report_relationships(
-		&mut doc, &parser, ctx, mm, case_id, &mut xpath, authority,
-	)
-	.await?;
-	apply_c_4_literature(&mut doc, &parser, mm, case_id, &mut xpath, authority)
-		.await?;
-	apply_c_5_study(&mut doc, &parser, ctx, mm, case_id, &mut xpath, authority)
-		.await?;
-	apply_h_3_sender_diagnoses(ctx, &mut doc, &parser, mm, case_id, &mut xpath)
-		.await?;
-	apply_h_5_case_summaries(ctx, &mut doc, &parser, mm, case_id, &mut xpath)
-		.await?;
+		&mut doc,
+		&parser,
+		&mut xpath,
+		&snapshot.documents,
+		&snapshot.other_identifiers,
+		&snapshot.linked_reports,
+		authority,
+	)?;
+	apply_c_4_literature(
+		&mut doc,
+		&parser,
+		&mut xpath,
+		&snapshot.literature_references,
+		authority,
+	)?;
+	apply_c_5_study(
+		&mut doc,
+		&parser,
+		&mut xpath,
+		snapshot.study.as_ref(),
+		&snapshot.study_registrations,
+		&snapshot.study_cross_reported_inds,
+		authority,
+	)?;
+	apply_h_3_sender_diagnoses(
+		&mut doc,
+		&parser,
+		&mut xpath,
+		&snapshot.sender_diagnoses,
+	)?;
+	apply_h_5_case_summaries(
+		&mut doc,
+		&parser,
+		&mut xpath,
+		&snapshot.case_summaries,
+	)?;
 	postprocess_export_doc(&mut doc, &mut xpath)?;
 	reorder_investigation_event_children(&mut xpath);
 
 	Ok(normalize_namespace_artifacts(doc.to_string()))
 }
 
-async fn apply_section_d(
-	ctx: &Ctx,
+fn apply_section_d(
 	doc: &mut Document,
 	parser: &Parser,
-	mm: &ModelManager,
-	case_id: sqlx::types::Uuid,
 	xpath: &mut Context,
+	patient: Option<&PatientInformation>,
+	identifiers: &[PatientIdentifier],
+	parent: Option<&ParentInformation>,
+	parent_past_drugs: &[ParentPastDrugHistory],
+	parent_medical_history: &[ParentMedicalHistory],
+	medical_history: &[MedicalHistoryEpisode],
+	past_drugs: &[PastDrugHistory],
+	death_info: &Option<PatientDeathInformation>,
 	authority: lib_core::regulatory::RegulatoryAuthority,
 ) -> Result<()> {
-	let Some(patient) = fetch_patient_information(ctx, mm, case_id).await? else {
+	let Some(patient) = patient else {
 		return Ok(());
 	};
-	let identifiers = fetch_patient_identifiers(ctx, mm, patient.id).await?;
-	let parent = fetch_parent_information(ctx, mm, patient.id).await?;
-	let parent_past_drugs = if let Some(parent) = parent.as_ref() {
-		fetch_parent_past_drug_history(ctx, mm, parent.id).await?
-	} else {
-		Vec::new()
-	};
-	let parent_medical_history = if let Some(parent) = parent.as_ref() {
-		fetch_parent_medical_history(ctx, mm, parent.id).await?
-	} else {
-		Vec::new()
-	};
-	let medical_history =
-		fetch_medical_history_episodes(ctx, mm, patient.id).await?;
-	let past_drugs = fetch_past_drug_history(ctx, mm, patient.id).await?;
-	let death_info = fetch_patient_death_information(mm, patient.id).await?;
 
 	if let Some(v) = patient.patient_initials.as_deref() {
 		set_text_first(xpath, "//hl7:primaryRole/hl7:player1/hl7:name", v);
@@ -263,7 +489,7 @@ async fn apply_section_d(
 			null_flavor,
 		);
 	}
-	apply_d_7_medical_history(doc, parser, xpath, &medical_history)?;
+	apply_d_7_medical_history(doc, parser, xpath, medical_history)?;
 	if patient.gestation_period.is_some() || patient.gestation_period_unit.is_some()
 	{
 		ensure_patient_observation(xpath, doc, parser, "16", "PQ")?;
@@ -305,7 +531,7 @@ async fn apply_section_d(
 		write_d_7_3(xpath, therapy_xpath, v);
 	}
 
-	for ident in &identifiers {
+	for ident in identifiers {
 		ensure_patient_identifier(xpath, doc, parser, &ident.identifier_type_code)?;
 		let id_xpath = format!(
 			"//hl7:primaryRole/hl7:player1/hl7:asIdentifiedEntity[hl7:code[@code='{}']]/hl7:id",
@@ -498,18 +724,18 @@ async fn apply_section_d(
 			doc,
 			parser,
 			xpath,
-			&parent_past_drugs,
+			parent_past_drugs,
 			matches!(authority, lib_core::regulatory::RegulatoryAuthority::Mfds),
 		)?;
 		apply_d_10_7_parent_medical_history(
 			doc,
 			parser,
 			xpath,
-			&parent_medical_history,
+			parent_medical_history,
 		)?;
 	}
 
-	apply_d_8_past_drugs(doc, parser, xpath, &past_drugs, authority)?;
+	apply_d_8_past_drugs(doc, parser, xpath, past_drugs, authority)?;
 	if !matches!(authority, lib_core::regulatory::RegulatoryAuthority::Fda) {
 		remove_nodes(
 			xpath,

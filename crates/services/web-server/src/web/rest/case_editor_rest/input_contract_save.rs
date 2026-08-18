@@ -1764,4 +1764,26 @@ mod input_contract_save_tests {
 		});
 		validate_row_payload("DG", "drug", row.as_object().unwrap(), None).unwrap();
 	}
+
+	#[test]
+	fn dg_assessment_expectedness_is_validated() {
+		let invalid = json!({
+			"drugReactionAssessments": [{ "expectedness": "3" }]
+		});
+		let detail = constraint_violation(
+			validate_row_payload("DG", "drug", invalid.as_object().unwrap(), None)
+				.unwrap_err(),
+		);
+		assert_eq!(detail.rule_code, "LOCAL.G.k.9.i.expectedness.ALLOWED.VALUE");
+		assert_eq!(
+			detail.path,
+			"drugs.0.drugReactionAssessments.0.expectedness"
+		);
+
+		let valid = json!({
+			"drugReactionAssessments": [{ "expectedness": "2" }]
+		});
+		validate_row_payload("DG", "drug", valid.as_object().unwrap(), None)
+			.unwrap();
+	}
 }

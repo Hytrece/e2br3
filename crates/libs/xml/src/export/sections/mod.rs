@@ -12,7 +12,6 @@ use lib_core::model::case::Case;
 use lib_core::model::narrative::NarrativeInformationBmc;
 use lib_core::model::patient::{PatientDeathInformation, PatientInformationBmc};
 use lib_core::model::reaction::Reaction;
-use lib_core::model::receiver::ReceiverInformation;
 use lib_core::model::safety_report::LiteratureReference;
 use lib_core::model::safety_report::PrimarySource;
 use lib_core::model::safety_report::SafetyReportIdentificationBmc;

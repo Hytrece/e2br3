@@ -162,28 +162,21 @@ pub(super) async fn reconcile_one_submission(
 			.await?;
 			let outbound_message_header = export_message_header(&header)?;
 
-			let ctx_clone = system_ctx.with_compliance(
+			let export_ctx = system_ctx.with_compliance(
 				Some(SYSTEM_REASON_RECONCILE_EXPORT.to_string()),
 				None,
 			);
-			let mm_clone = mm.clone();
-			let case_id = row.case_id;
-			let xml = task::spawn_blocking(move || {
-				Handle::current().block_on(export_case_xml_with_options(
-					&ctx_clone,
-					&mm_clone,
-					case_id,
-					ExportXmlOptions {
-						apply_comments: true,
-						authority: export_authority,
-						outbound_message_header,
-					},
-				))
-			})
+			let xml = export_case_xml_with_options(
+				&export_ctx,
+				mm,
+				row.case_id,
+				ExportXmlOptions {
+					apply_comments: true,
+					authority: export_authority,
+					outbound_message_header,
+				},
+			)
 			.await
-			.map_err(|err| Error::BadRequest {
-				message: format!("reconcile export task failed: {err}"),
-			})?
 			.map_err(Error::from)?;
 
 			let now = OffsetDateTime::now_utc();

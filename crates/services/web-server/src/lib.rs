@@ -1,13 +1,14 @@
 #![allow(dead_code)]
 
 pub mod config;
-pub mod openapi;
 pub mod runtime_settings;
 pub mod submission;
 pub mod web;
 
-use axum::Router;
-use axum::{http::StatusCode, middleware, routing::get};
+use axum::body::Body;
+use axum::http::{header, Method, Request, StatusCode, Uri};
+use axum::response::{IntoResponse, Response};
+use axum::{middleware, routing::get, Json, Router};
 use lib_core::model::authorization::{
 	AuthorizationMigrationError, AuthorizationMigrationService, MigrationReport,
 	RevisionRepository,
@@ -74,11 +75,17 @@ fn classify_authorization_startup(
 }
 
 pub fn app(mm: ModelManager) -> Router {
-	let routes_rest = web::routes_rest::routes(mm.clone()).route_layer(
-		middleware::from_fn_with_state(mm.clone(), mw_ctx_require_and_set_dbx),
-	);
-	let routes_internal = web::routes_internal::routes(mm.clone());
-	let routes_login = web::routes_login::routes(mm.clone());
+	let routes_rest = web::routes_rest::routes(mm.clone())
+		.fallback(route_not_found)
+		.route_layer(middleware::from_fn_with_state(
+			mm.clone(),
+			mw_ctx_require_and_set_dbx,
+		))
+		.route_layer(middleware::from_fn(mw_csrf_origin));
+	let routes_internal =
+		web::routes_internal::routes(mm.clone()).fallback(route_not_found);
+	let routes_login =
+		web::routes_login::routes(mm.clone()).fallback(route_not_found);
 
 	Router::new()
 		.route("/health", get(health))
@@ -92,8 +99,71 @@ pub fn app(mm: ModelManager) -> Router {
 		.fallback_service(routes_static::serve_dir(&config::web_config().WEB_FOLDER))
 }
 
+async fn mw_csrf_origin(req: Request<Body>, next: middleware::Next) -> Response {
+	let state_changing = !matches!(
+		req.method(),
+		&Method::GET | &Method::HEAD | &Method::OPTIONS | &Method::TRACE
+	);
+	let has_auth_cookie = req
+		.headers()
+		.get(header::COOKIE)
+		.and_then(|value| value.to_str().ok())
+		.is_some_and(|value| {
+			value
+				.split(';')
+				.any(|part| part.trim_start().starts_with("auth-token="))
+		});
+	if state_changing && has_auth_cookie && !csrf_origin_allowed(&req) {
+		return (
+			StatusCode::FORBIDDEN,
+			"cross-origin state-changing request rejected",
+		)
+			.into_response();
+	}
+	next.run(req).await
+}
+
+fn csrf_origin_allowed(req: &Request<Body>) -> bool {
+	let Some(origin) = req.headers().get(header::ORIGIN) else {
+		return true;
+	};
+	let Ok(origin) = origin.to_str() else {
+		return false;
+	};
+	if origin.eq_ignore_ascii_case("null") {
+		return false;
+	}
+	if let Ok(expected) = std::env::var("E2BR3_PUBLIC_ORIGIN") {
+		let expected = expected.trim().trim_end_matches('/');
+		if !expected.is_empty() {
+			return origin.trim_end_matches('/').eq_ignore_ascii_case(expected);
+		}
+	}
+	let Some(host) = req
+		.headers()
+		.get(header::HOST)
+		.and_then(|value| value.to_str().ok())
+	else {
+		return false;
+	};
+	origin.parse::<Uri>().ok().is_some_and(|uri| {
+		uri.authority()
+			.is_some_and(|authority| authority.as_str().eq_ignore_ascii_case(host))
+	})
+}
+
 async fn health() -> StatusCode {
 	StatusCode::NO_CONTENT
+}
+
+async fn route_not_found() -> impl IntoResponse {
+	(
+		StatusCode::NOT_FOUND,
+		Json(serde_json::json!({
+			"error": "route_not_found",
+			"message": "API route not found"
+		})),
+	)
 }
 
 #[cfg(test)]
@@ -130,5 +200,24 @@ mod tests {
 			result,
 			Err(AuthorizationMigrationError::CatalogHashMismatch { .. })
 		));
+	}
+
+	#[test]
+	fn csrf_rejects_null_origin() {
+		let request = Request::builder()
+			.header(header::ORIGIN, "null")
+			.body(Body::empty())
+			.expect("request");
+		assert!(!csrf_origin_allowed(&request));
+	}
+
+	#[tokio::test]
+	async fn api_route_not_found_is_json() {
+		let response = route_not_found().await.into_response();
+		assert_eq!(response.status(), StatusCode::NOT_FOUND);
+		assert_eq!(
+			response.headers().get(header::CONTENT_TYPE).unwrap(),
+			"application/json"
+		);
 	}
 }

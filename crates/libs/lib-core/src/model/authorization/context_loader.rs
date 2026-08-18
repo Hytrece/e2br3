@@ -50,6 +50,7 @@ pub enum CaseMutationKind {
 	ReviewToggle,
 	LockToggle,
 	Delete,
+	Restore,
 	Validate,
 	Submission,
 	SubmissionReceiver,
@@ -1102,6 +1103,7 @@ fn case_lifecycle_allows(facts: &CaseFacts, kind: CaseMutationKind) -> bool {
 		CaseMutationKind::Delete => {
 			!matches!(status.as_str(), "deleted" | "archived")
 		}
+		CaseMutationKind::Restore => status == "deleted",
 		CaseMutationKind::Validate => {
 			!matches!(status.as_str(), "locked" | "deleted" | "archived")
 		}

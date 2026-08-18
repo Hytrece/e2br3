@@ -1,14 +1,9 @@
-use super::n::fetch_primary_sources;
 use super::*;
 use crate::export::roundtrip::{patch_c_safety_report, CSafetyReportPatch};
-use lib_core::model::case_identifiers::{
-	LinkedReportNumber, LinkedReportNumberBmc, LinkedReportNumberFilter,
-	OtherCaseIdentifier, OtherCaseIdentifierBmc, OtherCaseIdentifierFilter,
-};
+use lib_core::model::case_identifiers::{LinkedReportNumber, OtherCaseIdentifier};
 use lib_core::model::safety_report::{
-	DocumentsHeldBySender, DocumentsHeldBySenderBmc, DocumentsHeldBySenderFilter,
-	SafetyReportIdentification, SenderInformationBmc, SenderInformationFilter,
-	StudyFdaCrossReportedInd, StudyFdaCrossReportedIndBmc,
+	DocumentsHeldBySender, SafetyReportIdentification, SenderInformationBmc,
+	SenderInformationFilter, StudyFdaCrossReportedInd, StudyFdaCrossReportedIndBmc,
 	StudyFdaCrossReportedIndFilter, StudyInformationBmc, StudyInformationFilter,
 	StudyRegistrationNumberBmc, StudyRegistrationNumberFilter,
 };
@@ -100,15 +95,13 @@ fn set_telecom_or_null_flavor(
 	}
 }
 
-pub(crate) async fn apply_c_2_primary_sources(
+pub(crate) fn apply_c_2_primary_sources(
 	doc: &mut Document,
 	parser: &Parser,
-	mm: &ModelManager,
-	case_id: sqlx::types::Uuid,
 	xpath: &mut Context,
+	sources: &[PrimarySource],
 	authority: lib_core::regulatory::RegulatoryAuthority,
 ) -> Result<()> {
-	let sources = fetch_primary_sources(mm, case_id).await?;
 	if sources.is_empty() {
 		return Ok(());
 	}
@@ -614,52 +607,15 @@ fn ensure_primary_source_author_nodes(
 	)
 }
 
-pub(crate) async fn apply_c_1_report_relationships(
+pub(crate) fn apply_c_1_report_relationships(
 	doc: &mut Document,
 	parser: &Parser,
-	ctx: &Ctx,
-	mm: &ModelManager,
-	case_id: sqlx::types::Uuid,
 	xpath: &mut Context,
+	documents: &[DocumentsHeldBySender],
+	identifiers: &[OtherCaseIdentifier],
+	linked_reports: &[LinkedReportNumber],
 	authority: lib_core::regulatory::RegulatoryAuthority,
 ) -> Result<()> {
-	let mut documents = DocumentsHeldBySenderBmc::list(
-		ctx,
-		mm,
-		Some(vec![DocumentsHeldBySenderFilter {
-			case_id: Some(uuid_eq(case_id)),
-			..Default::default()
-		}]),
-		Some(ListOptions::default()),
-	)
-	.await
-	.map_err(Error::from)?;
-	let mut identifiers = OtherCaseIdentifierBmc::list(
-		ctx,
-		mm,
-		Some(vec![OtherCaseIdentifierFilter {
-			case_id: Some(uuid_eq(case_id)),
-			..Default::default()
-		}]),
-		Some(ListOptions::default()),
-	)
-	.await
-	.map_err(Error::from)?;
-	let mut linked_reports = LinkedReportNumberBmc::list(
-		ctx,
-		mm,
-		Some(vec![LinkedReportNumberFilter {
-			case_id: Some(uuid_eq(case_id)),
-			..Default::default()
-		}]),
-		Some(ListOptions::default()),
-	)
-	.await
-	.map_err(Error::from)?;
-	documents.sort_by_key(|value| value.sequence_number);
-	identifiers.sort_by_key(|value| value.sequence_number);
-	linked_reports.sort_by_key(|value| value.sequence_number);
-
 	remove_nodes(
 		xpath,
 		"//hl7:investigationEvent/hl7:reference[hl7:document/hl7:code[@code='1']]",
@@ -1329,15 +1285,13 @@ mod primary_source_null_flavor_tests {
 	}
 }
 
-pub(crate) async fn apply_c_4_literature(
+pub(crate) fn apply_c_4_literature(
 	doc: &mut Document,
 	parser: &Parser,
-	mm: &ModelManager,
-	case_id: sqlx::types::Uuid,
 	xpath: &mut Context,
+	references: &[LiteratureReference],
 	authority: lib_core::regulatory::RegulatoryAuthority,
 ) -> Result<()> {
-	let references = fetch_literature_references(mm, case_id).await?;
 	if references.is_empty() {
 		return Ok(());
 	}
@@ -1420,26 +1374,18 @@ fn write_c_4_r_2(
 	)
 }
 
-pub(crate) async fn apply_c_5_study(
+pub(crate) fn apply_c_5_study(
 	doc: &mut Document,
 	parser: &Parser,
-	ctx: &Ctx,
-	mm: &ModelManager,
-	case_id: sqlx::types::Uuid,
 	xpath: &mut Context,
+	study: Option<&StudyInformation>,
+	registrations: &[StudyRegistrationNumber],
+	cross_reported_inds: &[StudyFdaCrossReportedInd],
 	authority: lib_core::regulatory::RegulatoryAuthority,
 ) -> Result<()> {
-	let study = fetch_study_information(ctx, mm, case_id).await?;
 	let Some(study) = study else {
 		return Ok(());
 	};
-	let registrations = fetch_study_registrations(ctx, mm, study.id).await?;
-	let cross_reported_inds =
-		if matches!(authority, lib_core::regulatory::RegulatoryAuthority::Fda) {
-			fetch_study_fda_cross_reported_inds(ctx, mm, study.id).await?
-		} else {
-			Vec::new()
-		};
 
 	remove_nodes(xpath, "//hl7:primaryRole/hl7:subjectOf1[hl7:researchStudy]");
 	remove_nodes(xpath, "//hl7:primaryRole/hl7:subjectOf2[hl7:researchStudy]");
@@ -1449,7 +1395,7 @@ pub(crate) async fn apply_c_5_study(
 	);
 
 	let mut auth_xml = String::new();
-	for reg in &registrations {
+	for reg in registrations {
 		if reg
 			.registration_number
 			.as_deref()
@@ -1654,7 +1600,7 @@ fn write_fda_study_id(value: Option<&str>, root: &str) -> String {
 		.unwrap_or_default()
 }
 
-async fn fetch_study_information(
+pub(crate) async fn fetch_study_information(
 	ctx: &Ctx,
 	mm: &ModelManager,
 	case_id: sqlx::types::Uuid,
@@ -1673,7 +1619,7 @@ async fn fetch_study_information(
 	Ok(studies.into_iter().next())
 }
 
-async fn fetch_literature_references(
+pub(crate) async fn fetch_literature_references(
 	mm: &ModelManager,
 	case_id: sqlx::types::Uuid,
 ) -> Result<Vec<LiteratureReference>> {
@@ -1684,7 +1630,7 @@ async fn fetch_literature_references(
 		.map_err(|e| Error::Model(lib_core::model::Error::Store(format!("{e}"))))
 }
 
-async fn fetch_study_registrations(
+pub(crate) async fn fetch_study_registrations(
 	ctx: &Ctx,
 	mm: &ModelManager,
 	study_information_id: sqlx::types::Uuid,
@@ -1704,7 +1650,7 @@ async fn fetch_study_registrations(
 	Ok(registrations)
 }
 
-async fn fetch_study_fda_cross_reported_inds(
+pub(crate) async fn fetch_study_fda_cross_reported_inds(
 	ctx: &Ctx,
 	mm: &ModelManager,
 	study_information_id: sqlx::types::Uuid,

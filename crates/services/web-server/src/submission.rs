@@ -24,8 +24,6 @@ use std::collections::HashMap;
 use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
-use tokio::runtime::Handle;
-use tokio::task;
 use tokio::time::sleep;
 use uuid::Uuid;
 use xml::validation::{validate_e2b_xml, XmlValidatorConfig};

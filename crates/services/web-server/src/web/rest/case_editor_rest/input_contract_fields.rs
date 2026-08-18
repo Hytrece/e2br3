@@ -20,6 +20,24 @@ fn cioms_dechallenge_result(input: FieldInput<'_>) -> Vec<InputIssue> {
 	}
 }
 
+fn assessment_expectedness(input: FieldInput<'_>) -> Vec<InputIssue> {
+	let valid = match input.value {
+		input_contracts::InputValue::Missing => true,
+		input_contracts::InputValue::String(value) => {
+			matches!(value.trim(), "1" | "2")
+		}
+		_ => false,
+	};
+	if valid {
+		Vec::new()
+	} else {
+		vec![InputIssue {
+			code: "LOCAL.G.k.9.i.expectedness.ALLOWED.VALUE",
+			message: "must be one of: 1, 2".to_string(),
+		}]
+	}
+}
+
 pub(super) fn validate_section_fields(
 	section: &str,
 	row: &Map<String, Value>,
@@ -948,6 +966,16 @@ fn dg(
 		changed_paths,
 		outer_indexes,
 		cioms_dechallenge_result,
+	)?;
+	validate_field(
+		row,
+		"drugReactionAssessments[].expectedness",
+		"drugs[].drugReactionAssessments[].expectedness",
+		InputType::String,
+		None,
+		changed_paths,
+		outer_indexes,
+		assessment_expectedness,
 	)?;
 	validate_field(
 		row,
