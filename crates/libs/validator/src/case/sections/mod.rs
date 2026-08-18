@@ -84,16 +84,8 @@ fn collect_meddra_version_issues(
 	validation_ctx: &ValidationContext,
 	issues: &mut Vec<ValidationIssue>,
 ) {
-	fn row_index(sequence_number: i32, fallback: usize) -> usize {
-		sequence_number
-			.checked_sub(1)
-			.and_then(|value| usize::try_from(value).ok())
-			.unwrap_or(fallback)
-	}
-
 	let mut versions = Vec::new();
 	for (idx, value) in validation_ctx.medical_history.iter().enumerate() {
-		let idx = row_index(value.sequence_number, idx);
 		versions.push((
 			"ICH.D.7.1.r.1a.MEDDRA.VERSION.CONSISTENT",
 			format!("patientInformation.medicalHistory.{idx}.meddraVersion"),
@@ -101,7 +93,6 @@ fn collect_meddra_version_issues(
 		));
 	}
 	for (idx, value) in validation_ctx.past_drugs.iter().enumerate() {
-		let idx = row_index(value.sequence_number, idx);
 		versions.extend([
 			(
 				"ICH.D.8.r.6a.MEDDRA.VERSION.CONSISTENT",
@@ -116,7 +107,6 @@ fn collect_meddra_version_issues(
 		]);
 	}
 	for (idx, value) in validation_ctx.reported_causes_of_death.iter().enumerate() {
-		let idx = row_index(value.sequence_number, idx);
 		versions.push((
 			"ICH.D.9.2.r.1a.MEDDRA.VERSION.CONSISTENT",
 			format!("patientInformation.death.reportedCauses.{idx}.meddraVersion"),
@@ -124,7 +114,6 @@ fn collect_meddra_version_issues(
 		));
 	}
 	for (idx, value) in validation_ctx.autopsy_causes_of_death.iter().enumerate() {
-		let idx = row_index(value.sequence_number, idx);
 		versions.push((
 			"ICH.D.9.4.r.1a.MEDDRA.VERSION.CONSISTENT",
 			format!("patientInformation.death.autopsyCauses.{idx}.meddraVersion"),
@@ -137,22 +126,30 @@ fn collect_meddra_version_issues(
 		.enumerate()
 		.map(|(idx, parent)| (parent.id, idx))
 		.collect::<HashMap<_, _>>();
-	for (idx, value) in validation_ctx.parent_medical_history.iter().enumerate() {
+	let mut parent_medical_history_indices = HashMap::new();
+	for value in &validation_ctx.parent_medical_history {
 		let Some(parent_idx) = parent_indices.get(&value.parent_id).copied() else {
 			continue;
 		};
-		let idx = row_index(value.sequence_number, idx);
+		let child_idx = parent_medical_history_indices
+			.entry(value.parent_id)
+			.or_insert(0);
+		let idx = *child_idx;
+		*child_idx += 1;
 		versions.push((
 			"ICH.D.10.7.1.r.1a.MEDDRA.VERSION.CONSISTENT",
 			format!("patientInformation.parents.{parent_idx}.medicalHistory.{idx}.meddraVersion"),
 			value.meddra_version.as_deref(),
 		));
 	}
-	for (idx, value) in validation_ctx.parent_past_drugs.iter().enumerate() {
+	let mut parent_past_drug_indices = HashMap::new();
+	for value in &validation_ctx.parent_past_drugs {
 		let Some(parent_idx) = parent_indices.get(&value.parent_id).copied() else {
 			continue;
 		};
-		let idx = row_index(value.sequence_number, idx);
+		let child_idx = parent_past_drug_indices.entry(value.parent_id).or_insert(0);
+		let idx = *child_idx;
+		*child_idx += 1;
 		versions.extend([
 			(
 				"ICH.D.10.8.r.6a.MEDDRA.VERSION.CONSISTENT",
@@ -167,7 +164,6 @@ fn collect_meddra_version_issues(
 		]);
 	}
 	for (idx, value) in validation_ctx.reactions.iter().enumerate() {
-		let idx = row_index(value.sequence_number, idx);
 		versions.push((
 			"ICH.E.i.2.1a.MEDDRA.VERSION.CONSISTENT",
 			format!("reactions.{idx}.reactionMeddraVersion"),
@@ -175,7 +171,6 @@ fn collect_meddra_version_issues(
 		));
 	}
 	for (idx, value) in validation_ctx.tests.iter().enumerate() {
-		let idx = row_index(value.sequence_number, idx);
 		versions.push((
 			"ICH.F.r.2.2a.MEDDRA.VERSION.CONSISTENT",
 			format!("testResults.{idx}.testMeddraVersion"),
@@ -188,11 +183,14 @@ fn collect_meddra_version_issues(
 		.enumerate()
 		.map(|(idx, drug)| (drug.id, idx))
 		.collect::<HashMap<_, _>>();
-	for (idx, value) in validation_ctx.indications.iter().enumerate() {
+	let mut indication_indices = HashMap::new();
+	for value in &validation_ctx.indications {
 		let Some(drug_idx) = drug_indices.get(&value.drug_id).copied() else {
 			continue;
 		};
-		let idx = row_index(value.sequence_number, idx);
+		let child_idx = indication_indices.entry(value.drug_id).or_insert(0);
+		let idx = *child_idx;
+		*child_idx += 1;
 		versions.push((
 			"ICH.G.k.7.r.2a.MEDDRA.VERSION.CONSISTENT",
 			format!("drugs.{drug_idx}.indications.{idx}.indicationMeddraVersion"),
@@ -200,7 +198,6 @@ fn collect_meddra_version_issues(
 		));
 	}
 	for (idx, value) in validation_ctx.sender_diagnoses.iter().enumerate() {
-		let idx = row_index(value.sequence_number, idx);
 		versions.push((
 			"ICH.H.3.r.1a.MEDDRA.VERSION.CONSISTENT",
 			format!("narrative.senderDiagnoses.{idx}.diagnosisMeddraVersion"),

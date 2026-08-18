@@ -1660,13 +1660,13 @@ pub(crate) fn collect_ich_issues(
 	let mut fallback = HashMap::new();
 	for relatedness in &validation_ctx.relatedness_assessments {
 		let assessment_id = relatedness.drug_reaction_assessment_id;
-		let nested = assessment_indices.get(&assessment_id).copied().map(
+		let nested = assessment_indices.get(&assessment_id).copied().and_then(
 			|(drug_idx, assessment_idx)| {
 				let fallback_idx = fallback.entry(assessment_id).or_insert(0);
-				let child_idx = relatedness_bases.get(&assessment_id).copied()?
-					+ *fallback_idx;
+				let child_idx =
+					relatedness_bases.get(&assessment_id).copied()? + *fallback_idx;
 				*fallback_idx += 1;
-				(drug_idx, assessment_idx, child_idx)
+				Some((drug_idx, assessment_idx, child_idx))
 			},
 		);
 		g_k_9_i_2_r_1(nested, relatedness, issues);
@@ -1956,7 +1956,8 @@ fn fda_g_k_9(
 		};
 		let is_suspect =
 			validation_ctx.drugs[drug_idx].drug_characterization.trim() == "1";
-		let Some(relatedness_base) = relatedness_bases.get(&assessment.id).copied() else {
+		let Some(relatedness_base) = relatedness_bases.get(&assessment.id).copied()
+		else {
 			continue;
 		};
 		let rows = validation_ctx
@@ -2166,8 +2167,8 @@ pub(crate) async fn collect_fda_issues(
 		);
 	}
 	if postmarket && combination_true && !has_device {
-		if let Some(drug_idx) = validation_ctx.drugs.first().map(|_| 0) {
-			fda_g_k_12_r_4_6(drug_idx, 0, [None; 3], true, issues);
+		if !validation_ctx.drugs.is_empty() {
+			fda_g_k_12_r_4_6(0, 0, [None; 3], true, issues);
 		}
 	}
 	fda_d_1_malfunction(validation_ctx, combination_true, has_malfunction, issues);
@@ -2929,7 +2930,6 @@ mod field_rule_tests {
 		assert!(!mfds_kr1_result_required(true, false, true));
 		assert!(!mfds_kr1_result_required(true, true, false));
 	}
-
 }
 
 #[cfg(test)]
@@ -3288,6 +3288,7 @@ mod golden_g_required_tests {
 	#[test]
 	fn nested_collection_companion_rules_are_preserved() {
 		let mut ctx = empty_ctx();
+		ctx.drugs.push(drug());
 		let mut substance = substance();
 		substance.substance_termid = Some("SUB123".to_string());
 		substance.strength_value = Some("1".parse().unwrap());
@@ -3303,6 +3304,7 @@ mod golden_g_required_tests {
 			codes_for(&ctx),
 			vec![
 				"ICH.G.k.1.REQUIRED".to_string(),
+				"ICH.G.k.1.AGGREGATE.REQUIRED".to_string(),
 				"ICH.G.k.2.2.REQUIRED".to_string(),
 				"ICH.G.k.2.3.r.2a.REQUIRED".to_string(),
 				"ICH.G.k.2.3.r.3b.REQUIRED".to_string(),
@@ -3316,6 +3318,7 @@ mod golden_g_required_tests {
 	#[test]
 	fn dosage_frequency_unit_is_required_from_number_of_units() {
 		let mut ctx = empty_ctx();
+		ctx.drugs.push(drug());
 		let mut dosage = dosage();
 		dosage.number_of_units = Some(Decimal::new(5, 1));
 		ctx.dosages.push(dosage);
@@ -3380,6 +3383,7 @@ mod golden_g_required_tests {
 	#[test]
 	fn indication_and_reaction_assessment_pair_rules_are_preserved() {
 		let mut ctx = empty_ctx();
+		ctx.drugs.push(drug());
 		let mut indication = indication();
 		indication.indication_meddra_version = Some("26.1".to_string());
 		ctx.indications.push(indication);
@@ -3393,7 +3397,9 @@ mod golden_g_required_tests {
 			codes_for(&ctx),
 			vec![
 				"ICH.G.k.1.REQUIRED".to_string(),
+				"ICH.G.k.1.AGGREGATE.REQUIRED".to_string(),
 				"ICH.G.k.2.2.REQUIRED".to_string(),
+				"ICH.G.k.2.3.r.REQUIRED".to_string(),
 				"ICH.G.k.7.r.2b.REQUIRED".to_string(),
 				"ICH.G.k.9.i.3.1b.REQUIRED".to_string(),
 				"ICH.G.k.9.i.3.2a.REQUIRED".to_string(),
