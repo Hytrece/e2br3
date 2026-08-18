@@ -77,6 +77,9 @@ admin_ui_url="$(database_url "$admin_url" "$database_name")"
 app_db_user="$(python3 -c 'import sys; from urllib.parse import urlsplit; print(urlsplit(sys.argv[1]).username or "")' "$maintenance_url")"
 log_dir="$repo_root/tmp/ui-env/$name"
 mkdir -p "$log_dir"
+ui_tsconfig="$log_dir/tsconfig.json"
+printf '{"extends":"%s"}\n' "$frontend_root/tsconfig.json" >"$ui_tsconfig"
+ui_tsconfig_path="$(python3 -c 'import os, sys; print(os.path.relpath(sys.argv[2], sys.argv[1]))' "$frontend_root" "$ui_tsconfig")"
 
 if psql "$admin_url" -Atqc "SELECT 1 FROM pg_database WHERE datname = '$database_name'" | grep -q 1; then
 	psql "$admin_ui_url" -Atqc "SELECT to_regclass('public.ui_env_ready')" | grep -q ui_env_ready || {
@@ -109,7 +112,7 @@ export E2BR3_DEFAULT_MESSAGE_RECEIVER_MFDS="${E2BR3_DEFAULT_MESSAGE_RECEIVER_MFD
 
 (cd "$repo_root" && "$binary") >"$log_dir/backend.log" 2>&1 &
 backend_pid=$!
-(cd "$frontend_root" && API_PROXY_TARGET="http://127.0.0.1:$backend_port" ./node_modules/.bin/next dev --port "$frontend_port") >"$log_dir/frontend.log" 2>&1 &
+(cd "$frontend_root" && API_PROXY_TARGET="http://127.0.0.1:$backend_port" UI_NEXT_DIST_DIR=".next-ui-$name" UI_TSCONFIG_PATH="$ui_tsconfig_path" ./node_modules/.bin/next dev --port "$frontend_port") >"$log_dir/frontend.log" 2>&1 &
 frontend_pid=$!
 
 cleanup() {
