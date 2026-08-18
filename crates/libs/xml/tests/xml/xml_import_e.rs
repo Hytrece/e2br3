@@ -1,5 +1,4 @@
 use xml::import_sections::e_reaction::parse_e_reactions;
-use xml::Error as XmlError;
 
 #[test]
 fn import_e_reaction_preserves_term_highlight_code() {
@@ -84,13 +83,14 @@ fn import_e_reaction_requires_primary_text() {
   </PORR_IN049016UV>
 </MCCI_IN200100UV01>"#;
 
-	let err = parse_e_reactions(xml).expect_err("missing reaction text should fail");
-	match err {
-		XmlError::InvalidXml { message, .. } => {
-			assert!(message.contains("ICH.E.i.1.1a.REQUIRED"));
-		}
-		other => panic!("unexpected error type: {other:?}"),
-	}
+	let reactions = parse_e_reactions(xml)
+		.expect("parsing leaves business validation to the validator");
+	assert_eq!(reactions.len(), 1);
+	assert!(reactions[0].primary_source_reaction.is_none());
+	assert_eq!(
+		reactions[0].reaction_meddra_code.as_deref(),
+		Some("10027940")
+	);
 }
 
 #[test]

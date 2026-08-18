@@ -1,5 +1,5 @@
 use super::*;
-use crate::export_utils::set_xsi_type_first;
+use crate::export_utils::{fmt_date_lexeme, set_xsi_type_first};
 use crate::mfds::codes::KR_C_3_1_1;
 
 pub fn patch_c_safety_report(
@@ -109,35 +109,6 @@ pub fn patch_c_safety_report(
 		);
 	}
 	if let Some(v) = patch.sender_street_address {
-		if xpath
-			.findnodes(&format!("{sender_base}/hl7:addr"), None)
-			.map(|nodes| nodes.is_empty())
-			.unwrap_or(true)
-		{
-			append_fragment_child(
-				&mut doc,
-				&parser,
-				&mut xpath,
-				sender_base,
-				"<addr/>",
-			)?;
-		}
-		if xpath
-			.findnodes(
-				&format!("{sender_base}/hl7:addr/hl7:streetAddressLine"),
-				None,
-			)
-			.map(|nodes| nodes.is_empty())
-			.unwrap_or(true)
-		{
-			append_fragment_child(
-				&mut doc,
-				&parser,
-				&mut xpath,
-				&format!("{sender_base}/hl7:addr"),
-				"<streetAddressLine/>",
-			)?;
-		}
 		write_c_3_4_1(&mut xpath, sender_base, v);
 	}
 	if let Some(v) = patch.sender_city {
@@ -155,48 +126,6 @@ pub fn patch_c_safety_report(
 	if patch.sender_person_title.is_some()
 		|| patch.sender_person_title_null_flavor.is_some()
 	{
-		if xpath
-			.findnodes(&format!("{sender_base}/hl7:assignedPerson"), None)
-			.map(|nodes| nodes.is_empty())
-			.unwrap_or(true)
-		{
-			append_fragment_child(
-				&mut doc,
-				&parser,
-				&mut xpath,
-				sender_base,
-				"<assignedPerson/>",
-			)?;
-		}
-		if xpath
-			.findnodes(&format!("{sender_base}/hl7:assignedPerson/hl7:name"), None)
-			.map(|nodes| nodes.is_empty())
-			.unwrap_or(true)
-		{
-			append_fragment_child(
-				&mut doc,
-				&parser,
-				&mut xpath,
-				&format!("{sender_base}/hl7:assignedPerson"),
-				"<name/>",
-			)?;
-		}
-		if xpath
-			.findnodes(
-				&format!("{sender_base}/hl7:assignedPerson/hl7:name/hl7:prefix"),
-				None,
-			)
-			.map(|nodes| nodes.is_empty())
-			.unwrap_or(true)
-		{
-			append_fragment_child(
-				&mut doc,
-				&parser,
-				&mut xpath,
-				&format!("{sender_base}/hl7:assignedPerson/hl7:name"),
-				"<prefix/>",
-			)?;
-		}
 		write_c_3_3_2(
 			&mut xpath,
 			sender_base,
@@ -207,48 +136,6 @@ pub fn patch_c_safety_report(
 	if patch.sender_person_given_name.is_some()
 		|| patch.sender_person_given_name_null_flavor.is_some()
 	{
-		if xpath
-			.findnodes(&format!("{sender_base}/hl7:assignedPerson"), None)
-			.map(|nodes| nodes.is_empty())
-			.unwrap_or(true)
-		{
-			append_fragment_child(
-				&mut doc,
-				&parser,
-				&mut xpath,
-				sender_base,
-				"<assignedPerson/>",
-			)?;
-		}
-		if xpath
-			.findnodes(&format!("{sender_base}/hl7:assignedPerson/hl7:name"), None)
-			.map(|nodes| nodes.is_empty())
-			.unwrap_or(true)
-		{
-			append_fragment_child(
-				&mut doc,
-				&parser,
-				&mut xpath,
-				&format!("{sender_base}/hl7:assignedPerson"),
-				"<name/>",
-			)?;
-		}
-		if xpath
-			.findnodes(
-				&format!("{sender_base}/hl7:assignedPerson/hl7:name/hl7:given"),
-				None,
-			)
-			.map(|nodes| nodes.is_empty())
-			.unwrap_or(true)
-		{
-			append_fragment_child(
-				&mut doc,
-				&parser,
-				&mut xpath,
-				&format!("{sender_base}/hl7:assignedPerson/hl7:name"),
-				"<given/>",
-			)?;
-		}
 		write_c_3_3_3(
 			&mut xpath,
 			sender_base,
@@ -259,22 +146,6 @@ pub fn patch_c_safety_report(
 	if patch.sender_person_middle_name.is_some()
 		|| patch.sender_person_middle_name_null_flavor.is_some()
 	{
-		if xpath
-			.findnodes(
-				&format!("{sender_base}//hl7:assignedPerson/hl7:name/hl7:given[2]"),
-				None,
-			)
-			.map(|nodes| nodes.is_empty())
-			.unwrap_or(true)
-		{
-			append_fragment_child(
-				&mut doc,
-				&parser,
-				&mut xpath,
-				&format!("{sender_base}//hl7:assignedPerson/hl7:name"),
-				"<given/>",
-			)?;
-		}
 		write_c_3_3_4(
 			&mut xpath,
 			sender_base,
@@ -285,48 +156,6 @@ pub fn patch_c_safety_report(
 	if patch.sender_person_family_name.is_some()
 		|| patch.sender_person_family_name_null_flavor.is_some()
 	{
-		if xpath
-			.findnodes(&format!("{sender_base}/hl7:assignedPerson"), None)
-			.map(|nodes| nodes.is_empty())
-			.unwrap_or(true)
-		{
-			append_fragment_child(
-				&mut doc,
-				&parser,
-				&mut xpath,
-				sender_base,
-				"<assignedPerson/>",
-			)?;
-		}
-		if xpath
-			.findnodes(&format!("{sender_base}/hl7:assignedPerson/hl7:name"), None)
-			.map(|nodes| nodes.is_empty())
-			.unwrap_or(true)
-		{
-			append_fragment_child(
-				&mut doc,
-				&parser,
-				&mut xpath,
-				&format!("{sender_base}/hl7:assignedPerson"),
-				"<name/>",
-			)?;
-		}
-		if xpath
-			.findnodes(
-				&format!("{sender_base}/hl7:assignedPerson/hl7:name/hl7:family"),
-				None,
-			)
-			.map(|nodes| nodes.is_empty())
-			.unwrap_or(true)
-		{
-			append_fragment_child(
-				&mut doc,
-				&parser,
-				&mut xpath,
-				&format!("{sender_base}/hl7:assignedPerson/hl7:name"),
-				"<family/>",
-			)?;
-		}
 		write_c_3_3_5(
 			&mut xpath,
 			sender_base,
@@ -474,7 +303,7 @@ fn ensure_c_3_nodes(
 	.any(value)
 	{
 		ensure(
-			base,
+			&format!("{base}/hl7:assignedPerson"),
 			&format!("{base}/hl7:assignedPerson/hl7:name"),
 			"<name/>",
 		)?;
@@ -600,7 +429,7 @@ fn write_c_1_4(
 	let path = "//hl7:investigationEvent/hl7:effectiveTime/hl7:low";
 	if let Some(value) = date_first_received {
 		remove_attr_first(xpath, path, "nullFlavor");
-		set_attr_first(xpath, path, "value", value);
+		set_attr_first(xpath, path, "value", &fmt_date_lexeme(value));
 	}
 	Ok(())
 }
@@ -616,7 +445,7 @@ fn write_c_1_5(
 	let path = "//hl7:investigationEvent/hl7:availabilityTime";
 	if let Some(value) = date_most_recent {
 		remove_attr_first(xpath, path, "nullFlavor");
-		set_attr_first(xpath, path, "value", value);
+		set_attr_first(xpath, path, "value", &fmt_date_lexeme(value));
 	}
 	Ok(())
 }

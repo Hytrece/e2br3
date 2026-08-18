@@ -29,7 +29,7 @@ pub(crate) mod patient_data;
 pub(crate) mod postprocess;
 
 pub(crate) use crate::export_utils::{
-	append_fragment_child, fmt_date, remove_attr_first, remove_nodes,
-	set_attr_first, set_text_first, xml_escape,
+	append_fragment_child, fmt_date, fmt_date_lexeme, remove_attr_first,
+	remove_nodes, set_attr_first, set_text_first, xml_escape,
 };
 pub(crate) use patient_data::*;

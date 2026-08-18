@@ -803,14 +803,14 @@ async fn load_editor_dg_row_detail(
 		ctx,
 		mm,
 		drug_id_filter::<DrugActiveSubstanceFilter>(drug_id),
-		Some(ListOptions::default()),
+		Some(ListOptions::from_order_bys(vec!["sequence_number", "id"])),
 	)
 	.await?;
 	let dosage_information = DosageInformationBmc::list(
 		ctx,
 		mm,
 		drug_id_filter::<DosageInformationFilter>(drug_id),
-		Some(ListOptions::default()),
+		Some(ListOptions::from_order_bys(vec!["sequence_number", "id"])),
 	)
 	.await?;
 	let dosage_information = dosage_information
@@ -846,21 +846,21 @@ async fn load_editor_dg_row_detail(
 		ctx,
 		mm,
 		drug_id_filter::<DrugIndicationFilter>(drug_id),
-		Some(ListOptions::default()),
+		Some(ListOptions::from_order_bys(vec!["sequence_number", "id"])),
 	)
 	.await?;
 	let device_characteristics = DrugDeviceCharacteristicBmc::list(
 		ctx,
 		mm,
 		drug_id_filter::<DrugDeviceCharacteristicFilter>(drug_id),
-		Some(ListOptions::default()),
+		Some(ListOptions::from_order_bys(vec!["sequence_number", "id"])),
 	)
 	.await?;
 	let fda_devices = FdaDeviceInformationBmc::list(
 		ctx,
 		mm,
 		drug_id_filter::<FdaDeviceInformationFilter>(drug_id),
-		Some(ListOptions::default()),
+		Some(ListOptions::from_order_bys(vec!["sequence_number", "id"])),
 	)
 	.await?;
 	let mut fda_devices_with_codes = Vec::with_capacity(fda_devices.len());
@@ -872,7 +872,7 @@ async fn load_editor_dg_row_detail(
 				device_id: Some(uuid_eq(device.id)),
 				..Default::default()
 			}]),
-			Some(ListOptions::default()),
+			Some(ListOptions::from_order_bys(vec!["sequence_number", "id"])),
 		)
 		.await?;
 		let mut value = json!(device);
@@ -904,7 +904,7 @@ async fn load_editor_dg_row_detail(
 				drug_reaction_assessment_id: Some(uuid_eq(assessment.id)),
 				..Default::default()
 			}]),
-			Some(ListOptions::default()),
+			Some(ListOptions::from_order_bys(vec!["sequence_number", "id"])),
 		)
 		.await?;
 		let base = json!({

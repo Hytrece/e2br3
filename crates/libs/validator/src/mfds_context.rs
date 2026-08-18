@@ -79,7 +79,7 @@ JOIN drug_information di ON di.id = das.drug_id
 WHERE di.case_id = $1
   AND di.deleted = false
   AND das.deleted = false
-ORDER BY di.sequence_number, das.sequence_number
+ORDER BY di.sequence_number, das.sequence_number, das.id
 "#;
 	mm.dbx().begin_txn().await?;
 	set_full_context_from_ctx_dbx(mm.dbx(), ctx).await?;
@@ -113,7 +113,7 @@ JOIN drug_information di ON di.id = dra.drug_id
 WHERE di.case_id = $1
   AND di.deleted = false
   AND ra.deleted = false
-ORDER BY di.sequence_number, dra.id, ra.sequence_number
+ORDER BY di.sequence_number, dra.id, ra.sequence_number, ra.id
 "#;
 	mm.dbx().begin_txn().await?;
 	set_full_context_from_ctx_dbx(mm.dbx(), ctx).await?;
@@ -142,7 +142,7 @@ FROM past_drug_history pdh
 JOIN patient_information pi ON pi.id = pdh.patient_id
 WHERE pi.case_id = $1
   AND pdh.deleted = false
-ORDER BY pdh.sequence_number
+ORDER BY pdh.sequence_number, pdh.id
 "#;
 	mm.dbx().begin_txn().await?;
 	set_full_context_from_ctx_dbx(mm.dbx(), ctx).await?;
@@ -174,7 +174,7 @@ JOIN patient_information pi ON pi.id = parent.patient_id
 WHERE pi.case_id = $1
   AND pph.deleted = false
   AND parent.deleted = false
-ORDER BY parent.created_at, pph.sequence_number
+ORDER BY parent.created_at, pph.sequence_number, pph.id
 "#;
 	mm.dbx().begin_txn().await?;
 	set_full_context_from_ctx_dbx(mm.dbx(), ctx).await?;

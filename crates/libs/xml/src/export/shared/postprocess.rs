@@ -1384,14 +1384,18 @@ fn history_effective_time_raw(
 		return String::new();
 	}
 	let low = match (start, start_null_flavor) {
-		(Some(value), _) => format!("<low value=\"{}\"/>", xml_escape(value)),
+		(Some(value), _) => {
+			format!("<low value=\"{}\"/>", xml_escape(&fmt_date_lexeme(value)))
+		}
 		(None, Some(value)) => {
 			format!("<low nullFlavor=\"{}\"/>", xml_escape(value))
 		}
 		(None, None) => "<low/>".to_string(),
 	};
 	let high = match (end, end_null_flavor) {
-		(Some(value), _) => format!("<high value=\"{}\"/>", xml_escape(value)),
+		(Some(value), _) => {
+			format!("<high value=\"{}\"/>", xml_escape(&fmt_date_lexeme(value)))
+		}
 		(None, Some(value)) => {
 			format!("<high nullFlavor=\"{}\"/>", xml_escape(value))
 		}

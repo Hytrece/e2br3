@@ -846,7 +846,7 @@ async fn list_active_substances(
 		return Ok(Vec::new());
 	}
 	let drug_ids: Vec<Uuid> = drugs.iter().map(|drug| drug.id).collect();
-	let sql = "SELECT * FROM drug_active_substances WHERE drug_id = ANY($1) AND deleted = false ORDER BY drug_id, sequence_number";
+	let sql = "SELECT * FROM drug_active_substances WHERE drug_id = ANY($1) AND deleted = false ORDER BY drug_id, sequence_number, id";
 	mm.dbx()
 		.fetch_all(sqlx::query_as::<_, DrugActiveSubstance>(sql).bind(&drug_ids))
 		.await
@@ -861,7 +861,7 @@ async fn list_dosages(
 		return Ok(Vec::new());
 	}
 	let drug_ids: Vec<Uuid> = drugs.iter().map(|drug| drug.id).collect();
-	let sql = "SELECT * FROM dosage_information WHERE drug_id = ANY($1) AND deleted = false ORDER BY drug_id, sequence_number";
+	let sql = "SELECT * FROM dosage_information WHERE drug_id = ANY($1) AND deleted = false ORDER BY drug_id, sequence_number, id";
 	mm.dbx()
 		.fetch_all(sqlx::query_as::<_, DosageInformation>(sql).bind(&drug_ids))
 		.await
@@ -876,7 +876,7 @@ async fn list_indications(
 		return Ok(Vec::new());
 	}
 	let drug_ids: Vec<Uuid> = drugs.iter().map(|drug| drug.id).collect();
-	let sql = "SELECT * FROM drug_indications WHERE drug_id = ANY($1) AND deleted = false ORDER BY drug_id, sequence_number";
+	let sql = "SELECT * FROM drug_indications WHERE drug_id = ANY($1) AND deleted = false ORDER BY drug_id, sequence_number, id";
 	mm.dbx()
 		.fetch_all(sqlx::query_as::<_, DrugIndication>(sql).bind(&drug_ids))
 		.await
@@ -907,7 +907,7 @@ async fn list_relatedness_assessments(
 	}
 	let assessment_ids: Vec<Uuid> =
 		assessments.iter().map(|assessment| assessment.id).collect();
-	let sql = "SELECT * FROM relatedness_assessments WHERE drug_reaction_assessment_id = ANY($1) AND deleted = false ORDER BY drug_reaction_assessment_id, sequence_number";
+	let sql = "SELECT * FROM relatedness_assessments WHERE drug_reaction_assessment_id = ANY($1) AND deleted = false ORDER BY drug_reaction_assessment_id, sequence_number, id";
 	mm.dbx()
 		.fetch_all(
 			sqlx::query_as::<_, RelatednessAssessment>(sql).bind(&assessment_ids),
@@ -923,7 +923,7 @@ async fn list_patient_identifiers(
 	let Some(patient) = patient else {
 		return Ok(Vec::new());
 	};
-	let sql = "SELECT * FROM patient_identifiers WHERE patient_id = $1 AND deleted = false ORDER BY sequence_number";
+	let sql = "SELECT * FROM patient_identifiers WHERE patient_id = $1 AND deleted = false ORDER BY sequence_number, id";
 	mm.dbx()
 		.fetch_all(sqlx::query_as::<_, PatientIdentifier>(sql).bind(patient.id))
 		.await
@@ -937,7 +937,7 @@ async fn list_medical_history(
 	let Some(patient) = patient else {
 		return Ok(Vec::new());
 	};
-	let sql = "SELECT * FROM medical_history_episodes WHERE patient_id = $1 AND deleted = false ORDER BY sequence_number";
+	let sql = "SELECT * FROM medical_history_episodes WHERE patient_id = $1 AND deleted = false ORDER BY sequence_number, id";
 	mm.dbx()
 		.fetch_all(sqlx::query_as::<_, MedicalHistoryEpisode>(sql).bind(patient.id))
 		.await
@@ -984,7 +984,7 @@ async fn list_past_drugs(
 		return Ok(Vec::new());
 	};
 	let sql =
-		"SELECT * FROM past_drug_history WHERE patient_id = $1 AND deleted = false ORDER BY sequence_number";
+		"SELECT * FROM past_drug_history WHERE patient_id = $1 AND deleted = false ORDER BY sequence_number, id";
 	mm.dbx()
 		.fetch_all(sqlx::query_as::<_, PastDrugHistory>(sql).bind(patient.id))
 		.await
@@ -1014,7 +1014,7 @@ async fn list_reported_causes_of_death(
 	let Some(death_info) = death_info else {
 		return Ok(Vec::new());
 	};
-	let sql = "SELECT * FROM reported_causes_of_death WHERE death_info_id = $1 AND deleted = false ORDER BY sequence_number";
+	let sql = "SELECT * FROM reported_causes_of_death WHERE death_info_id = $1 AND deleted = false ORDER BY sequence_number, id";
 	mm.dbx()
 		.fetch_all(
 			sqlx::query_as::<_, ReportedCauseOfDeath>(sql).bind(death_info.id),
@@ -1030,7 +1030,7 @@ async fn list_autopsy_causes_of_death(
 	let Some(death_info) = death_info else {
 		return Ok(Vec::new());
 	};
-	let sql = "SELECT * FROM autopsy_causes_of_death WHERE death_info_id = $1 AND deleted = false ORDER BY sequence_number";
+	let sql = "SELECT * FROM autopsy_causes_of_death WHERE death_info_id = $1 AND deleted = false ORDER BY sequence_number, id";
 	mm.dbx()
 		.fetch_all(sqlx::query_as::<_, AutopsyCauseOfDeath>(sql).bind(death_info.id))
 		.await
@@ -1051,7 +1051,7 @@ async fn list_parents(
 		.dbx()
 		.fetch_all(
 			sqlx::query_as::<_, ParentInformation>(
-				"SELECT * FROM parent_information WHERE patient_id = $1 AND deleted = false ORDER BY created_at",
+				"SELECT * FROM parent_information WHERE patient_id = $1 AND deleted = false ORDER BY created_at, id",
 			)
 			.bind(patient.id),
 		)
@@ -1075,7 +1075,7 @@ async fn list_parent_medical_history(
 		.dbx()
 		.fetch_all(
 			sqlx::query_as::<_, ParentMedicalHistory>(
-				"SELECT * FROM parent_medical_history WHERE parent_id = ANY($1) AND deleted = false ORDER BY parent_id, sequence_number",
+				"SELECT * FROM parent_medical_history WHERE parent_id = ANY($1) AND deleted = false ORDER BY parent_id, sequence_number, id",
 			)
 			.bind(parent_ids),
 		)
@@ -1099,7 +1099,7 @@ async fn list_parent_past_drugs(
 		.dbx()
 		.fetch_all(
 			sqlx::query_as::<_, ParentPastDrugHistory>(
-				"SELECT * FROM parent_past_drug_history WHERE parent_id = ANY($1) AND deleted = false ORDER BY parent_id, sequence_number",
+				"SELECT * FROM parent_past_drug_history WHERE parent_id = ANY($1) AND deleted = false ORDER BY parent_id, sequence_number, id",
 			)
 			.bind(parent_ids),
 		)

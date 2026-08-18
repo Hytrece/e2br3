@@ -5,7 +5,7 @@ use crate::import_sections::shared::{
 	normalize_iso2, telecom_first_in_node,
 };
 use crate::mapping::mfds::c_safety_report::CMfdsSafetyReportPaths;
-use crate::mfds::codes::{KR_C_3_1_1, KR_C_5_4_1};
+use crate::mfds::codes::KR_C_3_1_1;
 use crate::Result;
 use lib_core::model::receiver::ReceiverInformationForUpdate;
 use libxml::parser::Parser;
@@ -1206,6 +1206,16 @@ mod tests {
 	}
 
 	#[test]
+	fn study_import_reads_mfds_type_from_investigation_event() {
+		let xml = br#"<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><PORR_IN049016UV><controlActProcess><subject><investigationEvent><component><adverseEventAssessment><subject1><primaryRole><subjectOf1><researchStudy classCode="CLNTRL" moodCode="EVN"><title>Study</title></researchStudy></subjectOf1></primaryRole></subject1></adverseEventAssessment></component><subjectOf2 typeCode="SUBJ"><investigationCharacteristic classCode="OBS" moodCode="EVN"><code code="1" codeSystem="2.16.840.1.113883.3.989.5.1.10.1.7"/><value xsi:type="CE" code="4"/></investigationCharacteristic></subjectOf2></investigationEvent></subject></controlActProcess></PORR_IN049016UV></MCCI_IN200100UV01>"#;
+
+		let study = parse_study_information(xml)
+			.expect("parse study")
+			.expect("study");
+		assert_eq!(study.study_type_reaction_kr1.as_deref(), Some("4"));
+	}
+
+	#[test]
 	fn sender_import_preserves_name_null_flavors() {
 		let xml = br#"<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3"><PORR_IN049016UV><controlActProcess><subject><investigationEvent><subjectOf1><controlActEvent><author><assignedEntity><code code="1" codeSystem="2.16.840.1.113883.3.989.2.1.1.7"/><assignedPerson><name><given nullFlavor="MSK"/><family nullFlavor="NASK"/></name></assignedPerson></assignedEntity></author></controlActEvent></subjectOf1></investigationEvent></subject></controlActProcess></PORR_IN049016UV></MCCI_IN200100UV01>"#;
 
@@ -1768,7 +1778,12 @@ fn read_c_5_4_kr_1(
 	xpath: &mut Context,
 	node: &libxml::tree::Node,
 ) -> Result<Option<String>> {
-	let value = first_attr(xpath, node, &format!("hl7:subjectOf2/hl7:observation[hl7:code/@code='{KR_C_5_4_1}']/hl7:value"), "code");
+	let value = first_attr(
+		xpath,
+		node,
+		"//hl7:investigationEvent/hl7:subjectOf2/hl7:investigationCharacteristic[hl7:code[@code='1' and @codeSystem='2.16.840.1.113883.3.989.5.1.10.1.7']]/hl7:value",
+		"code",
+	);
 	import_constraint::string(
 		"studyTypeReactionKr1",
 		value.as_deref(),

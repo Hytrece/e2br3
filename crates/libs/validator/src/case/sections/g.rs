@@ -76,19 +76,6 @@ fn decimal_text(value: Option<Decimal>) -> Option<String> {
 	value.map(|value| value.normalize().to_string())
 }
 
-#[cfg(test)]
-fn resolve_drug_child_indices(
-	drug_indices: &HashMap<sqlx::types::Uuid, usize>,
-	drug_id: sqlx::types::Uuid,
-	sequence_number: i32,
-) -> Option<(usize, usize)> {
-	let drug_index = drug_indices.get(&drug_id).copied()?;
-	let child_index = sequence_number
-		.checked_sub(1)
-		.and_then(|value| usize::try_from(value).ok())?;
-	Some((drug_index, child_index))
-}
-
 fn additional_info_codes(drug: &DrugInformation) -> Vec<String> {
 	parse_drug_additional_info_codes_json(
 		drug.drug_additional_info_codes_json.as_ref(),
@@ -1578,7 +1565,9 @@ pub(crate) fn collect_ich_issues(
 	let mut fallback = HashMap::new();
 	for (flat_idx, substance) in validation_ctx.active_substances.iter().enumerate()
 	{
-		let drug_idx = drug_indices.get(&substance.drug_id).copied().unwrap_or(0);
+		let Some(drug_idx) = drug_indices.get(&substance.drug_id).copied() else {
+			continue;
+		};
 		let fallback_idx = fallback.entry(substance.drug_id).or_insert(0);
 		let idx = *fallback_idx;
 		*fallback_idx += 1;
@@ -1592,7 +1581,9 @@ pub(crate) fn collect_ich_issues(
 
 	let mut fallback = HashMap::new();
 	for (flat_idx, dosage) in validation_ctx.dosages.iter().enumerate() {
-		let drug_idx = drug_indices.get(&dosage.drug_id).copied().unwrap_or(0);
+		let Some(drug_idx) = drug_indices.get(&dosage.drug_id).copied() else {
+			continue;
+		};
 		let fallback_idx = fallback.entry(dosage.drug_id).or_insert(0);
 		let idx = *fallback_idx;
 		*fallback_idx += 1;
@@ -1619,7 +1610,9 @@ pub(crate) fn collect_ich_issues(
 
 	let mut fallback = HashMap::new();
 	for (flat_idx, indication) in validation_ctx.indications.iter().enumerate() {
-		let drug_idx = drug_indices.get(&indication.drug_id).copied().unwrap_or(0);
+		let Some(drug_idx) = drug_indices.get(&indication.drug_id).copied() else {
+			continue;
+		};
 		let fallback_idx = fallback.entry(indication.drug_id).or_insert(0);
 		let idx = *fallback_idx;
 		*fallback_idx += 1;
@@ -1635,7 +1628,9 @@ pub(crate) fn collect_ich_issues(
 	for (flat_idx, assessment) in
 		validation_ctx.drug_reaction_assessments.iter().enumerate()
 	{
-		let drug_idx = drug_indices.get(&assessment.drug_id).copied().unwrap_or(0);
+		let Some(drug_idx) = drug_indices.get(&assessment.drug_id).copied() else {
+			continue;
+		};
 		let idx = *fallback.entry(assessment.drug_id).or_insert(0);
 		*fallback.get_mut(&assessment.drug_id).expect("entry exists") += 1;
 		assessment_indices.insert(assessment.id, (drug_idx, idx));
@@ -1668,9 +1663,8 @@ pub(crate) fn collect_ich_issues(
 		let nested = assessment_indices.get(&assessment_id).copied().map(
 			|(drug_idx, assessment_idx)| {
 				let fallback_idx = fallback.entry(assessment_id).or_insert(0);
-				let child_idx =
-					relatedness_bases.get(&assessment_id).copied().unwrap_or(0)
-						+ *fallback_idx;
+				let child_idx = relatedness_bases.get(&assessment_id).copied()?
+					+ *fallback_idx;
 				*fallback_idx += 1;
 				(drug_idx, assessment_idx, child_idx)
 			},
@@ -1909,7 +1903,9 @@ fn fda_g_k_9(
 		.iter()
 		.position(|drug| drug.drug_characterization.trim() == "1");
 	if validation_ctx.drug_reaction_assessments.is_empty() {
-		let drug_idx = first_suspect_idx.unwrap_or(0);
+		let Some(drug_idx) = first_suspect_idx else {
+			return;
+		};
 		for (code, field, message) in [
 			(
 				"FDA.G.k.9.i.2.r.1.REQUIRED",
@@ -1951,7 +1947,6 @@ fn fda_g_k_9(
 			.max(1);
 		*next += row_count;
 	}
-	let mut assessment_indices = HashMap::new();
 	let mut has_suspect_result = false;
 	let mut first_suspect_result_path = None;
 	let mut first_suspect_assessment_path = None;
@@ -1961,24 +1956,21 @@ fn fda_g_k_9(
 		};
 		let is_suspect =
 			validation_ctx.drugs[drug_idx].drug_characterization.trim() == "1";
-		let assessment_idx =
-			assessment_indices.entry(assessment.drug_id).or_insert(0);
+		let Some(relatedness_base) = relatedness_bases.get(&assessment.id).copied() else {
+			continue;
+		};
 		let rows = validation_ctx
 			.relatedness_assessments
 			.iter()
 			.filter(|row| row.drug_reaction_assessment_id == assessment.id)
 			.collect::<Vec<_>>();
 		if is_suspect && first_suspect_assessment_path.is_none() {
-			let first_index =
-				relatedness_bases.get(&assessment.id).copied().unwrap_or(0);
 			first_suspect_assessment_path = Some(format!(
-				"drugs.{drug_idx}.drugReactionAssessments.{first_index}.resultOfAssessment"
+				"drugs.{drug_idx}.drugReactionAssessments.{relatedness_base}.resultOfAssessment"
 			));
 		}
 		for (fallback_idx, row) in rows.iter().enumerate() {
-			let relatedness_idx =
-				relatedness_bases.get(&assessment.id).copied().unwrap_or(0)
-					+ fallback_idx;
+			let relatedness_idx = relatedness_base + fallback_idx;
 			let has_source = row.source_of_assessment.as_deref().map(str::trim)
 				== Some("Sponsor");
 			let has_method =
@@ -2020,32 +2012,26 @@ fn fda_g_k_9(
 			}
 		}
 		if rows.is_empty() {
-			let relatedness_idx =
-				relatedness_bases.get(&assessment.id).copied().unwrap_or(0);
 			for (code, field) in [
 				("FDA.G.k.9.i.2.r.1.REQUIRED", "sourceOfAssessment"),
 				("FDA.G.k.9.i.2.r.2.REQUIRED", "methodOfAssessment"),
 			] {
 				crate::push_business_issue(
-					issues,
-					code,
-					format!("drugs.{drug_idx}.drugReactionAssessments.{relatedness_idx}.{field}"),
+				issues,
+				code,
+				format!("drugs.{drug_idx}.drugReactionAssessments.{relatedness_base}.{field}"),
 					"A relatedness assessment value is required for an IND safety report.",
 				);
 			}
 		}
-		*assessment_idx += 1;
 	}
 	if !has_suspect_result {
-		let drug_idx = first_suspect_idx.unwrap_or(0);
 		crate::push_business_issue(
 			issues,
 			"FDA.G.k.9.i.2.r.3.REQUIRED",
 			first_suspect_result_path
 				.or(first_suspect_assessment_path)
-			.unwrap_or_else(|| {
-				format!("drugs.{drug_idx}.drugReactionAssessments.0.resultOfAssessment")
-			}),
+			.unwrap_or_else(|| "drugs".to_string()),
 			"At least one suspect product must have a relatedness result for an IND safety report.",
 		);
 	}
@@ -2180,19 +2166,23 @@ pub(crate) async fn collect_fda_issues(
 		);
 	}
 	if postmarket && combination_true && !has_device {
-		fda_g_k_12_r_4_6(0, 0, [None; 3], true, issues);
+		if let Some(drug_idx) = validation_ctx.drugs.first().map(|_| 0) {
+			fda_g_k_12_r_4_6(drug_idx, 0, [None; 3], true, issues);
+		}
 	}
 	fda_d_1_malfunction(validation_ctx, combination_true, has_malfunction, issues);
-	fda_g_k_12(
-		validation_ctx
-			.drugs
-			.iter()
-			.position(|drug| drug.drug_characterization.trim() == "1")
-			.unwrap_or(0),
-		local_criteria == Some("5"),
-		has_malfunction_suspect,
-		issues,
-	);
+	if let Some(drug_idx) = validation_ctx
+		.drugs
+		.iter()
+		.position(|drug| drug.drug_characterization.trim() == "1")
+	{
+		fda_g_k_12(
+			drug_idx,
+			local_criteria == Some("5"),
+			has_malfunction_suspect,
+			issues,
+		);
+	}
 	fda_g_k_1_route(validation_ctx, first_product_malfunction, issues);
 	fda_g_k_9(validation_ctx, ind_number_present, issues);
 	Ok(())
@@ -2692,7 +2682,6 @@ pub(crate) fn collect_mfds_issues(
 #[cfg(test)]
 mod field_rule_tests {
 	use super::*;
-	use sqlx::types::Uuid;
 
 	#[test]
 	fn drug_rules_cover_domestic_foreign_and_unrelated_contexts() {
@@ -2941,19 +2930,6 @@ mod field_rule_tests {
 		assert!(!mfds_kr1_result_required(true, true, false));
 	}
 
-	#[test]
-	fn child_indices_have_no_owner_or_sequence_fallback() {
-		let known_drug = Uuid::new_v4();
-		let unknown_drug = Uuid::new_v4();
-		let indices = HashMap::from([(known_drug, 2)]);
-
-		assert_eq!(
-			resolve_drug_child_indices(&indices, known_drug, 4),
-			Some((2, 3))
-		);
-		assert_eq!(resolve_drug_child_indices(&indices, unknown_drug, 4), None);
-		assert_eq!(resolve_drug_child_indices(&indices, known_drug, 0), None);
-	}
 }
 
 #[cfg(test)]

@@ -196,7 +196,7 @@ CREATE TABLE IF NOT EXISTS sender_presave_gateways (
     created_by UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
     updated_by UUID REFERENCES users(id) ON DELETE RESTRICT,
 
-    CONSTRAINT sender_presave_gateways_authority_valid CHECK (gateway_authority IN ('fda', 'mfds')),
+    CONSTRAINT sender_presave_gateways_authority_valid CHECK (gateway_authority IN ('ich', 'fda', 'mfds')),
     CONSTRAINT sender_presave_gateways_sequence_unique UNIQUE (sender_presave_id, sequence_number)
 );
 

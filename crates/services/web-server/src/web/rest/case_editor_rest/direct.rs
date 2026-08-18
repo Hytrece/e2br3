@@ -3622,7 +3622,7 @@ async fn load_editor_dm_data(
 			patient_id: Some(uuid_eq(patient_id)),
 			..Default::default()
 		}]),
-		Some(ListOptions::default()),
+		Some(ListOptions::from_order_bys(vec!["sequence_number", "id"])),
 	)
 	.await?;
 	let medical_history_episodes = MedicalHistoryEpisodeBmc::list(
@@ -3632,7 +3632,7 @@ async fn load_editor_dm_data(
 			patient_id: Some(uuid_eq(patient_id)),
 			..Default::default()
 		}]),
-		Some(ListOptions::default()),
+		Some(ListOptions::from_order_bys(vec!["sequence_number", "id"])),
 	)
 	.await?;
 	let medical_history_episodes = medical_history_episodes
@@ -3656,7 +3656,7 @@ async fn load_editor_dm_data(
 			patient_id: Some(uuid_eq(patient_id)),
 			..Default::default()
 		}]),
-		Some(ListOptions::default()),
+		Some(ListOptions::from_order_bys(vec!["created_at", "id"])),
 	)
 	.await?;
 	let mut parents = Vec::new();
@@ -3670,7 +3670,7 @@ async fn load_editor_dm_data(
 				parent_id: Some(uuid_eq(parent.id)),
 				..Default::default()
 			}]),
-			Some(ListOptions::default()),
+			Some(ListOptions::from_order_bys(vec!["sequence_number", "id"])),
 		)
 		.await?;
 		let medical_history = medical_history
@@ -3697,7 +3697,7 @@ async fn load_editor_dm_data(
 				parent_id: Some(uuid_eq(parent.id)),
 				..Default::default()
 			}]),
-			Some(ListOptions::default()),
+			Some(ListOptions::from_order_bys(vec!["sequence_number", "id"])),
 		)
 		.await?;
 		let past_drug_history = past_drug_history
@@ -3733,7 +3733,7 @@ async fn load_editor_dm_data(
 		Some(vec![PatientDeathInformationFilter {
 			patient_id: Some(uuid_eq(patient_id)),
 		}]),
-		Some(ListOptions::default()),
+		Some(ListOptions::from_order_bys(vec!["created_at", "id"])),
 	)
 	.await?;
 	let mut reported_causes = Vec::new();
@@ -3747,7 +3747,7 @@ async fn load_editor_dm_data(
 					death_info_id: Some(uuid_eq(death_info.id)),
 					..Default::default()
 				}]),
-				Some(ListOptions::default()),
+				Some(ListOptions::from_order_bys(vec!["sequence_number", "id"])),
 			)
 			.await?,
 		);
@@ -3759,7 +3759,7 @@ async fn load_editor_dm_data(
 					death_info_id: Some(uuid_eq(death_info.id)),
 					..Default::default()
 				}]),
-				Some(ListOptions::default()),
+				Some(ListOptions::from_order_bys(vec!["sequence_number", "id"])),
 			)
 			.await?,
 		);

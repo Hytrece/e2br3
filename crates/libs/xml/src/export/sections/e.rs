@@ -444,7 +444,7 @@ fn write_e_i_4_or_5(
 			out.push('<');
 			out.push_str(tag);
 			out.push_str(" value=\"");
-			out.push_str(&xml_escape(value));
+			out.push_str(&xml_escape(&fmt_date_lexeme(value)));
 			out.push_str("\"/>");
 		}
 		(None, Some(null_flavor)) => {

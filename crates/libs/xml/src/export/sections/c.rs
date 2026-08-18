@@ -1,7 +1,6 @@
 use super::n::fetch_primary_sources;
 use super::*;
 use crate::export::roundtrip::{patch_c_safety_report, CSafetyReportPatch};
-use crate::mfds::codes::KR_C_5_4_1;
 use lib_core::model::case_identifiers::{
 	LinkedReportNumber, LinkedReportNumberBmc, LinkedReportNumberFilter,
 	OtherCaseIdentifier, OtherCaseIdentifierBmc, OtherCaseIdentifierFilter,
@@ -1444,6 +1443,10 @@ pub(crate) async fn apply_c_5_study(
 
 	remove_nodes(xpath, "//hl7:primaryRole/hl7:subjectOf1[hl7:researchStudy]");
 	remove_nodes(xpath, "//hl7:primaryRole/hl7:subjectOf2[hl7:researchStudy]");
+	remove_nodes(
+		xpath,
+		"//hl7:investigationEvent/hl7:subjectOf2[hl7:investigationCharacteristic/hl7:code[@code='1' and @codeSystem='2.16.840.1.113883.3.989.5.1.10.1.7']]",
+	);
 
 	let mut auth_xml = String::new();
 	for reg in &registrations {
@@ -1482,12 +1485,11 @@ pub(crate) async fn apply_c_5_study(
 			String::new()
 		};
 	let fragment = format!(
-		"<subjectOf1 typeCode=\"SBJ\"><researchStudy classCode=\"CLNTRL\" moodCode=\"EVN\">{}{}{}{}{}</researchStudy></subjectOf1>",
+		"<subjectOf1 typeCode=\"SBJ\"><researchStudy classCode=\"CLNTRL\" moodCode=\"EVN\">{}{}{}{}</researchStudy></subjectOf1>",
 		sponsor_id_xml,
 		study_type,
 		title_xml,
-		auth_xml,
-		regional_study_type
+		auth_xml
 	);
 	let xml = doc.to_string();
 	if let Some(injected) = insert_c_5_study(&xml, &fragment) {
@@ -1509,6 +1511,15 @@ pub(crate) async fn apply_c_5_study(
 		let _ = xpath.register_namespace("hl7", "urn:hl7-org:v3");
 		let _ = xpath
 			.register_namespace("xsi", "http://www.w3.org/2001/XMLSchema-instance");
+		if !regional_study_type.is_empty() {
+			append_fragment_child(
+				doc,
+				parser,
+				xpath,
+				"//hl7:investigationEvent",
+				&regional_study_type,
+			)?;
+		}
 	}
 	Ok(())
 }
@@ -1598,7 +1609,7 @@ fn write_c_5_4(value: &StudyInformation) -> String {
 
 /// e2b:C.5.4.KR.1
 fn write_c_5_4_kr_1(value: &StudyInformation) -> String {
-	value.study_type_reaction_kr1.as_deref().filter(|v| !v.trim().is_empty()).map(|v| format!("<subjectOf2 typeCode=\"SUBJ\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code code=\"{KR_C_5_4_1}\"/><value xsi:type=\"CE\" code=\"{}\"/></observation></subjectOf2>", xml_escape(v))).unwrap_or_default()
+	value.study_type_reaction_kr1.as_deref().filter(|v| !v.trim().is_empty()).map(|v| format!("<subjectOf2 typeCode=\"SUBJ\"><investigationCharacteristic classCode=\"OBS\" moodCode=\"EVN\"><code code=\"1\" codeSystem=\"2.16.840.1.113883.3.989.5.1.10.1.7\" codeSystemVersion=\"1.0\" displayName=\"otherStudiesType\"/><value xsi:type=\"CE\" code=\"{}\" codeSystem=\"2.16.840.1.113883.3.989.5.1.10.1.3\" codeSystemVersion=\"1.0\"/></investigationCharacteristic></subjectOf2>", xml_escape(v))).unwrap_or_default()
 }
 
 /// e2b:FDA.C.5.5a
@@ -1736,6 +1747,17 @@ mod study_writer_strictness_tests {
 			created_by: sqlx::types::Uuid::nil(),
 			updated_by: None,
 		}
+	}
+
+	#[test]
+	fn mfds_study_type_uses_the_investigation_event_shape() {
+		let mut study = study();
+		study.study_type_reaction_kr1 = Some("4".to_string());
+
+		let xml = write_c_5_4_kr_1(&study);
+		assert!(xml.contains("<investigationCharacteristic"));
+		assert!(xml.contains("codeSystem=\"2.16.840.1.113883.3.989.5.1.10.1.7\""));
+		assert!(!xml.contains("<observation"));
 	}
 
 	fn registration() -> StudyRegistrationNumber {

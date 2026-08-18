@@ -146,6 +146,21 @@ pub(crate) fn fmt_date(date: Date) -> String {
 	)
 }
 
+pub(crate) fn fmt_date_lexeme(value: &str) -> String {
+	let value = value.trim();
+	if value.len() == 10
+		&& value.as_bytes()[4] == b'-'
+		&& value.as_bytes()[7] == b'-'
+		&& value
+			.bytes()
+			.enumerate()
+			.all(|(index, byte)| matches!(index, 4 | 7) || byte.is_ascii_digit())
+	{
+		return value.replace('-', "");
+	}
+	value.to_string()
+}
+
 pub(crate) fn append_fragment_child(
 	doc: &mut Document,
 	parser: &Parser,
@@ -315,10 +330,18 @@ pub(crate) fn xml_escape(input: &str) -> String {
 #[cfg(test)]
 mod tests {
 	use super::{
-		append_fragment_child, set_xsi_type_first, wrap_fragment, XSI_NAMESPACE,
+		append_fragment_child, fmt_date_lexeme, set_xsi_type_first, wrap_fragment,
+		XSI_NAMESPACE,
 	};
 	use libxml::parser::Parser;
 	use libxml::xpath::Context;
+
+	#[test]
+	fn date_lexeme_compacts_ui_dates_without_rewriting_e2b_precision() {
+		assert_eq!(fmt_date_lexeme("2026-04-07"), "20260407");
+		assert_eq!(fmt_date_lexeme("202604"), "202604");
+		assert_eq!(fmt_date_lexeme("invalid"), "invalid");
+	}
 
 	#[test]
 	fn appended_fragment_keeps_namespace_bindings() {

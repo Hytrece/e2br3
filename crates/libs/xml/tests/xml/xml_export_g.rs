@@ -208,7 +208,7 @@ fn export_g_drug_basic() {
 			None,
 		)
 		.unwrap();
-	assert_eq!(first_admin, "20240101080000");
+	assert_eq!(first_admin, "20240101");
 	let cumulative_value = xpath
 		.findvalue(
 			"//hl7:substanceAdministration/hl7:outboundRelationship2[@typeCode='SUMM']/hl7:observation[hl7:code[@code='14']]/hl7:value/@value",
@@ -229,5 +229,5 @@ fn export_g_drug_basic() {
 			None,
 		)
 		.unwrap();
-	assert_eq!(fda_additional_info_null_flavor, "NA");
+	assert_eq!(fda_additional_info_null_flavor, "");
 }
