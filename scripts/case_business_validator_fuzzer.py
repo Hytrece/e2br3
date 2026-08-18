@@ -229,7 +229,7 @@ class Event:
 def discover_business_rule_codes(root: Path = ROOT) -> set[str]:
     codes: set[str] = set()
     section_root = root / "crates/libs/validator/src/case/sections"
-    for name in "cdefghn":
+    for name in "cdefgh":
         path = section_root / f"{name}.rs"
         production_source = path.read_text().split("\n#[cfg(test)]", 1)[0]
         codes.update(RULE_RE.findall(production_source))

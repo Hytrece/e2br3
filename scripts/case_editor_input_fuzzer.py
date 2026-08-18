@@ -1129,6 +1129,8 @@ def main(args: argparse.Namespace) -> int:
             if page == "DG" and owner == "drug":
                 baseline.setdefault("drugCharacterization", "1")
                 baseline.setdefault("medicinalProduct", "Fuzz product")
+                if reaction_id:
+                    set_path(baseline, "drugReactionAssessments[].reactionId", reaction_id)
             if row_route:
                 status, value, summary = request("POST", f"{route}/rows", {"authorities": authorities_for(owner_fields), "rows": {owner: baseline}})
                 row_ids[owner] = created_row_id(value)
