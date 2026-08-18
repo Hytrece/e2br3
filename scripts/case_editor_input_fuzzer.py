@@ -824,7 +824,9 @@ def expand_null_flavor_contracts(
     return derived
 
 
-def baseline_for(fields: list[dict[str, Any]], minimal: bool = False) -> dict[str, Any]:
+def baseline_for(
+    fields: list[dict[str, Any]], minimal: bool = False, safe: bool = False
+) -> dict[str, Any]:
     result: dict[str, Any] = {}
     concrete = [field for field in fields if not is_nullflavor_field(field)]
     if minimal:
@@ -834,7 +836,8 @@ def baseline_for(fields: list[dict[str, Any]], minimal: bool = False) -> dict[st
     for field in fields:
         for path, value in field.get("_fixedPayload", {}).items():
             set_path(result, path, copy.deepcopy(value))
-        set_path(result, field["payloadPath"], copy.deepcopy(field["roundTripValue"]))
+        value = field["roundTripValue"]
+        set_path(result, field["payloadPath"], False if safe and value is True else copy.deepcopy(value))
     return result
 
 
@@ -1113,7 +1116,11 @@ def main(args: argparse.Namespace) -> int:
                 add(Event("baseline", None, page, owner, None, "PASS" if owner_ready[owner] else "BASELINE_REJECTED", status, {**summary, "reason": "reuse case-created safety report row"}))
                 continue
             baseline_fields = [field for field in setup_groups.get(owner, owner_fields) if field.get("code") != "C.1.1"]
-            baseline = baseline_for(baseline_fields, minimal=not args.complete_baseline)
+            baseline = baseline_for(
+                baseline_fields,
+                minimal=not args.complete_baseline,
+                safe=args.complete_baseline,
+            )
             if page == "AE" and owner == "reaction":
                 # AE create contract requires an explicit positive sequence.
                 baseline.setdefault("sequenceNumber", 1)
@@ -1157,7 +1164,11 @@ def main(args: argparse.Namespace) -> int:
                     for candidate in setup_groups.get(owner, fields)
                     if nested_root(candidate["payloadPath"]) == root
                 ]
-                nested_baseline = baseline_for(root_fields, minimal=not args.complete_baseline)
+                nested_baseline = baseline_for(
+                    root_fields,
+                    minimal=not args.complete_baseline,
+                    safe=args.complete_baseline,
+                )
                 if page == "DG" and root.startswith("drugReactionAssessments[]") and reaction_id:
                     set_path(nested_baseline, "drugReactionAssessments[].reactionId", reaction_id)
                 if row_ids.get(owner):

@@ -113,7 +113,7 @@ JOIN drug_information di ON di.id = dra.drug_id
 WHERE di.case_id = $1
   AND di.deleted = false
   AND ra.deleted = false
-ORDER BY di.sequence_number, dra.sequence_number, ra.sequence_number
+ORDER BY di.sequence_number, dra.id, ra.sequence_number
 "#;
 	mm.dbx().begin_txn().await?;
 	set_full_context_from_ctx_dbx(mm.dbx(), ctx).await?;

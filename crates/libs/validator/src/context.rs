@@ -891,7 +891,7 @@ async fn list_drug_reaction_assessments(
 		return Ok(Vec::new());
 	}
 	let drug_ids: Vec<Uuid> = drugs.iter().map(|drug| drug.id).collect();
-	let sql = "SELECT * FROM drug_reaction_assessments WHERE drug_id = ANY($1) ORDER BY drug_id, reaction_id";
+	let sql = "SELECT * FROM drug_reaction_assessments WHERE drug_id = ANY($1) ORDER BY drug_id, id";
 	mm.dbx()
 		.fetch_all(sqlx::query_as::<_, DrugReactionAssessment>(sql).bind(&drug_ids))
 		.await

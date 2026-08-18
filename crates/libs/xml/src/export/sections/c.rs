@@ -1589,7 +1589,7 @@ fn write_c_5_4(value: &StudyInformation) -> String {
 		.filter(|value| !value.is_empty())
 		.map(|value| {
 			format!(
-				"<code code=\"{}\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.8\" codeSystemVersion=\"1.0\"/>",
+				"<code code=\"{}\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.8\"/>",
 				xml_escape(value)
 			)
 		})
@@ -1768,7 +1768,10 @@ mod study_writer_strictness_tests {
 		assert!(write_c_5_3(&study).contains("nullFlavor=\"NASK\""));
 		assert!(write_c_5_4(&study).is_empty());
 		study.study_type_reaction = Some("1".to_string());
-		assert_eq!(write_c_5_4(&study), "<code code=\"1\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.8\" codeSystemVersion=\"1.0\"/>");
+		assert_eq!(
+			write_c_5_4(&study),
+			"<code code=\"1\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.8\"/>"
+		);
 	}
 }
 

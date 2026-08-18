@@ -619,8 +619,8 @@ def scenario_catalog(seed: int) -> list[Scenario]:
         Scenario(30, "e-reaction-meddra-version-required", "ich", "AE", "reaction", "reactionMeddraVersionLLT", "reaction_meddra_version", "ICH.E.i.2.1a.REQUIRED", None, "26.0"),
         Scenario(31, "e-reaction-meddra-code-required", "ich", "AE", "reaction", "reactionMeddraCodeLLT", "reaction_meddra_code", "ICH.E.i.2.1b.REQUIRED", None, "10000001"),
         Scenario(32, "e-reaction-future-date-forbidden", "ich", "AE", "reaction", "reactionStartDate", "start_date", "ICH.E.i.4-5.FUTURE_DATE.FORBIDDEN", "29990303", f"{year}0303"),
-        Scenario(33, "e-reaction-duration-value-required", "ich", "AE", "reaction", "reactionDuration.value", "duration_value", "ICH.E.i.6a.REQUIRED", None, 1, (("reactionDuration.unit", "d"),)),
-        Scenario(34, "e-reaction-duration-unit-required", "ich", "AE", "reaction", "reactionDuration.unit", "duration_unit", "ICH.E.i.6b.REQUIRED", None, "d", (("reactionDuration.value", 1),)),
+        Scenario(33, "e-reaction-duration-value-required", "ich", "AE", "reaction", "reactionDuration.value", "duration_value", "ICH.E.i.6a.REQUIRED", None, "1", (("reactionDuration.unit", "d"),)),
+        Scenario(34, "e-reaction-duration-unit-required", "ich", "AE", "reaction", "reactionDuration.unit", "duration_unit", "ICH.E.i.6b.REQUIRED", None, "d", (("reactionDuration.value", "1"),)),
         Scenario(35, "e-reaction-outcome-required", "ich", "AE", "reaction", "reactionOutcome", "outcome", "ICH.E.i.7.REQUIRED", None, "1"),
         Scenario(
             36,
@@ -1538,7 +1538,7 @@ def main(args: argparse.Namespace) -> int:
             "reactionMeddraCodeLLT": "10000001",
             "reactionStartDate": f"{year}0303",
             "reactionEndDate": f"{year}0304",
-            "reactionDuration": {"value": 1, "unit": "d"},
+            "reactionDuration": {"value": "1", "unit": "d"},
             "reactionOutcome": "1",
             "seriousness": {
                 "serious": True,

@@ -204,7 +204,7 @@ fn write_e_i_1_2(value: &Reaction) -> String {
 		return String::new();
 	};
 	let mut out = String::new();
-	out.push_str("<outboundRelationship2 typeCode=\"PERT\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code code=\"30\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.19\" codeSystemVersion=\"1.1\"/><value xsi:type=\"ED\"");
+	out.push_str("<outboundRelationship2 typeCode=\"PERT\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code code=\"30\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.19\"/><value xsi:type=\"ED\"");
 	if let Some(language) = value.reaction_language.as_deref() {
 		out.push_str(" language=\"");
 		out.push_str(&xml_escape(language));
@@ -236,7 +236,7 @@ fn write_e_i_3_1(value: &Reaction) -> String {
 		return String::new();
 	};
 	format!(
-		"<outboundRelationship2 typeCode=\"PERT\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code code=\"37\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.19\" codeSystemVersion=\"1.1\"/><value xsi:type=\"CE\" code=\"{}\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.10\" codeSystemVersion=\"1.0\"/></observation></outboundRelationship2>",
+		"<outboundRelationship2 typeCode=\"PERT\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code code=\"37\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.19\"/><value xsi:type=\"CE\" code=\"{}\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.10\"/></observation></outboundRelationship2>",
 		xml_escape(term_code)
 	)
 }
@@ -382,7 +382,7 @@ fn write_e_i_7(value: Option<&str>) -> Result<String> {
 		});
 	};
 	Ok(format!(
-		"<outboundRelationship2 typeCode=\"PERT\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code code=\"27\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.19\"/><value xsi:type=\"CE\" code=\"{code}\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.11\" codeSystemVersion=\"1.0\" displayName=\"{display_name}\"/></observation></outboundRelationship2>"
+		"<outboundRelationship2 typeCode=\"PERT\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code code=\"27\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.19\"/><value xsi:type=\"CE\" code=\"{code}\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.11\" displayName=\"{display_name}\"/></observation></outboundRelationship2>"
 	))
 }
 
@@ -637,6 +637,23 @@ mod meddra_requirement_tests {
 		assert!(!xml.contains("<code code=\"30\""));
 		assert!(!xml.contains("<value xsi:type=\"CE\" nullFlavor="));
 		assert!(xml.contains("code=\"10019211\""));
+		assert!(xml.contains("codeSystemVersion=\"24.1\""));
+	}
+
+	#[test]
+	fn export_does_not_invent_fixed_code_system_versions() {
+		let mut reaction = reaction();
+		reaction.primary_source_reaction_translation = Some("Headache".to_string());
+		let xml = export_e_reactions_xml(&[reaction]).expect("reaction XML");
+
+		assert!(xml.contains(
+			"<code code=\"30\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.19\"/>"
+		));
+		assert!(xml.contains(
+			"<code code=\"37\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.19\"/>"
+		));
+		assert!(!xml.contains("code=\"30\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.19\" codeSystemVersion="));
+		assert!(!xml.contains("code=\"37\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.19\" codeSystemVersion="));
 		assert!(xml.contains("codeSystemVersion=\"24.1\""));
 	}
 

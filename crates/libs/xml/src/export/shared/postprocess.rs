@@ -984,7 +984,7 @@ fn write_d_10_8_r_parent_past_drug(
 			));
 		}
 		format!(
-			"<outboundRelationship2 typeCode=\"RSON\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code code=\"19\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.19\" codeSystemVersion=\"1.1\" displayName=\"indication\"/><value {value_attrs}/></observation></outboundRelationship2>"
+			"<outboundRelationship2 typeCode=\"RSON\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code code=\"19\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.19\" displayName=\"indication\"/><value {value_attrs}/></observation></outboundRelationship2>"
 		)
 	} else {
 		String::new()
@@ -1004,7 +1004,7 @@ fn write_d_10_8_r_parent_past_drug(
 			));
 		}
 		format!(
-			"<outboundRelationship2 typeCode=\"CAUS\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code code=\"29\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.19\" codeSystemVersion=\"1.1\" displayName=\"reaction\"/><value {value_attrs}/></observation></outboundRelationship2>"
+			"<outboundRelationship2 typeCode=\"CAUS\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code code=\"29\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.19\" displayName=\"reaction\"/><value {value_attrs}/></observation></outboundRelationship2>"
 		)
 	} else {
 		String::new()
@@ -1302,7 +1302,7 @@ fn apply_d_8_past_drugs(
 				));
 			}
 			format!(
-				"<outboundRelationship2 typeCode=\"RSON\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code code=\"19\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.19\" codeSystemVersion=\"1.1\" displayName=\"indication\"/><value {value_attrs}/></observation></outboundRelationship2>"
+				"<outboundRelationship2 typeCode=\"RSON\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code code=\"19\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.19\" displayName=\"indication\"/><value {value_attrs}/></observation></outboundRelationship2>"
 			)
 		} else {
 			String::new()
@@ -1323,7 +1323,7 @@ fn apply_d_8_past_drugs(
 				));
 			}
 			format!(
-				"<outboundRelationship2 typeCode=\"CAUS\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code code=\"29\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.19\" codeSystemVersion=\"1.1\" displayName=\"reaction\"/><value {value_attrs}/></observation></outboundRelationship2>"
+				"<outboundRelationship2 typeCode=\"CAUS\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code code=\"29\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.19\" displayName=\"reaction\"/><value {value_attrs}/></observation></outboundRelationship2>"
 			)
 		} else {
 			String::new()

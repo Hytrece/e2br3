@@ -332,8 +332,8 @@
         "kind": "row",
         "owner": "reaction"
       },
-      "roundTripValue": 1,
-      "projectionValue": "1.00",
+      "roundTripValue": "1",
+      "projectionValue": "1",
       "constraint": {
         "status": "verified",
         "ruleCode": "ICH.E.i.6a.LENGTH.MAX",

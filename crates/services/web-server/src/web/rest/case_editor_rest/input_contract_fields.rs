@@ -103,7 +103,7 @@ fn ae(
 		row,
 		"reactionDuration.value",
 		"reactions[].reactionDuration.value",
-		InputType::Number,
+		InputType::String,
 		None,
 		changed_paths,
 		outer_indexes,

@@ -1424,6 +1424,22 @@ mod input_contract_save_tests {
 			.unwrap_err();
 		assert!(error_message(error)
 			.contains("ICH.F.r.3.2.ALLOWED.VALUE at testResults.0.testResult"));
+
+		let duration = Map::from_iter([(
+			"reactionDuration".to_string(),
+			json!({ "value": "1.00" }),
+		)]);
+		assert!(validate_row_payload("AE", "reaction", &duration, None).is_ok());
+		let numeric_duration = Map::from_iter([(
+			"reactionDuration".to_string(),
+			json!({ "value": 1 }),
+		)]);
+		let detail = constraint_violation(
+			validate_row_payload("AE", "reaction", &numeric_duration, None)
+				.unwrap_err(),
+		);
+		assert_eq!(detail.rule_code, "ICH.E.i.6a.LENGTH.MAX");
+		assert_eq!(detail.path, "reactions.0.reactionDuration.value");
 	}
 
 	#[test]
