@@ -187,6 +187,10 @@ def baseline(section: str, fields: list[dict[str, Any]], seed: int) -> dict[str,
 
 def transfer_baseline(section: str, fields: list[dict[str, Any]], seed: int) -> dict[str, Any]:
     rows = baseline(section, fields, seed)
+    if section == "reporter" and rows["reporter"].get("qualificationKr1"):
+        rows["reporter"]["qualification"] = "3"
+    if section == "study" and rows["study"].get("studyTypeReactionKr1"):
+        rows["study"]["studyTypeReaction"] = "3"
     if section == "product":
         # MPID and PhPID are individually valid but mutually exclusive in Case Edit.
         rows["product"]["phpidVersion"] = ""
