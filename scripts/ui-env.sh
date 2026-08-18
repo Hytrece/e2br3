@@ -78,7 +78,7 @@ app_db_user="$(python3 -c 'import sys; from urllib.parse import urlsplit; print(
 log_dir="$repo_root/tmp/ui-env/$name"
 mkdir -p "$log_dir"
 ui_tsconfig="$log_dir/tsconfig.json"
-printf '{"extends":"%s"}\n' "$frontend_root/tsconfig.json" >"$ui_tsconfig"
+printf '{"extends":"%s","compilerOptions":{"baseUrl":"%s"}}\n' "$frontend_root/tsconfig.json" "$frontend_root" >"$ui_tsconfig"
 ui_tsconfig_path="$(python3 -c 'import os, sys; print(os.path.relpath(sys.argv[2], sys.argv[1]))' "$frontend_root" "$ui_tsconfig")"
 
 if psql "$admin_url" -Atqc "SELECT 1 FROM pg_database WHERE datname = '$database_name'" | grep -q 1; then
