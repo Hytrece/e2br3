@@ -21,7 +21,12 @@ pub async fn get_editor_shell(
 					SafetyReportIdentificationBmc::get_by_case(ctx, mm, case_id)
 						.await?
 						.safety_report_id
-						.unwrap_or_default();
+						.filter(|value| !value.trim().is_empty())
+						.ok_or_else(|| Error::BadRequest {
+							message: format!(
+								"case {case_id} has no safety report ID"
+							),
+						})?;
 				Ok((
 					axum::http::StatusCode::OK,
 					Json(CaseEditorShellDto::from_case_read_result(

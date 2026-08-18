@@ -20,12 +20,14 @@ use lib_core::model::case_query_catalog::{
 use lib_core::model::case_validation_summary::CaseValidationSummaryBmc;
 use lib_core::model::ModelManager;
 use lib_rest_core::rest_result::DataRestResult;
-use lib_rest_core::{case_matches_user_scope, with_rls_read, Error, Result};
+use lib_rest_core::{case_ids_matching_user_scope, with_rls_read, Error, Result};
 use lib_web::middleware::mw_auth::CtxW;
 use serde::{Deserialize, Serialize};
 use sqlx::types::Json as SqlxJson;
 use std::collections::BTreeMap;
 use uuid::Uuid;
+
+const MAX_CASE_QUERY_ROWS: usize = 5_000;
 
 /// GET /api/case-query/catalog
 pub async fn get_case_query_catalog(
@@ -212,7 +214,8 @@ pub async fn search_cases(
 
 				let sql = format!(
 					"SELECT c.id FROM cases c WHERE {where_sql} \
-		 ORDER BY c.created_at DESC, c.id DESC"
+		 ORDER BY c.created_at DESC, c.id DESC LIMIT {}",
+					MAX_CASE_QUERY_ROWS + 1
 				);
 
 				let rows = with_rls_read(mm, ctx, |dbx| {
@@ -229,14 +232,24 @@ pub async fn search_cases(
 					})
 				})
 				.await?;
+				if rows.len() > MAX_CASE_QUERY_ROWS {
+					return Err(Error::BadRequest {
+						message: format!(
+							"case query matches more than {MAX_CASE_QUERY_ROWS} cases"
+						),
+					});
+				}
 
 				// Enforce per-user case scope on top of RLS.
-				let mut case_ids = Vec::new();
-				for row in rows {
-					if case_matches_user_scope(ctx, mm, row.id).await? {
-						case_ids.push(row.id);
-					}
-				}
+				let row_ids = rows.iter().map(|row| row.id).collect::<Vec<_>>();
+				let visible_case_ids =
+					case_ids_matching_user_scope(ctx, mm, &row_ids).await?;
+				let case_ids = rows
+					.into_iter()
+					.filter_map(|row| {
+						visible_case_ids.contains(&row.id).then_some(row.id)
+					})
+					.collect::<Vec<_>>();
 
 				let total = case_ids.len();
 				let mut items = with_rls_read(mm, ctx, |dbx| {

@@ -70,9 +70,11 @@ fn export_e_reaction_basic() {
 		updated_by: None,
 	};
 
-	let xml =
-		export_e_reactions_xml_for_authority(&[reaction.clone()], RegulatoryAuthority::Fda)
-			.expect("export xml");
+	let xml = export_e_reactions_xml_for_authority(
+		&[reaction.clone()],
+		RegulatoryAuthority::Fda,
+	)
+	.expect("export xml");
 	let parser = Parser::default();
 	let doc = parser.parse_string(&xml).expect("parse");
 	let mut xpath = Context::new(&doc).expect("xpath");

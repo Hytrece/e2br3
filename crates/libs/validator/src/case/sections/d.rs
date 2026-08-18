@@ -2555,6 +2555,8 @@ mod golden_companion_tests {
 			mfds_medicinal_product_id: None,
 			mpid: None,
 			mpid_version: None,
+			mpid_source_code_system: None,
+			mpid_source_code_system_version: None,
 			phpid: None,
 			phpid_version: None,
 			start_date: None,

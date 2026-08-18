@@ -40,6 +40,10 @@ fn bad_input(msg: impl Into<String>) -> ImportError {
 	ImportError::BadInput(msg.into())
 }
 
+const MAX_TERMINOLOGY_ZIP_ENTRIES: usize = 256;
+const MAX_TERMINOLOGY_ZIP_ENTRY_BYTES: usize = 250 * 1024 * 1024;
+const MAX_TERMINOLOGY_ZIP_EXPANDED_BYTES: usize = 512 * 1024 * 1024;
+
 fn store_err<E: std::fmt::Display>(err: E) -> ImportError {
 	ImportError::Store(err.to_string())
 }
@@ -153,9 +157,17 @@ pub fn validate_dictionary(dictionary: &str) -> Result<()> {
 pub fn parse_meddra_upload(bytes: &[u8]) -> Result<Vec<MeddraRow>> {
 	let mut zip = ZipArchive::new(Cursor::new(bytes))
 		.map_err(|e| bad_input(format!("invalid MedDRA zip: {e}")))?;
+	if zip.len() > MAX_TERMINOLOGY_ZIP_ENTRIES {
+		return Err(bad_input(format!(
+			"terminology zip contains more than {MAX_TERMINOLOGY_ZIP_ENTRIES} entries"
+		)));
+	}
 
-	let llt = read_zip_file_case_insensitive(&mut zip, "llt.asc")?;
-	let mdhier = read_zip_file_case_insensitive(&mut zip, "mdhier.asc")?;
+	let mut expanded_bytes = 0usize;
+	let llt =
+		read_zip_file_case_insensitive(&mut zip, "llt.asc", &mut expanded_bytes)?;
+	let mdhier =
+		read_zip_file_case_insensitive(&mut zip, "mdhier.asc", &mut expanded_bytes)?;
 
 	let mut dedup: BTreeMap<String, MeddraRow> = BTreeMap::new();
 
@@ -223,10 +235,16 @@ pub fn parse_whodrug_cas_numbers(bytes: &[u8]) -> Result<Vec<String>> {
 	let Ok(mut zip) = ZipArchive::new(Cursor::new(bytes)) else {
 		return Ok(Vec::new());
 	};
+	if zip.len() > MAX_TERMINOLOGY_ZIP_ENTRIES {
+		return Err(bad_input(format!(
+			"terminology zip contains more than {MAX_TERMINOLOGY_ZIP_ENTRIES} entries"
+		)));
+	}
 	let mut has_c3_mp = false;
 	let mut sun = None;
+	let mut expanded_bytes = 0usize;
 	for idx in 0..zip.len() {
-		let mut entry = zip
+		let entry = zip
 			.by_index(idx)
 			.map_err(|e| bad_input(format!("whodrug zip read error: {e}")))?;
 		if !entry.is_file() || is_whodrug_zip_metadata_or_doc(entry.name()) {
@@ -236,10 +254,11 @@ pub fn parse_whodrug_cas_numbers(bytes: &[u8]) -> Result<Vec<String>> {
 		if basename.eq_ignore_ascii_case(WHODRUG_C3_MP.basename) {
 			has_c3_mp = true;
 		} else if basename.eq_ignore_ascii_case("sun.csv") {
-			let mut bytes = Vec::new();
-			entry.read_to_end(&mut bytes).map_err(|e| {
-				bad_input(format!("whodrug SUN.csv read error: {e}"))
-			})?;
+			let bytes = read_limited_zip_entry(
+				entry,
+				&mut expanded_bytes,
+				"whodrug SUN.csv",
+			)?;
 			sun = Some(bytes);
 		}
 	}
@@ -289,9 +308,15 @@ fn whodrug_zip_entries(bytes: &[u8]) -> Result<Option<Vec<(String, Vec<u8>)>>> {
 	let Ok(mut zip) = ZipArchive::new(Cursor::new(bytes)) else {
 		return Ok(None);
 	};
+	if zip.len() > MAX_TERMINOLOGY_ZIP_ENTRIES {
+		return Err(bad_input(format!(
+			"terminology zip contains more than {MAX_TERMINOLOGY_ZIP_ENTRIES} entries"
+		)));
+	}
 	let mut entries = Vec::new();
+	let mut expanded_bytes = 0usize;
 	for idx in 0..zip.len() {
-		let mut entry = zip
+		let entry = zip
 			.by_index(idx)
 			.map_err(|e| bad_input(format!("whodrug zip read error: {e}")))?;
 		if !entry.is_file() {
@@ -301,10 +326,8 @@ fn whodrug_zip_entries(bytes: &[u8]) -> Result<Option<Vec<(String, Vec<u8>)>>> {
 		if !is_delimited_name(&name.to_ascii_lowercase()) {
 			continue;
 		}
-		let mut entry_bytes = Vec::new();
-		entry
-			.read_to_end(&mut entry_bytes)
-			.map_err(|e| bad_input(format!("whodrug zip file read error: {e}")))?;
+		let entry_bytes =
+			read_limited_zip_entry(entry, &mut expanded_bytes, "whodrug zip file")?;
 		entries.push((name, entry_bytes));
 	}
 	Ok(Some(entries))
@@ -1116,10 +1139,11 @@ async fn upsert_whodrug_cas_numbers(
 fn read_zip_file_case_insensitive(
 	zip: &mut ZipArchive<Cursor<&[u8]>>,
 	target_name: &str,
+	expanded_bytes: &mut usize,
 ) -> Result<String> {
 	let target_name = target_name.to_ascii_lowercase();
 	for i in 0..zip.len() {
-		let mut file = zip
+		let file = zip
 			.by_index(i)
 			.map_err(|e| bad_input(format!("zip read error: {e}")))?;
 		if !file.is_file() {
@@ -1127,15 +1151,50 @@ fn read_zip_file_case_insensitive(
 		}
 		let name = file.name().rsplit('/').next().unwrap_or("");
 		if name.eq_ignore_ascii_case(&target_name) {
-			let mut bytes = Vec::new();
-			file.read_to_end(&mut bytes)
-				.map_err(|e| bad_input(format!("zip entry read error: {e}")))?;
+			let bytes = read_limited_zip_entry(
+				file,
+				expanded_bytes,
+				"terminology zip entry",
+			)?;
 			return Ok(String::from_utf8_lossy(&bytes).into_owned());
 		}
 	}
 	Err(bad_input(format!(
 		"missing required file in zip: {target_name}"
 	)))
+}
+
+fn read_limited_zip_entry<R: Read>(
+	mut reader: R,
+	expanded_bytes: &mut usize,
+	label: &str,
+) -> Result<Vec<u8>> {
+	let mut bytes = Vec::new();
+	let mut entry_bytes = 0usize;
+	let mut chunk = [0u8; 64 * 1024];
+	loop {
+		let count = reader
+			.read(&mut chunk)
+			.map_err(|e| bad_input(format!("{label} read error: {e}")))?;
+		if count == 0 {
+			break;
+		}
+		entry_bytes = entry_bytes
+			.checked_add(count)
+			.ok_or_else(|| bad_input(format!("{label} size overflow")))?;
+		*expanded_bytes = expanded_bytes
+			.checked_add(count)
+			.ok_or_else(|| bad_input(format!("{label} expanded size overflow")))?;
+		if entry_bytes > MAX_TERMINOLOGY_ZIP_ENTRY_BYTES
+			|| *expanded_bytes > MAX_TERMINOLOGY_ZIP_EXPANDED_BYTES
+		{
+			return Err(bad_input(format!(
+				"{label} exceeds terminology archive limits"
+			)));
+		}
+		bytes.extend_from_slice(&chunk[..count]);
+	}
+	Ok(bytes)
 }
 
 fn insert_term(

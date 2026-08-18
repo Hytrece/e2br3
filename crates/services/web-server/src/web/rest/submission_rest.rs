@@ -499,7 +499,7 @@ pub async fn post_gateway_ack_callback(
 		.ok_or(Error::BadRequest {
 			message: "missing x-callback-token".to_string(),
 		})?;
-	if incoming != expected {
+	if !tokens_equal(&expected, &incoming) {
 		return Err(Error::BadRequest {
 			message: "invalid x-callback-token".to_string(),
 		});
@@ -559,10 +559,22 @@ fn validate_internal_token(headers: &HeaderMap) -> Result<()> {
 		.ok_or(Error::BadRequest {
 			message: "missing x-callback-token".to_string(),
 		})?;
-	if incoming != expected {
+	if !tokens_equal(&expected, &incoming) {
 		return Err(Error::BadRequest {
 			message: "invalid x-callback-token".to_string(),
 		});
 	}
 	Ok(())
+}
+
+fn tokens_equal(expected: &str, incoming: &str) -> bool {
+	let expected = expected.as_bytes();
+	let incoming = incoming.as_bytes();
+	let mut difference = expected.len() ^ incoming.len();
+	for index in 0..expected.len().max(incoming.len()) {
+		let expected_byte = expected.get(index).copied().unwrap_or(0);
+		let incoming_byte = incoming.get(index).copied().unwrap_or(0);
+		difference |= usize::from(expected_byte ^ incoming_byte);
+	}
+	difference == 0
 }

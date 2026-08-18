@@ -18,6 +18,15 @@ fn check(
 	null_flavor: Option<&str>,
 	contract: FieldContract,
 ) -> Result<()> {
+	if matches!(&value, InputValue::String(value) if value.chars().any(|character| {
+		character.is_control() && !matches!(character, '\t' | '\n' | '\r')
+	})) {
+		return Err(Error::ConstraintViolation(ConstraintViolation {
+			rule_code: "INPUT.CONTROL_CHAR.REJECTED".to_owned(),
+			path: path.to_owned(),
+			message: "control characters are not allowed".to_owned(),
+		}));
+	}
 	let value_present = match value {
 		InputValue::Missing => false,
 		InputValue::String(value) => !value.trim().is_empty(),
@@ -49,6 +58,10 @@ fn text(value: Option<&str>) -> InputValue<'_> {
 
 fn boolean(value: Option<bool>) -> InputValue<'static> {
 	value.map_or(InputValue::Missing, InputValue::Boolean)
+}
+
+fn unconstrained(_: FieldInput<'_>) -> Vec<InputIssue> {
+	Vec::new()
 }
 
 fn decimal(
@@ -130,6 +143,42 @@ pub(super) fn sender_create(data: &SenderPresaveForCreate) -> Result<()> {
 
 pub(super) fn sender_update(data: &SenderPresaveForUpdate) -> Result<()> {
 	sender_parent!(data)
+}
+
+macro_rules! receiver_parent {
+	($data:expr) => {{
+		check(
+			"organizationName",
+			text($data.organization_name.as_deref()),
+			None,
+			unconstrained,
+		)?;
+		check(
+			"receiverType",
+			text($data.receiver_type.as_deref()),
+			None,
+			unconstrained,
+		)?;
+		if $data.receiver_type.as_deref().is_some_and(|value| {
+			!matches!(value, "Regulatory Authority" | "Original Manufacturer")
+		}) {
+			return Err(Error::ConstraintViolation(ConstraintViolation {
+				rule_code: "PRESAVE.RECEIVER_TYPE.ALLOWED".to_owned(),
+				path: "receiverType".to_owned(),
+				message: "must be Regulatory Authority or Original Manufacturer"
+					.to_owned(),
+			}));
+		}
+		Ok(())
+	}};
+}
+
+pub(super) fn receiver_create(data: &ReceiverPresaveForCreate) -> Result<()> {
+	receiver_parent!(data)
+}
+
+pub(super) fn receiver_update(data: &ReceiverPresaveForUpdate) -> Result<()> {
+	receiver_parent!(data)
 }
 
 macro_rules! sender_person {
@@ -342,6 +391,13 @@ macro_rules! product_parent {
 			None,
 			input_contracts::generated::g::g_k_2_5,
 		)?;
+		if $data.investigational_product_blinded == Some(false) {
+			return Err(Error::ConstraintViolation(ConstraintViolation {
+				rule_code: "ICH.G.k.2.5.ALLOWED.VALUE".to_owned(),
+				path: "investigationalProductBlinded".to_owned(),
+				message: "must be true when present".to_owned(),
+			}));
+		}
 		check_text!(
 			"obtainDrugCountry",
 			$data.obtain_drug_country,
@@ -569,6 +625,12 @@ macro_rules! narrative {
 			$data.case_narrative,
 			input_contracts::generated::h::h_1
 		);
+		check(
+			"additionalInformation",
+			text($data.additional_information.as_deref()),
+			None,
+			unconstrained,
+		)?;
 		Ok(())
 	}};
 }
@@ -658,6 +720,33 @@ mod tests {
 		};
 		let error = sender_update(&data).unwrap_err();
 		assert!(matches!(error, Error::ConstraintViolation(_)));
+	}
+
+	#[test]
+	fn presave_text_rejects_nul_but_allows_multiline_content() {
+		assert!(matches!(
+			narrative_update(&NarrativePresaveForUpdate {
+				case_narrative: Some("before\0after".into()),
+				..Default::default()
+			}),
+			Err(Error::ConstraintViolation(_))
+		));
+		assert!(narrative_update(&NarrativePresaveForUpdate {
+			case_narrative: Some("before\nafter".into()),
+			..Default::default()
+		})
+		.is_ok());
+	}
+
+	#[test]
+	fn receiver_type_rejects_noncanonical_values() {
+		assert!(matches!(
+			receiver_update(&ReceiverPresaveForUpdate {
+				receiver_type: Some("2".into()),
+				..Default::default()
+			}),
+			Err(Error::ConstraintViolation(_))
+		));
 	}
 
 	#[test]

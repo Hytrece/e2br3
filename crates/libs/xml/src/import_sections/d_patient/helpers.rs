@@ -75,6 +75,8 @@ pub(crate) struct PastDrugHistoryImport {
 	pub(crate) drug_name_null_flavor: Option<String>,
 	pub(crate) mpid: Option<String>,
 	pub(crate) mpid_version: Option<String>,
+	pub(crate) mpid_source_code_system: Option<String>,
+	pub(crate) mpid_source_code_system_version: Option<String>,
 	pub(crate) mfds_medicinal_product_version: Option<String>,
 	pub(crate) mfds_medicinal_product_id: Option<String>,
 	pub(crate) phpid: Option<String>,
@@ -504,7 +506,12 @@ pub(crate) fn parse_past_drug_history(
 		let (drug_name, drug_name_null_flavor) = read_d_8_r_1(&mut xpath, &node)?;
 		let (mfds_medicinal_product_version, mfds_medicinal_product_id) =
 			read_d_8_r_1_kr(&mut xpath, &node)?;
-		let (mpid_version, mpid) = read_d_8_r_2(&mut xpath, &node)?;
+		let (
+			mpid_version,
+			mpid,
+			mpid_source_code_system,
+			mpid_source_code_system_version,
+		) = read_d_8_r_2(&mut xpath, &node)?;
 		let (phpid_version, phpid) = read_d_8_r_3(&mut xpath, &node)?;
 		let (start_date, start_date_null_flavor) = read_d_8_r_4(&mut xpath, &node)?;
 		let (end_date, end_date_null_flavor) = read_d_8_r_5(&mut xpath, &node)?;
@@ -517,6 +524,8 @@ pub(crate) fn parse_past_drug_history(
 			drug_name_null_flavor,
 			mpid,
 			mpid_version,
+			mpid_source_code_system,
+			mpid_source_code_system_version,
 			mfds_medicinal_product_version,
 			mfds_medicinal_product_id,
 			phpid,
@@ -581,10 +590,33 @@ fn read_d_8_r_1_kr(
 fn read_d_8_r_2(
 	xpath: &mut Context,
 	node: &libxml::tree::Node,
-) -> Result<(Option<String>, Option<String>)> {
+) -> Result<(
+	Option<String>,
+	Option<String>,
+	Option<String>,
+	Option<String>,
+)> {
 	let base = format!("{PRODUCT}/hl7:asIdentifiedEntity[hl7:code[@code='MPID']]");
 	let fda_code =
 		format!("{PRODUCT}/hl7:code[@codeSystem='2.16.840.1.113883.6.69']");
+	if let Some(mpid) = first_attr(xpath, node, &fda_code, "code") {
+		input_string(
+			Some(mpid.clone()),
+			"mpid",
+			input_contracts::generated::d::d_8_r_2b,
+		)?;
+		let source_version = input_string(
+			first_attr(xpath, node, &fda_code, "codeSystemVersion"),
+			"mpidSourceCodeSystemVersion",
+			input_contracts::generated::d::mfds_d_8_r_1_kr_1a,
+		)?;
+		return Ok((
+			None,
+			Some(mpid),
+			Some("2.16.840.1.113883.6.69".to_string()),
+			source_version,
+		));
+	}
 	Ok((
 		input_string(
 			first_value(xpath, node, &format!("{base}/hl7:code/@codeSystemVersion"))
@@ -598,6 +630,8 @@ fn read_d_8_r_2(
 			"mpid",
 			input_contracts::generated::d::d_8_r_2b,
 		)?,
+		None,
+		None,
 	))
 }
 
@@ -1375,6 +1409,8 @@ pub(crate) fn parse_parent_information(xml: &[u8]) -> Result<Option<ParentImport
 			drug_name_null_flavor: None,
 			mpid,
 			mpid_version,
+			mpid_source_code_system: None,
+			mpid_source_code_system_version: None,
 			mfds_medicinal_product_version,
 			mfds_medicinal_product_id,
 			phpid,
@@ -1508,11 +1544,19 @@ mod tests {
 
 	#[test]
 	fn parse_d_8_r_2_accepts_fda_ndc_code() {
-		let xml = br#"<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3"><organizer><code code="2" codeSystem="2.16.840.1.113883.3.989.2.1.1.20"/><component><substanceAdministration><consumable><instanceOfKind><kindOfProduct><code code="59762-2858" codeSystem="2.16.840.1.113883.6.69" codeSystemVersion="2014110112"/><name>CureAll</name></kindOfProduct></instanceOfKind></consumable></substanceAdministration></component></organizer></MCCI_IN200100UV01>"#;
+		let xml = br#"<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3"><organizer><code code="2" codeSystem="2.16.840.1.113883.3.989.2.1.1.20"/><component><substanceAdministration><consumable><instanceOfKind><kindOfProduct><code code="59762-2858" codeSystem="2.16.840.1.113883.6.69" codeSystemVersion="201411011202"/><name>CureAll</name></kindOfProduct></instanceOfKind></consumable></substanceAdministration></component></organizer></MCCI_IN200100UV01>"#;
 
 		let past_drugs = parse_past_drug_history(xml).expect("parse FDA D.8");
 		assert_eq!(past_drugs[0].mpid.as_deref(), Some("59762-2858"));
-		assert_eq!(past_drugs[0].mpid_version.as_deref(), Some("2014110112"));
+		assert_eq!(past_drugs[0].mpid_version, None);
+		assert_eq!(
+			past_drugs[0].mpid_source_code_system.as_deref(),
+			Some("2.16.840.1.113883.6.69")
+		);
+		assert_eq!(
+			past_drugs[0].mpid_source_code_system_version.as_deref(),
+			Some("201411011202")
+		);
 		assert_eq!(past_drugs[0].mfds_medicinal_product_id, None);
 	}
 

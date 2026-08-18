@@ -3023,6 +3023,8 @@ mod golden_g_required_tests {
 			medicinal_product: String::new(),
 			mpid: None,
 			mpid_version: None,
+			mpid_source_code_system: None,
+			mpid_source_code_system_version: None,
 			mfds_mpid_version: None,
 			mfds_mpid: None,
 			phpid: None,

@@ -14,6 +14,8 @@ use crate::export::sections::n::apply_section_n;
 use crate::export::shared::patch_doc::postprocess_export_doc;
 use crate::export_utils::set_xsi_type_first;
 
+const FDA_MPID_CODE_SYSTEM: &str = "2.16.840.1.113883.6.69";
+
 fn normalize_namespace_artifacts(mut xml: String) -> String {
 	xml = xml.replace("xmlns:default=\"urn:hl7-org:v3\"", "");
 	xml = xml.replace("xmlns:default=\"urn:hl7-org:v3\" ", "");
@@ -1140,6 +1142,20 @@ fn write_d_8_r_2b(value: &PastDrugHistory) -> Option<&str> {
 	value.mpid.as_deref()
 }
 
+fn write_d_8_fda_mpid_code_system(value: &PastDrugHistory) -> &str {
+	value
+		.mpid_source_code_system
+		.as_deref()
+		.unwrap_or(FDA_MPID_CODE_SYSTEM)
+}
+
+fn write_d_8_fda_mpid_code_system_version(value: &PastDrugHistory) -> Option<&str> {
+	value
+		.mpid_source_code_system_version
+		.as_deref()
+		.or_else(|| write_d_8_r_2a(value))
+}
+
 /// e2b:D.8.r.3a
 fn write_d_8_r_3a(value: &PastDrugHistory) -> Option<&str> {
 	value.phpid_version.as_deref()
@@ -1234,12 +1250,15 @@ fn apply_d_8_past_drugs(
 			) && (write_d_8_r_2b(&drug).is_some()
 				|| write_d_8_r_2a(&drug).is_some())
 			{
-				let mut attrs =
-					String::from(" codeSystem=\"2.16.840.1.113883.6.69\"");
+				let mut attrs = format!(
+					" codeSystem=\"{}\"",
+					xml_escape(write_d_8_fda_mpid_code_system(&drug)),
+				);
 				if let Some(id) = write_d_8_r_2b(&drug) {
 					attrs.push_str(&format!(" code=\"{}\"", xml_escape(id)));
 				}
-				if let Some(version) = write_d_8_r_2a(&drug) {
+				if let Some(version) = write_d_8_fda_mpid_code_system_version(&drug)
+				{
 					attrs.push_str(&format!(
 						" codeSystemVersion=\"{}\"",
 						xml_escape(version)
@@ -1678,6 +1697,8 @@ mod tests {
 			mfds_medicinal_product_id: Some("MF&<>\"".to_string()),
 			mpid: Some("MP&<>\"".to_string()),
 			mpid_version: Some("MPV&<>\"".to_string()),
+			mpid_source_code_system: None,
+			mpid_source_code_system_version: None,
 			phpid: Some("PH&<>\"".to_string()),
 			phpid_version: Some("PHV&<>\"".to_string()),
 			start_date: None,
@@ -1772,6 +1793,8 @@ mod tests {
 			mfds_medicinal_product_id: Some(String::new()),
 			mpid: Some("MPID-EXACT".to_string()),
 			mpid_version: Some("MPID-V1".to_string()),
+			mpid_source_code_system: None,
+			mpid_source_code_system_version: None,
 			phpid: None,
 			phpid_version: None,
 			start_date: None,
@@ -1809,6 +1832,57 @@ mod tests {
 		assert!(!fragment.contains("<code code=\"\""));
 		assert!(!fragment.contains("codeSystemVersion=\" \""));
 		assert!(fragment.contains("code=\"MPID\""));
+	}
+
+	#[test]
+	fn d_8_fda_uses_source_mpid_metadata() {
+		let drug = PastDrugHistory {
+			id: Uuid::nil(),
+			patient_id: Uuid::nil(),
+			sequence_number: 1,
+			drug_name: Some("Past Drug".to_string()),
+			drug_name_null_flavor: None,
+			mfds_medicinal_product_version: None,
+			mfds_medicinal_product_id: None,
+			mpid: Some("59762-2858".to_string()),
+			mpid_version: None,
+			mpid_source_code_system: Some("2.16.840.1.113883.6.69".to_string()),
+			mpid_source_code_system_version: Some("201411011202".to_string()),
+			phpid: None,
+			phpid_version: None,
+			start_date: None,
+			start_date_null_flavor: None,
+			end_date: None,
+			end_date_null_flavor: None,
+			indication_meddra_version: None,
+			indication_meddra_code: None,
+			reaction_meddra_version: None,
+			reaction_meddra_code: None,
+			deleted: false,
+			created_at: OffsetDateTime::UNIX_EPOCH,
+			updated_at: OffsetDateTime::UNIX_EPOCH,
+			created_by: Uuid::nil(),
+			updated_by: None,
+		};
+		let parser = Parser::default();
+		let mut doc = parser
+			.parse_string(
+				"<MCCI_IN200100UV01 xmlns=\"urn:hl7-org:v3\"><primaryRole/></MCCI_IN200100UV01>",
+			)
+			.expect("doc");
+		let mut xpath = Context::new(&doc).expect("xpath");
+		let _ = xpath.register_namespace("hl7", "urn:hl7-org:v3");
+		apply_d_8_past_drugs(
+			&mut doc,
+			&parser,
+			&mut xpath,
+			&[drug],
+			lib_core::regulatory::RegulatoryAuthority::Fda,
+		)
+		.expect("apply FDA");
+		assert!(doc
+			.to_string()
+			.contains("code=\"59762-2858\" codeSystemVersion=\"201411011202\""));
 	}
 
 	#[test]

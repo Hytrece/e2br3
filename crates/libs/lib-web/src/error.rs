@@ -175,6 +175,7 @@ pub enum ClientError {
 	ENTITY_NOT_FOUND { entity: &'static str, id: i64 },
 	ENTITY_UUID_NOT_FOUND { entity: &'static str, id: String },
 	CONSTRAINT_VIOLATION,
+	INVALID_REQUEST,
 	SERVICE_ERROR,
 }
 // endregion: --- Client Error

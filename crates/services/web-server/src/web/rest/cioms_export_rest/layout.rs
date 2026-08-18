@@ -1368,12 +1368,18 @@ pub(super) fn render_cioms_continuation_pages(
 					.meddra_code
 					.clone()
 					.map(|value| format!("Code: {value}")),
-				episode.start_date.as_deref().map(|value| format!("Start: {value}")),
+				episode
+					.start_date
+					.as_deref()
+					.map(|value| format!("Start: {value}")),
 				episode
 					.start_date_null_flavor
 					.clone()
 					.map(|value| format!("Start null flavor: {value}")),
-				episode.end_date.as_deref().map(|value| format!("End: {value}")),
+				episode
+					.end_date
+					.as_deref()
+					.map(|value| format!("End: {value}")),
 				episode
 					.end_date_null_flavor
 					.clone()

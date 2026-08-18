@@ -43,6 +43,8 @@ use zip::ZipArchive;
 
 const MAX_XML_UPLOAD_BYTES: usize = 50 * 1024 * 1024;
 const MAX_XML_ZIP_ENTRY_BYTES: usize = 25 * 1024 * 1024;
+const MAX_XML_ZIP_ENTRIES: usize = 128;
+const MAX_XML_ZIP_EXPANDED_BYTES: usize = 100 * 1024 * 1024;
 pub const MAX_XML_REQUEST_BYTES: usize = MAX_XML_UPLOAD_BYTES + 64 * 1024;
 
 struct UploadedImportPayload {
@@ -215,8 +217,16 @@ fn extract_xml_entries(
 fn extract_xml_entries_from_zip(
 	mut zip: ZipArchive<Cursor<&[u8]>>,
 ) -> Result<Vec<(String, Vec<u8>)>> {
+	if zip.len() > MAX_XML_ZIP_ENTRIES {
+		return Err(Error::BadRequest {
+			message: format!(
+				"xml import zip contains more than {MAX_XML_ZIP_ENTRIES} entries"
+			),
+		});
+	}
 	let mut entries = Vec::new();
 	let mut names = HashSet::new();
+	let mut expanded_bytes = 0usize;
 	for idx in 0..zip.len() {
 		let mut entry = zip.by_index(idx).map_err(|err| Error::BadRequest {
 			message: format!("zip read error: {err}"),
@@ -248,6 +258,19 @@ fn extract_xml_entries_from_zip(
 			MAX_XML_ZIP_ENTRY_BYTES,
 			"xml zip entry",
 		)?;
+		expanded_bytes =
+			expanded_bytes
+				.checked_add(entry_bytes.len())
+				.ok_or_else(|| Error::BadRequest {
+					message: "xml import zip expanded size overflow".to_string(),
+				})?;
+		if expanded_bytes > MAX_XML_ZIP_EXPANDED_BYTES {
+			return Err(Error::BadRequest {
+				message: format!(
+					"xml import zip exceeds {MAX_XML_ZIP_EXPANDED_BYTES} expanded bytes"
+				),
+			});
+		}
 		entries.push((entry_name, entry_bytes));
 	}
 

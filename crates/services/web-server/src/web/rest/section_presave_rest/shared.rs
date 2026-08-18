@@ -3,7 +3,6 @@
 
 pub(super) use axum::extract::{Path, Query, State};
 pub(super) use axum::http::StatusCode;
-pub(super) use axum::Json;
 pub(super) use lib_core::authorization::EnforcedScopeFilter;
 pub(super) use lib_core::model::authorization::PresaveAuthorizationKind;
 pub(super) use lib_core::model::presave::{
@@ -49,6 +48,47 @@ pub(super) use lib_web::middleware::mw_authorization_snapshot::AuthorizationSnap
 pub(super) use serde::{Deserialize, Serialize};
 pub(super) use std::collections::HashSet;
 pub(super) use uuid::Uuid;
+
+pub struct Json<T>(pub T);
+
+impl<S, T> axum::extract::FromRequest<S> for Json<T>
+where
+	S: Send + Sync,
+	T: serde::de::DeserializeOwned,
+{
+	type Rejection = Error;
+
+	async fn from_request(
+		req: axum::extract::Request,
+		state: &S,
+	) -> core::result::Result<Self, Self::Rejection> {
+		axum::Json::<T>::from_request(req, state)
+			.await
+			.map(|axum::Json(value)| Self(value))
+			.map_err(|rejection| {
+				let body = rejection.body_text();
+				Error::ConstraintViolation(lib_rest_core::ConstraintViolation {
+					rule_code: "INPUT.JSON.INVALID".into(),
+					path: json_rejection_path(&body).into(),
+					message: "request JSON does not match the expected input type"
+						.into(),
+				})
+			})
+	}
+}
+
+impl<T: Serialize> axum::response::IntoResponse for Json<T> {
+	fn into_response(self) -> axum::response::Response {
+		axum::Json(self.0).into_response()
+	}
+}
+
+fn json_rejection_path(message: &str) -> &str {
+	message
+		.strip_prefix("Failed to deserialize the JSON body into the target type: ")
+		.and_then(|detail| detail.split_once(':'))
+		.map_or("$", |(path, _)| path)
+}
 
 pub(super) fn parse_scope_filter(
 	raw: Option<&str>,
@@ -795,7 +835,7 @@ pub(super) fn filter_product_presaves_for_scope(
 
 #[cfg(test)]
 mod tests {
-	use super::product_allowed_by_scope;
+	use super::{json_rejection_path, product_allowed_by_scope};
 	use uuid::Uuid;
 
 	#[test]
@@ -824,6 +864,17 @@ mod tests {
 			None,
 		));
 		assert!(product_allowed_by_scope(&[], &[], product_id, None));
+	}
+
+	#[test]
+	fn json_rejection_reports_the_input_path() {
+		assert_eq!(
+			json_rejection_path(
+				"Failed to deserialize the JSON body into the target type: data.rows.product.flag: invalid type"
+			),
+			"data.rows.product.flag"
+		);
+		assert_eq!(json_rejection_path("expected JSON value"), "$");
 	}
 }
 

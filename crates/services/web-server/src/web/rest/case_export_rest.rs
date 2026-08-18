@@ -30,6 +30,9 @@ use zip::{CompressionMethod, ZipWriter};
 
 // -- Types
 
+const MAX_BULK_XML_CASES: usize = 100;
+const MAX_BULK_XML_BYTES: usize = 100 * 1024 * 1024;
+
 #[derive(Debug, Deserialize)]
 pub struct BulkXmlExportInput {
 	pub case_ids: Vec<Uuid>,
@@ -412,6 +415,13 @@ pub async fn export_cases_zip(
 			unique_case_ids.push(*case_id);
 		}
 	}
+	if unique_case_ids.len() > MAX_BULK_XML_CASES {
+		return Err(Error::BadRequest {
+			message: format!(
+				"bulk export accepts at most {MAX_BULK_XML_CASES} cases"
+			),
+		});
+	}
 	let export_case_ids = unique_case_ids.clone();
 	lib_rest_core::with_authorized_case_export(
 		&ctx,
@@ -443,6 +453,7 @@ async fn export_cases_zip_authorized(
 	let mut cursor = Cursor::new(Vec::new());
 	let options =
 		SimpleFileOptions::default().compression_method(CompressionMethod::Deflated);
+	let mut xml_bytes = 0usize;
 	{
 		let mut zip = ZipWriter::new(&mut cursor);
 		for case_id in unique_case_ids {
@@ -487,6 +498,18 @@ async fn export_cases_zip_authorized(
 						message: format!("failed to start zip entry: {err}"),
 					}
 				})?;
+				xml_bytes = xml_bytes.checked_add(xml.len()).ok_or_else(|| {
+					Error::BadRequest {
+						message: "bulk export size overflow".to_string(),
+					}
+				})?;
+				if xml_bytes > MAX_BULK_XML_BYTES {
+					return Err(Error::BadRequest {
+						message: format!(
+							"bulk export exceeds {MAX_BULK_XML_BYTES} uncompressed bytes"
+						),
+					});
+				}
 				zip.write_all(xml.as_bytes())
 					.map_err(|err| Error::BadRequest {
 						message: format!("failed to write zip entry: {err}"),

@@ -1263,8 +1263,11 @@ async fn list_case_view_rows_authorized(
 
 	let mut scoped = Vec::with_capacity(limit.min(items.len()));
 	let mut scoped_offset = 0usize;
+	let item_ids = items.iter().map(|item| item.case_id).collect::<Vec<_>>();
+	let visible_case_ids =
+		lib_rest_core::case_ids_matching_user_scope(ctx, mm, &item_ids).await?;
 	for item in items {
-		if lib_rest_core::case_matches_user_scope(ctx, mm, item.case_id).await? {
+		if visible_case_ids.contains(&item.case_id) {
 			if scoped_offset < offset {
 				scoped_offset += 1;
 				continue;
@@ -1652,7 +1655,12 @@ async fn get_case_lifecycle_authorized(
 )> {
 	let safety_report =
 		SafetyReportIdentificationBmc::get_by_case(ctx, mm, id).await?;
-	let safety_report_id = safety_report.safety_report_id.unwrap_or_default();
+	let safety_report_id = safety_report
+		.safety_report_id
+		.filter(|value| !value.trim().is_empty())
+		.ok_or_else(|| Error::BadRequest {
+			message: format!("case {id} has no safety report ID"),
+		})?;
 	let versions = lib_rest_core::with_rls_read(mm, ctx, |dbx| {
 		let safety_report_id = safety_report_id.clone();
 		Box::pin(async move {
@@ -1741,12 +1749,13 @@ async fn list_case_link_options_authorized(
 	})
 	.await?;
 
-	let mut scoped = Vec::with_capacity(items.len());
-	for item in items {
-		if lib_rest_core::case_matches_user_scope(ctx, mm, item.case_id).await? {
-			scoped.push(item);
-		}
-	}
+	let item_ids = items.iter().map(|item| item.case_id).collect::<Vec<_>>();
+	let visible_case_ids =
+		lib_rest_core::case_ids_matching_user_scope(ctx, mm, &item_ids).await?;
+	let scoped = items
+		.into_iter()
+		.filter(|item| visible_case_ids.contains(&item.case_id))
+		.collect::<Vec<_>>();
 
 	Ok((
 		axum::http::StatusCode::OK,

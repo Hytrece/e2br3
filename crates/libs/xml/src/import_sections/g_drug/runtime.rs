@@ -91,6 +91,9 @@ async fn import_drugs(
 					.investigational_product_blinded,
 				mpid: drug.mpid,
 				mpid_version: drug.mpid_version,
+				mpid_source_code_system: drug.mpid_source_code_system,
+				mpid_source_code_system_version: drug
+					.mpid_source_code_system_version,
 				mfds_mpid_version: drug.mfds_mpid_version,
 				mfds_mpid: drug.mfds_mpid,
 				phpid: drug.phpid,

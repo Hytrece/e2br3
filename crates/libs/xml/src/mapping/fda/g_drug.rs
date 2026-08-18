@@ -25,6 +25,10 @@ impl GDrugPaths {
 		"(hl7:consumable/hl7:instanceOfKind/hl7:kindOfProduct/hl7:asIdentifiedEntity[hl7:code[@code='MPID']]/hl7:id/@extension | hl7:consumable/hl7:instanceOfKind/hl7:kindOfProduct/hl7:code[not(@codeSystem='2.16.840.1.113883.3.989.5.1.10.2.1')]/@code)[1]";
 	pub const MPID_VERSION: &'static str =
 		"(hl7:consumable/hl7:instanceOfKind/hl7:kindOfProduct/hl7:asIdentifiedEntity[hl7:code[@code='MPID']]/hl7:code/@codeSystemVersion | hl7:consumable/hl7:instanceOfKind/hl7:kindOfProduct/hl7:code[not(@codeSystem='2.16.840.1.113883.3.989.5.1.10.2.1')]/@codeSystemVersion)[1]";
+	pub const FDA_MPID: &'static str =
+		"hl7:consumable/hl7:instanceOfKind/hl7:kindOfProduct/hl7:code[@codeSystem='2.16.840.1.113883.6.69']/@code";
+	pub const FDA_MPID_VERSION: &'static str =
+		"hl7:consumable/hl7:instanceOfKind/hl7:kindOfProduct/hl7:code[@codeSystem='2.16.840.1.113883.6.69']/@codeSystemVersion";
 	pub const PHPID: &'static str =
 		"(hl7:consumable/hl7:instanceOfKind/hl7:kindOfProduct/hl7:asIdentifiedEntity[hl7:code[@code='PhPID' or @code='PHPID']]/hl7:id/@extension)[1]";
 	pub const PHPID_VERSION: &'static str =

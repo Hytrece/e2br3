@@ -1,10 +1,5 @@
-use axum::Router;
 use utoipa::openapi::security::{ApiKey, ApiKeyValue, SecurityScheme};
 use utoipa::{Modify, OpenApi, ToSchema};
-
-pub fn router() -> Router {
-	Router::new()
-}
 
 #[derive(OpenApi)]
 #[openapi(

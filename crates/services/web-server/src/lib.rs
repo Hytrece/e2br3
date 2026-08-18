@@ -82,7 +82,6 @@ pub fn app(mm: ModelManager) -> Router {
 
 	Router::new()
 		.route("/health", get(health))
-		.merge(openapi::router())
 		.nest("/auth/v1", routes_login)
 		.nest("/api", routes_rest)
 		.nest("/internal", routes_internal)

@@ -873,10 +873,16 @@ impl CaseBmc {
 		dbx: &Dbx,
 		list_options: Option<&ListOptions>,
 	) -> Result<Vec<CaseListViewRow>> {
+		// ponytail: fixed 5,000-row window; replace with SQL scope projection
+		// when case-list datasets exceed this ceiling.
+		const MAX_CASE_LIST_ROWS: i64 = 5_000;
 		let order_clause = list_view_order_clause(
 			list_options.and_then(|options| options.order_bys.as_ref()),
 		);
-		let sql = list_view_rows_sql(order_clause, "");
+		let sql = format!(
+			"{} LIMIT {MAX_CASE_LIST_ROWS}",
+			list_view_rows_sql(order_clause, "")
+		);
 
 		dbx.fetch_all(sqlx::query_as::<_, CaseListViewRow>(&sql))
 			.await

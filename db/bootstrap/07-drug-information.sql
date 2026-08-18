@@ -20,6 +20,9 @@ CREATE TABLE drug_information (
     -- G.k.2.4.r - Identification of the Pharmaceutical Product (MPID)
     mpid VARCHAR(1000),
     mpid_version VARCHAR(10),
+    -- FDA direct MPID provenance (not an E2B business field)
+    mpid_source_code_system TEXT,
+    mpid_source_code_system_version TEXT,
 
     -- G.k.2.1.KR.1a/b - MFDS medicinal product fields
     mfds_mpid_version VARCHAR(20),

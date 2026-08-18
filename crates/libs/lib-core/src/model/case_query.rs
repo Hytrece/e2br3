@@ -248,7 +248,11 @@ fn build_predicate(
 
 	let next_placeholder = |binds: &mut Vec<String>, value: &str| -> String {
 		let value = if raw_ts {
-			value.chars().filter(|c| c.is_ascii_digit()).take(8).collect()
+			value
+				.chars()
+				.filter(|c| c.is_ascii_digit())
+				.take(8)
+				.collect()
 		} else {
 			value.to_string()
 		};

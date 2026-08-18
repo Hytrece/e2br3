@@ -24,6 +24,8 @@ fn export_g_drug_basic() {
 		medicinal_product: "Drug A".to_string(),
 		mpid: Some("MPID123".to_string()),
 		mpid_version: Some("1".to_string()),
+		mpid_source_code_system: None,
+		mpid_source_code_system_version: None,
 		mfds_mpid_version: None,
 		mfds_mpid: None,
 		phpid: None,

@@ -24,13 +24,24 @@ pub async fn reconcile_due_submissions(
 		mm.dbx()
 			.fetch_all(
 				sqlx::query_as::<_, (Uuid,)>(
-					"SELECT submission_id
-					 FROM submission_dispatch_state
-					 WHERE next_retry_at IS NOT NULL
-					   AND next_retry_at <= now()
-					   AND terminal_at IS NULL
-					 ORDER BY next_retry_at ASC
-					 LIMIT $1",
+					// ponytail: fixed five-minute lease; use a persisted worker lease
+					// if reconciliation can run longer than that.
+					"WITH due AS (
+						SELECT submission_id
+						  FROM submission_dispatch_state
+						 WHERE next_retry_at IS NOT NULL
+						   AND next_retry_at <= now()
+						   AND terminal_at IS NULL
+						 ORDER BY next_retry_at ASC
+						 FOR UPDATE SKIP LOCKED
+						 LIMIT $1
+					)
+					UPDATE submission_dispatch_state state
+					   SET next_retry_at = now() + interval '5 minutes',
+					       updated_at = now()
+					  FROM due
+					 WHERE state.submission_id = due.submission_id
+					 RETURNING state.submission_id",
 				)
 				.bind(safe_limit),
 			)

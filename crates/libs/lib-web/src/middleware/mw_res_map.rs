@@ -92,14 +92,14 @@ fn map_model_error_to_client(
 		),
 		model::Error::UserAlreadyExists { .. } => (
 			StatusCode::CONFLICT,
-			ClientError::SERVICE_ERROR,
+			ClientError::INVALID_REQUEST,
 			Some(serde_json::Value::String(
 				"A user with that email already exists.".to_string(),
 			)),
 		),
 		model::Error::UniqueViolation { .. } => (
 			StatusCode::CONFLICT,
-			ClientError::SERVICE_ERROR,
+			ClientError::INVALID_REQUEST,
 			Some(serde_json::Value::String(
 				"Duplicate value: a record with the same key already exists."
 					.to_string(),
@@ -107,12 +107,12 @@ fn map_model_error_to_client(
 		),
 		model::Error::Validation { message } => (
 			StatusCode::BAD_REQUEST,
-			ClientError::SERVICE_ERROR,
+			ClientError::INVALID_REQUEST,
 			Some(serde_json::Value::String(message.clone())),
 		),
 		model::Error::Conflict { message } => (
 			StatusCode::CONFLICT,
-			ClientError::SERVICE_ERROR,
+			ClientError::INVALID_REQUEST,
 			Some(serde_json::Value::String(message.clone())),
 		),
 		_ => {
@@ -121,7 +121,7 @@ fn map_model_error_to_client(
 				if let Some((status, detail)) = map_pg_constraint(code.as_str()) {
 					return (
 						status,
-						ClientError::SERVICE_ERROR,
+						ClientError::INVALID_REQUEST,
 						Some(serde_json::Value::String(detail)),
 					);
 				}
@@ -139,13 +139,13 @@ fn map_model_error_to_client(
 					}
 					return (
 						StatusCode::BAD_REQUEST,
-						ClientError::SERVICE_ERROR,
+						ClientError::INVALID_REQUEST,
 						Some(serde_json::Value::String(detail)),
 					);
 				}
 				return (
 					StatusCode::BAD_REQUEST,
-					ClientError::SERVICE_ERROR,
+					ClientError::INVALID_REQUEST,
 					Some(serde_json::Value::String(
 						"Invalid input: the server rejected one or more fields."
 							.to_string(),
@@ -229,7 +229,7 @@ pub async fn mw_response_map(
 					}
 					lib_rest_core::Error::BadRequest { message } => (
 						StatusCode::BAD_REQUEST,
-						ClientError::SERVICE_ERROR,
+						ClientError::INVALID_REQUEST,
 						Some(serde_json::Value::String(message.clone())),
 					),
 					lib_rest_core::Error::Xml(err) => (
@@ -288,7 +288,7 @@ pub async fn mw_response_map(
 			),
 			lib_rest_core::Error::BadRequest { message } => {
 				debug_detail = Some(serde_json::Value::String(message.clone()));
-				(StatusCode::BAD_REQUEST, ClientError::SERVICE_ERROR)
+				(StatusCode::BAD_REQUEST, ClientError::INVALID_REQUEST)
 			}
 			lib_rest_core::Error::ConstraintViolation(detail) => {
 				debug_detail = Some(
@@ -403,4 +403,22 @@ pub async fn mw_response_map(
 		}
 	}
 	response
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn validation_errors_are_identifiable_client_errors() {
+		let (status, error, detail) = map_model_error_to_client(
+			&model::Error::Validation {
+				message: "invalid field".into(),
+			},
+			false,
+		);
+		assert_eq!(status, StatusCode::BAD_REQUEST);
+		assert_eq!(error.as_ref(), "INVALID_REQUEST");
+		assert_eq!(detail, Some(json!("invalid field")));
+	}
 }

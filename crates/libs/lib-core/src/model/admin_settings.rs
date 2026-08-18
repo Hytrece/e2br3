@@ -93,7 +93,6 @@ async fn insert_manual_audit(
 	record_id: Uuid,
 	organization_id: Uuid,
 	action: &str,
-	user_id: Uuid,
 	changed_fields: Option<Value>,
 	old_values: Option<Value>,
 	new_values: Option<Value>,
@@ -101,36 +100,16 @@ async fn insert_manual_audit(
 	dbx.execute(
 		sqlx::query(
 			r#"
-			INSERT INTO audit_logs (
-				table_name,
-				record_id,
-				organization_id,
-				action,
-				user_id,
-				reason_for_change,
-				change_category,
-				e_signature_id,
-				changed_fields,
-				old_values,
-				new_values
-			)
-			VALUES (
-				$1, $2, $3, $4, $5,
-				get_current_change_reason(),
-				get_current_change_category(),
-				get_current_esignature_id(),
-				$6, $7, $8
-			)
+			SELECT append_audit_log($1, $2, $3, $4, $5, $6, $7)
 			"#,
 		)
 		.bind(table_name)
 		.bind(record_id)
 		.bind(organization_id)
 		.bind(action)
-		.bind(user_id)
-		.bind(changed_fields)
 		.bind(old_values)
-		.bind(new_values),
+		.bind(new_values)
+		.bind(changed_fields),
 	)
 	.await
 	.map(|_| ())
@@ -163,7 +142,6 @@ impl AdminSettingsBmc {
 				organization_id,
 				organization_id,
 				"CREATE",
-				updated_by,
 				changed_settings_fields(None, &value),
 				None,
 				Some(value),
@@ -341,7 +319,6 @@ impl AdminSettingsBmc {
 				organization_id,
 				organization_id,
 				action,
-				updated_by.unwrap_or_else(|| ctx.user_id()),
 				Some(changed_fields),
 				old_value,
 				Some(value.clone()),
@@ -557,7 +534,6 @@ impl AdminSettingsBmc {
 					record_id,
 					organization_id,
 					action,
-					updated_by,
 					Some(changed_fields),
 					old_value,
 					Some(new_value),
@@ -593,7 +569,6 @@ impl AdminSettingsBmc {
 				record_id,
 				organization_id,
 				"DELETE",
-				updated_by,
 				None,
 				Some(old_value),
 				None,

@@ -325,6 +325,10 @@ pub struct PastDrugHistory {
 	// D.8.r.2-3 - Product IDs
 	pub mpid: Option<String>,
 	pub mpid_version: Option<String>,
+	#[serde(skip_serializing)]
+	pub mpid_source_code_system: Option<String>,
+	#[serde(skip_serializing)]
+	pub mpid_source_code_system_version: Option<String>,
 	pub phpid: Option<String>,
 	pub phpid_version: Option<String>,
 
@@ -359,6 +363,10 @@ pub struct PastDrugHistoryForCreate {
 	pub mfds_medicinal_product_id: Option<String>,
 	pub mpid: Option<String>,
 	pub mpid_version: Option<String>,
+	#[serde(skip_deserializing)]
+	pub mpid_source_code_system: Option<String>,
+	#[serde(skip_deserializing)]
+	pub mpid_source_code_system_version: Option<String>,
 	pub phpid: Option<String>,
 	pub phpid_version: Option<String>,
 	#[serde(
@@ -387,6 +395,10 @@ pub struct PastDrugHistoryForUpdate {
 	pub mfds_medicinal_product_id: Option<String>,
 	pub mpid: Option<String>,
 	pub mpid_version: Option<String>,
+	#[serde(skip_deserializing)]
+	pub mpid_source_code_system: Option<String>,
+	#[serde(skip_deserializing)]
+	pub mpid_source_code_system_version: Option<String>,
 	pub phpid: Option<String>,
 	pub phpid_version: Option<String>,
 	#[serde(
@@ -1343,25 +1355,27 @@ impl PastDrugHistoryBmc {
 
 		let sql = format!(
 			"UPDATE {} SET
-			 drug_name = CASE WHEN 'drug_name' = ANY($19) THEN NULL ELSE CASE WHEN $1::varchar IS NOT NULL THEN NULL ELSE COALESCE($2, drug_name) END END,
-			 drug_name_null_flavor = CASE WHEN 'drug_name_null_flavor' = ANY($19) THEN NULL ELSE CASE WHEN $2::varchar IS NOT NULL THEN NULL ELSE COALESCE($1, drug_name_null_flavor) END END,
-			 mfds_medicinal_product_version = CASE WHEN 'mfds_medicinal_product_version' = ANY($19) THEN NULL ELSE COALESCE($3, mfds_medicinal_product_version) END,
-			 mfds_medicinal_product_id = CASE WHEN 'mfds_medicinal_product_id' = ANY($19) THEN NULL ELSE COALESCE($4, mfds_medicinal_product_id) END,
-			 mpid = CASE WHEN 'mpid' = ANY($19) THEN NULL ELSE COALESCE($5, mpid) END,
-			 mpid_version = CASE WHEN 'mpid_version' = ANY($19) THEN NULL ELSE COALESCE($6, mpid_version) END,
-			 phpid = CASE WHEN 'phpid' = ANY($19) THEN NULL ELSE COALESCE($7, phpid) END,
-			 phpid_version = CASE WHEN 'phpid_version' = ANY($19) THEN NULL ELSE COALESCE($8, phpid_version) END,
-			 start_date = CASE WHEN 'start_date' = ANY($19) THEN NULL ELSE CASE WHEN $10::varchar IS NOT NULL THEN NULL ELSE COALESCE($9, start_date) END END,
-			 start_date_null_flavor = CASE WHEN 'start_date_null_flavor' = ANY($19) THEN NULL ELSE CASE WHEN $9::date IS NOT NULL THEN NULL ELSE COALESCE($10, start_date_null_flavor) END END,
-			 end_date = CASE WHEN 'end_date' = ANY($19) THEN NULL ELSE CASE WHEN $12::varchar IS NOT NULL THEN NULL ELSE COALESCE($11, end_date) END END,
-			 end_date_null_flavor = CASE WHEN 'end_date_null_flavor' = ANY($19) THEN NULL ELSE CASE WHEN $11::date IS NOT NULL THEN NULL ELSE COALESCE($12, end_date_null_flavor) END END,
-			 indication_meddra_version = CASE WHEN 'indication_meddra_version' = ANY($19) THEN NULL ELSE COALESCE($13, indication_meddra_version) END,
-			 indication_meddra_code = CASE WHEN 'indication_meddra_code' = ANY($19) THEN NULL ELSE COALESCE($14, indication_meddra_code) END,
-			 reaction_meddra_version = CASE WHEN 'reaction_meddra_version' = ANY($19) THEN NULL ELSE COALESCE($15, reaction_meddra_version) END,
-			 reaction_meddra_code = CASE WHEN 'reaction_meddra_code' = ANY($19) THEN NULL ELSE COALESCE($16, reaction_meddra_code) END,
+			 drug_name = CASE WHEN 'drug_name' = ANY($21) THEN NULL ELSE CASE WHEN $1::varchar IS NOT NULL THEN NULL ELSE COALESCE($2, drug_name) END END,
+			 drug_name_null_flavor = CASE WHEN 'drug_name_null_flavor' = ANY($21) THEN NULL ELSE CASE WHEN $2::varchar IS NOT NULL THEN NULL ELSE COALESCE($1, drug_name_null_flavor) END END,
+			 mfds_medicinal_product_version = CASE WHEN 'mfds_medicinal_product_version' = ANY($21) THEN NULL ELSE COALESCE($3, mfds_medicinal_product_version) END,
+			 mfds_medicinal_product_id = CASE WHEN 'mfds_medicinal_product_id' = ANY($21) THEN NULL ELSE COALESCE($4, mfds_medicinal_product_id) END,
+			 mpid = CASE WHEN 'mpid' = ANY($21) THEN NULL ELSE COALESCE($5, mpid) END,
+			 mpid_version = CASE WHEN 'mpid_version' = ANY($21) THEN NULL ELSE COALESCE($6, mpid_version) END,
+			 mpid_source_code_system = CASE WHEN 'mpid_source_code_system' = ANY($21) OR (($5 IS NOT NULL OR $6 IS NOT NULL) AND $17 IS NULL AND $18 IS NULL) THEN NULL ELSE COALESCE($17, mpid_source_code_system) END,
+			 mpid_source_code_system_version = CASE WHEN 'mpid_source_code_system_version' = ANY($21) OR (($5 IS NOT NULL OR $6 IS NOT NULL) AND $17 IS NULL AND $18 IS NULL) THEN NULL ELSE COALESCE($18, mpid_source_code_system_version) END,
+			 phpid = CASE WHEN 'phpid' = ANY($21) THEN NULL ELSE COALESCE($7, phpid) END,
+			 phpid_version = CASE WHEN 'phpid_version' = ANY($21) THEN NULL ELSE COALESCE($8, phpid_version) END,
+			 start_date = CASE WHEN 'start_date' = ANY($21) THEN NULL ELSE CASE WHEN $10::varchar IS NOT NULL THEN NULL ELSE COALESCE($9, start_date) END END,
+			 start_date_null_flavor = CASE WHEN 'start_date_null_flavor' = ANY($21) THEN NULL ELSE CASE WHEN $9::date IS NOT NULL THEN NULL ELSE COALESCE($10, start_date_null_flavor) END END,
+			 end_date = CASE WHEN 'end_date' = ANY($21) THEN NULL ELSE CASE WHEN $12::varchar IS NOT NULL THEN NULL ELSE COALESCE($11, end_date) END END,
+			 end_date_null_flavor = CASE WHEN 'end_date_null_flavor' = ANY($21) THEN NULL ELSE CASE WHEN $11::date IS NOT NULL THEN NULL ELSE COALESCE($12, end_date_null_flavor) END END,
+			 indication_meddra_version = CASE WHEN 'indication_meddra_version' = ANY($21) THEN NULL ELSE COALESCE($13, indication_meddra_version) END,
+			 indication_meddra_code = CASE WHEN 'indication_meddra_code' = ANY($21) THEN NULL ELSE COALESCE($14, indication_meddra_code) END,
+			 reaction_meddra_version = CASE WHEN 'reaction_meddra_version' = ANY($21) THEN NULL ELSE COALESCE($15, reaction_meddra_version) END,
+			 reaction_meddra_code = CASE WHEN 'reaction_meddra_code' = ANY($21) THEN NULL ELSE COALESCE($16, reaction_meddra_code) END,
 			 updated_at = now(),
-			 updated_by = $17
-			 WHERE id = $18",
+			 updated_by = $19
+			 WHERE id = $20",
 			Self::TABLE
 		);
 
@@ -1385,6 +1399,8 @@ impl PastDrugHistoryBmc {
 					.bind(data.indication_meddra_code)
 					.bind(data.reaction_meddra_version)
 					.bind(data.reaction_meddra_code)
+					.bind(data.mpid_source_code_system)
+					.bind(data.mpid_source_code_system_version)
 					.bind(ctx.user_id())
 					.bind(id)
 					.bind(clears),

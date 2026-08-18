@@ -35,6 +35,8 @@ use lib_core::regulatory::RegulatoryAuthority;
 use sqlx::types::time::{Date, Time};
 use std::collections::HashMap;
 
+const FDA_MPID_CODE_SYSTEM: &str = "2.16.840.1.113883.6.69";
+
 fn decimal_text(value: &rust_decimal::Decimal) -> String {
 	value.normalize().to_string()
 }
@@ -722,13 +724,23 @@ pub(crate) fn write_g_k_drug(
 	} else if matches!(authority, RegulatoryAuthority::Fda)
 		&& (write_g_k_2_1_1b(drug).is_some() || write_g_k_2_1_1a(drug).is_some())
 	{
-		out.push_str("<code codeSystem=\"2.16.840.1.113883.6.69\"");
+		out.push_str("<code codeSystem=\"");
+		out.push_str(
+			drug.mpid_source_code_system
+				.as_deref()
+				.unwrap_or(FDA_MPID_CODE_SYSTEM),
+		);
+		out.push_str("\"");
 		if let Some(code) = write_g_k_2_1_1b(drug) {
 			out.push_str(" code=\"");
 			out.push_str(&xml_escape(code));
 			out.push_str("\"");
 		}
-		if let Some(version) = write_g_k_2_1_1a(drug) {
+		if let Some(version) = drug
+			.mpid_source_code_system_version
+			.as_deref()
+			.or_else(|| write_g_k_2_1_1a(drug))
+		{
 			out.push_str(" codeSystemVersion=\"");
 			out.push_str(&xml_escape(version));
 			out.push_str("\"");
@@ -1761,6 +1773,8 @@ mod tests {
 			medicinal_product: "Drug A".to_string(),
 			mpid: Some("BASE-MPID".to_string()),
 			mpid_version: Some("BASE-V1".to_string()),
+			mpid_source_code_system: None,
+			mpid_source_code_system_version: None,
 			mfds_mpid_version: Some("KR-V1".to_string()),
 			mfds_mpid: Some("KR-MPID".to_string()),
 			phpid: None,
@@ -2025,6 +2039,26 @@ mod tests {
 			"<code codeSystem=\"2.16.840.1.113883.6.69\" code=\"BASE-MPID\" codeSystemVersion=\"BASE-V1\"/>"
 		));
 		assert!(!fragment.contains("code=\"MPID\""));
+	}
+
+	#[test]
+	fn export_fda_g_k_2_1_uses_source_version_when_present() {
+		let mut drug = test_drug(Uuid::new_v4(), Uuid::new_v4());
+		drug.mpid_source_code_system = Some("2.16.840.1.113883.6.69".to_string());
+		drug.mpid_source_code_system_version = Some("201411011202".to_string());
+		let fragment = write_g_k_drug(
+			&drug,
+			&[],
+			&[],
+			&[],
+			&[],
+			&[],
+			&[],
+			&[],
+			RegulatoryAuthority::Fda,
+		)
+		.expect("export FDA source MPID");
+		assert!(fragment.contains("codeSystemVersion=\"201411011202\""));
 	}
 
 	#[test]

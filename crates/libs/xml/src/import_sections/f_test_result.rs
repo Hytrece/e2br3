@@ -397,4 +397,13 @@ mod tests {
 			assert_eq!(results[0].more_info_available, Some(expected));
 		}
 	}
+
+	#[test]
+	fn ignores_hl7_high_interpretation_when_reading_e2b_result_code() {
+		let xml = br#"<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3"><organizer><code code="3" codeSystem="2.16.840.1.113883.3.989.2.1.1.20"/><component><observation><code><originalText>ALT</originalText></code><value><center value="86" unit="U/L"/></value><interpretationCode code="H" codeSystem="2.16.840.1.113883.5.83"/><referenceRange><observationRange><value value="56"/><interpretationCode code="H" codeSystem="2.16.840.1.113883.5.83"/></observationRange></referenceRange></observation></component></organizer></MCCI_IN200100UV01>"#;
+
+		let results = parse_f_test_results(xml).expect("parse HL7 interpretation");
+		assert_eq!(results[0].test_result_code, None);
+		assert_eq!(results[0].test_result_value.as_deref(), Some("86"));
+	}
 }

@@ -293,7 +293,7 @@ CREATE TABLE IF NOT EXISTS product_presaves (
     brand_name VARCHAR(2000),
     original_manufacturer VARCHAR(500),
     product_description TEXT,
-    mpid VARCHAR(255),
+    mpid VARCHAR(1000),
     mpid_version VARCHAR(50),
     mfds_mpid VARCHAR(255),
     mfds_mpid_version VARCHAR(50),

@@ -1,0 +1,2 @@
+ALTER TABLE product_presaves
+    ALTER COLUMN mpid TYPE VARCHAR(1000);

@@ -23,6 +23,8 @@ pub struct GDrugImport {
 	pub drug_characterization: String,
 	pub mpid: Option<String>,
 	pub mpid_version: Option<String>,
+	pub mpid_source_code_system: Option<String>,
+	pub mpid_source_code_system_version: Option<String>,
 	pub mfds_mpid: Option<String>,
 	pub mfds_mpid_version: Option<String>,
 	pub phpid: Option<String>,
@@ -178,8 +180,12 @@ pub fn parse_g_drugs(xml: &[u8]) -> Result<Vec<GDrugImport>> {
 		let xml_id = read_xml_id(&mut xpath, &node, idx + 1)?;
 		let name1 = read_g_k_2_2(&mut xpath, &node, idx + 1)?;
 		let drug_characterization = read_g_k_1(&drug_roles, &xml_id, idx + 1)?;
-		let mpid = read_g_k_2_1_1a(&mut xpath, &node)?;
-		let mpid_version = read_g_k_2_1_1b(&mut xpath, &node)?;
+		let (
+			mpid,
+			mpid_version,
+			mpid_source_code_system,
+			mpid_source_code_system_version,
+		) = read_mpid(&mut xpath, &node)?;
 		let mfds_mpid = read_g_k_2_1_kr_1b(&mut xpath, &node)?;
 		let mfds_mpid_version = read_g_k_2_1_kr_1a(&mut xpath, &node)?;
 		let phpid = read_g_k_2_1_2a(&mut xpath, &node)?;
@@ -395,6 +401,8 @@ pub fn parse_g_drugs(xml: &[u8]) -> Result<Vec<GDrugImport>> {
 			drug_characterization,
 			mpid,
 			mpid_version,
+			mpid_source_code_system,
+			mpid_source_code_system_version,
 			mfds_mpid,
 			mfds_mpid_version,
 			phpid,
@@ -437,14 +445,19 @@ fn read_g_k_1(
 	xml_id: &str,
 	_index: usize,
 ) -> Result<String> {
-	let value = drug_roles.get(xml_id).cloned().unwrap_or_default();
+	let value = drug_roles.get(xml_id).ok_or_else(|| {
+		invalid_field(
+			"G.k.1",
+			format!("drug characterization missing for product {xml_id}"),
+		)
+	})?;
 	import_constraint::string(
 		"drugCharacterization",
-		Some(&value),
+		Some(value),
 		None,
 		input_contracts::generated::g::g_k_1,
 	)?;
-	Ok(value)
+	Ok(value.clone())
 }
 
 fn read_drug_roles(xpath: &mut Context) -> Result<HashMap<String, String>> {
@@ -535,6 +548,42 @@ fn read_g_k_2_1_1a(xpath: &mut Context, node: &Node) -> Result<Option<String>> {
 		input_contracts::generated::g::g_k_2_1_1b,
 	)?;
 	Ok(value)
+}
+
+fn read_mpid(
+	xpath: &mut Context,
+	node: &Node,
+) -> Result<(
+	Option<String>,
+	Option<String>,
+	Option<String>,
+	Option<String>,
+)> {
+	if let Some(mpid) = first_attr(xpath, node, GDrugPaths::FDA_MPID) {
+		import_constraint::string(
+			"mpid",
+			Some(&mpid),
+			None,
+			input_contracts::generated::g::g_k_2_1_1b,
+		)?;
+		let version = input_string(
+			first_attr(xpath, node, GDrugPaths::FDA_MPID_VERSION),
+			"mpidSourceCodeSystemVersion",
+			input_contracts::generated::g::mfds_g_k_2_1_kr_1a,
+		)?;
+		return Ok((
+			Some(mpid),
+			None,
+			Some("2.16.840.1.113883.6.69".to_string()),
+			version,
+		));
+	}
+	Ok((
+		read_g_k_2_1_1a(xpath, node)?,
+		read_g_k_2_1_1b(xpath, node)?,
+		None,
+		None,
+	))
 }
 
 /// e2b:G.k.2.1.1b
@@ -1533,6 +1582,14 @@ mod tests {
 	}
 
 	#[test]
+	fn rejects_drug_without_characterization_reference_before_db_write() {
+		let xml = br#"<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3"><subjectOf2><organizer><code code="4" codeSystem="2.16.840.1.113883.3.989.2.1.1.20"/><component><substanceAdministration><id root="drug-without-role"/><consumable><instanceOfKind><kindOfProduct><name>Drug A</name></kindOfProduct></instanceOfKind></consumable></substanceAdministration></component></organizer></subjectOf2></MCCI_IN200100UV01>"#;
+
+		let error = parse_g_drugs(xml).expect_err("missing G.k.1");
+		assert!(error.to_string().contains("G.k.1"));
+	}
+
+	#[test]
 	fn imports_decimal_interval_value_and_special_frequency_unit() {
 		for unit in ["{cyclical}", "{asnecessary}", "{total}"] {
 			let xml = format!(
@@ -1651,6 +1708,24 @@ mod tests {
 			.find(|drug| drug.medicinal_product == "Drug B")
 			.expect("Drug B");
 		assert_eq!(drug_b.fda_other_characterization.as_deref(), Some("1"));
+	}
+
+	#[test]
+	fn preserves_fda_mpid_source_metadata_beyond_ich_version_limit() {
+		let xml = with_drug_role(
+			r#"<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3"><subjectOf2><organizer><code code="4" codeSystem="2.16.840.1.113883.3.989.2.1.1.20"/><component><substanceAdministration><consumable><instanceOfKind><kindOfProduct><code code="59762-2858" codeSystem="2.16.840.1.113883.6.69" codeSystemVersion="201411011202"/><name>Drug A</name></kindOfProduct></instanceOfKind></consumable></substanceAdministration></component></organizer></subjectOf2></MCCI_IN200100UV01>"#,
+		);
+		let drug = &parse_g_drugs(xml.as_bytes()).expect("parse FDA MPID")[0];
+		assert_eq!(drug.mpid.as_deref(), Some("59762-2858"));
+		assert_eq!(drug.mpid_version, None);
+		assert_eq!(
+			drug.mpid_source_code_system.as_deref(),
+			Some("2.16.840.1.113883.6.69")
+		);
+		assert_eq!(
+			drug.mpid_source_code_system_version.as_deref(),
+			Some("201411011202")
+		);
 	}
 
 	#[test]

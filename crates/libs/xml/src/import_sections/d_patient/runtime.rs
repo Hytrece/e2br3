@@ -202,6 +202,9 @@ async fn import_past_drug_history(
 					mfds_medicinal_product_id: entry.mfds_medicinal_product_id,
 					mpid: entry.mpid,
 					mpid_version: entry.mpid_version,
+					mpid_source_code_system: entry.mpid_source_code_system,
+					mpid_source_code_system_version: entry
+						.mpid_source_code_system_version,
 					phpid: entry.phpid,
 					phpid_version: entry.phpid_version,
 					start_date: entry.start_date,
@@ -229,6 +232,9 @@ async fn import_past_drug_history(
 					mfds_medicinal_product_id: entry.mfds_medicinal_product_id,
 					mpid: entry.mpid,
 					mpid_version: entry.mpid_version,
+					mpid_source_code_system: entry.mpid_source_code_system,
+					mpid_source_code_system_version: entry
+						.mpid_source_code_system_version,
 					phpid: entry.phpid,
 					phpid_version: entry.phpid_version,
 					start_date: entry.start_date,

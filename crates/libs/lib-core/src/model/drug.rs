@@ -34,6 +34,10 @@ pub struct DrugInformation {
 	// G.k.2.4-5 - Product identifiers
 	pub mpid: Option<String>,
 	pub mpid_version: Option<String>,
+	#[serde(skip_serializing)]
+	pub mpid_source_code_system: Option<String>,
+	#[serde(skip_serializing)]
+	pub mpid_source_code_system_version: Option<String>,
 	pub mfds_mpid_version: Option<String>,
 	pub mfds_mpid: Option<String>,
 	pub phpid: Option<String>,
@@ -102,6 +106,10 @@ pub struct DrugInformationForCreate {
 	pub investigational_product_blinded: Option<bool>,
 	pub mpid: Option<String>,
 	pub mpid_version: Option<String>,
+	#[serde(skip_deserializing)]
+	pub mpid_source_code_system: Option<String>,
+	#[serde(skip_deserializing)]
+	pub mpid_source_code_system_version: Option<String>,
 	pub mfds_mpid_version: Option<String>,
 	pub mfds_mpid: Option<String>,
 	pub phpid: Option<String>,
@@ -132,6 +140,10 @@ pub struct DrugInformationForUpdate {
 	pub investigational_product_blinded: Option<bool>,
 	pub mpid: Option<String>,
 	pub mpid_version: Option<String>,
+	#[serde(skip_deserializing)]
+	pub mpid_source_code_system: Option<String>,
+	#[serde(skip_deserializing)]
+	pub mpid_source_code_system_version: Option<String>,
 	pub mfds_mpid_version: Option<String>,
 	pub mfds_mpid: Option<String>,
 	pub phpid: Option<String>,
@@ -756,10 +768,11 @@ impl DrugInformationBmc {
 				     batch_lot_number, cumulative_dose_first_reaction_value, cumulative_dose_first_reaction_unit,
 				     gestation_period_exposure_value, gestation_period_exposure_unit,
 			     action_taken, investigational_product_blinded, mpid, mpid_version,
-			     mfds_mpid_version, mfds_mpid, phpid, phpid_version, obtain_drug_country,
-			     fda_additional_info_coded, fda_additional_info_coded_null_flavor,
-			     drug_additional_info_codes_json, drug_additional_information, fda_specialized_product_category,
-			     fda_other_characterization,
+				     mfds_mpid_version, mfds_mpid, phpid, phpid_version, obtain_drug_country,
+				     fda_additional_info_coded, fda_additional_info_coded_null_flavor,
+				     drug_additional_info_codes_json, drug_additional_information, fda_specialized_product_category,
+				     fda_other_characterization, mpid_source_code_system,
+				     mpid_source_code_system_version,
 			     created_at, updated_at, created_by
 				 )
 				 VALUES (
@@ -771,8 +784,8 @@ impl DrugInformationBmc {
 				     $22, $23, $24, $25, $26,
 			     $28, $29, $30,
 			     $31, $32,
-			     $33,
-			     now(), now(), $34
+				     $33, $34, $35,
+				     now(), now(), $36
 				 )
 				 RETURNING id",
 			Self::TABLE
@@ -814,6 +827,8 @@ impl DrugInformationBmc {
 					.bind(drug_c.drug_additional_information)
 					.bind(drug_c.fda_specialized_product_category)
 					.bind(drug_c.fda_other_characterization)
+					.bind(drug_c.mpid_source_code_system)
+					.bind(drug_c.mpid_source_code_system_version)
 					.bind(ctx.user_id()),
 			)
 			.await?;
@@ -891,34 +906,36 @@ impl DrugInformationBmc {
 
 		let sql = format!(
 			"UPDATE {}
-			 SET medicinal_product = CASE WHEN 'medicinal_product' = ANY($34) THEN NULL ELSE COALESCE($2, medicinal_product) END,
-			     drug_characterization = CASE WHEN 'drug_characterization' = ANY($34) THEN NULL ELSE COALESCE($3, drug_characterization) END,
-			     drug_authorization_number = CASE WHEN 'drug_authorization_number' = ANY($34) THEN NULL ELSE COALESCE($6, drug_authorization_number) END,
-			     manufacturer_name = CASE WHEN 'manufacturer_name' = ANY($34) THEN NULL ELSE COALESCE($7, manufacturer_name) END,
-			     manufacturer_country = CASE WHEN 'manufacturer_country' = ANY($34) THEN NULL ELSE COALESCE($8, manufacturer_country) END,
-			     batch_lot_number = CASE WHEN 'batch_lot_number' = ANY($34) THEN NULL ELSE COALESCE($9, batch_lot_number) END,
-			     cumulative_dose_first_reaction_value = CASE WHEN 'cumulative_dose_first_reaction_value' = ANY($34) THEN NULL ELSE COALESCE($10, cumulative_dose_first_reaction_value) END,
-			     cumulative_dose_first_reaction_unit = CASE WHEN 'cumulative_dose_first_reaction_unit' = ANY($34) THEN NULL ELSE COALESCE($11, cumulative_dose_first_reaction_unit) END,
-			     gestation_period_exposure_value = CASE WHEN 'gestation_period_exposure_value' = ANY($34) THEN NULL ELSE COALESCE($12, gestation_period_exposure_value) END,
-			     gestation_period_exposure_unit = CASE WHEN 'gestation_period_exposure_unit' = ANY($34) THEN NULL ELSE COALESCE($13, gestation_period_exposure_unit) END,
-			     action_taken = CASE WHEN 'action_taken' = ANY($34) THEN NULL ELSE COALESCE($15, action_taken) END,
-			     investigational_product_blinded = CASE WHEN 'investigational_product_blinded' = ANY($34) THEN NULL ELSE COALESCE($17, investigational_product_blinded) END,
-			     mpid = CASE WHEN 'mpid' = ANY($34) THEN NULL ELSE COALESCE($18, mpid) END,
-			     mpid_version = CASE WHEN 'mpid_version' = ANY($34) THEN NULL ELSE COALESCE($19, mpid_version) END,
-			     mfds_mpid_version = CASE WHEN 'mfds_mpid_version' = ANY($34) THEN NULL ELSE COALESCE($20, mfds_mpid_version) END,
-			     mfds_mpid = CASE WHEN 'mfds_mpid' = ANY($34) THEN NULL ELSE COALESCE($21, mfds_mpid) END,
-			     phpid = CASE WHEN 'phpid' = ANY($34) THEN NULL ELSE COALESCE($22, phpid) END,
-			     phpid_version = CASE WHEN 'phpid_version' = ANY($34) THEN NULL ELSE COALESCE($23, phpid_version) END,
-			     obtain_drug_country = CASE WHEN 'obtain_drug_country' = ANY($34) THEN NULL ELSE COALESCE($24, obtain_drug_country) END,
-			     fda_additional_info_coded = CASE WHEN 'fda_additional_info_coded' = ANY($34) OR $27 IS NOT NULL THEN NULL ELSE COALESCE($26, fda_additional_info_coded) END,
-			     fda_additional_info_coded_null_flavor = CASE WHEN 'fda_additional_info_coded_null_flavor' = ANY($34) OR $26 IS NOT NULL THEN NULL ELSE COALESCE($27, fda_additional_info_coded_null_flavor) END,
-			     drug_additional_info_codes_json = CASE WHEN 'drug_additional_info_codes_json' = ANY($34) THEN NULL ELSE COALESCE($28, drug_additional_info_codes_json) END,
-			     drug_additional_information = CASE WHEN 'drug_additional_information' = ANY($34) THEN NULL ELSE COALESCE($29, drug_additional_information) END,
-			     fda_specialized_product_category = CASE WHEN 'fda_specialized_product_category' = ANY($34) THEN NULL ELSE COALESCE($30, fda_specialized_product_category) END,
-			     source_product_presave_id = CASE WHEN 'source_product_presave_id' = ANY($34) THEN NULL ELSE COALESCE($31, source_product_presave_id) END,
-			     fda_other_characterization = CASE WHEN 'fda_other_characterization' = ANY($34) THEN NULL ELSE COALESCE($32, fda_other_characterization) END,
+			 SET medicinal_product = CASE WHEN 'medicinal_product' = ANY($36) THEN NULL ELSE COALESCE($2, medicinal_product) END,
+			     drug_characterization = CASE WHEN 'drug_characterization' = ANY($36) THEN NULL ELSE COALESCE($3, drug_characterization) END,
+			     drug_authorization_number = CASE WHEN 'drug_authorization_number' = ANY($36) THEN NULL ELSE COALESCE($6, drug_authorization_number) END,
+			     manufacturer_name = CASE WHEN 'manufacturer_name' = ANY($36) THEN NULL ELSE COALESCE($7, manufacturer_name) END,
+			     manufacturer_country = CASE WHEN 'manufacturer_country' = ANY($36) THEN NULL ELSE COALESCE($8, manufacturer_country) END,
+			     batch_lot_number = CASE WHEN 'batch_lot_number' = ANY($36) THEN NULL ELSE COALESCE($9, batch_lot_number) END,
+			     cumulative_dose_first_reaction_value = CASE WHEN 'cumulative_dose_first_reaction_value' = ANY($36) THEN NULL ELSE COALESCE($10, cumulative_dose_first_reaction_value) END,
+			     cumulative_dose_first_reaction_unit = CASE WHEN 'cumulative_dose_first_reaction_unit' = ANY($36) THEN NULL ELSE COALESCE($11, cumulative_dose_first_reaction_unit) END,
+			     gestation_period_exposure_value = CASE WHEN 'gestation_period_exposure_value' = ANY($36) THEN NULL ELSE COALESCE($12, gestation_period_exposure_value) END,
+			     gestation_period_exposure_unit = CASE WHEN 'gestation_period_exposure_unit' = ANY($36) THEN NULL ELSE COALESCE($13, gestation_period_exposure_unit) END,
+			     action_taken = CASE WHEN 'action_taken' = ANY($36) THEN NULL ELSE COALESCE($15, action_taken) END,
+			     investigational_product_blinded = CASE WHEN 'investigational_product_blinded' = ANY($36) THEN NULL ELSE COALESCE($17, investigational_product_blinded) END,
+			     mpid = CASE WHEN 'mpid' = ANY($36) THEN NULL ELSE COALESCE($18, mpid) END,
+			     mpid_version = CASE WHEN 'mpid_version' = ANY($36) THEN NULL ELSE COALESCE($19, mpid_version) END,
+			     mfds_mpid_version = CASE WHEN 'mfds_mpid_version' = ANY($36) THEN NULL ELSE COALESCE($20, mfds_mpid_version) END,
+			     mfds_mpid = CASE WHEN 'mfds_mpid' = ANY($36) THEN NULL ELSE COALESCE($21, mfds_mpid) END,
+			     phpid = CASE WHEN 'phpid' = ANY($36) THEN NULL ELSE COALESCE($22, phpid) END,
+			     phpid_version = CASE WHEN 'phpid_version' = ANY($36) THEN NULL ELSE COALESCE($23, phpid_version) END,
+			     obtain_drug_country = CASE WHEN 'obtain_drug_country' = ANY($36) THEN NULL ELSE COALESCE($24, obtain_drug_country) END,
+			     fda_additional_info_coded = CASE WHEN 'fda_additional_info_coded' = ANY($36) OR $27 IS NOT NULL THEN NULL ELSE COALESCE($26, fda_additional_info_coded) END,
+			     fda_additional_info_coded_null_flavor = CASE WHEN 'fda_additional_info_coded_null_flavor' = ANY($36) OR $26 IS NOT NULL THEN NULL ELSE COALESCE($27, fda_additional_info_coded_null_flavor) END,
+			     drug_additional_info_codes_json = CASE WHEN 'drug_additional_info_codes_json' = ANY($36) THEN NULL ELSE COALESCE($28, drug_additional_info_codes_json) END,
+			     drug_additional_information = CASE WHEN 'drug_additional_information' = ANY($36) THEN NULL ELSE COALESCE($29, drug_additional_information) END,
+			     fda_specialized_product_category = CASE WHEN 'fda_specialized_product_category' = ANY($36) THEN NULL ELSE COALESCE($30, fda_specialized_product_category) END,
+			     source_product_presave_id = CASE WHEN 'source_product_presave_id' = ANY($36) THEN NULL ELSE COALESCE($31, source_product_presave_id) END,
+				     fda_other_characterization = CASE WHEN 'fda_other_characterization' = ANY($36) THEN NULL ELSE COALESCE($32, fda_other_characterization) END,
+				     mpid_source_code_system = CASE WHEN 'mpid_source_code_system' = ANY($36) OR (($18 IS NOT NULL OR $19 IS NOT NULL) AND $33 IS NULL AND $34 IS NULL) THEN NULL ELSE COALESCE($33, mpid_source_code_system) END,
+				     mpid_source_code_system_version = CASE WHEN 'mpid_source_code_system_version' = ANY($36) OR (($18 IS NOT NULL OR $19 IS NOT NULL) AND $33 IS NULL AND $34 IS NULL) THEN NULL ELSE COALESCE($34, mpid_source_code_system_version) END,
 				     updated_at = now(),
-				     updated_by = $33
+				     updated_by = $35
 				 WHERE id = $1",
 			Self::TABLE
 		);
@@ -958,6 +975,8 @@ impl DrugInformationBmc {
 					.bind(drug_u.fda_specialized_product_category)
 					.bind(drug_u.source_product_presave_id)
 					.bind(drug_u.fda_other_characterization)
+					.bind(drug_u.mpid_source_code_system)
+					.bind(drug_u.mpid_source_code_system_version)
 					.bind(ctx.user_id())
 					.bind(clears),
 			)

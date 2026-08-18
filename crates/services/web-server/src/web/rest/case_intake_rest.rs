@@ -626,9 +626,7 @@ async fn create_case_from_intake_in_txn(
 			transmission_date: Some(format_e2b_datetime(transmission_date)),
 			report_type: Some(data.report_type),
 			date_first_received_from_source: Some(date_first_received_from_source),
-			date_of_most_recent_information: Some(
-				date_of_most_recent_information,
-			),
+			date_of_most_recent_information: Some(date_of_most_recent_information),
 			fulfil_expedited_criteria: Some(false),
 			fulfil_expedited_criteria_null_flavor: None,
 			local_criteria_report_type: None,
@@ -794,7 +792,9 @@ async fn create_case_from_intake_in_txn(
 				mfds_device_action_notification: None,
 				mfds_device_action_label_change: None,
 				mfds_device_action_other: None,
-				start_date: data.ae_start_date.and_then(|value| non_empty(Some(&value))),
+				start_date: data
+					.ae_start_date
+					.and_then(|value| non_empty(Some(&value))),
 				start_date_null_flavor: non_empty(
 					data.ae_start_date_null_flavor.as_deref(),
 				),

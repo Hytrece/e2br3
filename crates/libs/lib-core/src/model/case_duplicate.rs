@@ -147,8 +147,7 @@ fn match_date_or_null_flavor(
 					(Some(expected), Some(actual)) => expected == actual,
 					_ => expected.trim().eq_ignore_ascii_case(actual.trim()),
 				}
-			})
-				&& !has_meaningful_text(actual_null_flavor)
+			}) && !has_meaningful_text(actual_null_flavor)
 		}
 		(None, true) => {
 			actual.is_none()

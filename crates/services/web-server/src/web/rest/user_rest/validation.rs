@@ -329,11 +329,13 @@ pub(super) async fn validate_single_sponsor_admin_for_org(
 	Ok(())
 }
 
-pub(super) fn initial_password(pwd_clear: Option<String>) -> String {
+pub(super) fn initial_password(pwd_clear: Option<String>) -> Result<String> {
 	pwd_clear
 		.map(|value| value.trim().to_string())
 		.filter(|value| !value.is_empty())
-		.unwrap_or_else(|| "welcome".to_string())
+		.ok_or_else(|| Error::BadRequest {
+			message: "pwd_clear is required".to_string(),
+		})
 }
 
 pub(super) fn deserialize_access_datetime_option<'de, D>(
@@ -475,5 +477,15 @@ mod uuid_scope_tests {
 			Some("[]".to_string())
 		);
 		assert_eq!(serialize_scope_input(None), None);
+	}
+
+	#[test]
+	fn initial_password_requires_a_non_empty_value() {
+		assert!(initial_password(None).is_err());
+		assert!(initial_password(Some("  ".to_string())).is_err());
+		assert_eq!(
+			initial_password(Some(" secret ".to_string())).unwrap(),
+			"secret"
+		);
 	}
 }

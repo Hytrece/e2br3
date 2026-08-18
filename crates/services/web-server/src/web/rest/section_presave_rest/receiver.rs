@@ -17,6 +17,7 @@ pub async fn create_receiver_presave(
 		move |ctx, mm| {
 			Box::pin(async move {
 				let ParamsForCreate { data } = params;
+				super::input_contract::receiver_create(&data.rows.receiver)?;
 				for consignee in &data.rows.consignees {
 					validate_receiver_consignee_detail_create(consignee)?;
 					if consignee.deleted {
@@ -126,6 +127,7 @@ pub async fn update_receiver_presave(
 		move |ctx, mm| {
 			Box::pin(async move {
 				let ParamsForUpdate { data } = params;
+				super::input_contract::receiver_update(&data)?;
 				if data.deleted == Some(true) {
 					PresaveLifecycleService::archive(
 						ctx,
@@ -487,6 +489,9 @@ async fn preflight_receiver_presave_details(
 	receiver_id: Uuid,
 	data: &ReceiverPresaveRowsForUpdate,
 ) -> Result<()> {
+	if let Some(receiver) = &data.receiver {
+		super::input_contract::receiver_update(receiver)?;
+	}
 	if let Some(consignees) = &data.consignees {
 		for consignee in consignees {
 			preflight_receiver_consignee_detail(ctx, mm, receiver_id, consignee)

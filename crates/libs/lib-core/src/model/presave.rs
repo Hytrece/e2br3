@@ -26,6 +26,31 @@ fn clean_presave_text(value: Option<&str>) -> Option<String> {
 		.map(str::to_string)
 }
 
+macro_rules! clear_blank_patch_fields {
+	($data:expr, [$($field:ident),+ $(,)?]) => {{
+		let mut fields = Vec::new();
+		$(
+			if $data.$field.as_deref().is_some_and(|value| value.trim().is_empty()) {
+				$data.$field = None;
+				fields.push(stringify!($field));
+			}
+		)+
+		fields
+	}};
+}
+
+fn patched_text<'a>(
+	value: &'a Option<String>,
+	current: &'a Option<String>,
+	cleared: bool,
+) -> Option<&'a str> {
+	if cleared {
+		None
+	} else {
+		value.as_deref().or(current.as_deref())
+	}
+}
+
 fn join_presave_name_parts(parts: &[Option<&str>]) -> String {
 	parts
 		.iter()
@@ -1811,8 +1836,26 @@ impl ReporterPresaveBmc {
 		ctx: &Ctx,
 		mm: &ModelManager,
 		id: Uuid,
-		data: ReporterPresaveForUpdate,
+		mut data: ReporterPresaveForUpdate,
 	) -> Result<()> {
+		let clear_fields = clear_blank_patch_fields!(
+			data,
+			[
+				reporter_title_null_flavor,
+				reporter_given_name_null_flavor,
+				reporter_middle_name_null_flavor,
+				reporter_family_name_null_flavor,
+				organization_null_flavor,
+				department_null_flavor,
+				street_null_flavor,
+				city_null_flavor,
+				state_null_flavor,
+				postcode_null_flavor,
+				telephone_null_flavor,
+				reporter_email_null_flavor,
+				qualification_null_flavor,
+			]
+		);
 		if data.deleted == Some(true) {
 			return Err(validation_error(
 				"presave deletion must use lifecycle service",
@@ -1849,17 +1892,23 @@ impl ReporterPresaveBmc {
 				.or(current.qualification.as_deref());
 			Self::validate_identity(
 				reporter_given_name,
-				data.reporter_given_name_null_flavor
-					.as_deref()
-					.or(current.reporter_given_name_null_flavor.as_deref()),
+				patched_text(
+					&data.reporter_given_name_null_flavor,
+					&current.reporter_given_name_null_flavor,
+					clear_fields.contains(&"reporter_given_name_null_flavor"),
+				),
 				organization,
-				data.organization_null_flavor
-					.as_deref()
-					.or(current.organization_null_flavor.as_deref()),
+				patched_text(
+					&data.organization_null_flavor,
+					&current.organization_null_flavor,
+					clear_fields.contains(&"organization_null_flavor"),
+				),
 				qualification,
-				data.qualification_null_flavor
-					.as_deref()
-					.or(current.qualification_null_flavor.as_deref()),
+				patched_text(
+					&data.qualification_null_flavor,
+					&current.qualification_null_flavor,
+					clear_fields.contains(&"qualification_null_flavor"),
+				),
 			)?;
 			Self::ensure_unique_identity(
 				ctx,
@@ -1871,7 +1920,7 @@ impl ReporterPresaveBmc {
 			)
 			.await?;
 		}
-		base_uuid::update::<Self, _>(ctx, mm, id, data).await?;
+		base_uuid::update_patch::<Self, _>(ctx, mm, id, data, &clear_fields).await?;
 		Ok(())
 	}
 
@@ -2190,8 +2239,12 @@ impl StudyPresaveBmc {
 		ctx: &Ctx,
 		mm: &ModelManager,
 		id: Uuid,
-		data: StudyPresaveForUpdate,
+		mut data: StudyPresaveForUpdate,
 	) -> Result<()> {
+		let clear_fields = clear_blank_patch_fields!(
+			data,
+			[study_name_null_flavor, sponsor_study_number_null_flavor,]
+		);
 		data.validate_fields()?;
 		if data.deleted == Some(true) {
 			return Err(validation_error(
@@ -2208,14 +2261,23 @@ impl StudyPresaveBmc {
 				.or(current.sponsor_study_number.as_deref());
 			let study_name =
 				data.study_name.as_deref().or(current.study_name.as_deref());
-			let study_name_null_flavor = data
-				.study_name_null_flavor
-				.as_deref()
-				.or(current.study_name_null_flavor.as_deref());
-			let sponsor_study_number_null_flavor = data
-				.sponsor_study_number_null_flavor
-				.as_deref()
-				.or(current.sponsor_study_number_null_flavor.as_deref());
+			let study_name_null_flavor = data.study_name_null_flavor.as_deref();
+			let study_name_null_flavor = if clear_fields
+				.contains(&"study_name_null_flavor")
+			{
+				None
+			} else {
+				study_name_null_flavor.or(current.study_name_null_flavor.as_deref())
+			};
+			let sponsor_study_number_null_flavor =
+				data.sponsor_study_number_null_flavor.as_deref();
+			let sponsor_study_number_null_flavor =
+				if clear_fields.contains(&"sponsor_study_number_null_flavor") {
+					None
+				} else {
+					sponsor_study_number_null_flavor
+						.or(current.sponsor_study_number_null_flavor.as_deref())
+				};
 			let study_type_reaction = data
 				.study_type_reaction
 				.as_deref()
@@ -2237,7 +2299,7 @@ impl StudyPresaveBmc {
 			)
 			.await?;
 		}
-		base_uuid::update::<Self, _>(ctx, mm, id, data).await
+		base_uuid::update_patch::<Self, _>(ctx, mm, id, data, &clear_fields).await
 	}
 
 	pub async fn delete(ctx: &Ctx, mm: &ModelManager, id: Uuid) -> Result<()> {
@@ -2387,10 +2449,14 @@ impl StudyPresaveRegistrationNumberBmc {
 		ctx: &Ctx,
 		mm: &ModelManager,
 		id: Uuid,
-		data: StudyPresaveRegistrationNumberForUpdate,
+		mut data: StudyPresaveRegistrationNumberForUpdate,
 	) -> Result<()> {
+		let clear_fields = clear_blank_patch_fields!(
+			data,
+			[registration_number_null_flavor, country_code_null_flavor,]
+		);
 		data.validate_fields()?;
-		base_uuid::update::<Self, _>(ctx, mm, id, data).await
+		base_uuid::update_patch::<Self, _>(ctx, mm, id, data, &clear_fields).await
 	}
 
 	pub async fn delete(ctx: &Ctx, mm: &ModelManager, id: Uuid) -> Result<()> {
@@ -2462,14 +2528,73 @@ pub struct StudyPresaveFdaCrossReportedIndNumberForUpdate {
 	pub deleted: Option<bool>,
 }
 
-impl_child_bmc!(
-	StudyPresaveFdaCrossReportedIndNumberBmc,
-	StudyPresaveFdaCrossReportedIndNumber,
-	StudyPresaveFdaCrossReportedIndNumberForCreate,
-	StudyPresaveFdaCrossReportedIndNumberForUpdate,
-	"study_presave_fda_cross_reported_ind_numbers",
-	"study_presave_id"
-);
+pub struct StudyPresaveFdaCrossReportedIndNumberBmc;
+
+impl DbBmc for StudyPresaveFdaCrossReportedIndNumberBmc {
+	const TABLE: &'static str = "study_presave_fda_cross_reported_ind_numbers";
+}
+
+impl StudyPresaveFdaCrossReportedIndNumberBmc {
+	pub async fn create(
+		ctx: &Ctx,
+		mm: &ModelManager,
+		data: StudyPresaveFdaCrossReportedIndNumberForCreate,
+	) -> Result<Uuid> {
+		base_uuid::create::<Self, _>(ctx, mm, data).await
+	}
+
+	pub async fn get(
+		ctx: &Ctx,
+		mm: &ModelManager,
+		id: Uuid,
+	) -> Result<StudyPresaveFdaCrossReportedIndNumber> {
+		base_uuid::get::<Self, _>(ctx, mm, id).await
+	}
+
+	pub async fn update(
+		ctx: &Ctx,
+		mm: &ModelManager,
+		id: Uuid,
+		mut data: StudyPresaveFdaCrossReportedIndNumberForUpdate,
+	) -> Result<()> {
+		let clear_fields = clear_blank_patch_fields!(data, [ind_number_null_flavor]);
+		base_uuid::update_patch::<Self, _>(ctx, mm, id, data, &clear_fields).await
+	}
+
+	pub async fn delete(ctx: &Ctx, mm: &ModelManager, id: Uuid) -> Result<()> {
+		base_uuid::delete::<Self>(ctx, mm, id).await
+	}
+
+	pub async fn list_by_parent(
+		ctx: &Ctx,
+		mm: &ModelManager,
+		parent_id: Uuid,
+	) -> Result<Vec<StudyPresaveFdaCrossReportedIndNumber>> {
+		let dbx = mm.dbx();
+		dbx.begin_txn().await?;
+		if let Err(err) = set_full_context_from_ctx_dbx(dbx, ctx).await {
+			dbx.rollback_txn().await?;
+			return Err(err);
+		}
+		let rows = match dbx
+			.fetch_all(
+				sqlx::query_as::<_, StudyPresaveFdaCrossReportedIndNumber>(
+					"SELECT * FROM study_presave_fda_cross_reported_ind_numbers WHERE study_presave_id = $1 ORDER BY sequence_number ASC, id ASC",
+				)
+				.bind(parent_id),
+			)
+			.await
+		{
+			Ok(rows) => rows,
+			Err(err) => {
+				dbx.rollback_txn().await?;
+				return Err(err.into());
+			}
+		};
+		dbx.commit_txn().await?;
+		Ok(rows)
+	}
+}
 
 #[derive(Debug, Clone, Fields, FromRow, Serialize)]
 pub struct StudyPresaveProduct {

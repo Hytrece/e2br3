@@ -1,8 +1,8 @@
 use crate::error::Error;
 use crate::import_constraint;
 use crate::Result;
-use libxml::parser::Parser;
-use libxml::tree::Node;
+use libxml::parser::{Parser, ParserOptions};
+use libxml::tree::{Document, Node};
 use libxml::xpath::Context;
 use sqlx::types::time::Date;
 use sqlx::types::Uuid;
@@ -300,14 +300,7 @@ pub(crate) fn extract_message_header(xml: &[u8]) -> Result<MessageHeaderExtract>
 		line: None,
 		column: None,
 	})?;
-	let parser = Parser::default();
-	let doc = parser
-		.parse_string(xml_str)
-		.map_err(|err| Error::InvalidXml {
-			message: format!("XML parse error: {err}"),
-			line: None,
-			column: None,
-		})?;
+	let doc = parse_import_xml(xml_str)?;
 	let mut xpath = Context::new(&doc).map_err(|_| Error::InvalidXml {
 		message: "Failed to initialize XPath context".to_string(),
 		line: None,
@@ -352,14 +345,7 @@ pub(crate) fn extract_safety_report_id(xml: &[u8]) -> Result<String> {
 		line: None,
 		column: None,
 	})?;
-	let parser = Parser::default();
-	let doc = parser
-		.parse_string(xml_str)
-		.map_err(|err| Error::InvalidXml {
-			message: format!("XML parse error: {err}"),
-			line: None,
-			column: None,
-		})?;
+	let doc = parse_import_xml(xml_str)?;
 	let mut xpath = Context::new(&doc).map_err(|_| Error::InvalidXml {
 		message: "Failed to initialize XPath context".to_string(),
 		line: None,
@@ -396,6 +382,24 @@ pub(crate) fn extract_safety_report_id(xml: &[u8]) -> Result<String> {
 	})
 }
 
+fn parse_import_xml(xml: &str) -> Result<Document> {
+	Parser::default()
+		.parse_string_with_options(
+			xml,
+			ParserOptions {
+				recover: false,
+				no_error: true,
+				no_warning: true,
+				..Default::default()
+			},
+		)
+		.map_err(|err| Error::InvalidXml {
+			message: format!("XML parse error: {err}"),
+			line: None,
+			column: None,
+		})
+}
+
 #[cfg(test)]
 mod tests {
 	use super::extract_safety_report_id;
@@ -421,6 +425,14 @@ mod tests {
 		let extracted = extract_safety_report_id(xml).expect("extract C.1.1");
 
 		assert_eq!(extracted, "CASE-C-1-1");
+	}
+
+	#[test]
+	fn rejects_malformed_xml_before_field_validation() {
+		let xml = br#"<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3"><PORR_IN049016UV><id root="2.16.840.1.113883.3.989.2.1.3.1" extension="CASE"/><value xsi:type="CE" xsi:type="CE"/></PORR_IN049016UV></MCCI_IN200100UV01>"#;
+
+		let error = extract_safety_report_id(xml).expect_err("malformed XML");
+		assert!(error.to_string().contains("XML parse error"));
 	}
 
 	#[test]

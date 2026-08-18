@@ -332,6 +332,7 @@ pub async fn load_workflow_runtime_settings(
 
 #[derive(Debug, FromRow)]
 struct CaseScopeRow {
+	case_id: Uuid,
 	sender_identifiers: Vec<String>,
 	product_identifiers: Vec<String>,
 	study_identifiers: Vec<String>,
@@ -661,17 +662,21 @@ pub async fn validate_active_sender_selection(
 	Ok(Some(requested))
 }
 
-async fn load_case_scope(
+async fn load_case_scopes(
 	ctx: &Ctx,
 	mm: &ModelManager,
-	case_id: Uuid,
-) -> Result<CaseScopeRow> {
+	case_ids: &[Uuid],
+) -> Result<Vec<CaseScopeRow>> {
+	if case_ids.is_empty() {
+		return Ok(Vec::new());
+	}
 	with_rls_read(mm, ctx, |dbx| {
+		let case_ids = case_ids.to_vec();
 		Box::pin(async move {
-			dbx.fetch_one(
+			dbx.fetch_all(
 				sqlx::query_as::<_, CaseScopeRow>(
 					r#"
-			SELECT
+			SELECT c.id AS case_id,
 				COALESCE(
 					(
 						SELECT array_agg(identifier)
@@ -703,10 +708,10 @@ async fn load_case_scope(
 					  AND d.investigational_product_blinded = TRUE
 				) AS has_blinded_data
 			FROM cases c
-			WHERE c.id = $1
+			WHERE c.id = ANY($1)
 			"#,
 				)
-				.bind(case_id),
+				.bind(case_ids),
 			)
 			.await
 			.map_err(|e| Error::from(lib_core::model::Error::from(e)))
@@ -720,8 +725,21 @@ pub async fn case_matches_user_scope(
 	mm: &ModelManager,
 	case_id: Uuid,
 ) -> Result<bool> {
+	Ok(case_ids_matching_user_scope(ctx, mm, &[case_id])
+		.await?
+		.contains(&case_id))
+}
+
+pub async fn case_ids_matching_user_scope(
+	ctx: &Ctx,
+	mm: &ModelManager,
+	case_ids: &[Uuid],
+) -> Result<HashSet<Uuid>> {
+	if case_ids.is_empty() {
+		return Ok(HashSet::new());
+	}
 	if ctx.is_system_admin() || ctx.is_sponsor_admin() {
-		return Ok(true);
+		return Ok(case_ids.iter().copied().collect());
 	}
 
 	let user: lib_core::model::user::User =
@@ -729,38 +747,30 @@ pub async fn case_matches_user_scope(
 	let now = OffsetDateTime::now_utc();
 	if let Some(start_at) = user.access_start_at {
 		if now < start_at {
-			return Ok(false);
+			return Ok(HashSet::new());
 		}
 	}
 	if let Some(end_at) = user.access_end_at {
 		if now > end_at {
-			return Ok(false);
+			return Ok(HashSet::new());
 		}
 	}
 
-	let scope = load_case_scope(ctx, mm, case_id).await?;
-	if !scope_allows(
-		&parse_scope_values(user.access_sender_ids.as_deref()),
-		&scope.sender_identifiers,
-	) {
-		return Ok(false);
-	}
-	if !scope_allows(
-		&parse_scope_values(user.access_product_ids.as_deref()),
-		&scope.product_identifiers,
-	) {
-		return Ok(false);
-	}
-	if !scope_allows(
-		&parse_scope_values(user.access_study_ids.as_deref()),
-		&scope.study_identifiers,
-	) {
-		return Ok(false);
-	}
-	if scope.has_blinded_data && user.access_blind_allowed != Some(true) {
-		return Ok(false);
-	}
-	Ok(true)
+	let sender_scope = parse_scope_values(user.access_sender_ids.as_deref());
+	let product_scope = parse_scope_values(user.access_product_ids.as_deref());
+	let study_scope = parse_scope_values(user.access_study_ids.as_deref());
+	let scopes = load_case_scopes(ctx, mm, case_ids).await?;
+	Ok(scopes
+		.into_iter()
+		.filter(|scope| {
+			scope_allows(&sender_scope, &scope.sender_identifiers)
+				&& scope_allows(&product_scope, &scope.product_identifiers)
+				&& scope_allows(&study_scope, &scope.study_identifiers)
+				&& (!scope.has_blinded_data
+					|| user.access_blind_allowed == Some(true))
+		})
+		.map(|scope| scope.case_id)
+		.collect())
 }
 
 pub async fn case_write_block_reason_for_case(

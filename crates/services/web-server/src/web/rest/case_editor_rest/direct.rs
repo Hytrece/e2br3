@@ -438,8 +438,10 @@ async fn load_editor_ci_data(
 				safety_report_version: entity.version,
 				transmission_date: entity.transmission_date,
 				report_type: entity.report_type,
-				date_first_received_from_source: entity.date_first_received_from_source,
-				date_of_most_recent_information: entity.date_of_most_recent_information,
+				date_first_received_from_source: entity
+					.date_first_received_from_source,
+				date_of_most_recent_information: entity
+					.date_of_most_recent_information,
 				fulfil_expedited_criteria: entity.fulfil_expedited_criteria,
 				fulfil_expedited_criteria_null_flavor: entity
 					.fulfil_expedited_criteria_null_flavor,
@@ -763,10 +765,7 @@ async fn apply_ci_rows_patch(
 				}),
 			}
 		}
-		fn date_text(
-			row: &Map<String, Value>,
-			key: &str,
-		) -> Result<Option<String>> {
+		fn date_text(row: &Map<String, Value>, key: &str) -> Result<Option<String>> {
 			let value = row.get(key).cloned().unwrap_or(Value::Null);
 			if value.as_str().is_some_and(|value| value.trim().is_empty()) {
 				return Ok(None);
@@ -775,7 +774,16 @@ async fn apply_ci_rows_patch(
 				return Ok(Some(value.to_string()));
 			}
 			serde_json::from_value::<CiDatePatchValue>(json!({ "value": value }))
-				.map(|value| value.value.map(|date| format!("{:04}{:02}{:02}", date.year(), u8::from(date.month()), date.day())))
+				.map(|value| {
+					value.value.map(|date| {
+						format!(
+							"{:04}{:02}{:02}",
+							date.year(),
+							u8::from(date.month()),
+							date.day()
+						)
+					})
+				})
 				.map_err(|err| Error::BadRequest {
 					message: format!(
 						"CI.safetyReportIdentification.{key} must be an E2B date or null: {err}"
@@ -2183,7 +2191,11 @@ async fn apply_dm_page_rows_patch(
 		paths: &[&str],
 	) -> Result<Option<String>> {
 		Ok(value_at_path(row, paths).and_then(|value| {
-			value.as_str().map(str::trim).filter(|v| !v.is_empty()).map(str::to_owned)
+			value
+				.as_str()
+				.map(str::trim)
+				.filter(|v| !v.is_empty())
+				.map(str::to_owned)
 		}))
 	}
 	fn boolean_field(row: &Map<String, Value>, paths: &[&str]) -> Option<bool> {
@@ -3640,10 +3652,7 @@ async fn load_editor_dm_data(
 		.map(|episode| {
 			let mut value = json!(episode);
 			if let Value::Object(ref mut map) = value {
-				map.insert(
-					"start_date".to_string(),
-					json!(episode.start_date),
-				);
+				map.insert("start_date".to_string(), json!(episode.start_date));
 				map.insert("end_date".to_string(), json!(episode.end_date));
 			}
 			value
