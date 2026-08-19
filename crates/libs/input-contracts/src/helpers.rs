@@ -208,7 +208,7 @@ fn valid_decimal(value: &str) -> bool {
 
 fn valid_base64(value: &str) -> bool {
 	let bytes = value.as_bytes();
-	if bytes.is_empty() || !bytes.len().is_multiple_of(4) {
+	if bytes.is_empty() || bytes.len() % 4 != 0 {
 		return false;
 	}
 	let padding = bytes.iter().rev().take_while(|&&byte| byte == b'=').count();
