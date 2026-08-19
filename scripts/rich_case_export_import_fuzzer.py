@@ -362,14 +362,15 @@ def run(args: argparse.Namespace) -> int:
 			results.append(link_case_sender(client, source_id, sender_id))
 		results.append(configure_case_authority_types(client, source_id))
 		results.append(configure_case_identification(client, source_id))
-		if "mfds" in authorities:
-			results.extend(configure_mfds_ct_case(client, source_id, seed))
-			results.append(configure_case_narrative(client, source_id))
+		source_validations: list[dict[str, Any]] = []
 		for authority in authorities:
+			if authority == "mfds":
+				results.extend(configure_mfds_ct_case(client, source_id, seed))
+				results.append(configure_case_narrative(client, source_id))
 			check = validation(client, source_id, authority)
-			results.append({"kind": "source_validation", "round": round_no, "authority": authority, "case_id": source_id, **check})
-			if check["status"] == 200 and check["ok"] is True:
-				results.append({"kind": "source_mark_validated", "round": round_no, "authority": authority, "case_id": source_id, **mark_validated(client, source_id)})
+			source_check = {"kind": "source_validation", "round": round_no, "authority": authority, "case_id": source_id, **check}
+			source_validations.append(source_check)
+			results.append(source_check)
 			status, source_xml, export_summary = export_xml(client, source_id, authority)
 			results.append({"kind": "source_export", "round": round_no, "authority": authority, "case_id": source_id, "status": status, "response": export_summary})
 			if status != 200:
@@ -408,6 +409,8 @@ def run(args: argparse.Namespace) -> int:
 			results.append({"kind": "reexport_compare", "round": round_no, "authority": authority, "case_id": import_id, "status": "PASS" if status == 200 and not failures else "FAIL", "http_status": status, "failures": failures, "response": export_summary})
 			if status == 200:
 				(authority_dir / "reexport.xml").write_bytes(exported)
+		if source_validations and all(item["status"] == 200 and item["ok"] is True for item in source_validations):
+			results.append({"kind": "source_mark_validated", "round": round_no, "authority": "all", "case_id": source_id, **mark_validated(client, source_id)})
 	if not args.keep_cases:
 		for case_id in sorted(set(case_ids)):
 			results.append({"kind": "cleanup", **delete_case(client, case_id)})
