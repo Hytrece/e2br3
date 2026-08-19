@@ -79,6 +79,8 @@ def setup_rich_case(args: argparse.Namespace, seed: int, output_dir: Path) -> tu
 		"--artifact-dir", str(setup_dir),
 		"--no-run-gates",
 	]
+	if args.contract:
+		command.extend(["--contract", args.contract])
 	try:
 		process = subprocess.run(
 			command,
@@ -274,6 +276,7 @@ def parser() -> argparse.ArgumentParser:
 	parser.add_argument("--timeout", type=float, default=30)
 	parser.add_argument("--setup-timeout", type=float, default=600)
 	parser.add_argument("--artifact-dir", default="tmp/rich-case-export-import")
+	parser.add_argument("--contract", default=os.getenv("E2BR3_EDITOR_CONTRACT"))
 	parser.add_argument("--keep-cases", action="store_true")
 	parser.add_argument("--allow-remote", action="store_true")
 	return parser
