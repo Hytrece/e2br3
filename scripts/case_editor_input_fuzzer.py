@@ -1060,6 +1060,19 @@ def main(args: argparse.Namespace) -> int:
                 status, projection, summary = request("GET", route)
                 row_ids[owner] = extract_row_id(projection, owner) if status == 200 else None
                 owner_ready[owner] = status == 200 and bool(row_ids[owner])
+                if owner_ready[owner] and args.complete_baseline:
+                    baseline = baseline_for(
+                        [field for field in setup_groups[owner] if field.get("code") != "C.1.1"],
+                        minimal=False,
+                        safe=True,
+                    )
+                    baseline["id"] = row_ids[owner]
+                    status, _, summary = request(
+                        "PATCH",
+                        route,
+                        {"authorities": authorities_for(owner_fields), "rows": {owner: baseline}},
+                    )
+                    owner_ready[owner] = status == 200
                 add(Event("baseline", None, page, owner, None, "PASS" if owner_ready[owner] else "BASELINE_REJECTED", status, {**summary, "reason": "reuse case-created safety report row"}))
                 continue
             baseline_fields = [field for field in setup_groups.get(owner, owner_fields) if field.get("code") != "C.1.1"]
