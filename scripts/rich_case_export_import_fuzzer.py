@@ -177,6 +177,26 @@ def configure_case_authority_types(client: ApiClient, case_id: str) -> dict[str,
 	return {"kind": "case_authority_types", "status": status, "response": summary(status, body, transport)}
 
 
+def configure_case_identification(client: ApiClient, case_id: str) -> dict[str, Any]:
+	status, body, transport = client.request(
+		"PATCH",
+		f"/api/cases/{case_id}/editor/pages/CI",
+		{
+			"authorities": ["ich", "fda", "mfds"],
+			"rows": {
+				"safetyReportIdentification": {
+					"reportType": "1",
+					"combinationProductReportIndicator": "1",
+					"otherCaseIdentifiersExist": True,
+					"fulfilExpeditedCriteria": False,
+					"additionalDocumentsAvailable": False,
+				}
+			},
+		},
+	)
+	return {"kind": "case_identification", "status": status, "response": summary(status, body, transport)}
+
+
 def validation(client: ApiClient, case_id: str, authority: str) -> dict[str, Any]:
 	status, body, transport = client.request("GET", f"/api/cases/{case_id}/validation?authority={authority}")
 	value = json_value(body)
@@ -248,6 +268,7 @@ def run(args: argparse.Namespace) -> int:
 		if sender_id:
 			results.append(link_case_sender(client, source_id, sender_id))
 		results.append(configure_case_authority_types(client, source_id))
+		results.append(configure_case_identification(client, source_id))
 		for authority in authorities:
 			check = validation(client, source_id, authority)
 			results.append({"kind": "source_validation", "round": round_no, "authority": authority, "case_id": source_id, **check})
