@@ -111,13 +111,22 @@ def setup_rich_case(args: argparse.Namespace, seed: int, output_dir: Path) -> tu
 	}
 
 
-def create_import_product(client: ApiClient, token: str) -> tuple[str | None, list[dict[str, Any]]]:
+def create_import_product(client: ApiClient, token: str) -> tuple[str | None, str | None, list[dict[str, Any]]]:
 	results: list[dict[str, Any]] = []
 	sender_payload = {
 		"data": {
 			"rows": {
 				"sender": {"senderType": "1", "organizationName": f"RICH-IMPORT-{token}"},
-				"gateways": [],
+		"gateways": [
+			{
+				"sequenceNumber": index,
+				"gatewayAuthority": authority,
+				"senderIdentifier": f"RICH-{authority.upper()}-{token}",
+				"isDefaultForAuthority": True,
+				"deleted": False,
+			}
+			for index, authority in enumerate(("ich", "fda", "mfds"), 1)
+		],
 				"responsiblePersons": [],
 			}
 		}
@@ -126,7 +135,7 @@ def create_import_product(client: ApiClient, token: str) -> tuple[str | None, li
 	results.append({"kind": "support_sender", "status": status, "response": summary(status, body, transport)})
 	sender_id = object_id(json_value(body))
 	if status != 201 or not sender_id:
-		return None, results
+		return None, None, results
 	product_payload = {
 		"data": {
 			"rows": {
@@ -141,7 +150,31 @@ def create_import_product(client: ApiClient, token: str) -> tuple[str | None, li
 	}
 	status, body, transport = client.request("POST", "/api/presaves/products", product_payload)
 	results.append({"kind": "support_product", "status": status, "response": summary(status, body, transport)})
-	return (object_id(json_value(body)) if status == 201 else None), results
+	return (object_id(json_value(body)) if status == 201 else None), sender_id, results
+
+
+def link_case_sender(client: ApiClient, case_id: str, sender_id: str) -> dict[str, Any]:
+	status, body, transport = client.request(
+		"PATCH",
+		f"/api/cases/{case_id}/editor/pages/SD",
+		{
+			"authorities": ["ich", "fda", "mfds"],
+			"rows": {"senderInformation": {"sourceSenderPresaveId": sender_id}},
+		},
+	)
+	return {"kind": "case_sender_link", "status": status, "response": summary(status, body, transport)}
+
+
+def configure_case_authority_types(client: ApiClient, case_id: str) -> dict[str, Any]:
+	status, body, transport = client.request(
+		"PUT",
+		f"/api/cases/{case_id}",
+		{
+			"data": {"fda_report_type": "1", "mfds_report_type": "6"},
+			"reason_for_change": "rich export/import roundtrip setup",
+		},
+	)
+	return {"kind": "case_authority_types", "status": status, "response": summary(status, body, transport)}
 
 
 def validation(client: ApiClient, case_id: str, authority: str) -> dict[str, Any]:
@@ -201,7 +234,7 @@ def run(args: argparse.Namespace) -> int:
 	results.append({"kind": "login", "status": status, "response": summary(status, body, transport)})
 	if status != 200:
 		return write_results(args, results)
-	product_id, product_results = create_import_product(client, f"{args.seed}-{uuid.uuid4().hex[:8]}")
+	product_id, sender_id, product_results = create_import_product(client, f"{args.seed}-{uuid.uuid4().hex[:8]}")
 	results.extend(product_results)
 	if not product_id:
 		return write_results(args, results)
@@ -212,6 +245,9 @@ def run(args: argparse.Namespace) -> int:
 		if not source_id:
 			continue
 		case_ids.append(source_id)
+		if sender_id:
+			results.append(link_case_sender(client, source_id, sender_id))
+		results.append(configure_case_authority_types(client, source_id))
 		for authority in authorities:
 			check = validation(client, source_id, authority)
 			results.append({"kind": "source_validation", "round": round_no, "authority": authority, "case_id": source_id, **check})
