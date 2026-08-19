@@ -172,7 +172,7 @@ def configure_case_authority_types(client: ApiClient, case_id: str) -> dict[str,
 		"PUT",
 		f"/api/cases/{case_id}",
 		{
-			"data": {"fda_report_type": "1", "mfds_report_type": "3"},
+			"data": {"fda_report_type": "4", "mfds_report_type": "1"},
 			"reason_for_change": "rich export/import roundtrip setup",
 		},
 	)
@@ -197,6 +197,18 @@ def configure_case_identification(client: ApiClient, case_id: str) -> dict[str, 
 		},
 	)
 	return {"kind": "case_identification", "status": status, "response": summary(status, body, transport)}
+
+
+def configure_case_narrative(client: ApiClient, case_id: str) -> dict[str, Any]:
+	status, body, transport = client.request(
+		"PATCH",
+		f"/api/cases/{case_id}/editor/pages/NR",
+		{
+			"authorities": ["ich", "fda", "mfds"],
+			"rows": {"narrative": {"senderComments": "발신자 의견"}},
+		},
+	)
+	return {"kind": "case_narrative", "status": status, "response": summary(status, body, transport)}
 
 
 def repair_import_sender(client: ApiClient, case_id: str, sender_id: str) -> dict[str, Any]:
@@ -302,6 +314,8 @@ def run(args: argparse.Namespace) -> int:
 			results.append(link_case_sender(client, source_id, sender_id))
 		results.append(configure_case_authority_types(client, source_id))
 		results.append(configure_case_identification(client, source_id))
+		if "mfds" in authorities:
+			results.append(configure_case_narrative(client, source_id))
 		for authority in authorities:
 			check = validation(client, source_id, authority)
 			results.append({"kind": "source_validation", "round": round_no, "authority": authority, "case_id": source_id, **check})
@@ -333,6 +347,8 @@ def run(args: argparse.Namespace) -> int:
 				results.append(configure_case_authority_types(client, import_id))
 				if authority != "ich":
 					results.append(configure_case_identification(client, import_id))
+				if authority == "mfds":
+					results.append(configure_case_narrative(client, import_id))
 			import_check = validation(client, import_id, authority)
 			results.append({"kind": "import_validation", "round": round_no, "authority": authority, "case_id": import_id, **import_check})
 			if import_check["status"] == 200 and import_check["ok"] is True:
