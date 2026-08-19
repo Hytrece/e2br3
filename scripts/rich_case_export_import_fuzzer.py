@@ -209,7 +209,6 @@ def repair_import_sender(client: ApiClient, case_id: str, sender_id: str) -> dic
 				"senderInformation": {
 					"sourceSenderPresaveId": sender_id,
 					"senderType": "3",
-					"healthProfessionalTypeKr1": "4",
 					"organizationName": "QVIS Safety",
 					"department": "Pharmacovigilance",
 					"personTitle": "Dr",
