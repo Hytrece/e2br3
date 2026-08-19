@@ -959,7 +959,7 @@ def main(args: argparse.Namespace) -> int:
         status, created, summary = request(
             "POST",
             "/api/cases",
-            {"data": {"safetyReportIdentification": {"safetyReportId": f"CASE-FUZZ-{uuid.uuid4()}"}, "status": "draft"}},
+			{"data": {"safetyReportIdentification": {"safetyReportId": f"FUZZ-{uuid.uuid4().hex[:9]}"}, "status": "draft"}},
         )
         case_id = object_id(created)
         add(Event("create", None, None, None, None, "PASS" if status == 201 and case_id else "FAIL", status, summary))
