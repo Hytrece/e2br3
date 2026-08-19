@@ -35,7 +35,7 @@ fn import_d_section_all_fields_from_scenario6() {
 		patient.medical_history_text.as_deref(),
 		Some("Systems Review.")
 	);
-	assert_eq!(patient.concomitant_therapy, None);
+	assert_eq!(patient.concomitant_therapy, Some(true));
 }
 
 #[test]
@@ -73,6 +73,30 @@ fn import_d_section_parses_race_ethnicity_null_flavor() {
 		patient.ethnicity_code_null_flavor.as_deref(),
 		Some(ethnicity_null)
 	);
+}
+
+#[test]
+fn import_d_section_preserves_false_concomitant_therapy() {
+	let xml = br#"<MCCI_IN200100UV01 xmlns="urn:hl7-org:v3" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <primaryRole>
+    <subjectOf2>
+      <organizer>
+        <code code="1" codeSystem="2.16.840.1.113883.3.989.2.1.1.20"/>
+        <component>
+          <observation>
+            <code code="11" codeSystem="2.16.840.1.113883.3.989.2.1.1.19"/>
+            <value xsi:type="BL" value="false"/>
+          </observation>
+        </component>
+      </organizer>
+    </subjectOf2>
+  </primaryRole>
+</MCCI_IN200100UV01>"#;
+
+	let patient = parse_d_patient(xml)
+		.expect("parse")
+		.expect("section D should exist");
+	assert_eq!(patient.concomitant_therapy, Some(false));
 }
 
 #[test]
