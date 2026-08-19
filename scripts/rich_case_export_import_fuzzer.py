@@ -199,6 +199,54 @@ def configure_case_identification(client: ApiClient, case_id: str) -> dict[str, 
 	return {"kind": "case_identification", "status": status, "response": summary(status, body, transport)}
 
 
+def configure_mfds_ct_case(client: ApiClient, case_id: str, seed: int) -> list[dict[str, Any]]:
+	"""Fill the MFDS CT topology without requiring a local KR product catalog."""
+	patches = [
+		(
+			"mfds_ct_identification",
+			"CI",
+			{"safetyReportIdentification": {"reportType": "2", "fulfilExpeditedCriteria": True}},
+		),
+		(
+			"mfds_ct_study",
+			"SI",
+			{
+				"studyInformation": {
+					"studyName": "Rich CT study",
+					"sponsorStudyNumber": f"STUDY-{seed}",
+					"studyTypeReaction": "1",
+				},
+				"studyRegistrationNumbers": [{
+					"sequenceNumber": 1,
+					"registrationNumber": f"REG-{seed}",
+					"countryCode": "KR",
+				}],
+			},
+		),
+		(
+			"mfds_ct_patient_identifier",
+			"DM",
+			{
+				"patientInformation": {},
+				"patientIdentifiers": [{
+					"sequenceNumber": 1,
+					"identifierTypeCode": "4",
+					"identifierValue": f"STUDY-{seed}",
+				}],
+			},
+		),
+	]
+	results: list[dict[str, Any]] = []
+	for kind, page, rows in patches:
+		status, body, transport = client.request(
+			"PATCH",
+			f"/api/cases/{case_id}/editor/pages/{page}",
+			{"authorities": ["mfds"], "rows": rows},
+		)
+		results.append({"kind": kind, "status": status, "response": summary(status, body, transport)})
+	return results
+
+
 def configure_case_narrative(client: ApiClient, case_id: str) -> dict[str, Any]:
 	status, body, transport = client.request(
 		"PATCH",
@@ -315,6 +363,7 @@ def run(args: argparse.Namespace) -> int:
 		results.append(configure_case_authority_types(client, source_id))
 		results.append(configure_case_identification(client, source_id))
 		if "mfds" in authorities:
+			results.extend(configure_mfds_ct_case(client, source_id, seed))
 			results.append(configure_case_narrative(client, source_id))
 		for authority in authorities:
 			check = validation(client, source_id, authority)
@@ -348,6 +397,7 @@ def run(args: argparse.Namespace) -> int:
 				if authority != "ich":
 					results.append(configure_case_identification(client, import_id))
 				if authority == "mfds":
+					results.extend(configure_mfds_ct_case(client, import_id, seed))
 					results.append(configure_case_narrative(client, import_id))
 			import_check = validation(client, import_id, authority)
 			results.append({"kind": "import_validation", "round": round_no, "authority": authority, "case_id": import_id, **import_check})
@@ -370,7 +420,12 @@ def write_results(args: argparse.Namespace, results: list[dict[str, Any]]) -> in
 	with path.open("w", encoding="utf-8") as handle:
 		for result in results:
 			handle.write(json.dumps(result, ensure_ascii=True, sort_keys=True) + "\n")
-	failed = [item for item in results if item.get("status") in {"FAIL", "error"} or item.get("kind") == "reexport_compare" and item.get("status") != "PASS"]
+	failed = [
+		item for item in results
+		if item.get("status") in {"FAIL", "error"}
+		or item.get("kind") == "reexport_compare" and item.get("status") != "PASS"
+		or item.get("kind", "").endswith("validation") and item.get("ok") is False
+	]
 	counts = {kind: sum(1 for item in results if item.get("kind") == kind) for kind in sorted({item.get("kind") for item in results})}
 	print(json.dumps({"results": len(results), "failed": len(failed), "counts": counts, "artifact": str(path)}, ensure_ascii=True))
 	return 1 if failed else 0
