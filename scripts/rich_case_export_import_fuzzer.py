@@ -121,7 +121,7 @@ def create_import_product(client: ApiClient, token: str) -> tuple[str | None, st
 			{
 				"sequenceNumber": index,
 				"gatewayAuthority": authority,
-				"senderIdentifier": f"RICH-{authority.upper()}-{token}",
+				"senderIdentifier": f"RICH-{authority.upper()[:3]}-01",
 				"isDefaultForAuthority": True,
 				"deleted": False,
 			}
