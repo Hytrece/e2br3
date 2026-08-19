@@ -139,17 +139,22 @@ fn csrf_origin_allowed(req: &Request<Body>) -> bool {
 			return origin.trim_end_matches('/').eq_ignore_ascii_case(expected);
 		}
 	}
-	let Some(host) = req
-		.headers()
-		.get(header::HOST)
-		.and_then(|value| value.to_str().ok())
-	else {
+	let origin_authority = origin.parse::<Uri>().ok().and_then(|uri| {
+		uri.authority()
+			.map(|authority| authority.as_str().to_owned())
+	});
+	let Some(origin_authority) = origin_authority else {
 		return false;
 	};
-	origin.parse::<Uri>().ok().is_some_and(|uri| {
-		uri.authority()
-			.is_some_and(|authority| authority.as_str().eq_ignore_ascii_case(host))
-	})
+	[header::HOST.as_str(), "x-forwarded-host"]
+		.into_iter()
+		.filter_map(|name| {
+			req.headers()
+				.get(name)
+				.and_then(|value| value.to_str().ok())
+		})
+		.flat_map(|value| value.split(',').map(str::trim))
+		.any(|host| origin_authority.eq_ignore_ascii_case(host))
 }
 
 async fn health() -> StatusCode {
@@ -209,6 +214,17 @@ mod tests {
 			.body(Body::empty())
 			.expect("request");
 		assert!(!csrf_origin_allowed(&request));
+	}
+
+	#[test]
+	fn csrf_accepts_the_origin_forwarded_by_the_frontend_proxy() {
+		let request = Request::builder()
+			.header(header::HOST, "127.0.0.1:8216")
+			.header("x-forwarded-host", "localhost:4033")
+			.header(header::ORIGIN, "http://localhost:4033")
+			.body(Body::empty())
+			.expect("request");
+		assert!(csrf_origin_allowed(&request));
 	}
 
 	#[tokio::test]
