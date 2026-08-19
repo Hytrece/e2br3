@@ -172,7 +172,7 @@ def configure_case_authority_types(client: ApiClient, case_id: str) -> dict[str,
 		"PUT",
 		f"/api/cases/{case_id}",
 		{
-			"data": {"fda_report_type": "1", "mfds_report_type": "6"},
+			"data": {"fda_report_type": "1", "mfds_report_type": "3"},
 			"reason_for_change": "rich export/import roundtrip setup",
 		},
 	)
@@ -188,7 +188,7 @@ def configure_case_identification(client: ApiClient, case_id: str) -> dict[str, 
 			"rows": {
 				"safetyReportIdentification": {
 					"reportType": "1",
-					"combinationProductReportIndicator": "1",
+					"combinationProductReportIndicator": "false",
 					"otherCaseIdentifiersExist": True,
 					"fulfilExpeditedCriteria": False,
 					"additionalDocumentsAvailable": False,
@@ -197,6 +197,38 @@ def configure_case_identification(client: ApiClient, case_id: str) -> dict[str, 
 		},
 	)
 	return {"kind": "case_identification", "status": status, "response": summary(status, body, transport)}
+
+
+def repair_import_sender(client: ApiClient, case_id: str, sender_id: str) -> dict[str, Any]:
+	status, body, transport = client.request(
+		"PATCH",
+		f"/api/cases/{case_id}/editor/pages/SD",
+		{
+			"authorities": ["ich", "fda", "mfds"],
+			"rows": {
+				"senderInformation": {
+					"sourceSenderPresaveId": sender_id,
+					"senderType": "3",
+					"healthProfessionalTypeKr1": "4",
+					"organizationName": "QVIS Safety",
+					"department": "Pharmacovigilance",
+					"personTitle": "Dr",
+					"personGivenName": "Sora",
+					"personMiddleName": "J",
+					"personFamilyName": "Kim",
+					"streetAddress": "1 Test Road",
+					"city": "Seoul",
+					"state": "Seoul",
+					"postcode": "04524",
+					"countryCode": "KR",
+					"telephone": "+821012345678",
+					"fax": "+8221234567",
+					"email": "sender@example.test",
+				},
+			},
+		},
+	)
+	return {"kind": "import_sender_repair", "status": status, "response": summary(status, body, transport)}
 
 
 def validation(client: ApiClient, case_id: str, authority: str) -> dict[str, Any]:
@@ -297,6 +329,11 @@ def run(args: argparse.Namespace) -> int:
 			results.append({"kind": "import", "round": round_no, "authority": authority, "status": status, "case_id": import_id, "response": summary(status, body, transport)})
 			if status != 200 or not import_id:
 				continue
+			if sender_id:
+				results.append(repair_import_sender(client, import_id, sender_id))
+				results.append(configure_case_authority_types(client, import_id))
+				if authority != "ich":
+					results.append(configure_case_identification(client, import_id))
 			import_check = validation(client, import_id, authority)
 			results.append({"kind": "import_validation", "round": round_no, "authority": authority, "case_id": import_id, **import_check})
 			if import_check["status"] == 200 and import_check["ok"] is True:
