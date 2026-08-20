@@ -140,7 +140,7 @@ TRANSFER_SPECS = {
         TransferSpec("ReceiverPresaveRoute", "message_receiver_identifier", "MessageHeader", "message_receiver_identifier", (transfer_call("messageHeader.messageReceiverIdentifier", "route.messageReceiverIdentifier"),)),
     ),
     "product": (
-        TransferSpec("ProductPresave", "medicinal_product", "DrugInformation", "medicinal_product", (value_assignment("medicinalProduct", "d.medicinalProduct"),)),
+        TransferSpec("ProductPresave", "medicinal_product", "DrugInformation", "medicinal_product", (r"\bmedicinalProduct\s*[:=]\s*(?:d\.medicinalProduct|reportedMedicinalProduct\(d\))",)),
         TransferSpec("ProductPresave", "mpid_version", "DrugInformation", "mpid_version", (value_assignment("mpidVersion", "d.mpidVersion"),)),
         TransferSpec("ProductPresave", "mpid", "DrugInformation", "mpid", (value_assignment("mpid", "d.mpid"),)),
         TransferSpec("ProductPresave", "mfds_mpid_version", "DrugInformation", "mfds_mpid_version", (value_assignment("mfdsMpidVersion", "d.mfdsMpidVersion"),)),

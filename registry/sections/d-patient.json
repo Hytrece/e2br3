@@ -664,6 +664,50 @@
     "notes": ""
   },
   {
+    "id": "D.8.r.2b.local.codeSystem",
+    "e2br3_code": "D.8.r.2b.local.codeSystem",
+    "label": "Past Drug History MPID Code System",
+    "section": "D",
+    "authority": "ICH",
+    "status": "not_applicable",
+    "local_only": true,
+    "backend": {
+      "status": "mapped",
+      "model": "PastDrugHistory",
+      "field": "mpid_source_code_system",
+      "file": "crates/libs/lib-core/src/model/patient.rs",
+      "evidence": "PastDrugHistory.mpid_source_code_system preserves the MPID codeSystem attribute."
+    },
+    "frontend": {
+      "status": "not_applicable",
+      "evidence": "Transport metadata is preserved by import and export rather than entered separately."
+    },
+    "action": "",
+    "notes": "XML fidelity metadata for D.8.r.2b."
+  },
+  {
+    "id": "D.8.r.2b.local.codeSystemVersion",
+    "e2br3_code": "D.8.r.2b.local.codeSystemVersion",
+    "label": "Past Drug History MPID Code System Version",
+    "section": "D",
+    "authority": "ICH",
+    "status": "not_applicable",
+    "local_only": true,
+    "backend": {
+      "status": "mapped",
+      "model": "PastDrugHistory",
+      "field": "mpid_source_code_system_version",
+      "file": "crates/libs/lib-core/src/model/patient.rs",
+      "evidence": "PastDrugHistory.mpid_source_code_system_version preserves the MPID codeSystemVersion attribute."
+    },
+    "frontend": {
+      "status": "not_applicable",
+      "evidence": "Transport metadata is preserved by import and export rather than entered separately."
+    },
+    "action": "",
+    "notes": "XML fidelity metadata for D.8.r.2b."
+  },
+  {
     "id": "D.8.r.2b",
     "e2br3_code": "D.8.r.2b",
     "label": "Past Drug History Medicinal Product Identifier MPID",

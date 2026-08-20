@@ -565,8 +565,10 @@ fn study_presave_create(
 	StudyPresaveForCreate {
 		product_presave_id: None,
 		study_name: Some("Authority Study".into()),
+		study_name_null_flavor: None,
 		study_name_notation: None,
 		sponsor_study_number: Some("AUTH-STUDY".into()),
+		sponsor_study_number_null_flavor: None,
 		sponsor_study_number_kind: None,
 		study_type_reaction: Some("1".into()),
 		study_type_reaction_kr1: None,
@@ -584,8 +586,10 @@ fn study_presave_create_for_product(
 	StudyPresaveForCreate {
 		product_presave_id: Some(product_presave_id),
 		study_name: Some("Relationship Study".into()),
+		study_name_null_flavor: None,
 		study_name_notation: None,
 		sponsor_study_number: Some(format!("REL-STUDY-{}", Uuid::new_v4())),
+		sponsor_study_number_null_flavor: None,
 		sponsor_study_number_kind: None,
 		study_type_reaction: Some("1".into()),
 		study_type_reaction_kr1: None,
@@ -1442,8 +1446,10 @@ async fn section_presave_parent_bmcs_crud_roundtrip() -> Result<()> {
 		StudyPresaveForCreate {
 			product_presave_id: Some(product_id),
 			study_name: Some(format!("Study Name {suffix}")),
+			study_name_null_flavor: None,
 			study_name_notation: Some("Study Name Notation".into()),
 			sponsor_study_number: Some(format!("ST-001-{suffix}")),
+			sponsor_study_number_null_flavor: None,
 			sponsor_study_number_kind: Some("PROTOCOL_NO".into()),
 			study_type_reaction: Some("1".into()),
 			study_type_reaction_kr1: None,
@@ -1661,6 +1667,7 @@ async fn reporter_presave_accepts_field_specific_null_flavors() -> Result<()> {
 			telephone: None,
 			telephone_null_flavor: Some("MSK".into()),
 			reporter_email: None,
+			reporter_email_null_flavor: None,
 			country_code: None,
 			qualification: None,
 			qualification_kr1: None,
@@ -1719,6 +1726,7 @@ async fn reporter_presave_rejects_invalid_field_specific_null_flavors() -> Resul
 				telephone: None,
 				telephone_null_flavor: None,
 				reporter_email: None,
+				reporter_email_null_flavor: None,
 				country_code: None,
 				qualification: Some("1".into()),
 				qualification_kr1: None,
@@ -1786,7 +1794,9 @@ async fn study_presave_registration_numbers_enforce_registration_number_max_leng
 			study_presave_id: study_id,
 			sequence_number: 1,
 			registration_number: Some("REG-before".into()),
+			registration_number_null_flavor: None,
 			country_code: Some("KR".into()),
+			country_code_null_flavor: None,
 			deleted: Some(false),
 		},
 	)
@@ -1799,7 +1809,9 @@ async fn study_presave_registration_numbers_enforce_registration_number_max_leng
 				study_presave_id: study_id,
 				sequence_number: 2,
 				registration_number: Some("R".repeat(51)),
+				registration_number_null_flavor: None,
 				country_code: Some("KR".into()),
+				country_code_null_flavor: None,
 				deleted: Some(false),
 			},
 		)
@@ -1953,8 +1965,10 @@ async fn section_presave_parent_bmcs_enforce_minimal_identity_requirements(
 			StudyPresaveForCreate {
 				product_presave_id: None,
 				study_name: Some("Invalid Study".into()),
+				study_name_null_flavor: None,
 				study_name_notation: None,
 				sponsor_study_number: Some("INVALID-STUDY".into()),
+				sponsor_study_number_null_flavor: None,
 				sponsor_study_number_kind: None,
 			study_type_reaction: None,
 			study_type_reaction_kr1: None,
@@ -2221,8 +2235,10 @@ async fn section_presave_parent_bmcs_reject_duplicate_identity_within_org(
 		StudyPresaveForCreate {
 			product_presave_id: Some(product_id),
 			study_name: Some("Duplicate Study".into()),
+			study_name_null_flavor: None,
 			study_name_notation: None,
 			sponsor_study_number: Some(format!("DUP-STUDY-{suffix}")),
+			sponsor_study_number_null_flavor: None,
 			sponsor_study_number_kind: None,
 			study_type_reaction: Some("1".into()),
 			study_type_reaction_kr1: None,
@@ -2240,8 +2256,10 @@ async fn section_presave_parent_bmcs_reject_duplicate_identity_within_org(
 			StudyPresaveForCreate {
 				product_presave_id: Some(product_id),
 				study_name: Some("Different Study".into()),
+				study_name_null_flavor: None,
 				study_name_notation: None,
 				sponsor_study_number: Some(format!(" dup-study-{suffix} ")),
+				sponsor_study_number_null_flavor: None,
 				sponsor_study_number_kind: None,
 				study_type_reaction: Some("2".into()),
 				study_type_reaction_kr1: None,
@@ -2597,8 +2615,10 @@ async fn section_presave_child_bmcs_crud_roundtrip() -> Result<()> {
 		StudyPresaveForCreate {
 			product_presave_id: Some(product_id),
 			study_name: Some("Child Study".into()),
+			study_name_null_flavor: None,
 			study_name_notation: None,
 			sponsor_study_number: Some(format!("CHILD-STUDY-{suffix}")),
+			sponsor_study_number_null_flavor: None,
 			sponsor_study_number_kind: None,
 			study_type_reaction: Some("1".into()),
 			study_type_reaction_kr1: None,
@@ -2835,7 +2855,9 @@ async fn section_presave_child_bmcs_crud_roundtrip() -> Result<()> {
 			study_presave_id: study_id,
 			sequence_number: 1,
 			registration_number: Some("REG-before".into()),
+			registration_number_null_flavor: None,
 			country_code: Some("KR".into()),
+			country_code_null_flavor: None,
 			deleted: Some(false),
 		},
 	)
@@ -2881,7 +2903,8 @@ async fn section_presave_child_bmcs_crud_roundtrip() -> Result<()> {
 		StudyPresaveFdaCrossReportedIndNumberForCreate {
 			study_presave_id: study_id,
 			sequence_number: 1,
-			ind_number: "IND-123".into(),
+			ind_number: Some("IND-123".into()),
+			ind_number_null_flavor: None,
 			deleted: Some(false),
 		},
 	)
@@ -2903,7 +2926,7 @@ async fn section_presave_child_bmcs_crud_roundtrip() -> Result<()> {
 		cross_reported_ind_id,
 	)
 	.await?;
-	assert_eq!(cross_reported_ind.ind_number, "IND-456");
+	assert_eq!(cross_reported_ind.ind_number.as_deref(), Some("IND-456"));
 	assert!(cross_reported_ind.deleted);
 	assert_eq!(
 		StudyPresaveFdaCrossReportedIndNumberBmc::list_by_parent(
