@@ -742,7 +742,7 @@ fn apply_section_d(
 			"//hl7:primaryRole/hl7:subjectOf2[hl7:observation/hl7:code[@code='C17049' or @code='C16564']]",
 		);
 	}
-	apply_d_9_1_date_of_death_null_flavor(doc, parser, xpath, &death_info)?;
+	apply_d_9_1_date_of_death_null_flavor(doc, parser, xpath, death_info)?;
 
 	Ok(())
 }

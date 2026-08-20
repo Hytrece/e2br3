@@ -61,7 +61,7 @@ pub(crate) fn apply_section_n(
 			parser,
 			xpath,
 			"/hl7:MCCI_IN200100UV01/hl7:receiver/hl7:device/hl7:asAgent",
-			&receiver,
+			receiver,
 			report.receiver_organization.as_deref(),
 		);
 		apply_n_receiver_organization(
@@ -69,7 +69,7 @@ pub(crate) fn apply_section_n(
 			parser,
 			xpath,
 			"/hl7:MCCI_IN200100UV01/hl7:PORR_IN049016UV/hl7:receiver/hl7:device/hl7:asAgent",
-			&receiver,
+			receiver,
 			report.receiver_organization.as_deref(),
 		);
 	}

@@ -197,7 +197,7 @@ async fn import_e2b_xml_in_txn(
 
 	let case_id = CaseBmc::create(
 		ctx,
-		&mm,
+		mm,
 		CaseForCreate {
 			organization_id: ctx.organization_id(),
 			dg_prd_key: Some(product_id.clone()),
@@ -213,13 +213,13 @@ async fn import_e2b_xml_in_txn(
 
 	let message_number =
 		shared::make_import_message_number(&message_number, case_id);
-	let has_header = MessageHeaderBmc::get_by_case(ctx, &mm, case_id)
+	let has_header = MessageHeaderBmc::get_by_case(ctx, mm, case_id)
 		.await
 		.is_ok();
 	if !has_header {
 		MessageHeaderBmc::create(
 			ctx,
-			&mm,
+			mm,
 			MessageHeaderForCreate {
 				case_id,
 				batch_sender_identifier: None,
@@ -235,7 +235,7 @@ async fn import_e2b_xml_in_txn(
 	}
 	MessageHeaderBmc::update_by_case(
 		ctx,
-		&mm,
+		mm,
 		case_id,
 		MessageHeaderForUpdate {
 			batch_number: header_extract.batch_number.clone(),
@@ -252,7 +252,7 @@ async fn import_e2b_xml_in_txn(
 
 	import_section_c(
 		ctx,
-		&mm,
+		mm,
 		&req.xml,
 		case_id,
 		&safety_report_id,
@@ -261,18 +261,18 @@ async fn import_e2b_xml_in_txn(
 		&req.c_settings,
 	)
 	.await?;
-	import_section_d(ctx, &mm, &req.xml, case_id).await?;
-	import_section_h(ctx, &mm, &req.xml, case_id).await?;
+	import_section_d(ctx, mm, &req.xml, case_id).await?;
+	import_section_h(ctx, mm, &req.xml, case_id).await?;
 
 	let snapshot = json!({
 		"parsed": parsed.json,
 	});
 
-	let reaction_map = import_section_e(ctx, &mm, &req.xml, case_id).await?;
-	import_section_f(ctx, &mm, &req.xml, case_id).await?;
+	let reaction_map = import_section_e(ctx, mm, &req.xml, case_id).await?;
+	import_section_f(ctx, mm, &req.xml, case_id).await?;
 	import_section_g(
 		ctx,
-		&mm,
+		mm,
 		&req.xml,
 		case_id,
 		&reaction_map,
@@ -282,7 +282,7 @@ async fn import_e2b_xml_in_txn(
 
 	let version_id = match CaseVersionBmc::create(
 		ctx,
-		&mm,
+		mm,
 		CaseVersionForCreate {
 			case_id,
 			version: next_version,
@@ -298,7 +298,7 @@ async fn import_e2b_xml_in_txn(
 
 	CaseBmc::update(
 		ctx,
-		&mm,
+		mm,
 		case_id,
 		CaseForUpdate {
 			raw_xml: Some(req.xml.to_vec()),

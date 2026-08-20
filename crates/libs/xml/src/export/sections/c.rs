@@ -623,13 +623,13 @@ pub(crate) fn apply_c_1_report_relationships(
 
 	let mut fragment = String::new();
 	for value in identifiers {
-		fragment.push_str(&write_c_1_9_1(&value));
+		fragment.push_str(&write_c_1_9_1(value));
 	}
 	for value in linked_reports {
-		fragment.push_str(&write_c_1_10_r(&value));
+		fragment.push_str(&write_c_1_10_r(value));
 	}
 	for value in documents {
-		fragment.push_str(&format!("<reference typeCode=\"REFR\"><document classCode=\"DOC\" moodCode=\"EVN\"><code code=\"1\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.27\"/>{}{}</document></reference>", write_c_1_6_1_r_1(&value), write_c_1_6_1_r_2(&value, authority)?));
+		fragment.push_str(&format!("<reference typeCode=\"REFR\"><document classCode=\"DOC\" moodCode=\"EVN\"><code code=\"1\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.27\"/>{}{}</document></reference>", write_c_1_6_1_r_1(value), write_c_1_6_1_r_2(value, authority)?));
 	}
 	if fragment.is_empty() {
 		return Ok(());
@@ -1301,8 +1301,8 @@ pub(crate) fn apply_c_4_literature(
 
 	let mut fragment = String::new();
 	for item in references {
-		let bibliographic = write_c_4_r_1(&item);
-		let attachment = write_c_4_r_2(&item, authority)?;
+		let bibliographic = write_c_4_r_1(item);
+		let attachment = write_c_4_r_2(item, authority)?;
 		fragment.push_str(&format!(
 			"<reference typeCode=\"REFR\"><document classCode=\"DOC\" moodCode=\"EVN\"><code code=\"2\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.27\"/>{}{}</document></reference>",
 			attachment,
@@ -1412,19 +1412,19 @@ pub(crate) fn apply_c_5_study(
 	}
 
 	if matches!(authority, lib_core::regulatory::RegulatoryAuthority::Fda) {
-		let mut fda_ids = vec![write_fda_c_5_5a(&study), write_fda_c_5_5b(&study)];
+		let mut fda_ids = vec![write_fda_c_5_5a(study), write_fda_c_5_5b(study)];
 		fda_ids.extend(cross_reported_inds.iter().map(write_fda_c_5_6_r));
 		for id in fda_ids.into_iter().filter(|id| !id.is_empty()) {
 			auth_xml.push_str(&format!("<authorization typeCode=\"AUTH\"><studyRegistration classCode=\"ACT\" moodCode=\"EVN\">{id}</studyRegistration></authorization>"));
 		}
 	}
 
-	let sponsor_id_xml = write_c_5_3(&study);
-	let title_xml = write_c_5_2(&study);
-	let study_type = write_c_5_4(&study);
+	let sponsor_id_xml = write_c_5_3(study);
+	let title_xml = write_c_5_2(study);
+	let study_type = write_c_5_4(study);
 	let regional_study_type =
 		if matches!(authority, lib_core::regulatory::RegulatoryAuthority::Mfds) {
-			write_c_5_4_kr_1(&study)
+			write_c_5_4_kr_1(study)
 		} else {
 			String::new()
 		};
