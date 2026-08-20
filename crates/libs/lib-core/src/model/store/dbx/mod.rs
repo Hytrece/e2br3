@@ -17,15 +17,13 @@ use tokio::sync::Mutex;
 pub struct Dbx {
 	db_pool: Db,
 	txn_holder: Arc<Mutex<Option<TxnHolder>>>,
-	with_txn: bool,
 }
 
 impl Dbx {
-	pub fn new(db_pool: Db, with_txn: bool) -> Result<Self> {
+	pub fn new(db_pool: Db) -> Result<Self> {
 		Ok(Dbx {
 			db_pool,
 			txn_holder: Arc::default(),
-			with_txn,
 		})
 	}
 }
@@ -67,10 +65,6 @@ impl DerefMut for TxnHolder {
 
 impl Dbx {
 	pub async fn begin_txn(&self) -> Result<()> {
-		if !self.with_txn {
-			return Err(Error::CannotBeginTxnWithTxnFalse);
-		}
-
 		let mut txh_g = self.txn_holder.lock().await;
 		// If we already have a tx holder, then, we increment
 		if let Some(txh) = txh_g.as_mut() {
@@ -105,10 +99,6 @@ impl Dbx {
 	}
 
 	pub async fn commit_txn(&self) -> Result<()> {
-		if !self.with_txn {
-			return Err(Error::CannotCommitTxnWithTxnFalse);
-		}
-
 		let mut txh_g = self.txn_holder.lock().await;
 		if let Some(txh) = txh_g.as_mut() {
 			let counter = txh.dec();
@@ -141,25 +131,21 @@ impl Dbx {
 		O: for<'r> FromRow<'r, <Postgres as sqlx::Database>::Row> + Send + Unpin,
 		A: IntoArguments<'q, Postgres> + 'q,
 	{
-		let data = if self.with_txn {
-			let mut txh_g = self.txn_holder.lock().await;
-			if let Some(mut txn_holder) = txh_g.take() {
-				let res = query.fetch_one(txn_holder.as_mut()).await;
-				match res {
-					Ok(data) => {
-						txh_g.replace(txn_holder);
-						data
-					}
-					Err(err) => {
-						tracing::error!(
-							"Dbx::fetch_one transaction query failed: {err}"
-						);
-						let _ = txn_holder.txn.rollback().await;
-						return Err(err.into());
-					}
+		let mut txh_g = self.txn_holder.lock().await;
+		let data = if let Some(mut txn_holder) = txh_g.take() {
+			let res = query.fetch_one(txn_holder.as_mut()).await;
+			match res {
+				Ok(data) => {
+					txh_g.replace(txn_holder);
+					data
 				}
-			} else {
-				query.fetch_one(self.db()).await?
+				Err(err) => {
+					tracing::error!(
+						"Dbx::fetch_one transaction query failed: {err}"
+					);
+					let _ = txn_holder.txn.rollback().await;
+					return Err(err.into());
+				}
 			}
 		} else {
 			query.fetch_one(self.db()).await?
@@ -176,25 +162,21 @@ impl Dbx {
 		O: for<'r> FromRow<'r, <Postgres as sqlx::Database>::Row> + Send + Unpin,
 		A: IntoArguments<'q, Postgres> + 'q,
 	{
-		let data = if self.with_txn {
-			let mut txh_g = self.txn_holder.lock().await;
-			if let Some(mut txn_holder) = txh_g.take() {
-				let res = query.fetch_optional(txn_holder.as_mut()).await;
-				match res {
-					Ok(data) => {
-						txh_g.replace(txn_holder);
-						data
-					}
-					Err(err) => {
-						tracing::error!(
-							"Dbx::fetch_optional transaction query failed: {err}"
-						);
-						let _ = txn_holder.txn.rollback().await;
-						return Err(err.into());
-					}
+		let mut txh_g = self.txn_holder.lock().await;
+		let data = if let Some(mut txn_holder) = txh_g.take() {
+			let res = query.fetch_optional(txn_holder.as_mut()).await;
+			match res {
+				Ok(data) => {
+					txh_g.replace(txn_holder);
+					data
 				}
-			} else {
-				query.fetch_optional(self.db()).await?
+				Err(err) => {
+					tracing::error!(
+						"Dbx::fetch_optional transaction query failed: {err}"
+					);
+					let _ = txn_holder.txn.rollback().await;
+					return Err(err.into());
+				}
 			}
 		} else {
 			query.fetch_optional(self.db()).await?
@@ -211,25 +193,21 @@ impl Dbx {
 		O: for<'r> FromRow<'r, <Postgres as sqlx::Database>::Row> + Send + Unpin,
 		A: IntoArguments<'q, Postgres> + 'q,
 	{
-		let data = if self.with_txn {
-			let mut txh_g = self.txn_holder.lock().await;
-			if let Some(mut txn_holder) = txh_g.take() {
-				let res = query.fetch_all(txn_holder.as_mut()).await;
-				match res {
-					Ok(data) => {
-						txh_g.replace(txn_holder);
-						data
-					}
-					Err(err) => {
-						tracing::error!(
-							"Dbx::fetch_all transaction query failed: {err}"
-						);
-						let _ = txn_holder.txn.rollback().await;
-						return Err(err.into());
-					}
+		let mut txh_g = self.txn_holder.lock().await;
+		let data = if let Some(mut txn_holder) = txh_g.take() {
+			let res = query.fetch_all(txn_holder.as_mut()).await;
+			match res {
+				Ok(data) => {
+					txh_g.replace(txn_holder);
+					data
 				}
-			} else {
-				query.fetch_all(self.db()).await?
+				Err(err) => {
+					tracing::error!(
+						"Dbx::fetch_all transaction query failed: {err}"
+					);
+					let _ = txn_holder.txn.rollback().await;
+					return Err(err.into());
+				}
 			}
 		} else {
 			query.fetch_all(self.db()).await?
@@ -242,25 +220,19 @@ impl Dbx {
 	where
 		A: IntoArguments<'q, Postgres> + 'q,
 	{
-		let row_affected = if self.with_txn {
-			let mut txh_g = self.txn_holder.lock().await;
-			if let Some(mut txn_holder) = txh_g.take() {
-				let res = query.execute(txn_holder.as_mut()).await;
-				match res {
-					Ok(done) => {
-						txh_g.replace(txn_holder);
-						done.rows_affected()
-					}
-					Err(err) => {
-						tracing::error!(
-							"Dbx::execute transaction query failed: {err}"
-						);
-						let _ = txn_holder.txn.rollback().await;
-						return Err(err.into());
-					}
+		let mut txh_g = self.txn_holder.lock().await;
+		let row_affected = if let Some(mut txn_holder) = txh_g.take() {
+			let res = query.execute(txn_holder.as_mut()).await;
+			match res {
+				Ok(done) => {
+					txh_g.replace(txn_holder);
+					done.rows_affected()
 				}
-			} else {
-				query.execute(self.db()).await?.rows_affected()
+				Err(err) => {
+					tracing::error!("Dbx::execute transaction query failed: {err}");
+					let _ = txn_holder.txn.rollback().await;
+					return Err(err.into());
+				}
 			}
 		} else {
 			query.execute(self.db()).await?.rows_affected()

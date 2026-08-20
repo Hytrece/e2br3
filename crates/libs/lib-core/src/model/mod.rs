@@ -118,7 +118,7 @@ pub struct ModelManager {
 
 impl Clone for ModelManager {
 	fn clone(&self) -> Self {
-		let dbx = Dbx::new(self.dbx.db().clone(), true).expect(
+		let dbx = Dbx::new(self.dbx.db().clone()).expect(
 			"cloning ModelManager should create a Dbx over the existing pool",
 		);
 		ModelManager { dbx }
@@ -131,12 +131,12 @@ impl ModelManager {
 		let db_pool = new_db_pool()
 			.await
 			.map_err(|ex| Error::CantCreateModelManagerProvider(ex.to_string()))?;
-		let dbx = Dbx::new(db_pool, true)?;
+		let dbx = Dbx::new(db_pool)?;
 		Ok(ModelManager { dbx })
 	}
 
 	pub fn new_with_txn(&self) -> Result<ModelManager> {
-		let dbx = Dbx::new(self.dbx.db().clone(), true)?;
+		let dbx = Dbx::new(self.dbx.db().clone())?;
 		Ok(ModelManager { dbx })
 	}
 
