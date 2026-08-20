@@ -116,7 +116,7 @@ pub async fn create_user(
 		organization_id,
 		email,
 		username: Some(username),
-		pwd_clear: initial_password(data.pwd_clear)?,
+		pwd_clear: initial_password(data.pwd_clear),
 		role,
 		comments: data.comments,
 		other_information: data.other_information,

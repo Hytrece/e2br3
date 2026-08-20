@@ -64,6 +64,18 @@ fn unconstrained(_: FieldInput<'_>) -> Vec<InputIssue> {
 	Vec::new()
 }
 
+fn sender_organization_name_notation(input: FieldInput<'_>) -> Vec<InputIssue> {
+	match input.value {
+		InputValue::String(value) if value.chars().count() > 50 => {
+			vec![InputIssue {
+				code: "PRESAVE.SENDER.ORGANIZATION_NAME_NOTATION.LENGTH.MAX",
+				message: "must contain at most 50 characters".to_owned(),
+			}]
+		}
+		_ => Vec::new(),
+	}
+}
+
 fn decimal(
 	path: &str,
 	value: Option<&Decimal>,
@@ -107,6 +119,11 @@ macro_rules! sender_parent {
 			"organizationName",
 			$data.organization_name,
 			input_contracts::generated::c::c_3_2
+		);
+		check_text!(
+			"organizationNameNotation",
+			$data.organization_name_notation,
+			sender_organization_name_notation
 		);
 		// ICH.C.3.4.1-8
 		check_text!(
@@ -720,6 +737,25 @@ mod tests {
 		};
 		let error = sender_update(&data).unwrap_err();
 		assert!(matches!(error, Error::ConstraintViolation(_)));
+	}
+
+	#[test]
+	fn sender_rejects_overlong_organization_name_notation() {
+		assert!(sender_update(&SenderPresaveForUpdate {
+			organization_name_notation: Some("x".repeat(50)),
+			..Default::default()
+		})
+		.is_ok());
+		let error = sender_update(&SenderPresaveForUpdate {
+			organization_name_notation: Some("x".repeat(51)),
+			..Default::default()
+		})
+		.unwrap_err();
+		assert!(matches!(
+			error,
+			Error::ConstraintViolation(ConstraintViolation { path, .. })
+				if path == "organizationNameNotation"
+		));
 	}
 
 	#[test]
