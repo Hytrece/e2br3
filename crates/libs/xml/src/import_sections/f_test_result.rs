@@ -221,12 +221,6 @@ fn read_f_r_3_2(
 			low_value,
 			Some(if inclusive { "GE" } else { "GT" }.to_string()),
 		)
-	} else if low_value.is_some()
-		|| low_null.is_some()
-		|| high_value.is_some()
-		|| high_null.is_some()
-	{
-		(None, None)
 	} else {
 		(None, None)
 	};
