@@ -173,12 +173,12 @@ pub fn parse_drug_additional_info_codes_json(
 		.unwrap_or_default()
 		.into_iter()
 		.filter(|entry| {
-			entry
+			!entry
 				.value_code
 				.as_deref()
 				.map(str::trim)
 				.unwrap_or("")
-				.is_empty() == false
+				.is_empty()
 		})
 		.collect()
 }
@@ -259,12 +259,12 @@ pub fn structured_drug_additional_info_codes_to_json(
 	let filtered: Vec<_> = codes
 		.into_iter()
 		.filter(|entry| {
-			entry
+			!entry
 				.value_code
 				.as_deref()
 				.map(str::trim)
 				.unwrap_or("")
-				.is_empty() == false
+				.is_empty()
 		})
 		.collect();
 	if filtered.is_empty() {
