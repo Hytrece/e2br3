@@ -489,6 +489,32 @@ def load_generated_rules(root: Path, pattern: re.Pattern[str]) -> set[str]:
     return rules
 
 
+def apply_meddra_baseline(
+    contract: list[dict[str, Any]], version: str | None, code: str | None
+) -> int:
+    """Replace stale contract MedDRA samples for a valid-fixture run."""
+    if version is None and code is None:
+        return 0
+    changed = 0
+    for page in contract:
+        for field in page.get("fields", []):
+            paths = " ".join(
+                str(field.get(key, ""))
+                for key in ("code", "frontendPath", "payloadPath", "projectionPath")
+            ).lower()
+            replacement = (
+                version
+                if version is not None and "meddraversion" in paths
+                else code
+                if code is not None and "meddracode" in paths
+                else None
+            )
+            if replacement is not None and field.get("roundTripValue") != replacement:
+                field["roundTripValue"] = replacement
+                changed += 1
+    return changed
+
+
 def field_rule_prefix(field: dict[str, Any]) -> str:
     authority = str(field.get("authority", "ICH")).upper()
     code = str(field.get("code", ""))
@@ -859,6 +885,7 @@ def main(args: argparse.Namespace) -> int:
         raise SystemExit("set E2BR3_ADMIN_PASSWORD")
     contract_path = Path(args.contract).resolve()
     contract = json.loads(contract_path.read_text())
+    apply_meddra_baseline(contract, args.meddra_version, args.meddra_code)
     backend_root = Path(__file__).resolve().parents[1]
     max_length_fields = apply_max_lengths(contract, load_max_lengths(backend_root))
     identifier_fields, boolean_fields = apply_generated_rules(
@@ -1037,8 +1064,8 @@ def main(args: argparse.Namespace) -> int:
                         "reaction": {
                             "sequenceNumber": 1,
                             "primarySourceReaction": "Fuzz reaction",
-                            "reactionMeddraVersionLLT": "26.0",
-                            "reactionMeddraCodeLLT": "10000001",
+                            "reactionMeddraVersionLLT": args.meddra_version or "26.0",
+                            "reactionMeddraCodeLLT": args.meddra_code or "10000001",
                         }
                     },
                 },
@@ -1084,8 +1111,8 @@ def main(args: argparse.Namespace) -> int:
             if page == "AE" and owner == "reaction":
                 # AE create contract requires an explicit positive sequence.
                 baseline.setdefault("sequenceNumber", 1)
-                baseline.setdefault("reactionMeddraVersionLLT", "26.0")
-                baseline.setdefault("reactionMeddraCodeLLT", "10000001")
+                baseline.setdefault("reactionMeddraVersionLLT", args.meddra_version or "26.0")
+                baseline.setdefault("reactionMeddraCodeLLT", args.meddra_code or "10000001")
             if page == "DG" and owner == "drug":
                 baseline.setdefault("drugCharacterization", "1")
                 baseline.setdefault("medicinalProduct", "Fuzz product")
@@ -1383,6 +1410,8 @@ def parser() -> argparse.ArgumentParser:
     parser.add_argument("--timeout", type=float, default=20)
     parser.add_argument("--contract", default=str(DEFAULT_CONTRACT))
     parser.add_argument("--null-flavor-pairs", default=str(DEFAULT_NULL_FLAVOR_PAIRS))
+    parser.add_argument("--meddra-version", help="override contract MedDRA version for a valid fixture")
+    parser.add_argument("--meddra-code", help="override contract MedDRA code for a valid fixture")
     parser.add_argument("--null-flavor-only", action="store_true")
     parser.add_argument("--complete-baseline", action="store_true", help="populate every concrete contract field during owner setup")
     parser.add_argument("--artifact-dir", default="tmp/rbac-rls-fuzz/case-editor-contract")

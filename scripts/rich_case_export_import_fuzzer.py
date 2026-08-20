@@ -76,6 +76,8 @@ def setup_rich_case(args: argparse.Namespace, seed: int, output_dir: Path) -> tu
 		"--complete-baseline",
 		"--values-per-field", "0",
 		"--samples-per-category", "1",
+		"--meddra-version", "28.1",
+		"--meddra-code", "10000001",
 		"--artifact-dir", str(setup_dir),
 		"--no-run-gates",
 	]

@@ -217,6 +217,17 @@ class CaseEditorInputFuzzerTests(unittest.TestCase):
         )
         self.assertTrue(fuzzer.parser().parse_args(["--complete-baseline"]).complete_baseline)
 
+    def test_meddra_baseline_override_updates_only_meddra_fields(self) -> None:
+        contract = [{"fields": [
+            {"code": "E.i.2.1a", "frontendPath": "reactionMeddraVersionLLT", "roundTripValue": "26.0"},
+            {"code": "E.i.2.1b", "frontendPath": "reactionMeddraCodeLLT", "roundTripValue": "10000001"},
+            {"code": "E.i.1.1b", "frontendPath": "reactionLanguage", "roundTripValue": "eng"},
+        ]}]
+        self.assertEqual(fuzzer.apply_meddra_baseline(contract, "28.1", "10000001"), 1)
+        self.assertEqual(contract[0]["fields"][0]["roundTripValue"], "28.1")
+        self.assertEqual(contract[0]["fields"][1]["roundTripValue"], "10000001")
+        self.assertEqual(contract[0]["fields"][2]["roundTripValue"], "eng")
+
     def test_ui_plan_covers_all_fields_and_seeded_candidates(self) -> None:
         args = ui_fuzzer.parser().parse_args(["--seed", "2026081401", "--dry-run"])
         plan = ui_fuzzer.build_plan(args)
