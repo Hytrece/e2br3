@@ -502,7 +502,7 @@ pub(super) async fn apply_dm_page_rows_patch(
 				),
 			});
 		};
-		for (_index, value) in episodes.iter().enumerate() {
+		for value in episodes {
 			let episode = as_object(page_id, "medicalHistoryEpisodes", value)?;
 			let id = uuid_field(episode, &["id"]);
 			if bool_field(episode, &["deleted"]) == Some(true) {
@@ -600,7 +600,7 @@ pub(super) async fn apply_dm_page_rows_patch(
 				message: format!("{page_id}.patientIdentifiers must be an array"),
 			});
 		};
-		for (_index, value) in identifier_rows.iter().enumerate() {
+		for value in identifier_rows {
 			let identifier = as_object(page_id, "patientIdentifiers", value)?;
 			let id = uuid_field(identifier, &["id"]);
 			if bool_field(identifier, &["deleted"]) == Some(true) {
@@ -747,7 +747,7 @@ pub(super) async fn apply_dm_page_rows_patch(
 				message: format!("{page_id}.reportedCauses must be an array"),
 			});
 		};
-		for (_index, value) in causes.iter().enumerate() {
+		for value in causes {
 			let cause = as_object(page_id, "reportedCauses", value)?;
 			let id = uuid_field(cause, &["id"]);
 			if bool_field(cause, &["deleted"]) == Some(true) {
@@ -806,7 +806,7 @@ pub(super) async fn apply_dm_page_rows_patch(
 				message: format!("{page_id}.autopsyCauses must be an array"),
 			});
 		};
-		for (_index, value) in causes.iter().enumerate() {
+		for value in causes {
 			let cause = as_object(page_id, "autopsyCauses", value)?;
 			let id = uuid_field(cause, &["id"]);
 			if bool_field(cause, &["deleted"]) == Some(true) {
@@ -1008,7 +1008,7 @@ pub(super) async fn apply_dm_page_rows_patch(
 				"{page_id}.parentInfo is required before parent medical history"
 			),
 		})?;
-		for (_index, value) in history_rows.iter().enumerate() {
+		for value in history_rows {
 			let history = as_object(page_id, "parentMedicalHistory", value)?;
 			let id = uuid_field(history, &["id"]);
 			if bool_field(history, &["deleted"]) == Some(true) {
@@ -1112,7 +1112,7 @@ pub(super) async fn apply_dm_page_rows_patch(
 				"{page_id}.parentInfo is required before parent past drug history"
 			),
 		})?;
-		for (_index, value) in drug_rows.iter().enumerate() {
+		for value in drug_rows {
 			let drug = as_object(page_id, "parentPastDrugs", value)?;
 			let id = uuid_field(drug, &["id"]);
 			if bool_field(drug, &["deleted"]) == Some(true) {

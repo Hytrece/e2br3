@@ -163,7 +163,7 @@ pub(super) async fn apply_si_page_rows_patch(
 				),
 			});
 		};
-		for (_index, value) in registrations.iter().enumerate() {
+		for value in registrations {
 			let registration =
 				as_object(page_id, "studyRegistrationNumbers", value)?;
 			let id = uuid_field(registration, &["id"]);
@@ -259,7 +259,7 @@ pub(super) async fn apply_si_page_rows_patch(
 					),
 				});
 			};
-			for (_index, value) in numbers.iter().enumerate() {
+			for value in numbers {
 				let number = as_object(
 					page_id,
 					"studyInformation.fdaCrossReportedIndNumbers",
