@@ -495,7 +495,7 @@ pub async fn post_gateway_ack_callback(
 		})?;
 	let incoming = headers
 		.get("x-callback-token")
-		.and_then(|v| header_to_str(v))
+		.and_then(header_to_str)
 		.ok_or(Error::BadRequest {
 			message: "missing x-callback-token".to_string(),
 		})?;

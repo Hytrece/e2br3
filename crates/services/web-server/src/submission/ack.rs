@@ -1,7 +1,7 @@
 use super::*;
 
 pub(super) fn status_from_ack(level: u8, success: bool) -> Result<SubmissionStatus> {
-	if !matches!(level, 1 | 2 | 3 | 4) {
+	if !matches!(level, 1..=4) {
 		return Err(Error::BadRequest {
 			message: "ack level must be one of: 1, 2, 3, 4".to_string(),
 		});
