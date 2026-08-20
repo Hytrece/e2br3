@@ -132,7 +132,7 @@ impl CaseVersionBmc {
 		.await
 		{
 			dbx.rollback_txn().await?;
-			return Err(err.into());
+			return Err(err);
 		}
 		let user_id = ctx.user_id();
 		let sql = "INSERT INTO case_versions (case_id, version, snapshot, change_reason, changed_by) VALUES ($1, $2, $3, $4, $5) RETURNING id";
@@ -175,7 +175,7 @@ impl CaseVersionBmc {
 		.await
 		{
 			dbx.rollback_txn().await?;
-			return Err(err.into());
+			return Err(err);
 		}
 		let sql = format!(
 			"SELECT * FROM {} WHERE case_id = $1 ORDER BY version DESC",
@@ -283,7 +283,7 @@ impl AuditLogBmc {
 		.await
 		{
 			dbx.rollback_txn().await?;
-			return Err(err.into());
+			return Err(err);
 		}
 		let logs = match dbx
 			.fetch_all(sqlx::query_as_with::<_, AuditLog, _>(&sql, values))
@@ -319,7 +319,7 @@ impl AuditLogBmc {
 		.await
 		{
 			dbx.rollback_txn().await?;
-			return Err(err.into());
+			return Err(err);
 		}
 		let logs = if table_name == "cases" {
 			let sql = format!(
@@ -401,7 +401,7 @@ impl AuditLogBmc {
 		.await
 		{
 			dbx.rollback_txn().await?;
-			return Err(err.into());
+			return Err(err);
 		}
 		let report = match dbx
 			.fetch_one(

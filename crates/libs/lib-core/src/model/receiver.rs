@@ -168,7 +168,7 @@ impl ReceiverInformationBmc {
 		mm.dbx().begin_txn().await?;
 		if let Err(err) = set_full_context_from_ctx_dbx(mm.dbx(), ctx).await {
 			mm.dbx().rollback_txn().await?;
-			return Err(err.into());
+			return Err(err);
 		}
 		let sql = format!("SELECT * FROM {} WHERE case_id = $1", Self::TABLE);
 		let entity = match mm
@@ -203,7 +203,7 @@ impl ReceiverInformationBmc {
 		mm.dbx().begin_txn().await?;
 		if let Err(err) = set_full_context_from_ctx_dbx(mm.dbx(), ctx).await {
 			mm.dbx().rollback_txn().await?;
-			return Err(err.into());
+			return Err(err);
 		}
 		let sql = format!("SELECT * FROM {} WHERE case_id = $1", Self::TABLE);
 		let entity = match mm
