@@ -843,9 +843,9 @@ impl SafetyReportIdentificationBmc {
 				.map(|v| !v.trim().is_empty())
 				.unwrap_or(false);
 			let has_signature = ctx.e_signature_id().is_some();
-			if !currently_nullified
-				&& !is_system_context(ctx)
-				&& !(has_reason && has_signature)
+			if !(currently_nullified
+				|| is_system_context(ctx)
+				|| has_reason && has_signature)
 			{
 				return Err(crate::model::Error::Store(
 					"compliance context required for nullification status transition"

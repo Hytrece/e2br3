@@ -166,7 +166,7 @@ fn render_typescript(
 			});
 		}
 		let action_id = serde_json::to_string(action.id.as_str())?;
-		output.push_str(&format!("  {}: {},\n", symbol, action_id));
+		output.push_str(&format!("  {symbol}: {action_id},\n"));
 	}
 	output.push_str(
 		"} as const;\n\nexport type ActionId = (typeof Action)[keyof typeof Action];\n\nexport const ALL_ACTIONS: readonly ActionId[] = Object.values(Action);\n\n",

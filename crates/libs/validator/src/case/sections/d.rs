@@ -2281,10 +2281,8 @@ pub(crate) fn collect_fda_issues(
 		.safety_report
 		.as_ref()
 		.and_then(|report| report.local_criteria_report_type.as_deref());
-	if vaers {
-		if fda_d_2_required(local_criteria) {
-			fda_d_2(validation_ctx.patient.as_ref(), issues);
-		}
+	if vaers && fda_d_2_required(local_criteria) {
+		fda_d_2(validation_ctx.patient.as_ref(), issues);
 	}
 	if !vaers || local_criteria.map(str::trim) != Some("5") {
 		fda_d_11(validation_ctx.patient.as_ref(), vaers, issues);

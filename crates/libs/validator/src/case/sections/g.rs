@@ -2166,10 +2166,12 @@ pub(crate) async fn collect_fda_issues(
 			issues,
 		);
 	}
-	if postmarket && combination_true && !has_device {
-		if !validation_ctx.drugs.is_empty() {
-			fda_g_k_12_r_4_6(0, 0, [None; 3], true, issues);
-		}
+	if postmarket
+		&& combination_true
+		&& !has_device
+		&& !validation_ctx.drugs.is_empty()
+	{
+		fda_g_k_12_r_4_6(0, 0, [None; 3], true, issues);
 	}
 	fda_d_1_malfunction(validation_ctx, combination_true, has_malfunction, issues);
 	if let Some(drug_idx) = validation_ctx
