@@ -598,8 +598,8 @@ async fn create_case_from_intake_in_txn(
 
 	let now = OffsetDateTime::now_utc();
 	MessageHeaderBmc::create(
-		&ctx,
-		&mm,
+		ctx,
+		mm,
 		MessageHeaderForCreate {
 			case_id,
 			batch_sender_identifier: Some(batch_sender_identifier),
@@ -617,8 +617,8 @@ async fn create_case_from_intake_in_txn(
 	.await?;
 
 	SafetyReportIdentificationBmc::create(
-		&ctx,
-		&mm,
+		ctx,
+		mm,
 		SafetyReportIdentificationForCreate {
 			case_id,
 			safety_report_id: Some(safety_report_id.clone()),
