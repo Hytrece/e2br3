@@ -16,7 +16,7 @@ fn every_bootstrap_null_flavor_column_has_an_allowed_value_check() {
 			line.contains("_null_flavor VARCHAR") && !line.contains("ADD COLUMN")
 		})
 		.collect();
-	assert_eq!(columns.len(), 79, "NullFlavor storage inventory changed");
+	assert_eq!(columns.len(), 90, "NullFlavor storage inventory changed");
 	for column in columns {
 		assert!(
 			column.contains("CHECK") && column.contains(" IN ("),
