@@ -159,5 +159,6 @@ pub struct OrganizationSelectionBody {
 
 #[derive(Debug, Deserialize)]
 pub struct SetMyPasswordBody {
+	pub current_password: String,
 	pub new_password: String,
 }

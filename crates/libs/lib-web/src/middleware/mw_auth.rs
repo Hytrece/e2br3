@@ -61,7 +61,11 @@ pub async fn mw_ctx_resolver(
 		.ok()
 		.map(|resolved| resolved.snapshot.clone());
 	let ctx_ext_result = match resolved {
-		Ok(ResolvedRequest { ctx, .. }) => {
+		Ok(ResolvedRequest {
+			ctx,
+			must_change_password,
+			..
+		}) => {
 			let mut ctx = if let Some(reason) = audit_reason {
 				ctx.with_compliance(Some(reason), ctx.e_signature_id())
 			} else {
@@ -70,7 +74,7 @@ pub async fn mw_ctx_resolver(
 			if let Some(category) = audit_category {
 				ctx = ctx.with_change_category(Some(category));
 			}
-			Ok(CtxW(ctx))
+			Ok(CtxW(ctx, must_change_password))
 		}
 		Err(err) => Err(err),
 	};
@@ -133,6 +137,7 @@ fn hex_value(value: u8) -> Option<u8> {
 struct ResolvedRequest {
 	ctx: Ctx,
 	snapshot: AuthorizationSnapshotW,
+	must_change_password: bool,
 }
 
 async fn ctx_resolve(
@@ -193,12 +198,13 @@ async fn ctx_resolve(
 	Ok(ResolvedRequest {
 		ctx,
 		snapshot: AuthorizationSnapshotW::new(snapshot),
+		must_change_password: user.must_change_password,
 	})
 }
 
 // region:    --- Ctx Extractor
 #[derive(Debug, Clone)]
-pub struct CtxW(pub Ctx);
+pub struct CtxW(pub Ctx, pub bool);
 
 #[derive(Debug, Clone, Copy)]
 pub struct RbacPolicyVersion(pub i64);
@@ -233,6 +239,7 @@ pub enum CtxExtError {
 	FailValidate,
 	CannotSetTokenCookie,
 	AuthorizationSnapshotLoad(String),
+	PasswordChangeRequired,
 
 	CtxNotInRequestExt,
 	AuthorizationSnapshotNotInRequestExt,

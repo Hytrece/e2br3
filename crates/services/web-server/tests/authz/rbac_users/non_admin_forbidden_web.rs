@@ -29,7 +29,7 @@ async fn test_viewer_cannot_create_user() -> Result<()> {
 			"organization_id": seed.org_id,
 			"email": format!("rbac-viewer-create-{suffix}@example.com"),
 			"username": format!("rbac_viewer_create_{suffix}"),
-			"pwd_clear": "p@ssw0rd",
+			"pwd_clear": "p@ssw0rd-long-enough",
 			"role": "case_reviewer"
 		}
 	});
@@ -206,7 +206,7 @@ async fn test_non_admin_cannot_create_user() -> Result<()> {
 				"organization_id": seed.org_id,
 				"email": format!("rbac-{role}-create-{suffix}@example.com"),
 				"username": format!("rbac_{role}_create_{suffix}"),
-				"pwd_clear": "p@ssw0rd",
+				"pwd_clear": "p@ssw0rd-long-enough",
 				"role": "case_reviewer"
 			}
 		});

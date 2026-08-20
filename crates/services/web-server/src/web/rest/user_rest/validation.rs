@@ -1,5 +1,8 @@
 use super::*;
 
+const PASSWORD_MIN_CHARS: usize = 15;
+const PASSWORD_MAX_CHARS: usize = 128;
+
 pub(super) fn validate_username(username: &str) -> Result<()> {
 	if username.chars().count() > USERNAME_MAX_LEN {
 		return Err(Error::BadRequest {
@@ -329,11 +332,29 @@ pub(super) async fn validate_single_sponsor_admin_for_org(
 	Ok(())
 }
 
-pub(super) fn initial_password(pwd_clear: Option<String>) -> String {
-	pwd_clear
-		.map(|value| value.trim().to_string())
-		.filter(|value| !value.is_empty())
-		.unwrap_or_else(|| "welcome".to_string())
+pub(super) fn validate_new_password(password: &str) -> Result<()> {
+	let length = password.chars().count();
+	if !(PASSWORD_MIN_CHARS..=PASSWORD_MAX_CHARS).contains(&length) {
+		return Err(Error::BadRequest {
+			message: format!(
+				"password must be between {PASSWORD_MIN_CHARS} and {PASSWORD_MAX_CHARS} characters"
+			),
+		});
+	}
+	if password.chars().any(char::is_control) {
+		return Err(Error::BadRequest {
+			message: "password must not contain control characters".to_string(),
+		});
+	}
+	Ok(())
+}
+
+pub(super) fn initial_password(pwd_clear: Option<String>) -> Result<String> {
+	let password = pwd_clear.ok_or_else(|| Error::BadRequest {
+		message: "pwd_clear is required".to_string(),
+	})?;
+	validate_new_password(&password)?;
+	Ok(password)
 }
 
 pub(super) fn deserialize_access_datetime_option<'de, D>(
@@ -478,9 +499,12 @@ mod uuid_scope_tests {
 	}
 
 	#[test]
-	fn initial_password_defaults_to_welcome() {
-		assert_eq!(initial_password(None), "welcome");
-		assert_eq!(initial_password(Some("  ".to_string())), "welcome");
-		assert_eq!(initial_password(Some(" secret ".to_string())), "secret");
+	fn initial_password_is_explicit_and_meets_the_shared_policy() {
+		assert!(initial_password(None).is_err());
+		assert!(initial_password(Some("too-short".to_string())).is_err());
+		assert_eq!(
+			initial_password(Some("long-enough-password".to_string())).unwrap(),
+			"long-enough-password"
+		);
 	}
 }

@@ -42,7 +42,7 @@ fn secure_auth_cookie() -> bool {
 	)
 }
 
-pub(crate) fn remove_token_cookie(cookies: &Cookies) -> Result<()> {
+pub fn remove_token_cookie(cookies: &Cookies) -> Result<()> {
 	let mut cookie = Cookie::from(AUTH_TOKEN);
 	cookie.set_path("/");
 

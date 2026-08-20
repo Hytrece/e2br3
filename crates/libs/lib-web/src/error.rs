@@ -117,6 +117,9 @@ impl Error {
 			),
 
 			// -- Auth
+			CtxExt(middleware::mw_auth::CtxExtError::PasswordChangeRequired) => {
+				(StatusCode::FORBIDDEN, ClientError::PASSWORD_CHANGE_REQUIRED)
+			}
 			CtxExt(_) => (StatusCode::FORBIDDEN, ClientError::NO_AUTH),
 
 			// -- Authorization
@@ -169,6 +172,7 @@ pub enum ClientError {
 	LOGIN_PASSWORD_NOT_CONFIGURED,
 	LOGIN_ACCOUNT_UNAVAILABLE,
 	NO_AUTH,
+	PASSWORD_CHANGE_REQUIRED,
 	ACCESS_DENIED { required_role: String },
 	PERMISSION_DENIED { required_permission: String },
 	ORGANIZATION_ACCESS_DENIED,

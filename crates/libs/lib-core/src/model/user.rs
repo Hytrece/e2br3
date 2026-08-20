@@ -119,6 +119,7 @@ pub struct UserForAuth {
 	pub email: String,
 	pub username: String,
 	pub role: String,
+	pub must_change_password: bool,
 
 	// -- token info
 	pub token_salt: Uuid,
@@ -170,6 +171,8 @@ enum UserIden {
 	Id,
 	Email,
 	Pwd,
+	PwdSalt,
+	TokenSalt,
 	MustChangePassword,
 }
 
@@ -871,12 +874,13 @@ impl UserBmc {
 		Ok(())
 	}
 
-	pub async fn update_pwd_and_clear_must_change(
+	async fn set_password(
 		ctx: &Ctx,
 		mm: &ModelManager,
 		id: Uuid,
-		pwd_clear: &str,
-	) -> Result<()> {
+		current_password: Option<&str>,
+		new_password: &str,
+	) -> Result<bool> {
 		for attempt in 1..=USER_WRITE_MAX_ATTEMPTS {
 			let dbx = mm.dbx();
 			dbx.begin_txn().await.map_err(Error::Dbx)?;
@@ -898,9 +902,18 @@ impl UserBmc {
 				return Err(err);
 			}
 
-			let user: UserForLogin = match Self::get(ctx, mm, id).await {
+			let user = match dbx
+				.fetch_one(
+					sqlx::query_as::<_, (Option<String>, Uuid)>(
+						"SELECT pwd, pwd_salt FROM users WHERE id = $1 FOR UPDATE",
+					)
+					.bind(id),
+				)
+				.await
+			{
 				Ok(user) => user,
 				Err(err) => {
+					let err: Error = err.into();
 					let _ = dbx.rollback_txn().await;
 					if Self::is_retryable_write_error(&err)
 						&& attempt < USER_WRITE_MAX_ATTEMPTS
@@ -911,14 +924,44 @@ impl UserBmc {
 					return Err(err);
 				}
 			};
-			let pwd = pwd::hash_pwd(ContentToHash {
-				content: pwd_clear.to_string(),
-				salt: user.pwd_salt,
+			if let Some(current_password) = current_password {
+				let Some(current_hash) = user.0 else {
+					let _ = dbx.rollback_txn().await;
+					return Ok(false);
+				};
+				if pwd::validate_pwd(
+					ContentToHash {
+						salt: user.1,
+						content: current_password.to_string(),
+					},
+					current_hash,
+				)
+				.await
+				.is_err()
+				{
+					let _ = dbx.rollback_txn().await;
+					return Ok(false);
+				}
+			}
+
+			let pwd_salt = Uuid::new_v4();
+			let pwd = match pwd::hash_pwd(ContentToHash {
+				content: new_password.to_string(),
+				salt: pwd_salt,
 			})
-			.await?;
+			.await
+			{
+				Ok(pwd) => pwd,
+				Err(err) => {
+					let _ = dbx.rollback_txn().await;
+					return Err(err.into());
+				}
+			};
 
 			let mut fields = SeaFields::new(vec![
 				SeaField::new(UserIden::Pwd, pwd),
+				SeaField::new(UserIden::PwdSalt, pwd_salt),
+				SeaField::new(UserIden::TokenSalt, Uuid::new_v4()),
 				SeaField::new(UserIden::MustChangePassword, false),
 			]);
 			prep_fields_for_update::<Self>(&mut fields, ctx.user_id());
@@ -955,7 +998,7 @@ impl UserBmc {
 			}
 
 			match dbx.commit_txn().await {
-				Ok(()) => return Ok(()),
+				Ok(()) => return Ok(true),
 				Err(err) => {
 					let err = Error::Dbx(err);
 					let _ = dbx.rollback_txn().await;
@@ -969,7 +1012,28 @@ impl UserBmc {
 				}
 			}
 		}
-		unreachable!("user password reset retry loop exhausted without returning")
+		unreachable!("user password change retry loop exhausted without returning")
+	}
+
+	pub async fn change_password(
+		ctx: &Ctx,
+		mm: &ModelManager,
+		id: Uuid,
+		current_password: &str,
+		new_password: &str,
+	) -> Result<bool> {
+		Self::set_password(ctx, mm, id, Some(current_password), new_password).await
+	}
+
+	pub async fn update_pwd_and_clear_must_change(
+		ctx: &Ctx,
+		mm: &ModelManager,
+		id: Uuid,
+		new_password: &str,
+	) -> Result<()> {
+		Self::set_password(ctx, mm, id, None, new_password)
+			.await
+			.map(|_| ())
 	}
 
 	pub async fn set_must_change_password(
@@ -1085,6 +1149,7 @@ impl UserBmc {
 				email,
 				username,
 				lower(trim(role)) AS role,
+				must_change_password,
 				token_salt
 			FROM users
 			WHERE lower(btrim(email)) = $1
@@ -1148,6 +1213,7 @@ impl UserBmc {
 				           WHEN 'operational_user' THEN 'user'
 				           ELSE assignment.role_id::text
 				       END AS role,
+				       u.must_change_password,
 				       u.token_salt
 				FROM users u
 				JOIN user_role_assignments assignment

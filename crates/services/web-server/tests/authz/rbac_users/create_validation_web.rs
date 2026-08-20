@@ -37,7 +37,7 @@ async fn test_admin_can_create_user() -> Result<()> {
 			"organization_id": seed.org_id,
 			"email": format!("rbac-admin-create-{suffix}@example.com"),
 			"username": format!("rbac_admin_create_{suffix}"),
-			"pwd_clear": "p@ssw0rd",
+			"pwd_clear": "p@ssw0rd-long-enough",
 			"role": role_id,
 			"access_blind_allowed": true
 		}
@@ -344,6 +344,8 @@ async fn test_new_user_temp_password_and_first_login_reset_flow() -> Result<()> 
 	let suffix = Uuid::new_v4();
 	let email = format!("first-login-{suffix}@example.com");
 	let username = format!("first_login_{suffix}");
+	let temporary_password = "temporary-password-123";
+	let new_password = "new-password-456789";
 	let role_id = create_empty_permission_profile(
 		&app,
 		&admin_cookie,
@@ -356,7 +358,8 @@ async fn test_new_user_temp_password_and_first_login_reset_flow() -> Result<()> 
 			"organization_id": seed.org_id,
 			"email": email,
 			"username": username,
-			"role": role_id
+			"role": role_id,
+			"pwd_clear": temporary_password
 		}
 	});
 	let create_req = Request::builder()
@@ -370,7 +373,7 @@ async fn test_new_user_temp_password_and_first_login_reset_flow() -> Result<()> 
 
 	let login_body = json!({
 		"email": email,
-		"pwd": "welcome"
+		"pwd": temporary_password
 	});
 	let login_req = Request::builder()
 		.method("POST")
@@ -379,8 +382,15 @@ async fn test_new_user_temp_password_and_first_login_reset_flow() -> Result<()> 
 		.body(Body::from(login_body.to_string()))?;
 	let login_res = app.clone().oneshot(login_req).await?;
 	assert_eq!(login_res.status(), StatusCode::OK);
-	let auth_cookie = login_res
-		.headers()
+	let login_headers = login_res.headers().clone();
+	let login_bytes =
+		axum::body::to_bytes(login_res.into_body(), usize::MAX).await?;
+	let login_json: serde_json::Value = serde_json::from_slice(&login_bytes)?;
+	assert_eq!(
+		login_json["result"]["must_change_password"].as_bool(),
+		Some(true)
+	);
+	let auth_cookie = login_headers
 		.get_all(header::SET_COOKIE)
 		.iter()
 		.filter_map(|val| val.to_str().ok())
@@ -399,12 +409,47 @@ async fn test_new_user_temp_password_and_first_login_reset_flow() -> Result<()> 
 		.header("cookie", auth_cookie.as_str())
 		.body(Body::empty())?;
 	let me_res = app.clone().oneshot(me_req).await?;
-	assert_eq!(me_res.status(), StatusCode::OK);
+	assert_eq!(me_res.status(), StatusCode::FORBIDDEN);
 	let me_bytes = axum::body::to_bytes(me_res.into_body(), usize::MAX).await?;
 	let me_json: serde_json::Value = serde_json::from_slice(&me_bytes)?;
-	assert_eq!(me_json["data"]["mustChangePassword"].as_bool(), Some(true));
+	assert_eq!(me_json["error"]["message"], "PASSWORD_CHANGE_REQUIRED");
 
-	let set_pwd_body = json!({ "data": { "new_password": "new_password_123" } });
+	let wrong_current_body = json!({
+		"data": {
+			"current_password": "incorrect-password",
+			"new_password": new_password
+		}
+	});
+	let wrong_current_req = Request::builder()
+		.method("POST")
+		.uri("/api/users/me/password")
+		.header("cookie", auth_cookie.as_str())
+		.header("content-type", "application/json")
+		.body(Body::from(wrong_current_body.to_string()))?;
+	let wrong_current_res = app.clone().oneshot(wrong_current_req).await?;
+	assert_eq!(wrong_current_res.status(), StatusCode::BAD_REQUEST);
+
+	let weak_password_body = json!({
+		"data": {
+			"current_password": temporary_password,
+			"new_password": "short"
+		}
+	});
+	let weak_password_req = Request::builder()
+		.method("POST")
+		.uri("/api/users/me/password")
+		.header("cookie", auth_cookie.as_str())
+		.header("content-type", "application/json")
+		.body(Body::from(weak_password_body.to_string()))?;
+	let weak_password_res = app.clone().oneshot(weak_password_req).await?;
+	assert_eq!(weak_password_res.status(), StatusCode::BAD_REQUEST);
+
+	let set_pwd_body = json!({
+		"data": {
+			"current_password": temporary_password,
+			"new_password": new_password
+		}
+	});
 	let set_pwd_req = Request::builder()
 		.method("POST")
 		.uri("/api/users/me/password")
@@ -414,9 +459,17 @@ async fn test_new_user_temp_password_and_first_login_reset_flow() -> Result<()> 
 	let set_pwd_res = app.clone().oneshot(set_pwd_req).await?;
 	assert_eq!(set_pwd_res.status(), StatusCode::NO_CONTENT);
 
+	let stale_session_req = Request::builder()
+		.method("GET")
+		.uri("/api/users/me")
+		.header("cookie", auth_cookie.as_str())
+		.body(Body::empty())?;
+	let stale_session_res = app.clone().oneshot(stale_session_req).await?;
+	assert_eq!(stale_session_res.status(), StatusCode::FORBIDDEN);
+
 	let old_login_body = json!({
 		"email": email,
-		"pwd": "welcome"
+		"pwd": temporary_password
 	});
 	let old_login_req = Request::builder()
 		.method("POST")
@@ -428,7 +481,7 @@ async fn test_new_user_temp_password_and_first_login_reset_flow() -> Result<()> 
 
 	let new_login_body = json!({
 		"email": email,
-		"pwd": "new_password_123"
+		"pwd": new_password
 	});
 	let new_login_req = Request::builder()
 		.method("POST")
@@ -589,7 +642,7 @@ async fn test_create_user_duplicate_email_returns_conflict_with_detail() -> Resu
 			"organization_id": seed.org_id,
 			"email": email,
 			"username": format!("rbac_dup_email_1_{suffix}"),
-			"pwd_clear": "p@ssw0rd",
+			"pwd_clear": "p@ssw0rd-long-enough",
 			"role": role_id
 		}
 	});
@@ -607,7 +660,7 @@ async fn test_create_user_duplicate_email_returns_conflict_with_detail() -> Resu
 			"organization_id": seed.org_id,
 			"email": email,
 			"username": format!("rbac_dup_email_2_{suffix}"),
-			"pwd_clear": "p@ssw0rd",
+			"pwd_clear": "p@ssw0rd-long-enough",
 			"role": role_id
 		}
 	});

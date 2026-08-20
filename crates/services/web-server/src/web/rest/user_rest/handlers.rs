@@ -116,7 +116,7 @@ pub async fn create_user(
 		organization_id,
 		email,
 		username: Some(username),
-		pwd_clear: initial_password(data.pwd_clear),
+		pwd_clear: initial_password(data.pwd_clear)?,
 		role,
 		comments: data.comments,
 		other_information: data.other_information,
@@ -174,31 +174,33 @@ pub async fn get_user(
 pub async fn set_my_password(
 	State(mm): State<ModelManager>,
 	ctx_w: CtxW,
+	cookies: tower_cookies::Cookies,
 	Json(params): Json<ParamsForCreate<SetMyPasswordBody>>,
 ) -> Result<StatusCode> {
 	let ctx = ctx_w.0;
 	let ParamsForCreate { data } = params;
-	let new_password = data.new_password.trim();
-	if new_password.is_empty() {
+	validate_new_password(&data.new_password)?;
+	if data.current_password.is_empty() {
 		return Err(Error::BadRequest {
-			message: "new_password is required".to_string(),
+			message: "current_password is required".to_string(),
 		});
 	}
-	let privileged_ctx = Ctx::new(
-		ctx.user_id(),
-		ctx.organization_id(),
-		ROLE_SPONSOR_ADMIN_CRO.to_string(),
-	)
-	.map_err(|_| Error::BadRequest {
-		message: "valid user context required".to_string(),
-	})?;
-	UserBmc::update_pwd_and_clear_must_change(
-		&privileged_ctx,
+	if !UserBmc::change_password(
+		&ctx,
 		&mm,
 		ctx.user_id(),
-		new_password,
+		&data.current_password,
+		&data.new_password,
 	)
-	.await?;
+	.await?
+	{
+		return Err(Error::BadRequest {
+			message: "current password is invalid".to_string(),
+		});
+	}
+	token::remove_token_cookie(&cookies).map_err(|err| Error::BadRequest {
+		message: format!("failed to clear the previous session: {err}"),
+	})?;
 	Ok(StatusCode::NO_CONTENT)
 }
 

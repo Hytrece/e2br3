@@ -169,7 +169,7 @@ async fn test_auth_login_user_with_nil_org_fails() -> Result<()> {
 			"organization_id": seed.org_id,
 			"email": email,
 			"username": format!("nil_org_login_{suffix}"),
-			"pwd_clear": "NilOrgPwd123!",
+			"pwd_clear": "NilOrgPwd123!-long",
 			"role": role_id
 		}
 	});
@@ -214,7 +214,7 @@ async fn test_auth_login_user_with_nil_org_fails() -> Result<()> {
 	.await?;
 	dbx.commit_txn().await?;
 
-	let login_body = json!({ "email": email, "pwd": "NilOrgPwd123!" });
+	let login_body = json!({ "email": email, "pwd": "NilOrgPwd123!-long" });
 	let login_req = Request::builder()
 		.method("POST")
 		.uri("/auth/v1/login")
@@ -235,6 +235,7 @@ async fn test_auth_login_created_user_email_case_insensitive() -> Result<()> {
 	let suffix = Uuid::new_v4();
 	let mixed_case_email = format!("CaseMix-{suffix}@Example.COM");
 	let login_email = mixed_case_email.to_lowercase();
+	let password = "case-insensitive-password";
 	let admin_cookie = cookie_header(&admin_token.to_string());
 	let role_id = create_empty_permission_profile(
 		&app,
@@ -248,7 +249,8 @@ async fn test_auth_login_created_user_email_case_insensitive() -> Result<()> {
 			"organization_id": seed.org_id,
 			"email": mixed_case_email,
 			"username": format!("case_mix_{suffix}"),
-			"role": role_id
+			"role": role_id,
+			"pwd_clear": password
 		}
 	});
 	let create_req = Request::builder()
@@ -260,7 +262,7 @@ async fn test_auth_login_created_user_email_case_insensitive() -> Result<()> {
 	let create_res = app.clone().oneshot(create_req).await?;
 	assert_eq!(create_res.status(), StatusCode::CREATED);
 
-	let login_body = json!({ "email": login_email, "pwd": "welcome" });
+	let login_body = json!({ "email": login_email, "pwd": password });
 	let login_req = Request::builder()
 		.method("POST")
 		.uri("/auth/v1/login")
@@ -281,7 +283,7 @@ async fn test_auth_login_created_user_uses_requested_initial_password() -> Resul
 	let app = web_server::app(mm);
 	let suffix = Uuid::new_v4();
 	let email = format!("initial-password-{suffix}@example.com");
-	let password = "InitialPwd123!";
+	let password = "InitialPwd123!-long";
 	let admin_cookie = cookie_header(&admin_token.to_string());
 	let role_id = create_empty_permission_profile(
 		&app,
@@ -357,7 +359,7 @@ async fn test_auth_login_upgrades_legacy_hash_for_non_admin_user() -> Result<()>
 	let app = web_server::app(mm.clone());
 	let suffix = Uuid::new_v4();
 	let email = format!("legacy-user-{suffix}@example.com");
-	let password = "hello world";
+	let password = "hello legacy world";
 	let admin_cookie = cookie_header(&admin_token.to_string());
 	let role_id = create_empty_permission_profile(
 		&app,
