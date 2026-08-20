@@ -171,8 +171,7 @@ CREATE TABLE dosage_information (
 
     -- G.k.4.r.7 - Batch/Lot Number; NullFlavor is retained only for source XML round trips.
     batch_lot_number VARCHAR(200),
-    batch_lot_number_null_flavor VARCHAR(4)
-        CHECK (batch_lot_number_null_flavor IN ('UNK')),
+    batch_lot_number_null_flavor VARCHAR(4) CHECK (batch_lot_number_null_flavor IN ('UNK')),
 
     -- G.k.4.r.8 - Dosage Text
     dosage_text TEXT,
