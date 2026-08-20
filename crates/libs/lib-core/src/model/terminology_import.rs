@@ -195,7 +195,7 @@ pub fn parse_meddra_upload(bytes: &[u8]) -> Result<Vec<MeddraRow>> {
 		insert_term(&mut dedup, cols[3], cols[7], "SOC");
 	}
 
-	let rows = dedup.into_iter().map(|(_, row)| row).collect::<Vec<_>>();
+	let rows = dedup.into_values().collect::<Vec<_>>();
 
 	if rows.is_empty() {
 		return Err(bad_input("No MedDRA rows parsed from llt.asc/mdhier.asc"));
@@ -982,7 +982,7 @@ pub async fn approve_release(
 async fn set_platform_service_context(dbx: &Dbx) -> Result<()> {
 	crate::model::store::set_full_context_from_ctx_dbx(dbx, &Ctx::root_ctx())
 		.await
-		.map_err(|e| store_err(e))
+		.map_err(store_err)
 }
 
 async fn finish_txn<T>(dbx: &Dbx, result: Result<T>) -> Result<T> {
