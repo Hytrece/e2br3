@@ -123,7 +123,6 @@ pub struct EnforcedScopeFilter {
 }
 
 impl EnforcedScopeFilter {
-	#[allow(dead_code)] // Constructed by scoped repositories during route cutover.
 	pub(crate) fn new(
 		sender_ids: Vec<String>,
 		product_ids: Vec<String>,
@@ -170,7 +169,6 @@ pub struct ContextSnapshot<'tx, C: AuthorizationContext> {
 }
 
 impl<'tx, C: AuthorizationContext> ContextSnapshot<'tx, C> {
-	#[allow(dead_code)] // Constructed by scoped repositories during route cutover.
 	pub(crate) fn new(evaluated: EvaluatedContext) -> Self {
 		Self {
 			evaluated,
@@ -186,7 +184,6 @@ pub struct LockedMutationContext<'tx, C: AuthorizationContext> {
 }
 
 impl<'tx, C: AuthorizationContext> LockedMutationContext<'tx, C> {
-	#[allow(dead_code)] // Constructed by locking repositories during route cutover.
 	pub(crate) fn new(evaluated: EvaluatedContext) -> Self {
 		Self {
 			evaluated,
