@@ -285,7 +285,7 @@ pub(super) fn render_landscape_cioms(
 		template.reaction_information.w,
 		122,
 		"7 + 13 DESCRIBE REACTION(S) (including relevant tests/lab data)",
-		&reaction_text,
+		reaction_text,
 		118,
 		8,
 	);

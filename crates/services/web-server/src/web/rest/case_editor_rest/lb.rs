@@ -142,7 +142,7 @@ async fn build_editor_lb_page_row_response(
 	row_id: Uuid,
 	authorities: Option<String>,
 ) -> Result<Value> {
-	let persisted = TestResultBmc::get_in_case(&ctx, &mm, case_id, row_id).await?;
+	let persisted = TestResultBmc::get_in_case(ctx, mm, case_id, row_id).await?;
 	let test_date = ci_date(persisted.test_date);
 	let mut test_result = json!(persisted);
 	if let Value::Object(ref mut map) = test_result {

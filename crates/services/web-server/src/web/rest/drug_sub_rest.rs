@@ -95,7 +95,7 @@ pub async fn replace_fda_devices(
 		format!("fda_device_information:replace:drug:{drug_id}"),
 		move |ctx, mm| {
 			Box::pin(async move {
-				DrugInformationBmc::get_in_case(&ctx, &mm, case_id, drug_id).await?;
+				DrugInformationBmc::get_in_case(ctx, mm, case_id, drug_id).await?;
 				let mut filter = FdaDeviceInformationFilter::default();
 				filter.drug_id = Some(modql::filter::OpValsValue::from(vec![
 					modql::filter::OpValValue::Eq(serde_json::json!(
@@ -103,14 +103,14 @@ pub async fn replace_fda_devices(
 					)),
 				]));
 				for existing in FdaDeviceInformationBmc::list(
-					&ctx,
-					&mm,
+					ctx,
+					mm,
 					Some(vec![filter]),
 					Some(modql::filter::ListOptions::default()),
 				)
 				.await?
 				{
-					FdaDeviceInformationBmc::delete(&ctx, &mm, existing.id).await?;
+					FdaDeviceInformationBmc::delete(ctx, mm, existing.id).await?;
 				}
 
 				let mut created = Vec::with_capacity(params.data.devices.len());
@@ -118,8 +118,8 @@ pub async fn replace_fda_devices(
 					params.data.devices.into_iter().enumerate()
 				{
 					let id = FdaDeviceInformationBmc::create(
-						&ctx,
-						&mm,
+						ctx,
+						mm,
 						FdaDeviceInformationForCreate {
 							drug_id,
 							sequence_number: device_index as i32 + 1,
@@ -149,8 +149,8 @@ pub async fn replace_fda_devices(
 					] {
 						for (code_index, code) in codes.into_iter().enumerate() {
 							FdaDeviceCodeBmc::create(
-								&ctx,
-								&mm,
+								ctx,
+								mm,
 								FdaDeviceCodeForCreate {
 									device_id: id,
 									element: element.to_string(),
@@ -161,7 +161,7 @@ pub async fn replace_fda_devices(
 							.await?;
 						}
 					}
-					created.push(FdaDeviceInformationBmc::get(&ctx, &mm, id).await?);
+					created.push(FdaDeviceInformationBmc::get(ctx, mm, id).await?);
 				}
 				Ok((
 					axum::http::StatusCode::OK,
@@ -227,11 +227,11 @@ pub async fn create_fda_device_code(
 		format!("fda_device_codes:new:device:{device_id}"),
 		move |ctx, mm| {
 			Box::pin(async move {
-				ensure_device_scope(&ctx, &mm, drug_id, device_id).await?;
+				ensure_device_scope(ctx, mm, drug_id, device_id).await?;
 				let mut data = params.data;
 				data.device_id = device_id;
-				let id = FdaDeviceCodeBmc::create(&ctx, &mm, data).await?;
-				let data = FdaDeviceCodeBmc::get(&ctx, &mm, id).await?;
+				let id = FdaDeviceCodeBmc::create(ctx, mm, data).await?;
+				let data = FdaDeviceCodeBmc::get(ctx, mm, id).await?;
 				Ok((
 					axum::http::StatusCode::CREATED,
 					axum::Json(lib_rest_core::rest_result::DataRestResult { data }),
@@ -264,7 +264,7 @@ pub async fn list_fda_device_codes(
 		format!("fda_device_codes:list:device:{device_id}"),
 		move |ctx, mm| {
 			Box::pin(async move {
-				ensure_device_scope(&ctx, &mm, drug_id, device_id).await?;
+				ensure_device_scope(ctx, mm, drug_id, device_id).await?;
 				let mut filter = FdaDeviceCodeFilter::default();
 				filter.device_id = Some(modql::filter::OpValsValue::from(vec![
 					modql::filter::OpValValue::Eq(serde_json::json!(
@@ -272,8 +272,8 @@ pub async fn list_fda_device_codes(
 					)),
 				]));
 				let data = FdaDeviceCodeBmc::list(
-					&ctx,
-					&mm,
+					ctx,
+					mm,
 					Some(vec![filter]),
 					Some(modql::filter::ListOptions::default()),
 				)
@@ -330,8 +330,8 @@ pub async fn get_fda_device_code(
 		format!("fda_device_codes:{id}:device:{device_id}"),
 		move |ctx, mm| {
 			Box::pin(async move {
-				let data = scoped_fda_device_code(&ctx, &mm, drug_id, device_id, id)
-					.await?;
+				let data =
+					scoped_fda_device_code(ctx, mm, drug_id, device_id, id).await?;
 				Ok((
 					axum::http::StatusCode::OK,
 					axum::Json(lib_rest_core::rest_result::DataRestResult { data }),
@@ -368,9 +368,9 @@ pub async fn update_fda_device_code(
 		format!("fda_device_codes:{id}:device:{device_id}"),
 		move |ctx, mm| {
 			Box::pin(async move {
-				scoped_fda_device_code(&ctx, &mm, drug_id, device_id, id).await?;
-				FdaDeviceCodeBmc::update(&ctx, &mm, id, params.data).await?;
-				let data = FdaDeviceCodeBmc::get(&ctx, &mm, id).await?;
+				scoped_fda_device_code(ctx, mm, drug_id, device_id, id).await?;
+				FdaDeviceCodeBmc::update(ctx, mm, id, params.data).await?;
+				let data = FdaDeviceCodeBmc::get(ctx, mm, id).await?;
 				Ok((
 					axum::http::StatusCode::OK,
 					axum::Json(lib_rest_core::rest_result::DataRestResult { data }),

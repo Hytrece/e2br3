@@ -195,8 +195,8 @@ async fn load_editor_dh_row_detail(
 	case_id: Uuid,
 	row_id: Uuid,
 ) -> Result<Value> {
-	let patient = PatientInformationBmc::get_by_case(&ctx, &mm, case_id).await?;
-	let history = PastDrugHistoryBmc::get(&ctx, &mm, row_id).await?;
+	let patient = PatientInformationBmc::get_by_case(ctx, mm, case_id).await?;
+	let history = PastDrugHistoryBmc::get(ctx, mm, row_id).await?;
 	if history.patient_id != patient.id {
 		return Err(lib_core::model::Error::EntityUuidNotFound {
 			entity: "past_drug_history",
@@ -235,7 +235,7 @@ async fn editor_dh_create_extras(
 	case_id: Uuid,
 	row: &serde_json::Map<String, Value>,
 ) -> Result<Vec<(&'static str, Value)>> {
-	let patient = PatientInformationBmc::get_by_case(&ctx, &mm, case_id).await?;
+	let patient = PatientInformationBmc::get_by_case(ctx, mm, case_id).await?;
 	Ok(vec![
 		("patient_id", json!(patient.id)),
 		(
@@ -253,7 +253,7 @@ async fn verify_editor_dh_page_row(
 	case_id: Uuid,
 	row_id: Uuid,
 ) -> Result<()> {
-	load_editor_dh_row_detail(&ctx, &mm, case_id, row_id).await?;
+	load_editor_dh_row_detail(ctx, mm, case_id, row_id).await?;
 	Ok(())
 }
 

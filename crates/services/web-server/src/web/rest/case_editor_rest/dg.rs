@@ -1093,7 +1093,7 @@ async fn build_editor_dg_page_row_response(
 	row_id: Uuid,
 	authorities: Option<String>,
 ) -> Result<Value> {
-	let drug = load_editor_dg_row_detail(&ctx, &mm, case_id, row_id).await?;
+	let drug = load_editor_dg_row_detail(ctx, mm, case_id, row_id).await?;
 	editor_page_row_response(
 		case_id,
 		"DG",

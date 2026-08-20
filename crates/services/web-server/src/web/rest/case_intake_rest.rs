@@ -681,8 +681,8 @@ async fn create_case_from_intake_in_txn(
 			.filter(|v| !v.is_empty())
 			.and_then(|v| v.parse().ok());
 		let patient_id = PatientInformationBmc::create(
-			&ctx,
-			&mm,
+			ctx,
+			mm,
 			PatientInformationForCreate {
 				case_id,
 				patient_initials: non_empty(data.patient_initials.as_deref()),
@@ -719,8 +719,8 @@ async fn create_case_from_intake_in_txn(
 			|| investigation_number_null_flavor.is_some()
 		{
 			PatientIdentifierBmc::create(
-				&ctx,
-				&mm,
+				ctx,
+				mm,
 				PatientIdentifierForCreate {
 					patient_id,
 					sequence_number: 1,
@@ -743,8 +743,8 @@ async fn create_case_from_intake_in_txn(
 		|| data.ae_start_date_null_flavor.is_some()
 	{
 		ReactionBmc::create(
-			&ctx,
-			&mm,
+			ctx,
+			mm,
 			ReactionForCreate {
 				case_id,
 				sequence_number: 1,
