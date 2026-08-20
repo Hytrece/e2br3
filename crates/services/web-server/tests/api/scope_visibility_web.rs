@@ -1457,7 +1457,8 @@ async fn test_case_get_allows_empty_product_or_study_scope_but_blocks_mismatch(
 
 #[serial]
 #[tokio::test]
-async fn test_case_get_blocks_blinded_case_without_blind_scope() -> Result<()> {
+async fn test_case_get_does_not_treat_e2b_blinded_field_as_user_scope() -> Result<()>
+{
 	let mm = init_test_mm().await?;
 	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
 	let admin_token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
@@ -1518,7 +1519,7 @@ async fn test_case_get_blocks_blinded_case_without_blind_scope() -> Result<()> {
 		None,
 	)
 	.await?;
-	assert_eq!(status, StatusCode::FORBIDDEN);
+	assert_eq!(status, StatusCode::OK);
 	Ok(())
 }
 

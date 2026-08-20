@@ -915,7 +915,6 @@ pub async fn create_follow_up_case_guarded(
 	Json<DataRestResult<CaseFollowUpCreateResult>>,
 )> {
 	let ctx = ctx_w.0;
-	let blind_allowed = snapshot.scope().blind_allowed();
 	lib_rest_core::with_authorized_case_create(
 		&ctx,
 		&snapshot,
@@ -927,7 +926,6 @@ pub async fn create_follow_up_case_guarded(
 				mm,
 				source_case_id,
 				pages,
-				blind_allowed,
 			))
 		},
 	)
@@ -939,12 +937,11 @@ async fn create_follow_up_case_authorized(
 	mm: &ModelManager,
 	source_case_id: Uuid,
 	pages: CaseFollowUpPagePatchRequest,
-	blind_allowed: bool,
 ) -> Result<(
 	axum::http::StatusCode,
 	Json<DataRestResult<CaseFollowUpCreateResult>>,
 )> {
-	create_follow_up_case_in_txn(ctx, mm, source_case_id, pages, blind_allowed).await
+	create_follow_up_case_in_txn(ctx, mm, source_case_id, pages).await
 }
 
 async fn create_follow_up_case_in_txn(
@@ -952,7 +949,6 @@ async fn create_follow_up_case_in_txn(
 	mm: &ModelManager,
 	source_case_id: Uuid,
 	mut pages: CaseFollowUpPagePatchRequest,
-	blind_allowed: bool,
 ) -> Result<(
 	axum::http::StatusCode,
 	Json<DataRestResult<CaseFollowUpCreateResult>>,
@@ -1043,7 +1039,7 @@ async fn create_follow_up_case_in_txn(
 		report.insert("safetyReportId".to_string(), json!(safety_report_id));
 		report.insert("safetyReportVersion".to_string(), json!(next_version));
 	}
-	apply_follow_up_page_patches(ctx, mm, case_id, pages, blind_allowed).await?;
+	apply_follow_up_page_patches(ctx, mm, case_id, pages).await?;
 
 	Ok((
 		axum::http::StatusCode::CREATED,

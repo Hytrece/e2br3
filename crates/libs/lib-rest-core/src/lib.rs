@@ -336,7 +336,6 @@ struct CaseScopeRow {
 	sender_identifiers: Vec<String>,
 	product_identifiers: Vec<String>,
 	study_identifiers: Vec<String>,
-	has_blinded_data: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -699,13 +698,7 @@ async fn load_case_scopes(
 						WHERE scope_kind = 'study'
 					),
 					ARRAY[]::text[]
-				) AS study_identifiers,
-				EXISTS(
-					SELECT 1
-					FROM drug_information d
-					WHERE d.case_id = c.id
-					  AND d.investigational_product_blinded = TRUE
-				) AS has_blinded_data
+				) AS study_identifiers
 			FROM cases c
 			WHERE c.id = ANY($1)
 			"#,
@@ -765,8 +758,6 @@ pub async fn case_ids_matching_user_scope(
 			scope_allows(&sender_scope, &scope.sender_identifiers)
 				&& scope_allows(&product_scope, &scope.product_identifiers)
 				&& scope_allows(&study_scope, &scope.study_identifiers)
-				&& (!scope.has_blinded_data
-					|| user.access_blind_allowed == Some(true))
 		})
 		.map(|scope| scope.case_id)
 		.collect())

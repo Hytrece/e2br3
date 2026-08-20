@@ -182,20 +182,6 @@ const ASSESSMENT_ALIASES: &[(&str, &[&str])] = &[
 	("expectedness", &["expectedness"]),
 ];
 
-fn reject_unscoped_blind_write(
-	blind_allowed: bool,
-	row: &Map<String, Value>,
-) -> Result<()> {
-	if bool_field(row, &["investigationalProductBlinded"]) == Some(true)
-		&& !blind_allowed
-	{
-		return Err(Error::PermissionDenied {
-			required_permission: "Case.BlindData".to_string(),
-		});
-	}
-	Ok(())
-}
-
 const RELATEDNESS_ALIASES: &[(&str, &[&str])] = &[
 	("source_of_assessment", &["sourceOfAssessment"]),
 	("method_of_assessment", &["methodOfAssessment"]),
@@ -1108,13 +1094,11 @@ pub(crate) async fn apply_editor_dg_page_row_create(
 	mm: &ModelManager,
 	case_id: Uuid,
 	request: &CaseEditorPagePatchRequest,
-	blind_allowed: bool,
 ) -> Result<(Uuid, Option<String>)> {
 	let requested_authorities =
 		validate_request_projection_context(request.authorities.as_deref())?;
 	let row = required_row_object("DG", &request.rows, "drug")?;
 	validate_row_payload("DG", "drug", row, None)?;
-	reject_unscoped_blind_write(blind_allowed, row)?;
 
 	let model = row_model_value(
 		"DG",
@@ -1154,7 +1138,6 @@ pub async fn create_editor_dg_page_row(
 	Json(request): Json<CaseEditorPagePatchRequest>,
 ) -> Result<(axum::http::StatusCode, Json<Value>)> {
 	let ctx = ctx_w.0;
-	let blind_allowed = snapshot.scope().blind_allowed();
 	lib_rest_core::with_authorized_case_child_mutation(
 		&ctx,
 		&snapshot,
@@ -1164,14 +1147,8 @@ pub async fn create_editor_dg_page_row(
 		move |ctx, mm| {
 			Box::pin(async move {
 				let (row_id, requested_authorities) =
-					apply_editor_dg_page_row_create(
-						ctx,
-						mm,
-						case_id,
-						&request,
-						blind_allowed,
-					)
-					.await?;
+					apply_editor_dg_page_row_create(ctx, mm, case_id, &request)
+						.await?;
 				mark_editor_validation_summary_stale(
 					ctx,
 					mm,
@@ -1202,7 +1179,6 @@ pub async fn patch_editor_dg_page_row(
 	Json(request): Json<CaseEditorPagePatchRequest>,
 ) -> Result<(axum::http::StatusCode, Json<Value>)> {
 	let ctx = ctx_w.0;
-	let blind_allowed = snapshot.scope().blind_allowed();
 	lib_rest_core::with_authorized_case_child_mutation(
 		&ctx,
 		&snapshot,
@@ -1218,7 +1194,6 @@ pub async fn patch_editor_dg_page_row(
 
 				let row = required_row_object("DG", &request.rows, "drug")?;
 				validate_row_payload("DG", "drug", row, None)?;
-				reject_unscoped_blind_write(blind_allowed, row)?;
 
 				let model = row_model_value("DG", "", row, DRUG_ROW_ALIASES, &[]);
 				let update = parse_row_model::<DrugInformationForUpdate>(

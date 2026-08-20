@@ -161,22 +161,13 @@ impl XmlExportHistoryBmc {
 						   AND identifier = ANY($3)
 					)
 				   )
-				   AND (
-					$4
-					OR NOT EXISTS (
-						SELECT 1 FROM drug_information d
-						 WHERE d.case_id = c.id
-						   AND d.investigational_product_blinded = TRUE
-					)
-				   )
 				 ORDER BY h.exported_at DESC, h.created_at DESC
 				 LIMIT 200
 				"#,
 			)
 			.bind(scope.sender_ids())
 			.bind(scope.product_ids())
-			.bind(scope.study_ids())
-			.bind(scope.blind_allowed()),
+			.bind(scope.study_ids()),
 		)
 		.await
 		.map_err(crate::model::Error::from)

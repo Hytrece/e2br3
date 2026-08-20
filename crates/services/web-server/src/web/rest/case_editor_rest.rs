@@ -37,7 +37,6 @@ pub(crate) async fn apply_follow_up_page_patches(
 	mm: &ModelManager,
 	case_id: Uuid,
 	mut pages: CaseFollowUpPagePatchRequest,
-	blind_allowed: bool,
 ) -> Result<()> {
 	let authorities = pages.ci.authorities.clone();
 	for request in [&pages.rp, &pages.sd, &pages.si, &pages.dm, &pages.nr]
@@ -109,14 +108,7 @@ pub(crate) async fn apply_follow_up_page_patches(
 	}
 	for row in &mut pages.dg {
 		remap_follow_up_dg_reaction_ids(&mut row.request, &reaction_ids)?;
-		dg::apply_editor_dg_page_row_create(
-			ctx,
-			mm,
-			case_id,
-			&row.request,
-			blind_allowed,
-		)
-		.await?;
+		dg::apply_editor_dg_page_row_create(ctx, mm, case_id, &row.request).await?;
 	}
 
 	common::mark_editor_validation_summary_stale(

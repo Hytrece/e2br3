@@ -108,7 +108,6 @@ struct CaseFacts {
 	sender_identifiers: Vec<String>,
 	product_identifiers: Vec<String>,
 	study_identifiers: Vec<String>,
-	has_blinded_data: bool,
 }
 
 #[derive(Debug, FromRow)]
@@ -898,12 +897,7 @@ impl<'tx> AuthorizationFactLoader<'tx> {
 			           FROM case_scope_identifiers(c.id)
 			          WHERE scope_kind = 'study'),
 			        ARRAY[]::text[]
-			       ) AS study_identifiers,
-			       EXISTS(
-			        SELECT 1 FROM drug_information d
-			         WHERE d.case_id = c.id
-			           AND d.investigational_product_blinded = TRUE
-			       ) AS has_blinded_data
+			       ) AS study_identifiers
 			  FROM cases c
 			 WHERE c.id = $1
 			 {lock_clause}
@@ -987,7 +981,6 @@ fn case_within_scope(
 	scope_allows(snapshot.scope().sender_ids(), &facts.sender_identifiers)
 		&& scope_allows(snapshot.scope().product_ids(), &facts.product_identifiers)
 		&& scope_allows(snapshot.scope().study_ids(), &facts.study_identifiers)
-		&& (!facts.has_blinded_data || snapshot.scope().blind_allowed())
 }
 
 fn scope_allows(assigned: &[String], available: &[String]) -> bool {
@@ -1185,7 +1178,6 @@ mod tests {
 			sender_identifiers: Vec::new(),
 			product_identifiers: Vec::new(),
 			study_identifiers: Vec::new(),
-			has_blinded_data: false,
 		};
 
 		assert!(case_lifecycle_allows(

@@ -215,8 +215,19 @@ pub async fn list_users(
 ) -> Result<(StatusCode, Json<DataRestResult<Vec<UserView>>>)> {
 	let ctx = ctx_w.0;
 	let target_organization_id = user_target_organization(&ctx, &snapshot);
-	let params = ParamsList::<UserFilter>::from_raw_query(raw_query.as_deref())
+	let include_blinded = raw_query.as_deref().is_some_and(|query| {
+		query.split('&').any(|part| {
+			matches!(part, "include_blinded=true" | "includeBlinded=true")
+		})
+	});
+	let mut params = ParamsList::<UserFilter>::from_raw_query(raw_query.as_deref())
 		.map_err(|message| Error::BadRequest { message })?;
+	if !include_blinded {
+		params.filters.get_or_insert_default().push(UserFilter {
+			access_blind_allowed: Some(OpValBool::Eq(false).into()),
+			..Default::default()
+		});
+	}
 	let action = policy_registry()
 		.context_action("user.list")
 		.expect("user.list policy");

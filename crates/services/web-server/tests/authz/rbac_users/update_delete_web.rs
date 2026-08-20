@@ -20,7 +20,7 @@ use uuid::Uuid;
 
 #[serial]
 #[tokio::test]
-async fn test_sponsor_admin_can_set_and_persist_blind_scope() -> Result<()> {
+async fn test_sponsor_admin_can_hide_and_restore_blind_user() -> Result<()> {
 	let mm = init_test_mm().await?;
 	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
 	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
@@ -62,6 +62,42 @@ async fn test_sponsor_admin_can_set_and_persist_blind_scope() -> Result<()> {
 		Some(true),
 		"{created:?}"
 	);
+	let default_list = Request::builder()
+		.method("GET")
+		.uri("/api/users")
+		.header("cookie", admin_cookie.as_str())
+		.body(Body::empty())?;
+	let default_res = app.clone().oneshot(default_list).await?;
+	let default_status = default_res.status();
+	let default_body =
+		axum::body::to_bytes(default_res.into_body(), usize::MAX).await?;
+	assert_eq!(
+		default_status,
+		StatusCode::OK,
+		"{}",
+		String::from_utf8_lossy(&default_body)
+	);
+	let default_users: serde_json::Value = serde_json::from_slice(&default_body)?;
+	assert!(!default_users["data"]
+		.as_array()
+		.unwrap()
+		.iter()
+		.any(|user| { user["id"].as_str() == Some(created_id) }));
+
+	let include_list = Request::builder()
+		.method("GET")
+		.uri("/api/users?include_blinded=true")
+		.header("cookie", admin_cookie.as_str())
+		.body(Body::empty())?;
+	let include_res = app.clone().oneshot(include_list).await?;
+	let include_body =
+		axum::body::to_bytes(include_res.into_body(), usize::MAX).await?;
+	let included_users: serde_json::Value = serde_json::from_slice(&include_body)?;
+	assert!(included_users["data"]
+		.as_array()
+		.unwrap()
+		.iter()
+		.any(|user| { user["id"].as_str() == Some(created_id) }));
 
 	let update_body = json!({
 		"data": {
@@ -71,7 +107,7 @@ async fn test_sponsor_admin_can_set_and_persist_blind_scope() -> Result<()> {
 	let update_req = Request::builder()
 		.method("PUT")
 		.uri(format!("/api/users/{created_id}"))
-		.header("cookie", admin_cookie)
+		.header("cookie", admin_cookie.as_str())
 		.header("content-type", "application/json")
 		.body(Body::from(update_body.to_string()))?;
 	let update_res = app.clone().oneshot(update_req).await?;
@@ -84,6 +120,20 @@ async fn test_sponsor_admin_can_set_and_persist_blind_scope() -> Result<()> {
 		Some(false),
 		"{updated:?}"
 	);
+	let restored_list = Request::builder()
+		.method("GET")
+		.uri("/api/users")
+		.header("cookie", admin_cookie)
+		.body(Body::empty())?;
+	let restored_res = app.clone().oneshot(restored_list).await?;
+	let restored_body =
+		axum::body::to_bytes(restored_res.into_body(), usize::MAX).await?;
+	let restored_users: serde_json::Value = serde_json::from_slice(&restored_body)?;
+	assert!(restored_users["data"]
+		.as_array()
+		.unwrap()
+		.iter()
+		.any(|user| { user["id"].as_str() == Some(created_id) }));
 	Ok(())
 }
 

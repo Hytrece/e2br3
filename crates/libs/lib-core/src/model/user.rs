@@ -9,7 +9,9 @@ use crate::model::store::{
 use crate::model::{Error, ModelManager, Result};
 use lib_auth::pwd::{self, ContentToHash, SchemeStatus};
 use modql::field::{Fields, HasSeaFields, SeaField, SeaFields};
-use modql::filter::{FilterNodes, ListOptions, OpValsString, OpValsValue};
+use modql::filter::{
+	FilterNodes, ListOptions, OpValsBool, OpValsString, OpValsValue,
+};
 use sea_query::{Expr, Iden, PostgresQueryBuilder, Query};
 use sea_query_binder::SqlxBinder;
 use serde::{Deserialize, Serialize};
@@ -157,6 +159,7 @@ pub struct UserFilter {
 	pub email: Option<OpValsString>,
 	pub username: Option<OpValsString>,
 	pub role: Option<OpValsString>,
+	pub access_blind_allowed: Option<OpValsBool>,
 }
 
 /// Marker trait for different User representations

@@ -66,7 +66,8 @@ CREATE TABLE IF NOT EXISTS users (
     access_sender_ids TEXT,
     access_product_ids TEXT,
     access_study_ids TEXT,
-    access_blind_allowed BOOLEAN,
+    -- Legacy column name: TRUE means hide this account from the default user list.
+    access_blind_allowed BOOLEAN NOT NULL DEFAULT FALSE,
     active_sender_identifier TEXT,
     active BOOLEAN DEFAULT true,
     must_change_password BOOLEAN NOT NULL DEFAULT false,

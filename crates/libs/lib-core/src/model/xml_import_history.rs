@@ -184,7 +184,7 @@ impl XmlImportHistoryBmc {
 					 WHERE (
 						(
 							h.case_id IS NULL
-							AND (h.uploaded_by = $5 OR $6)
+							AND (h.uploaded_by = $4 OR $5)
 						)
 						OR (
 							h.case_id IS NOT NULL
@@ -224,14 +224,6 @@ impl XmlImportHistoryBmc {
 									   AND identifier = ANY($3)
 								)
 							)
-							AND (
-								$4
-								OR NOT EXISTS (
-									SELECT 1 FROM drug_information d
-									 WHERE d.case_id = c.id
-									   AND d.investigational_product_blinded = TRUE
-								)
-							)
 						)
 					 )
 					 ORDER BY h.uploaded_at DESC, h.created_at DESC
@@ -241,7 +233,6 @@ impl XmlImportHistoryBmc {
 				.bind(scope.sender_ids())
 				.bind(scope.product_ids())
 				.bind(scope.study_ids())
-				.bind(scope.blind_allowed())
 				.bind(ctx.user_id())
 				.bind(include_unscoped),
 			)
