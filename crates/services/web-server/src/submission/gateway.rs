@@ -284,7 +284,6 @@ mod tests {
 			success,
 			code: Some("ACK1".to_string()),
 			message: Some("accepted by gateway".to_string()),
-			received_at: None,
 		}
 	}
 

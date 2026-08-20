@@ -542,25 +542,12 @@ pub(crate) fn product_presave_allowed(
 	)
 }
 
-pub(super) fn deny_presave_scope() -> Error {
-	Error::PermissionDenied {
-		required_permission: "PresaveTemplate.Scope".to_string(),
-	}
-}
-
 pub(super) fn can_manage_all_presaves(snapshot: &AuthorizationSnapshotW) -> bool {
 	snapshot
 		.grants()
 		.iter()
 		.any(|grant| grant.as_str() == "info.edit")
 		|| snapshot.identity().is_platform_administrator()
-}
-
-pub(super) fn presave_case_link_conflict(message: &str) -> Error {
-	model::Error::Conflict {
-		message: message.to_string(),
-	}
-	.into()
 }
 
 pub(super) fn rest_ok<T: Serialize>(
@@ -573,219 +560,6 @@ pub(super) fn rest_created<T: Serialize>(
 	data: T,
 ) -> (StatusCode, Json<DataRestResult<T>>) {
 	(StatusCode::CREATED, Json(DataRestResult { data }))
-}
-
-pub(super) async fn presave_scope_assigned_to_users(
-	mm: &ModelManager,
-	organization_id: Uuid,
-	scope_column: &str,
-	identifiers: Vec<String>,
-) -> Result<bool> {
-	if identifiers.is_empty() {
-		return Ok(false);
-	}
-	let sql = match scope_column {
-		"access_sender_ids" => {
-			r#"
-			SELECT EXISTS (
-				SELECT 1
-				FROM users u
-				CROSS JOIN LATERAL jsonb_array_elements_text(
-					CASE
-						WHEN u.access_sender_ids IS NULL OR btrim(u.access_sender_ids) = ''
-							THEN '[]'::jsonb
-						ELSE u.access_sender_ids::jsonb
-					END
-				) AS scope_value(value)
-				WHERE u.organization_id = $1
-				  AND u.active = true
-				  AND lower(btrim(scope_value.value)) = ANY($2)
-			)
-			"#
-		}
-		"access_product_ids" => {
-			r#"
-			SELECT EXISTS (
-				SELECT 1
-				FROM users u
-				CROSS JOIN LATERAL jsonb_array_elements_text(
-					CASE
-						WHEN u.access_product_ids IS NULL OR btrim(u.access_product_ids) = ''
-							THEN '[]'::jsonb
-						ELSE u.access_product_ids::jsonb
-					END
-				) AS scope_value(value)
-				WHERE u.organization_id = $1
-				  AND u.active = true
-				  AND lower(btrim(scope_value.value)) = ANY($2)
-			)
-			"#
-		}
-		"access_study_ids" => {
-			r#"
-			SELECT EXISTS (
-				SELECT 1
-				FROM users u
-				CROSS JOIN LATERAL jsonb_array_elements_text(
-					CASE
-						WHEN u.access_study_ids IS NULL OR btrim(u.access_study_ids) = ''
-							THEN '[]'::jsonb
-						ELSE u.access_study_ids::jsonb
-					END
-				) AS scope_value(value)
-				WHERE u.organization_id = $1
-				  AND u.active = true
-				  AND lower(btrim(scope_value.value)) = ANY($2)
-			)
-			"#
-		}
-		_ => return Ok(false),
-	};
-	let (exists,) = mm
-		.dbx()
-		.fetch_one(
-			sqlx::query_as::<_, (bool,)>(sql)
-				.bind(organization_id)
-				.bind(identifiers),
-		)
-		.await
-		.map_err(|err| Error::from(model::Error::from(err)))?;
-	Ok(exists)
-}
-
-pub(super) async fn sender_presave_used_by_cases(
-	mm: &ModelManager,
-	organization_id: Uuid,
-	id: Uuid,
-) -> Result<bool> {
-	let (exists,) = mm
-		.dbx()
-		.fetch_one(
-			sqlx::query_as::<_, (bool,)>(
-				r#"
-				SELECT EXISTS (
-					SELECT 1
-					FROM sender_information sender
-					JOIN cases c ON c.id = sender.case_id
-					WHERE c.organization_id = $1
-					  AND sender.source_sender_presave_id = $2
-				)
-				"#,
-			)
-			.bind(organization_id)
-			.bind(id),
-		)
-		.await
-		.map_err(|err| Error::from(model::Error::from(err)))?;
-	Ok(exists)
-}
-
-pub(super) async fn product_presave_used_by_cases(
-	mm: &ModelManager,
-	organization_id: Uuid,
-	id: Uuid,
-) -> Result<bool> {
-	let (exists,) = mm
-		.dbx()
-		.fetch_one(
-			sqlx::query_as::<_, (bool,)>(
-				r#"
-				SELECT EXISTS (
-					SELECT 1
-					FROM drug_information drug
-					JOIN cases c ON c.id = drug.case_id
-					WHERE c.organization_id = $1
-					  AND drug.source_product_presave_id = $2
-				)
-				"#,
-			)
-			.bind(organization_id)
-			.bind(id),
-		)
-		.await
-		.map_err(|err| Error::from(model::Error::from(err)))?;
-	Ok(exists)
-}
-
-pub(super) async fn study_presave_used_by_cases(
-	mm: &ModelManager,
-	organization_id: Uuid,
-	id: Uuid,
-) -> Result<bool> {
-	let (exists,) = mm
-		.dbx()
-		.fetch_one(
-			sqlx::query_as::<_, (bool,)>(
-				r#"
-				SELECT EXISTS (
-					SELECT 1
-					FROM study_information study
-					JOIN cases c ON c.id = study.case_id
-					WHERE c.organization_id = $1
-					  AND study.source_study_presave_id = $2
-				)
-				"#,
-			)
-			.bind(organization_id)
-			.bind(id),
-		)
-		.await
-		.map_err(|err| Error::from(model::Error::from(err)))?;
-	Ok(exists)
-}
-
-pub(super) async fn reporter_presave_used_by_cases(
-	mm: &ModelManager,
-	organization_id: Uuid,
-	id: Uuid,
-) -> Result<bool> {
-	let (exists,) = mm
-		.dbx()
-		.fetch_one(
-			sqlx::query_as::<_, (bool,)>(
-				r#"
-				SELECT EXISTS (
-					SELECT 1
-					FROM primary_sources source
-					JOIN cases c ON c.id = source.case_id
-					WHERE c.organization_id = $1
-					  AND source.source_reporter_presave_id = $2
-				)
-				"#,
-			)
-			.bind(organization_id)
-			.bind(id),
-		)
-		.await
-		.map_err(|err| Error::from(model::Error::from(err)))?;
-	Ok(exists)
-}
-
-pub(super) async fn narrative_presave_used_by_cases(
-	mm: &ModelManager,
-	organization_id: Uuid,
-	id: Uuid,
-) -> Result<bool> {
-	let (exists,) = mm
-		.dbx()
-		.fetch_one(
-			sqlx::query_as::<_, (bool,)>(
-				r#"
-				SELECT EXISTS (
-					SELECT 1
-					FROM narrative_information narrative
-					JOIN cases c ON c.id = narrative.case_id
-					WHERE c.organization_id = $1
-					  AND narrative.source_narrative_presave_id = $2
-				)
-				"#,
-			)
-			.bind(organization_id)
-			.bind(id),
-		)
-		.await
-		.map_err(|err| Error::from(model::Error::from(err)))?;
-	Ok(exists)
 }
 
 pub(super) fn filter_sender_presaves_for_scope(
@@ -912,10 +686,6 @@ pub(super) fn filter_study_presaves_for_scope(
 					})
 		})
 		.collect()
-}
-
-pub(super) fn text_present(value: Option<&str>) -> bool {
-	value.is_some_and(|value| !value.trim().is_empty())
 }
 
 pub(super) fn ensure_parent_scope(

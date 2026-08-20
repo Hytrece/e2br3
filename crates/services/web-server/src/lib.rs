@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 pub mod config;
 pub mod runtime_settings;
 pub mod submission;

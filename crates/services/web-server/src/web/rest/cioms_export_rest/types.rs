@@ -22,7 +22,6 @@ pub struct ExportCiomsQuery {
 pub(super) struct CiomsDrugReactionCausalityRow {
 	pub(super) drug_id: Uuid,
 	pub(super) reaction_id: Uuid,
-	pub(super) drug_characterization: String,
 	pub(super) administration_start_interval_value: Option<Decimal>,
 	pub(super) administration_start_interval_unit: Option<String>,
 	pub(super) last_dose_interval_value: Option<Decimal>,
@@ -30,7 +29,6 @@ pub(super) struct CiomsDrugReactionCausalityRow {
 	pub(super) recurrence_action: Option<String>,
 	pub(super) reaction_recurred: Option<String>,
 	pub(super) dechallenge_result: Option<String>,
-	pub(super) relatedness_sequence_number: Option<i32>,
 	pub(super) relatedness_source: Option<String>,
 	pub(super) relatedness_method: Option<String>,
 	pub(super) relatedness_method_kr1: Option<String>,

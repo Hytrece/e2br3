@@ -184,10 +184,6 @@ pub(super) fn reaction_dates(reaction: Option<&Reaction>) -> String {
 	}
 }
 
-pub(super) fn drug_therapy_dates(_drug: Option<&DrugInformation>) -> String {
-	String::new()
-}
-
 pub(super) fn dosage_therapy_dates(dosage: Option<&DosageInformation>) -> String {
 	let Some(dosage) = dosage else {
 		return String::new();

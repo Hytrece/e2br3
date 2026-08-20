@@ -23,13 +23,6 @@ pub(super) fn ordered_cioms_case_data(
 	ordered
 }
 
-pub(super) fn build_cioms_pdf(
-	data: &CiomsCaseData,
-	settings: &CiomsSettings,
-) -> Result<Vec<u8>> {
-	build_cioms_pdf_with_options(data, settings, CiomsExportOptions::default())
-}
-
 pub(super) fn build_cioms_pdf_with_options(
 	data: &CiomsCaseData,
 	settings: &CiomsSettings,

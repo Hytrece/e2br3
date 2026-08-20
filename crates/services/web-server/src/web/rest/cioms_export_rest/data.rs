@@ -192,7 +192,6 @@ async fn load_causality_rows_by_case(
 				sqlx::query_as::<_, CiomsDrugReactionCausalityRow>(
 					"SELECT dra.drug_id,
 				        dra.reaction_id,
-				        di.drug_characterization,
 				        dra.administration_start_interval_value,
 				        dra.administration_start_interval_unit,
 				        dra.last_dose_interval_value,
@@ -200,7 +199,6 @@ async fn load_causality_rows_by_case(
 				        dra.recurrence_action,
 				        dra.reaction_recurred,
 				        dra.dechallenge_result,
-				        ra.sequence_number AS relatedness_sequence_number,
 				        ra.source_of_assessment AS relatedness_source,
 				        ra.method_of_assessment AS relatedness_method,
 				        ra.method_of_assessment_kr1 AS relatedness_method_kr1,

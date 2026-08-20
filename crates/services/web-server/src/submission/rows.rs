@@ -99,15 +99,6 @@ pub(super) struct EsgAckResponse {
 	pub(super) success: Option<bool>,
 	pub(super) code: Option<String>,
 	pub(super) message: Option<String>,
-	pub(super) received_at: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
-pub(super) struct As2SubmitResponse {
-	pub(super) remote_submission_id: Option<String>,
-	pub(super) submission_id: Option<String>,
-	pub(super) status: Option<String>,
-	pub(super) authority: Option<String>,
 }
 
 pub(super) fn env_truthy(name: &str) -> bool {

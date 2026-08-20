@@ -113,27 +113,6 @@ impl PdfCanvas {
 			self.text(x, y - (idx as i32 * (size + 3)), size, &line);
 		}
 	}
-
-	pub(super) fn save_state(&mut self) {
-		self.stream.push_str("q\n");
-	}
-
-	pub(super) fn restore_state(&mut self) {
-		self.stream.push_str("Q\n");
-	}
-
-	pub(super) fn transform(
-		&mut self,
-		scale_x: f32,
-		scale_y: f32,
-		translate_x: f32,
-		translate_y: f32,
-	) {
-		let _ = writeln!(
-			self.stream,
-			"{scale_x:.4} 0 0 {scale_y:.4} {translate_x:.4} {translate_y:.4} cm"
-		);
-	}
 }
 
 pub(super) fn wrap_pdf_text(value: &str, max_chars: usize) -> Vec<String> {
@@ -312,27 +291,6 @@ pub(super) fn basic_repeated_item_rows(data: &CiomsCaseData) -> Vec<String> {
 		));
 	}
 	rows
-}
-
-pub(super) fn render_basic_repeated_items_table(
-	canvas: &mut PdfCanvas,
-	data: &CiomsCaseData,
-	x: i32,
-	y: i32,
-	w: i32,
-) {
-	let rows = basic_repeated_item_rows(data);
-	if rows.is_empty() {
-		return;
-	}
-	let row_count = rows.len().min(12);
-	let h = 22 + row_count as i32 * 12;
-	canvas.rect(x, y, w, h);
-	canvas.text(x + 4, y + h - 12, 7, "BASIC REPEATED ITEM TABLE");
-	canvas.line(x, y + h - 18, x + w, y + h - 18);
-	for (index, row) in rows.into_iter().take(row_count).enumerate() {
-		canvas.wrapped_text(x + 4, y + h - 30 - index as i32 * 12, 7, 90, 1, &row);
-	}
 }
 
 pub(super) fn render_reporter_footer(

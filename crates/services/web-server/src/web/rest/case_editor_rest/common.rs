@@ -274,22 +274,6 @@ pub(super) fn as_object<'a>(
 	})
 }
 
-pub(super) fn first_array_object<'a>(
-	page_id: &str,
-	key: &str,
-	value: &'a Value,
-) -> Result<Option<&'a serde_json::Map<String, Value>>> {
-	let Some(items) = value.as_array() else {
-		return Err(Error::BadRequest {
-			message: format!("{page_id}.{key} must be an array"),
-		});
-	};
-	items
-		.first()
-		.map(|item| as_object(page_id, key, item))
-		.transpose()
-}
-
 pub(super) fn optional_row_object<'a>(
 	page_id: &str,
 	rows: &'a BTreeMap<String, Value>,
@@ -308,17 +292,6 @@ pub(super) fn required_row_object<'a>(
 	optional_row_object(page_id, rows, key)?.ok_or_else(|| Error::BadRequest {
 		message: format!("{page_id}.{key} row payload is required"),
 	})
-}
-
-pub(super) fn optional_first_row_object<'a>(
-	page_id: &str,
-	rows: &'a BTreeMap<String, Value>,
-	key: &str,
-) -> Result<Option<&'a serde_json::Map<String, Value>>> {
-	rows.get(key)
-		.map(|value| first_array_object(page_id, key, value))
-		.transpose()
-		.map(Option::flatten)
 }
 
 pub(super) fn string_field(

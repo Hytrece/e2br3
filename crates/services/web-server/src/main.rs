@@ -1,13 +1,7 @@
-#![allow(dead_code)]
-
 // region:    --- Modules
 
 mod bootstrap;
-mod config;
 mod error;
-mod runtime_settings;
-mod submission;
-mod web;
 
 pub use self::error::{Error, Result};
 use lib_core::_dev_utils;
@@ -32,7 +26,8 @@ async fn main() -> Result<()> {
 
 	// -- FOR DEV ONLY (skips automatically if SKIP_DEV_INIT=1)
 	_dev_utils::init_dev().await;
-	config::validate_submission_runtime_config().map_err(Error::Config)?;
+	web_server::config::validate_submission_runtime_config()
+		.map_err(Error::Config)?;
 
 	let mm = ModelManager::new().await?;
 	let authorization_status = web_server::initialize_authorization_storage()
