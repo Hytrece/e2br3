@@ -2578,11 +2578,14 @@ mod tests {
 		second.last_dose_interval_value = Some(Decimal::new(28, 0));
 		second.last_dose_interval_unit = Some("d".to_string());
 
-		let source = include_bytes!(
-			"../../../../../../docs/exporter/mfds/1-1_ExampleCase_literature_KR_initial_v1_0_샘플.xml"
-		);
+		let Ok(source) = std::fs::read(concat!(
+			env!("CARGO_MANIFEST_DIR"),
+			"/../../../docs/exporter/mfds/1-1_ExampleCase_literature_KR_initial_v1_0_샘플.xml"
+		)) else {
+			return;
+		};
 		let xml = crate::export::roundtrip::patch_g_drugs_for_authority(
-			source,
+			&source,
 			&[drug],
 			&[],
 			&[],

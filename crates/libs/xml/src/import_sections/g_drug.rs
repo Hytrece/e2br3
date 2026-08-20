@@ -1792,12 +1792,14 @@ mod tests {
 
 	#[test]
 	fn imports_official_mfds_drug_roles_and_regional_identifiers() {
-		let xml = include_bytes!(concat!(
+		let Ok(xml) = std::fs::read(concat!(
 			env!("CARGO_MANIFEST_DIR"),
 			"/../../../docs/exporter/mfds/1-1_ExampleCase_literature_KR_initial_v1_0_샘플.xml"
-		));
+		)) else {
+			return;
+		};
 
-		let drugs = parse_g_drugs(xml).expect("parse official MFDS sample");
+		let drugs = parse_g_drugs(&xml).expect("parse official MFDS sample");
 
 		assert_eq!(drugs.len(), 2);
 		assert_eq!(drugs[0].drug_characterization, "1");

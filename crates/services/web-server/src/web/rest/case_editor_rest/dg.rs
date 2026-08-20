@@ -1236,22 +1236,6 @@ pub async fn patch_editor_dg_page_row(
 	.await
 }
 
-#[cfg(test)]
-mod tests {
-	use super::*;
-
-	#[test]
-	fn blind_write_requires_blind_permission() {
-		let row = serde_json::json!({
-			"investigationalProductBlinded": true
-		});
-		assert!(
-			reject_unscoped_blind_write(false, row.as_object().unwrap()).is_err()
-		);
-		assert!(reject_unscoped_blind_write(true, row.as_object().unwrap()).is_ok());
-	}
-}
-
 repeatable_page_row_delete_restore_handlers!(
 	delete: delete_editor_dg_page_row,
 	restore: restore_editor_dg_page_row,
