@@ -59,13 +59,13 @@ pub(crate) fn write_f_r_test_result(result: &TestResult) -> Result<String> {
 	if let Some(version) = write_f_r_2_2a(result) {
 		out.push_str(" codeSystemVersion=\"");
 		out.push_str(&xml_escape(version));
-		out.push_str("\"");
+		out.push('"');
 	}
 	let test_name = write_f_r_2_1(result);
 	if !test_name.trim().is_empty() {
 		out.push_str(" displayName=\"");
 		out.push_str(&test_name);
-		out.push_str("\"");
+		out.push('"');
 	}
 	out.push('>');
 	if !test_name.trim().is_empty() {

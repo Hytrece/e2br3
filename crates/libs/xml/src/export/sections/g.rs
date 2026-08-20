@@ -713,12 +713,12 @@ pub(crate) fn write_g_k_drug(
 		if let Some(code) = write_g_k_2_1_kr_1b(drug) {
 			out.push_str(" code=\"");
 			out.push_str(&xml_escape(code));
-			out.push_str("\"");
+			out.push('"');
 		}
 		if let Some(version) = write_g_k_2_1_kr_1a(drug) {
 			out.push_str(" codeSystemVersion=\"");
 			out.push_str(&xml_escape(version));
-			out.push_str("\"");
+			out.push('"');
 		}
 		out.push_str("/>");
 	} else if matches!(authority, RegulatoryAuthority::Fda)
@@ -730,11 +730,11 @@ pub(crate) fn write_g_k_drug(
 				.as_deref()
 				.unwrap_or(FDA_MPID_CODE_SYSTEM),
 		);
-		out.push_str("\"");
+		out.push('"');
 		if let Some(code) = write_g_k_2_1_1b(drug) {
 			out.push_str(" code=\"");
 			out.push_str(&xml_escape(code));
-			out.push_str("\"");
+			out.push('"');
 		}
 		if let Some(version) = drug
 			.mpid_source_code_system_version
@@ -743,7 +743,7 @@ pub(crate) fn write_g_k_drug(
 		{
 			out.push_str(" codeSystemVersion=\"");
 			out.push_str(&xml_escape(version));
-			out.push_str("\"");
+			out.push('"');
 		}
 		out.push_str("/>");
 	}
@@ -757,7 +757,7 @@ pub(crate) fn write_g_k_drug(
 		if let Some(mpid) = write_g_k_2_1_1b(drug) {
 			out.push_str(" extension=\"");
 			out.push_str(&xml_escape(mpid));
-			out.push_str("\"");
+			out.push('"');
 		}
 		out.push_str(
 			"/><code code=\"MPID\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.4\"",
@@ -765,7 +765,7 @@ pub(crate) fn write_g_k_drug(
 		if let Some(ver) = write_g_k_2_1_1a(drug) {
 			out.push_str(" codeSystemVersion=\"");
 			out.push_str(&xml_escape(ver));
-			out.push_str("\"");
+			out.push('"');
 		}
 		out.push_str("/></asIdentifiedEntity>");
 	}
@@ -774,7 +774,7 @@ pub(crate) fn write_g_k_drug(
 		if let Some(phpid) = write_g_k_2_1_2b(drug) {
 			out.push_str(" extension=\"");
 			out.push_str(&xml_escape(phpid));
-			out.push_str("\"");
+			out.push('"');
 		}
 		out.push_str(
 			"/><code code=\"PHPID\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.4\"",
@@ -782,7 +782,7 @@ pub(crate) fn write_g_k_drug(
 		if let Some(ver) = write_g_k_2_1_2a(drug) {
 			out.push_str(" codeSystemVersion=\"");
 			out.push_str(&xml_escape(ver));
-			out.push_str("\"");
+			out.push('"');
 		}
 		out.push_str("/></asIdentifiedEntity>");
 	}
@@ -819,12 +819,12 @@ pub(crate) fn write_g_k_drug(
 				if let Some(v) = write_g_k_2_3_r_3a(sub) {
 					out.push_str(" value=\"");
 					out.push_str(&xml_escape(&decimal_text(v)));
-					out.push_str("\"");
+					out.push('"');
 				}
 				if let Some(u) = write_g_k_2_3_r_3b(sub) {
 					out.push_str(" unit=\"");
 					out.push_str(&xml_escape(u));
-					out.push_str("\"");
+					out.push('"');
 				}
 				out.push_str("/><denominator value=\"1\" unit=\"1\"/></quantity>");
 			}
@@ -839,12 +839,12 @@ pub(crate) fn write_g_k_drug(
 				if let Some(code) = write_g_k_2_3_r_1_kr_1b(sub) {
 					out.push_str(" code=\"");
 					out.push_str(&xml_escape(code));
-					out.push_str("\"");
+					out.push('"');
 				}
 				if let Some(version) = write_g_k_2_3_r_1_kr_1a(sub) {
 					out.push_str(" codeSystemVersion=\"");
 					out.push_str(&xml_escape(version));
-					out.push_str("\"");
+					out.push('"');
 				}
 				out.push_str("/>");
 			} else if write_g_k_2_3_r_2b(sub).is_some()
@@ -855,17 +855,17 @@ pub(crate) fn write_g_k_drug(
 				if let Some(code) = write_g_k_2_3_r_2b(sub) {
 					out.push_str(" code=\"");
 					out.push_str(&xml_escape(code));
-					out.push_str("\"");
+					out.push('"');
 				}
 				if let Some(code_system) = write_g_k_2_3_r_2_code_system(sub) {
 					out.push_str(" codeSystem=\"");
 					out.push_str(&xml_escape(code_system));
-					out.push_str("\"");
+					out.push('"');
 				}
 				if let Some(ver) = write_g_k_2_3_r_2a(sub) {
 					out.push_str(" codeSystemVersion=\"");
 					out.push_str(&xml_escape(ver));
-					out.push_str("\"");
+					out.push('"');
 				}
 				out.push_str("/>");
 			}
@@ -930,7 +930,7 @@ pub(crate) fn write_g_k_drug(
 			} {
 				out.push_str(" code=\"");
 				out.push_str(&xml_escape(code));
-				out.push_str("\"");
+				out.push('"');
 			}
 			if let Some(cs) = if use_value_code_as_code {
 				value_code_system
@@ -939,7 +939,7 @@ pub(crate) fn write_g_k_drug(
 			} {
 				out.push_str(" codeSystem=\"");
 				out.push_str(&xml_escape(cs));
-				out.push_str("\"");
+				out.push('"');
 			}
 			if let Some(name) = if use_value_code_as_code {
 				value_display_name
@@ -948,7 +948,7 @@ pub(crate) fn write_g_k_drug(
 			} {
 				out.push_str(" displayName=\"");
 				out.push_str(&xml_escape(name));
-				out.push_str("\"");
+				out.push('"');
 			}
 			out.push_str("/>");
 			if !use_value_code_as_code {
@@ -958,7 +958,7 @@ pub(crate) fn write_g_k_drug(
 				if let Some(vt) = value_type {
 					out.push_str(" xsi:type=\"");
 					out.push_str(&xml_escape(vt));
-					out.push_str("\"");
+					out.push('"');
 				}
 				let renders_text_body = matches!(
 					normalized_value_type.as_deref(),
@@ -967,22 +967,22 @@ pub(crate) fn write_g_k_drug(
 				if let Some(v) = value_value.filter(|_| !renders_text_body) {
 					out.push_str(" value=\"");
 					out.push_str(&xml_escape(v));
-					out.push_str("\"");
+					out.push('"');
 				}
 				if let Some(code) = value_code {
 					out.push_str(" code=\"");
 					out.push_str(&xml_escape(code));
-					out.push_str("\"");
+					out.push('"');
 				}
 				if let Some(cs) = value_code_system {
 					out.push_str(" codeSystem=\"");
 					out.push_str(&xml_escape(cs));
-					out.push_str("\"");
+					out.push('"');
 				}
 				if let Some(name) = value_display_name {
 					out.push_str(" displayName=\"");
 					out.push_str(&xml_escape(name));
-					out.push_str("\"");
+					out.push('"');
 				}
 				if let Some(v) = value_value.filter(|_| renders_text_body) {
 					out.push('>');
@@ -1035,12 +1035,12 @@ pub(crate) fn write_g_k_drug(
 		if let Some(v) = write_g_k_5a(drug) {
 			out.push_str(" value=\"");
 			out.push_str(&xml_escape(&decimal_text(v)));
-			out.push_str("\"");
+			out.push('"');
 		}
 		if let Some(u) = write_g_k_5b(drug) {
 			out.push_str(" unit=\"");
 			out.push_str(&xml_escape(u));
-			out.push_str("\"");
+			out.push('"');
 		}
 		out.push_str("/></observation></outboundRelationship2>");
 	}
@@ -1051,12 +1051,12 @@ pub(crate) fn write_g_k_drug(
 		if let Some(v) = write_g_k_6a(drug) {
 			out.push_str(" value=\"");
 			out.push_str(&xml_escape(&decimal_text(v)));
-			out.push_str("\"");
+			out.push('"');
 		}
 		if let Some(u) = write_g_k_6b(drug) {
 			out.push_str(" unit=\"");
 			out.push_str(&xml_escape(u));
-			out.push_str("\"");
+			out.push('"');
 		}
 		out.push_str("/></observation></outboundRelationship2>");
 	}
@@ -1111,12 +1111,12 @@ pub(crate) fn write_g_k_drug(
 			if let Some(v) = write_g_k_4_r_2(dose) {
 				out.push_str(" value=\"");
 				out.push_str(&xml_escape(&decimal_text(v)));
-				out.push_str("\"");
+				out.push('"');
 			}
 			if let Some(u) = write_g_k_4_r_3(dose) {
 				out.push_str(" unit=\"");
 				out.push_str(&xml_escape(u));
-				out.push_str("\"");
+				out.push('"');
 			}
 			out.push_str(if timing_parts > 1 {
 				"/></comp>"
@@ -1170,11 +1170,11 @@ pub(crate) fn write_g_k_drug(
 			});
 			if let Some(width) = write_g_k_4_r_6a(dose) {
 				out.push_str(&xml_escape(&decimal_text(width)));
-				out.push_str("\"");
+				out.push('"');
 				if let Some(unit) = write_g_k_4_r_6b(dose) {
 					out.push_str(" unit=\"");
 					out.push_str(&xml_escape(unit));
-					out.push_str("\"");
+					out.push('"');
 				}
 				out.push_str(if timing_parts > 1 {
 					"/></comp>"
@@ -1197,7 +1197,7 @@ pub(crate) fn write_g_k_drug(
 			{
 				out.push_str(" nullFlavor=\"");
 				out.push_str(&xml_escape(null_flavor));
-				out.push_str("\"");
+				out.push('"');
 			} else if let Some(code) = write_g_k_4_r_10_2b(dose) {
 				out.push_str(" code=\"");
 				out.push_str(&xml_escape(code));
@@ -1212,7 +1212,7 @@ pub(crate) fn write_g_k_drug(
 				if let Some(ver) = write_g_k_4_r_10_2a(dose) {
 					out.push_str(" codeSystemVersion=\"");
 					out.push_str(&xml_escape(ver));
-					out.push_str("\"");
+					out.push('"');
 				}
 			}
 			if let Some(route) = write_g_k_4_r_10_1(dose) {
@@ -1228,12 +1228,12 @@ pub(crate) fn write_g_k_drug(
 			if let Some(v) = write_g_k_4_r_1a(dose) {
 				out.push_str(" value=\"");
 				out.push_str(&xml_escape(&decimal_text(v)));
-				out.push_str("\"");
+				out.push('"');
 			}
 			if let Some(u) = write_g_k_4_r_1b(dose) {
 				out.push_str(" unit=\"");
 				out.push_str(&xml_escape(u));
-				out.push_str("\"");
+				out.push('"');
 			}
 			out.push_str("/>");
 		}
@@ -1263,20 +1263,20 @@ pub(crate) fn write_g_k_drug(
 				if let Some(null_flavor) = dose.dose_form_null_flavor.as_deref() {
 					out.push_str(" nullFlavor=\"");
 					out.push_str(&xml_escape(null_flavor));
-					out.push_str("\"");
+					out.push('"');
 				} else if let Some(code) = write_g_k_4_r_9_2b(dose) {
 					out.push_str(" code=\"");
 					out.push_str(&xml_escape(code));
-					out.push_str("\"");
+					out.push('"');
 				}
 				if dose.dose_form_null_flavor.is_none() {
 					if let Some(ver) = write_g_k_4_r_9_2a(dose) {
 						out.push_str(" codeSystemVersion=\"");
 						out.push_str(&xml_escape(ver));
-						out.push_str("\"");
+						out.push('"');
 					}
 				}
-				out.push_str(">");
+				out.push('>');
 				if dose.dose_form_null_flavor.is_none() {
 					if let Some(text) = write_g_k_4_r_9_1(dose) {
 						out.push_str("<originalText>");
@@ -1298,11 +1298,11 @@ pub(crate) fn write_g_k_drug(
 			if let Some(null_flavor) = dose.parent_route_null_flavor.as_deref() {
 				out.push_str(" nullFlavor=\"");
 				out.push_str(&xml_escape(null_flavor));
-				out.push_str("\"");
+				out.push('"');
 			} else if let Some(code) = write_g_k_4_r_11_2b(dose) {
 				out.push_str(" code=\"");
 				out.push_str(&xml_escape(code));
-				out.push_str("\"");
+				out.push('"');
 			}
 			if dose.parent_route_null_flavor.is_none() {
 				if let Some(code_system) = write_g_k_4_r_11_2_code_system(dose) {
@@ -1313,7 +1313,7 @@ pub(crate) fn write_g_k_drug(
 				if let Some(ver) = write_g_k_4_r_11_2a(dose) {
 					out.push_str(" codeSystemVersion=\"");
 					out.push_str(&xml_escape(ver));
-					out.push_str("\"");
+					out.push('"');
 				}
 			}
 			out.push_str("><originalText>");
@@ -1346,9 +1346,9 @@ pub(crate) fn write_g_k_drug(
 		if let Some(ver) = write_g_k_7_r_2a(ind) {
 			out.push_str(" codeSystemVersion=\"");
 			out.push_str(&xml_escape(ver));
-			out.push_str("\"");
+			out.push('"');
 		}
-		out.push_str(">");
+		out.push('>');
 		let (text, text_null_flavor) = write_g_k_7_r_1(ind);
 		if let Some(text) = text {
 			out.push_str("<originalText>");
@@ -1421,12 +1421,12 @@ fn write_g_k_9_i_time_intervals(assessment: &DrugReactionAssessment) -> String {
 		if let Some(value) = write_g_k_9_i_3_1a(assessment) {
 			out.push_str(" value=\"");
 			out.push_str(&xml_escape(&decimal_text(value)));
-			out.push_str("\"");
+			out.push('"');
 		}
 		if let Some(unit) = write_g_k_9_i_3_1b(assessment) {
 			out.push_str(" unit=\"");
 			out.push_str(&xml_escape(unit));
-			out.push_str("\"");
+			out.push('"');
 		}
 		out.push_str(
 			"/><actReference classCode=\"ACT\" moodCode=\"EVN\"><id root=\"",
@@ -1441,12 +1441,12 @@ fn write_g_k_9_i_time_intervals(assessment: &DrugReactionAssessment) -> String {
 		if let Some(value) = write_g_k_9_i_3_2a(assessment) {
 			out.push_str(" value=\"");
 			out.push_str(&xml_escape(&decimal_text(value)));
-			out.push_str("\"");
+			out.push('"');
 		}
 		if let Some(unit) = write_g_k_9_i_3_2b(assessment) {
 			out.push_str(" unit=\"");
 			out.push_str(&xml_escape(unit));
-			out.push_str("\"");
+			out.push('"');
 		}
 		out.push_str(
 			"/><actReference classCode=\"ACT\" moodCode=\"EVN\"><id root=\"",

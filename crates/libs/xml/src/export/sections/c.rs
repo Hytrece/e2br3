@@ -400,11 +400,9 @@ fn write_c_2_r_3(xpath: &mut Context, base: &str, value: &PrimarySource) {
 	);
 	if let Some(code) = value.country_code.as_deref() {
 		set_attr_first(xpath, &path, "code", code);
-	} else {
-		if let Ok(nodes) = xpath.findnodes(&path, None) {
-			for mut node in nodes.into_iter().take(1) {
-				node.unlink_node();
-			}
+	} else if let Ok(nodes) = xpath.findnodes(&path, None) {
+		for mut node in nodes.into_iter().take(1) {
+			node.unlink_node();
 		}
 	}
 }

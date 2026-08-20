@@ -95,16 +95,13 @@ fn prune_optional_nodes(_doc: &mut Document, xpath: &mut Context) {
 			let xp = path_to_xpath(raw);
 			if let Ok(nodes) = xpath.findnodes(&xp, None) {
 				for node in nodes {
-					if node.get_name() == "substanceAdministration" {
-						if let Some(parent) = node.get_parent() {
-							if parent.get_name() == "outboundRelationship2" {
-								if parent.get_attribute("typeCode").as_deref()
+					if node.get_name() == "substanceAdministration"
+						&& node.get_parent().is_some_and(|parent| {
+							parent.get_name() == "outboundRelationship2"
+								&& parent.get_attribute("typeCode").as_deref()
 									== Some("FLFS")
-								{
-									continue;
-								}
-							}
-						}
+						}) {
+						continue;
 					}
 					if !node_has_real_data(&node) {
 						let mut n = node;

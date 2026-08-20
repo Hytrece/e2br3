@@ -1327,7 +1327,7 @@ pub(crate) fn parse_parent_information(xml: &[u8]) -> Result<Option<ParentImport
 			line: None,
 			column: None,
 		})?;
-	let Some(node) = nodes.get(0) else {
+	let Some(node) = nodes.first() else {
 		return Ok(None);
 	};
 

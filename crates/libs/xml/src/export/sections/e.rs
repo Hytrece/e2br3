@@ -103,7 +103,7 @@ pub(crate) fn write_e_i_reaction(
 		if let Some(version) = write_e_i_2_1a(reaction) {
 			out.push_str(" codeSystemVersion=\"");
 			out.push_str(&xml_escape(version));
-			out.push_str("\"");
+			out.push('"');
 		}
 	} else {
 		out.push_str(" nullFlavor=\"NI\"");
@@ -113,9 +113,9 @@ pub(crate) fn write_e_i_reaction(
 		if let Some(lang) = write_e_i_1_1b(reaction) {
 			out.push_str(" language=\"");
 			out.push_str(&xml_escape(lang));
-			out.push_str("\"");
+			out.push('"');
 		}
-		out.push_str(">");
+		out.push('>');
 		out.push_str(&xml_escape(text));
 		out.push_str("</originalText></value>");
 	} else {
@@ -346,11 +346,11 @@ fn write_e_i_6_width(out: &mut String, reaction: &Reaction) {
 	};
 	out.push_str("<width value=\"");
 	out.push_str(&xml_escape(width));
-	out.push_str("\"");
+	out.push('"');
 	if let Some(unit) = write_e_i_6b(reaction) {
 		out.push_str(" unit=\"");
 		out.push_str(&xml_escape(unit));
-		out.push_str("\"");
+		out.push('"');
 	}
 	out.push_str("/>");
 }

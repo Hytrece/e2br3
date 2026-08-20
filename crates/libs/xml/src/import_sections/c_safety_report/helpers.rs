@@ -1647,7 +1647,7 @@ pub(crate) fn parse_study_information(xml: &[u8]) -> Result<Option<StudyImport>>
 			column: None,
 		}
 	})?;
-	let Some(node) = nodes.get(0) else {
+	let Some(node) = nodes.first() else {
 		return Ok(None);
 	};
 
