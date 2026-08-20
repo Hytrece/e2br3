@@ -317,7 +317,7 @@ pub(super) fn fmt_date(date: Date) -> String {
 	let year = date.year();
 	let month: u8 = date.month().into();
 	let day = date.day();
-	format!("{:04}{:02}{:02}", year, month, day)
+	format!("{year:04}{month:02}{day:02}")
 }
 
 pub(super) fn normalize_bl_value(value: &str) -> Option<&'static str> {

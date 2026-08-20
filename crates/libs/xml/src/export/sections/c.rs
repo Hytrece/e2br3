@@ -1304,9 +1304,7 @@ pub(crate) fn apply_c_4_literature(
 		let bibliographic = write_c_4_r_1(item);
 		let attachment = write_c_4_r_2(item, authority)?;
 		fragment.push_str(&format!(
-			"<reference typeCode=\"REFR\"><document classCode=\"DOC\" moodCode=\"EVN\"><code code=\"2\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.27\"/>{}{}</document></reference>",
-			attachment,
-			bibliographic
+			"<reference typeCode=\"REFR\"><document classCode=\"DOC\" moodCode=\"EVN\"><code code=\"2\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.27\"/>{attachment}{bibliographic}</document></reference>"
 		));
 	}
 
@@ -1405,9 +1403,7 @@ pub(crate) fn apply_c_5_study(
 		let country_xml = write_c_5_1_r_2(reg);
 		let id_xml = write_c_5_1_r_1(reg);
 		auth_xml.push_str(&format!(
-			"<authorization typeCode=\"AUTH\"><studyRegistration classCode=\"ACT\" moodCode=\"EVN\">{}{}</studyRegistration></authorization>",
-			id_xml,
-			country_xml
+			"<authorization typeCode=\"AUTH\"><studyRegistration classCode=\"ACT\" moodCode=\"EVN\">{id_xml}{country_xml}</studyRegistration></authorization>"
 		));
 	}
 
@@ -1429,11 +1425,7 @@ pub(crate) fn apply_c_5_study(
 			String::new()
 		};
 	let fragment = format!(
-		"<subjectOf1 typeCode=\"SBJ\"><researchStudy classCode=\"CLNTRL\" moodCode=\"EVN\">{}{}{}{}</researchStudy></subjectOf1>",
-		sponsor_id_xml,
-		study_type,
-		title_xml,
-		auth_xml
+		"<subjectOf1 typeCode=\"SBJ\"><researchStudy classCode=\"CLNTRL\" moodCode=\"EVN\">{sponsor_id_xml}{study_type}{title_xml}{auth_xml}</researchStudy></subjectOf1>"
 	);
 	let xml = doc.to_string();
 	if let Some(injected) = insert_c_5_study(&xml, &fragment) {
