@@ -113,6 +113,21 @@ pub fn rls_ctx_for_authorized_subject(
 	Ok(request_ctx.clone())
 }
 
+async fn begin_fact_transaction<'a>(
+	request_ctx: &Ctx,
+	mm: &'a ModelManager,
+) -> Result<&'a lib_core::model::store::dbx::Dbx> {
+	let dbx = mm.dbx();
+	dbx.begin_txn()
+		.await
+		.map_err(lib_core::model::Error::from)?;
+	if let Err(error) = set_full_context_from_ctx_dbx(dbx, request_ctx).await {
+		let _ = dbx.rollback_txn().await;
+		return Err(error.into());
+	}
+	Ok(dbx)
+}
+
 pub async fn with_authorized_subject_action<T, F>(
 	request_ctx: &Ctx,
 	snapshot: &RequestAuthorizationSnapshot,
@@ -126,14 +141,7 @@ where
 		&'ctx ModelManager,
 	) -> Pin<Box<dyn Future<Output = Result<T>> + Send + 'ctx>>,
 {
-	let dbx = mm.dbx();
-	dbx.begin_txn()
-		.await
-		.map_err(lib_core::model::Error::from)?;
-	if let Err(error) = set_full_context_from_ctx_dbx(dbx, request_ctx).await {
-		let _ = dbx.rollback_txn().await;
-		return Err(error.into());
-	}
+	let dbx = begin_fact_transaction(request_ctx, mm).await?;
 	let result = async {
 		let action =
 			policy_registry().subject_action(action_id).ok_or_else(|| {
@@ -165,14 +173,7 @@ where
 		&'ctx ModelManager,
 	) -> Pin<Box<dyn Future<Output = Result<T>> + Send + 'ctx>>,
 {
-	let dbx = mm.dbx();
-	dbx.begin_txn()
-		.await
-		.map_err(lib_core::model::Error::from)?;
-	if let Err(error) = set_full_context_from_ctx_dbx(dbx, request_ctx).await {
-		let _ = dbx.rollback_txn().await;
-		return Err(error.into());
-	}
+	let dbx = begin_fact_transaction(request_ctx, mm).await?;
 	let result = async {
 		let (context, protected_administrator) =
 			AuthorizationFactLoader::new(dbx, snapshot)
@@ -211,14 +212,7 @@ where
 		&'ctx ModelManager,
 	) -> Pin<Box<dyn Future<Output = Result<T>> + Send + 'ctx>>,
 {
-	let dbx = mm.dbx();
-	dbx.begin_txn()
-		.await
-		.map_err(lib_core::model::Error::from)?;
-	if let Err(error) = set_full_context_from_ctx_dbx(dbx, request_ctx).await {
-		let _ = dbx.rollback_txn().await;
-		return Err(error.into());
-	}
+	let dbx = begin_fact_transaction(request_ctx, mm).await?;
 	let result = async {
 		let context = AuthorizationFactLoader::new(dbx, snapshot).case_collection();
 		let action = policy_registry()
@@ -248,14 +242,7 @@ where
 		&'ctx ModelManager,
 	) -> Pin<Box<dyn Future<Output = Result<T>> + Send + 'ctx>>,
 {
-	let dbx = mm.dbx();
-	dbx.begin_txn()
-		.await
-		.map_err(lib_core::model::Error::from)?;
-	if let Err(error) = set_full_context_from_ctx_dbx(dbx, request_ctx).await {
-		let _ = dbx.rollback_txn().await;
-		return Err(error.into());
-	}
+	let dbx = begin_fact_transaction(request_ctx, mm).await?;
 	let result = async {
 		let context =
 			AuthorizationFactLoader::new(dbx, snapshot).settings_existing();
@@ -286,14 +273,7 @@ where
 		&'ctx ModelManager,
 	) -> Pin<Box<dyn Future<Output = Result<T>> + Send + 'ctx>>,
 {
-	let dbx = mm.dbx();
-	dbx.begin_txn()
-		.await
-		.map_err(lib_core::model::Error::from)?;
-	if let Err(error) = set_full_context_from_ctx_dbx(dbx, request_ctx).await {
-		let _ = dbx.rollback_txn().await;
-		return Err(error.into());
-	}
+	let dbx = begin_fact_transaction(request_ctx, mm).await?;
 	let result = async {
 		let context = AuthorizationFactLoader::new(dbx, snapshot)
 			.settings_for_mutation()
@@ -326,14 +306,7 @@ where
 		&'ctx ModelManager,
 	) -> Pin<Box<dyn Future<Output = Result<T>> + Send + 'ctx>>,
 {
-	let dbx = mm.dbx();
-	dbx.begin_txn()
-		.await
-		.map_err(lib_core::model::Error::from)?;
-	if let Err(error) = set_full_context_from_ctx_dbx(dbx, request_ctx).await {
-		let _ = dbx.rollback_txn().await;
-		return Err(error.into());
-	}
+	let dbx = begin_fact_transaction(request_ctx, mm).await?;
 	let result = async {
 		let context = AuthorizationFactLoader::new(dbx, snapshot)
 			.notice_for_mutation()
@@ -366,14 +339,7 @@ where
 		&'ctx ModelManager,
 	) -> Pin<Box<dyn Future<Output = Result<T>> + Send + 'ctx>>,
 {
-	let dbx = mm.dbx();
-	dbx.begin_txn()
-		.await
-		.map_err(lib_core::model::Error::from)?;
-	if let Err(error) = set_full_context_from_ctx_dbx(dbx, request_ctx).await {
-		let _ = dbx.rollback_txn().await;
-		return Err(error.into());
-	}
+	let dbx = begin_fact_transaction(request_ctx, mm).await?;
 	let result = async {
 		let context =
 			AuthorizationFactLoader::new(dbx, snapshot).audit_log_collection();
@@ -404,14 +370,7 @@ where
 		&'ctx ModelManager,
 	) -> Pin<Box<dyn Future<Output = Result<T>> + Send + 'ctx>>,
 {
-	let dbx = mm.dbx();
-	dbx.begin_txn()
-		.await
-		.map_err(lib_core::model::Error::from)?;
-	if let Err(error) = set_full_context_from_ctx_dbx(dbx, request_ctx).await {
-		let _ = dbx.rollback_txn().await;
-		return Err(error.into());
-	}
+	let dbx = begin_fact_transaction(request_ctx, mm).await?;
 	let result = async {
 		let context =
 			AuthorizationFactLoader::new(dbx, snapshot).terminology_collection();
@@ -443,14 +402,7 @@ where
 		&'ctx ModelManager,
 	) -> Pin<Box<dyn Future<Output = Result<T>> + Send + 'ctx>>,
 {
-	let dbx = mm.dbx();
-	dbx.begin_txn()
-		.await
-		.map_err(lib_core::model::Error::from)?;
-	if let Err(error) = set_full_context_from_ctx_dbx(dbx, request_ctx).await {
-		let _ = dbx.rollback_txn().await;
-		return Err(error.into());
-	}
+	let dbx = begin_fact_transaction(request_ctx, mm).await?;
 	let authorization_result = async {
 		let context = AuthorizationFactLoader::new(dbx, snapshot)
 			.terminology_import_for_mutation(fingerprint)
@@ -485,14 +437,7 @@ where
 		&'ctx EnforcedScopeFilter,
 	) -> Pin<Box<dyn Future<Output = Result<T>> + Send + 'ctx>>,
 {
-	let dbx = mm.dbx();
-	dbx.begin_txn()
-		.await
-		.map_err(lib_core::model::Error::from)?;
-	if let Err(error) = set_full_context_from_ctx_dbx(dbx, request_ctx).await {
-		let _ = dbx.rollback_txn().await;
-		return Err(error.into());
-	}
+	let dbx = begin_fact_transaction(request_ctx, mm).await?;
 	let result = async {
 		let context =
 			AuthorizationFactLoader::new(dbx, snapshot).presave_collection();
@@ -531,14 +476,7 @@ where
 		&'ctx ModelManager,
 	) -> Pin<Box<dyn Future<Output = Result<T>> + Send + 'ctx>>,
 {
-	let dbx = mm.dbx();
-	dbx.begin_txn()
-		.await
-		.map_err(lib_core::model::Error::from)?;
-	if let Err(error) = set_full_context_from_ctx_dbx(dbx, request_ctx).await {
-		let _ = dbx.rollback_txn().await;
-		return Err(error.into());
-	}
+	let dbx = begin_fact_transaction(request_ctx, mm).await?;
 	let result = async {
 		let context = AuthorizationFactLoader::new(dbx, snapshot)
 			.presave_existing(kind, id)
@@ -572,14 +510,7 @@ where
 		&'ctx ModelManager,
 	) -> Pin<Box<dyn Future<Output = Result<T>> + Send + 'ctx>>,
 {
-	let dbx = mm.dbx();
-	dbx.begin_txn()
-		.await
-		.map_err(lib_core::model::Error::from)?;
-	if let Err(error) = set_full_context_from_ctx_dbx(dbx, request_ctx).await {
-		let _ = dbx.rollback_txn().await;
-		return Err(error.into());
-	}
+	let dbx = begin_fact_transaction(request_ctx, mm).await?;
 	let authorization_result = async {
 		let context = AuthorizationFactLoader::new(dbx, snapshot)
 			.presave_create_for_mutation(fingerprint)
@@ -612,14 +543,7 @@ where
 		&'ctx ModelManager,
 	) -> Pin<Box<dyn Future<Output = Result<T>> + Send + 'ctx>>,
 {
-	let dbx = mm.dbx();
-	dbx.begin_txn()
-		.await
-		.map_err(lib_core::model::Error::from)?;
-	if let Err(error) = set_full_context_from_ctx_dbx(dbx, request_ctx).await {
-		let _ = dbx.rollback_txn().await;
-		return Err(error.into());
-	}
+	let dbx = begin_fact_transaction(request_ctx, mm).await?;
 	let result = async {
 		let context = AuthorizationFactLoader::new(dbx, snapshot)
 			.presave_create_for_mutation(fingerprint)
@@ -654,14 +578,7 @@ where
 		&'ctx ModelManager,
 	) -> Pin<Box<dyn Future<Output = Result<T>> + Send + 'ctx>>,
 {
-	let dbx = mm.dbx();
-	dbx.begin_txn()
-		.await
-		.map_err(lib_core::model::Error::from)?;
-	if let Err(error) = set_full_context_from_ctx_dbx(dbx, request_ctx).await {
-		let _ = dbx.rollback_txn().await;
-		return Err(error.into());
-	}
+	let dbx = begin_fact_transaction(request_ctx, mm).await?;
 	let authorization_result = async {
 		let context = AuthorizationFactLoader::new(dbx, snapshot)
 			.presave_for_mutation(kind, id)
@@ -695,14 +612,7 @@ where
 		&'ctx ModelManager,
 	) -> Pin<Box<dyn Future<Output = Result<T>> + Send + 'ctx>>,
 {
-	let dbx = mm.dbx();
-	dbx.begin_txn()
-		.await
-		.map_err(lib_core::model::Error::from)?;
-	if let Err(error) = set_full_context_from_ctx_dbx(dbx, request_ctx).await {
-		let _ = dbx.rollback_txn().await;
-		return Err(error.into());
-	}
+	let dbx = begin_fact_transaction(request_ctx, mm).await?;
 	let result = async {
 		let context = AuthorizationFactLoader::new(dbx, snapshot)
 			.presave_for_mutation(kind, id)
@@ -736,14 +646,7 @@ where
 		&'ctx ModelManager,
 	) -> Pin<Box<dyn Future<Output = Result<T>> + Send + 'ctx>>,
 {
-	let dbx = mm.dbx();
-	dbx.begin_txn()
-		.await
-		.map_err(lib_core::model::Error::from)?;
-	if let Err(error) = set_full_context_from_ctx_dbx(dbx, request_ctx).await {
-		let _ = dbx.rollback_txn().await;
-		return Err(error.into());
-	}
+	let dbx = begin_fact_transaction(request_ctx, mm).await?;
 	let result = async {
 		let context = AuthorizationFactLoader::new(dbx, snapshot)
 			.case_audit_trail(case_id)
@@ -779,14 +682,7 @@ where
 		&'ctx EnforcedScopeFilter,
 	) -> Pin<Box<dyn Future<Output = Result<T>> + Send + 'ctx>>,
 {
-	let dbx = mm.dbx();
-	dbx.begin_txn()
-		.await
-		.map_err(lib_core::model::Error::from)?;
-	if let Err(error) = set_full_context_from_ctx_dbx(dbx, request_ctx).await {
-		let _ = dbx.rollback_txn().await;
-		return Err(error.into());
-	}
+	let dbx = begin_fact_transaction(request_ctx, mm).await?;
 	let result = async {
 		let context = AuthorizationFactLoader::new(dbx, snapshot).case_collection();
 		let action = policy_registry()
@@ -824,14 +720,7 @@ where
 		&'ctx ModelManager,
 	) -> Pin<Box<dyn Future<Output = Result<T>> + Send + 'ctx>>,
 {
-	let dbx = mm.dbx();
-	dbx.begin_txn()
-		.await
-		.map_err(lib_core::model::Error::from)?;
-	if let Err(error) = set_full_context_from_ctx_dbx(dbx, request_ctx).await {
-		let _ = dbx.rollback_txn().await;
-		return Err(error.into());
-	}
+	let dbx = begin_fact_transaction(request_ctx, mm).await?;
 	let result = async {
 		let context = AuthorizationFactLoader::new(dbx, snapshot)
 			.case_resource_set(case_ids)
@@ -865,14 +754,7 @@ where
 		&'ctx ModelManager,
 	) -> Pin<Box<dyn Future<Output = Result<T>> + Send + 'ctx>>,
 {
-	let dbx = mm.dbx();
-	dbx.begin_txn()
-		.await
-		.map_err(lib_core::model::Error::from)?;
-	if let Err(error) = set_full_context_from_ctx_dbx(dbx, request_ctx).await {
-		let _ = dbx.rollback_txn().await;
-		return Err(error.into());
-	}
+	let dbx = begin_fact_transaction(request_ctx, mm).await?;
 	let result = async {
 		let loader = AuthorizationFactLoader::new(dbx, snapshot);
 		let case_id = loader
@@ -911,14 +793,7 @@ where
 		&'ctx ModelManager,
 	) -> Pin<Box<dyn Future<Output = Result<T>> + Send + 'ctx>>,
 {
-	let dbx = mm.dbx();
-	dbx.begin_txn()
-		.await
-		.map_err(lib_core::model::Error::from)?;
-	if let Err(error) = set_full_context_from_ctx_dbx(dbx, request_ctx).await {
-		let _ = dbx.rollback_txn().await;
-		return Err(error.into());
-	}
+	let dbx = begin_fact_transaction(request_ctx, mm).await?;
 	let result = async {
 		let context =
 			AuthorizationFactLoader::new(dbx, snapshot).submission_collection();
@@ -953,14 +828,7 @@ where
 		&'ctx EnforcedScopeFilter,
 	) -> Pin<Box<dyn Future<Output = Result<T>> + Send + 'ctx>>,
 {
-	let dbx = mm.dbx();
-	dbx.begin_txn()
-		.await
-		.map_err(lib_core::model::Error::from)?;
-	if let Err(error) = set_full_context_from_ctx_dbx(dbx, request_ctx).await {
-		let _ = dbx.rollback_txn().await;
-		return Err(error.into());
-	}
+	let dbx = begin_fact_transaction(request_ctx, mm).await?;
 	let result = async {
 		let context =
 			AuthorizationFactLoader::new(dbx, snapshot).import_history_collection();
@@ -1000,14 +868,7 @@ where
 		&'ctx ModelManager,
 	) -> Pin<Box<dyn Future<Output = Result<T>> + Send + 'ctx>>,
 {
-	let dbx = mm.dbx();
-	dbx.begin_txn()
-		.await
-		.map_err(lib_core::model::Error::from)?;
-	if let Err(error) = set_full_context_from_ctx_dbx(dbx, request_ctx).await {
-		let _ = dbx.rollback_txn().await;
-		return Err(error.into());
-	}
+	let dbx = begin_fact_transaction(request_ctx, mm).await?;
 	let result = async {
 		let context = AuthorizationFactLoader::new(dbx, snapshot)
 			.import_history_existing(history_id)
@@ -1043,14 +904,7 @@ where
 		&'ctx EnforcedScopeFilter,
 	) -> Pin<Box<dyn Future<Output = Result<T>> + Send + 'ctx>>,
 {
-	let dbx = mm.dbx();
-	dbx.begin_txn()
-		.await
-		.map_err(lib_core::model::Error::from)?;
-	if let Err(error) = set_full_context_from_ctx_dbx(dbx, request_ctx).await {
-		let _ = dbx.rollback_txn().await;
-		return Err(error.into());
-	}
+	let dbx = begin_fact_transaction(request_ctx, mm).await?;
 	let result = async {
 		let context = AuthorizationFactLoader::new(dbx, snapshot)
 			.xml_import_batch_for_mutation(fingerprint)
@@ -1090,14 +944,7 @@ where
 		&'ctx ModelManager,
 	) -> Pin<Box<dyn Future<Output = Result<T>> + Send + 'ctx>>,
 {
-	let dbx = mm.dbx();
-	dbx.begin_txn()
-		.await
-		.map_err(lib_core::model::Error::from)?;
-	if let Err(error) = set_full_context_from_ctx_dbx(dbx, request_ctx).await {
-		let _ = dbx.rollback_txn().await;
-		return Err(error.into());
-	}
+	let dbx = begin_fact_transaction(request_ctx, mm).await?;
 	let result = async {
 		let context = AuthorizationFactLoader::new(dbx, snapshot)
 			.submission_existing(submission_id)
@@ -1131,14 +978,7 @@ where
 		&'ctx ModelManager,
 	) -> Pin<Box<dyn Future<Output = Result<T>> + Send + 'ctx>>,
 {
-	let dbx = mm.dbx();
-	dbx.begin_txn()
-		.await
-		.map_err(lib_core::model::Error::from)?;
-	if let Err(error) = set_full_context_from_ctx_dbx(dbx, request_ctx).await {
-		let _ = dbx.rollback_txn().await;
-		return Err(error.into());
-	}
+	let dbx = begin_fact_transaction(request_ctx, mm).await?;
 	let result = async {
 		let context = AuthorizationFactLoader::new(dbx, snapshot)
 			.submission_parent_case_for_mutation(submission_id)
@@ -1173,14 +1013,7 @@ where
 		&'ctx ModelManager,
 	) -> Pin<Box<dyn Future<Output = Result<T>> + Send + 'ctx>>,
 {
-	let dbx = mm.dbx();
-	dbx.begin_txn()
-		.await
-		.map_err(lib_core::model::Error::from)?;
-	if let Err(error) = set_full_context_from_ctx_dbx(dbx, request_ctx).await {
-		let _ = dbx.rollback_txn().await;
-		return Err(error.into());
-	}
+	let dbx = begin_fact_transaction(request_ctx, mm).await?;
 	let result = async {
 		let context = AuthorizationFactLoader::new(dbx, snapshot)
 			.case_existing(case_id)
@@ -1214,14 +1047,7 @@ where
 		&'ctx ModelManager,
 	) -> Pin<Box<dyn Future<Output = Result<T>> + Send + 'ctx>>,
 {
-	let dbx = mm.dbx();
-	dbx.begin_txn()
-		.await
-		.map_err(lib_core::model::Error::from)?;
-	if let Err(error) = set_full_context_from_ctx_dbx(dbx, request_ctx).await {
-		let _ = dbx.rollback_txn().await;
-		return Err(error.into());
-	}
+	let dbx = begin_fact_transaction(request_ctx, mm).await?;
 	let loader = AuthorizationFactLoader::new(dbx, snapshot);
 	if let Err(error) = loader.lock_and_verify_revisions().await {
 		let _ = dbx.rollback_txn().await;
@@ -1265,14 +1091,7 @@ where
 		&'ctx ModelManager,
 	) -> Pin<Box<dyn Future<Output = Result<T>> + Send + 'ctx>>,
 {
-	let dbx = mm.dbx();
-	dbx.begin_txn()
-		.await
-		.map_err(lib_core::model::Error::from)?;
-	if let Err(error) = set_full_context_from_ctx_dbx(dbx, request_ctx).await {
-		let _ = dbx.rollback_txn().await;
-		return Err(error.into());
-	}
+	let dbx = begin_fact_transaction(request_ctx, mm).await?;
 	let loader = AuthorizationFactLoader::new(dbx, snapshot);
 	if let Err(error) = loader.lock_and_verify_revisions().await {
 		let _ = dbx.rollback_txn().await;
@@ -1312,14 +1131,7 @@ where
 		&'ctx ModelManager,
 	) -> Pin<Box<dyn Future<Output = Result<T>> + Send + 'ctx>>,
 {
-	let dbx = mm.dbx();
-	dbx.begin_txn()
-		.await
-		.map_err(lib_core::model::Error::from)?;
-	if let Err(error) = set_full_context_from_ctx_dbx(dbx, request_ctx).await {
-		let _ = dbx.rollback_txn().await;
-		return Err(error.into());
-	}
+	let dbx = begin_fact_transaction(request_ctx, mm).await?;
 	let result = async {
 		let context = AuthorizationFactLoader::new(dbx, snapshot)
 			.case_child(case_id, child_fingerprint)
@@ -1356,14 +1168,7 @@ where
 		&'ctx ModelManager,
 	) -> Pin<Box<dyn Future<Output = Result<T>> + Send + 'ctx>>,
 {
-	let dbx = mm.dbx();
-	dbx.begin_txn()
-		.await
-		.map_err(lib_core::model::Error::from)?;
-	if let Err(error) = set_full_context_from_ctx_dbx(dbx, request_ctx).await {
-		let _ = dbx.rollback_txn().await;
-		return Err(error.into());
-	}
+	let dbx = begin_fact_transaction(request_ctx, mm).await?;
 	let loader = AuthorizationFactLoader::new(dbx, snapshot);
 	if let Err(error) = loader.lock_and_verify_revisions().await {
 		let _ = dbx.rollback_txn().await;
