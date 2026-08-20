@@ -3149,6 +3149,7 @@ mod golden_g_required_tests {
 			recurrence_action: None,
 			reaction_recurred: None,
 			dechallenge_result: None,
+			expectedness: None,
 			created_at: OffsetDateTime::UNIX_EPOCH,
 			updated_at: OffsetDateTime::UNIX_EPOCH,
 			created_by: Uuid::nil(),
