@@ -247,8 +247,6 @@ pub(super) async fn mark_editor_validation_summary_stale(
 	Ok(())
 }
 
-/// PATCH /api/cases/{case_id}/editor/pages/CI
-
 pub(super) fn reject_unknown_row_keys(
 	page_id: &str,
 	rows: &BTreeMap<String, Value>,
