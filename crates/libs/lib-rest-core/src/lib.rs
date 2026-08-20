@@ -577,11 +577,10 @@ pub async fn routing_profile_for_user(
 		load_sender_options_for_org(ctx, mm, ctx.organization_id()).await?
 	};
 
-	let available_senders = if ctx.is_sponsor_admin() {
-		all_senders
-	} else if sender_scope.values.is_empty()
-		&& product_scope.values.is_empty()
-		&& study_scope.values.is_empty()
+	let available_senders = if ctx.is_sponsor_admin()
+		|| (sender_scope.values.is_empty()
+			&& product_scope.values.is_empty()
+			&& study_scope.values.is_empty())
 	{
 		all_senders
 	} else {
