@@ -25,10 +25,9 @@ pub(super) fn compressed_font() -> &'static [u8] {
 		encoder
 			.write_all(cff_table())
 			.expect("embedded CIOMS font must be compressible");
-		let compressed = encoder
+		encoder
 			.finish()
-			.expect("embedded CIOMS font compression must finish");
-		compressed
+			.expect("embedded CIOMS font compression must finish")
 	})
 	.as_slice()
 }

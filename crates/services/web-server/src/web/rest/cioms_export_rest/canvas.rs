@@ -70,8 +70,7 @@ impl PdfCanvas {
 			};
 			let _ = writeln!(
 				self.stream,
-				"BT /F2 {size} Tf {x} {y} Td <{}> Tj ET",
-				encoded
+				"BT /F2 {size} Tf {x} {y} Td <{encoded}> Tj ET"
 			);
 		}
 	}

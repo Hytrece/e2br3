@@ -14,15 +14,13 @@ fn cioms_item_20_result<'a>(
 	let mut values = values.into_iter();
 	let first_value = values.next().ok_or_else(|| Error::BadRequest {
 		message: format!(
-			"CIOMS Item 20 validation failed for case {}: suspect drug {} has no drug-reaction assessment",
-			case_number, drug_id
+			"CIOMS Item 20 validation failed for case {case_number}: suspect drug {drug_id} has no drug-reaction assessment"
 		),
 	})?;
 	let first_value = first_value.ok_or_else(|| {
 		Error::BadRequest {
 			message: format!(
-				"CIOMS Item 20 validation failed for case {}: suspect drug {} has a missing dechallenge result",
-				case_number, drug_id
+				"CIOMS Item 20 validation failed for case {case_number}: suspect drug {drug_id} has a missing dechallenge result"
 			),
 		}
 	})?;
@@ -30,16 +28,14 @@ fn cioms_item_20_result<'a>(
 		let value = value.ok_or_else(|| {
 			Error::BadRequest {
 				message: format!(
-					"CIOMS Item 20 validation failed for case {}: suspect drug {} has a missing dechallenge result",
-					case_number, drug_id
+					"CIOMS Item 20 validation failed for case {case_number}: suspect drug {drug_id} has a missing dechallenge result"
 				),
 			}
 		})?;
 		if value != first_value {
 			return Err(Error::BadRequest {
 				message: format!(
-					"CIOMS Item 20 validation failed for case {}: suspect drug {} has conflicting dechallenge results",
-					case_number, drug_id
+					"CIOMS Item 20 validation failed for case {case_number}: suspect drug {drug_id} has conflicting dechallenge results"
 				),
 			});
 		}
@@ -50,8 +46,7 @@ fn cioms_item_20_result<'a>(
 	}
 	Err(Error::BadRequest {
 		message: format!(
-			"CIOMS Item 20 validation failed for case {}: suspect drug {} has invalid dechallenge result '{}'",
-			case_number, drug_id, first_value
+			"CIOMS Item 20 validation failed for case {case_number}: suspect drug {drug_id} has invalid dechallenge result '{first_value}'"
 		),
 	})
 }
@@ -128,7 +123,7 @@ pub(super) fn render_landscape_cioms(
 		data.causality_rows.iter().find(|row| {
 			row.drug_id == drug.id
 				&& first_reaction_id
-					.map_or(true, |reaction_id| row.reaction_id == reaction_id)
+					.is_none_or(|reaction_id| row.reaction_id == reaction_id)
 		})
 	});
 	let dechallenge_result = cioms_item_20_value(data)?;
@@ -508,7 +503,7 @@ fn render_portrait_cioms(
 		data.causality_rows.iter().find(|row| {
 			row.drug_id == drug.id
 				&& first_reaction_id
-					.map_or(true, |reaction_id| row.reaction_id == reaction_id)
+					.is_none_or(|reaction_id| row.reaction_id == reaction_id)
 		})
 	});
 	let dechallenge_result = cioms_item_20_value(data)?;

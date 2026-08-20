@@ -136,7 +136,7 @@ async fn read_field_limited(
 	})? {
 		if bytes.len().saturating_add(chunk.len()) > max_bytes {
 			return Err(Error::BadRequest {
-				message: format!("terminology upload exceeds {} bytes", max_bytes),
+				message: format!("terminology upload exceeds {max_bytes} bytes"),
 			});
 		}
 		bytes.extend_from_slice(&chunk);

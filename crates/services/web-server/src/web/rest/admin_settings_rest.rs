@@ -385,9 +385,9 @@ async fn normalize_workflow_config(
 		.map(|status| {
 			let name = status.name.trim().to_string();
 			if name.is_empty() {
-				return Err(Error::BadRequest {
+				Err(Error::BadRequest {
 					message: "workflow status name is required".to_string(),
-				});
+				})
 			} else {
 				Ok(WorkflowStatusConfigPayload {
 					name,

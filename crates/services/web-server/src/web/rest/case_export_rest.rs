@@ -158,14 +158,9 @@ fn export_file_name(
 	include_authority_suffix: bool,
 ) -> String {
 	if include_authority_suffix {
-		format!(
-			"{}-{}-{}.xml",
-			safety_report_id,
-			case_id,
-			authority.as_str()
-		)
+		format!("{safety_report_id}-{case_id}-{}.xml", authority.as_str())
 	} else {
-		format!("{}-{}.xml", safety_report_id, case_id)
+		format!("{safety_report_id}-{case_id}.xml")
 	}
 }
 

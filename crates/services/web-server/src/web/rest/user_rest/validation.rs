@@ -67,13 +67,13 @@ pub(super) fn parse_scope_input(
 pub(super) fn serialize_scope_input(
 	value: Option<ScopeListInput>,
 ) -> Option<String> {
-	parse_scope_input(value).and_then(|values| {
+	parse_scope_input(value).map(|values| {
 		let values = values
 			.into_iter()
 			.map(|value| value.trim().to_string())
 			.filter(|value| !value.is_empty())
 			.collect::<Vec<_>>();
-		Some(serde_json::json!(values).to_string())
+		serde_json::json!(values).to_string()
 	})
 }
 
