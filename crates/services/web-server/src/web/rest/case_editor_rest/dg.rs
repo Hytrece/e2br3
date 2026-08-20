@@ -29,6 +29,7 @@ use lib_core::model::drug_reaction_assessment::{
 	RelatednessAssessmentBmc, RelatednessAssessmentFilter,
 	RelatednessAssessmentForCreate, RelatednessAssessmentForUpdate,
 };
+use std::collections::BTreeMap;
 
 const DRUG_ROW_ALIASES: &[(&str, &[&str])] = &[
 	("source_product_presave_id", &["sourceProductPresaveId"]),
@@ -882,18 +883,40 @@ async fn load_editor_dg_row_detail(
 		Some(ListOptions::from_order_bys(vec!["sequence_number", "id"])),
 	)
 	.await?;
-	let mut fda_devices_with_codes = Vec::with_capacity(fda_devices.len());
-	for device in fda_devices {
-		let codes = FdaDeviceCodeBmc::list(
+	let device_ids = fda_devices
+		.iter()
+		.map(|device| device.id)
+		.collect::<Vec<_>>();
+	let device_codes = if device_ids.is_empty() {
+		Vec::new()
+	} else {
+		FdaDeviceCodeBmc::list(
 			ctx,
 			mm,
-			Some(vec![FdaDeviceCodeFilter {
-				device_id: Some(uuid_eq(device.id)),
-				..Default::default()
-			}]),
+			Some(
+				device_ids
+					.iter()
+					.copied()
+					.map(|device_id| FdaDeviceCodeFilter {
+						device_id: Some(uuid_eq(device_id)),
+						..Default::default()
+					})
+					.collect(),
+			),
 			Some(ListOptions::from_order_bys(vec!["sequence_number", "id"])),
 		)
-		.await?;
+		.await?
+	};
+	let mut codes_by_device = BTreeMap::new();
+	for code in device_codes {
+		codes_by_device
+			.entry(code.device_id)
+			.or_insert_with(Vec::new)
+			.push(code);
+	}
+	let mut fda_devices_with_codes = Vec::with_capacity(fda_devices.len());
+	for device in fda_devices {
+		let codes = codes_by_device.remove(&device.id).unwrap_or_default();
 		let mut value = json!(device);
 		if let Value::Object(ref mut map) = value {
 			for (element, key) in [
@@ -914,18 +937,42 @@ async fn load_editor_dg_row_detail(
 	}
 	let assessments =
 		DrugReactionAssessmentBmc::list_by_drug(ctx, mm, drug_id).await?;
-	let mut drug_reaction_assessments = Vec::new();
-	for assessment in assessments {
-		let relatedness = RelatednessAssessmentBmc::list(
+	let assessment_ids = assessments
+		.iter()
+		.map(|assessment| assessment.id)
+		.collect::<Vec<_>>();
+	let relatedness_rows = if assessment_ids.is_empty() {
+		Vec::new()
+	} else {
+		RelatednessAssessmentBmc::list(
 			ctx,
 			mm,
-			Some(vec![RelatednessAssessmentFilter {
-				drug_reaction_assessment_id: Some(uuid_eq(assessment.id)),
-				..Default::default()
-			}]),
+			Some(
+				assessment_ids
+					.iter()
+					.copied()
+					.map(|assessment_id| RelatednessAssessmentFilter {
+						drug_reaction_assessment_id: Some(uuid_eq(assessment_id)),
+						..Default::default()
+					})
+					.collect(),
+			),
 			Some(ListOptions::from_order_bys(vec!["sequence_number", "id"])),
 		)
-		.await?;
+		.await?
+	};
+	let mut relatedness_by_assessment = BTreeMap::new();
+	for relatedness in relatedness_rows {
+		relatedness_by_assessment
+			.entry(relatedness.drug_reaction_assessment_id)
+			.or_insert_with(Vec::new)
+			.push(relatedness);
+	}
+	let mut drug_reaction_assessments = Vec::new();
+	for assessment in assessments {
+		let relatedness = relatedness_by_assessment
+			.remove(&assessment.id)
+			.unwrap_or_default();
 		let base = json!({
 			"drugReactionAssessmentId": assessment.id,
 			"reactionId": assessment.reaction_id,
