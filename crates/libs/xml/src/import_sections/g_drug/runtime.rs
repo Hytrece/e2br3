@@ -434,7 +434,7 @@ async fn import_drug_reaction_assessments(
 			.map(|v| v.0);
 
 		if let Some(id) = existing {
-			let _ = RelatednessAssessmentBmc::update(
+			RelatednessAssessmentBmc::update(
 				ctx,
 				mm,
 				id,
@@ -469,7 +469,7 @@ async fn import_drug_reaction_assessments(
 				},
 			)
 			.await?;
-			let _ = RelatednessAssessmentBmc::update(
+			RelatednessAssessmentBmc::update(
 				ctx,
 				mm,
 				id,

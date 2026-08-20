@@ -303,7 +303,7 @@ async fn import_c_2_sender_information(
 		.await?
 	};
 
-	let _ = SenderInformationBmc::update(
+	SenderInformationBmc::update(
 		ctx,
 		mm,
 		sender_id,
@@ -465,7 +465,7 @@ async fn import_c_3_primary_sources(
 			.await?
 		};
 
-		let _ = PrimarySourceBmc::update(
+		PrimarySourceBmc::update(
 			ctx,
 			mm,
 			primary_id,
@@ -533,7 +533,7 @@ async fn import_c_4_case_identifiers(
 			.map_err(model::Error::from)?
 			.map(|v| v.0);
 		if let Some(id) = existing {
-			let _ = OtherCaseIdentifierBmc::update(
+			OtherCaseIdentifierBmc::update(
 				ctx,
 				mm,
 				id,
@@ -574,7 +574,7 @@ async fn import_c_4_case_identifiers(
 			.map_err(model::Error::from)?
 			.map(|v| v.0);
 		if let Some(id) = existing {
-			let _ = LinkedReportNumberBmc::update(
+			LinkedReportNumberBmc::update(
 				ctx,
 				mm,
 				id,
@@ -622,7 +622,7 @@ async fn import_c_4_documents_held_by_sender(
 			.map_err(model::Error::from)?
 			.map(|v| v.0);
 		if let Some(id) = existing {
-			let _ = DocumentsHeldBySenderBmc::update(
+			DocumentsHeldBySenderBmc::update(
 				ctx,
 				mm,
 				id,
@@ -681,7 +681,7 @@ async fn import_c_4_literature_references(
 			.map_err(model::Error::from)?
 			.map(|v| v.0);
 		if let Some(id) = existing {
-			let _ = LiteratureReferenceBmc::update(
+			LiteratureReferenceBmc::update(
 				ctx,
 				mm,
 				id,
@@ -876,7 +876,7 @@ async fn import_c_6_receiver_information(
 		.await?
 		.is_some()
 	{
-		let _ = ReceiverInformationBmc::update_by_case(
+		ReceiverInformationBmc::update_by_case(
 			ctx,
 			mm,
 			case_id,

@@ -62,7 +62,7 @@ async fn import_patient_identifiers(
 			.map_err(model::Error::from)?
 			.map(|v| v.0);
 		if let Some(id) = existing {
-			let _ = PatientIdentifierBmc::update(
+			PatientIdentifierBmc::update(
 				ctx,
 				mm,
 				id,
@@ -113,7 +113,7 @@ async fn import_medical_history(
 			.map_err(model::Error::from)?
 			.map(|v| v.0);
 		if let Some(id) = existing {
-			let _ = MedicalHistoryEpisodeBmc::update(
+			MedicalHistoryEpisodeBmc::update(
 				ctx,
 				mm,
 				id,
@@ -145,7 +145,7 @@ async fn import_medical_history(
 				},
 			)
 			.await?;
-			let _ = MedicalHistoryEpisodeBmc::update(
+			MedicalHistoryEpisodeBmc::update(
 				ctx,
 				mm,
 				id,
@@ -190,7 +190,7 @@ async fn import_past_drug_history(
 			.map_err(model::Error::from)?
 			.map(|v| v.0);
 		if let Some(id) = existing {
-			let _ = PastDrugHistoryBmc::update(
+			PastDrugHistoryBmc::update(
 				ctx,
 				mm,
 				id,
@@ -292,7 +292,7 @@ async fn import_patient_death(
 		.await?
 	};
 
-	let _ = PatientDeathInformationBmc::update(
+	PatientDeathInformationBmc::update(
 		ctx,
 		mm,
 		death_id,
@@ -320,7 +320,7 @@ async fn import_patient_death(
 			.map_err(model::Error::from)?
 			.map(|v| v.0);
 		if let Some(id) = existing {
-			let _ = ReportedCauseOfDeathBmc::update(
+			ReportedCauseOfDeathBmc::update(
 				ctx,
 				mm,
 				id,
@@ -362,7 +362,7 @@ async fn import_patient_death(
 			.map_err(model::Error::from)?
 			.map(|v| v.0);
 		if let Some(id) = existing {
-			let _ = AutopsyCauseOfDeathBmc::update(
+			AutopsyCauseOfDeathBmc::update(
 				ctx,
 				mm,
 				id,
@@ -444,7 +444,7 @@ async fn import_parent_information(
 		.await?
 	};
 
-	let _ = ParentInformationBmc::update(
+	ParentInformationBmc::update(
 		ctx,
 		mm,
 		parent_id,
@@ -483,7 +483,7 @@ async fn import_parent_information(
 			.map_err(model::Error::from)?
 			.map(|v| v.0);
 		if let Some(id) = existing {
-			let _ = ParentMedicalHistoryBmc::update(
+			ParentMedicalHistoryBmc::update(
 				ctx,
 				mm,
 				id,
@@ -515,7 +515,7 @@ async fn import_parent_information(
 				},
 			)
 			.await?;
-			let _ = ParentMedicalHistoryBmc::update(
+			ParentMedicalHistoryBmc::update(
 				ctx,
 				mm,
 				id,
@@ -550,7 +550,7 @@ async fn import_parent_information(
 			.map_err(model::Error::from)?
 			.map(|v| v.0);
 		if let Some(id) = existing {
-			let _ = ParentPastDrugHistoryBmc::update(
+			ParentPastDrugHistoryBmc::update(
 				ctx,
 				mm,
 				id,
@@ -606,7 +606,7 @@ async fn import_parent_information(
 				},
 			)
 			.await?;
-			let _ = ParentPastDrugHistoryBmc::update(
+			ParentPastDrugHistoryBmc::update(
 				ctx,
 				mm,
 				id,
