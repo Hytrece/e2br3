@@ -82,7 +82,7 @@ pub async fn create_submission(
 				ctx.e_signature_id(),
 			)
 			.await
-			.map_err(|e| Error::from(lib_core::model::Error::from(e)))?;
+			.map_err(Error::from)?;
 
 			mm.dbx()
 				.execute(
@@ -164,7 +164,7 @@ pub async fn create_submission(
 		ctx.e_signature_id(),
 	)
 	.await
-	.map_err(|e| Error::from(lib_core::model::Error::from(e)))?;
+	.map_err(Error::from)?;
 
 	let updated = mm
 		.dbx()

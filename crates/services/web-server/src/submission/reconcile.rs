@@ -20,7 +20,7 @@ pub async fn reconcile_due_submissions(
 			system_ctx.role(),
 		)
 		.await
-		.map_err(|e| Error::from(lib_core::model::Error::from(e)))?;
+		.map_err(Error::from)?;
 		mm.dbx()
 			.fetch_all(
 				sqlx::query_as::<_, (Uuid,)>(
@@ -110,7 +110,7 @@ pub(super) async fn reconcile_one_submission(
 			system_ctx.role(),
 		)
 		.await
-		.map_err(|e| Error::from(lib_core::model::Error::from(e)))?;
+		.map_err(Error::from)?;
 		mm.dbx()
 			.fetch_optional(
 				sqlx::query_as::<_, CaseSubmissionRow>(
@@ -203,7 +203,7 @@ pub(super) async fn reconcile_one_submission(
 						system_ctx.e_signature_id(),
 					)
 					.await
-					.map_err(|e| Error::from(lib_core::model::Error::from(e)))?;
+					.map_err(Error::from)?;
 
 					mm.dbx()
 						.execute(
@@ -316,7 +316,7 @@ pub(super) async fn reconcile_one_submission(
 						system_ctx.e_signature_id(),
 					)
 					.await
-					.map_err(|e| Error::from(lib_core::model::Error::from(e)))?;
+					.map_err(Error::from)?;
 					upsert_dispatch_state_submit_failure(
 						mm,
 						submission_id,

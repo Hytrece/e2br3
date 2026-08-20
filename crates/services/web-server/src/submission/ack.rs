@@ -80,7 +80,7 @@ pub async fn apply_gateway_ack_by_remote(
 		system_ctx.e_signature_id(),
 	)
 	.await
-	.map_err(|e| Error::from(lib_core::model::Error::from(e)))?;
+	.map_err(Error::from)?;
 
 	let row = mm
 		.dbx()
