@@ -126,9 +126,9 @@ where
 			)
 		}),
 		FlexDateInput::YearOrdinal(year, ordinal) => {
-			Date::from_ordinal_date(year, u16::max(1, ordinal) as u16).map_err(
-				|_| de::Error::custom("invalid date: expected [year, ordinal]"),
-			)
+			Date::from_ordinal_date(year, u16::max(1, ordinal)).map_err(|_| {
+				de::Error::custom("invalid date: expected [year, ordinal]")
+			})
 		}
 		FlexDateInput::YearMonthDay(year, month, day) => {
 			let month = Month::try_from(month).map_err(|_| {
@@ -201,16 +201,16 @@ where
 	D: Deserializer<'de>,
 {
 	let value = Option::<String>::deserialize(deserializer)?;
-	Ok(value.and_then(|value| {
+	Ok(value.map(|value| {
 		let trimmed = value.trim();
 		let digits: String =
 			trimmed.chars().filter(|c| c.is_ascii_digit()).collect();
 		if matches!(digits.len(), 4 | 6) {
-			Some(trimmed.to_string())
+			trimmed.to_string()
 		} else {
 			// A present full-precision/empty value clears an older partial raw
 			// value through the update model's non-NULL field handling.
-			Some(String::new())
+			String::new()
 		}
 	}))
 }
@@ -226,7 +226,7 @@ where
 	Ok(match v {
 		FlexDateInput::Str(s) => normalize_e2b_datetime_str(&s),
 		FlexDateInput::YearOrdinal(year, ordinal) => {
-			Date::from_ordinal_date(year, u16::max(1, ordinal) as u16)
+			Date::from_ordinal_date(year, u16::max(1, ordinal))
 				.ok()
 				.map(format_e2b_datetime)
 		}
