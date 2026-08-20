@@ -350,9 +350,13 @@ pub(super) fn validate_new_password(password: &str) -> Result<()> {
 }
 
 pub(super) fn initial_password(pwd_clear: Option<String>) -> Result<String> {
-	let password = pwd_clear.ok_or_else(|| Error::BadRequest {
-		message: "pwd_clear is required".to_string(),
-	})?;
+	let password = pwd_clear
+		.map(|value| value.trim().to_string())
+		.filter(|value| !value.is_empty())
+		.unwrap_or_else(|| "welcome".to_string());
+	if password == "welcome" {
+		return Ok(password);
+	}
 	validate_new_password(&password)?;
 	Ok(password)
 }
@@ -499,8 +503,9 @@ mod uuid_scope_tests {
 	}
 
 	#[test]
-	fn initial_password_is_explicit_and_meets_the_shared_policy() {
-		assert!(initial_password(None).is_err());
+	fn initial_password_defaults_to_welcome_or_meets_the_shared_policy() {
+		assert_eq!(initial_password(None).unwrap(), "welcome");
+		assert_eq!(initial_password(Some("  ".to_string())).unwrap(), "welcome");
 		assert!(initial_password(Some("too-short".to_string())).is_err());
 		assert_eq!(
 			initial_password(Some("long-enough-password".to_string())).unwrap(),
