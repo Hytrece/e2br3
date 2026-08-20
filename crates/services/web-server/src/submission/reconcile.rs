@@ -24,24 +24,13 @@ pub async fn reconcile_due_submissions(
 		mm.dbx()
 			.fetch_all(
 				sqlx::query_as::<_, (Uuid,)>(
-					// ponytail: fixed five-minute lease; use a persisted worker lease
-					// if reconciliation can run longer than that.
-					"WITH due AS (
-						SELECT submission_id
-						  FROM submission_dispatch_state
-						 WHERE next_retry_at IS NOT NULL
-						   AND next_retry_at <= now()
-						   AND terminal_at IS NULL
-						 ORDER BY next_retry_at ASC
-						 FOR UPDATE SKIP LOCKED
-						 LIMIT $1
-					)
-					UPDATE submission_dispatch_state state
-					   SET next_retry_at = now() + interval '5 minutes',
-					       updated_at = now()
-					  FROM due
-					 WHERE state.submission_id = due.submission_id
-					 RETURNING state.submission_id",
+					"SELECT submission_id
+					   FROM submission_dispatch_state
+					  WHERE next_retry_at IS NOT NULL
+					    AND next_retry_at <= now()
+					    AND terminal_at IS NULL
+					  ORDER BY next_retry_at ASC
+					  LIMIT $1",
 				)
 				.bind(safe_limit),
 			)
@@ -96,6 +85,66 @@ pub(super) async fn reconcile_one_submission(
 	mm: &ModelManager,
 	submission_id: Uuid,
 ) -> Result<ReconcileOutcome> {
+	let Some(lock_mm) = try_acquire_reconcile_lock(mm, submission_id).await? else {
+		return Ok(ReconcileOutcome::Skipped);
+	};
+
+	let result = reconcile_one_submission_locked(mm, submission_id).await;
+	let unlock_result = lock_mm
+		.dbx()
+		.rollback_txn()
+		.await
+		.map_err(|e| Error::from(lib_core::model::Error::from(e)));
+	match (result, unlock_result) {
+		(Err(err), _) => Err(err),
+		(Ok(_), Err(err)) => Err(err),
+		(Ok(outcome), Ok(())) => Ok(outcome),
+	}
+}
+
+async fn try_acquire_reconcile_lock(
+	mm: &ModelManager,
+	submission_id: Uuid,
+) -> Result<Option<ModelManager>> {
+	let lock_mm = mm.clone();
+	lock_mm
+		.dbx()
+		.begin_txn()
+		.await
+		.map_err(|e| Error::from(lib_core::model::Error::from(e)))?;
+	let acquired = match lock_mm
+		.dbx()
+		.fetch_one(
+			sqlx::query_as::<_, (bool,)>(
+				"SELECT pg_try_advisory_xact_lock(
+					hashtextextended('e2br3.submission.reconcile:' || $1::text, 0)
+				)",
+			)
+			.bind(submission_id),
+		)
+		.await
+	{
+		Ok(row) => row.0,
+		Err(err) => {
+			let _ = lock_mm.dbx().rollback_txn().await;
+			return Err(Error::from(lib_core::model::Error::from(err)));
+		}
+	};
+	if !acquired {
+		lock_mm
+			.dbx()
+			.rollback_txn()
+			.await
+			.map_err(|e| Error::from(lib_core::model::Error::from(e)))?;
+		return Ok(None);
+	}
+	Ok(Some(lock_mm))
+}
+
+async fn reconcile_one_submission_locked(
+	mm: &ModelManager,
+	submission_id: Uuid,
+) -> Result<ReconcileOutcome> {
 	let system_ctx = Ctx::root_ctx()
 		.with_compliance(Some(SYSTEM_REASON_RECONCILE_RETRY.to_string()), None);
 	mm.dbx()
@@ -114,9 +163,17 @@ pub(super) async fn reconcile_one_submission(
 		mm.dbx()
 			.fetch_optional(
 				sqlx::query_as::<_, CaseSubmissionRow>(
-					"SELECT id, case_id, gateway, remote_submission_id, status, xml_bytes, submitted_by, submitted_at
-					 FROM case_submissions
-					 WHERE id = $1",
+					"SELECT submission.id, submission.case_id, submission.gateway,
+					        submission.remote_submission_id, submission.status,
+					        submission.xml_bytes, submission.submitted_by,
+					        submission.submitted_at
+					   FROM case_submissions submission
+					   JOIN submission_dispatch_state state
+					     ON state.submission_id = submission.id
+					  WHERE submission.id = $1
+					    AND state.next_retry_at IS NOT NULL
+					    AND state.next_retry_at <= now()
+					    AND state.terminal_at IS NULL",
 				)
 				.bind(submission_id),
 			)
@@ -362,5 +419,34 @@ pub async fn reconcile_due_submissions_with_runtime_status(
 			record_reconcile_error(&err.to_string());
 			Err(err)
 		}
+	}
+}
+
+#[cfg(test)]
+mod lock_tests {
+	use super::*;
+
+	#[serial_test::serial]
+	#[tokio::test]
+	async fn submission_lock_has_one_owner_and_releases_with_transaction() {
+		std::env::set_var("SERVICE_DB_MAX_CONNECTIONS", "3");
+		let mm = ModelManager::new().await.unwrap();
+		let submission_id = Uuid::new_v4();
+
+		let first = try_acquire_reconcile_lock(&mm, submission_id)
+			.await
+			.unwrap()
+			.expect("first worker should own the submission lock");
+		assert!(try_acquire_reconcile_lock(&mm, submission_id)
+			.await
+			.unwrap()
+			.is_none());
+
+		first.dbx().rollback_txn().await.unwrap();
+		let next = try_acquire_reconcile_lock(&mm, submission_id)
+			.await
+			.unwrap()
+			.expect("lock should be available after transaction end");
+		next.dbx().rollback_txn().await.unwrap();
 	}
 }

@@ -32,13 +32,7 @@ fn require_ack1(
 	})?;
 	if !success {
 		return Err(Error::BadRequest {
-			message: format!(
-				"{gateway} submit response contains unsuccessful ACK1{}",
-				ack.message
-					.as_deref()
-					.map(|message| format!(": {message}"))
-					.unwrap_or_default()
-			),
+			message: format!("{gateway} submit response contains unsuccessful ACK1"),
 		});
 	}
 	Ok(SubmissionAck {
@@ -91,17 +85,14 @@ pub(super) async fn submit_to_gateway(
 				message: format!("AS2 submitter request failed: {err}"),
 			})?;
 		let status = resp.status();
+		if !status.is_success() {
+			return Err(Error::BadRequest {
+				message: format!("AS2 submitter rejected request ({status})"),
+			});
+		}
 		let body_text = resp.text().await.map_err(|err| Error::BadRequest {
 			message: format!("AS2 submitter response read failed: {err}"),
 		})?;
-		if !status.is_success() {
-			let body_snippet = body_text.chars().take(200).collect::<String>();
-			return Err(Error::BadRequest {
-				message: format!(
-					"AS2 submitter rejected request ({status}): {body_snippet}"
-				),
-			});
-		}
 		let parsed: As2GatewaySubmitResponse = serde_json::from_str(&body_text)
 			.map_err(|err| Error::BadRequest {
 				message: format!("AS2 submitter response is not valid JSON: {err}"),
@@ -181,15 +172,14 @@ pub(super) async fn submit_to_gateway(
 			message: format!("FDA ESG submit request failed: {err}"),
 		})?;
 	let status = resp.status();
+	if !status.is_success() {
+		return Err(Error::BadRequest {
+			message: format!("FDA ESG submit failed ({status})"),
+		});
+	}
 	let body_text = resp.text().await.map_err(|err| Error::BadRequest {
 		message: format!("FDA ESG submit response read failed: {err}"),
 	})?;
-	if !status.is_success() {
-		let body_snippet = body_text.chars().take(200).collect::<String>();
-		return Err(Error::BadRequest {
-			message: format!("FDA ESG submit failed ({status}): {body_snippet}"),
-		});
-	}
 
 	let parsed: EsgSubmitResponse =
 		serde_json::from_str(&body_text).map_err(|err| Error::BadRequest {
@@ -328,7 +318,9 @@ mod tests {
 			OffsetDateTime::now_utc(),
 		)
 		.expect_err("negative ACK must not enter successful outcome type");
-		assert!(error.to_string().contains("unsuccessful ACK1"));
+		let message = error.to_string();
+		assert!(message.contains("unsuccessful ACK1"));
+		assert!(!message.contains("accepted by gateway"));
 	}
 
 	#[test]
