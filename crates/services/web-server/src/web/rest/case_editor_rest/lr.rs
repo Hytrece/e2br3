@@ -1,4 +1,15 @@
-use super::common::*;
+use super::common::{
+	editor_page_row_response, i32_field, json, query_authorities_csv,
+	repeatable_page_projection_response, uuid_eq, CaseEditorPageProjectionQuery,
+	CaseEditorPageProjectionResponse, CtxW, Error, Json, ListOptions,
+	LiteratureReferenceBmc, LiteratureReferenceFilter, LiteratureReferenceForCreate,
+	LiteratureReferenceForUpdate, ModelManager, Path, Query, Result, State, Uuid,
+	Value,
+};
+use super::handler_macros::{
+	repeatable_page_row_create_handler, repeatable_page_row_delete_handler,
+	repeatable_page_row_patch_handler, repeatable_page_row_read_handler,
+};
 
 const LITERATURE_REFERENCE_ROW_ALIASES: &[(&str, &[&str])] = &[
 	("reference_text", &["referenceText"]),

@@ -1,4 +1,9 @@
-use super::common::*;
+#[cfg(test)]
+use super::common::json;
+use super::common::{
+	as_object, bool_field, optional_row_object, string_field, BTreeMap, Error, Map,
+	Result, Value,
+};
 use input_contracts::{FieldInput, InputIssue, InputValue};
 use lib_rest_core::ConstraintViolation;
 use std::collections::BTreeSet;

@@ -4,6 +4,7 @@
 //! so existing router paths (`case_editor_rest::<handler>`) stay unchanged.
 
 mod common;
+mod handler_macros;
 
 mod ae;
 mod dg;
