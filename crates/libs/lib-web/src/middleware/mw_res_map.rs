@@ -12,7 +12,6 @@ use lib_rest_core::prelude::StatusCode;
 use serde_json::{json, to_value};
 use std::sync::Arc;
 use tracing::{debug, error};
-use uuid::Uuid;
 
 fn normalize_detail_for_client(detail: serde_json::Value) -> serde_json::Value {
 	match detail {
@@ -178,7 +177,7 @@ pub async fn mw_response_map(
 	let ctx = ctx.map(|ctx| ctx.0).ok();
 
 	debug!("{:<12} - mw_response_map", "RES_MAPPER");
-	let uuid = Uuid::new_v4();
+	let uuid = req_stamp.uuid;
 
 	// -- Get the eventual response error.
 	let web_error = res.extensions().get::<Arc<Error>>().map(Arc::as_ref);
@@ -384,10 +383,22 @@ pub async fn mw_response_map(
 			});
 
 	// -- Build and log the server log line.
+	let response_status = client_status_error
+		.as_ref()
+		.map(|(status, _)| *status)
+		.unwrap_or_else(|| res.status());
 	let client_error = client_status_error.unzip().1;
 
-	if let Err(err) =
-		log_request(req_method, uri, req_stamp, ctx, web_error, client_error).await
+	if let Err(err) = log_request(
+		req_method,
+		uri,
+		req_stamp,
+		ctx,
+		response_status,
+		web_error,
+		client_error,
+	)
+	.await
 	{
 		error!("log_request failed: {err}");
 	}
@@ -395,6 +406,9 @@ pub async fn mw_response_map(
 	debug!("\n");
 
 	let mut response = error_response.unwrap_or(res);
+	if let Ok(value) = HeaderValue::from_str(&uuid.to_string()) {
+		response.headers_mut().insert("x-request-id", value);
+	}
 	if let Some(version) = policy_version_value {
 		if let Ok(value) = HeaderValue::from_str(&version.to_string()) {
 			response
@@ -408,6 +422,8 @@ pub async fn mw_response_map(
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use lib_utils::time::now_utc;
+	use uuid::Uuid;
 
 	#[test]
 	fn validation_errors_are_identifiable_client_errors() {
@@ -420,5 +436,30 @@ mod tests {
 		assert_eq!(status, StatusCode::BAD_REQUEST);
 		assert_eq!(error.as_ref(), "INVALID_REQUEST");
 		assert_eq!(detail, Some(json!("invalid field")));
+	}
+
+	#[tokio::test]
+	async fn response_exposes_the_request_stamp_id() {
+		let request_id = Uuid::new_v4();
+		let response = mw_response_map(
+			Err(Error::ReqStampNotInReqExt),
+			"/health".parse().unwrap(),
+			Method::GET,
+			ReqStamp {
+				uuid: request_id,
+				time_in: now_utc(),
+			},
+			None,
+			StatusCode::OK.into_response(),
+		)
+		.await;
+		let expected = request_id.to_string();
+		assert_eq!(
+			response
+				.headers()
+				.get("x-request-id")
+				.and_then(|value| value.to_str().ok()),
+			Some(expected.as_str())
+		);
 	}
 }

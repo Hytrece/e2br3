@@ -1854,6 +1854,8 @@ async fn test_imported_case_save_updates_public_fields_without_import_noise(
 	assert!(!rendered.contains("batch"), "{update_body:?}");
 	assert!(!rendered.contains("header"), "{update_body:?}");
 	assert!(!rendered.contains("import"), "{update_body:?}");
+	assert!(!rendered.contains("raw_xml"), "{update_body:?}");
+	assert!(!rendered.contains("rawxml"), "{update_body:?}");
 
 	Ok(())
 }
