@@ -120,6 +120,36 @@ async fn product_presave_create_persists_complete_rows_atomically() -> Result<()
 	Ok(())
 }
 
+#[serial]
+#[tokio::test]
+async fn info_editor_can_create_product_for_same_org_sender() -> Result<()> {
+	let mm = init_test_mm().await?;
+	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
+	let admin_token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
+	let admin_cookie = cookie_header(&admin_token.to_string());
+	let app = web_server::app(mm.clone());
+	let (_, editor_cookie) =
+		create_info_editor(&app, &mm, &admin_cookie, seed.org_id).await?;
+	let sender_id =
+		create_sender_presave_via_api(&app, &admin_cookie, "fda").await?;
+
+	post_json_created(
+		&app,
+		&editor_cookie,
+		"/api/presaves/products".to_string(),
+		json!({ "data": { "rows": {
+			"product": {
+				"senderPresaveId": sender_id,
+				"productId": format!("INFO-EDITOR-{}", Uuid::new_v4())
+			},
+			"activeSubstances": []
+		} } }),
+	)
+	.await?;
+
+	Ok(())
+}
+
 #[tokio::test]
 async fn test_canonical_product_presave_is_authorityless_union_record() -> Result<()>
 {

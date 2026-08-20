@@ -1441,14 +1441,6 @@ impl ProductPresaveBmc {
 		mm: &ModelManager,
 		sender_presave_id: Option<Uuid>,
 	) -> Result<()> {
-		if sender_presave_id.is_some()
-			&& !ctx.is_cro_sponsor_admin()
-			&& !ctx.is_company_sponsor_admin()
-		{
-			return Err(relationship_conflict(
-				"only CRO or company sponsor administrators can set product sender presaves",
-			));
-		}
 		if let Some(sender_presave_id) = sender_presave_id {
 			let sender = SenderPresaveBmc::get(ctx, mm, sender_presave_id)
 				.await
