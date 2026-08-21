@@ -145,11 +145,15 @@ pub async fn init_authorization_test_db() -> Result<AuthorizationTestDb> {
 pub async fn init_clean_bootstrap_authorization_test_db(
 ) -> Result<AuthorizationTestDb> {
 	let database = new_isolated_database().await?;
-	sqlx::raw_sql(include_str!(
-		"../../../../../db/bootstrap/01-safetydb-schema.sql"
-	))
-	.execute(database.pool())
-	.await?;
+	let bootstrap =
+		include_str!("../../../../../db/bootstrap/01-safetydb-schema.sql")
+			.lines()
+			.filter(|line| {
+				!line.starts_with('\\') && !line.contains(":\"app_db_user\"")
+			})
+			.collect::<Vec<_>>()
+			.join("\n");
+	sqlx::raw_sql(&bootstrap).execute(database.pool()).await?;
 	apply_authorization_migrations(&database).await?;
 	Ok(database)
 }

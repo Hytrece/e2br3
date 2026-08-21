@@ -77,11 +77,16 @@ pub async fn create_user(
 		"active_sender_identifier",
 		data.active_sender_identifier.as_deref(),
 	)?;
-	if sender_scope_assignment_forbidden_for_ctx(&ctx)
-		&& has_sender_scope_assignment(
-			&data.active_sender_identifier,
-			&data.access_sender_ids,
-		) {
+	if !matches!(
+		snapshot.identity().built_in_kind(),
+		Some(
+			BuiltInIdentityKind::SponsorCroAdministrator
+				| BuiltInIdentityKind::SponsorCompanyAdministrator
+		)
+	) && has_sender_scope_assignment(
+		&data.active_sender_identifier,
+		&data.access_sender_ids,
+	) {
 		return Err(sender_scope_assignment_forbidden());
 	}
 	if organization_id.is_nil() {
@@ -310,8 +315,13 @@ pub async fn update_user(
 	} else {
 		"user.update"
 	};
-	let forbids_sender_scope_assignment =
-		sender_scope_assignment_forbidden_for_ctx(&ctx);
+	let forbids_sender_scope_assignment = !matches!(
+		snapshot.identity().built_in_kind(),
+		Some(
+			BuiltInIdentityKind::SponsorCroAdministrator
+				| BuiltInIdentityKind::SponsorCompanyAdministrator
+		)
+	);
 	lib_rest_core::with_authorized_user_mutation(
 		&ctx,
 		&snapshot,

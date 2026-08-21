@@ -259,6 +259,14 @@ async fn device_rows_are_tenant_scoped_and_targeted_export_ignores_org_volume(
 		.execute(&mut *tx)
 		.await?;
 	}
+	sqlx::query(
+		"UPDATE safety_report_identification
+		 SET transmission_date = '20260821000000'
+		 WHERE case_id = $1",
+	)
+	.bind(seed.case_org1)
+	.execute(&mut *tx)
+	.await?;
 	tx.commit().await?;
 
 	let ctx = Ctx::new(

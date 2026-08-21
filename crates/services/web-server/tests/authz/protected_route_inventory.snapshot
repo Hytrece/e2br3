@@ -342,12 +342,14 @@ POST /api/cases/{case_id}/source-documents
 POST /api/cases/{case_id}/test-results
 POST /api/cases/{case_id}/test-results/{id}/restore
 POST /api/cases/{id}/lock/toggle
+POST /api/cases/{id}/restore
 POST /api/cases/{id}/review/toggle
 POST /api/cases/{id}/submissions/fda
 POST /api/cases/{id}/submissions/mfds
 POST /api/cases/{id}/validator/mark-validated
 POST /api/cases/{id}/workflow/assign
 POST /api/cases/{id}/workflow/transition
+POST /api/cases/{source_case_id}/follow-up
 POST /api/import/xml
 POST /api/import/xml/validate
 POST /api/organizations

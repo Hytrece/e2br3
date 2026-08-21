@@ -432,7 +432,7 @@ fn submission_routes_use_typed_policy_contexts_only() {
 	}
 	assert!(source.contains("with_authorized_submission_collection"));
 	assert!(source.contains("with_authorized_submission_read"));
-	assert!(source.contains("with_authorized_submission_mutation"));
+	assert!(source.contains("with_authorized_case_mutation"));
 	assert!(source.contains("\"submission.execute\""));
 }
 

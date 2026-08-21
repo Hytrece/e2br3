@@ -190,7 +190,8 @@ async fn access_end_is_exclusive_and_missing_revision_rows_fail_closed() -> Resu
 {
 	let database = init_authorization_test_db().await?;
 	apply_authorization_revision_migration(&database).await?;
-	let boundary = OffsetDateTime::now_utc() + Duration::hours(1);
+	let boundary =
+		OffsetDateTime::now_utc().replace_nanosecond(0)? + Duration::hours(1);
 	sqlx::query("UPDATE users SET access_end_at = $1 WHERE id = $2")
 		.bind(boundary)
 		.bind(USER_ID)
@@ -247,7 +248,8 @@ async fn access_start_is_inclusive_and_token_expiry_is_the_earliest_boundary(
 ) -> Result<()> {
 	let database = init_authorization_test_db().await?;
 	apply_authorization_revision_migration(&database).await?;
-	let start = OffsetDateTime::now_utc() + Duration::hours(1);
+	let start =
+		OffsetDateTime::now_utc().replace_nanosecond(0)? + Duration::hours(1);
 	let access_end = start + Duration::hours(2);
 	let token_expiry = start + Duration::minutes(30);
 	sqlx::query(
