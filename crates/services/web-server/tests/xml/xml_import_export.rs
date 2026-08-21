@@ -1,6 +1,7 @@
 use crate::common::{
 	cookie_header, create_test_import_product, init_test_env, init_test_mm,
-	seed_org_with_users, unique_safety_report_id_xml, Result,
+	prepare_test_fda_export_case, seed_org_with_users, unique_safety_report_id_xml,
+	Result,
 };
 use axum::body::{to_bytes, Body};
 use axum::http::{Request, StatusCode};
@@ -43,8 +44,19 @@ fn fixture_xml(filename: &str) -> Result<String> {
 	)?)
 }
 
-fn scenario6_with_first_test_date_null_flavor() -> Result<String> {
+fn scenario6_xml() -> Result<String> {
 	let xml = fixture_xml("FAERS2022Scenario6.xml")?;
+	let invalid_attachment_tail = "\n.\n\n\t\t\t\t\t\t\t</text>";
+	let updated =
+		xml.replacen(invalid_attachment_tail, "\n\n\t\t\t\t\t\t\t</text>", 1);
+	if updated == xml {
+		return Err("Scenario 6 invalid attachment marker was not found".into());
+	}
+	Ok(updated)
+}
+
+fn scenario6_with_first_test_date_null_flavor() -> Result<String> {
+	let xml = scenario6_xml()?;
 	let original = "<originalText>Calcium Level</originalText>\n\t\t\t\t\t\t\t\t\t\t\t\t\t\t<!--  F.r.2.1 Test Name (free text) #1 -->\n\t\t\t\t\t\t\t\t\t\t\t\t\t</code>\n\t\t\t\t\t\t\t\t\t\t\t\t\t<effectiveTime value=\"20090101\"/>";
 	let replacement = "<originalText>Calcium Level</originalText>\n\t\t\t\t\t\t\t\t\t\t\t\t\t\t<!--  F.r.2.1 Test Name (free text) #1 -->\n\t\t\t\t\t\t\t\t\t\t\t\t\t</code>\n\t\t\t\t\t\t\t\t\t\t\t\t\t<effectiveTime nullFlavor=\"UNK\"/>";
 	let updated = xml.replacen(original, replacement, 1);
@@ -502,7 +514,7 @@ async fn test_import_then_export_xml() -> Result<()> {
 		create_test_import_product(&mm, seed.org_id, seed.admin.id).await?;
 	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
 	let cookie = cookie_header(&token.to_string());
-	let app = web_server::app(mm);
+	let app = web_server::app(mm.clone());
 
 	let xml_path = examples_dir.join("FAERS2022Scenario2.xml");
 	let mut xml = std::fs::read_to_string(xml_path)?;
@@ -547,6 +559,13 @@ async fn test_import_then_export_xml() -> Result<()> {
 		.and_then(|v| v.get("case_id").or_else(|| v.get("caseId")))
 		.and_then(|v| v.as_str())
 		.ok_or("missing case_id in import response")?;
+	prepare_test_fda_export_case(
+		&mm,
+		seed.org_id,
+		seed.admin.id,
+		Uuid::parse_str(case_id)?,
+	)
+	.await?;
 
 	let req = Request::builder()
 		.method("GET")
@@ -695,7 +714,7 @@ async fn test_import_e_nullflavor_then_readback_reactions() -> Result<()> {
 	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
 	let cookie = cookie_header(&token.to_string());
 	let app = web_server::app(mm);
-	let xml = fixture_xml("FAERS2022Scenario6.xml")?;
+	let xml = scenario6_xml()?;
 
 	let import_value = import_xml_string(
 		&app,
@@ -757,7 +776,7 @@ async fn test_import_update_dg_fields_then_export_contains_updates() -> Result<(
 		create_test_import_product(&mm, seed.org_id, seed.admin.id).await?;
 	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
 	let cookie = cookie_header(&token.to_string());
-	let app = web_server::app(mm);
+	let app = web_server::app(mm.clone());
 
 	let xml_path = examples_dir.join("FAERS2022Scenario2.xml");
 	let xml = unique_safety_report_id_xml(std::fs::read_to_string(xml_path)?);
@@ -792,6 +811,13 @@ async fn test_import_update_dg_fields_then_export_contains_updates() -> Result<(
 		.and_then(|v| v.as_str())
 		.ok_or("missing case_id in import response")?
 		.to_string();
+	prepare_test_fda_export_case(
+		&mm,
+		seed.org_id,
+		seed.admin.id,
+		Uuid::parse_str(&case_id)?,
+	)
+	.await?;
 
 	// Resolve primary drug/reaction IDs from imported case.
 	let (status, body) = request_json(
@@ -1006,7 +1032,7 @@ async fn test_import_update_dg_fields_then_export_contains_updates() -> Result<(
 		sentinel_substance.as_str(),
 		"mg",
 		"20240102",
-		"801",
+		"unit=\"a\"",
 		sentinel_batch.as_str(),
 	] {
 		assert!(

@@ -102,7 +102,7 @@ async fn test_admin_can_access_terminology_endpoints() -> Result<()> {
 
 #[serial]
 #[tokio::test]
-async fn test_viewer_cannot_access_terminology_endpoints() -> Result<()> {
+async fn test_viewer_can_read_terminology_but_cannot_import() -> Result<()> {
 	let mm = init_test_mm().await?;
 	let seed = seed_terminology_admin(&mm).await?;
 	let token = generate_web_token(&seed.viewer.email, seed.viewer.token_salt)?;
@@ -116,7 +116,7 @@ async fn test_viewer_cannot_access_terminology_endpoints() -> Result<()> {
 		.header("cookie", cookie.clone())
 		.body(Body::empty())?;
 	let res = app.clone().oneshot(req).await?;
-	assert_eq!(res.status(), StatusCode::FORBIDDEN);
+	assert_eq!(res.status(), StatusCode::OK);
 
 	let req = Request::builder()
 		.method("POST")

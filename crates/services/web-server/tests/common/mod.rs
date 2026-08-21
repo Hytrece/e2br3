@@ -10,10 +10,12 @@ use lib_core::ctx::{
 	Ctx, ROLE_SPONSOR_ADMIN_COMPANY, ROLE_SPONSOR_ADMIN_CRO, ROLE_SYSTEM_ADMIN,
 	ROLE_USER, SYSTEM_ORG_ID, SYSTEM_USER_ID,
 };
+use lib_core::model::admin_settings::AdminSettingsBmc;
 use lib_core::model::authorization::AuthorizationMigrationService;
+use lib_core::model::case::{CaseBmc, CaseForUpdate};
 use lib_core::model::presave::{
 	ProductPresaveBmc, ProductPresaveForCreate, SenderPresaveBmc,
-	SenderPresaveForCreate,
+	SenderPresaveForCreate, SenderPresaveGatewayBmc, SenderPresaveGatewayForCreate,
 };
 use lib_core::model::store::{
 	set_full_context_dbx, set_org_context, set_user_context,
@@ -315,6 +317,31 @@ pub async fn create_test_import_product(
 		},
 	)
 	.await?;
+	for (sequence_number, gateway_authority) in
+		["ich", "fda", "mfds"].into_iter().enumerate()
+	{
+		SenderPresaveGatewayBmc::create(
+			&ctx,
+			mm,
+			SenderPresaveGatewayForCreate {
+				sender_presave_id: sender_id,
+				sequence_number: sequence_number as i32 + 1,
+				gateway_authority: gateway_authority.into(),
+				sender_identifier: Some("TEST-SENDER".into()),
+				routing_identifier: None,
+				cde_sender_identifier: None,
+				cdr_sender_identifier: None,
+				is_default_for_authority: Some(true),
+				deleted: None,
+			},
+		)
+		.await?;
+	}
+	let mut settings = AdminSettingsBmc::get(&ctx, mm, "system")
+		.await?
+		.ok_or("missing test organization settings")?;
+	settings["apply_sender_info_to_imported_cases"] = serde_json::Value::Bool(true);
+	AdminSettingsBmc::upsert(&ctx, mm, "system", &settings, Some(user_id)).await?;
 	Ok(ProductPresaveBmc::create(
 		&ctx,
 		mm,
@@ -343,6 +370,26 @@ pub async fn create_test_import_product(
 		},
 	)
 	.await?)
+}
+
+pub async fn prepare_test_fda_export_case(
+	mm: &ModelManager,
+	org_id: Uuid,
+	user_id: Uuid,
+	case_id: Uuid,
+) -> Result<()> {
+	let ctx = Ctx::new(user_id, org_id, ROLE_SPONSOR_ADMIN_CRO.to_string())?;
+	CaseBmc::update(
+		&ctx,
+		mm,
+		case_id,
+		CaseForUpdate {
+			fda_report_type: Some("4".into()),
+			..Default::default()
+		},
+	)
+	.await?;
+	Ok(())
 }
 
 pub async fn seed_company_org_with_users(

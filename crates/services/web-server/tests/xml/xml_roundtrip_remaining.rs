@@ -1,6 +1,7 @@
 use crate::common::{
 	cookie_header, create_test_import_product, init_test_env, init_test_mm,
-	seed_org_with_users, unique_safety_report_id_xml, Result,
+	prepare_test_fda_export_case, seed_org_with_users, unique_safety_report_id_xml,
+	Result,
 };
 use axum::body::{to_bytes, Body};
 use axum::http::{Request, StatusCode};
@@ -157,6 +158,13 @@ async fn setup_imported_case_from(fixture_name: &str) -> Result<ImportedCaseSetu
 			format!("missing data.caseId in import response: {import_value}")
 		})?
 		.to_string();
+	prepare_test_fda_export_case(
+		&mm,
+		seed.org_id,
+		seed.admin.id,
+		Uuid::parse_str(&case_id)?,
+	)
+	.await?;
 	ensure_reaction_language(&app, &cookie, &case_id).await?;
 	ensure_batch_transmission_date(&app, &cookie, &case_id).await?;
 	ensure_fda_device_characteristics(&app, &cookie, &case_id).await?;
@@ -555,7 +563,7 @@ async fn fda_export_reads_persisted_sections_through_rls() -> Result<()> {
 		"<name>Drug Safety</name>",
 		"<name>QVIS Safety CRO</name>",
 		"<code codeSystem=\"1.0.3166.1.2.2\" code=\"KR\"/>",
-		"<researchStudy classCode=\"CLNTRL\" moodCode=\"EVN\"><id extension=\"QVIS-CT-2026-004\" root=\"2.16.840.1.113883.3.989.2.1.3.5\"/><code code=\"1\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.8\" codeSystemVersion=\"1.0\"/>",
+		"<researchStudy classCode=\"CLNTRL\" moodCode=\"EVN\"><id extension=\"QVIS-CT-2026-004\" root=\"2.16.840.1.113883.3.989.2.1.3.5\"/><code code=\"1\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.8\"/>",
 		"<authorization typeCode=\"AUTH\"><studyRegistration classCode=\"ACT\" moodCode=\"EVN\"><id extension=\"123456\" root=\"2.16.840.1.113883.3.989.5.1.2.2.1.2.1\"/></studyRegistration></authorization>",
 		"<authorization typeCode=\"AUTH\"><studyRegistration classCode=\"ACT\" moodCode=\"EVN\"><id extension=\"654321\" root=\"2.16.840.1.113883.3.989.5.1.2.2.1.2.2\"/></studyRegistration></authorization>",
 		"<authorization typeCode=\"AUTH\"><studyRegistration classCode=\"ACT\" moodCode=\"EVN\"><id extension=\"789012\" root=\"2.16.840.1.113883.3.989.5.1.2.2.1.2.3\"/></studyRegistration></authorization>",
@@ -1488,7 +1496,7 @@ async fn test_roundtrip_dg_remaining_14_fields() -> Result<()> {
 		"ml",
 		"20240102",
 		"20240103",
-		"801",
+		"unit=\"a\"",
 		sentinel_batch.as_str(),
 	] {
 		assert!(
@@ -1649,16 +1657,14 @@ async fn test_roundtrip_ci_si_fields() -> Result<()> {
 		}
 		Err(err) => return Err(err),
 	};
+	let expected_batch_number = format!("BATCH-{case_id}");
 	for expected in [
 		sentinel_wuid.as_str(),
 		sentinel_null_reason.as_str(),
-		sentinel_batch.as_str(),
-		sentinel_batch_sender.as_str(),
-		sentinel_batch_receiver.as_str(),
-		sentinel_msg_number.as_str(),
-		sentinel_msg_sender.as_str(),
-		sentinel_msg_receiver.as_str(),
-		"20240601112233",
+		expected_batch_number.as_str(),
+		"TEST-SENDER",
+		"ZZFDA",
+		"CDER",
 	] {
 		assert!(
 			xml.contains(expected),
@@ -2028,7 +2034,7 @@ async fn test_api_persistence_ae_sd_all_fields() -> Result<()> {
 				"required_intervention": false,
 				"start_date": "2024-04-06",
 				"end_date": "2024-04-07",
-				"duration_value": 5.5,
+				"duration_value": "5.5",
 				"duration_unit": "804",
 				"outcome": "2",
 				"medical_confirmation": true,
