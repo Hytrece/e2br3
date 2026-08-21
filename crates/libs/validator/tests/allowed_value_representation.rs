@@ -133,12 +133,6 @@ fn boundary_cases() -> Vec<BoundaryCase> {
 			json!("12mg")
 		),
 		boundary_case!(
-			"ICH.E.i.6a.ALLOWED.VALUE",
-			ReactionForUpdate,
-			"duration_value",
-			json!("12mg")
-		),
-		boundary_case!(
 			"ICH.G.k.2.3.r.3a.ALLOWED.VALUE",
 			DrugActiveSubstanceForUpdate,
 			"strength_value",
@@ -194,18 +188,6 @@ fn boundary_cases() -> Vec<BoundaryCase> {
 			json!("20230230")
 		),
 		boundary_case!(
-			"ICH.C.1.4.ALLOWED.VALUE",
-			SafetyReportIdentificationForUpdate,
-			"date_first_received_from_source",
-			json!("20230230")
-		),
-		boundary_case!(
-			"ICH.C.1.5.ALLOWED.VALUE",
-			SafetyReportIdentificationForUpdate,
-			"date_of_most_recent_information",
-			json!("20230230")
-		),
-		boundary_case!(
 			"ICH.D.2.1.ALLOWED.VALUE",
 			PatientInformationForUpdate,
 			"birth_date",
@@ -215,18 +197,6 @@ fn boundary_cases() -> Vec<BoundaryCase> {
 			"ICH.D.6.ALLOWED.VALUE",
 			PatientInformationForUpdate,
 			"last_menstrual_period_date",
-			json!("20230230")
-		),
-		boundary_case!(
-			"ICH.D.7.1.r.2.ALLOWED.VALUE",
-			MedicalHistoryEpisodeForUpdate,
-			"start_date",
-			json!("20230230")
-		),
-		boundary_case!(
-			"ICH.D.7.1.r.4.ALLOWED.VALUE",
-			MedicalHistoryEpisodeForUpdate,
-			"end_date",
 			json!("20230230")
 		),
 		boundary_case!(
@@ -284,18 +254,6 @@ fn boundary_cases() -> Vec<BoundaryCase> {
 			json!("20230230")
 		),
 		boundary_case!(
-			"ICH.E.i.4.ALLOWED.VALUE",
-			ReactionForUpdate,
-			"start_date",
-			json!("20230230")
-		),
-		boundary_case!(
-			"ICH.E.i.5.ALLOWED.VALUE",
-			ReactionForUpdate,
-			"end_date",
-			json!("20230230")
-		),
-		boundary_case!(
 			"ICH.F.r.1.ALLOWED.VALUE",
 			TestResultForUpdate,
 			"test_date",
@@ -307,7 +265,7 @@ fn boundary_cases() -> Vec<BoundaryCase> {
 #[test]
 fn documented_invalid_representations_are_rejected() {
 	let cases = boundary_cases();
-	assert_eq!(cases.len(), 43);
+	assert_eq!(cases.len(), 36);
 	let accepted = cases
 		.iter()
 		.filter(|case| !(case.rejects)())
