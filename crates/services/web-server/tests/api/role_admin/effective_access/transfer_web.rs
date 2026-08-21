@@ -145,6 +145,17 @@ async fn test_export_submission_matrix_privileges_grant_effective_xml_export_per
 	)
 	.await?;
 	create_message_header(&app, &admin_cookie, case_id, "SENDER-01").await?;
+	let sender_presave_id =
+		create_sender_presave(&app, &admin_cookie, "Export Sender", "SENDER-01")
+			.await?;
+	create_sender_information(
+		&app,
+		&admin_cookie,
+		case_id,
+		"Export Sender",
+		sender_presave_id,
+	)
+	.await?;
 	let (status, value) = request_json(
 		&app,
 		"PUT",

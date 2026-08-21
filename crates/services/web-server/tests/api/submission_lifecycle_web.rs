@@ -252,6 +252,8 @@ async fn create_case_with_profile(
 	let body = json!({
 		"data": {
 			"status": "draft",
+			"fdaReportType": "1",
+			"mfdsReportType": "1",
 			"safetyReportIdentification": {
 				"safetyReportId": initial_report_id
 			}
@@ -276,10 +278,10 @@ async fn create_safety_report(
 		"data": {
 			"case_id": case_id,
 			"safety_report_id": format!("US-SENDER-{}", case_id.simple()),
-			"transmission_date": [2024, 10, 1],
+			"transmission_date": "20241001000000",
 				"report_type": "1",
-				"date_first_received_from_source": [2024, 10, 1],
-				"date_of_most_recent_information": [2024, 10, 1],
+				"date_first_received_from_source": "20241001",
+				"date_of_most_recent_information": "20241001",
 				"fulfil_expedited_criteria": false,
 				"combination_product_report_indicator": "false",
 				"other_case_identifiers_exist": null,
@@ -363,11 +365,49 @@ async fn create_sender(
 	cookie: &str,
 	case_id: Uuid,
 ) -> Result<()> {
+	let gateways = ["ich", "fda", "mfds"]
+		.into_iter()
+		.enumerate()
+		.map(|(index, authority)| {
+			json!({
+				"sequenceNumber": index + 1,
+				"gatewayAuthority": authority,
+				"senderIdentifier": format!("TEST-{}", authority.to_ascii_uppercase()),
+				"isDefaultForAuthority": true
+			})
+		})
+		.collect::<Vec<_>>();
+	let (status, value) = post_json(
+		app,
+		cookie,
+		"/api/presaves/senders",
+		json!({
+			"data": { "rows": {
+				"sender": {
+					"senderType": "1",
+					"organizationName": format!("Sender Org {case_id}")
+				},
+				"gateways": gateways,
+				"responsiblePersons": []
+			} }
+		}),
+	)
+	.await?;
+	if status != StatusCode::CREATED {
+		return Err(format!(
+			"create sender presave failed: status={status} body={value}"
+		)
+		.into());
+	}
+	let sender_presave_id = value["data"]["rows"]["sender"]["id"]
+		.as_str()
+		.ok_or("missing sender presave id")?;
 	let body = json!({
 		"data": {
 			"case_id": case_id,
 			"sender_type": "1",
-			"organization_name": "Sender Org"
+			"organization_name": "Sender Org",
+			"source_sender_presave_id": sender_presave_id
 		}
 	});
 	let (status, value) = post_json(
@@ -680,8 +720,7 @@ async fn test_manual_export_is_not_blocked_by_workflow_status() -> Result<()> {
 
 	for status in ["draft", "reviewed", "locked"] {
 		let case_id = create_case(&app, &cookie, seed.org_id).await?;
-		create_patient(&app, &cookie, case_id).await?;
-		create_narrative(&app, &cookie, case_id).await?;
+		seed_rule_clean_case(&mm, &app, &cookie, case_id).await?;
 		mm.dbx().begin_txn().await?;
 		set_full_context_dbx(
 			mm.dbx(),

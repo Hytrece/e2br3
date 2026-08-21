@@ -79,10 +79,10 @@ async fn create_safety_report(
 		"data": {
 			"case_id": case_id,
 			"safety_report_id": format!("US-SENDER-{}", case_id.simple()),
-			"transmission_date": [2024, 1],
+			"transmission_date": "20240101000000",
 			"report_type": "1",
-			"date_first_received_from_source": [2024, 1],
-				"date_of_most_recent_information": [2024, 1],
+			"date_first_received_from_source": "20240101",
+				"date_of_most_recent_information": "20240101",
 				"fulfil_expedited_criteria": false,
 				"combination_product_report_indicator": "false",
 				"other_case_identifiers_exist": null,
@@ -1623,10 +1623,10 @@ async fn test_create_safety_report_is_idempotent_for_existing_case() -> Result<(
 	let body = json!({
 		"data": {
 			"case_id": case_id,
-			"transmission_date": [2025, 1],
+			"transmission_date": "20250101000000",
 			"report_type": "2",
-			"date_first_received_from_source": [2025, 1],
-			"date_of_most_recent_information": [2025, 1],
+			"date_first_received_from_source": "20250101",
+			"date_of_most_recent_information": "20250101",
 			"fulfil_expedited_criteria": true
 		}
 	});
@@ -2125,9 +2125,9 @@ async fn test_c1_date_ordering_business_rules() -> Result<()> {
 		case_id,
 		json!({
 			"data": {
-				"transmission_date": [2024, 2],
-				"date_first_received_from_source": [2024, 4],
-				"date_of_most_recent_information": [2024, 3]
+				"transmission_date": "20240102000000",
+				"date_first_received_from_source": "20240104",
+				"date_of_most_recent_information": "20240103"
 			}
 		}),
 	)

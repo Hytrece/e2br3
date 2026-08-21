@@ -295,10 +295,10 @@ async fn create_safety_report(
 	let body = json!({
 		"data": {
 			"case_id": case_id,
-			"transmission_date": [2024, 1],
+			"transmission_date": "20240101000000",
 			"report_type": "1",
-			"date_first_received_from_source": [2024, 1],
-			"date_of_most_recent_information": [2024, 1],
+			"date_first_received_from_source": "20240101",
+			"date_of_most_recent_information": "20240101",
 			"fulfil_expedited_criteria": false
 		}
 	});
@@ -336,8 +336,8 @@ async fn safety_report_preserves_c1_boolean_null_flavors() -> Result<()> {
 			"safety_report_id": format!("SR-NF-{}", Uuid::new_v4()),
 			"transmission_date": "20260630010101",
 			"report_type": "1",
-			"date_first_received_from_source": [2026, 6, 30],
-			"date_of_most_recent_information": [2026, 6, 30],
+			"date_first_received_from_source": "20260630",
+			"date_of_most_recent_information": "20260630",
 			"fulfil_expedited_criteria": null,
 			"fulfil_expedited_criteria_null_flavor": "NI",
 			"other_case_identifiers_exist": null,
@@ -557,10 +557,10 @@ async fn test_singleton_post_endpoints_are_idempotent() -> Result<()> {
 	create_safety_report(&app, &cookie, case_id).await?;
 	let body = json!({"data": {
 		"case_id": case_id,
-		"transmission_date": [2025, 1],
+		"transmission_date": "20250101000000",
 		"report_type": "2",
-		"date_first_received_from_source": [2025, 1],
-		"date_of_most_recent_information": [2025, 1],
+		"date_first_received_from_source": "20250101",
+		"date_of_most_recent_information": "20250101",
 		"fulfil_expedited_criteria": true
 	}});
 	let (status, _) = post_json(

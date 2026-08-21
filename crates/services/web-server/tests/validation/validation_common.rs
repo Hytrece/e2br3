@@ -139,10 +139,10 @@ pub async fn create_safety_report_with(
 	let body = json!({
 		"data": {
 			"case_id": case_id,
-			"transmission_date": [2024, 1],
+			"transmission_date": "20240101000000",
 			"report_type": report_type,
-			"date_first_received_from_source": [2024, 1],
-			"date_of_most_recent_information": [2024, 1],
+			"date_first_received_from_source": "20240101",
+			"date_of_most_recent_information": "20240101",
 			"fulfil_expedited_criteria": fulfil_expedited_criteria
 		}
 	});

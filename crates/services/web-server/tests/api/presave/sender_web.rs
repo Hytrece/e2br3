@@ -472,7 +472,7 @@ async fn test_sender_presave_details_rolls_back_parent_on_child_constraint_failu
 				"sender": { "organizationName": "must roll back" },
 				"gateways": [{
 					"sequenceNumber": 1,
-					"gatewayAuthority": "ich",
+					"gatewayAuthority": "invalid",
 					"senderIdentifier": "INVALID-GATEWAY"
 				}]
 			} }

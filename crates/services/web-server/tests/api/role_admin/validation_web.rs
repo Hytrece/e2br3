@@ -93,7 +93,7 @@ async fn test_role_admin_api_rejects_duplicate_role_name_in_same_org() -> Result
 	)
 	.await?;
 	assert_eq!(status, StatusCode::BAD_REQUEST, "{value:?}");
-	assert_eq!(value["error"]["message"], "SERVICE_ERROR");
+	assert_eq!(value["error"]["message"], "INVALID_REQUEST");
 	assert_eq!(
 		value["error"]["data"]["detail"],
 		"role name already exists in this organization"
@@ -148,7 +148,7 @@ async fn test_role_admin_api_rejects_rename_to_duplicate_role_name_in_same_org(
 	)
 	.await?;
 	assert_eq!(status, StatusCode::BAD_REQUEST, "{value:?}");
-	assert_eq!(value["error"]["message"], "SERVICE_ERROR");
+	assert_eq!(value["error"]["message"], "INVALID_REQUEST");
 	assert_eq!(
 		value["error"]["data"]["detail"],
 		"role name already exists in this organization"

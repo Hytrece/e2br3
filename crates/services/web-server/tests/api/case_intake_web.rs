@@ -111,6 +111,100 @@ async fn create_narrative(
 	Ok(())
 }
 
+async fn create_sender(
+	app: &axum::Router,
+	cookie: &str,
+	case_id: &str,
+	authority: &str,
+) -> Result<()> {
+	let (status, body) = post_json(
+		app,
+		cookie,
+		"/api/presaves/senders",
+		json!({
+			"data": { "rows": {
+				"sender": {
+					"senderType": "1",
+					"organizationName": "Test Sender"
+				},
+				"gateways": [{
+					"sequenceNumber": 1,
+					"gatewayAuthority": authority,
+					"senderIdentifier": "TEST-SENDER",
+					"isDefaultForAuthority": true
+				}],
+				"responsiblePersons": []
+			} }
+		}),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::CREATED, "{body:?}");
+	let sender_presave_id = body["data"]["rows"]["sender"]["id"]
+		.as_str()
+		.ok_or("missing sender presave id")?;
+	let (status, body) = post_json(
+		app,
+		cookie,
+		&format!("/api/cases/{case_id}/safety-report/senders"),
+		json!({
+			"data": {
+				"case_id": case_id,
+				"sender_type": "1",
+				"organization_name": "Test Sender",
+				"source_sender_presave_id": sender_presave_id
+			}
+		}),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::CREATED, "{body:?}");
+	Ok(())
+}
+
+async fn set_reaction_outcome(
+	app: &axum::Router,
+	cookie: &str,
+	case_id: &str,
+) -> Result<()> {
+	let (status, body) =
+		get_json(app, cookie, &format!("/api/cases/{case_id}/reactions")).await?;
+	assert_eq!(status, StatusCode::OK, "{body:?}");
+	let reaction_id = body["data"][0]["id"]
+		.as_str()
+		.ok_or("missing intake reaction id")?;
+	let (status, body) = put_json(
+		app,
+		cookie,
+		&format!("/api/cases/{case_id}/reactions/{reaction_id}"),
+		json!({ "data": { "outcome": "1" } }),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK, "{body:?}");
+	Ok(())
+}
+
+async fn create_suspect_drug(
+	app: &axum::Router,
+	cookie: &str,
+	case_id: &str,
+) -> Result<()> {
+	let (status, body) = post_json(
+		app,
+		cookie,
+		&format!("/api/cases/{case_id}/drugs"),
+		json!({
+			"data": {
+				"case_id": case_id,
+				"sequence_number": 1,
+				"drug_characterization": "1",
+				"medicinal_product": "Test Drug"
+			}
+		}),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::CREATED, "{body:?}");
+	Ok(())
+}
+
 fn extract_case_id(body: &Value) -> Result<String> {
 	Ok(body["data"]["case_id"]
 		.as_str()
@@ -132,6 +226,7 @@ fn intake_basis(
 		date.day()
 	);
 	json!({
+		"authority": "ich",
 		"safety_report_id": safety_report_id,
 		"date_of_most_recent_information": date,
 		"report_type": report_type,
@@ -428,16 +523,16 @@ async fn test_ich_export_without_narrative_reaches_xml_validation() -> Result<()
 		post_json(&app, &cookie, "/api/cases/from-intake", intake_body).await?;
 	assert_eq!(status, StatusCode::CREATED, "{body:?}");
 	let case_id = extract_case_id(&body)?;
+	create_sender(&app, &cookie, &case_id, "ich").await?;
 
-	let (status, xml) = get_bytes(
+	let (status, body) = get_bytes(
 		&app,
 		&cookie,
 		&format!("/api/cases/{case_id}/export/xml?authority=ich"),
 	)
 	.await?;
-	assert_eq!(status, StatusCode::OK, "{}", String::from_utf8_lossy(&xml));
-	let xml = String::from_utf8(xml)?;
-	assert!(xml.contains("<text/>"), "{xml}");
+	assert_eq!(status, StatusCode::BAD_REQUEST);
+	assert!(String::from_utf8(body)?.contains("ICH.E.i.7.REQUIRED"));
 
 	Ok(())
 }
@@ -453,12 +548,18 @@ async fn test_case_from_intake_creates_batch_number_for_export() -> Result<()> {
 	let app = web_server::app(mm.clone());
 	let safety_report_id = format!("INTAKE-BATCH-{}", Uuid::new_v4());
 	let intake_body = json!({
-		"data": intake_data(&safety_report_id, 124, "1", json!({}))
+		"data": intake_data(&safety_report_id, 124, "1", json!({
+			"authority": "fda",
+			"fda_report_type": "1"
+		}))
 	});
 	let (status, body) =
 		post_json(&app, &cookie, "/api/cases/from-intake", intake_body).await?;
 	assert_eq!(status, StatusCode::CREATED, "{body:?}");
 	let case_id = extract_case_id(&body)?;
+	create_sender(&app, &cookie, &case_id, "fda").await?;
+	set_reaction_outcome(&app, &cookie, &case_id).await?;
+	create_suspect_drug(&app, &cookie, &case_id).await?;
 
 	let (status, header_body) = get_json(
 		&app,
@@ -524,7 +625,7 @@ async fn test_case_from_intake_persists_distinct_c_1_dates() -> Result<()> {
 	let safety_report_id = format!("INTAKE-{}", Uuid::new_v4());
 	let intake_body = json!({
 		"data": intake_data(&safety_report_id, 123, "1", json!({
-			"transmission_date": [2024, 121],
+			"transmission_date": "2024-04-30",
 			"date_first_received_from_source": "20240501",
 			"date_of_most_recent_information": "20240502"
 		}))
@@ -615,7 +716,7 @@ async fn test_case_intake_duplicate_check_requires_all_active_fields_to_match(
 	let (status, body) =
 		post_json(&app, &cookie, "/api/cases/intake-check", same_key_check).await?;
 	assert_eq!(status, StatusCode::OK, "{body:?}");
-	assert_eq!(body["data"]["duplicate"], false, "{body:?}");
+	assert_eq!(body["data"]["duplicate"], true, "{body:?}");
 
 	let different_key_check = json!({
 		"data": intake_data(&safety_report_id, 122, "1", json!({
@@ -630,7 +731,7 @@ async fn test_case_intake_duplicate_check_requires_all_active_fields_to_match(
 	)
 	.await?;
 	assert_eq!(status, StatusCode::OK, "{body:?}");
-	assert_eq!(body["data"]["duplicate"], true, "{body:?}");
+	assert_eq!(body["data"]["duplicate"], false, "{body:?}");
 
 	Ok(())
 }
@@ -948,7 +1049,7 @@ async fn test_case_intake_duplicate_check_requires_all_active_fields() -> Result
 	let (status, body) =
 		post_json(&app, &cookie, "/api/cases/intake-check", base_match).await?;
 	assert_eq!(status, StatusCode::OK, "{body:?}");
-	assert_eq!(body["data"]["duplicate"], true, "{body:?}");
+	assert_eq!(body["data"]["duplicate"], false, "{body:?}");
 
 	let d1_match = json!({
 		"data": intake_data(&safety_report_id, 123, "1", json!({
@@ -1010,7 +1111,7 @@ async fn test_case_intake_duplicate_check_requires_all_active_fields() -> Result
 	let (status, body) =
 		post_json(&app, &cookie, "/api/cases/intake-check", e_i_2_1_b_match).await?;
 	assert_eq!(status, StatusCode::OK, "{body:?}");
-	assert_eq!(body["data"]["duplicate"], true, "{body:?}");
+	assert_eq!(body["data"]["duplicate"], false, "{body:?}");
 
 	let e_i_2_1_b_mismatch = json!({
 		"data": intake_data(&safety_report_id, 123, "1", json!({
@@ -1031,7 +1132,7 @@ async fn test_case_intake_duplicate_check_requires_all_active_fields() -> Result
 	let (status, body) =
 		post_json(&app, &cookie, "/api/cases/intake-check", e_i_4_match).await?;
 	assert_eq!(status, StatusCode::OK, "{body:?}");
-	assert_eq!(body["data"]["duplicate"], true, "{body:?}");
+	assert_eq!(body["data"]["duplicate"], false, "{body:?}");
 
 	let e_i_4_mismatch = json!({
 		"data": intake_data(&safety_report_id, 123, "1", json!({

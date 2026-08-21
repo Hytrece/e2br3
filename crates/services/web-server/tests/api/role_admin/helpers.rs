@@ -349,6 +349,7 @@ pub(super) async fn create_sender_information(
 	cookie: &str,
 	case_id: Uuid,
 	organization_name: &str,
+	source_sender_presave_id: Uuid,
 ) -> Result<()> {
 	let (status, value) = request_json(
 		app,
@@ -360,7 +361,8 @@ pub(super) async fn create_sender_information(
 				"case_id": case_id,
 				"sender_type": "1",
 				"organization_name": organization_name,
-				"person_given_name": "Safety"
+				"person_given_name": "Safety",
+				"source_sender_presave_id": source_sender_presave_id
 			}
 		})),
 	)
@@ -388,7 +390,11 @@ pub(super) async fn create_sender_presave(
 		Some(json!({
 			"data": { "rows": {
 				"sender": { "senderType": "2", "organizationName": name, "email": format!("{sender_identifier}@example.test") },
-				"gateways": [{ "sequenceNumber": 1, "gatewayAuthority": "fda", "senderIdentifier": sender_identifier, "isDefaultForAuthority": true }],
+				"gateways": [
+					{ "sequenceNumber": 1, "gatewayAuthority": "ich", "senderIdentifier": sender_identifier, "isDefaultForAuthority": true },
+					{ "sequenceNumber": 2, "gatewayAuthority": "fda", "senderIdentifier": sender_identifier, "isDefaultForAuthority": true },
+					{ "sequenceNumber": 3, "gatewayAuthority": "mfds", "senderIdentifier": sender_identifier, "isDefaultForAuthority": true }
+				],
 				"responsiblePersons": [{ "sequenceNumber": 1, "personGivenName": "Safety" }]
 			} }
 		})),
