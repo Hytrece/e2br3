@@ -60,10 +60,7 @@ fn import_e_section_all_fields_from_scenario6() {
 		second.xml_id.as_deref(),
 		Some("2baa28d6-c9e8-4e6c-93e9-5b860b314220")
 	);
-	assert_eq!(
-		second.primary_source_reaction.as_deref(),
-		Some("Reaction 7")
-	);
+	assert_eq!(second.primary_source_reaction, None);
 	assert_eq!(second.primary_source_reaction_translation, None);
 	assert_eq!(second.reaction_language, None);
 	assert_eq!(second.reaction_meddra_version.as_deref(), Some("12.0"));

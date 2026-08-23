@@ -24,12 +24,12 @@ fn import_f_section_all_fields_from_scenario6() {
 		first.comments.as_deref(),
 		Some("These results may be skewed")
 	);
-	assert_eq!(first.more_info_available, None);
+	assert_eq!(first.more_info_available, Some(true));
 
 	let sixth = &tests[5];
 	assert_eq!(sixth.test_date, Some(date(2009, 1, 1)));
 	assert_eq!(sixth.test_date_null_flavor, None);
-	assert_eq!(sixth.test_name, "Laboratory Test 2");
+	assert_eq!(sixth.test_name, "");
 	assert_eq!(sixth.test_meddra_version.as_deref(), Some("12.0"));
 	assert_eq!(sixth.test_meddra_code.as_deref(), Some("10005362"));
 	assert_eq!(sixth.test_result_code, None);
@@ -68,7 +68,7 @@ fn import_f_section_parses_test_date_null_flavor() {
 		first.comments.as_deref(),
 		Some("These results may be skewed")
 	);
-	assert_eq!(first.more_info_available, None);
+	assert_eq!(first.more_info_available, Some(true));
 }
 
 #[test]

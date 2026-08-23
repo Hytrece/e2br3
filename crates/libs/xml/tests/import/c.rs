@@ -5,7 +5,11 @@ use xml::{apply_c_safety_report_import_settings, CImportSettings};
 fn conformant_scenario6() -> Vec<u8> {
 	String::from_utf8(fixture("FAERS2022Scenario6.xml"))
 		.expect("utf-8 fixture")
-		.replacen("20140614151617-0500", "20220614151617-0500", 1)
+		.replacen(
+			"<effectiveTime value=\"20140614151617-0500\"/>",
+			"<effectiveTime value=\"20220614151617-0500\"/>",
+			1,
+		)
 		.into_bytes()
 }
 

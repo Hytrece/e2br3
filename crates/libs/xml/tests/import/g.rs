@@ -25,7 +25,10 @@ fn import_g_section_all_fields_from_scenario6() {
 	assert_eq!(first.medicinal_product, "Drug A");
 	assert_eq!(first.drug_characterization, "1");
 	assert_eq!(first.mpid.as_deref(), Some("894444-28525-765"));
-	assert_eq!(first.mpid_version.as_deref(), Some("2014110112"));
+	assert_eq!(
+		first.mpid_source_code_system_version.as_deref(),
+		Some("2014110112")
+	);
 	assert_eq!(first.phpid, None);
 	assert_eq!(first.phpid_version, None);
 	assert_eq!(first.investigational_product_blinded, Some(true));
