@@ -189,26 +189,6 @@ jobs:
           SERVICE_WEB_FOLDER: "web-folder/"
         run: scripts/test-isolated-db.sh --workspace --exclude lib-core -- --test-threads=1
 
-      - name: Release Validation Gates
-        env:
-          SKIP_DEV_INIT: "1"
-          SERVICE_DB_URL: postgres://app_user:dev_only_pwd@localhost/app_db
-          SERVICE_PWD_KEY: CKUGFOD9_2Qf6Pn3ZFRYgPYb8ht4vKqEG9PGMXTB7497bT0367DjoaD6ydFnEVaIRda0kKeBZVCT5Hb62m2sCA
-          SERVICE_TOKEN_KEY: 9FoHBmkyxbgu_xFoQK7e0jz3RMNVJWgfvbVn712FBNH9LLaAWS3CS6Zpcg6RveiObvCUb6a2z-uAiLjhLh2igw
-          SERVICE_TOKEN_DURATION_SEC: "1800"
-          SERVICE_WEB_FOLDER: "web-folder/"
-          E2BR3_XSD_PATH: docs/exporter/schema/multicacheschemas/MCCI_IN200100UV01.xsd
-          E2BR3_MFDS_EXAMPLES_DIR: docs/exporter/mfds
-          E2BR3_MFDS_REQUIRE_VALIDATION_OK: "0"
-        run: |
-          # Validation and workflow tests now live in the current package targets.
-          cargo test -p xml --test xml -- --test-threads=1
-          cargo test -p xml --test import -- --test-threads=1
-          cargo test -p web-server --test api case_validation_web -- --test-threads=1
-          cargo test -p web-server --test api validation_contract_web -- --test-threads=1
-          cargo test -p web-server --test smoke roundtrip_profiles_web -- --nocapture --test-threads=1
-          cargo test -p web-server --test smoke mfds_import_samples_web -- --nocapture --test-threads=1
-
   deploy-dev:
     name: Deploy Dev EC2
     if: ${{ github.event_name == 'push' && github.ref_name == 'dev' }}
