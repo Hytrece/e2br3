@@ -1647,6 +1647,10 @@ async fn test_import_export_submission_histories_follow_product_scope() -> Resul
 	let export_items = export_history["data"]["items"]
 		.as_array()
 		.ok_or("missing export history items")?;
+	assert!(
+		export_items.iter().all(|row| row["exportedAt"].is_string()),
+		"exportedAt must be an RFC 3339 string: {export_history:?}"
+	);
 	assert!(export_items
 		.iter()
 		.any(|row| row["caseId"] == case_allowed.to_string()));

@@ -27,6 +27,7 @@ pub struct XmlExportHistoryRecord {
 	pub error_message: Option<String>,
 	pub exported_by: Uuid,
 	pub exporter_email: Option<String>,
+	#[serde(with = "time::serde::rfc3339")]
 	pub exported_at: OffsetDateTime,
 }
 
