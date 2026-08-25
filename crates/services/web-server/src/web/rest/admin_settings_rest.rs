@@ -206,16 +206,22 @@ fn normalize_notice_date(
 }
 
 fn import_date_update_is_supported(value: &ImportDateUpdatePayload) -> bool {
-	matches!(
-		(
-			value.date_of_creation,
-			value.most_recent_info_date,
-			value.report_first_received_date,
-		),
-		(Some(false), Some(false), Some(false))
-			| (Some(true), Some(false), Some(true))
-			| (Some(true), Some(true), Some(false))
-			| (Some(true), Some(true), Some(true))
+	let (
+		Some(date_of_creation),
+		Some(most_recent_info_date),
+		Some(report_first_received_date),
+	) = (
+		value.date_of_creation,
+		value.most_recent_info_date,
+		value.report_first_received_date,
+	)
+	else {
+		return false;
+	};
+	runtime_settings::import_date_update_is_supported(
+		date_of_creation,
+		most_recent_info_date,
+		report_first_received_date,
 	)
 }
 

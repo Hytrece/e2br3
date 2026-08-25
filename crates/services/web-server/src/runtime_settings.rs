@@ -53,6 +53,24 @@ pub struct ImportDateSettings {
 	pub update_report_first_received_date: bool,
 }
 
+pub(crate) fn import_date_update_is_supported(
+	date_of_creation: bool,
+	most_recent_info_date: bool,
+	report_first_received_date: bool,
+) -> bool {
+	matches!(
+		(
+			date_of_creation,
+			most_recent_info_date,
+			report_first_received_date,
+		),
+		(false, false, false)
+			| (true, false, false)
+			| (true, true, false)
+			| (true, true, true)
+	)
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RuntimeSettings {
 	pub timezone: String,
@@ -120,16 +138,10 @@ impl RuntimeSettings {
 				"report_first_received_date",
 			)?,
 		};
-		if !matches!(
-			(
-				import_dates.update_date_of_creation,
-				import_dates.update_most_recent_info_date,
-				import_dates.update_report_first_received_date,
-			),
-			(false, false, false)
-				| (true, false, true)
-				| (true, true, false)
-				| (true, true, true)
+		if !import_date_update_is_supported(
+			import_dates.update_date_of_creation,
+			import_dates.update_most_recent_info_date,
+			import_dates.update_report_first_received_date,
 		) {
 			return Err(Error::BadRequest {
 				message:

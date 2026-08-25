@@ -2005,6 +2005,30 @@ async fn test_admin_settings_round_trips_alignment_fields() -> Result<()> {
 		data["case_number_sequence_condition"].as_str(),
 		Some("Per sender")
 	);
+
+	let (status, body) = update_admin_settings(
+		&app,
+		&cookie,
+		json!({"data": {"import_date_update": {
+			"date_of_creation": true,
+			"most_recent_info_date": false,
+			"report_first_received_date": false
+		}}}),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK, "{body:?}");
+
+	let (status, body) = update_admin_settings(
+		&app,
+		&cookie,
+		json!({"data": {"import_date_update": {
+			"date_of_creation": true,
+			"most_recent_info_date": false,
+			"report_first_received_date": true
+		}}}),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::BAD_REQUEST, "{body:?}");
 	Ok(())
 }
 
