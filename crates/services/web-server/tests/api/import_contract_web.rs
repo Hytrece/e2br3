@@ -290,7 +290,7 @@ async fn test_import_rejects_missing_upload_filename() -> Result<()> {
 
 #[serial]
 #[tokio::test]
-async fn test_import_selected_product_links_first_drug_and_case_product_id(
+async fn test_import_selected_product_links_sender_without_overwriting_xml_sender(
 ) -> Result<()> {
 	let mm = init_test_mm().await?;
 	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
@@ -324,7 +324,7 @@ async fn test_import_selected_product_links_first_drug_and_case_product_id(
 		"/api/admin/settings",
 		json!({
 			"data": {
-				"apply_sender_info_to_imported_cases": true
+				"apply_sender_info_to_imported_cases": false
 			}
 		}),
 	)
@@ -383,10 +383,15 @@ async fn test_import_selected_product_links_first_drug_and_case_product_id(
 	set_org_context(&mut tx, seed.org_id, ROLE_SPONSOR_ADMIN_CRO).await?;
 	let row = sqlx::query_as::<
 		_,
-		(Option<uuid::Uuid>, Option<String>, Option<uuid::Uuid>),
+		(
+			Option<uuid::Uuid>,
+			Option<String>,
+			Option<uuid::Uuid>,
+			Option<String>,
+		),
 	>(
 		"SELECT d.source_product_presave_id, c.dg_prd_key,
-		        sender.source_sender_presave_id
+		        sender.source_sender_presave_id, sender.organization_name
 		 FROM cases c
 		 JOIN drug_information d ON d.case_id = c.id
 		 LEFT JOIN sender_information sender ON sender.case_id = c.id
@@ -416,6 +421,7 @@ async fn test_import_selected_product_links_first_drug_and_case_product_id(
 		row.2.map(|id| id.to_string()).as_deref(),
 		Some(sender_presave_id)
 	);
+	assert_ne!(row.3.as_deref(), Some("Selected Product Sender"));
 
 	Ok(())
 }

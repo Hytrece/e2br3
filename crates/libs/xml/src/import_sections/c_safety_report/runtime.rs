@@ -245,7 +245,10 @@ async fn import_c_2_sender_information(
 			Some(sender_id),
 		)
 	} else {
-		(c_helpers::parse_sender_information(xml)?, None)
+		(
+			c_helpers::parse_sender_information(xml)?,
+			settings.selected_sender_presave_id,
+		)
 	};
 	let Some(sender) = sender else {
 		return Ok(());

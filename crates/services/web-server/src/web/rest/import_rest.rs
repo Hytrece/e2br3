@@ -944,9 +944,7 @@ async fn import_xml_authorized(
 	let entries = extract_xml_entries(&payload.bytes, &uploaded_file_name)?;
 	let mut imported_cases = Vec::with_capacity(entries.len());
 	let mut c_settings = load_import_settings(ctx, mm).await?;
-	if c_settings.apply_sender_info_to_imported_cases {
-		c_settings.selected_sender_presave_id = selected_product.2;
-	}
+	c_settings.selected_sender_presave_id = selected_product.2;
 	let effective_product_id = selected_product.1.as_str();
 
 	for (entry_name, xml) in entries {
