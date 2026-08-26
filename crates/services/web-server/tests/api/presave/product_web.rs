@@ -122,18 +122,18 @@ async fn product_presave_create_persists_complete_rows_atomically() -> Result<()
 
 #[serial]
 #[tokio::test]
-async fn info_editor_can_create_product_for_same_org_sender() -> Result<()> {
+async fn info_editor_can_create_and_list_only_products_in_scope() -> Result<()> {
 	let mm = init_test_mm().await?;
 	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
 	let admin_token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
 	let admin_cookie = cookie_header(&admin_token.to_string());
 	let app = web_server::app(mm.clone());
-	let (_, editor_cookie) =
+	let (editor_id, editor_cookie) =
 		create_info_editor(&app, &mm, &admin_cookie, seed.org_id).await?;
 	let sender_id =
 		create_sender_presave_via_api(&app, &admin_cookie, "fda").await?;
 
-	post_json_created(
+	let allowed = post_json_created(
 		&app,
 		&editor_cookie,
 		"/api/presaves/products".to_string(),
@@ -146,7 +146,47 @@ async fn info_editor_can_create_product_for_same_org_sender() -> Result<()> {
 		} } }),
 	)
 	.await?;
+	let blocked_sender =
+		create_sender_presave_via_api(&app, &admin_cookie, "fda").await?;
+	let blocked = post_json_created(
+		&app,
+		&admin_cookie,
+		"/api/presaves/products".to_string(),
+		json!({ "data": { "rows": {
+				"product": {
+					"senderPresaveId": blocked_sender,
+					"productId": "INFO-EDITOR-BLOCKED"
+				},
+				"activeSubstances": []
+			} } }),
+	)
+	.await?;
+	let allowed_id = data_rows_id(&allowed, "product")?;
+	let blocked_id = data_rows_id(&blocked, "product")?;
 
+	let (status, value) = request_json(
+		&app,
+		&admin_cookie,
+		Method::PUT,
+		format!("/api/users/{editor_id}"),
+		Some(json!({ "data": {
+			"access_sender_ids": [sender_id.to_string()]
+		} })),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK, "{value:?}");
+
+	let listed =
+		get_json_ok(&app, &editor_cookie, "/api/presaves/products".to_string())
+			.await?;
+	let ids: Vec<_> = listed["data"]
+		.as_array()
+		.ok_or("missing product list")?
+		.iter()
+		.filter_map(|product| product["id"].as_str())
+		.collect();
+	assert!(ids.contains(&allowed_id.to_string().as_str()));
+	assert!(!ids.contains(&blocked_id.to_string().as_str()));
 	Ok(())
 }
 

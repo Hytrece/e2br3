@@ -543,11 +543,7 @@ pub(crate) fn product_presave_allowed(
 }
 
 pub(super) fn can_manage_all_presaves(snapshot: &AuthorizationSnapshotW) -> bool {
-	snapshot
-		.grants()
-		.iter()
-		.any(|grant| grant.as_str() == "info.edit")
-		|| snapshot.identity().is_platform_administrator()
+	snapshot.identity().is_platform_administrator()
 }
 
 pub(super) fn rest_ok<T: Serialize>(
