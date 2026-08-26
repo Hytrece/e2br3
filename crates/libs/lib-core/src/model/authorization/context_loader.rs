@@ -783,6 +783,22 @@ impl<'tx> AuthorizationFactLoader<'tx> {
 		)))
 	}
 
+	pub async fn case_existing_scope_postcondition(
+		&self,
+		case_id: Uuid,
+	) -> Result<
+		LockedMutationContext<'tx, Existing<CaseResource>>,
+		AuthorizationFactLoadError,
+	> {
+		let facts = self.load_case_facts(case_id, true).await?;
+		Ok(LockedMutationContext::new(case_evaluated(
+			self.snapshot,
+			case_id,
+			&facts,
+			true,
+		)))
+	}
+
 	pub async fn case_child(
 		&self,
 		case_id: Uuid,
@@ -846,6 +862,24 @@ impl<'tx> AuthorizationFactLoader<'tx> {
 			child_fingerprint.as_ref(),
 			&facts,
 			case_lifecycle_allows(&facts, CaseMutationKind::ChildEdit),
+		)))
+	}
+
+	pub async fn case_child_scope_postcondition(
+		&self,
+		case_id: Uuid,
+		child_fingerprint: impl AsRef<str>,
+	) -> Result<
+		LockedMutationContext<'tx, Parent<CaseResource, CaseChildResource>>,
+		AuthorizationFactLoadError,
+	> {
+		let facts = self.load_case_facts(case_id, true).await?;
+		Ok(LockedMutationContext::new(case_child_evaluated(
+			self.snapshot,
+			case_id,
+			child_fingerprint.as_ref(),
+			&facts,
+			true,
 		)))
 	}
 

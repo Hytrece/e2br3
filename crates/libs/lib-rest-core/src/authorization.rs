@@ -1107,11 +1107,18 @@ where
 			.ok_or_else(|| Error::AccessDenied {
 				required_role: format!("registered {action_id} action"),
 			})?;
-		let permit = authorize_contextual_mutation(action, snapshot, context)
-			.map_err(denied)?;
+		let permit =
+			authorize_contextual_mutation(action.clone(), snapshot, context)
+				.map_err(denied)?;
 		let authorized_ctx =
 			rls_ctx_for_authorized_mutation(request_ctx, snapshot, &permit)?;
-		operation(&authorized_ctx, mm).await
+		let result = operation(&authorized_ctx, mm).await?;
+		let context = loader
+			.case_existing_scope_postcondition(case_id)
+			.await
+			.map_err(map_fact_load_error)?;
+		authorize_contextual_mutation(action, snapshot, context).map_err(denied)?;
+		Ok(result)
 	}
 	.await;
 	finish_fact_transaction(dbx, result).await
@@ -1168,6 +1175,7 @@ where
 		&'ctx ModelManager,
 	) -> Pin<Box<dyn Future<Output = Result<T>> + Send + 'ctx>>,
 {
+	let child_fingerprint = child_fingerprint.as_ref().to_owned();
 	let dbx = begin_fact_transaction(request_ctx, mm).await?;
 	let loader = AuthorizationFactLoader::new(dbx, snapshot);
 	if let Err(error) = loader.lock_and_verify_revisions().await {
@@ -1176,7 +1184,7 @@ where
 	}
 	let result = async {
 		let context = loader
-			.case_child_for_verified_mutation(case_id, child_fingerprint)
+			.case_child_for_verified_mutation(case_id, &child_fingerprint)
 			.await
 			.map_err(map_fact_load_error)?;
 		let action = policy_registry()
@@ -1186,8 +1194,9 @@ where
 			.ok_or_else(|| Error::AccessDenied {
 				required_role: "registered case.child.update action".to_string(),
 			})?;
-		let permit = authorize_contextual_mutation(action, snapshot, context)
-			.map_err(denied)?;
+		let permit =
+			authorize_contextual_mutation(action.clone(), snapshot, context)
+				.map_err(denied)?;
 		let authorized_ctx =
 			rls_ctx_for_authorized_mutation(request_ctx, snapshot, &permit)?;
 		let case = CaseBmc::get(&authorized_ctx, mm, case_id).await?;
@@ -1198,7 +1207,13 @@ where
 				message: reason.message,
 			});
 		}
-		operation(&authorized_ctx, mm).await
+		let result = operation(&authorized_ctx, mm).await?;
+		let context = loader
+			.case_child_scope_postcondition(case_id, child_fingerprint)
+			.await
+			.map_err(map_fact_load_error)?;
+		authorize_contextual_mutation(action, snapshot, context).map_err(denied)?;
+		Ok(result)
 	}
 	.await;
 	finish_fact_transaction(dbx, result).await

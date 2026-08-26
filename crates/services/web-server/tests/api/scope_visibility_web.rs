@@ -1046,6 +1046,24 @@ async fn test_case_update_requires_matching_sender_scope() -> Result<()> {
 	let sender_b =
 		create_sender_presave(&app, &admin_cookie, "Sender Org B", "SEND-UPD-B")
 			.await?;
+	let product_a =
+		create_product_presave(&app, &admin_cookie, sender_a, "Product A").await?;
+	let product_b =
+		create_product_presave(&app, &admin_cookie, sender_b, "Product B").await?;
+	let dbx = mm.dbx();
+	dbx.begin_txn().await?;
+	set_full_context_dbx(dbx, seed.admin.id, seed.org_id, ROLE_SPONSOR_ADMIN_CRO)
+		.await?;
+	let product_b_key = dbx
+		.fetch_one(
+			sqlx::query_as::<_, (String,)>(
+				"SELECT product_id FROM product_presaves WHERE id = $1",
+			)
+			.bind(product_b),
+		)
+		.await?
+		.0;
+	dbx.commit_txn().await?;
 
 	let case_a = create_case(
 		&app,
@@ -1089,7 +1107,10 @@ async fn test_case_update_requires_matching_sender_scope() -> Result<()> {
 		&app,
 		&admin_cookie,
 		seed.viewer.id,
-		json!({ "access_sender_ids": [sender_a.to_string()] }),
+		json!({
+			"access_sender_ids": [sender_a.to_string()],
+			"access_product_ids": [product_a.to_string()]
+		}),
 	)
 	.await?;
 
@@ -1106,6 +1127,31 @@ async fn test_case_update_requires_matching_sender_scope() -> Result<()> {
 	)
 	.await?;
 	assert_eq!(status, StatusCode::FORBIDDEN, "{value:?}");
+
+	let (status, value) = request_json(
+		&app,
+		"PUT",
+		&viewer_cookie,
+		format!("/api/cases/{case_a}"),
+		Some(json!({ "data": { "dg_prd_key": product_b_key } })),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::FORBIDDEN, "{value:?}");
+	let dbx = mm.dbx();
+	dbx.begin_txn().await?;
+	set_full_context_dbx(dbx, seed.admin.id, seed.org_id, ROLE_SPONSOR_ADMIN_CRO)
+		.await?;
+	let stored_product_key = dbx
+		.fetch_one(
+			sqlx::query_as::<_, (Option<String>,)>(
+				"SELECT dg_prd_key FROM cases WHERE id = $1",
+			)
+			.bind(case_a),
+		)
+		.await?
+		.0;
+	dbx.commit_txn().await?;
+	assert_eq!(stored_product_key, None);
 
 	Ok(())
 }
@@ -1189,6 +1235,13 @@ async fn test_case_editor_can_create_assigned_dg_but_denies_unassigned_product(
 		Some(&unassigned_product_key),
 	)
 	.await?;
+	let initially_unscoped_case = create_case(
+		&app,
+		&admin_cookie,
+		&format!("SR-DG-UNSCOPED-{}", Uuid::new_v4()),
+		None,
+	)
+	.await?;
 	update_user_scope(
 		&app,
 		&admin_cookie,
@@ -1265,6 +1318,31 @@ async fn test_case_editor_can_create_assigned_dg_but_denies_unassigned_product(
 	)
 	.await?;
 	assert_eq!(status, StatusCode::FORBIDDEN, "{value:?}");
+
+	let (status, value) = request_json(
+		&app,
+		"POST",
+		&editor_cookie,
+		format!("/api/cases/{initially_unscoped_case}/editor/pages/DG/rows"),
+		Some(dg_row(unassigned_product, "Unassigned Drug")),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::FORBIDDEN, "{value:?}");
+	let dbx = mm.dbx();
+	dbx.begin_txn().await?;
+	set_full_context_dbx(dbx, seed.admin.id, seed.org_id, ROLE_SPONSOR_ADMIN_CRO)
+		.await?;
+	let stored_rows = dbx
+		.fetch_one(
+			sqlx::query_as::<_, (i64,)>(
+				"SELECT count(*) FROM drug_information WHERE case_id = $1",
+			)
+			.bind(initially_unscoped_case),
+		)
+		.await?
+		.0;
+	dbx.commit_txn().await?;
+	assert_eq!(stored_rows, 0);
 	Ok(())
 }
 
