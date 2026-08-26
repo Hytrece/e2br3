@@ -107,6 +107,35 @@ async fn test_user_api_role_metadata_uses_authoritative_assignment() -> Result<(
 
 #[serial]
 #[tokio::test]
+async fn test_current_user_profile_exposes_custom_role_name() -> Result<()> {
+	let mm = init_test_mm().await?;
+	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
+	let admin_token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
+	let admin_cookie = cookie_header(&admin_token.to_string());
+	let app = web_server::app(mm.clone());
+	let role_name = "UIV Case Operator";
+	let role_id = create_empty_custom_role(&app, &admin_cookie, role_name).await?;
+	let (_, custom_cookie) = custom_role_user(&mm, seed.org_id, &role_id).await?;
+
+	let (status, value) = request_json(
+		&app,
+		"GET",
+		&custom_cookie,
+		"/api/users/me/profile".to_string(),
+		None,
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK, "{value:?}");
+	assert_eq!(
+		value["data"]["user"]["roleMeta"]["canonicalRoleId"],
+		role_id
+	);
+	assert_eq!(value["data"]["user"]["roleMeta"]["displayName"], role_name);
+	Ok(())
+}
+
+#[serial]
+#[tokio::test]
 async fn test_restoring_twenty_first_active_custom_role_returns_conflict(
 ) -> Result<()> {
 	let mm = init_test_mm().await?;

@@ -17,6 +17,11 @@ pub(super) async fn user_views(
 	let user_ids = users.iter().map(|user| user.id).collect::<Vec<_>>();
 	let role_assignments =
 		UserBmc::role_assignments_for_users(ctx, mm, &user_ids).await?;
+	let role_names = PermissionProfileBmc::list(ctx, mm)
+		.await?
+		.into_iter()
+		.map(|profile| (profile.id.to_string(), profile.name))
+		.collect::<std::collections::HashMap<_, _>>();
 	users
 		.into_iter()
 		.map(|mut user| {
@@ -34,12 +39,17 @@ pub(super) async fn user_views(
 				// not turn that stale display record into a 500; authorization still
 				// fails closed because inactive roles are excluded from snapshots.
 				.unwrap_or_else(|| canonical_role(&user.role));
-			user_view_with_role(user, role)
+			let role_name = role_names.get(&role).map(String::as_str);
+			user_view_with_role(user, role, role_name)
 		})
 		.collect()
 }
 
-fn user_view_with_role(user: User, role: String) -> Result<UserView> {
+fn user_view_with_role(
+	user: User,
+	role: String,
+	role_name: Option<&str>,
+) -> Result<UserView> {
 	let active = user_is_effectively_active(&user);
 	let access_sender_ids = user.access_sender_ids.clone();
 	let access_product_ids = user.access_product_ids.clone();
@@ -52,7 +62,7 @@ fn user_view_with_role(user: User, role: String) -> Result<UserView> {
 		email: user.email,
 		username: user.username,
 		role: role.clone(),
-		role_meta: role_metadata(&role, None),
+		role_meta: role_metadata(&role, role_name),
 		comments: user.comments,
 		other_information: user.other_information,
 		scope: UserScopeView {

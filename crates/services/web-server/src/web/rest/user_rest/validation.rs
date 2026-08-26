@@ -189,11 +189,22 @@ pub(super) fn role_display_name(role: &str) -> String {
 		.unwrap_or_else(|| canonical.replace('_', " "))
 }
 
-pub(super) fn role_metadata(role: &str, _unused: Option<&str>) -> UserRoleMetadata {
+pub(super) fn role_metadata(
+	role: &str,
+	custom_name: Option<&str>,
+) -> UserRoleMetadata {
 	let canonical_role_id = canonical_role(role);
 	let built_in = built_in_role_metadata(&canonical_role_id);
 	UserRoleMetadata {
-		display_name: role_display_name(&canonical_role_id),
+		display_name: built_in
+			.map(|metadata| metadata.display_name.to_string())
+			.or_else(|| {
+				custom_name
+					.map(str::trim)
+					.filter(|name| !name.is_empty())
+					.map(str::to_string)
+			})
+			.unwrap_or_else(|| role_display_name(&canonical_role_id)),
 		canonical_role_id: canonical_role_id.clone(),
 		is_builtin: built_in.is_some(),
 		is_editable: built_in.is_none(),
