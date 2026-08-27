@@ -272,24 +272,26 @@ fn list_view_rows_sql(order_clause: &str, where_clause: &str) -> String {
 		       c.status = 'reviewed' AS reviewed,
 		       c.status = 'locked' AS locked,
 		       c.status = 'deleted' AS deleted,
-		       (
-		       	c.status IN ('validated', 'reviewed', 'locked')
-		       	OR (
-		       		c.raw_xml IS NOT NULL
-		       		AND COALESCE(c.dirty_c, false) = false
-		       		AND COALESCE(c.dirty_d, false) = false
-		       		AND COALESCE(c.dirty_e, false) = false
-		       		AND COALESCE(c.dirty_f, false) = false
-		       		AND COALESCE(c.dirty_g, false) = false
-		       		AND COALESCE(c.dirty_h, false) = false
-		       	)
-		       ) AS export_eligible
+		       c.status <> 'deleted' AS export_eligible
 		  FROM cases c
 		  LEFT JOIN safety_report_identification s ON s.case_id = c.id
 		 {where_clause}
 		 ORDER BY {order_clause}
 		"#
 	)
+}
+
+#[cfg(test)]
+mod list_view_rows_tests {
+	use super::list_view_rows_sql;
+
+	#[test]
+	fn draft_cases_are_left_to_the_export_endpoint_for_validation() {
+		let sql = list_view_rows_sql("c.created_at DESC", "");
+		let sql = sql.split_whitespace().collect::<Vec<_>>().join(" ");
+		assert!(sql.contains("c.status <> 'deleted' AS export_eligible"));
+		assert!(!sql.contains("c.raw_xml IS NOT NULL"));
+	}
 }
 
 // -- Case domain helpers
