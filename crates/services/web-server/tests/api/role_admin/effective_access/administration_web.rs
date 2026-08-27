@@ -35,7 +35,7 @@ async fn test_admin_edit_cannot_manage_roles_or_assign_roles() -> Result<()> {
 		"PUT",
 		&custom_cookie,
 		format!("/api/users/{}", seed.viewer.id),
-		Some(json!({ "data": { "comments": "allowed user-field edit" } })),
+		Some(json!({ "data": { "access_blind_allowed": true } })),
 	)
 	.await?;
 	assert_eq!(status, StatusCode::OK, "{value:?}");
