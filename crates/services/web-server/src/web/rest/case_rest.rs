@@ -871,10 +871,12 @@ pub async fn case_to_read_result(
 	case: Case,
 ) -> Result<CaseReadResult> {
 	let actionability = workflow_actionability_for_case(ctx, mm, &case).await?;
-	let status = case.status.clone();
 	Ok(CaseReadResult {
-		qc_state: qc_state_for_case_status(&status),
-		is_locked: status.eq_ignore_ascii_case("locked"),
+		qc_state: qc_state_for_case_status(
+			&case.status,
+			case.status_before_lock.as_deref(),
+		),
+		is_locked: case.status.eq_ignore_ascii_case("locked"),
 		case: case.into(),
 		can_act_on_workflow: actionability.can_act_on_workflow,
 		workflow_block_reason: actionability.workflow_block_reason,
@@ -1433,7 +1435,7 @@ pub async fn toggle_case_review(
 	ctx_w: CtxW,
 	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 	Path(id): Path<Uuid>,
-) -> Result<(axum::http::StatusCode, Json<DataRestResult<PublicCaseView>>)> {
+) -> Result<(axum::http::StatusCode, Json<DataRestResult<CaseReadResult>>)> {
 	let ctx = ctx_w.0;
 	lib_rest_core::with_authorized_case_mutation(
 		&ctx,
@@ -1445,11 +1447,10 @@ pub async fn toggle_case_review(
 		move |ctx, mm| {
 			Box::pin(async move {
 				let entity = CaseBmc::toggle_review(ctx, mm, id).await?;
+				let entity = case_to_read_result(ctx, mm, entity).await?;
 				Ok((
 					axum::http::StatusCode::OK,
-					Json(DataRestResult {
-						data: entity.into(),
-					}),
+					Json(DataRestResult { data: entity }),
 				))
 			})
 		},
@@ -1463,7 +1464,7 @@ pub async fn toggle_case_lock(
 	ctx_w: CtxW,
 	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 	Path(id): Path<Uuid>,
-) -> Result<(axum::http::StatusCode, Json<DataRestResult<PublicCaseView>>)> {
+) -> Result<(axum::http::StatusCode, Json<DataRestResult<CaseReadResult>>)> {
 	let ctx = ctx_w.0;
 	lib_rest_core::with_authorized_case_mutation(
 		&ctx,
@@ -1475,11 +1476,10 @@ pub async fn toggle_case_lock(
 		move |ctx, mm| {
 			Box::pin(async move {
 				let entity = CaseBmc::toggle_lock(ctx, mm, id).await?;
+				let entity = case_to_read_result(ctx, mm, entity).await?;
 				Ok((
 					axum::http::StatusCode::OK,
-					Json(DataRestResult {
-						data: entity.into(),
-					}),
+					Json(DataRestResult { data: entity }),
 				))
 			})
 		},

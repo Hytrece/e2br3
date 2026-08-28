@@ -3037,8 +3037,17 @@ async fn test_case_read_returns_separate_qc_and_lock_axes() -> Result<()> {
 
 	let (status, body) = toggle_case_action(&app, &cookie, case_id, "lock").await?;
 	assert_eq!(status, StatusCode::OK, "{body:?}");
+	assert_eq!(body["data"]["qc_state"].as_str(), Some("QCed"));
+	assert_eq!(body["data"]["is_locked"].as_bool(), Some(true));
 	let (status, body) = get_case(&app, &cookie, case_id).await?;
 	assert_eq!(status, StatusCode::OK, "{body:?}");
+	assert_eq!(body["data"]["qc_state"].as_str(), Some("QCed"));
 	assert_eq!(body["data"]["is_locked"].as_bool(), Some(true));
+
+	let (status, body) = toggle_case_action(&app, &cookie, case_id, "lock").await?;
+	assert_eq!(status, StatusCode::OK, "{body:?}");
+	assert_eq!(body["data"]["status"].as_str(), Some("reviewed"));
+	assert_eq!(body["data"]["qc_state"].as_str(), Some("QCed"));
+	assert_eq!(body["data"]["is_locked"].as_bool(), Some(false));
 	Ok(())
 }

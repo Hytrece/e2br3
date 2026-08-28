@@ -239,7 +239,15 @@ pub async fn workflow_ownership_for_case(
 	})
 }
 
-pub fn qc_state_for_case_status(status: &str) -> &'static str {
+pub fn qc_state_for_case_status(
+	status: &str,
+	status_before_lock: Option<&str>,
+) -> &'static str {
+	let status = if status.trim().eq_ignore_ascii_case("locked") {
+		status_before_lock.unwrap_or(status)
+	} else {
+		status
+	};
 	match status.trim().to_ascii_lowercase().as_str() {
 		"reviewed" | "validated" => "QCed",
 		_ => "Pending",
