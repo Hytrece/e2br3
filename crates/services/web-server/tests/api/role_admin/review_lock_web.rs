@@ -37,12 +37,21 @@ async fn toggle_case_action(
 	case_id: Uuid,
 	action: &str,
 ) -> Result<(StatusCode, serde_json::Value)> {
+	let (status, current) =
+		request_json(app, "GET", cookie, format!("/api/cases/{case_id}"), None)
+			.await?;
+	if status != StatusCode::OK {
+		return Ok((status, current));
+	}
+	let expected_status = current["data"]["status"]
+		.as_str()
+		.ok_or("case response is missing status")?;
 	request_json(
 		app,
 		"POST",
 		cookie,
 		format!("/api/cases/{case_id}/{action}/toggle"),
-		Some(json!({})),
+		Some(json!({ "data": { "expected_status": expected_status } })),
 	)
 	.await
 }
