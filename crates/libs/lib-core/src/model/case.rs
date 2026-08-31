@@ -269,7 +269,9 @@ fn list_view_rows_sql(order_clause: &str, where_clause: &str) -> String {
 		       	 LIMIT 1
 		       ), NULLIF(s.receiver_organization, ''), 'N/A') AS receiver,
 		       CASE WHEN c.raw_xml IS NULL THEN 'Manual' ELSE 'Import' END AS creation_type,
-		       c.status = 'reviewed' AS reviewed,
+		       (lower(c.status) IN ('reviewed', 'validated') OR
+		        (lower(c.status) = 'locked' AND
+		         lower(COALESCE(c.status_before_lock, '')) IN ('reviewed', 'validated'))) AS reviewed,
 		       c.status = 'locked' AS locked,
 		       c.status = 'deleted' AS deleted,
 		       c.status <> 'deleted' AS export_eligible
@@ -291,6 +293,15 @@ mod list_view_rows_tests {
 		let sql = sql.split_whitespace().collect::<Vec<_>>().join(" ");
 		assert!(sql.contains("c.status <> 'deleted' AS export_eligible"));
 		assert!(!sql.contains("c.raw_xml IS NOT NULL"));
+	}
+
+	#[test]
+	fn locked_reviewed_cases_remain_qced_in_list_projection() {
+		let sql = list_view_rows_sql("c.created_at DESC", "");
+		let sql = sql.split_whitespace().collect::<Vec<_>>().join(" ");
+		assert!(sql.contains(
+			"lower(COALESCE(c.status_before_lock, '')) IN ('reviewed', 'validated')"
+		));
 	}
 }
 
@@ -705,6 +716,7 @@ impl CaseBmc {
 		ctx: &Ctx,
 		mm: &ModelManager,
 		id: Uuid,
+		expected_status: &str,
 	) -> Result<Case> {
 		let dbx = mm.dbx();
 		dbx.begin_txn().await?;
@@ -729,6 +741,14 @@ impl CaseBmc {
 				id,
 			});
 		};
+		if !status.trim().eq_ignore_ascii_case(expected_status.trim()) {
+			dbx.rollback_txn().await?;
+			return Err(crate::model::Error::Conflict {
+				message:
+					"case status changed in another session; refresh and try again"
+						.to_string(),
+			});
+		}
 		let next = match status.trim().to_ascii_lowercase().as_str() {
 			"draft" => "reviewed",
 			"reviewed" | "validated" => "draft",
@@ -771,6 +791,7 @@ impl CaseBmc {
 		ctx: &Ctx,
 		mm: &ModelManager,
 		id: Uuid,
+		expected_status: &str,
 	) -> Result<Case> {
 		let dbx = mm.dbx();
 		dbx.begin_txn().await?;
@@ -796,6 +817,14 @@ impl CaseBmc {
 				id,
 			});
 		};
+		if !status.trim().eq_ignore_ascii_case(expected_status.trim()) {
+			dbx.rollback_txn().await?;
+			return Err(crate::model::Error::Conflict {
+				message:
+					"case status changed in another session; refresh and try again"
+						.to_string(),
+			});
+		}
 		let normalized = status.trim().to_ascii_lowercase();
 		let (next, remembered): (String, Option<String>) = match normalized.as_str()
 		{

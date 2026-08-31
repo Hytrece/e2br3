@@ -6,6 +6,7 @@ use lib_core::model::case::{
 	Case, CaseBmc, CaseWorkflowEventBmc, CaseWorkflowEventRow, WorkflowAssignRecord,
 	WorkflowTransitionRecord,
 };
+use lib_core::model::permission_profile::PermissionProfileBmc;
 use lib_core::model::ModelManager;
 use lib_rest_core::prelude::*;
 use lib_rest_core::rest_params::ParamsForCreate;
@@ -40,6 +41,14 @@ pub struct WorkflowStatusRuntimeDoc {
 pub struct WorkflowConfigRuntimeDoc {
 	pub workflow_enabled: bool,
 	pub statuses: Vec<WorkflowStatusRuntimeDoc>,
+	pub roles: Vec<WorkflowRoleRuntimeDoc>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkflowRoleRuntimeDoc {
+	pub id: String,
+	pub name: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -76,6 +85,7 @@ pub struct WorkflowEventReadResult {
 	pub target_user_display: Option<String>,
 	pub comment: Option<String>,
 	pub date_of_most_recent: Option<String>,
+	#[serde(with = "time::serde::rfc3339::option")]
 	pub due_at: Option<OffsetDateTime>,
 	pub delay: String,
 	pub acted_by: Uuid,
@@ -83,6 +93,7 @@ pub struct WorkflowEventReadResult {
 	pub actor_role_id: String,
 	pub used_admin_override: bool,
 	pub override_reason: Option<String>,
+	#[serde(with = "time::serde::rfc3339")]
 	pub created_at: OffsetDateTime,
 }
 
@@ -568,8 +579,19 @@ pub async fn get_workflow_config_runtime(
 		move |ctx, mm| {
 			Box::pin(async move {
 				let workflow = load_workflow_runtime_settings(ctx, mm).await?;
+				let roles = PermissionProfileBmc::list(ctx, mm)
+					.await
+					.map_err(Error::Model)?
+					.into_iter()
+					.filter(|role| role.active)
+					.map(|role| WorkflowRoleRuntimeDoc {
+						id: role.id.to_string(),
+						name: role.name,
+					})
+					.collect();
 				let data = WorkflowConfigRuntimeDoc {
 					workflow_enabled: workflow.enabled,
+					roles,
 					statuses: workflow
 						.statuses
 						.into_iter()

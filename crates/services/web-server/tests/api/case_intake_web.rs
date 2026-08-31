@@ -592,7 +592,7 @@ async fn test_case_from_intake_creates_batch_number_for_export() -> Result<()> {
 		&app,
 		&cookie,
 		&format!("/api/cases/{case_id}/review/toggle"),
-		json!({}),
+		json!({"data":{"expected_status":"draft"}}),
 	)
 	.await?;
 	assert_eq!(status, StatusCode::OK, "{workflow_response:?}");

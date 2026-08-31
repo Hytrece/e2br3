@@ -854,6 +854,12 @@ pub struct CaseReadResult {
 	pub is_locked: bool,
 	pub can_act_on_workflow: bool,
 	pub workflow_block_reason: Option<&'static str>,
+	pub case_write_block_reason: Option<&'static str>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CaseStatusToggleInput {
+	pub expected_status: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -871,6 +877,8 @@ pub async fn case_to_read_result(
 	case: Case,
 ) -> Result<CaseReadResult> {
 	let actionability = workflow_actionability_for_case(ctx, mm, &case).await?;
+	let write_block_reason =
+		case_write_block_reason_for_case(ctx, mm, &case).await?;
 	Ok(CaseReadResult {
 		qc_state: qc_state_for_case_status(
 			&case.status,
@@ -880,6 +888,7 @@ pub async fn case_to_read_result(
 		case: case.into(),
 		can_act_on_workflow: actionability.can_act_on_workflow,
 		workflow_block_reason: actionability.workflow_block_reason,
+		case_write_block_reason: write_block_reason.map(|reason| reason.code),
 	})
 }
 
@@ -1435,8 +1444,10 @@ pub async fn toggle_case_review(
 	ctx_w: CtxW,
 	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 	Path(id): Path<Uuid>,
+	Json(params): Json<ParamsForCreate<CaseStatusToggleInput>>,
 ) -> Result<(axum::http::StatusCode, Json<DataRestResult<CaseReadResult>>)> {
 	let ctx = ctx_w.0;
+	let expected_status = params.data.expected_status;
 	lib_rest_core::with_authorized_case_mutation(
 		&ctx,
 		&snapshot,
@@ -1446,7 +1457,8 @@ pub async fn toggle_case_review(
 		CaseMutationKind::ReviewToggle,
 		move |ctx, mm| {
 			Box::pin(async move {
-				let entity = CaseBmc::toggle_review(ctx, mm, id).await?;
+				let entity =
+					CaseBmc::toggle_review(ctx, mm, id, &expected_status).await?;
 				let entity = case_to_read_result(ctx, mm, entity).await?;
 				Ok((
 					axum::http::StatusCode::OK,
@@ -1464,8 +1476,10 @@ pub async fn toggle_case_lock(
 	ctx_w: CtxW,
 	snapshot: lib_web::middleware::mw_authorization_snapshot::AuthorizationSnapshotW,
 	Path(id): Path<Uuid>,
+	Json(params): Json<ParamsForCreate<CaseStatusToggleInput>>,
 ) -> Result<(axum::http::StatusCode, Json<DataRestResult<CaseReadResult>>)> {
 	let ctx = ctx_w.0;
+	let expected_status = params.data.expected_status;
 	lib_rest_core::with_authorized_case_mutation(
 		&ctx,
 		&snapshot,
@@ -1475,7 +1489,8 @@ pub async fn toggle_case_lock(
 		CaseMutationKind::LockToggle,
 		move |ctx, mm| {
 			Box::pin(async move {
-				let entity = CaseBmc::toggle_lock(ctx, mm, id).await?;
+				let entity =
+					CaseBmc::toggle_lock(ctx, mm, id, &expected_status).await?;
 				let entity = case_to_read_result(ctx, mm, entity).await?;
 				Ok((
 					axum::http::StatusCode::OK,

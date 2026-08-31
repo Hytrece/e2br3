@@ -25,6 +25,7 @@ pub struct CaseEditorShellDto {
 	pub is_locked: bool,
 	pub can_act_on_workflow: bool,
 	pub workflow_block_reason: Option<&'static str>,
+	pub case_write_block_reason: Option<&'static str>,
 }
 
 #[derive(Debug, Serialize)]
@@ -58,6 +59,7 @@ impl CaseEditorShellDto {
 			is_locked: value.is_locked,
 			can_act_on_workflow: value.can_act_on_workflow,
 			workflow_block_reason: value.workflow_block_reason,
+			case_write_block_reason: value.case_write_block_reason,
 		}
 	}
 }

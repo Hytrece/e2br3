@@ -806,12 +806,21 @@ async fn toggle_case_action(
 	case_id: Uuid,
 	action: &str,
 ) -> Result<(StatusCode, Value)> {
+	let (current_status, current) = get_case(app, cookie, case_id).await?;
+	if current_status != StatusCode::OK {
+		return Ok((current_status, current));
+	}
+	let expected_status = current["data"]["status"]
+		.as_str()
+		.ok_or("case response is missing status")?;
 	let req = Request::builder()
 		.method("POST")
 		.uri(format!("/api/cases/{case_id}/{action}/toggle"))
 		.header("cookie", cookie)
 		.header("content-type", "application/json")
-		.body(Body::from("{}"))?;
+		.body(Body::from(
+			json!({"data":{"expected_status":expected_status}}).to_string(),
+		))?;
 	let res = app.clone().oneshot(req).await?;
 	let status = res.status();
 	let body = to_bytes(res.into_body(), usize::MAX).await?;
@@ -3034,11 +3043,19 @@ async fn test_case_read_returns_separate_qc_and_lock_axes() -> Result<()> {
 	assert_eq!(status, StatusCode::OK, "{body:?}");
 	assert_eq!(body["data"]["qc_state"].as_str(), Some("QCed"));
 	assert_eq!(body["data"]["is_locked"].as_bool(), Some(false));
+	assert_eq!(
+		body["data"]["case_write_block_reason"].as_str(),
+		Some("case_qced")
+	);
 
 	let (status, body) = toggle_case_action(&app, &cookie, case_id, "lock").await?;
 	assert_eq!(status, StatusCode::OK, "{body:?}");
 	assert_eq!(body["data"]["qc_state"].as_str(), Some("QCed"));
 	assert_eq!(body["data"]["is_locked"].as_bool(), Some(true));
+	assert_eq!(
+		body["data"]["case_write_block_reason"].as_str(),
+		Some("case_locked")
+	);
 	let (status, body) = get_case(&app, &cookie, case_id).await?;
 	assert_eq!(status, StatusCode::OK, "{body:?}");
 	assert_eq!(body["data"]["qc_state"].as_str(), Some("QCed"));
@@ -3049,5 +3066,40 @@ async fn test_case_read_returns_separate_qc_and_lock_axes() -> Result<()> {
 	assert_eq!(body["data"]["status"].as_str(), Some("reviewed"));
 	assert_eq!(body["data"]["qc_state"].as_str(), Some("QCed"));
 	assert_eq!(body["data"]["is_locked"].as_bool(), Some(false));
+	assert_eq!(
+		body["data"]["case_write_block_reason"].as_str(),
+		Some("case_qced")
+	);
+	Ok(())
+}
+
+#[serial]
+#[tokio::test]
+async fn test_lifecycle_toggle_rejects_stale_screen_status() -> Result<()> {
+	let mm = init_test_mm().await?;
+	let seed = seed_org_with_users(&mm, "adminpwd", "viewpwd").await?;
+	let token = generate_web_token(&seed.admin.email, seed.admin.token_salt)?;
+	let cookie = cookie_header(&token.to_string());
+	let app = web_server::app(mm);
+	let case_id = create_case(&app, &cookie, seed.org_id).await?;
+
+	let (status, body) =
+		toggle_case_action(&app, &cookie, case_id, "review").await?;
+	assert_eq!(status, StatusCode::OK, "{body:?}");
+
+	let stale_lock_req = Request::builder()
+		.method("POST")
+		.uri(format!("/api/cases/{case_id}/lock/toggle"))
+		.header("cookie", &cookie)
+		.header("content-type", "application/json")
+		.body(Body::from(
+			json!({"data":{"expected_status":"draft"}}).to_string(),
+		))?;
+	let stale_lock_res = app.clone().oneshot(stale_lock_req).await?;
+	assert_eq!(stale_lock_res.status(), StatusCode::CONFLICT);
+
+	let (status, body) = get_case(&app, &cookie, case_id).await?;
+	assert_eq!(status, StatusCode::OK, "{body:?}");
+	assert_eq!(body["data"]["status"].as_str(), Some("reviewed"));
 	Ok(())
 }
