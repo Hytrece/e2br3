@@ -159,6 +159,7 @@ pub struct OrganizationSelectionBody {
 
 #[derive(Debug, Deserialize)]
 pub struct SetMyPasswordBody {
+	#[serde(default)]
 	pub current_password: String,
 	pub new_password: String,
 }

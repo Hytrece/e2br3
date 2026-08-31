@@ -182,15 +182,22 @@ pub async fn set_my_password(
 	cookies: tower_cookies::Cookies,
 	Json(params): Json<ParamsForCreate<SetMyPasswordBody>>,
 ) -> Result<StatusCode> {
-	let ctx = ctx_w.0;
+	let CtxW(ctx, must_change_password) = ctx_w;
 	let ParamsForCreate { data } = params;
 	validate_new_password(&data.new_password)?;
-	if data.current_password.is_empty() {
+	if must_change_password {
+		UserBmc::update_pwd_and_clear_must_change(
+			&ctx,
+			&mm,
+			ctx.user_id(),
+			&data.new_password,
+		)
+		.await?;
+	} else if data.current_password.is_empty() {
 		return Err(Error::BadRequest {
 			message: "current_password is required".to_string(),
 		});
-	}
-	if !UserBmc::change_password(
+	} else if !UserBmc::change_password(
 		&ctx,
 		&mm,
 		ctx.user_id(),

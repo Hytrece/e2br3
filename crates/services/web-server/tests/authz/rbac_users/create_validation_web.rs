@@ -344,7 +344,7 @@ async fn test_new_user_temp_password_and_first_login_reset_flow() -> Result<()> 
 	let suffix = Uuid::new_v4();
 	let email = format!("first-login-{suffix}@example.com");
 	let username = format!("first_login_{suffix}");
-	let temporary_password = "temporary-password-123";
+	let temporary_password = "welcome";
 	let new_password = "new-password-456789";
 	let role_id = create_empty_permission_profile(
 		&app,
@@ -358,8 +358,7 @@ async fn test_new_user_temp_password_and_first_login_reset_flow() -> Result<()> 
 			"organization_id": seed.org_id,
 			"email": email,
 			"username": username,
-			"role": role_id,
-			"pwd_clear": temporary_password
+			"role": role_id
 		}
 	});
 	let create_req = Request::builder()
@@ -403,35 +402,23 @@ async fn test_new_user_temp_password_and_first_login_reset_flow() -> Result<()> 
 		})
 		.ok_or("missing auth-token cookie after login")?;
 
-	let me_req = Request::builder()
+	let profile_req = Request::builder()
 		.method("GET")
-		.uri("/api/users/me")
+		.uri("/api/users/me/profile")
 		.header("cookie", auth_cookie.as_str())
 		.body(Body::empty())?;
-	let me_res = app.clone().oneshot(me_req).await?;
-	assert_eq!(me_res.status(), StatusCode::FORBIDDEN);
-	let me_bytes = axum::body::to_bytes(me_res.into_body(), usize::MAX).await?;
-	let me_json: serde_json::Value = serde_json::from_slice(&me_bytes)?;
-	assert_eq!(me_json["error"]["message"], "PASSWORD_CHANGE_REQUIRED");
-
-	let wrong_current_body = json!({
-		"data": {
-			"current_password": "incorrect-password",
-			"new_password": new_password
-		}
-	});
-	let wrong_current_req = Request::builder()
-		.method("POST")
-		.uri("/api/users/me/password")
-		.header("cookie", auth_cookie.as_str())
-		.header("content-type", "application/json")
-		.body(Body::from(wrong_current_body.to_string()))?;
-	let wrong_current_res = app.clone().oneshot(wrong_current_req).await?;
-	assert_eq!(wrong_current_res.status(), StatusCode::BAD_REQUEST);
+	let profile_res = app.clone().oneshot(profile_req).await?;
+	assert_eq!(profile_res.status(), StatusCode::OK);
+	let profile_bytes =
+		axum::body::to_bytes(profile_res.into_body(), usize::MAX).await?;
+	let profile_json: serde_json::Value = serde_json::from_slice(&profile_bytes)?;
+	assert_eq!(
+		profile_json["data"]["user"]["mustChangePassword"].as_bool(),
+		Some(true)
+	);
 
 	let weak_password_body = json!({
 		"data": {
-			"current_password": temporary_password,
 			"new_password": "short"
 		}
 	});
@@ -446,7 +433,6 @@ async fn test_new_user_temp_password_and_first_login_reset_flow() -> Result<()> 
 
 	let set_pwd_body = json!({
 		"data": {
-			"current_password": temporary_password,
 			"new_password": new_password
 		}
 	});

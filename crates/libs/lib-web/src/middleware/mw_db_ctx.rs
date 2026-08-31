@@ -14,6 +14,7 @@ pub async fn mw_ctx_require_and_set_dbx(
 	if ctx.1
 		&& !(req.method() == Method::POST
 			&& req.uri().path() == "/users/me/password")
+		&& !(req.method() == Method::GET && req.uri().path() == "/users/me/profile")
 	{
 		return Err(CtxExtError::PasswordChangeRequired.into());
 	}
