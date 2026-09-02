@@ -558,7 +558,11 @@ async fn test_audit_trail_case_crud() -> Result<()> {
 		.header("content-type", "application/json")
 		.body(Body::from(
 			json!({
-				"reason_for_change": "audit test delete transition"
+				"reason_for_change": "audit test delete transition",
+				"e_signature": {
+					"meaning": "delete case for audit test",
+					"password": "adminpwd"
+				}
 			})
 			.to_string(),
 		))?;

@@ -2004,6 +2004,42 @@ async fn test_delete_case_requires_reason_for_change() -> Result<()> {
 		"{delete_body:?}"
 	);
 
+	let (delete_status, delete_body) = delete_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}"),
+		json!({ "reason_for_change": "duplicate created in error" }),
+	)
+	.await?;
+	assert_eq!(delete_status, StatusCode::BAD_REQUEST, "{delete_body:?}");
+	assert!(
+		delete_body
+			.to_string()
+			.contains("e_signature is required for delete"),
+		"{delete_body:?}"
+	);
+
+	let (delete_status, delete_body) = delete_json(
+		&app,
+		&cookie,
+		&format!("/api/cases/{case_id}"),
+		json!({
+			"reason_for_change": "duplicate created in error",
+			"e_signature": {
+				"meaning": "delete duplicate case",
+				"password": "wrong-password"
+			}
+		}),
+	)
+	.await?;
+	assert_eq!(delete_status, StatusCode::BAD_REQUEST, "{delete_body:?}");
+	assert!(
+		delete_body
+			.to_string()
+			.contains("invalid e-signature credentials"),
+		"{delete_body:?}"
+	);
+
 	let (get_status, get_body) =
 		get_json(&app, &cookie, &format!("/api/cases/{case_id}")).await?;
 	assert_eq!(get_status, StatusCode::OK, "{get_body:?}");
@@ -2049,7 +2085,11 @@ async fn test_delete_case_soft_deletes_and_keeps_case_visible() -> Result<()> {
 		&cookie,
 		&format!("/api/cases/{case_id}"),
 		json!({
-			"reason_for_change": "client requested soft delete"
+			"reason_for_change": "client requested soft delete",
+			"e_signature": {
+				"meaning": "delete case",
+				"password": "adminpwd"
+			}
 		}),
 	)
 	.await?;
@@ -2099,11 +2139,11 @@ async fn test_delete_case_soft_deletes_and_keeps_case_visible() -> Result<()> {
 	dbx.begin_txn().await?;
 	dbx.execute(sqlx::query("SET ROLE e2br3_auditor_role"))
 		.await?;
-	let reason = dbx
+	let audit = dbx
 		.fetch_optional(
-			sqlx::query_as::<_, (Option<String>,)>(
+			sqlx::query_as::<_, (Option<String>, Option<Uuid>)>(
 				r#"
-				SELECT reason_for_change
+				SELECT reason_for_change, e_signature_id
 				FROM audit_logs
 				WHERE table_name = 'cases'
 				  AND record_id = $1
@@ -2119,9 +2159,10 @@ async fn test_delete_case_soft_deletes_and_keeps_case_visible() -> Result<()> {
 		.await?;
 	dbx.rollback_txn().await?;
 	assert_eq!(
-		reason.and_then(|(v,)| v).as_deref(),
+		audit.as_ref().and_then(|(reason, _)| reason.as_deref()),
 		Some("client requested soft delete")
 	);
+	assert!(audit.and_then(|(_, signature_id)| signature_id).is_some());
 
 	let (missing_reason_status, missing_reason_body) = post_json(
 		&app,
@@ -2214,7 +2255,13 @@ async fn test_deleted_case_rejects_content_updates() -> Result<()> {
 		&app,
 		&cookie,
 		&format!("/api/cases/{case_id}"),
-		json!({ "reason_for_change": "client requested soft delete" }),
+		json!({
+			"reason_for_change": "client requested soft delete",
+			"e_signature": {
+				"meaning": "delete case",
+				"password": "adminpwd"
+			}
+		}),
 	)
 	.await?;
 	assert_eq!(delete_status, StatusCode::OK, "{delete_body:?}");
