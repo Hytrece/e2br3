@@ -736,9 +736,10 @@ pub struct PublicCaseUpdateRequest {
 	pub e_signature: Option<ESignatureInput>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Default, Deserialize)]
 pub struct PublicCaseDeleteRequest {
 	pub reason_for_change: Option<String>,
+	pub e_signature: Option<ESignatureInput>,
 }
 
 #[derive(Debug, Serialize)]
@@ -1522,6 +1523,10 @@ pub async fn delete_case(
 		CaseMutationKind::Delete,
 		move |ctx, mm| {
 			Box::pin(async move {
+				let PublicCaseDeleteRequest {
+					reason_for_change,
+					e_signature,
+				} = payload.map(|Json(params)| params).unwrap_or_default();
 				let current = CaseBmc::get(ctx, mm, id).await?;
 				if !is_allowed_case_status_transition(&current.status, "deleted") {
 					return Err(Error::BadRequest {
@@ -1532,11 +1537,27 @@ pub async fn delete_case(
 					});
 				}
 				let reason = required_reason_for_change(
-					payload.and_then(|Json(params)| params.reason_for_change),
+					reason_for_change,
 					ctx.change_reason(),
 					"delete",
 				)?;
-				let ctx_for_update = ctx.with_compliance(Some(reason), None);
+				let e_signature = e_signature.ok_or(Error::BadRequest {
+					message: "e_signature is required for delete".to_string(),
+				})?;
+				let compliance = ComplianceActionInput {
+					reason_for_change: reason.clone(),
+					e_signature,
+				};
+				let signature_id = capture_e_signature(
+					ctx,
+					mm,
+					Some(id),
+					"CASE_STATUS_TRANSITION",
+					&compliance,
+				)
+				.await?;
+				let ctx_for_update =
+					ctx.with_compliance(Some(reason), Some(signature_id));
 				CaseBmc::update(
 					&ctx_for_update,
 					mm,
