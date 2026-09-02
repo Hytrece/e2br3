@@ -220,30 +220,6 @@ pub(crate) fn valid_e2b_datetime(value: &str) -> bool {
 	true
 }
 
-pub(crate) fn valid_ich_identifier(
-	vocabulary: &VocabularyContext,
-	value: Option<&str>,
-) -> bool {
-	let Some(value) = value.map(str::trim).filter(|value| !value.is_empty()) else {
-		return true;
-	};
-	if value.chars().count() > 100 || value.chars().any(char::is_control) {
-		return false;
-	}
-	let Some((country, remainder)) = value.split_once('-') else {
-		return false;
-	};
-	let Some((organization, report_number)) = remainder.rsplit_once('-') else {
-		return false;
-	};
-	vocabulary.contains_snapshot_code(
-		"ISO3166",
-		crate::VocabularyScope::All,
-		country,
-	) && !organization.trim().is_empty()
-		&& !report_number.trim().is_empty()
-}
-
 pub(crate) fn valid_ucum(value: Option<&str>) -> bool {
 	value
 		.map(str::trim)

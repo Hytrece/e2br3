@@ -1,7 +1,7 @@
 use super::helpers::{
 	e2b_datetime_date, e2b_ts_date, max_length, reject_future_date, reject_when,
-	require, valid_base64, valid_code, valid_e2b_datetime, valid_ich_identifier,
-	valid_iso3166, DateValues,
+	require, valid_base64, valid_code, valid_e2b_datetime, valid_iso3166,
+	DateValues,
 };
 use crate::{
 	has_text, is_mfds_clinical_trial_receiver, is_mfds_compassionate_use_receiver,
@@ -1030,12 +1030,10 @@ fn c_1_9_1_r_1(
 }
 
 /// ICH.C.1.9.1.r.2.REQUIRED
-/// ICH.C.1.9.1.r.2.ALLOWED.VALUE
 /// ICH.C.1.9.1.r.2.LENGTH.MAX
 fn c_1_9_1_r_2(
 	idx: usize,
 	identifier: &OtherCaseIdentifier,
-	vocabulary: &crate::context::VocabularyContext,
 	issues: &mut Vec<ValidationIssue>,
 ) {
 	let path = format!("otherCaseIdentifiers.{idx}.caseIdentifier");
@@ -1047,12 +1045,6 @@ fn c_1_9_1_r_2(
 		"case-identification",
 		"[C.1.9.1.r.2] Case identifier is required when an other case identifier row is present.",
 		has_text(value),
-	);
-	allowed(
-		issues,
-		"ICH.C.1.9.1.r.2.PROFILE",
-		&path,
-		valid_ich_identifier(vocabulary, value),
 	);
 	length(issues, "ICH.C.1.9.1.r.2.LENGTH.MAX", &path, value, 100);
 }
@@ -1309,7 +1301,7 @@ pub(crate) fn collect_ich_issues(
 	for (idx, identifier) in validation_ctx.other_case_identifiers.iter().enumerate()
 	{
 		c_1_9_1_r_1(idx, identifier, issues);
-		c_1_9_1_r_2(idx, identifier, &validation_ctx.vocabulary, issues);
+		c_1_9_1_r_2(idx, identifier, issues);
 	}
 	for (idx, report) in validation_ctx.linked_report_numbers.iter().enumerate() {
 		c_1_10_r(idx, report, issues);
@@ -3256,6 +3248,16 @@ mod golden_c1_value_tests {
 				),
 			]
 		);
+	}
+
+	#[test]
+	fn c1_9_1_r_2_accepts_free_text_identifier() {
+		let identifier = other_identifier("Legacy Safety DB", "LEGACY-2026-4451");
+		let mut issues = Vec::new();
+
+		c_1_9_1_r_2(0, &identifier, &mut issues);
+
+		assert!(issues.is_empty(), "{issues:?}");
 	}
 
 	#[test]
