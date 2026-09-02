@@ -190,9 +190,9 @@ jobs:
         run: scripts/test-isolated-db.sh --workspace --exclude lib-core -- --test-threads=1
 
   deploy-dev:
-    name: Deploy Dev EC2
+    name: Publish Dev Backend Image
     if: ${{ github.event_name == 'push' && github.ref_name == 'dev' }}
-    needs: [registry, fmt, clippy, test]
+    needs: [registry, fmt, clippy]
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -208,14 +208,6 @@ jobs:
           git fetch --no-tags origin "${BEFORE_SHA}"
           scripts/db/check_migration_changes.sh "${BEFORE_SHA}" "${GITHUB_SHA}"
 
-      - name: Checkout frontend dev
-        uses: actions/checkout@v4
-        with:
-          repository: QVIS-safety/e2br3-frontend
-          ref: dev
-          path: frontend/E2BR3-frontend
-          token: ${{ secrets.FRONTEND_REPOSITORY_TOKEN }}
-
       - uses: docker/setup-buildx-action@v3
 
       - uses: docker/login-action@v3
@@ -229,13 +221,6 @@ jobs:
           IMAGE_REF="ghcr.io/qvis-safety/e2br3-web-server:${GITHUB_SHA}"
           echo "IMAGE_REF=${IMAGE_REF}" >> "${GITHUB_ENV}"
           docker buildx build --platform linux/amd64 --push \
+            --cache-from type=gha,scope=dev-backend \
+            --cache-to type=gha,mode=max,scope=dev-backend \
             --tag "${IMAGE_REF}" --tag ghcr.io/qvis-safety/e2br3-web-server:dev .
-
-      - name: Build and push frontend image
-        run: |
-          FRONTEND_SHA="$(git -C frontend/E2BR3-frontend rev-parse HEAD)"
-          FRONTEND_IMAGE_REF="ghcr.io/qvis-safety/e2br3-frontend:${FRONTEND_SHA}"
-          echo "FRONTEND_IMAGE_REF=${FRONTEND_IMAGE_REF}" >> "${GITHUB_ENV}"
-          docker buildx build --platform linux/amd64 --push \
-            --tag "${FRONTEND_IMAGE_REF}" --tag ghcr.io/qvis-safety/e2br3-frontend:dev \
-            frontend/E2BR3-frontend

@@ -3,7 +3,7 @@ set -eu
 
 APP_DIR=/opt/e2br3
 BACKEND_IMAGE=ghcr.io/qvis-safety/e2br3-web-server:dev
-FRONTEND_IMAGE=ghcr.io/qvis-safety/e2br3-frontend:dev
+FRONTEND_IMAGE=ghcr.io/qvis-safety/e2br3-frontend-dev:dev
 
 cd "${APP_DIR}"
 sudo -u ec2-user git -C "${APP_DIR}" fetch origin dev
