@@ -20,7 +20,7 @@ use lib_core::model::case_query_catalog::{
 use lib_core::model::case_validation_summary::CaseValidationSummaryBmc;
 use lib_core::model::ModelManager;
 use lib_rest_core::rest_result::DataRestResult;
-use lib_rest_core::{case_ids_matching_user_scope, with_rls_read, Error, Result};
+use lib_rest_core::{with_rls_read, Error, Result};
 use lib_web::middleware::mw_auth::CtxW;
 use serde::{Deserialize, Serialize};
 use sqlx::types::Json as SqlxJson;
@@ -40,7 +40,7 @@ pub async fn get_case_query_catalog(
 		&ctx,
 		&snapshot,
 		&_mm,
-		move |_ctx, _mm| {
+		move |_ctx, _mm, _scope| {
 			Box::pin(async move {
 				let pages = catalog().to_vec();
 				Ok((StatusCode::OK, Json(DataRestResult { data: pages })))
@@ -61,6 +61,8 @@ pub struct CaseQueryRequest {
 	pub report_type_last: bool,
 	#[serde(default)]
 	pub no_ack_accept_history: bool,
+	pub limit: Option<u32>,
+	pub offset: Option<u32>,
 }
 
 #[derive(Debug, Serialize)]
@@ -90,8 +92,9 @@ pub struct CaseQueryResult {
 }
 
 #[derive(sqlx::FromRow)]
-struct CaseIdRow {
-	id: Uuid,
+struct CaseQueryPageRow {
+	case_ids: Vec<Uuid>,
+	total: i64,
 }
 
 #[derive(sqlx::FromRow)]
@@ -164,6 +167,23 @@ fn result_values_sql(pages: &[&'static CatalogPage]) -> String {
 	)
 }
 
+fn scope_where(first_bind: usize) -> String {
+	let sender = first_bind;
+	let product = first_bind + 1;
+	let study = first_bind + 2;
+	format!(
+		"(cardinality(${sender}::text[]) = 0 \
+		 OR NOT EXISTS (SELECT 1 FROM case_scope_identifiers(c.id) WHERE scope_kind = 'sender') \
+		 OR EXISTS (SELECT 1 FROM case_scope_identifiers(c.id) WHERE scope_kind = 'sender' AND identifier = ANY(${sender}::text[]))) \
+		AND (cardinality(${product}::text[]) = 0 \
+		 OR NOT EXISTS (SELECT 1 FROM case_scope_identifiers(c.id) WHERE scope_kind = 'product') \
+		 OR EXISTS (SELECT 1 FROM case_scope_identifiers(c.id) WHERE scope_kind = 'product' AND identifier = ANY(${product}::text[]))) \
+		AND (cardinality(${study}::text[]) = 0 \
+		 OR NOT EXISTS (SELECT 1 FROM case_scope_identifiers(c.id) WHERE scope_kind = 'study') \
+		 OR EXISTS (SELECT 1 FROM case_scope_identifiers(c.id) WHERE scope_kind = 'study' AND identifier = ANY(${study}::text[])))"
+	)
+}
+
 fn resolve_result_pages(page_ids: &[String]) -> Result<Vec<&'static CatalogPage>> {
 	if page_ids.is_empty() {
 		return Err(Error::BadRequest {
@@ -195,8 +215,18 @@ pub async fn search_cases(
 		&ctx,
 		&snapshot,
 		&mm,
-		move |ctx, mm| {
+		move |ctx, mm, scope| {
 			Box::pin(async move {
+				let explicit_page = request.limit.is_some() || request.offset.is_some();
+				let limit = request.limit.unwrap_or(MAX_CASE_QUERY_ROWS as u32);
+				if limit == 0 || limit as usize > MAX_CASE_QUERY_ROWS {
+					return Err(Error::BadRequest {
+						message: format!(
+							"limit must be between 1 and {MAX_CASE_QUERY_ROWS}"
+						),
+					});
+				}
+				let offset = request.offset.unwrap_or(0);
 				let pages = resolve_result_pages(&request.result_pages)?;
 				let elements = result_elements(&pages);
 				let conditions =
@@ -212,27 +242,61 @@ pub async fn search_cases(
 				};
 				let where_sql = combine_where(&where_sql, &filters);
 
+				let scope_bind = binds.len() + 1;
+				let limit_bind = scope_bind + 3;
+				let offset_bind = limit_bind + 1;
+				let scope_where = scope_where(scope_bind);
+				let matching_limit = if explicit_page {
+					String::new()
+				} else {
+					format!(" LIMIT {}", MAX_CASE_QUERY_ROWS + 1)
+				};
 				let sql = format!(
-					"SELECT c.id FROM cases c WHERE {where_sql} \
-		 ORDER BY c.created_at DESC, c.id DESC LIMIT {}",
-					MAX_CASE_QUERY_ROWS + 1
+					"WITH matching AS MATERIALIZED (\
+					 SELECT c.id, c.created_at FROM cases c \
+					 WHERE {where_sql} AND {scope_where}{matching_limit}\
+					) SELECT ARRAY(SELECT id FROM matching \
+					 ORDER BY created_at DESC, id DESC LIMIT ${limit_bind} OFFSET ${offset_bind}) AS case_ids, \
+					(SELECT COUNT(*) FROM matching) AS total"
 				);
+				let (sender_ids, product_ids, study_ids) =
+					if ctx.is_system_admin() || ctx.is_sponsor_admin() {
+						(Vec::new(), Vec::new(), Vec::new())
+					} else {
+						(
+							scope.sender_ids().to_vec(),
+							scope.product_ids().to_vec(),
+							scope.study_ids().to_vec(),
+						)
+					};
 
-				let rows = with_rls_read(mm, ctx, |dbx| {
+				let page = with_rls_read(mm, ctx, |dbx| {
 					let sql = sql.clone();
 					let binds = binds.clone();
+					let sender_ids = sender_ids.clone();
+					let product_ids = product_ids.clone();
+					let study_ids = study_ids.clone();
 					Box::pin(async move {
-						let mut query = sqlx::query_as::<_, CaseIdRow>(&sql);
+						let mut query =
+							sqlx::query_as::<_, CaseQueryPageRow>(&sql);
 						for value in binds {
 							query = query.bind(value);
 						}
-						dbx.fetch_all(query)
+						dbx.fetch_one(
+							query
+								.bind(sender_ids)
+								.bind(product_ids)
+								.bind(study_ids)
+								.bind(i64::from(limit))
+								.bind(i64::from(offset)),
+						)
 							.await
 							.map_err(|err| Error::Model(err.into()))
 					})
 				})
 				.await?;
-				if rows.len() > MAX_CASE_QUERY_ROWS {
+				let total = page.total as usize;
+				if !explicit_page && total > MAX_CASE_QUERY_ROWS {
 					return Err(Error::BadRequest {
 						message: format!(
 							"case query matches more than {MAX_CASE_QUERY_ROWS} cases"
@@ -240,18 +304,7 @@ pub async fn search_cases(
 					});
 				}
 
-				// Enforce per-user case scope on top of RLS.
-				let row_ids = rows.iter().map(|row| row.id).collect::<Vec<_>>();
-				let visible_case_ids =
-					case_ids_matching_user_scope(ctx, mm, &row_ids).await?;
-				let case_ids = rows
-					.into_iter()
-					.filter_map(|row| {
-						visible_case_ids.contains(&row.id).then_some(row.id)
-					})
-					.collect::<Vec<_>>();
-
-				let total = case_ids.len();
+				let case_ids = page.case_ids;
 				let mut items = with_rls_read(mm, ctx, |dbx| {
 					let case_ids = case_ids.clone();
 					Box::pin(async move {

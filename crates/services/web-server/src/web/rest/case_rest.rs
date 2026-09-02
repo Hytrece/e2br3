@@ -1180,7 +1180,7 @@ pub async fn list_cases(
 		&ctx,
 		&snapshot,
 		&mm,
-		move |ctx, mm| {
+		move |ctx, mm, _scope| {
 			Box::pin(async move {
 				let params =
 					ParamsList::<CaseFilter>::from_raw_query(raw_query.as_deref())
@@ -1221,7 +1221,9 @@ pub async fn list_case_view_rows(
 		&ctx,
 		&snapshot,
 		&mm,
-		move |ctx, mm| Box::pin(list_case_view_rows_authorized(ctx, mm, raw_query)),
+		move |ctx, mm, _scope| {
+			Box::pin(list_case_view_rows_authorized(ctx, mm, raw_query))
+		},
 	)
 	.await
 }
@@ -1792,7 +1794,7 @@ pub async fn list_case_link_options(
 		&ctx,
 		&snapshot,
 		&mm,
-		move |ctx, mm| Box::pin(list_case_link_options_authorized(ctx, mm)),
+		move |ctx, mm, _scope| Box::pin(list_case_link_options_authorized(ctx, mm)),
 	)
 	.await
 }

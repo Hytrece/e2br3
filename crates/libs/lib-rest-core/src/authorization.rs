@@ -210,6 +210,7 @@ where
 	F: for<'ctx> FnOnce(
 		&'ctx Ctx,
 		&'ctx ModelManager,
+		&'ctx EnforcedScopeFilter,
 	) -> Pin<Box<dyn Future<Output = Result<T>> + Send + 'ctx>>,
 {
 	let dbx = begin_fact_transaction(request_ctx, mm).await?;
@@ -224,7 +225,13 @@ where
 			authorize_contextual_read(action, snapshot, context).map_err(denied)?;
 		let authorized_ctx =
 			rls_ctx_for_authorized_read(request_ctx, snapshot, &permit)?;
-		operation(&authorized_ctx, mm).await
+		let scope =
+			permit
+				.enforced_scope_filter()
+				.ok_or_else(|| Error::AccessDenied {
+					required_role: "case scope filter".to_string(),
+				})?;
+		operation(&authorized_ctx, mm, scope).await
 	}
 	.await;
 	finish_fact_transaction(dbx, result).await

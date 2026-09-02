@@ -718,6 +718,23 @@ async fn test_case_list_is_filtered_by_sender_scope() -> Result<()> {
 	let cases = value["data"].as_array().ok_or("missing cases array")?;
 	assert!(cases.iter().any(|row| row["id"] == case_a.to_string()));
 	assert!(!cases.iter().any(|row| row["id"] == case_b.to_string()));
+
+	let (status, query) = request_json(
+		&app,
+		"POST",
+		&viewer_cookie,
+		"/api/cases/query".to_string(),
+		Some(json!({
+			"conditions": [],
+			"resultPages": ["CASE"],
+			"limit": 1,
+			"offset": 0
+		})),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK, "{query:?}");
+	assert_eq!(query["data"]["total"], 1);
+	assert_eq!(query["data"]["caseIds"][0], case_a.to_string());
 	Ok(())
 }
 
