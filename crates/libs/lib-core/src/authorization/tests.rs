@@ -283,18 +283,55 @@ fn implied_grants_expand_in_the_registry_not_in_callers() {
 }
 
 #[test]
-fn home_workflow_read_exposes_case_list_without_merging_case_workflow() {
+fn case_operational_grants_expose_the_case_list() {
 	let home = policy_registry()
 		.effective_grants(["home.workflow.read"])
 		.unwrap();
 	assert!(home.iter().any(|id| id.as_str() == "case.read"));
 
-	let case_workflow = policy_registry()
-		.effective_grants(["case.workflow.read"])
+	for grant in [
+		"case.workflow.read",
+		"case.review",
+		"case.lock",
+		"submission.execute",
+	] {
+		let effective = policy_registry().effective_grants([grant]).unwrap();
+		assert!(
+			effective.iter().any(|id| id.as_str() == "case.read"),
+			"{grant} must expose the case list it operates on"
+		);
+	}
+}
+
+#[test]
+fn import_execute_can_list_product_options_without_info_read() {
+	let effective = policy_registry()
+		.effective_grants(["import.execute"])
 		.unwrap();
-	assert!(
-		!case_workflow.iter().any(|id| id.as_str() == "case.read"),
-		"CASE Workflow is independent from CASE Case read"
+	assert!(!effective.iter().any(|id| id.as_str() == "info.read"));
+	let action = policy_registry()
+		.action("import.product.list")
+		.expect("import product list action");
+	assert_eq!(
+		action.required_grants,
+		[GrantId::parse("import.execute").unwrap()]
+	);
+}
+
+#[test]
+fn submission_execute_can_list_receiver_options_without_history_read() {
+	let effective = policy_registry()
+		.effective_grants(["submission.execute"])
+		.unwrap();
+	assert!(!effective
+		.iter()
+		.any(|id| id.as_str() == "submission.history.read"));
+	let action = policy_registry()
+		.action("submission.receiver.list")
+		.expect("submission receiver options action");
+	assert_eq!(
+		action.required_grants,
+		[GrantId::parse("submission.execute").unwrap()]
 	);
 }
 

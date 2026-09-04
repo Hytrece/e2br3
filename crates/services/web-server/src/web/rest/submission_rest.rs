@@ -218,10 +218,11 @@ pub async fn list_receiver_options(
 	Json<DataRestResult<SubmissionReceiverOptionList>>,
 )> {
 	let ctx = ctx_w.0;
-	lib_rest_core::with_authorized_submission_collection(
+	lib_rest_core::with_authorized_submission_collection_action(
 		&ctx,
 		&snapshot,
 		&mm,
+		"submission.receiver.list",
 		move |ctx, mm| {
 			Box::pin(async move {
 				let authority = query.authority.trim().to_ascii_lowercase();

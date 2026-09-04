@@ -444,14 +444,38 @@ where
 		&'ctx EnforcedScopeFilter,
 	) -> Pin<Box<dyn Future<Output = Result<T>> + Send + 'ctx>>,
 {
+	with_authorized_presave_collection_action(
+		request_ctx,
+		snapshot,
+		mm,
+		"info.list",
+		operation,
+	)
+	.await
+}
+
+pub async fn with_authorized_presave_collection_action<T, F>(
+	request_ctx: &Ctx,
+	snapshot: &RequestAuthorizationSnapshot,
+	mm: &ModelManager,
+	action_id: &'static str,
+	operation: F,
+) -> Result<T>
+where
+	F: for<'ctx> FnOnce(
+		&'ctx Ctx,
+		&'ctx ModelManager,
+		&'ctx EnforcedScopeFilter,
+	) -> Pin<Box<dyn Future<Output = Result<T>> + Send + 'ctx>>,
+{
 	let dbx = begin_fact_transaction(request_ctx, mm).await?;
 	let result = async {
 		let context =
 			AuthorizationFactLoader::new(dbx, snapshot).presave_collection();
 		let action = policy_registry()
-			.context_action::<Collection<PresaveResource>>("info.list")
+			.context_action::<Collection<PresaveResource>>(action_id)
 			.ok_or_else(|| Error::AccessDenied {
-				required_role: "registered info.list action".to_string(),
+				required_role: format!("registered {action_id} action"),
 			})?;
 		let permit =
 			authorize_contextual_read(action, snapshot, context).map_err(denied)?;
@@ -800,17 +824,37 @@ where
 		&'ctx ModelManager,
 	) -> Pin<Box<dyn Future<Output = Result<T>> + Send + 'ctx>>,
 {
+	with_authorized_submission_collection_action(
+		request_ctx,
+		snapshot,
+		mm,
+		"submission.history.list",
+		operation,
+	)
+	.await
+}
+
+pub async fn with_authorized_submission_collection_action<T, F>(
+	request_ctx: &Ctx,
+	snapshot: &RequestAuthorizationSnapshot,
+	mm: &ModelManager,
+	action_id: &'static str,
+	operation: F,
+) -> Result<T>
+where
+	F: for<'ctx> FnOnce(
+		&'ctx Ctx,
+		&'ctx ModelManager,
+	) -> Pin<Box<dyn Future<Output = Result<T>> + Send + 'ctx>>,
+{
 	let dbx = begin_fact_transaction(request_ctx, mm).await?;
 	let result = async {
 		let context =
 			AuthorizationFactLoader::new(dbx, snapshot).submission_collection();
 		let action = policy_registry()
-			.context_action::<Collection<SubmissionResource>>(
-				"submission.history.list",
-			)
+			.context_action::<Collection<SubmissionResource>>(action_id)
 			.ok_or_else(|| Error::AccessDenied {
-				required_role: "registered submission.history.list action"
-					.to_string(),
+				required_role: format!("registered {action_id} action"),
 			})?;
 		let permit =
 			authorize_contextual_read(action, snapshot, context).map_err(denied)?;

@@ -79,27 +79,43 @@ pub async fn list_product_presaves(
 	let ctx = ctx_w.0;
 	let sender_ids = parse_scope_filter(query.sender_ids.as_deref(), "senderIds")?;
 	let show_all = can_manage_all_presaves(&snapshot);
-	with_authorized_presave_collection(&ctx, &snapshot, &mm, |ctx, mm, scope| {
-		Box::pin(async move {
-			let entities = ProductPresaveBmc::list(ctx, mm, None).await?;
-			let studies = StudyPresaveBmc::list(ctx, mm, None).await?;
-			let entities = (if show_all {
-				entities
-			} else {
-				filter_product_presaves_for_scope(scope, entities, &studies)
-			})
-			.into_iter()
-			.filter(|product| {
-				sender_ids.as_ref().is_none_or(|ids| {
-					product
-						.sender_presave_id
-						.is_some_and(|id| ids.contains(&id))
+	let action_id = if lib_core::authorization::policy_registry()
+		.action("info.list")
+		.is_some_and(|action| {
+			lib_core::authorization::check_eligibility(&action.id, &snapshot)
+				.is_eligible()
+		}) {
+		"info.list"
+	} else {
+		"import.product.list"
+	};
+	with_authorized_presave_collection_action(
+		&ctx,
+		&snapshot,
+		&mm,
+		action_id,
+		|ctx, mm, scope| {
+			Box::pin(async move {
+				let entities = ProductPresaveBmc::list(ctx, mm, None).await?;
+				let studies = StudyPresaveBmc::list(ctx, mm, None).await?;
+				let entities = (if show_all {
+					entities
+				} else {
+					filter_product_presaves_for_scope(scope, entities, &studies)
 				})
+				.into_iter()
+				.filter(|product| {
+					sender_ids.as_ref().is_none_or(|ids| {
+						product
+							.sender_presave_id
+							.is_some_and(|id| ids.contains(&id))
+					})
+				})
+				.collect();
+				Ok(rest_ok(entities))
 			})
-			.collect();
-			Ok(rest_ok(entities))
-		})
-	})
+		},
+	)
 	.await
 }
 
