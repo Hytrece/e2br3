@@ -96,7 +96,6 @@ fn embedded_snapshot_codes() -> Arc<SnapshotCodes> {
 pub struct VocabularyContext {
 	meddra_available: bool,
 	meddra_versions: HashSet<String>,
-	unavailable_meddra_versions: HashSet<String>,
 	meddra_terms: HashSet<MeddraTermKey>,
 	whodrug_products: HashSet<(String, String)>,
 	whodrug_cas_numbers: HashSet<(String, String)>,
@@ -108,7 +107,6 @@ impl Default for VocabularyContext {
 		Self {
 			meddra_available: false,
 			meddra_versions: HashSet::new(),
-			unavailable_meddra_versions: HashSet::new(),
 			meddra_terms: HashSet::new(),
 			whodrug_products: HashSet::new(),
 			whodrug_cas_numbers: HashSet::new(),
@@ -124,16 +122,6 @@ impl VocabularyContext {
 
 	pub(crate) fn contains_meddra_version(&self, version: &str) -> bool {
 		self.meddra_versions.contains(version)
-	}
-
-	pub(crate) fn unavailable_meddra_versions(&self) -> Vec<&str> {
-		let mut versions = self
-			.unavailable_meddra_versions
-			.iter()
-			.map(String::as_str)
-			.collect::<Vec<_>>();
-		versions.sort_unstable();
-		versions
 	}
 
 	pub(crate) fn contains_meddra_term(&self, version: &str, code: &str) -> bool {
@@ -411,11 +399,6 @@ async fn load_vocabulary_context(
 	)?;
 	let meddra_available = !versions.is_empty();
 	let meddra_versions = versions.into_iter().collect::<HashSet<_>>();
-	let unavailable_meddra_versions = requested_keys
-		.iter()
-		.map(|key| key.version.clone())
-		.filter(|version| !meddra_versions.contains(version))
-		.collect();
 	let mut snapshot_codes = embedded_snapshot_codes();
 	Arc::make_mut(&mut snapshot_codes)
 		.entry(("ISO3166".to_string(), VocabularyScope::All))
@@ -459,7 +442,6 @@ async fn load_vocabulary_context(
 	Ok(VocabularyContext {
 		meddra_available,
 		meddra_versions,
-		unavailable_meddra_versions,
 		meddra_terms: terms.into_iter().collect(),
 		whodrug_products: whodrug_keys,
 		whodrug_cas_numbers: whodrug_cas_keys,

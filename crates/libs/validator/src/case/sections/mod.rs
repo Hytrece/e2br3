@@ -48,21 +48,6 @@ pub(crate) async fn collect_section_issues(
 	.await?;
 	h::collect(&mut issues, authority, validation_ctx);
 	collect_meddra_version_issues(validation_ctx, &mut issues);
-	let unavailable_versions =
-		validation_ctx.vocabulary.unavailable_meddra_versions();
-	if !unavailable_versions.is_empty() {
-		crate::push_field_issue(
-			&mut issues,
-			"ICH.MEDDRA.VERSION.UNAVAILABLE",
-			"terminology.meddra",
-			"terminology",
-			format!(
-				"MedDRA {} is not loaded; codes for this version were not validated.",
-				unavailable_versions.join(", ")
-			),
-			false,
-		);
-	}
 	retain_case_business_rules(&mut issues);
 	Ok(issues)
 }
@@ -219,6 +204,11 @@ fn collect_meddra_version_issues(
 			value.diagnosis_meddra_version.as_deref(),
 		));
 	}
+	collect_unavailable_meddra_version_warnings(
+		&validation_ctx.vocabulary,
+		&versions,
+		issues,
+	);
 
 	if !has_multiple_values(versions.iter().filter_map(|(_, _, value)| *value)) {
 		return;
@@ -230,6 +220,31 @@ fn collect_meddra_version_issues(
 				code,
 				path,
 				"Only one MedDRA version may be used in an ICSR",
+			);
+		}
+	}
+}
+
+fn collect_unavailable_meddra_version_warnings(
+	vocabulary: &crate::context::VocabularyContext,
+	versions: &[(&str, String, Option<&str>)],
+	issues: &mut Vec<ValidationIssue>,
+) {
+	for (_, path, version) in versions {
+		let Some(version) = version.map(str::trim).filter(|value| !value.is_empty())
+		else {
+			continue;
+		};
+		if helpers::valid_dotted_version(Some(version))
+			&& !vocabulary.contains_meddra_version(version)
+		{
+			crate::push_business_warning(
+				issues,
+				"ICH.MEDDRA.VERSION.UNAVAILABLE",
+				path,
+				format!(
+					"MedDRA {version} is not loaded; this code was not validated."
+				),
 			);
 		}
 	}
@@ -385,6 +400,41 @@ mod tests {
 	fn detects_multiple_non_empty_meddra_versions() {
 		assert!(!has_multiple_values(["26.1", " 26.1 ", ""]));
 		assert!(has_multiple_values(["26.1", "27.0"]));
+	}
+
+	#[test]
+	fn unavailable_meddra_release_warns_each_field_without_blocking() {
+		let vocabulary =
+			crate::context::VocabularyContext::for_meddra(&[("28.1", "10000001")]);
+		let versions = vec![
+			(
+				"ignored",
+				"reactions.0.reactionMeddraVersion".to_string(),
+				Some("12.0"),
+			),
+			(
+				"ignored",
+				"narrative.senderDiagnoses.0.diagnosisMeddraVersion".to_string(),
+				Some("12.0"),
+			),
+			(
+				"ignored",
+				"testResults.0.testMeddraVersion".to_string(),
+				Some("28.1"),
+			),
+		];
+		let mut issues = Vec::new();
+
+		collect_unavailable_meddra_version_warnings(
+			&vocabulary,
+			&versions,
+			&mut issues,
+		);
+
+		assert_eq!(issues.len(), 2);
+		assert!(issues.iter().all(|issue| !issue.blocking));
+		assert_eq!(issues[0].section, "E");
+		assert_eq!(issues[1].section, "H");
 	}
 
 	#[test]
