@@ -131,13 +131,13 @@ The remaining gaps are compile-time isolation of dev helpers, explicit staging s
 - Editor shell, lifecycle, and export paths now reject a missing or blank `safety_report_id`.
 - The old empty-string fallbacks no longer hide this broken domain invariant.
 
-### P2 — Case collection endpoints have inconsistent query shapes
+### P2 — Case collection endpoints have inconsistent query shapes (partially remediated)
 
-- [`case.rs`](../crates/libs/lib-core/src/model/case.rs#L872) now caps the projection at 5,000 rows.
-- [`case_rest.rs`](../crates/services/web-server/src/web/rest/case_rest.rs#L1264) batches scope evaluation for the returned IDs.
-- [`lib-rest-core/src/lib.rs`](../crates/libs/lib-rest-core/src/lib.rs#L729) loads the user once and case scopes in one query.
+- The list-view now applies sender/product/study scope before ordering and bounded SQL pagination ([`case.rs`](../crates/libs/lib-core/src/model/case.rs#L921)).
+- The previous 5,000-row projection, separate scope query, and in-memory pagination are gone.
+- The dynamic case-query and list-view paths share the same SQL scope predicate.
 
-The list-view hot path remains `up to 5,000 cases + one scope query`, followed by in-memory pagination. The legacy `GET /api/cases` path is worse: it checks scope and builds the response per case ([`case_rest.rs`](../crates/services/web-server/src/web/rest/case_rest.rs#L1170)).
+The remaining legacy `GET /api/cases` path still checks scope and builds the response per case after its own pagination ([`case_rest.rs`](../crates/services/web-server/src/web/rest/case_rest.rs#L1170)).
 
 The dynamic case-query endpoint now applies sender/product/study scope inside the candidate SQL and supports bounded `limit`/`offset` pagination ([`case_query_catalog_rest.rs`](../crates/services/web-server/src/web/rest/case_query_catalog_rest.rs#L205)). Calls that omit pagination retain the existing 5,000-result compatibility ceiling.
 
@@ -196,7 +196,7 @@ The repository contains 50 uses of `ListOptions::default()` across 17 Rust files
 ## Second-pass priority order
 
 1. Isolate dev initialization and known bootstrap credentials from deployed startup.
-2. Rewrite the remaining `GET /api/cases` and list-view paths as bounded SQL scope projections.
+2. Rewrite the remaining legacy `GET /api/cases` path as a bounded SQL scope projection.
 3. Replace `ModelManager`/`Dbx` transaction convention with an explicit transaction object passed through the operation.
 4. Put export batches behind timeout/job boundaries only if the existing 100-case/100-MiB cap proves insufficient.
 5. Split remaining large files only along real domain or ownership boundaries.
@@ -211,4 +211,4 @@ No new dependency is required. The next useful cuts are the legacy case-list que
 
 For clinical/regulatory payloads, “debug copy” is a data-retention decision. There is no visible lifecycle, encryption, cleanup, or access policy around these extra copies.
 
-net: 0 new dependencies. The stale OpenAPI layer, static/API fallback overlap, editor child N+1 queries, and dynamic case-query in-memory scope filter are gone. Remaining architecture debt is deployed dev/bootstrap startup, legacy case-list query shape, transaction ownership, and operational telemetry.
+net: 0 new dependencies. The stale OpenAPI layer, static/API fallback overlap, editor child N+1 queries, and case-query/list-view in-memory scope filters are gone. Remaining architecture debt is deployed dev/bootstrap startup, legacy case-list query shape, transaction ownership, and operational telemetry.

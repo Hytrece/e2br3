@@ -167,6 +167,23 @@ fn list_view_order_clause(order_bys: Option<&OrderBys>) -> &'static str {
 	}
 }
 
+pub fn case_scope_where(first_bind: usize) -> String {
+	let sender = first_bind;
+	let product = first_bind + 1;
+	let study = first_bind + 2;
+	format!(
+		"(cardinality(${sender}::text[]) = 0 \
+		 OR NOT EXISTS (SELECT 1 FROM case_scope_identifiers(c.id) WHERE scope_kind = 'sender') \
+		 OR EXISTS (SELECT 1 FROM case_scope_identifiers(c.id) WHERE scope_kind = 'sender' AND identifier = ANY(${sender}::text[]))) \
+		AND (cardinality(${product}::text[]) = 0 \
+		 OR NOT EXISTS (SELECT 1 FROM case_scope_identifiers(c.id) WHERE scope_kind = 'product') \
+		 OR EXISTS (SELECT 1 FROM case_scope_identifiers(c.id) WHERE scope_kind = 'product' AND identifier = ANY(${product}::text[]))) \
+		AND (cardinality(${study}::text[]) = 0 \
+		 OR NOT EXISTS (SELECT 1 FROM case_scope_identifiers(c.id) WHERE scope_kind = 'study') \
+		 OR EXISTS (SELECT 1 FROM case_scope_identifiers(c.id) WHERE scope_kind = 'study' AND identifier = ANY(${study}::text[])))"
+	)
+}
+
 fn list_view_rows_sql(order_clause: &str, where_clause: &str) -> String {
 	format!(
 		r#"
@@ -904,21 +921,39 @@ impl CaseBmc {
 	pub async fn list_view_rows(
 		dbx: &Dbx,
 		list_options: Option<&ListOptions>,
+		sender_ids: &[String],
+		product_ids: &[String],
+		study_ids: &[String],
 	) -> Result<Vec<CaseListViewRow>> {
-		// ponytail: fixed 5,000-row window; replace with SQL scope projection
-		// when case-list datasets exceed this ceiling.
-		const MAX_CASE_LIST_ROWS: i64 = 5_000;
 		let order_clause = list_view_order_clause(
 			list_options.and_then(|options| options.order_bys.as_ref()),
 		);
+		let limit = list_options
+			.and_then(|options| options.limit)
+			.unwrap_or(500)
+			.clamp(0, 500);
+		let offset = list_options
+			.and_then(|options| options.offset)
+			.unwrap_or(0)
+			.max(0);
 		let sql = format!(
-			"{} LIMIT {MAX_CASE_LIST_ROWS}",
-			list_view_rows_sql(order_clause, "")
+			"{} LIMIT $4 OFFSET $5",
+			list_view_rows_sql(
+				order_clause,
+				&format!("WHERE {}", case_scope_where(1)),
+			)
 		);
 
-		dbx.fetch_all(sqlx::query_as::<_, CaseListViewRow>(&sql))
-			.await
-			.map_err(crate::model::Error::from)
+		dbx.fetch_all(
+			sqlx::query_as::<_, CaseListViewRow>(&sql)
+				.bind(sender_ids)
+				.bind(product_ids)
+				.bind(study_ids)
+				.bind(limit)
+				.bind(offset),
+		)
+		.await
+		.map_err(crate::model::Error::from)
 	}
 
 	/// List case grid projections for a known case-id set.

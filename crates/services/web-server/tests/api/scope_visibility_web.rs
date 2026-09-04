@@ -719,6 +719,22 @@ async fn test_case_list_is_filtered_by_sender_scope() -> Result<()> {
 	assert!(cases.iter().any(|row| row["id"] == case_a.to_string()));
 	assert!(!cases.iter().any(|row| row["id"] == case_b.to_string()));
 
+	let (status, list_view) = request_json(
+		&app,
+		"GET",
+		&viewer_cookie,
+		"/api/cases/list-view?list_options%5Blimit%5D=1&list_options%5Boffset%5D=0&list_options%5Border_bys%5D=%21created_at".to_string(),
+		None,
+	)
+	.await?;
+	assert_eq!(status, StatusCode::OK, "{list_view:?}");
+	let rows = list_view["data"]["items"]
+		.as_array()
+		.ok_or("missing list-view items")?;
+	assert_eq!(rows.len(), 1, "{list_view:?}");
+	assert_eq!(rows[0]["caseId"], case_a.to_string());
+	assert_eq!(rows[0]["no"], 1);
+
 	let (status, query) = request_json(
 		&app,
 		"POST",

@@ -7,6 +7,7 @@ use crate::web::rest::{
 };
 use axum::extract::{Path, State};
 use axum::Json;
+use lib_core::authorization::EnforcedScopeFilter;
 use lib_core::ctx::Ctx;
 use lib_core::model::authorization::CaseMutationKind;
 use lib_core::model::case::{
@@ -1222,8 +1223,8 @@ pub async fn list_case_view_rows(
 		&ctx,
 		&snapshot,
 		&mm,
-		move |ctx, mm, _scope| {
-			Box::pin(list_case_view_rows_authorized(ctx, mm, raw_query))
+		move |ctx, mm, scope| {
+			Box::pin(list_case_view_rows_authorized(ctx, mm, scope, raw_query))
 		},
 	)
 	.await
@@ -1232,6 +1233,7 @@ pub async fn list_case_view_rows(
 async fn list_case_view_rows_authorized(
 	ctx: &Ctx,
 	mm: &ModelManager,
+	scope: &EnforcedScopeFilter,
 	raw_query: Option<String>,
 ) -> Result<(
 	axum::http::StatusCode,
@@ -1240,56 +1242,40 @@ async fn list_case_view_rows_authorized(
 	let params = ParamsList::<CaseFilter>::from_raw_query(raw_query.as_deref())
 		.map_err(|message| Error::BadRequest { message })?;
 	let list_options = params.list_options;
-	let offset = list_options
-		.as_ref()
-		.and_then(|options| options.offset)
-		.unwrap_or(0)
-		.max(0) as usize;
-	let limit = list_options
-		.as_ref()
-		.and_then(|options| options.limit)
-		.unwrap_or(500)
-		.clamp(0, 500) as usize;
-	if limit == 0 {
-		return Ok((
-			axum::http::StatusCode::OK,
-			Json(DataRestResult {
-				data: CaseListViewResult { items: Vec::new() },
-			}),
-		));
-	}
+	let (sender_ids, product_ids, study_ids) =
+		if ctx.is_system_admin() || ctx.is_sponsor_admin() {
+			(Vec::new(), Vec::new(), Vec::new())
+		} else {
+			(
+				scope.sender_ids().to_vec(),
+				scope.product_ids().to_vec(),
+				scope.study_ids().to_vec(),
+			)
+		};
 
-	let items = lib_rest_core::with_rls_read(mm, ctx, |dbx| {
+	let mut items = lib_rest_core::with_rls_read(mm, ctx, |dbx| {
 		let list_options = list_options.clone();
+		let sender_ids = sender_ids.clone();
+		let product_ids = product_ids.clone();
+		let study_ids = study_ids.clone();
 		Box::pin(async move {
-			CaseBmc::list_view_rows(dbx, list_options.as_ref())
-				.await
-				.map_err(Error::from)
+			CaseBmc::list_view_rows(
+				dbx,
+				list_options.as_ref(),
+				&sender_ids,
+				&product_ids,
+				&study_ids,
+			)
+			.await
+			.map_err(Error::from)
 		})
 	})
 	.await?;
 
-	let mut scoped = Vec::with_capacity(limit.min(items.len()));
-	let mut scoped_offset = 0usize;
-	let item_ids = items.iter().map(|item| item.case_id).collect::<Vec<_>>();
-	let visible_case_ids =
-		lib_rest_core::case_ids_matching_user_scope(ctx, mm, &item_ids).await?;
-	for item in items {
-		if visible_case_ids.contains(&item.case_id) {
-			if scoped_offset < offset {
-				scoped_offset += 1;
-				continue;
-			}
-			scoped.push(item);
-			if scoped.len() >= limit {
-				break;
-			}
-		}
-	}
-	let case_ids = scoped.iter().map(|item| item.case_id).collect::<Vec<_>>();
+	let case_ids = items.iter().map(|item| item.case_id).collect::<Vec<_>>();
 	let cached_totals =
 		CaseValidationSummaryBmc::cached_totals_by_case(ctx, mm, &case_ids).await?;
-	for item in &mut scoped {
+	for item in &mut items {
 		item.warn = cached_totals
 			.get(&item.case_id)
 			.copied()
@@ -1300,7 +1286,7 @@ async fn list_case_view_rows_authorized(
 	Ok((
 		axum::http::StatusCode::OK,
 		Json(DataRestResult {
-			data: CaseListViewResult { items: scoped },
+			data: CaseListViewResult { items },
 		}),
 	))
 }

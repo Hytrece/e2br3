@@ -9,7 +9,7 @@
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::Json;
-use lib_core::model::case::{CaseBmc, CaseListViewRow};
+use lib_core::model::case::{case_scope_where, CaseBmc, CaseListViewRow};
 use lib_core::model::case_query::{
 	build_where, combine_where, validate_conditions, RawCondition, ReportFilters,
 };
@@ -167,23 +167,6 @@ fn result_values_sql(pages: &[&'static CatalogPage]) -> String {
 	)
 }
 
-fn scope_where(first_bind: usize) -> String {
-	let sender = first_bind;
-	let product = first_bind + 1;
-	let study = first_bind + 2;
-	format!(
-		"(cardinality(${sender}::text[]) = 0 \
-		 OR NOT EXISTS (SELECT 1 FROM case_scope_identifiers(c.id) WHERE scope_kind = 'sender') \
-		 OR EXISTS (SELECT 1 FROM case_scope_identifiers(c.id) WHERE scope_kind = 'sender' AND identifier = ANY(${sender}::text[]))) \
-		AND (cardinality(${product}::text[]) = 0 \
-		 OR NOT EXISTS (SELECT 1 FROM case_scope_identifiers(c.id) WHERE scope_kind = 'product') \
-		 OR EXISTS (SELECT 1 FROM case_scope_identifiers(c.id) WHERE scope_kind = 'product' AND identifier = ANY(${product}::text[]))) \
-		AND (cardinality(${study}::text[]) = 0 \
-		 OR NOT EXISTS (SELECT 1 FROM case_scope_identifiers(c.id) WHERE scope_kind = 'study') \
-		 OR EXISTS (SELECT 1 FROM case_scope_identifiers(c.id) WHERE scope_kind = 'study' AND identifier = ANY(${study}::text[])))"
-	)
-}
-
 fn resolve_result_pages(page_ids: &[String]) -> Result<Vec<&'static CatalogPage>> {
 	if page_ids.is_empty() {
 		return Err(Error::BadRequest {
@@ -245,7 +228,7 @@ pub async fn search_cases(
 				let scope_bind = binds.len() + 1;
 				let limit_bind = scope_bind + 3;
 				let offset_bind = limit_bind + 1;
-				let scope_where = scope_where(scope_bind);
+				let scope_where = case_scope_where(scope_bind);
 				let matching_limit = if explicit_page {
 					String::new()
 				} else {
