@@ -160,6 +160,28 @@ async fn create_sender(
 	Ok(())
 }
 
+async fn create_unlinked_sender(
+	app: &axum::Router,
+	cookie: &str,
+	case_id: &str,
+) -> Result<()> {
+	let (status, body) = post_json(
+		app,
+		cookie,
+		&format!("/api/cases/{case_id}/safety-report/senders"),
+		json!({
+			"data": {
+				"case_id": case_id,
+				"sender_type": "1",
+				"organization_name": "Test Sender"
+			}
+		}),
+	)
+	.await?;
+	assert_eq!(status, StatusCode::CREATED, "{body:?}");
+	Ok(())
+}
+
 async fn set_reaction_outcome(
 	app: &axum::Router,
 	cookie: &str,
@@ -523,7 +545,7 @@ async fn test_ich_export_without_narrative_reaches_xml_validation() -> Result<()
 		post_json(&app, &cookie, "/api/cases/from-intake", intake_body).await?;
 	assert_eq!(status, StatusCode::CREATED, "{body:?}");
 	let case_id = extract_case_id(&body)?;
-	create_sender(&app, &cookie, &case_id, "ich").await?;
+	create_unlinked_sender(&app, &cookie, &case_id).await?;
 
 	let (status, body) = get_bytes(
 		&app,

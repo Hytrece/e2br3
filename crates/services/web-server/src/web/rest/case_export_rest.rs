@@ -1,10 +1,11 @@
 use crate::runtime_settings;
-use crate::submission::{export_message_header, prepare_outbound_message_header};
+use crate::submission::export_message_header;
 use axum::extract::{Path, Query, State};
 use axum::http::header;
 use axum::response::Response;
 use axum::Json;
 use lib_core::model::case::CaseBmc;
+use lib_core::model::message_header::MessageHeaderBmc;
 use lib_core::model::safety_report::SafetyReportIdentificationBmc;
 use lib_core::model::xml_export_history::{
 	XmlExportHistoryBmc, XmlExportHistoryRecord,
@@ -185,8 +186,10 @@ async fn generate_validated_case_xml_for_authority_with_notation(
 	authority: RegulatoryAuthority,
 	include_notation: Option<bool>,
 ) -> Result<(lib_core::model::case::Case, String)> {
-	let header =
-		prepare_outbound_message_header(ctx, mm, id, authority, None).await?;
+	let mut header = MessageHeaderBmc::get_by_case(ctx, mm, id)
+		.await
+		.map_err(Error::Model)?;
+	header.batch_transmission_date = Some(OffsetDateTime::now_utc());
 	let options = export_xml_options(
 		ctx,
 		mm,
