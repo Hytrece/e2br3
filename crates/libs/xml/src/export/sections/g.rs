@@ -1488,7 +1488,7 @@ pub(crate) fn write_g_k_causality_assessments(
 	authority: RegulatoryAuthority,
 ) -> Result<String> {
 	let mut out = String::new();
-	out.push_str(&write_g_k_1_causality(drug)?);
+	out.push_str(&write_g_k_1_causality(drug));
 	if matches!(authority, RegulatoryAuthority::Fda) {
 		out.push_str(&write_fda_g_k_1_a_causality(drug));
 	}
@@ -1620,22 +1620,19 @@ fn write_g_k_9_i_1(value: &DrugReactionAssessment) -> String {
 	value.reaction_id.to_string()
 }
 
-pub(crate) fn write_g_k_1_causality(drug: &DrugInformation) -> Result<String> {
-	let (code, display_name) =
-		write_g_k_1(drug).ok_or_else(|| Error::InvalidXml {
-			message: if drug.drug_characterization.trim().is_empty() {
-				"ICH.G.k.1.REQUIRED"
-			} else {
-				"ICH.G.k.1.INVALID"
-			}
-			.to_string(),
-			line: None,
-			column: None,
-		})?;
-	Ok(format!(
-		"<component typeCode=\"COMP\"><causalityAssessment classCode=\"OBS\" moodCode=\"EVN\"><code code=\"20\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.19\" displayName=\"interventionCharacterization\"/><value xsi:type=\"CE\" code=\"{code}\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.13\" displayName=\"{display_name}\"/><subject2 typeCode=\"SUBJ\"><productUseReference classCode=\"SBADM\" moodCode=\"EVN\"><id root=\"{drug_id}\"/></productUseReference></subject2></causalityAssessment></component>",
+pub(crate) fn write_g_k_1_causality(drug: &DrugInformation) -> String {
+	let code = drug.drug_characterization.trim();
+	if code.is_empty() {
+		return String::new();
+	}
+	let display_name = write_g_k_1(drug)
+		.map(|(_, name)| format!(" displayName=\"{}\"", xml_escape(name)))
+		.unwrap_or_default();
+	format!(
+		"<component typeCode=\"COMP\"><causalityAssessment classCode=\"OBS\" moodCode=\"EVN\"><code code=\"20\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.19\" displayName=\"interventionCharacterization\"/><value xsi:type=\"CE\" code=\"{}\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.13\"{display_name}/><subject2 typeCode=\"SUBJ\"><productUseReference classCode=\"SBADM\" moodCode=\"EVN\"><id root=\"{drug_id}\"/></productUseReference></subject2></causalityAssessment></component>",
+		xml_escape(code),
 		drug_id = drug.id,
-	))
+	)
 }
 
 /// e2b:G.k.1
@@ -2473,11 +2470,13 @@ mod tests {
 	}
 
 	#[test]
-	fn rejects_invalid_g_k_1_without_a_synthetic_null_flavor() {
+	fn preserves_invalid_g_k_1_for_non_blocking_export() {
 		let mut drug = test_drug(Uuid::new_v4(), Uuid::new_v4());
 		drug.drug_characterization.clear();
+		assert!(write_g_k_1_causality(&drug).is_empty());
 
-		assert!(write_g_k_1_causality(&drug).is_err());
+		drug.drug_characterization = "9".to_string();
+		assert!(write_g_k_1_causality(&drug).contains("code=\"9\""));
 	}
 
 	#[test]

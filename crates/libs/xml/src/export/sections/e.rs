@@ -175,7 +175,7 @@ pub(crate) fn write_e_i_reaction(
 		reaction.expectedness.as_deref(),
 	);
 	append_extension_code(&mut out, "AE_SEVERITY", reaction.severity.as_deref());
-	out.push_str(&write_e_i_7(reaction.outcome.as_deref())?);
+	out.push_str(&write_e_i_7(reaction.outcome.as_deref()));
 	out.push_str(&write_e_i_8(reaction));
 	out.push_str("</observation></subjectOf2>");
 	Ok(out)
@@ -356,34 +356,26 @@ fn write_e_i_6_width(out: &mut String, reaction: &Reaction) {
 }
 
 /// e2b:E.i.7
-fn write_e_i_7(value: Option<&str>) -> Result<String> {
-	let Some((code, display_name)) =
-		value.map(str::trim).and_then(|code| match code {
-			"0" => Some(("0", "unknown")),
-			"1" => Some(("1", "recovered/resolved")),
-			"2" => Some(("2", "recovering/resolving")),
-			"3" => Some(("3", "not recovered/not resolved/ongoing")),
-			"4" => Some(("4", "recovered/resolved with sequelae")),
-			"5" => Some(("5", "fatal")),
-			_ => None,
-		})
-	else {
-		return Err(Error::InvalidXml {
-			message: if value.map(str::trim).is_some_and(str::is_empty)
-				|| value.is_none()
-			{
-				"ICH.E.i.7.REQUIRED"
-			} else {
-				"ICH.E.i.7.INVALID"
-			}
-			.to_string(),
-			line: None,
-			column: None,
-		});
+fn write_e_i_7(value: Option<&str>) -> String {
+	let Some(code) = value.map(str::trim).filter(|code| !code.is_empty()) else {
+		return String::new();
 	};
-	Ok(format!(
-		"<outboundRelationship2 typeCode=\"PERT\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code code=\"27\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.19\"/><value xsi:type=\"CE\" code=\"{code}\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.11\" displayName=\"{display_name}\"/></observation></outboundRelationship2>"
-	))
+	let display_name = match code {
+		"0" => Some("unknown"),
+		"1" => Some("recovered/resolved"),
+		"2" => Some("recovering/resolving"),
+		"3" => Some("not recovered/not resolved/ongoing"),
+		"4" => Some("recovered/resolved with sequelae"),
+		"5" => Some("fatal"),
+		_ => None,
+	};
+	let display_name = display_name
+		.map(|name| format!(" displayName=\"{}\"", xml_escape(name)))
+		.unwrap_or_default();
+	format!(
+		"<outboundRelationship2 typeCode=\"PERT\"><observation classCode=\"OBS\" moodCode=\"EVN\"><code code=\"27\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.19\"/><value xsi:type=\"CE\" code=\"{}\" codeSystem=\"2.16.840.1.113883.3.989.2.1.1.11\"{display_name}/></observation></outboundRelationship2>",
+		xml_escape(code)
+	)
 }
 
 /// e2b:E.i.8
@@ -464,17 +456,17 @@ mod split_null_flavor_tests {
 
 	#[test]
 	fn exports_unknown_reaction_outcome_as_code_zero() {
-		let xml = write_e_i_7(Some("0")).expect("valid outcome");
+		let xml = write_e_i_7(Some("0"));
 		assert!(xml.contains("code=\"0\""));
 		assert!(xml.contains("displayName=\"unknown\""));
 		assert!(!xml.contains("nullFlavor=\"NI\""));
 	}
 
 	#[test]
-	fn rejects_invalid_reaction_outcome() {
-		for value in [None, Some(""), Some("99")] {
-			assert!(write_e_i_7(value).is_err());
-		}
+	fn preserves_invalid_reaction_outcome_for_non_blocking_export() {
+		assert!(write_e_i_7(None).is_empty());
+		assert!(write_e_i_7(Some("")).is_empty());
+		assert!(write_e_i_7(Some("99")).contains("code=\"99\""));
 	}
 
 	#[test]

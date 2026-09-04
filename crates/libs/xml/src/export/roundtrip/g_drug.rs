@@ -152,7 +152,7 @@ pub(crate) fn patch_g_drugs_for_authority(
 			"//hl7:primaryRole",
 			&fragment,
 		)?;
-		let causality_fragment = write_g_k_1_causality(drug)?;
+		let causality_fragment = write_g_k_1_causality(drug);
 		append_fragment_child(
 			&mut doc,
 			&parser,

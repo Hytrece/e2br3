@@ -22,7 +22,6 @@ use std::collections::HashSet;
 use std::io::{Cursor, Write};
 use time::Month;
 use uuid::Uuid;
-use xml::validation::{validate_e2b_xml, XmlValidatorConfig};
 use xml::{export_case_xml_with_options, ExportXmlOptions};
 use zip::write::SimpleFileOptions;
 use zip::{CompressionMethod, ZipWriter};
@@ -165,20 +164,18 @@ fn export_file_name(
 	}
 }
 
-pub async fn generate_validated_case_xml_for_authority(
+pub async fn generate_case_xml_for_authority(
 	ctx: &lib_core::ctx::Ctx,
 	mm: &lib_core::model::ModelManager,
 	id: Uuid,
 	case: lib_core::model::case::Case,
 	authority: RegulatoryAuthority,
 ) -> Result<(lib_core::model::case::Case, String)> {
-	generate_validated_case_xml_for_authority_with_notation(
-		ctx, mm, id, case, authority, None,
-	)
-	.await
+	generate_case_xml_for_authority_with_notation(ctx, mm, id, case, authority, None)
+		.await
 }
 
-async fn generate_validated_case_xml_for_authority_with_notation(
+async fn generate_case_xml_for_authority_with_notation(
 	ctx: &lib_core::ctx::Ctx,
 	mm: &lib_core::model::ModelManager,
 	id: Uuid,
@@ -203,43 +200,6 @@ async fn generate_validated_case_xml_for_authority_with_notation(
 		.map_err(|err| Error::BadRequest {
 			message: format!("export task failed: {err}"),
 		})?;
-
-	{
-		let schema_report = validate_e2b_xml(
-			xml.as_bytes(),
-			Some(XmlValidatorConfig {
-				authority: Some(authority),
-				..XmlValidatorConfig::default()
-			}),
-		)
-		.map_err(|err| Error::BadRequest {
-			message: format!("export XML validation failed: {err}"),
-		})?;
-		if !schema_report.ok {
-			let details = schema_report
-				.errors
-				.iter()
-				.take(8)
-				.map(|e| match (e.line, e.column) {
-					(Some(line), Some(column)) => {
-						format!("{} [line {}, col {}]", e.message, line, column)
-					}
-					(Some(line), None) => {
-						format!("{} [line {}]", e.message, line)
-					}
-					_ => e.message.clone(),
-				})
-				.collect::<Vec<_>>()
-				.join(" | ");
-			return Err(Error::BadRequest {
-				message: format!(
-					"exported XML failed schema/basic validation ({} issue(s)); details: {}",
-					schema_report.errors.len(),
-					details
-				),
-			});
-		}
-	}
 
 	Ok((case, xml))
 }
@@ -324,7 +284,7 @@ async fn export_case_authorized(
 	let safety_report_id = safety_report_id_for_case(ctx, mm, id).await?;
 	let authority = resolve_requested_export_authority(query.authority.as_deref())?;
 	let file_name = export_file_name(&safety_report_id, id, authority, true);
-	let (_case, xml) = match generate_validated_case_xml_for_authority_with_notation(
+	let (_case, xml) = match generate_case_xml_for_authority_with_notation(
 		ctx,
 		mm,
 		id,
@@ -449,7 +409,7 @@ async fn export_cases_zip_authorized(
 			{
 				let file_name =
 					export_file_name(&safety_report_id, case_id, authority, true);
-				let (_case, xml) = match generate_validated_case_xml_for_authority(
+				let (_case, xml) = match generate_case_xml_for_authority(
 					ctx,
 					mm,
 					case_id,
