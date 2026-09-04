@@ -588,6 +588,9 @@ impl CaseBmc {
 		mm: &ModelManager,
 		filters: Option<Vec<CaseFilter>>,
 		list_options: Option<ListOptions>,
+		sender_ids: &[String],
+		product_ids: &[String],
+		study_ids: &[String],
 	) -> Result<Vec<Case>> {
 		let mut conditions: Vec<String> = Vec::new();
 		let mut organization_id: Option<Uuid> = None;
@@ -619,23 +622,25 @@ impl CaseBmc {
 		if status.is_some() {
 			conditions.push(format!("c.status = ${}", conditions.len() + 1));
 		}
+		let scope_bind = conditions.len() + 1;
+		conditions.push(case_scope_where(scope_bind));
+		let limit_bind = scope_bind + 3;
+		let offset_bind = limit_bind + 1;
+		let limit = list_options
+			.as_ref()
+			.and_then(|options| options.limit)
+			.unwrap_or(1000)
+			.clamp(0, 5000);
+		let offset = list_options
+			.as_ref()
+			.and_then(|options| options.offset)
+			.unwrap_or(0)
+			.max(0);
 		let mut sql = CASE_SELECT.to_string();
-		if !conditions.is_empty() {
-			sql.push_str(" WHERE ");
-			sql.push_str(&conditions.join(" AND "));
-		}
+		sql.push_str(" WHERE ");
+		sql.push_str(&conditions.join(" AND "));
 		sql.push_str(" ORDER BY c.created_at DESC, c.id DESC");
-		if let Some(limit) = list_options.as_ref().and_then(|options| options.limit)
-		{
-			sql.push_str(&format!(" LIMIT {}", limit.clamp(0, 5000)));
-		} else {
-			sql.push_str(" LIMIT 1000");
-		}
-		if let Some(offset) =
-			list_options.as_ref().and_then(|options| options.offset)
-		{
-			sql.push_str(&format!(" OFFSET {}", offset.max(0)));
-		}
+		sql.push_str(&format!(" LIMIT ${limit_bind} OFFSET ${offset_bind}"));
 
 		let dbx = mm.dbx();
 		dbx.begin_txn().await?;
@@ -655,7 +660,16 @@ impl CaseBmc {
 		if let Some(value) = status {
 			query = query.bind(value);
 		}
-		let entities = dbx.fetch_all(query).await?;
+		let entities = dbx
+			.fetch_all(
+				query
+					.bind(sender_ids)
+					.bind(product_ids)
+					.bind(study_ids)
+					.bind(limit)
+					.bind(offset),
+			)
+			.await?;
 		dbx.commit_txn().await?;
 		Ok(entities)
 	}

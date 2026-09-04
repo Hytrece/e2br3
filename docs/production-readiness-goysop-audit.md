@@ -109,7 +109,7 @@ The review covered these areas:
 2. Isolate internal APIs with private networking plus signed or mTLS requests.
 3. Define a durable, redacted telemetry and incident-response contract.
 4. Replace implicit `ModelManager`/`Dbx` transaction ownership.
-5. Push the remaining legacy case-list scope and pagination into SQL.
+5. ~~Push the remaining legacy case-list scope and pagination into SQL.~~ Done.
 6. Add token revocation/rotation semantics if immediate session revocation becomes a requirement.
 
 `cargo check --workspace` passed during this review. That only establishes that the current tree compiles; it does not establish production safety.
@@ -131,13 +131,12 @@ The remaining gaps are compile-time isolation of dev helpers, explicit staging s
 - Editor shell, lifecycle, and export paths now reject a missing or blank `safety_report_id`.
 - The old empty-string fallbacks no longer hide this broken domain invariant.
 
-### P2 — Case collection endpoints have inconsistent query shapes (partially remediated)
+### P2 — Case collection endpoints have inconsistent query shapes (remediated)
 
 - The list-view now applies sender/product/study scope before ordering and bounded SQL pagination ([`case.rs`](../crates/libs/lib-core/src/model/case.rs#L921)).
 - The previous 5,000-row projection, separate scope query, and in-memory pagination are gone.
 - The dynamic case-query and list-view paths share the same SQL scope predicate.
-
-The remaining legacy `GET /api/cases` path still checks scope and builds the response per case after its own pagination ([`case_rest.rs`](../crates/services/web-server/src/web/rest/case_rest.rs#L1170)).
+- The legacy `GET /api/cases` path now applies the same scope predicate before bounded SQL pagination. Its per-case scope query is gone, and workflow settings are loaded once per non-empty response instead of repeatedly per case.
 
 The dynamic case-query endpoint now applies sender/product/study scope inside the candidate SQL and supports bounded `limit`/`offset` pagination ([`case_query_catalog_rest.rs`](../crates/services/web-server/src/web/rest/case_query_catalog_rest.rs#L205)). Calls that omit pagination retain the existing 5,000-result compatibility ceiling.
 
@@ -196,12 +195,11 @@ The repository contains 50 uses of `ListOptions::default()` across 17 Rust files
 ## Second-pass priority order
 
 1. Isolate dev initialization and known bootstrap credentials from deployed startup.
-2. Rewrite the remaining legacy `GET /api/cases` path as a bounded SQL scope projection.
-3. Replace `ModelManager`/`Dbx` transaction convention with an explicit transaction object passed through the operation.
-4. Put export batches behind timeout/job boundaries only if the existing 100-case/100-MiB cap proves insufficient.
-5. Split remaining large files only along real domain or ownership boundaries.
+2. Replace `ModelManager`/`Dbx` transaction convention with an explicit transaction object passed through the operation.
+3. Put export batches behind timeout/job boundaries only if the existing 100-case/100-MiB cap proves insufficient.
+4. Split remaining large files only along real domain or ownership boundaries.
 
-No new dependency is required. The next useful cuts are the legacy case-list query shape and implicit transaction ownership.
+No new dependency is required. The next useful architectural cut is implicit transaction ownership.
 
 ### P1 — Regulatory payloads are copied into long-lived or unsafe debug locations (partially remediated)
 
@@ -211,4 +209,4 @@ No new dependency is required. The next useful cuts are the legacy case-list que
 
 For clinical/regulatory payloads, “debug copy” is a data-retention decision. There is no visible lifecycle, encryption, cleanup, or access policy around these extra copies.
 
-net: 0 new dependencies. The stale OpenAPI layer, static/API fallback overlap, editor child N+1 queries, and case-query/list-view in-memory scope filters are gone. Remaining architecture debt is deployed dev/bootstrap startup, legacy case-list query shape, transaction ownership, and operational telemetry.
+net: 0 new dependencies. The stale OpenAPI layer, static/API fallback overlap, editor child N+1 queries, and all case-list in-memory scope filters are gone. Remaining architecture debt is deployed dev/bootstrap startup, transaction ownership, and operational telemetry.
