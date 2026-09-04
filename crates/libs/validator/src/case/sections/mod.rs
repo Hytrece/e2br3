@@ -48,6 +48,21 @@ pub(crate) async fn collect_section_issues(
 	.await?;
 	h::collect(&mut issues, authority, validation_ctx);
 	collect_meddra_version_issues(validation_ctx, &mut issues);
+	let unavailable_versions =
+		validation_ctx.vocabulary.unavailable_meddra_versions();
+	if !unavailable_versions.is_empty() {
+		crate::push_field_issue(
+			&mut issues,
+			"ICH.MEDDRA.VERSION.UNAVAILABLE",
+			"terminology.meddra",
+			"terminology",
+			format!(
+				"MedDRA {} is not loaded; codes for this version were not validated.",
+				unavailable_versions.join(", ")
+			),
+			false,
+		);
+	}
 	retain_case_business_rules(&mut issues);
 	Ok(issues)
 }

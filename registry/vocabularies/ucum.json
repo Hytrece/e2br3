@@ -1584,6 +1584,7 @@
     {
       "code": "a",
       "scopes": [
+        "frequency",
         "prefix",
         "unit"
       ]
@@ -1705,6 +1706,7 @@
     {
       "code": "d",
       "scopes": [
+        "frequency",
         "prefix",
         "unit"
       ]
@@ -1778,6 +1780,7 @@
     {
       "code": "h",
       "scopes": [
+        "frequency",
         "prefix",
         "unit"
       ]
@@ -1840,12 +1843,14 @@
     {
       "code": "min",
       "scopes": [
+        "frequency",
         "unit"
       ]
     },
     {
       "code": "mo",
       "scopes": [
+        "frequency",
         "unit"
       ]
     },
@@ -1961,6 +1966,7 @@
     {
       "code": "wk",
       "scopes": [
+        "frequency",
         "unit"
       ]
     },
@@ -1975,10 +1981,28 @@
       "scopes": [
         "prefix"
       ]
+    },
+    {
+      "code": "{asnecessary}",
+      "scopes": [
+        "frequency"
+      ]
+    },
+    {
+      "code": "{cyclical}",
+      "scopes": [
+        "frequency"
+      ]
+    },
+    {
+      "code": "{total}",
+      "scopes": [
+        "frequency"
+      ]
     }
   ],
   "license": "https://ucum.org/license",
-  "name": "UCUM",
+  "name": "ICH constrained UCUM",
   "source": "https://raw.githubusercontent.com/ucum-org/ucum/v2.2/ucum-essence.xml",
   "source_sha256": "dfccea1b5dc284245ebae97edd1dc03c45864da4e87df55bc9851797b4fd0b61",
   "version": "2.2"

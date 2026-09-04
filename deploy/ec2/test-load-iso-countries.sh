@@ -89,6 +89,8 @@ grep -F "ON CONFLICT (code)" "${PSQL_LOG}" >/dev/null
 grep -F "UPDATE iso_countries AS country" "${PSQL_LOG}" >/dev/null
 grep -F "INSERT INTO controlled_terminology_terms" "${PSQL_LOG}" >/dev/null
 grep -F "'iso3166', 'continuously-maintained'" "${PSQL_LOG}" >/dev/null
+grep -F "'EU', 'European Union', true" "${PSQL_LOG}" >/dev/null
+grep -F "ISO country load is missing the ICH EU exception" "${PSQL_LOG}" >/dev/null
 grep -F "INSERT INTO terminology_releases" "${PSQL_LOG}" >/dev/null
 grep -F "source_url=https://datahub.io/core/country-list/_r/-/data.csv" "${PSQL_LOG}" >/dev/null
 grep -F "\\copy staging_iso_countries(name, code) FROM '" "${PSQL_LOG}" >/dev/null

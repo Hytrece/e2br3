@@ -243,12 +243,10 @@ pub(crate) fn valid_dotted_version(value: Option<&str>) -> bool {
 }
 
 pub(crate) fn valid_meddra_version(
-	vocabulary: &VocabularyContext,
-	value: Option<&str>,
+	_vocabulary: &VocabularyContext,
+	_value: Option<&str>,
 ) -> bool {
-	let value = value.map(str::trim).filter(|value| !value.is_empty());
-	!vocabulary.meddra_available()
-		|| value.is_none_or(|value| vocabulary.contains_meddra_version(value))
+	true
 }
 
 pub(crate) fn valid_meddra_term(
@@ -262,6 +260,9 @@ pub(crate) fn valid_meddra_term(
 	let version = version.map(str::trim).filter(|value| !value.is_empty());
 	let code = code.map(str::trim).filter(|value| !value.is_empty());
 	match (version, code) {
+		(Some(version), Some(_)) if !vocabulary.contains_meddra_version(version) => {
+			true
+		}
 		(Some(version), Some(code)) => {
 			vocabulary.contains_meddra_term(version, code)
 		}
@@ -354,6 +355,23 @@ pub(crate) fn valid_iso3166(
 #[cfg(test)]
 mod tests {
 	use super::*;
+
+	#[test]
+	fn unavailable_meddra_release_is_not_reported_as_invalid_data() {
+		let vocabulary = VocabularyContext::for_meddra(&[("28.1", "10000001")]);
+
+		assert!(valid_meddra_version(&vocabulary, Some("12.0")));
+		assert!(valid_meddra_term(
+			&vocabulary,
+			Some("12.0"),
+			Some("10047319")
+		));
+		assert!(!valid_meddra_term(
+			&vocabulary,
+			Some("28.1"),
+			Some("99999999")
+		));
+	}
 
 	#[test]
 	fn mfds_foreign_product_matches_the_entered_whodrug_version() {

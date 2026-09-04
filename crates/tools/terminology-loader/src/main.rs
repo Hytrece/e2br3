@@ -138,6 +138,38 @@ struct ControlledArtifactEntry {
 	scopes: Vec<String>,
 }
 
+fn validate_controlled_artifact_contract(
+	dictionary: &str,
+	artifact: &ControlledArtifact,
+) -> Result<(), String> {
+	let required: &[(&str, &str)] = match dictionary {
+		"iso3166" => &[("EU", "ich_country")],
+		"ich_constrained_ucum" => &[
+			("a", "frequency"),
+			("mo", "frequency"),
+			("wk", "frequency"),
+			("d", "frequency"),
+			("h", "frequency"),
+			("min", "frequency"),
+			("{cyclical}", "frequency"),
+			("{asnecessary}", "frequency"),
+			("{total}", "frequency"),
+		],
+		_ => &[],
+	};
+
+	for (code, scope) in required {
+		if !artifact.entries.iter().any(|entry| {
+			entry.code == *code && entry.scopes.iter().any(|item| item == scope)
+		}) {
+			return Err(format!(
+				"controlled artifact is missing required {dictionary} code/scope: {code}/{scope}"
+			));
+		}
+	}
+	Ok(())
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
 	let cli = Cli::parse();
@@ -193,6 +225,7 @@ async fn load_controlled(
 			}
 		}
 	}
+	validate_controlled_artifact_contract(&args.dictionary, &artifact)?;
 	let loaded_rows = seen.len() as i64;
 	println!(
 		"Controlled terminology parse complete: dictionary={}, rows={}, version={}, language={}, name={}, source={}, license={}",
@@ -1267,6 +1300,31 @@ mod tests {
 	use zip::{CompressionMethod, ZipWriter};
 
 	static ZIP_COUNTER: AtomicU64 = AtomicU64::new(0);
+
+	#[test]
+	fn controlled_artifacts_require_ich_specific_scopes() {
+		let artifact = ControlledArtifact {
+			name: "test".to_string(),
+			version: "1".to_string(),
+			source: "test".to_string(),
+			source_sha256: "test".to_string(),
+			license: "test".to_string(),
+			entries: vec![ControlledArtifactEntry {
+				code: "d".to_string(),
+				scopes: vec!["unit".to_string()],
+			}],
+		};
+
+		assert!(validate_controlled_artifact_contract(
+			"ich_constrained_ucum",
+			&artifact
+		)
+		.unwrap_err()
+		.contains("a/frequency"));
+		assert!(validate_controlled_artifact_contract("iso3166", &artifact)
+			.unwrap_err()
+			.contains("EU/ich_country"));
+	}
 
 	#[test]
 	fn parse_meddra_directory_keeps_one_row_per_code_for_database_key() {

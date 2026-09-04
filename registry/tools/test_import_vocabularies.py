@@ -32,6 +32,10 @@ class VocabularyImporterTests(unittest.TestCase):
         self.assertEqual("2.2", first["version"])
         self.assertIn({"code": "m", "scopes": ["prefix"]}, first["entries"])
         self.assertIn({"code": "g", "scopes": ["unit"]}, first["entries"])
+        self.assertIn({"code": "d", "scopes": ["frequency"]}, first["entries"])
+        self.assertIn(
+            {"code": "{cyclical}", "scopes": ["frequency"]}, first["entries"]
+        )
         self.assertNotIn("mg", [entry["code"] for entry in first["entries"]])
 
     def test_iso639_uses_both_set_two_alpha_three_codes(self):

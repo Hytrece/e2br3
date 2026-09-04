@@ -30,6 +30,17 @@ VALID_SCOPES = {
     "dose_form",
     "route",
 }
+ICH_FREQUENCY_CODES = {
+    "a",
+    "mo",
+    "wk",
+    "d",
+    "h",
+    "min",
+    "{cyclical}",
+    "{asnecessary}",
+    "{total}",
+}
 
 
 def source_sha256(raw: bytes) -> str:
@@ -64,8 +75,10 @@ def normalize_ucum(raw: bytes) -> dict[str, Any]:
         elif local_name in {"base-unit", "unit"}:
             rows.append((element.attrib.get("Code", ""), ["unit"]))
 
+    rows.extend((code, ["frequency"]) for code in ICH_FREQUENCY_CODES)
+
     return {
-        "name": "UCUM",
+        "name": "ICH constrained UCUM",
         "version": version,
         "source": f"https://raw.githubusercontent.com/ucum-org/ucum/v{version}/ucum-essence.xml",
         "source_sha256": source_sha256(raw),

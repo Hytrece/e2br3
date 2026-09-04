@@ -133,6 +133,14 @@ WHERE trim(code) ~ '^[A-Za-z]{2}$'
 ON CONFLICT (dictionary, version, language, scope, code)
 DO UPDATE SET display_name = EXCLUDED.display_name, active = true;
 
+INSERT INTO controlled_terminology_terms
+  (dictionary, version, language, scope, code, display_name, active)
+VALUES
+  ('iso3166', 'continuously-maintained', 'en', 'ich_country',
+   'EU', 'European Union', true)
+ON CONFLICT (dictionary, version, language, scope, code)
+DO UPDATE SET display_name = EXCLUDED.display_name, active = true;
+
 INSERT INTO terminology_releases
   (dictionary, version, language, status, source_path, loaded_rows, activated_at)
 SELECT
@@ -158,6 +166,17 @@ BEGIN
 
   IF loaded_count < 200 THEN
     RAISE EXCEPTION 'ISO country load produced too few active rows: %', loaded_count;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM controlled_terminology_terms
+    WHERE dictionary = 'iso3166'
+      AND scope = 'ich_country'
+      AND code = 'EU'
+      AND active = true
+  ) THEN
+    RAISE EXCEPTION 'ISO country load is missing the ICH EU exception';
   END IF;
 
   RAISE NOTICE 'Loaded active ISO countries: %', loaded_count;
