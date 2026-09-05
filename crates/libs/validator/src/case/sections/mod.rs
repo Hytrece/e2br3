@@ -242,9 +242,7 @@ fn collect_unavailable_meddra_version_warnings(
 				issues,
 				"ICH.MEDDRA.VERSION.UNAVAILABLE",
 				path,
-				format!(
-					"MedDRA {version} is not loaded; this code was not validated."
-				),
+				format!("MedDRA {version} is not loaded"),
 			);
 		}
 	}
